@@ -1465,26 +1465,27 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     expect(el('[data-testid="rx-pharmacy-history"]')).toBeNull();
   });
 
-  it('declines to load the history in global view, and says why', async () => {
-    // Both services open with roleValidator.requireActiveHospitalId(), which
-    // returns NULL for a super-admin in global view and is then dereferenced
-    // — two 500s on a page that is explicitly cross-tenant.
+  it('loads the history in global view — the services no longer 500 without a hospital', async () => {
+    // Both services used to open with roleValidator.requireActiveHospitalId()
+    // and dereference its result, which is NULL for a super-admin in global
+    // view: two 500s on a page that is explicitly cross-tenant. #740 made them
+    // treat that caller the way the rest of the read surface does, so the panel
+    // fires its calls instead of asking for a hospital.
     const rx = makeRx({ status: 'DISPENSED' });
     await setup({
       list: [rx],
       roles: ['ROLE_SUPER_ADMIN'],
       superAdmin: true,
       globalView: true,
+      dispenses: of(page([makeDispense()])),
     });
 
     component.viewDetail(rx);
     fixture.detectChanges();
 
-    expect(pharmacyService.listDispensesByPrescription).not.toHaveBeenCalled();
-    expect(pharmacyService.listRoutingDecisionsByPrescription).not.toHaveBeenCalled();
-    expect(el('[data-testid="rx-history-scope"]')).not.toBeNull();
-    expect(el('[data-testid="rx-history-error"]')).toBeNull();
-    expect(el('[data-testid="rx-history-empty"]')).toBeNull();
+    expect(pharmacyService.listDispensesByPrescription).toHaveBeenCalled();
+    expect(pharmacyService.listRoutingDecisionsByPrescription).toHaveBeenCalled();
+    expect(el('[data-testid="rx-dispense-history"]')).not.toBeNull();
   });
 
   it('loads the history for a super-admin who has picked a hospital', async () => {
@@ -1500,7 +1501,6 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     component.viewDetail(rx);
     fixture.detectChanges();
 
-    expect(el('[data-testid="rx-history-scope"]')).toBeNull();
     expect(el('[data-testid="rx-dispense-history"]')).not.toBeNull();
   });
 

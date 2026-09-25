@@ -848,25 +848,22 @@ export class PrescriptionsComponent implements OnInit {
   ];
 
   /**
-   * A super-admin in GLOBAL view has no hospital scope, and both history
-   * services start with `roleValidator.requireActiveHospitalId()`, which
-   * returns **null** for exactly that caller and is then dereferenced
-   * (`hospitalId.equals(prescription.getHospital().getId())`) — two 500s and
-   * an error box on a page that is explicitly cross-tenant. Reported to the
-   * coordinator as a backend defect; this is the client half, which declines
-   * to fire the calls and says why instead.
-   */
-  protected readonly historyNeedsScope = computed(() => this.isSuperAdmin() && this.globalView());
-
-  /**
    * Read live off the role signal rather than captured at construction: the
    * active role set changes under a hospital-scope switch, and a panel gated
    * on a constructor snapshot keeps the answer it was born with.
+   *
+   * <p>No global-view exception any more. Both history services used to open
+   * with `roleValidator.requireActiveHospitalId()` and dereference its result,
+   * which is **null** for a super-admin in global view — two 500s on a page
+   * that is explicitly cross-tenant, so this panel used to decline to fire the
+   * calls and ask for a hospital instead. #740 fixed that at the source: the
+   * reads now treat that caller the way the rest of the read surface does (no
+   * hospital, no narrowing), so the message would suppress a panel the backend
+   * is willing to serve. The panel is read-only — no routing WRITE lives in
+   * it, and #740 deliberately kept those refusing without a scope.
    */
-  protected readonly canReadPharmacyHistory = computed(
-    () =>
-      this.roleContext.hasAnyActiveRole(PrescriptionsComponent.HISTORY_ROLES) &&
-      !this.historyNeedsScope(),
+  protected readonly canReadPharmacyHistory = computed(() =>
+    this.roleContext.hasAnyActiveRole(PrescriptionsComponent.HISTORY_ROLES),
   );
 
   dispenseHistory = signal<DispenseResponse[]>([]);

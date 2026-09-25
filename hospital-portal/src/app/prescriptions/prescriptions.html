@@ -546,14 +546,10 @@
                client. The panel is absent — not empty, not erroring — for the
                roles the route admits but the endpoints do not (NURSE, MIDWIFE,
                ADMIN), so nobody is shown a 403 they did not ask for. -->
-          @if ((canReadPharmacyHistory() || historyNeedsScope()) && hasPharmacyHistory(rx)) {
+          @if (canReadPharmacyHistory() && hasPharmacyHistory(rx)) {
             <div class="detail-notes" data-testid="rx-pharmacy-history">
               <span class="field-label">{{ 'PRESCRIPTIONS.HISTORY.SECTION' | translate }}</span>
-              @if (historyNeedsScope()) {
-                <p class="muted" data-testid="rx-history-scope">
-                  {{ 'PRESCRIPTIONS.HISTORY.SCOPE_REQUIRED' | translate }}
-                </p>
-              } @else if (historyLoading()) {
+              @if (historyLoading()) {
                 <div class="loading-state" data-testid="rx-history-loading">
                   <div class="spinner"></div>
                   <p>{{ 'COMMON.LOADING' | translate }}</p>
