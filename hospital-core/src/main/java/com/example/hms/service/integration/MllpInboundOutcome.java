@@ -26,10 +26,9 @@ package com.example.hms.service.integration;
  * distinction cannot be reintroduced by returning it.
  *
  * <p>The reason is not lost: each path records it on the
- * {@code integration_message_event} row (a "cross-tenant rejection"
- * error message against the receiving hospital's organization), which
- * is where an operator looks for a misconfigured sender and where the
- * sender cannot.
+ * {@code integration_message_event} row — a "cross-tenant rejection"
+ * error message against the receiving hospital's organization — which
+ * is a surface the sender cannot read.
  *
  * <p>Modelled after the same intent as {@code Hl7AckBuilder.AckCode}
  * but kept on the service side so domain code never has to depend on

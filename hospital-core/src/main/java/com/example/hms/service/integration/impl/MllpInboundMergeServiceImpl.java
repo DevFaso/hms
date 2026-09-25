@@ -1,9 +1,9 @@
 package com.example.hms.service.integration.impl;
 
 import com.example.hms.enums.empi.EmpiAliasType;
-import com.example.hms.enums.empi.EmpiMergeType;
 import com.example.hms.enums.integration.IntegrationMessageDirection;
 import com.example.hms.enums.integration.IntegrationMessageStatus;
+import com.example.hms.enums.empi.EmpiMergeType;
 import com.example.hms.model.Hospital;
 import com.example.hms.payload.dto.empi.EmpiIdentityResponseDTO;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
@@ -11,6 +11,7 @@ import com.example.hms.service.empi.EmpiService;
 import com.example.hms.service.integration.MllpInboundMergeService;
 import com.example.hms.service.integration.MllpInboundOutcome;
 import com.example.hms.service.integration.message.IntegrationMessageRecorder;
+import com.example.hms.service.integration.message.MllpRecordingContext;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedMergeMessage;
 
 import java.util.Optional;
@@ -47,25 +48,18 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
                                            Hospital receivingHospital,
                                            String sendingApplication,
                                            String sendingFacility,
-                                           String messageControlId,
-                                           String rawMessageBody) {
-        String integrationId = buildIntegrationId(sendingApplication, sendingFacility);
-        UUID organizationId = organizationIdOf(receivingHospital);
+                                           String messageControlId) {
         if (parsed == null
                 || !StringUtils.hasText(parsed.survivingMrn())
                 || !StringUtils.hasText(parsed.priorMrn())) {
             log.warn("MLLP A40 rejected — missing PID-3 or MRG-1 (sender={}/{} hospital={})",
                 sendingApplication, sendingFacility,
                 receivingHospital != null ? receivingHospital.getId() : null);
-            recordReject(integrationId, organizationId, rawMessageBody,
-                "missing PID-3 or MRG-1");
             return MllpInboundOutcome.REJECTED_INVALID;
         }
         if (receivingHospital == null || receivingHospital.getId() == null) {
             log.warn("MLLP A40 rejected — no resolved hospital (sender={}/{})",
                 sendingApplication, sendingFacility);
-            recordReject(integrationId, organizationId, rawMessageBody,
-                "no resolved hospital");
             return MllpInboundOutcome.REJECTED_INVALID;
         }
 
@@ -79,8 +73,6 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             log.warn("MLLP A40 rejected — PID-3 and MRG-1 are the same identifier "
                 + "(sender={}/{} hospital={})",
                 sendingApplication, sendingFacility, receivingHospital.getId());
-            recordReject(integrationId, organizationId, rawMessageBody,
-                "PID-3 and MRG-1 are the same identifier");
             return MllpInboundOutcome.REJECTED_INVALID;
         }
 
@@ -96,8 +88,8 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // identifiers stay out of it altogether: an MRN is PHI.
             log.warn("MLLP A40 rejected — unknown identifier(s) (sender={}/{} hospital={})",
                 sendingApplication, sendingFacility, hospitalId);
-            recordReject(integrationId, organizationId, rawMessageBody,
-                "identifier not found");
+            recordReject(receivingHospital, sendingApplication, sendingFacility,
+                messageControlId, "identifier not found");
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
         }
 
@@ -132,14 +124,14 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // same ACK text. The reason survives on the integration message
             // row, which the sender cannot read. Nor, today, can the
             // hospital's own integration operator: the only read surface is
-            // /super-admin/integration-messages (SUPER_ADMIN), so diagnosing
-            // a misconfigured sender means escalating. Widening that surface
-            // is a separate change.
+            // /super-admin/integration-messages (SUPER_ADMIN), so diagnosing a
+            // misconfigured sender means escalating. Widening that surface is
+            // a separate change.
             log.warn("MLLP A40 cross-tenant reject — the two patients are not both "
                 + "registered at hospital={} (sender={}/{})",
                 hospitalId, sendingApplication, sendingFacility);
-            recordReject(integrationId, organizationId, rawMessageBody,
-                "cross-tenant rejection");
+            recordReject(receivingHospital, sendingApplication, sendingFacility,
+                messageControlId, "cross-tenant rejection");
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
         }
 
@@ -169,8 +161,6 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // queue should say so.
             log.warn("MLLP A40 refused by the merge service — sender={}/{} hospital={}: {}",
                 sendingApplication, sendingFacility, hospitalId, ex.getMessage());
-            recordReject(integrationId, organizationId, rawMessageBody,
-                "refused by the merge service");
             return MllpInboundOutcome.REJECTED_INVALID;
         }
 
@@ -182,55 +172,34 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
     }
 
     /**
-     * Best-effort FAILED record. The recorder runs in REQUIRES_NEW and
-     * swallows its own exceptions, so the row survives this transaction
-     * rolling back; the try-catch is belt-and-braces for a missing bean in a
-     * narrow test context. The reason text never carries an identifier — the
-     * raw body already holds whatever the sender sent, and copying an MRN into
-     * a second column buys nothing.
+     * The rejection reason the ACK is not allowed to carry, written where the
+     * sender cannot read it.
+     *
+     * <p><b>The message body is deliberately not stored</b> — see the same
+     * method on {@code MllpInboundAdtServiceImpl} for why: one probe, one
+     * small row, no PID. MSH-10 is the sender's own message id, not patient
+     * data, and is what correlates the refusal with the sender's queue.
+     *
+     * <p>Best-effort: the recorder is {@code REQUIRES_NEW} and swallows its
+     * own exceptions, so the row survives this transaction rolling back.
      */
-    private void recordReject(String integrationId, UUID organizationId,
-                              String rawMessageBody, String reason) {
-        if (messageRecorder == null) {
-            return;
-        }
+    private void recordReject(Hospital receivingHospital,
+                              String sendingApplication, String sendingFacility,
+                              String messageControlId, String reason) {
         try {
             messageRecorder.recordMessage(
-                integrationId, organizationId,
+                MllpRecordingContext.integrationId(sendingApplication, sendingFacility),
+                MllpRecordingContext.organizationId(receivingHospital),
                 IntegrationMessageDirection.INBOUND,
-                MESSAGE_TYPE, rawMessageBody,
-                IntegrationMessageStatus.FAILED, reason);
+                MESSAGE_TYPE,
+                null,
+                IntegrationMessageStatus.FAILED,
+                StringUtils.hasText(messageControlId)
+                    ? reason + " (MSH-10 " + messageControlId.trim() + ")" : reason);
         } catch (RuntimeException ex) {
-            log.warn("MLLP A40 message recorder threw for integration={} reason={}",
-                integrationId, reason, ex);
+            log.warn("MLLP A40 message recorder threw for sender={}/{} reason={}",
+                sendingApplication, sendingFacility, reason, ex);
         }
-    }
-
-    /**
-     * {@code integration_message_event.integration_id} is
-     * {@code VARCHAR(120) NOT NULL}, and HL7 v2.5 permits 180 characters in
-     * each of MSH-3 and MSH-4. Truncate for the same reason
-     * {@code Hl7MessageDispatcher.integrationIdFor} does: an over-long id
-     * fails the recorder insert, the recorder swallows it, and the DLQ row
-     * disappears — which on this path is the only surviving record of the
-     * rejection.
-     */
-    private static final int RECORDER_INTEGRATION_ID_MAX = 120;
-
-    private static String buildIntegrationId(String app, String fac) {
-        String safeApp = StringUtils.hasText(app) ? app.trim() : "?";
-        String safeFac = StringUtils.hasText(fac) ? fac.trim() : "?";
-        String raw = "MLLP:" + safeApp + "/" + safeFac;
-        return raw.length() > RECORDER_INTEGRATION_ID_MAX
-            ? raw.substring(0, RECORDER_INTEGRATION_ID_MAX)
-            : raw;
-    }
-
-    private static UUID organizationIdOf(Hospital hospital) {
-        if (hospital == null || hospital.getOrganization() == null) {
-            return null;
-        }
-        return hospital.getOrganization().getId();
     }
 
     /** Resolve an MRN to its patient through EMPI, or empty if unknown. */

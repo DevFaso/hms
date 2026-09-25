@@ -29,6 +29,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -169,7 +170,7 @@ class MllpInboundAdtServiceImplTest {
     }
 
     @Test
-    @DisplayName("The cross-tenant reason IS recorded — on the integration message row")
+    @DisplayName("The cross-tenant reason IS recorded — on the integration message row, without the body")
     void crossTenantReasonIsRecordedOnTheIntegrationRow() {
         when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-1"))
             .thenReturn(Optional.of(empiHit(patientId)));
@@ -177,15 +178,16 @@ class MllpInboundAdtServiceImplTest {
         when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospital.getId()))
             .thenReturn(Optional.empty());
 
-        service.processAdt(adt("MRN-1", "Doe", "Jane", null),
-            hospital, "REG", "HOSP1", "MSG-1", "MSH|raw|body");
+        service.processAdt(adt("MRN-1", "Doe", "Jane", null), hospital, "REG", "HOSP1", "MSG-1");
 
+        // isNull() on the payload is load-bearing: one probe must not park a
+        // full PID in the DLQ.
         verify(messageRecorder).recordMessage(
             eq("MLLP:REG/HOSP1"), any(),
             eq(IntegrationMessageDirection.INBOUND),
-            eq("ADT^A08"), eq("MSH|raw|body"),
+            eq("ADT^A08"), isNull(),
             eq(IntegrationMessageStatus.FAILED),
-            eq("cross-tenant rejection"));
+            eq("cross-tenant rejection (MSH-10 MSG-1)"));
     }
 
     @Test
@@ -194,16 +196,15 @@ class MllpInboundAdtServiceImplTest {
         when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-X"))
             .thenReturn(Optional.empty());
 
-        service.processAdt(adt("MRN-X", "Doe", "Jane", null),
-            hospital, "REG", "HOSP1", "MSG-1", "MSH|raw|body");
+        service.processAdt(adt("MRN-X", "Doe", "Jane", null), hospital, "REG", "HOSP1", "MSG-1");
 
         // The operator can still tell the two apart. The sender cannot.
         verify(messageRecorder).recordMessage(
             eq("MLLP:REG/HOSP1"), any(),
             eq(IntegrationMessageDirection.INBOUND),
-            eq("ADT^A08"), eq("MSH|raw|body"),
+            eq("ADT^A08"), isNull(),
             eq(IntegrationMessageStatus.FAILED),
-            eq("PID-3 not found"));
+            eq("PID-3 not found (MSH-10 MSG-1)"));
     }
 
     @Test
@@ -216,7 +217,7 @@ class MllpInboundAdtServiceImplTest {
             .thenReturn(Optional.of(new PatientHospitalRegistration()));
 
         assertThat(service.processAdt(adt("MRN-1", "Doe", "Jane", LocalDate.of(1985, 1, 1)),
-            hospital, "REG", "HOSP1", "MSG-1", "MSH|raw|body"))
+            hospital, "REG", "HOSP1", "MSG-1"))
             .isEqualTo(MllpInboundOutcome.ACCEPTED);
 
         verify(messageRecorder, never()).recordMessage(

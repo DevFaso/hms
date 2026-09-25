@@ -13,6 +13,7 @@ import com.example.hms.service.integration.MllpInboundAdtService;
 import com.example.hms.service.integration.MllpInboundAdtVisitProjectionService;
 import com.example.hms.service.integration.MllpInboundOutcome;
 import com.example.hms.service.integration.message.IntegrationMessageRecorder;
+import com.example.hms.service.integration.message.MllpRecordingContext;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedAdtMessage;
 
 import java.util.Optional;
@@ -41,8 +42,7 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
                                          Hospital receivingHospital,
                                          String sendingApplication,
                                          String sendingFacility) {
-        return processAdt(parsed, receivingHospital, sendingApplication, sendingFacility,
-            null, null);
+        return processAdt(parsed, receivingHospital, sendingApplication, sendingFacility, null);
     }
 
     @Override
@@ -52,34 +52,15 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
                                          String sendingApplication,
                                          String sendingFacility,
                                          String messageControlId) {
-        return processAdt(parsed, receivingHospital, sendingApplication, sendingFacility,
-            messageControlId, null);
-    }
-
-    @Override
-    @Transactional
-    public MllpInboundOutcome processAdt(ParsedAdtMessage parsed,
-                                         Hospital receivingHospital,
-                                         String sendingApplication,
-                                         String sendingFacility,
-                                         String messageControlId,
-                                         String rawMessageBody) {
-        String integrationId = buildIntegrationId(sendingApplication, sendingFacility);
-        UUID organizationId = organizationIdOf(receivingHospital);
-        String messageType = messageTypeOf(parsed);
         if (parsed == null || !StringUtils.hasText(parsed.mrn())) {
             log.warn("MLLP ADT rejected — missing PID-3 MRN (sender={}/{} hospital={})",
                 sendingApplication, sendingFacility,
                 receivingHospital != null ? receivingHospital.getId() : null);
-            recordReject(integrationId, organizationId, messageType, rawMessageBody,
-                "missing PID-3 MRN");
             return MllpInboundOutcome.REJECTED_INVALID;
         }
         if (receivingHospital == null || receivingHospital.getId() == null) {
             log.warn("MLLP ADT rejected — no resolved hospital (sender={}/{})",
                 sendingApplication, sendingFacility);
-            recordReject(integrationId, organizationId, messageType, rawMessageBody,
-                "no resolved hospital");
             return MllpInboundOutcome.REJECTED_INVALID;
         }
 
@@ -91,8 +72,8 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
             log.warn("MLLP ADT rejected — PID-3 unknown to EMPI (sender={}/{} hospital={} event={})",
                 sendingApplication, sendingFacility,
                 receivingHospital.getId(), parsed.triggerEvent());
-            recordReject(integrationId, organizationId, messageType, rawMessageBody,
-                "PID-3 not found");
+            recordReject(parsed, receivingHospital, sendingApplication, sendingFacility,
+                messageControlId, "PID-3 not found");
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
         }
 
@@ -109,8 +90,8 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
             // inconsistency, treat as not-found rather than crashing.
             log.warn("MLLP ADT — PID-3 resolved to patientId={} but no Patient row exists",
                 patientId);
-            recordReject(integrationId, organizationId, messageType, rawMessageBody,
-                "EMPI alias without a patient row");
+            recordReject(parsed, receivingHospital, sendingApplication, sendingFacility,
+                messageControlId, "EMPI alias without a patient row");
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
         }
         Patient patient = patientOpt.get();
@@ -135,17 +116,8 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
                 + "(sender={}/{})",
                 patient.getId(), receivingHospital.getId(),
                 sendingApplication, sendingFacility);
-            // The reason the ACK cannot carry. The integration DLQ row
-            // says "cross-tenant rejection", so the misconfiguration is
-            // diagnosable; the sender sees the same three letters it would
-            // get for a typo. That surface is
-            // /super-admin/integration-messages, SUPER_ADMIN only — a
-            // hospital's own integration operator cannot read it today and
-            // has to escalate. Widening it is a separate change; what this
-            // one guarantees is that the reason is written down somewhere the
-            // sender is not.
-            recordReject(integrationId, organizationId, messageType, rawMessageBody,
-                "cross-tenant rejection");
+            recordReject(parsed, receivingHospital, sendingApplication, sendingFacility,
+                messageControlId, "cross-tenant rejection");
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
         }
 
@@ -188,59 +160,50 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
     }
 
     /**
-     * Best-effort FAILED record for a rejected ADT. The recorder runs in
-     * REQUIRES_NEW and swallows its own exceptions, so the row survives this
-     * transaction rolling back; the null guard and try-catch are
-     * belt-and-braces for a narrow test context with no recorder bean. The
-     * reason text never carries an identifier.
+     * The rejection reason the ACK is not allowed to carry, written where the
+     * sender cannot read it.
+     *
+     * <p><b>The message body is deliberately not stored.</b> The recorder will
+     * take up to 64 KB of payload and the dispatcher's own parse-failure rows
+     * use it, but a refusal on this path is reached once per probe by exactly
+     * the sender this change is defending against — storing a full PID
+     * (MRN, name, date of birth, address) per attempt, unencrypted, would turn
+     * the compensating control into an unbounded PHI sink. MSH-10 is the
+     * sender's own message id, not patient data, and is what an operator needs
+     * to correlate the refusal with the sender's queue. Such a row is not
+     * replayable, which is correct: a cross-tenant message must not be
+     * replayed, it must be reconfigured.
+     *
+     * <p>Best-effort: the recorder is {@code REQUIRES_NEW} and swallows its
+     * own exceptions, so the row survives this transaction rolling back.
      */
-    private void recordReject(String integrationId, UUID organizationId,
-                              String messageType, String rawMessageBody, String reason) {
-        if (messageRecorder == null) {
-            return;
-        }
+    private void recordReject(ParsedAdtMessage parsed, Hospital receivingHospital,
+                              String sendingApplication, String sendingFacility,
+                              String messageControlId, String reason) {
         try {
             messageRecorder.recordMessage(
-                integrationId, organizationId,
+                MllpRecordingContext.integrationId(sendingApplication, sendingFacility),
+                MllpRecordingContext.organizationId(receivingHospital),
                 IntegrationMessageDirection.INBOUND,
-                messageType, rawMessageBody,
-                IntegrationMessageStatus.FAILED, reason);
+                messageTypeOf(parsed),
+                null,
+                IntegrationMessageStatus.FAILED,
+                withControlId(reason, messageControlId));
         } catch (RuntimeException ex) {
-            log.warn("MLLP ADT message recorder threw for integration={} reason={}",
-                integrationId, reason, ex);
+            log.warn("MLLP ADT message recorder threw for sender={}/{} reason={}",
+                sendingApplication, sendingFacility, reason, ex);
         }
     }
 
-    /**
-     * {@code integration_message_event.integration_id} is
-     * {@code VARCHAR(120) NOT NULL}, and HL7 v2.5 permits 180 characters in
-     * each of MSH-3 and MSH-4. Truncate for the same reason
-     * {@code Hl7MessageDispatcher.integrationIdFor} does: an over-long id
-     * fails the recorder insert, the recorder swallows it, and the DLQ row
-     * disappears — which on this path is the only surviving record of the
-     * rejection.
-     */
-    private static final int RECORDER_INTEGRATION_ID_MAX = 120;
-
-    private static String buildIntegrationId(String app, String fac) {
-        String safeApp = StringUtils.hasText(app) ? app.trim() : "?";
-        String safeFac = StringUtils.hasText(fac) ? fac.trim() : "?";
-        String raw = "MLLP:" + safeApp + "/" + safeFac;
-        return raw.length() > RECORDER_INTEGRATION_ID_MAX
-            ? raw.substring(0, RECORDER_INTEGRATION_ID_MAX)
-            : raw;
+    private static String withControlId(String reason, String messageControlId) {
+        return StringUtils.hasText(messageControlId)
+            ? reason + " (MSH-10 " + messageControlId.trim() + ")"
+            : reason;
     }
 
     private static String messageTypeOf(ParsedAdtMessage parsed) {
         String trigger = parsed == null ? null : parsed.triggerEvent();
         return StringUtils.hasText(trigger) ? "ADT^" + trigger.trim() : "ADT";
-    }
-
-    private static UUID organizationIdOf(Hospital hospital) {
-        if (hospital == null || hospital.getOrganization() == null) {
-            return null;
-        }
-        return hospital.getOrganization().getId();
     }
 
     /**

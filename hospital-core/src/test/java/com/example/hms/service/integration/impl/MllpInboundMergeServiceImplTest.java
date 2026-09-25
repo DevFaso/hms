@@ -29,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -190,16 +191,17 @@ class MllpInboundMergeServiceImplTest {
         registeredHere(survivingPatientId, true);
         registeredHere(retiringPatientId, false);
 
-        service.processMerge(message(), hospital, "LIS", "HOSP1", "MSG-A40-1", "MSH|raw|body");
+        process();
 
-        // The ACK cannot say this. The DLQ row can, and the operator who owns
-        // the sender is the one who reads it.
+        // The ACK cannot say this. The DLQ row can — and it says it without
+        // the body, so one probe does not park two MRNs and a name in the
+        // payload column.
         verify(messageRecorder).recordMessage(
             eq("MLLP:LIS/HOSP1"), any(),
             eq(IntegrationMessageDirection.INBOUND),
-            eq("ADT^A40"), eq("MSH|raw|body"),
+            eq("ADT^A40"), isNull(),
             eq(IntegrationMessageStatus.FAILED),
-            eq("cross-tenant rejection"));
+            eq("cross-tenant rejection (MSH-10 MSG-A40-1)"));
     }
 
     @Test
@@ -207,14 +209,14 @@ class MllpInboundMergeServiceImplTest {
         empiKnows(SURVIVING_MRN, survivingPatientId);
         empiDoesNotKnow(PRIOR_MRN);
 
-        service.processMerge(message(), hospital, "LIS", "HOSP1", "MSG-A40-1", "MSH|raw|body");
+        process();
 
         verify(messageRecorder).recordMessage(
             eq("MLLP:LIS/HOSP1"), any(),
             eq(IntegrationMessageDirection.INBOUND),
-            eq("ADT^A40"), eq("MSH|raw|body"),
+            eq("ADT^A40"), isNull(),
             eq(IntegrationMessageStatus.FAILED),
-            eq("identifier not found"));
+            eq("identifier not found (MSH-10 MSG-A40-1)"));
     }
 
     @Test

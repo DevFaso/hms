@@ -32,6 +32,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -46,6 +47,9 @@ import static org.mockito.Mockito.when;
  * and collect the MRNs that are real in hospitals it cannot read. PR #715
  * closed the same hole on ORU^R01 by making a cross-tenant accession answer
  * exactly like an unknown one; this is that fix on the other two doors.
+ *
+ * <p>The refusal rows carry no payload on purpose: one probe must not park a
+ * full PID in the DLQ. That is asserted with {@code isNull()} below.
  *
  * <p>Everything here goes through the <b>real</b> dispatcher, the real parser
  * and the real inbound services — only repositories, EMPI and the recorder are
@@ -200,9 +204,9 @@ class AdtCrossTenantAckTest {
         verify(messageRecorder).recordMessage(
             eq("MLLP:REGISTRATION/HOSP-B"), any(),
             eq(IntegrationMessageDirection.INBOUND),
-            eq("ADT^A08"), eq(a08(FOREIGN_MRN)),
+            eq("ADT^A08"), isNull(),
             eq(IntegrationMessageStatus.FAILED),
-            eq("cross-tenant rejection"));
+            eq("cross-tenant rejection (MSH-10 CTRL-SAME)"));
     }
 
     /* ── ADT^A40 ─────────────────────────────────────────────────────── */
@@ -262,9 +266,9 @@ class AdtCrossTenantAckTest {
         verify(messageRecorder).recordMessage(
             eq("MLLP:REGISTRATION/HOSP-B"), any(),
             eq(IntegrationMessageDirection.INBOUND),
-            eq("ADT^A40"), eq(a40(LOCAL_MRN, FOREIGN_MRN)),
+            eq("ADT^A40"), isNull(),
             eq(IntegrationMessageStatus.FAILED),
-            eq("cross-tenant rejection"));
+            eq("cross-tenant rejection (MSH-10 CTRL-SAME)"));
     }
 
     @Test

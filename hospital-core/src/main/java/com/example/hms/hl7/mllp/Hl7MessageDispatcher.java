@@ -8,6 +8,7 @@ import com.example.hms.service.integration.MllpInboundLabService;
 import com.example.hms.service.integration.MllpInboundMergeService;
 import com.example.hms.service.integration.MllpInboundOutcome;
 import com.example.hms.service.integration.message.IntegrationMessageRecorder;
+import com.example.hms.service.integration.message.MllpRecordingContext;
 import com.example.hms.service.platform.MllpAllowedSenderService;
 import com.example.hms.utility.Hl7v2MessageBuilder;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedAdtMessage;
@@ -192,7 +193,7 @@ public class Hl7MessageDispatcher {
         }
         MllpInboundOutcome outcome = inboundAdt.processAdt(
             parsed, hospital, header.sendingApplication(), header.sendingFacility(),
-            header.messageControlId(), hl7Body);
+            header.messageControlId());
         return ackForOutcome(header, outcome, header.messageType());
     }
 
@@ -220,7 +221,7 @@ public class Hl7MessageDispatcher {
         }
         MllpInboundOutcome outcome = inboundMerge.processMerge(
             parsed, hospital, header.sendingApplication(), header.sendingFacility(),
-            header.messageControlId(), hl7Body);
+            header.messageControlId());
         return ackForOutcome(header, outcome, "ADT^A40");
     }
 
@@ -247,33 +248,20 @@ public class Hl7MessageDispatcher {
     }
 
     /**
-     * Recorder column {@code clinical.integration_message_event.integration_id}
-     * is {@code VARCHAR(120)}. Truncate aggressively here so a sender with a
-     * pathological MSH-3 / MSH-4 (HL7 v2.5 permits each up to 180 chars)
-     * cannot push the synthesised id past the column limit and cause the
-     * recorder insert to fail — which would silently drop the DLQ entry for
-     * dispatcher-level rejects.
+     * One spelling of the sender's id for the whole MLLP surface. The
+     * dispatcher's pre-service rejects and the inbound services' own rejects
+     * have to land under the same {@code integration_id}, or an operator
+     * reading the DLQ for a misconfigured sender sees half its messages. The
+     * truncation that used to live here lives in {@link MllpRecordingContext}
+     * with the reason it exists.
      */
-    private static final int RECORDER_INTEGRATION_ID_MAX = 120;
-
     private static String integrationIdFor(Hl7MessageHeader header) {
-        String app = blankOrNullToPlaceholder(header.sendingApplication());
-        String fac = blankOrNullToPlaceholder(header.sendingFacility());
-        String raw = "MLLP:" + app + "/" + fac;
-        return raw.length() > RECORDER_INTEGRATION_ID_MAX
-            ? raw.substring(0, RECORDER_INTEGRATION_ID_MAX)
-            : raw;
-    }
-
-    private static String blankOrNullToPlaceholder(String value) {
-        return (value == null || value.isBlank()) ? "?" : value.trim();
+        return MllpRecordingContext.integrationId(
+            header.sendingApplication(), header.sendingFacility());
     }
 
     private static UUID organizationIdOf(Hospital hospital) {
-        if (hospital == null || hospital.getOrganization() == null) {
-            return null;
-        }
-        return hospital.getOrganization().getId();
+        return MllpRecordingContext.organizationId(hospital);
     }
 
     private String ackForOutcome(Hl7MessageHeader header, MllpInboundOutcome outcome, String label) {
