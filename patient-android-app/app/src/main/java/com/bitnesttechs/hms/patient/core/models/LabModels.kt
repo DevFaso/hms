@@ -184,11 +184,41 @@ data class LabResultDto(
         // `formatReferenceRange` falls back to the RESULT's unit when
         // `ranges[0]` has none, so whenever this row has a unit the formatted
         // range carries one too.
-        if (range.isEmpty()) return true
-        if (!range.endsWith(unit, ignoreCase = true)) return false
-        val boundary = range.length - unit.length - 1
-        return boundary < 0 || !range[boundary].isLetterOrDigit()
+        if (range.isBlank()) return true
+        val haystack = normalizedUnit(range)
+        val needle = normalizedUnit(unit)
+        if (needle.isEmpty()) return true
+        if (!haystack.endsWith(needle)) return false
+        val boundary = haystack.length - needle.length - 1
+        if (boundary < 0) return true
+        val preceding = haystack[boundary]
+        // A DIGIT before the unit is the numbers/unit junction — "90-120mmhg"
+        // — so the whole unit is there. A LETTER means the suffix cut a longer
+        // unit in half: `g/dl` inside `mg/dl`, `u/l` inside `mu/l`. The one
+        // letter that is not part of a unit is the `x` of the `x10^9/L`
+        // multiplication marker; no real unit ends `…xg/dL`.
+        return !preceding.isLetter() || preceding == 'x'
     }
+
+    /**
+     * Enough normalisation that a purely COSMETIC difference between the
+     * configured range's unit and the result's does not read as a real one.
+     *
+     * `findMatchingRange` compares `trim().equalsIgnoreCase(...)` and falls
+     * back to `ranges[0]`, so `mm Hg` vs `mmHg`, `µmol/L` vs `umol/L` and
+     * `x10^9/L` vs `10^9/L` all end up grading against the range on screen —
+     * the app must not caveat those. Case, whitespace, the two micro signs
+     * and a leading multiplication marker are therefore folded away. What is
+     * deliberately NOT folded is an SI prefix: `mg` and `g` are a
+     * thousandfold apart and that is the disagreement worth flagging.
+     */
+    private fun normalizedUnit(raw: String): String =
+        raw.lowercase()
+            .replace('\u00B5', 'u') // MICRO SIGN
+            .replace('\u03BC', 'u') // GREEK SMALL LETTER MU
+            .filterNot { it.isWhitespace() }
+            .removePrefix("x")
+            .removePrefix("*")
 
     /** The date worth showing: a pending row's `resultedAt` is not its own. */
     val displayDate: String? get() = if (isPending) collectedAt else (resultedAt ?: collectedAt)

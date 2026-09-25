@@ -264,6 +264,37 @@ class LabModelsTest {
         assertTrue(sameUnit.isGradedNormal)
     }
 
+    /**
+     * `findMatchingRange` falls back to `ranges[0]` on any textual
+     * disagreement, so the range on screen IS the graded one whenever the
+     * difference is only cosmetic. Those must not be caveated.
+     */
+    @Test
+    fun cosmeticUnitDifferencesAreNotTreatedAsAMismatch() {
+        val row = LabResultDto(
+            id = "u", testName = "Test", value = "100", status = "NORMAL", released = true
+        )
+        val equivalent = listOf(
+            "mmHg" to "90 - 120 mm Hg",
+            "umol/L" to "12 - 16 \u00b5mol/L",
+            "\u00b5mol/L" to "12 - 16 umol/L",
+            "\u03bcmol/L" to "12 - 16 umol/L",
+            "10^9/L" to "4 - 11 x10^9/L",
+            "x10^9/L" to "4 - 11 10^9/L",
+            "G/DL" to "12 - 16 g/dL"
+        )
+        for ((rowUnit, shownRange) in equivalent) {
+            val lab = row.copy(unit = rowUnit, referenceRange = shownRange)
+            assertFalse("$rowUnit vs $shownRange must not be a mismatch", lab.referenceRangeUnitUncertain)
+            assertTrue("$rowUnit vs $shownRange must stay graded", lab.isGradedNormal)
+        }
+
+        // An SI prefix is never cosmetic: mg and g are a thousandfold apart.
+        val prefixed = row.copy(unit = "g/dL", referenceRange = "70 - 110 mg/dL")
+        assertTrue(prefixed.referenceRangeUnitUncertain)
+        assertFalse(prefixed.isGradedNormal)
+    }
+
     /** A pending row's `resultedAt` is the analyzer's, not the lab's. */
     @Test
     fun aPendingRowShowsTheOrderDateRatherThanAResultDate() {
