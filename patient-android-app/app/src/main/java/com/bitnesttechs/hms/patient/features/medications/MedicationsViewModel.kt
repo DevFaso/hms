@@ -286,6 +286,14 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                     _outcome.value =
                         Outcome(R.string.refill_cancel_failed, detail ?: "HTTP ${resp.code()}")
                 }
+            } catch (e: CancellationException) {
+                // `awaitFreshLoad` suspends in cancelAndJoin/join, both of
+                // which throw this when the CALLER is cancelled — backing out
+                // of Medications while the post-cancel reload is in flight
+                // tears down viewModelScope. Reporting that as a failed
+                // cancellation, and letting the coroutine finish normally,
+                // is the same trap `load()` already rethrows out of.
+                throw e
             } catch (e: Exception) {
                 _outcome.value = Outcome(R.string.refill_cancel_failed, e.message)
             }
@@ -353,6 +361,9 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                         else -> Outcome(R.string.refill_request_failed, detail ?: "HTTP ${resp.code()}")
                     }
                 }
+            } catch (e: CancellationException) {
+                // See cancelRefill: a cancelled caller is not a failed request.
+                throw e
             } catch (e: Exception) {
                 _outcome.value = Outcome(R.string.refill_request_failed, e.message)
             }

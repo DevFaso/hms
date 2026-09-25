@@ -203,6 +203,15 @@ class LabModelsTest {
             assertFalse("$rowUnit must not match $shownRange", trap.isGradedNormal)
         }
 
+        // Both multiplication markers are accepted at the boundary: a range
+        // and a result BOTH recorded as *10^9/L are byte-identical units, and
+        // only `x` was excepted.
+        val starMarker = ungraded.copy(
+            value = "7.2", unit = "*10^9/L", referenceRange = "4 - 11 *10^9/L"
+        )
+        assertFalse(starMarker.referenceRangeUnitUncertain)
+        assertTrue(starMarker.isGradedNormal)
+
         // A unit that contains digits still matches itself.
         val digitsInUnit = ungraded.copy(
             value = "7.2", unit = "x10^9/L", referenceRange = "4 - 11 x10^9/L"
