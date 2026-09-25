@@ -57,7 +57,13 @@
     @if (loadError()) {
       <p class="stale-banner" role="status">
         {{ 'inBasket.labResultsError' | translate }}
-        <button type="button" class="btn-secondary" (click)="load()">
+        <!--
+          Reachable while a read is in flight, unlike the one in the error
+          card: this branch renders whenever rows are held, and `loadError` is
+          no longer cleared at request start. Four clicks on a slow link were
+          four requests to an endpoint that is an unbounded N+1.
+        -->
+        <button type="button" class="btn-secondary" [disabled]="loading()" (click)="load()">
           {{ 'COMMON.RETRY' | translate }}
         </button>
       </p>
