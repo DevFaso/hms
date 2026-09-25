@@ -13,7 +13,25 @@ public interface PrescriptionService {
 
     PrescriptionResponseDTO createPrescription(PrescriptionRequestDTO request, Locale locale);
 
+    /**
+     * The guarded read: hospital scope, and a patient principal may only read
+     * their own prescription. This is the one to call for a READ.
+     */
     PrescriptionResponseDTO getPrescriptionById(UUID id, Locale locale);
+
+    /**
+     * The same read WITHOUT the patient-ownership guard, for the read-back a
+     * write endpoint returns after it has already authorised and committed the
+     * write ({@code pharmacist-verify}, {@code request-clarification},
+     * {@code resolve-clarification}).
+     *
+     * <p>Those endpoints admit roles the read does not — {@code
+     * ROLE_PHARMACY_VERIFIER} above all — so putting them through the guard
+     * would let an actor who also happens to be a patient commit the write and
+     * then be told 404 by the response to it, with a retry refused as already
+     * done. Hospital scope still applies. Do not call this from a read path.
+     */
+    PrescriptionResponseDTO getPrescriptionAfterWrite(UUID id, Locale locale);
 
     /**
      * Sign a prescription (P2 #16).

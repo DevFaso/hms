@@ -9,11 +9,10 @@ import java.util.Set;
  * One definition of "the caller is the patient and nobody else" for the
  * prescription reads.
  *
- * <p>{@code GET /prescriptions/{id}} admits exactly five roles — four of
- * the clinical readers below plus {@code ROLE_PATIENT} — so on that endpoint
- * "holds ROLE_PATIENT and no clinical reader role" is the same thing as "a
- * pure patient principal". Two decisions hang off it and they must not drift
- * apart:
+ * <p>{@code GET /prescriptions/{id}} admits four clinical roles plus
+ * {@code ROLE_PATIENT}, so on that endpoint "holds ROLE_PATIENT and no
+ * clinical reader role" is the same thing as "a pure patient principal". Two
+ * decisions hang off it and they must not drift apart:
  * <ol>
  *   <li>the patient's copy omits the pharmacist-to-prescriber clarification
  *       exchange ({@code PrescriptionController.getById}), and</li>
@@ -21,15 +20,10 @@ import java.util.Set;
  *       ({@code PrescriptionServiceImpl.getPrescriptionById}).</li>
  * </ol>
  *
- * <p>A super-admin is never patient-only here, and the set names
- * {@code ROLE_SUPER_ADMIN} outright rather than leaning on
- * {@link com.example.hms.security.RoleExpansion#SUPER_ADMIN_INHERITS}: the
- * expansion runs on the password/JWT path but
- * {@code KeycloakJwtAuthenticationConverter} maps realm roles straight to
- * authorities, so on the OIDC path a super-admin who is also a patient would
- * otherwise read as patient-only. Neither is a clinician who happens to be a
- * patient at the hospital — the clinical role wins, as it already did for the
- * redaction.
+ * <p>A clinician who happens to be a patient at the hospital is not
+ * patient-only — the clinical role wins, as it already did for the redaction
+ * — and neither is a super-admin. Which roles count, and why the set does not
+ * simply mirror the annotation, is on the constant below.
  *
  * <p>Not to be confused with {@code RoleValidator.isPatientOnlyFromAuth()},
  * which answers a similar-sounding question with a different staff set: it
@@ -43,17 +37,25 @@ public final class PrescriptionReaderRoles {
      * The roles that read a prescription as a clinician rather than as its
      * subject.
      *
-     * <p>Wider than the five {@code GET /prescriptions/{id}} admits, on
-     * purpose: {@code PrescriptionServiceImpl.getPrescriptionById} is also the
-     * read-back of {@code /{id}/pharmacist-verify} and
-     * {@code /{id}/request-clarification}, which admit
-     * {@code ROLE_PHARMACY_VERIFIER} and {@code ROLE_SUPER_ADMIN}. Leaving
-     * those two out would let a pharmacy verifier who is also a patient commit
-     * the verification and then be told 404 by the read-back that follows it.
+     * <p>{@code ROLE_PHYSICIAN} and {@code ROLE_SURGEON} are named alongside
+     * {@code ROLE_DOCTOR}, and {@code ROLE_SUPER_ADMIN} outright, because
+     * {@link com.example.hms.security.RoleExpansion} runs on the password/JWT
+     * path but {@code KeycloakJwtAuthenticationConverter} maps realm roles
+     * straight to authorities. Without them a surgeon or a super-admin who is
+     * also a patient at the hospital would read a colleague’s prescription
+     * over one login and get a 404 over the other.
+     *
+     * <p>{@code ROLE_PHARMACY_VERIFIER} is deliberately NOT here. It is not a
+     * reader of {@code GET /prescriptions/{id}} — the annotation does not
+     * admit it — and exempting it would let a pharmacy verifier who is also
+     * a patient read a stranger’s prescription through the patient door. The
+     * write endpoints that do admit it return their read-back through
+     * {@code PrescriptionService.getPrescriptionAfterWrite}, which skips the
+     * ownership guard because the write was already authorised.
      */
     public static final Set<String> CLINICAL_READER_ROLES = Set.of(
-        "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_PHARMACIST",
-        "ROLE_PHARMACY_VERIFIER", "ROLE_SUPER_ADMIN");
+        "ROLE_DOCTOR", "ROLE_PHYSICIAN", "ROLE_SURGEON",
+        "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_PHARMACIST", "ROLE_SUPER_ADMIN");
 
     private PrescriptionReaderRoles() {
     }

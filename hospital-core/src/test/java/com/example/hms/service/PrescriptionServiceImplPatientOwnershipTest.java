@@ -206,7 +206,8 @@ class PrescriptionServiceImplPatientOwnershipTest {
     @Test
     @DisplayName("every clinical reader still reads any prescription at their hospital")
     void clinicalRolesAreUnaffected() {
-        for (String role : List.of("ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_PHARMACIST")) {
+        for (String role : List.of("ROLE_DOCTOR", "ROLE_PHYSICIAN", "ROLE_SURGEON",
+                "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_PHARMACIST")) {
             SecurityContextHolder.clearContext();
             authenticateAs(role);
             UUID id = prescriptionFor(otherPatient());
@@ -265,9 +266,47 @@ class PrescriptionServiceImplPatientOwnershipTest {
     }
 
     @Test
-    @DisplayName("a pharmacy verifier who is also a patient still gets the verify read-back")
-    void pharmacyVerifierWhoIsAlsoAPatientIsUnaffected() {
+    @DisplayName("a pharmacy verifier who is also a patient gets the read-back of their own write")
+    void pharmacyVerifierWhoIsAlsoAPatientGetsTheReadBack() {
         authenticateAs("ROLE_PATIENT", "ROLE_PHARMACY_VERIFIER");
+        UUID id = prescriptionFor(otherPatient());
+
+        assertThat(service.getPrescriptionAfterWrite(id, Locale.ENGLISH).getId()).isEqualTo(id);
+    }
+
+    @Test
+    @DisplayName("but the same principal reading through the patient door is refused")
+    void pharmacyVerifierWhoIsAlsoAPatientCannotReadAStranger() {
+        authenticateAs("ROLE_PATIENT", "ROLE_PHARMACY_VERIFIER");
+        UUID id = prescriptionFor(otherPatient());
+
+        assertThatThrownBy(() -> service.getPrescriptionById(id, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .hasMessageContaining(NOT_FOUND_KEY);
+    }
+
+    @Test
+    @DisplayName("the read-back still refuses a prescription at another hospital")
+    void readBackKeepsHospitalScope() {
+        authenticateAs("ROLE_PHARMACY_VERIFIER");
+        com.example.hms.model.Hospital elsewhere = new com.example.hms.model.Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        UUID id = UUID.randomUUID();
+        com.example.hms.model.Prescription prescription = new com.example.hms.model.Prescription();
+        prescription.setId(id);
+        prescription.setHospital(elsewhere);
+        prescription.setPatient(otherPatient());
+        when(prescriptionRepository.findById(id)).thenReturn(Optional.of(prescription));
+
+        assertThatThrownBy(() -> service.getPrescriptionAfterWrite(id, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .hasMessageContaining(NOT_FOUND_KEY);
+    }
+
+    @Test
+    @DisplayName("a surgeon who is also a patient is a clinician on the OIDC path too")
+    void surgeonWhoIsAlsoAPatientIsUnaffectedOverOidc() {
+        authenticateViaOidcAs("ROLE_SURGEON", "ROLE_PATIENT");
         UUID id = prescriptionFor(otherPatient());
 
         assertThat(service.getPrescriptionById(id, Locale.ENGLISH).getId()).isEqualTo(id);

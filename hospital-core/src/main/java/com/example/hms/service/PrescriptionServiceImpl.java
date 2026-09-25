@@ -130,6 +130,20 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Override
     @Transactional
     public PrescriptionResponseDTO getPrescriptionById(UUID id, Locale locale) {
+        Prescription prescription = findWithinHospitalScope(id);
+        requireOwnPrescriptionWhenPatient(prescription);
+        return prescriptionMapper.toResponseDTO(prescription);
+    }
+
+    @Override
+    @Transactional
+    public PrescriptionResponseDTO getPrescriptionAfterWrite(UUID id, Locale locale) {
+        // No ownership guard: the caller has just been authorised for, and has
+        // committed, a write on this prescription. See the interface javadoc.
+        return prescriptionMapper.toResponseDTO(findWithinHospitalScope(id));
+    }
+
+    private Prescription findWithinHospitalScope(UUID id) {
         Prescription prescription = prescriptionRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
 
@@ -141,10 +155,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             // Return 404 (not 403) to avoid info leakage
             throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
-
-        requireOwnPrescriptionWhenPatient(prescription);
-
-        return prescriptionMapper.toResponseDTO(prescription);
+        return prescription;
     }
 
     /**
@@ -166,9 +177,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * for every {@code /me/patient/*} read, through the same resolver.
      *
      * <p>A no-op for every clinical role, including a clinician who is also a
-     * patient at the hospital, a pharmacy verifier reading an order back after
-     * verifying it, and a super-admin on either auth path — see
-     * {@link PrescriptionReaderRoles}.
+     * patient at the hospital and a super-admin on either auth path — see
+     * {@link PrescriptionReaderRoles}. The write endpoints that admit roles
+     * this read does not go through {@link #getPrescriptionAfterWrite}
+     * instead.
      */
     private void requireOwnPrescriptionWhenPatient(Prescription prescription) {
         org.springframework.security.core.Authentication auth =

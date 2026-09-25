@@ -130,7 +130,7 @@ public class PrescriptionController {
         Locale locale) {
         String note = request != null ? request.getNote() : null;
         pharmacistVerificationService.verify(id, note);
-        return ResponseEntity.ok(prescriptionService.getPrescriptionById(id, locale));
+        return ResponseEntity.ok(prescriptionService.getPrescriptionAfterWrite(id, locale));
     }
 
     /**
@@ -154,7 +154,7 @@ public class PrescriptionController {
         @Valid @RequestBody PrescriptionClarificationRequestDTO request,
         Locale locale) {
         clarificationService.requestClarification(id, request.getReason());
-        return ResponseEntity.ok(prescriptionService.getPrescriptionById(id, locale));
+        return ResponseEntity.ok(prescriptionService.getPrescriptionAfterWrite(id, locale));
     }
 
     /**
@@ -174,7 +174,7 @@ public class PrescriptionController {
         @Valid @RequestBody(required = false) PrescriptionClarificationResolutionDTO request,
         Locale locale) {
         clarificationService.resolveClarification(id, request != null ? request.getResponse() : null);
-        return ResponseEntity.ok(prescriptionService.getPrescriptionById(id, locale));
+        return ResponseEntity.ok(prescriptionService.getPrescriptionAfterWrite(id, locale));
     }
 
     @GetMapping("/{id}")
