@@ -451,13 +451,12 @@ export class PatientDetailComponent implements OnInit {
   }
 
   /**
-   * The documents tab is hospital-pinned (the backend reads through the
-   * hospital the patient is registered at). The chart has no scope selector
-   * of its own, so the tab hosts the cross-tenant chip and forwards the
-   * selection; a change re-fetches under the new X-Hospital-Id.
-   */
-  /**
    * The scope the Documents tab's list was loaded for.
+   *
+   * The tab is hospital-pinned (the backend reads through the hospital the
+   * patient is registered at). The chart has no scope selector of its own, so
+   * the tab hosts the cross-tenant chip and forwards the selection; a change
+   * re-fetches under the new X-Hospital-Id.
    *
    * Seeded from the LIVE scope, not null. `DocumentsTabComponent` reloads only
    * when this input actually changes, and the value itself is never sent —
@@ -467,7 +466,7 @@ export class PatientDetailComponent implements OnInit {
    * (Before `preserveScope`, the chip's own `enableGlobalView()` on mount hid
    * this by forcing the two into agreement.)
    */
-  readonly documentsScope = signal<string | null>(this.roleContext.effectiveHospitalIdForRequest());
+  readonly documentsScope = signal<string | null>(this.scopedHospitalId());
 
   onDocumentsScopeChange(hospitalId: string | null): void {
     this.documentsScope.set(hospitalId);
