@@ -519,14 +519,10 @@
                client. The panel is absent — not empty, not erroring — for the
                roles the route admits but the endpoints do not (NURSE, MIDWIFE,
                ADMIN), so nobody is shown a 403 they did not ask for. -->
-          @if ((canReadPharmacyHistory() || historyNeedsScope()) && hasPharmacyHistory(rx)) {
+          @if (canReadPharmacyHistory() && hasPharmacyHistory(rx)) {
             <div class="detail-notes" data-testid="rx-pharmacy-history">
               <span class="field-label">{{ 'PRESCRIPTIONS.HISTORY.SECTION' | translate }}</span>
-              @if (historyNeedsScope()) {
-                <p class="muted" data-testid="rx-history-scope">
-                  {{ 'PRESCRIPTIONS.HISTORY.SCOPE_REQUIRED' | translate }}
-                </p>
-              } @else if (historyLoading()) {
+              @if (historyLoading()) {
                 <div class="loading-state" data-testid="rx-history-loading">
                   <div class="spinner"></div>
                   <p>{{ 'COMMON.LOADING' | translate }}</p>
@@ -609,6 +605,22 @@
                             }}</span>
                           </td>
                           <td>
+                            <!-- The no-show arrives as a flag, not as stored
+                                 prose: the server used to compose "Partner
+                                 no-show: " in English into the reason column
+                                 and it reached a French or Spanish prescriber
+                                 in English. Anything the pharmacist typed is
+                                 kept and shown as they typed it. -->
+                            @if (r.partnerNoShow) {
+                              <span
+                                class="attention-note"
+                                [attr.data-testid]="'rx-routing-no-show-' + r.id"
+                                >{{ 'PRESCRIPTIONS.HISTORY.PARTNER_NO_SHOW' | translate }}</span
+                              >
+                            }
+                            @if (r.noShowReason) {
+                              <span class="cell-sub">{{ r.noShowReason }}</span>
+                            }
                             @if (r.reason) {
                               <span>{{ r.reason }}</span>
                             }
@@ -619,7 +631,12 @@
                                     : { date: (r.estimatedRestockDate | date: 'shortDate') }
                               }}</span>
                             }
-                            @if (!r.reason && !r.estimatedRestockDate) {
+                            @if (
+                              !r.reason &&
+                              !r.partnerNoShow &&
+                              !r.noShowReason &&
+                              !r.estimatedRestockDate
+                            ) {
                               —
                             }
                           </td>

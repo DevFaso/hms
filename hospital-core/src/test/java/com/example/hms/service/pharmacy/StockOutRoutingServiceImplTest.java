@@ -858,9 +858,14 @@ class StockOutRoutingServiceImplTest {
             service.partnerNoShow(decision.getId(), "  Patient waited two days, nothing delivered ");
 
             assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
+            // The fact is a marker the client translates, never an English
+            // sentence: a composed "Partner no-show: " reached French and
+            // Spanish prescribers in English, and stored text cannot be
+            // translated at render time.
             assertThat(decision.getReason())
                     .startsWith("Nearest partner has stock")
-                    .contains("Partner no-show: Patient waited two days, nothing delivered");
+                    .contains("[PARTNER_NO_SHOW] Patient waited two days, nothing delivered")
+                    .doesNotContain("Partner no-show");
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
             assertThat(prescription.getPharmacyId()).isNull();
             assertThat(prescription.getPharmacyName()).isNull();
@@ -905,6 +910,66 @@ class StockOutRoutingServiceImplTest {
 
             assertThatThrownBy(() -> service.partnerNoShow(decision.getId(), "never came"))
                     .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("a global-view super-admin may record one: no hospital, no narrowing")
+        void globalViewSuperAdminIsNotRefused() {
+            PrescriptionRoutingDecision decision = accepted();
+            prescription.setStatus(PrescriptionStatus.PARTNER_ACCEPTED);
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            when(routingDecisionRepository.findById(decision.getId())).thenReturn(Optional.of(decision));
+            when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(routingMapper.toResponseDTO(decision))
+                    .thenReturn(RoutingDecisionResponseDTO.builder().status("CANCELLED").build());
+
+            service.partnerNoShow(decision.getId(), "never came");
+
+            assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
+        }
+    }
+
+    @Nested
+    @DisplayName("a super-admin in GLOBAL view has no hospital — the read is unscoped, not a 500")
+    class GlobalViewReads {
+
+        @Test
+        @DisplayName("listByPrescription answers instead of dereferencing a null hospital")
+        void listByPrescriptionUnscoped() {
+            org.springframework.data.domain.Pageable pageable =
+                    org.springframework.data.domain.PageRequest.of(0, 10);
+            PrescriptionRoutingDecision decision = PrescriptionRoutingDecision.builder()
+                    .prescription(prescription)
+                    .build();
+            RoutingDecisionResponseDTO dto = RoutingDecisionResponseDTO.builder().build();
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(routingDecisionRepository.findByPrescriptionId(prescriptionId, pageable))
+                    .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(decision)));
+            when(routingMapper.toResponseDTO(decision)).thenReturn(dto);
+
+            assertThat(service.listByPrescription(prescriptionId, pageable).getContent())
+                    .containsExactly(dto);
+        }
+
+        @Test
+        @DisplayName("listByPatient answers instead of dereferencing a null hospital")
+        void listByPatientUnscoped() {
+            org.springframework.data.domain.Pageable pageable =
+                    org.springframework.data.domain.PageRequest.of(0, 10);
+            PrescriptionRoutingDecision decision = PrescriptionRoutingDecision.builder()
+                    .prescription(prescription)
+                    .build();
+            RoutingDecisionResponseDTO dto = RoutingDecisionResponseDTO.builder().build();
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            when(routingDecisionRepository.findByDecidedForPatientId(patient.getId(), pageable))
+                    .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(decision)));
+            when(routingMapper.toResponseDTO(decision)).thenReturn(dto);
+
+            assertThat(service.listByPatient(patient.getId(), pageable).getContent()).containsExactly(dto);
         }
     }
 

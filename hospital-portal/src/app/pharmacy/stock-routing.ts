@@ -45,6 +45,7 @@ export class StockRoutingComponent implements OnInit {
   // Routing decisions history
   decisions = signal<RoutingDecisionResponse[]>([]);
   decisionsLoading = signal(false);
+  decisionsError = signal(false);
   decisionsPage = 0;
   decisionsTotalPages = 0;
 
@@ -82,6 +83,7 @@ export class StockRoutingComponent implements OnInit {
   loadDecisions(): void {
     if (!this.prescriptionId.trim()) return;
     this.decisionsLoading.set(true);
+    this.decisionsError.set(false);
     this.svc
       .listRoutingDecisionsByPrescription(this.prescriptionId, this.decisionsPage, 10)
       .subscribe({
@@ -90,7 +92,16 @@ export class StockRoutingComponent implements OnInit {
           this.decisionsTotalPages = res.data.totalPages;
           this.decisionsLoading.set(false);
         },
-        error: () => this.decisionsLoading.set(false),
+        // Never swallowed into an empty table: the history section is absent
+        // when there is nothing recorded, so a failure that only cleared the
+        // spinner read as "this order was never routed" — which is exactly
+        // what a pharmacist decides the next route from.
+        error: () => {
+          this.decisions.set([]);
+          this.decisionsTotalPages = 0;
+          this.decisionsLoading.set(false);
+          this.decisionsError.set(true);
+        },
       });
   }
 

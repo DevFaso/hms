@@ -66,18 +66,14 @@
         }
 
         <!-- ── The exchange so far, pharmacy side ─────────────────────────
-             The work-queue projection carries only an attention flag, and
-             that flag is masked whenever the row also has a status or a
-             back order to report, so the words are fetched from the
-             prescription record every time the dialog opens. -->
-        <!-- Not gated on the resolved flag alone: that flag is masked
-             whenever the row also reports a status or a back order, so a
-             verifier would be shown a bare "ask a question" form with no
-             hint that an answer they cannot read is on the record. Any
-             attentionReason at all could be masking one; none means there
-             is nothing to hide, which keeps the note off a first question
-             on a freshly signed order. The note is a conditional: a reason
-             could be masking an exchange, it does not prove one exists. -->
+             The work-queue projection carries the cue but never the words —
+             it is served to roles the prescription read refuses — so the
+             text is fetched from the prescription record on every open. -->
+        <!-- Stated, not hedged: clarificationResolvedAt says an answer is
+             waiting whatever else the row reports, so a verifier — who may
+             raise a question but is not on GET /prescriptions/{id} — is
+             told plainly that there is an answer they cannot read, instead
+             of being shown a bare "ask a question" form. -->
         @if (mayHideAnswer()) {
           <p class="clarify-note" data-testid="rx-clarification-unreadable">
             {{ 'PRESCRIPTIONS.CLARIFICATION.ANSWER_NOT_VISIBLE' | translate }}

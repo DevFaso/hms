@@ -30,6 +30,7 @@ describe('PrescriptionClarificationComponent', () => {
     status?: string | null;
     medicationLabel?: string | null;
     attentionReason?: string | null;
+    clarificationResolvedAt?: string | null;
     question?: string | null;
     askedAt?: string | null;
   }
@@ -44,6 +45,10 @@ describe('PrescriptionClarificationComponent', () => {
     fixture.componentRef.setInput('status', inputs.status ?? 'SIGNED');
     fixture.componentRef.setInput('medicationLabel', inputs.medicationLabel ?? 'Amoxicillin');
     fixture.componentRef.setInput('attentionReason', inputs.attentionReason ?? null);
+    fixture.componentRef.setInput(
+      'clarificationResolvedAt',
+      inputs.clarificationResolvedAt ?? null,
+    );
     fixture.componentRef.setInput('question', inputs.question ?? null);
     fixture.componentRef.setInput('askedAt', inputs.askedAt ?? null);
     fixture.detectChanges();
@@ -408,10 +413,27 @@ describe('PrescriptionClarificationComponent', () => {
     );
   });
 
-  it('tells a verifier an unreadable exchange exists even when the flag is masked', () => {
+  it('tells a verifier an unreadable answer is waiting even when the reason is masked', () => {
     // attentionReason reports PENDING_STOCK, not CLARIFICATION_RESOLVED, so
-    // nothing on the row says an answer is waiting; the verifier still
-    // cannot read it and must be told rather than shown a bare form.
+    // the reason says nothing about the answer; clarificationResolvedAt does,
+    // and the verifier — who cannot read the text — is told rather than shown
+    // a bare form.
+    create(['ROLE_PHARMACY_VERIFIER'], {
+      mode: 'PHARMACY',
+      status: 'PENDING_STOCK',
+      attentionReason: 'PENDING_STOCK',
+      clarificationResolvedAt: '2026-09-24T09:00:00',
+    });
+    el('rx-clarification-open-rx-1')!.click();
+    fixture.detectChanges();
+
+    expect(prescriptions.getById).not.toHaveBeenCalled();
+    expect(el('rx-clarification-unreadable')).not.toBeNull();
+  });
+
+  it('gives a verifier no warning on a flagged row that carries no answer', () => {
+    // A back order is a reason to look at the row; it is not an exchange, and
+    // the note used to be shown on any reason at all.
     create(['ROLE_PHARMACY_VERIFIER'], {
       mode: 'PHARMACY',
       status: 'PENDING_STOCK',
@@ -420,8 +442,23 @@ describe('PrescriptionClarificationComponent', () => {
     el('rx-clarification-open-rx-1')!.click();
     fixture.detectChanges();
 
-    expect(prescriptions.getById).not.toHaveBeenCalled();
-    expect(el('rx-clarification-unreadable')).not.toBeNull();
+    expect(el('rx-clarification-unreadable')).toBeNull();
+  });
+
+  it('labels the button "read the answer" on a row the status reason masks', () => {
+    // The cue the pharmacist actually needs: before clarificationResolvedAt
+    // the button still read "ask a question" on an answered back order.
+    prescriptions.getById.and.returnValue(of({} as PrescriptionResponse));
+    create(['ROLE_PHARMACIST'], {
+      mode: 'PHARMACY',
+      status: 'PENDING_STOCK',
+      attentionReason: 'PENDING_STOCK',
+      clarificationResolvedAt: '2026-09-24T09:00:00',
+    });
+
+    expect(el('rx-clarification-open-rx-1')!.getAttribute('aria-label')).toContain(
+      'PRESCRIPTIONS.CLARIFICATION.READ_ANSWER',
+    );
   });
 
   it('replaces the backend\'s bare "Access denied" with the rule that was broken', () => {

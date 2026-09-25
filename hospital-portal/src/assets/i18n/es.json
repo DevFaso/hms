@@ -5584,7 +5584,7 @@
       "ANSWER_HINT": "Al enviar su respuesta, la receta vuelve a la cola de trabajo de farmacia con el estado que tenía antes de la pregunta.",
       "ANSWER_INPUT_LABEL": "Su respuesta (opcional)",
       "ANSWER_LABEL": "Respuesta del prescriptor",
-      "ANSWER_NOT_VISIBLE": "Su rol actual no puede abrir el expediente de la receta, por lo que, si se planteó una pregunta anterior, no es posible mostrarla aquí ni tampoco la respuesta del prescriptor.",
+      "ANSWER_NOT_VISIBLE": "Su rol actual no puede abrir el expediente de la receta, por lo que la respuesta del prescriptor sobre esta orden no puede mostrarse aquí.",
       "ANSWER_PLACEHOLDER": "Responda al farmacéutico, o déjelo vacío si ya corrigió la receta.",
       "ASK": "Consultar al prescriptor",
       "ASKED_LABEL": "Preguntada el",
@@ -5751,7 +5751,7 @@
       "RESTOCK_ETA": "Reposición prevista el {{date}}",
       "EMPTY": "Todavía no hay dispensaciones ni derivaciones registradas para esta receta.",
       "ERROR": "No se pudo cargar el historial de dispensación.",
-      "SCOPE_REQUIRED": "Elija un hospital en el selector de ámbito para ver el historial de dispensación.",
+      "PARTNER_NO_SHOW": "La farmacia asociada nunca entregó",
       "PARTIAL_ERROR_DISPENSES": "No se pudieron cargar las dispensaciones, por lo que esto no es todo.",
       "PARTIAL_ERROR_ROUTINGS": "No se pudieron cargar las decisiones de derivación, por lo que esto no es todo."
     },
@@ -7368,6 +7368,15 @@
     "VERIF_UNCONFIRMED": "Sin confirmar"
   },
   "PHARMACY": {
+    "ATTENTION": {
+      "PENDING_STOCK": "Sin existencias — en pedido pendiente",
+      "PARTNER_REJECTED": "La farmacia asociada la rechazó — dispense aquí o derive a otra",
+      "PARTNER_ACCEPTED": "En una farmacia asociada — registre una no entrega antes de dispensar aquí",
+      "BACK_ORDER_OUTSTANDING": "Dispensada parcialmente — el pedido al proveedor sigue abierto",
+      "CLARIFICATION_RESOLVED": "El prescriptor ha respondido — lea la respuesta primero",
+      "PRESCRIBER_ANSWERED": "El prescriptor ha respondido",
+      "UNRECOGNISED": "Requiere una segunda revisión — compruebe la orden antes de dispensar"
+    },
     "ACCEPT": "Aceptar",
     "ADDRESS": "Dirección",
     "ADD_FIRST_ITEM": "Añada su primer artículo de inventario",
@@ -7523,6 +7532,7 @@
     "PARTNER": "Asociada",
     "PARTNER_ACCEPTED": "La farmacia asociada aceptó",
     "PARTNER_DISPENSED": "La farmacia asociada confirmó la dispensación",
+    "PARTNER_NO_SHOW": "La farmacia asociada nunca entregó",
     "PARTNER_PHARMACIES": "Farmacias asociadas",
     "PARTNER_REJECTED": "La farmacia asociada rechazó",
     "PATIENT": "Paciente",
@@ -7584,6 +7594,7 @@
     "ROUTE_TO_PARTNER": "Derivar a farmacia asociada",
     "ROUTING_FAILED": "Error en la operación de derivación",
     "ROUTING_HISTORY": "Historial de derivaciones",
+    "ROUTING_HISTORY_FAILED": "No se pudo cargar el historial de derivaciones.",
     "ROUTING_OPTIONS": "Opciones de derivación",
     "ROUTING_REASON_HINT": "Motivo opcional para derivar esta receta",
     "RXNORM_CODE": "Código RxNorm",

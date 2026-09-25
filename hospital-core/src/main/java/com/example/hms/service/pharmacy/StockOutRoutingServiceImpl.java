@@ -449,7 +449,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
         Prescription prescription = decision.getPrescription();
         decision.setStatus(RoutingDecisionStatus.CANCELLED);
-        decision.setReason(appendNoShowReason(decision.getReason(), reason.trim()));
+        decision.setReason(PartnerNoShowReason.compose(decision.getReason(), reason.trim()));
         prescription.setStatus(PrescriptionStatus.SIGNED);
         // The partner that did not deliver is no longer this order's pharmacy.
         clearPharmacy(prescription);
@@ -462,13 +462,6 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 routingDecisionId.toString());
 
         return routingMapper.toResponseDTO(saved);
-    }
-
-    /** Keeps the routing reason the decision was taken for, and adds why it ended. */
-    private static String appendNoShowReason(String existing, String noShowReason) {
-        String suffix = "Partner no-show: " + noShowReason;
-        String combined = existing == null || existing.isBlank() ? suffix : existing + " | " + suffix;
-        return combined.length() > 1024 ? combined.substring(0, 1024) : combined;
     }
 
     @Override
@@ -494,20 +487,39 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
     // ── Private helpers ──
 
+    /**
+     * A null {@code hospitalId} is a real super-admin in GLOBAL view, not a
+     * missing check: {@code requireActiveHospitalId} returns null for exactly
+     * that caller, who has no single hospital to be in scope for. The row is
+     * therefore not narrowed rather than rejected — the stance of
+     * {@code DispenseServiceImpl.enforceHospitalScope},
+     * {@code PrescriptionClarificationService.findInScope} and the rest of the
+     * hospital-scoped read surface. Dereferencing it answered the global-view
+     * super-admin with a 500 on every routing read.
+     */
     private Prescription findPrescription(UUID prescriptionId, UUID hospitalId) {
         Prescription prescription = prescriptionRepository.findById(prescriptionId)
                 .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
-        if (prescription.getHospital() == null
-                || !hospitalId.equals(prescription.getHospital().getId())) {
+        if (hospitalId != null
+                && (prescription.getHospital() == null
+                    || !hospitalId.equals(prescription.getHospital().getId()))) {
             throw new ResourceNotFoundException("prescription.notfound");
         }
         return prescription;
     }
 
+    /**
+     * Same global-view stance as {@link #findPrescription} for the HOSPITAL
+     * check. A decision with no prescription is refused whoever is asking:
+     * every caller of this method goes on to act on that prescription.
+     */
     private void enforceDecisionHospitalScope(PrescriptionRoutingDecision decision, UUID hospitalId) {
-        if (decision.getPrescription() == null
-                || decision.getPrescription().getHospital() == null
-                || !hospitalId.equals(decision.getPrescription().getHospital().getId())) {
+        if (decision.getPrescription() == null) {
+            throw new ResourceNotFoundException("routing.decision.notfound");
+        }
+        if (hospitalId != null
+                && (decision.getPrescription().getHospital() == null
+                    || !hospitalId.equals(decision.getPrescription().getHospital().getId()))) {
             throw new ResourceNotFoundException("routing.decision.notfound");
         }
     }

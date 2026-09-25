@@ -169,6 +169,65 @@ describe('StockRoutingComponent', () => {
     expect(component.checking()).toBeFalse();
   });
 
+  it('renders a no-show from the flag, not from a stored English sentence', () => {
+    pharmacySvc.listRoutingDecisionsByPrescription.and.returnValue(
+      of({
+        data: {
+          content: [
+            {
+              id: 'dec-9',
+              prescriptionId: 'rx-1',
+              routingType: 'PARTNER',
+              targetPharmacyName: 'Partner Pharmacy',
+              reason: 'Nearest partner has stock',
+              partnerNoShow: true,
+              noShowReason: 'nobody at the counter',
+              status: 'CANCELLED',
+              decidedAt: '2025-06-01T10:00:00',
+            },
+          ],
+          totalElements: 1,
+          totalPages: 1,
+          size: 10,
+          number: 0,
+        },
+      } as any),
+    );
+    component.prescriptionId = 'rx-1';
+    component.checkStock();
+    fixture.detectChanges();
+
+    const flag = fixture.nativeElement.querySelector('[data-testid="routing-no-show-dec-9"]');
+    expect(flag).not.toBeNull();
+    expect(flag.textContent).toContain('PHARMACY.PARTNER_NO_SHOW');
+    const row = flag.closest('td');
+    expect(row.textContent).toContain('nobody at the counter');
+    expect(row.textContent).toContain('Nearest partner has stock');
+  });
+
+  it('says the routing history could not be loaded instead of rendering none', () => {
+    // A swallowed failure read as "this order was never routed", which is
+    // exactly what the next routing decision is taken from.
+    pharmacySvc.listRoutingDecisionsByPrescription.and.returnValue(
+      throwError(() => ({ status: 500 })),
+    );
+    component.prescriptionId = 'rx-1';
+    component.checkStock();
+    fixture.detectChanges();
+
+    expect(component.decisionsError()).toBeTrue();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="routing-history-error"]'),
+    ).not.toBeNull();
+
+    pharmacySvc.listRoutingDecisionsByPrescription.and.returnValue(of(decisionsResponse as any));
+    fixture.nativeElement.querySelector('[data-testid="routing-history-retry"]').click();
+    fixture.detectChanges();
+
+    expect(component.decisionsError()).toBeFalse();
+    expect(fixture.nativeElement.querySelector('[data-testid="routing-history-error"]')).toBeNull();
+  });
+
   it('should return expected badge classes', () => {
     expect(component.statusBadgeClass('PENDING')).toBe('badge-warning');
     expect(component.statusBadgeClass('COMPLETED')).toBe('badge-success');

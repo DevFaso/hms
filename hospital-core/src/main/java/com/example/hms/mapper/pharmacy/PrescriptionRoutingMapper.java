@@ -8,6 +8,7 @@ import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
 import com.example.hms.payload.dto.pharmacy.RoutingDecisionRequestDTO;
 import com.example.hms.payload.dto.pharmacy.RoutingDecisionResponseDTO;
+import com.example.hms.service.pharmacy.PartnerNoShowReason;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -36,7 +37,14 @@ public class PrescriptionRoutingMapper {
                 .targetPharmacyName(entity.getTargetPharmacy() != null ? entity.getTargetPharmacy().getName() : null)
                 .decidedByUserId(entity.getDecidedByUser() != null ? entity.getDecidedByUser().getId() : null)
                 .patientId(entity.getDecidedForPatient() != null ? entity.getDecidedForPatient().getId() : null)
-                .reason(entity.getReason())
+                // The no-show fact travels as a flag plus the pharmacist's own
+                // words, never as a composed sentence: a sentence stored in
+                // English reaches a French or Spanish prescriber in English.
+                // Rows written before the marker existed carry the old literal
+                // and decode the same way.
+                .reason(PartnerNoShowReason.withoutNoShow(entity.getReason()))
+                .partnerNoShow(PartnerNoShowReason.isNoShow(entity.getReason()))
+                .noShowReason(PartnerNoShowReason.freeText(entity.getReason()))
                 .estimatedRestockDate(entity.getEstimatedRestockDate())
                 .remainingQuantity(entity.getRemainingQuantity())
                 .status(entity.getStatus() != null ? entity.getStatus().name() : null)

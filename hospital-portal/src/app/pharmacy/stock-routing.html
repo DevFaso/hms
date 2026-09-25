@@ -202,7 +202,22 @@
   }
 
   <!-- Routing decisions history -->
-  @if (decisions().length > 0) {
+  @if (decisionsError()) {
+    <div class="form-card form-card-accent">
+      <h2>{{ 'PHARMACY.ROUTING_HISTORY' | translate }}</h2>
+      <div class="history-error" role="alert" data-testid="routing-history-error">
+        <p>{{ 'PHARMACY.ROUTING_HISTORY_FAILED' | translate }}</p>
+        <button
+          type="button"
+          class="btn btn-sm"
+          (click)="loadDecisions()"
+          data-testid="routing-history-retry"
+        >
+          {{ 'COMMON.RETRY' | translate }}
+        </button>
+      </div>
+    </div>
+  } @else if (decisions().length > 0) {
     <div class="form-card form-card-accent">
       <h2>{{ 'PHARMACY.ROUTING_HISTORY' | translate }}</h2>
       <table class="data-table">
@@ -230,7 +245,26 @@
                   {{ d.status | enumLabel: 'status' }}
                 </span>
               </td>
-              <td>{{ d.reason || '—' }}</td>
+              <td>
+                <!-- The no-show is a flag, not stored prose: the server used
+                     to compose "Partner no-show: " in English into the reason
+                     column, and stored text cannot be translated at render
+                     time. The pharmacist's own words are kept as typed. -->
+                @if (d.partnerNoShow) {
+                  <span class="no-show-flag" [attr.data-testid]="'routing-no-show-' + d.id">{{
+                    'PHARMACY.PARTNER_NO_SHOW' | translate
+                  }}</span>
+                }
+                @if (d.noShowReason) {
+                  <span class="cell-sub">{{ d.noShowReason }}</span>
+                }
+                @if (d.reason) {
+                  <span class="cell-sub">{{ d.reason }}</span>
+                }
+                @if (!d.partnerNoShow && !d.noShowReason && !d.reason) {
+                  —
+                }
+              </td>
               <td>{{ d.decidedAt | date: 'short' }}</td>
               <td>
                 @if (d.status === 'PENDING' && d.routingType === 'PARTNER') {

@@ -5584,7 +5584,7 @@
       "ANSWER_HINT": "L'envoi de votre réponse renvoie l'ordonnance dans la file de travail de la pharmacie avec le statut qu'elle avait avant la question.",
       "ANSWER_INPUT_LABEL": "Votre réponse (facultative)",
       "ANSWER_LABEL": "Réponse du prescripteur",
-      "ANSWER_NOT_VISIBLE": "Votre rôle actuel ne peut pas ouvrir le dossier de l'ordonnance : si une question a déjà été posée, ni celle-ci ni la réponse du prescripteur ne peuvent être affichées ici.",
+      "ANSWER_NOT_VISIBLE": "Votre rôle actuel ne peut pas ouvrir le dossier de l'ordonnance : la réponse du prescripteur sur cette ordonnance ne peut pas être affichée ici.",
       "ANSWER_PLACEHOLDER": "Répondez au pharmacien, ou laissez vide si vous avez corrigé l'ordonnance elle-même.",
       "ASK": "Interroger le prescripteur",
       "ASKED_LABEL": "Posée le",
@@ -5751,7 +5751,7 @@
       "RESTOCK_ETA": "Réapprovisionnement prévu le {{date}}",
       "EMPTY": "Aucune délivrance ni orientation enregistrée pour cette ordonnance.",
       "ERROR": "L'historique de délivrance n'a pas pu être chargé.",
-      "SCOPE_REQUIRED": "Choisissez un hôpital dans le sélecteur de périmètre pour voir l'historique de délivrance.",
+      "PARTNER_NO_SHOW": "Le partenaire n'a jamais délivré",
       "PARTIAL_ERROR_DISPENSES": "Les délivrances n'ont pas pu être chargées : ceci n'est donc pas complet.",
       "PARTIAL_ERROR_ROUTINGS": "Les décisions d'orientation n'ont pas pu être chargées : ceci n'est donc pas complet."
     },
@@ -7368,6 +7368,15 @@
     "VERIF_UNCONFIRMED": "Non confirmée"
   },
   "PHARMACY": {
+    "ATTENTION": {
+      "PENDING_STOCK": "Rupture de stock — en commande",
+      "PARTNER_REJECTED": "La pharmacie partenaire a refusé — délivrer ici ou réacheminer",
+      "PARTNER_ACCEPTED": "Chez une pharmacie partenaire — enregistrer une non-délivrance avant de délivrer ici",
+      "BACK_ORDER_OUTSTANDING": "Partiellement délivrée — la commande fournisseur est toujours ouverte",
+      "CLARIFICATION_RESOLVED": "Le prescripteur a répondu — lire la réponse d'abord",
+      "PRESCRIBER_ANSWERED": "Le prescripteur a répondu",
+      "UNRECOGNISED": "À revoir — vérifier l'ordonnance avant de délivrer"
+    },
     "ACCEPT": "Accepter",
     "ADDRESS": "Adresse",
     "ADD_FIRST_ITEM": "Ajoutez votre premier article d'inventaire",
@@ -7523,6 +7532,7 @@
     "PARTNER": "Partenaire",
     "PARTNER_ACCEPTED": "Pharmacie partenaire a accepté",
     "PARTNER_DISPENSED": "Pharmacie partenaire a confirmé la dispensation",
+    "PARTNER_NO_SHOW": "Le partenaire n'a jamais délivré",
     "PARTNER_PHARMACIES": "Pharmacies partenaires",
     "PARTNER_REJECTED": "Pharmacie partenaire a rejeté",
     "PATIENT": "Patient",
@@ -7584,6 +7594,7 @@
     "ROUTE_TO_PARTNER": "Acheminer vers la pharmacie partenaire",
     "ROUTING_FAILED": "Échec de l'opération de routage",
     "ROUTING_HISTORY": "Historique de routage",
+    "ROUTING_HISTORY_FAILED": "L'historique de routage n'a pas pu être chargé.",
     "ROUTING_OPTIONS": "Options de routage",
     "ROUTING_REASON_HINT": "Raison optionnelle pour acheminer cette prescription",
     "RXNORM_CODE": "Code RxNorm",

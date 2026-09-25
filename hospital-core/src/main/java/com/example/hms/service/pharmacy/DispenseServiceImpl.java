@@ -601,11 +601,18 @@ public class DispenseServiceImpl implements DispenseService {
     @Transactional(readOnly = true)
     public Page<DispenseResponseDTO> listByPrescription(UUID prescriptionId, Pageable pageable) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        // Validate the prescription belongs to the caller's hospital before returning any history
+        // Validate the prescription belongs to the caller's hospital before
+        // returning any history. A null hospital is a real super-admin in
+        // GLOBAL view: they have no single hospital to be in scope for, and
+        // the read is genuinely unscoped for them — the same stance as
+        // enforceHospitalScope below, PrescriptionClarificationService
+        // .findInScope and the rest of the hospital-scoped read surface.
+        // Dereferencing it instead answered that caller with a 500.
         Prescription prescription = prescriptionRepository.findById(prescriptionId)
                 .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
-        if (prescription.getHospital() == null
-                || !hospitalId.equals(prescription.getHospital().getId())) {
+        if (hospitalId != null
+                && (prescription.getHospital() == null
+                    || !hospitalId.equals(prescription.getHospital().getId()))) {
             throw new ResourceNotFoundException("prescription.notfound");
         }
         return dispenseRepository.findByPrescriptionId(prescriptionId, pageable)
@@ -961,7 +968,8 @@ public class DispenseServiceImpl implements DispenseService {
                     .user(staffUser)
                     .build();
         }
-        String attentionReason = attentionReason(p, lastPharmacyAction, backOrderOutstanding);
+        LocalDateTime unactedAnswer = unactedClarificationAnswer(p, lastPharmacyAction);
+        String attentionReason = attentionReason(p, unactedAnswer, backOrderOutstanding);
         return WorkQueuePrescriptionDTO.builder()
                 .id(p.getId())
                 .medicationName(p.getMedicationName())
@@ -978,6 +986,7 @@ public class DispenseServiceImpl implements DispenseService {
                 .lastRefusedBy(lastRefusedBy(p, latestDecision))
                 .needsAttention(attentionReason != null)
                 .attentionReason(attentionReason)
+                .clarificationResolvedAt(unactedAnswer)
                 .build();
     }
 
@@ -995,7 +1004,7 @@ public class DispenseServiceImpl implements DispenseService {
      * routing decision after the resolution clears it; without that the row
      * would be flagged for the rest of its life.
      */
-    private static String attentionReason(Prescription p, LocalDateTime lastPharmacyAction,
+    private static String attentionReason(Prescription p, LocalDateTime unactedAnswer,
                                           boolean backOrderOutstanding) {
         if (p.getStatus() != null && NEEDS_ATTENTION_STATUSES.contains(p.getStatus())) {
             return p.getStatus().name();
@@ -1003,9 +1012,41 @@ public class DispenseServiceImpl implements DispenseService {
         if (backOrderOutstanding) {
             return ATTENTION_BACK_ORDER_OUTSTANDING;
         }
+        if (unactedAnswer != null) {
+            return ATTENTION_CLARIFICATION_RESOLVED;
+        }
+        return null;
+    }
+
+    /**
+     * When the prescriber answered, or null when there is no answer the
+     * pharmacy has yet to act on.
+     *
+     * <p>Reported separately from {@link #attentionReason} because that field
+     * carries ONE reason by precedence and {@code resolveClarification}
+     * restores the status the question was asked from: a question raised on a
+     * PENDING_STOCK or PARTNER_REJECTED order comes back flagged with that
+     * status, and the answer — the thing the pharmacist has been waiting for —
+     * had no cue on the row at all. It is a second fact about the row, not a
+     * competing reason, so it gets its own field and the precedence above is
+     * left alone.
+     *
+     * <p>Cleared once the pharmacy acts on it (a dispense or a routing
+     * decision after the resolution), exactly as the attention reason is;
+     * without that the row would be flagged for the rest of its life.
+     *
+     * <p>The words of the exchange are deliberately NOT on this projection:
+     * the question and the answer are encrypted clinical narrative, the
+     * work-queue endpoint admits PHARMACY_VERIFIER and HOSPITAL_ADMIN, and
+     * {@code GET /prescriptions/{id}} — the read that returns the text — does
+     * not. The cue says an answer is waiting; the dialog fetches it under the
+     * role gate that governs it.
+     */
+    private static LocalDateTime unactedClarificationAnswer(Prescription p,
+                                                            LocalDateTime lastPharmacyAction) {
         LocalDateTime resolvedAt = p.getClarificationResolvedAt();
         if (resolvedAt != null && (lastPharmacyAction == null || resolvedAt.isAfter(lastPharmacyAction))) {
-            return ATTENTION_CLARIFICATION_RESOLVED;
+            return resolvedAt;
         }
         return null;
     }
