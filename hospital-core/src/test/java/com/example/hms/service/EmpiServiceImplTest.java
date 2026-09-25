@@ -5,6 +5,7 @@ import com.example.hms.enums.empi.EmpiAliasType;
 import com.example.hms.enums.empi.EmpiIdentityStatus;
 import com.example.hms.enums.empi.EmpiMergeType;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.GlobalExceptionHandler;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.EmpiMapper;
 import com.example.hms.model.empi.EmpiIdentityAlias;
@@ -35,14 +36,20 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.MessageSource;
+import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.context.request.WebRequest;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -658,7 +665,7 @@ class EmpiServiceImplTest {
 
         UUID primaryId = primary.getId();
         assertThatThrownBy(() -> empiService.mergeIdentities(primaryId, request))
-            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            .isInstanceOf(ResourceNotFoundException.class);
         Mockito.verify(mergeEventRepository, Mockito.never()).save(any());
     }
 
@@ -681,7 +688,7 @@ class EmpiServiceImplTest {
 
         UUID primaryId = primary.getId();
         assertThatThrownBy(() -> empiService.mergeIdentities(primaryId, request))
-            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            .isInstanceOf(ResourceNotFoundException.class);
         Mockito.verify(mergeEventRepository, Mockito.never()).save(any());
     }
 
@@ -751,5 +758,154 @@ class EmpiServiceImplTest {
         // tenant's patient that no later check could undo.
         Mockito.verify(masterIdentityRepository, Mockito.never()).save(any());
         Mockito.verify(mergeEventRepository, Mockito.never()).save(any());
+    }
+
+    /* No oracle on the merge: another tenant's identity answers like a
+       missing one, and owning one side answers like owning neither. */
+
+    @Test
+    void mergeIdentities_foreignCandidateIsByteIdenticalToAMissingCandidate() {
+        renderMessagesWithArguments();
+        UUID callerHospital = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(callerHospital);
+        EmpiMasterIdentity mine = activeIdentity("EMP-MINE", callerHospital);
+        UUID candidateId = UUID.randomUUID();
+        when(masterIdentityRepository.findById(mine.getId())).thenReturn(Optional.of(mine));
+
+        // World 1: the candidate is a real identity at another hospital.
+        EmpiMasterIdentity foreign = activeIdentity("EMP-THEIRS", UUID.randomUUID());
+        foreign.setId(candidateId);
+        when(masterIdentityRepository.findById(candidateId)).thenReturn(Optional.of(foreign));
+        Throwable elsewhere = mergeRefusal(mine.getId(), candidateId);
+
+        // World 2: the candidate exists nowhere.
+        when(masterIdentityRepository.findById(candidateId)).thenReturn(Optional.empty());
+        Throwable nowhere = mergeRefusal(mine.getId(), candidateId);
+
+        assertIdenticalRefusal(elsewhere, nowhere);
+        assertThat(nowhere).isExactlyInstanceOf(ResourceNotFoundException.class);
+        Mockito.verify(mergeEventRepository, Mockito.never()).save(any());
+        Mockito.verify(masterIdentityRepository, Mockito.never()).save(any());
+    }
+
+    @Test
+    void mergeIdentities_owningOneSideAnswersExactlyLikeOwningNeither() {
+        renderMessagesWithArguments();
+        UUID callerHospital = UUID.randomUUID();
+        UUID foreignHospital = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(callerHospital);
+        EmpiMasterIdentity mine = activeIdentity("EMP-MINE", callerHospital);
+        EmpiMasterIdentity theirsA = activeIdentity("EMP-TA", foreignHospital);
+        EmpiMasterIdentity theirsB = activeIdentity("EMP-TB", foreignHospital);
+        UUID ghostA = UUID.randomUUID();
+        UUID ghostB = UUID.randomUUID();
+        for (EmpiMasterIdentity identity : List.of(mine, theirsA, theirsB)) {
+            when(masterIdentityRepository.findById(identity.getId())).thenReturn(Optional.of(identity));
+        }
+        when(masterIdentityRepository.findById(ghostA)).thenReturn(Optional.empty());
+        when(masterIdentityRepository.findById(ghostB)).thenReturn(Optional.empty());
+
+        Throwable neitherExists = mergeRefusal(ghostA, ghostB);
+
+        assertIdenticalRefusal(mergeRefusal(mine.getId(), theirsA.getId()), neitherExists);
+        assertIdenticalRefusal(mergeRefusal(theirsA.getId(), mine.getId()), neitherExists);
+        assertIdenticalRefusal(mergeRefusal(theirsA.getId(), theirsB.getId()), neitherExists);
+        assertIdenticalRefusal(mergeRefusal(mine.getId(), ghostA), neitherExists);
+        assertIdenticalRefusal(mergeRefusal(ghostA, mine.getId()), neitherExists);
+        Mockito.verify(mergeEventRepository, Mockito.never()).save(any());
+    }
+
+    @Test
+    void mergeIdentities_looksUpBothSidesBeforeJudgingEither() {
+        // A missing primary must not skip the secondary lookup: if it did, the
+        // cost of a refusal would depend on which side failed, and a caller
+        // could time the difference.
+        UUID callerHospital = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(callerHospital);
+        UUID missingPrimary = UUID.randomUUID();
+        EmpiMasterIdentity mine = activeIdentity("EMP-MINE", callerHospital);
+        when(masterIdentityRepository.findById(missingPrimary)).thenReturn(Optional.empty());
+        when(masterIdentityRepository.findById(mine.getId())).thenReturn(Optional.of(mine));
+
+        assertThat(mergeRefusal(missingPrimary, mine.getId())).isInstanceOf(ResourceNotFoundException.class);
+
+        Mockito.verify(masterIdentityRepository).findById(missingPrimary);
+        Mockito.verify(masterIdentityRepository).findById(mine.getId());
+    }
+
+    @Test
+    void mergeIdentities_mergesTwoOfTheCallersOwnIdentities() {
+        UUID callerHospital = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(callerHospital);
+        EmpiMasterIdentity primary = activeIdentity("EMP-P", callerHospital);
+        EmpiMasterIdentity secondary = activeIdentity("EMP-S", callerHospital);
+        when(masterIdentityRepository.findById(primary.getId())).thenReturn(Optional.of(primary));
+        when(masterIdentityRepository.findById(secondary.getId())).thenReturn(Optional.of(secondary));
+        when(mergeEventRepository.save(any(EmpiMergeEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(masterIdentityRepository.save(any(EmpiMasterIdentity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        EmpiMergeRequestDTO request = new EmpiMergeRequestDTO();
+        request.setSecondaryIdentityId(secondary.getId());
+        request.setMergeType(EmpiMergeType.MANUAL);
+
+        EmpiMergeEventResponseDTO response = empiService.mergeIdentities(primary.getId(), request);
+
+        assertThat(response.getPrimaryIdentityId()).isEqualTo(primary.getId());
+        assertThat(secondary.getStatus()).isEqualTo(EmpiIdentityStatus.MERGED);
+        Mockito.verify(mergeEventRepository).save(any(EmpiMergeEvent.class));
+    }
+
+    /**
+     * The shared stub answers every message with its bare key and drops the
+     * arguments, which would make a refusal that names the failing id look
+     * identical to one that names nothing. The real bundles format {0}; so
+     * must the oracle tests.
+     */
+    private void renderMessagesWithArguments() {
+        when(messageSource.getMessage(anyString(), any(), any())).thenAnswer(invocation -> {
+            Object[] args = invocation.getArgument(1);
+            return invocation.getArgument(0) + " " + java.util.Arrays.toString(args);
+        });
+    }
+
+    private Throwable mergeRefusal(UUID primaryId, UUID secondaryId) {
+        EmpiMergeRequestDTO request = new EmpiMergeRequestDTO();
+        request.setSecondaryIdentityId(secondaryId);
+        request.setMergeType(EmpiMergeType.MANUAL);
+        return catchThrowable(() -> empiService.mergeIdentities(primaryId, request));
+    }
+
+    /**
+     * Same exception type and message, and the same HTTP answer once the real
+     * {@code GlobalExceptionHandler} renders it (status, error, message, path);
+     * only the timestamp may differ.
+     */
+    private static void assertIdenticalRefusal(Throwable first, Throwable second) {
+        assertThat(first).isNotNull();
+        assertThat(second).isNotNull();
+        assertThat(first).isExactlyInstanceOf(second.getClass());
+        assertThat(first.getMessage()).isEqualTo(second.getMessage());
+        assertThat(rendered(first)).isEqualTo(rendered(second));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> rendered(Throwable refusal) {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler();
+        WebRequest request = Mockito.mock(WebRequest.class);
+        when(request.getDescription(false)).thenReturn("uri=/api/empi/identities/merge");
+        ResponseEntity<Object> response;
+        if (refusal instanceof ResourceNotFoundException notFound) {
+            response = handler.handleResourceNotFoundException(notFound, request);
+        } else if (refusal instanceof AccessDeniedException denied) {
+            response = handler.handleAccessDenied(denied, request);
+        } else if (refusal instanceof BusinessException business) {
+            response = handler.handleBusinessException(business, request);
+        } else {
+            throw new AssertionError("unexpected refusal type " + refusal.getClass(), refusal);
+        }
+        Map<String, Object> body = new LinkedHashMap<>((Map<String, Object>) response.getBody());
+        body.remove("timestamp");
+        body.put("httpStatus", response.getStatusCode().value());
+        return body;
     }
 }

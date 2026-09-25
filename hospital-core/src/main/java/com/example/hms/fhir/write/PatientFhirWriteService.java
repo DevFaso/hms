@@ -1,5 +1,6 @@
 package com.example.hms.fhir.write;
 
+import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
 import ca.uhn.fhir.rest.server.exceptions.MethodNotAllowedException;
 import ca.uhn.fhir.rest.server.exceptions.PreconditionFailedException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
@@ -14,6 +15,7 @@ import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.AuditEventLogService;
 import org.hl7.fhir.r4.model.OperationOutcome;
 import org.slf4j.Logger;
@@ -22,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -41,6 +44,13 @@ import java.util.UUID;
  *       OperationOutcome (per empi-identity skill); &gt;1 matches →
  *       412 (kept unreachable by the V101 partial unique index).</li>
  * </ul>
+ *
+ * <p>Cross-tenant: both operations are anchored on the caller's active
+ * hospital (no scope → 403). PUT refuses a patient not registered there, and
+ * the conditional-create lookup refuses an identifier system naming any other
+ * hospital, each with exactly the 404 a nonexistent patient or MRN gets — an
+ * unknown id and another tenant's id are indistinguishable (the rule HL7
+ * settled in #715/#738).
  *
  * <p>Feature-flagged via {@link FhirWriteProperties#isEnabled()};
  * disabled state surfaces as {@code 405 Method Not Allowed} from the
@@ -80,15 +90,26 @@ public class PatientFhirWriteService {
      * PUT /Patient/{id}. Applies the FHIR-mutable subset to an existing
      * entity. Caller is the provider — exceptions propagate to HAPI's
      * exception handler which renders the matching HTTP status.
+     *
+     * <p>Tenant gate: the patient must be registered at the caller's active
+     * hospital. {@code PatientRepository.findById} alone is not that gate —
+     * {@code TenantAwareJpaRepository} scopes it to every hospital the caller
+     * is PERMITTED at (all of a multi-hospital user's assignments, every
+     * hospital of a permitted organisation) and not at all for a super-admin,
+     * so a writer pinned to hospital A could overwrite the contact and address
+     * of a patient registered only at B, and read the whole resource back.
+     *
+     * <p>No oracle: an id that exists nowhere and an id registered only at
+     * another hospital get the same 404 with the same body, and cost the same
+     * single registration query, so a writer cannot sort candidate ids into
+     * "real somewhere else" and "not real".
      */
     @Transactional
     public Patient update(UUID patientId, org.hl7.fhir.r4.model.Patient fhirIn) {
         ensureEnabled();
-        Patient existing = patientRepository.findById(patientId)
-            .orElseThrow(() -> notFoundWith(
-                "Patient/" + patientId + " not found",
-                OperationOutcome.IssueType.NOTFOUND
-            ));
+        UUID hospitalId = requireHospitalScope();
+        Patient existing = findRegisteredAt(patientId, hospitalId)
+            .orElseThrow(() -> patientNotFound(patientId));
         patientMapper.applyFhirUpdates(existing, fhirIn);
         Patient saved = patientRepository.save(existing);
         emitAudit(AuditEventType.PATIENT_UPDATE, saved,
@@ -108,6 +129,7 @@ public class PatientFhirWriteService {
     @Transactional(readOnly = true)
     public Patient conditionalCreate(String ifNoneExistRaw, org.hl7.fhir.r4.model.Patient fhirIn) {
         ensureEnabled();
+        UUID callerHospitalId = requireHospitalScope();
         if (ifNoneExistRaw == null || ifNoneExistRaw.isBlank()) {
             throw unprocessable(
                 "POST /Patient requires an If-None-Exist header — auto-provisioning is disabled.",
@@ -128,8 +150,13 @@ public class PatientFhirWriteService {
             )
         );
 
-        List<PatientHospitalRegistration> matches = registrationRepository
-            .findActiveByHospitalIdAndIdentifier(mrn.hospitalId(), mrn.mrn());
+        // The hospital in the identifier system comes from the REQUEST. Only the
+        // caller's own active hospital may be searched: another hospital's MRN
+        // space answers exactly like an MRN that matches nothing, never with the
+        // other hospital's patient.
+        List<PatientHospitalRegistration> matches = callerHospitalId.equals(mrn.hospitalId())
+            ? registrationRepository.findActiveByHospitalIdAndIdentifier(mrn.hospitalId(), mrn.mrn())
+            : List.of();
 
         long activeMrnMatches = matches.stream()
             .filter(r -> r != null && r.getMrn() != null
@@ -162,10 +189,56 @@ public class PatientFhirWriteService {
                 OperationOutcome.IssueType.EXCEPTION
             ));
 
+        // Ids only in the audit description: an MRN is a patient identifier.
         emitAudit(AuditEventType.PATIENT_ACCESS, resolved,
-            "FHIR conditional-create matched MRN " + mrn.mrn() + " — returned existing Patient/"
+            "FHIR conditional-create matched an active MRN — returned existing Patient/"
                 + resolved.getId());
         return resolved;
+    }
+
+    /**
+     * The caller's active hospital, from the authenticated principal's
+     * {@code HospitalContext} (an {@code X-Hospital-Id} pin is honoured only
+     * inside the principal's permitted scope). No scope is refused up front as
+     * 403, like the Encounter and Observation write paths: "pin a hospital"
+     * reveals nothing about any identifier.
+     */
+    private static UUID requireHospitalScope() {
+        UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
+        if (hospitalId == null) {
+            OperationOutcome outcome = new OperationOutcome();
+            outcome.addIssue()
+                .setSeverity(OperationOutcome.IssueSeverity.ERROR)
+                .setCode(OperationOutcome.IssueType.FORBIDDEN)
+                .setDiagnostics("FHIR Patient writes require an active hospital scope; supply "
+                    + "X-Hospital-Id or authenticate as a hospital-scoped user.");
+            throw new ForbiddenOperationException("An active hospital scope is required.", outcome);
+        }
+        return hospitalId;
+    }
+
+    /**
+     * The patient, only when registered at {@code hospitalId}. The registration
+     * is asked first so that a missing id and another hospital's id cost the
+     * same one query and come back the same empty.
+     */
+    private Optional<Patient> findRegisteredAt(UUID patientId, UUID hospitalId) {
+        if (!registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)) {
+            return Optional.empty();
+        }
+        return patientRepository.findById(patientId);
+    }
+
+    /**
+     * Deliberately one answer for "no such patient" and "registered at another
+     * hospital" — the same wording {@code Patient/{id}/$everything} uses.
+     */
+    private static ResourceNotFoundException patientNotFound(UUID patientId) {
+        return notFoundWith(
+            "Patient/" + patientId + " is not registered at your active hospital. If you expect "
+                + "this record, switch your hospital scope to one where the patient is registered.",
+            OperationOutcome.IssueType.NOTFOUND
+        );
     }
 
     private void ensureEnabled() {
