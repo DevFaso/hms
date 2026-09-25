@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.payload.dto.PrescriptionRequestDTO;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
 import org.springframework.data.domain.Page;
@@ -36,7 +37,16 @@ public interface PrescriptionService {
      */
     PrescriptionResponseDTO cosignPrescription(UUID id, Locale locale);
 
-    Page<PrescriptionResponseDTO> list(UUID patientId, UUID staffId, UUID encounterId, Pageable pageable, Locale locale);
+    /**
+     * The prescription list, hospital-scoped.
+     *
+     * @param statuses gap G12 — restrict the page to these {@code PrescriptionStatus}
+     *                 values. {@code null} or empty means every status, which is what
+     *                 the endpoint did before the parameter existed.
+     */
+    Page<PrescriptionResponseDTO> list(UUID patientId, UUID staffId, UUID encounterId,
+                                       List<PrescriptionStatus> statuses,
+                                       Pageable pageable, Locale locale);
 
     PrescriptionResponseDTO updatePrescription(UUID id, PrescriptionRequestDTO request, Locale locale);
 

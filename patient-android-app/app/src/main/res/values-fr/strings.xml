@@ -687,4 +687,5 @@
     <string name="dosage_and_administration">Posologie et administration</string>
     <string name="start_date">Date de début</string>
     <string name="end_date">Date de fin</string>
+    <string name="refreshing">Actualisation…</string>
 </resources>

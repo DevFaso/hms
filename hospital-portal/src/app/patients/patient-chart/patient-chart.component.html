@@ -287,7 +287,24 @@
   }
 
   <!-- ══ Labs (B6) ══ -->
-  @if (section() === 'labs' && canViewLabs()) {
+  @if (section() === 'labs' && canViewLabs() && !labsScoped()) {
+    <!--
+      No hospital scope: both lab reads would go out unscoped, read across
+      every tenant and write no cross-hospital reach row. The section declines
+      to read — see labsScoped() — and says so.
+
+      Deliberately NOT `<app-hospital-scope-hint>` plus an embedded chip. That
+      chip clears the session's pin on mount unless `preserveScope` is passed,
+      re-runs a hospital lookup on every tab switch, and would be the only
+      picker on a page whose other three sections do not follow it — three
+      problems in exchange for saving a navigation. A picker on the chart is
+      worth doing properly, as its own change.
+    -->
+    <p class="labs-hint" role="status" data-testid="labs-no-hospital">
+      {{ 'CHART.LAB_NO_HOSPITAL' | translate }}
+    </p>
+  }
+  @if (section() === 'labs' && canViewLabs() && labsScoped()) {
     <!--
       A populated section is cached for the scope it was read under, so a
       result released while the chart is open would not appear on a revisit.
@@ -346,11 +363,7 @@
           patient treated elsewhere shows released results above an orders
           table reading "no lab orders", as if the order record were missing.
         -->
-        @if (globalScope()) {
-          <p class="labs-hint">{{ 'CHART.LAB_ORDERS_SCOPE_HINT_GLOBAL' | translate }}</p>
-        } @else {
-          <p class="labs-hint">{{ 'CHART.LAB_ORDERS_SCOPE_HINT' | translate }}</p>
-        }
+        <p class="labs-hint">{{ 'CHART.LAB_ORDERS_SCOPE_HINT' | translate }}</p>
         <div class="data-table">
           <table>
             <caption class="sr-only">

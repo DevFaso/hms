@@ -95,13 +95,15 @@ enum class MedicationStatus {
 
     companion object {
         /**
-         * A medication with no status at all is treated as current: the
-         * backend only omits it when `@JsonInclude(NON_NULL)` drops a null,
-         * and `resolveStatus` never returns one.
+         * An absent status is UNKNOWN, like the other three enums here.
+         * `resolveStatus` never returns null today, but if that ever stops
+         * being true the failure mode of assuming ACTIVE is a discontinued
+         * or finished course badged green — the exact bug this mapping
+         * exists to prevent — while "Status unavailable" costs nothing.
          */
         fun fromWire(raw: String?): MedicationStatus {
             val trimmed = raw?.trim().orEmpty()
-            if (trimmed.isEmpty()) return ACTIVE
+            if (trimmed.isEmpty()) return UNKNOWN
             return entries.firstOrNull { it.name.equals(trimmed, ignoreCase = true) } ?: UNKNOWN
         }
     }

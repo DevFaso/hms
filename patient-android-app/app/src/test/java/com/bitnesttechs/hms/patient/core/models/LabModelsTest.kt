@@ -177,6 +177,15 @@ class LabModelsTest {
         val graded = ungraded.copy(value = "4.2", referenceRange = "3.5 - 5.1")
         assertTrue(graded.isGradedNormal)
         assertEquals(StatusTone.POSITIVE, graded.tone)
+
+
+        // The units on the range are NOT compared with the row's: the app
+        // cannot tell whether the range shown is the one that graded this
+        // result, and the check that tried was removed. See
+        // LabResultDto.displayReferenceRange.
+        val otherUnit = ungraded.copy(value = "5.4", unit = "mmol/L", referenceRange = "70 - 110 mg/dL")
+        assertTrue(otherUnit.isGradedNormal)
+        assertEquals("70 - 110 mg/dL", otherUnit.displayReferenceRange)
     }
 
     /** A pending row's `resultedAt` is the analyzer's, not the lab's. */

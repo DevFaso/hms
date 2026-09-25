@@ -63,15 +63,59 @@ class PrescriptionControllerTest {
 
     @Test
     void list_preAuthorize_includesSuperAdmin() throws Exception {
-        List<String> roles = extractRolesFromMethod("list",
-                UUID.class, UUID.class, UUID.class, Pageable.class, Locale.class);
-        assertThat(roles).contains("SUPER_ADMIN");
+        assertThat(listRoles()).contains("SUPER_ADMIN");
     }
 
     @Test
     void list_preAuthorize_retainsTenantRoles() throws Exception {
-        List<String> roles = extractRolesFromMethod("list",
-                UUID.class, UUID.class, UUID.class, Pageable.class, Locale.class);
-        assertThat(roles).contains("DOCTOR", "NURSE", "MIDWIFE", "PHARMACIST").doesNotContain("HOSPITAL_ADMIN");
+        assertThat(listRoles()).contains("DOCTOR", "NURSE", "MIDWIFE", "PHARMACIST")
+                .doesNotContain("HOSPITAL_ADMIN");
+    }
+
+    /* ── Gap G9: the verifier reads ────────────────────────────────────── */
+
+    /**
+     * ROLE_PHARMACY_VERIFIER holds {@code /pharmacist-verify} and
+     * {@code /request-clarification}. Both are judgments about the order as
+     * written, and neither is possible without reading it — the role could
+     * not even read the prescriber's answer to its own question. The nav
+     * entry in the portal shell is gated on exactly these two reads.
+     */
+    @Test
+    void list_preAuthorize_admitsThePharmacyVerifier() throws Exception {
+        assertThat(listRoles()).contains("PHARMACY_VERIFIER");
+    }
+
+    @Test
+    void getById_preAuthorize_admitsThePharmacyVerifier() throws Exception {
+        List<String> roles = extractRolesFromMethod("getById",
+                UUID.class, org.springframework.security.core.Authentication.class, Locale.class);
+        assertThat(roles).contains("PHARMACY_VERIFIER", "DOCTOR", "NURSE", "MIDWIFE",
+                "PHARMACIST", "PATIENT");
+    }
+
+    /**
+     * Whoever may RAISE a clarification must read the answer, so every role on
+     * {@code requestClarification} is a clinical reader — otherwise a
+     * pharmacist who is also a patient of the hospital would get the copy with
+     * the exchange stripped out of it.
+     */
+    @Test
+    void everyClarificationRequesterIsAClinicalReader() throws Exception {
+        List<String> requesters = extractRolesFromMethod("requestClarification",
+                UUID.class, com.example.hms.payload.dto.PrescriptionClarificationRequestDTO.class, Locale.class);
+        for (String role : requesters) {
+            if ("SUPER_ADMIN".equals(role)) {
+                continue; // expanded into ROLE_DOCTOR by RoleExpansion before any check runs
+            }
+            assertThat(PrescriptionController.CLINICAL_READER_ROLES)
+                    .as("%s may ask a question and must therefore read the answer", role)
+                    .contains("ROLE_" + role);
+        }
+    }
+
+    private static List<String> listRoles() throws Exception {
+        return extractRolesFromMethod("list",
+                UUID.class, UUID.class, UUID.class, List.class, Pageable.class, Locale.class);
     }
 }
