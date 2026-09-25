@@ -85,15 +85,6 @@
     @if (listTruncated()) {
       <p class="muted list-truncated" role="status" data-testid="rx-list-truncated">
         {{ 'PRESCRIPTIONS.LIST_TRUNCATED' | translate }}
-        <!-- Gap G12: one of the counts IS exact, and saying so is the point of
-             fetching it separately. Without this the banner would go on
-             telling a prescriber that the number the clinical inbox sent them
-             here for is only a minimum. -->
-        @if (attentionComplete()) {
-          <span data-testid="rx-attention-count-exact">{{
-            'PRESCRIPTIONS.ATTENTION_COUNT_EXACT' | translate
-          }}</span>
-        }
       </p>
     }
     <div class="search-box">

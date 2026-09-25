@@ -5757,7 +5757,6 @@
     },
     "QUANTITY_VALUE": "{{value}} {{unit}}",
     "REFILLS_VALUE": "{{remaining}} of {{allowed}} remaining",
-    "ATTENTION_COUNT_EXACT": "The “Needs attention” count is complete: it is fetched separately, by status.",
     "LIST_TRUNCATED": "Only the most recent prescriptions are listed, so these counts are a minimum. Use the search box to find an older one."
   },
   "PROFILE": {

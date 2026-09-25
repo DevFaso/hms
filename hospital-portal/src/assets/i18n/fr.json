@@ -5757,7 +5757,6 @@
     },
     "QUANTITY_VALUE": "{{value}} {{unit}}",
     "REFILLS_VALUE": "{{remaining}} sur {{allowed}} restant(s)",
-    "ATTENTION_COUNT_EXACT": "Le total « À traiter » est complet : il est récupéré séparément, par statut.",
     "LIST_TRUNCATED": "Seules les ordonnances les plus récentes sont affichées : ces totaux sont donc un minimum. Utilisez la recherche pour en retrouver une plus ancienne."
   },
   "PROFILE": {

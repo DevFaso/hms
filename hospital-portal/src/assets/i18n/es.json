@@ -5657,8 +5657,8 @@
     "PATIENT": "Patient",
     "PRESCRIBED_BY": "Prescrito por",
     "PRESCRIBER": "Prescriber",
-    "QUANTITY": "Quantity",
-    "REFILLS": "Refills",
+    "QUANTITY": "Cantidad",
+    "REFILLS": "Renovaciones",
     "ROUTE": "Route",
     "SEARCH": "Search prescriptions...",
     "SELECT_HOSPITAL": "Select hospital",
@@ -5757,7 +5757,6 @@
     },
     "QUANTITY_VALUE": "{{value}} {{unit}}",
     "REFILLS_VALUE": "{{remaining}} de {{allowed}} restantes",
-    "ATTENTION_COUNT_EXACT": "El total de «Requiere atención» está completo: se obtiene por separado, por estado.",
     "LIST_TRUNCATED": "Solo se muestran las recetas más recientes, por lo que estos totales son un mínimo. Use el buscador para encontrar una más antigua."
   },
   "PROFILE": {

@@ -641,9 +641,9 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     };
   }
 
-  function page<T>(content: T[]): ApiResponse<Page<T>> {
+  function page<T>(content: T[], totalElements = content.length): ApiResponse<Page<T>> {
     return {
-      data: { content, totalElements: content.length, totalPages: 1, size: 20, number: 0 },
+      data: { content, totalElements, totalPages: 1, size: 20, number: 0 },
     };
   }
 
@@ -984,7 +984,7 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     await setup({
       list: [rx],
       routings: of(page([makeRouting({ remainingQuantity: 99 })])),
-      dispenses: of(page([makeDispense({ quantityDispensed: 25 })])),
+      dispenses: of(page([makeDispense({ quantityDispensed: 25, unit: 'comprimés' })])),
     });
 
     component.viewDetail(rx);
@@ -997,6 +997,58 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     expect(rendered)
       .withContext('a bare number could as easily be millilitres as tablets')
       .toContain('comprimés');
+  });
+
+  it('will not sum a fill list the server has more of', async () => {
+    // The fills are fetched 20 at a time. Summing the page would understate
+    // what has been dispensed and overstate what is owed — and this figure
+    // reads as an authoritative balance, not a snapshot.
+    const rx = makeRx({ status: 'PARTIALLY_FILLED', quantity: 300, quantityUnit: 'comprimés' });
+    await setup({
+      list: [rx],
+      // Decided after the fill, so the snapshot is not stale and the
+      // fallback has something to report.
+      routings: of(
+        page([
+          makeRouting({
+            remainingQuantity: 7,
+            decidedAt: '2026-09-10T08:00:00',
+            createdAt: '2026-09-10T08:00:00',
+          }),
+        ]),
+      ),
+      dispenses: of(page([makeDispense({ quantityDispensed: 20, unit: 'comprimés' })], 40)),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(component.outstandingQuantity())
+      .withContext('the routing snapshot, not 300 − 20')
+      .toBe(7);
+  });
+
+  it('will not subtract a fill counted in a different unit', async () => {
+    // 200 ml dispensed as 2 bottles is not "198 ml outstanding".
+    const rx = makeRx({ status: 'PARTIALLY_FILLED', quantity: 200, quantityUnit: 'ml' });
+    await setup({
+      list: [rx],
+      routings: of(
+        page([
+          makeRouting({
+            remainingQuantity: 100,
+            decidedAt: '2026-09-10T08:00:00',
+            createdAt: '2026-09-10T08:00:00',
+          }),
+        ]),
+      ),
+      dispenses: of(page([makeDispense({ quantityDispensed: 2, unit: 'flacon' })])),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(component.outstandingQuantity()).toBe(100);
   });
 
   it('claims no remainder on an order nothing has been filled against', async () => {
@@ -1019,8 +1071,13 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
       list: [rx],
       dispenses: of(
         page([
-          makeDispense({ id: 'd-1', quantityDispensed: 10 }),
-          makeDispense({ id: 'd-2', quantityDispensed: 20, status: 'CANCELLED' }),
+          makeDispense({ id: 'd-1', quantityDispensed: 10, unit: 'comprimés' }),
+          makeDispense({
+            id: 'd-2',
+            quantityDispensed: 20,
+            unit: 'comprimés',
+            status: 'CANCELLED',
+          }),
         ]),
       ),
     });
@@ -1108,7 +1165,6 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
 
     expect(component.prescriptions().map((p) => p.id)).toEqual(['rx-page', 'rx-old']);
     expect(component.countInTab('attention')).toBe(1);
-    expect(component.attentionComplete()).toBeTrue();
 
     component.setTab('attention');
     expect(component.filtered().map((p) => p.id)).toEqual(['rx-old']);
@@ -1122,29 +1178,29 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     expect(component.countInTab('attention')).toBe(1);
   });
 
-  it('keeps the page and says the counts are a minimum when the attention query fails', async () => {
+  it('keeps the page when the attention query fails', async () => {
     await setup({
       list: [makeRx({ id: 'rx-1', status: 'SIGNED' })],
       attention: throwError(() => new Error('boom')),
     });
 
     // Nothing is swallowed as empty data: the page is still there, and the
-    // truncation banner goes on saying the counts are a lower bound.
+    // truncation banner goes on saying the counts are a lower bound — which
+    // is what this page did before the filter existed.
     expect(component.prescriptions().map((p) => p.id)).toEqual(['rx-1']);
-    expect(component.attentionComplete()).toBeFalse();
   });
 
-  it('says the attention count is exact on a truncated page, and only then', async () => {
-    const full = Array.from({ length: PrescriptionService.LIST_PAGE_SIZE }, (_, i) =>
+  it('does not let the merged attention rows make an untruncated page look truncated', async () => {
+    const page200 = Array.from({ length: PrescriptionService.LIST_PAGE_SIZE - 1 }, (_, i) =>
       makeRx({ id: 'rx-' + i, status: 'SIGNED' }),
     );
-    await setup({ list: full });
-    fixture.detectChanges();
+    await setup({
+      list: page200,
+      attention: of([makeRx({ id: 'rx-old', status: 'PENDING_CLARIFICATION' })]),
+    });
 
-    expect(component.listTruncated())
-      .withContext('the merged attention rows must not be what makes the page look truncated')
-      .toBeTrue();
-    expect(el('[data-testid="rx-attention-count-exact"]')).not.toBeNull();
+    expect(component.prescriptions().length).toBe(PrescriptionService.LIST_PAGE_SIZE);
+    expect(component.listTruncated()).toBeFalse();
   });
 
   it('drops a routing remainder that a later fill has made stale', async () => {

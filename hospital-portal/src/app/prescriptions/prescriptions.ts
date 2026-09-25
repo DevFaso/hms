@@ -611,24 +611,22 @@ export class PrescriptionsComponent implements OnInit {
    */
   private readonly pageRowCount = signal(0);
 
-  /**
-   * True when the status-filtered attention query came back, so the "Needs
-   * attention" count is a TOTAL rather than a lower bound. False when that
-   * request failed and the tab falls back to whatever the unfiltered page
-   * happened to contain — which is exactly what this page did before the
-   * filter existed, and the truncation banner already says so.
-   */
-  readonly attentionComplete = signal(false);
-
   load(): void {
     this.loading.set(true);
     // Two requests, because they answer different questions. The first is the
     // page: the newest 200 prescriptions, whatever their status, which is what
-    // five of the six tabs list. The second is the whole of "Needs attention",
-    // by status, because that is the tab the clinical inbox sends a prescriber
+    // five of the six tabs list. The second is the newest 200 in an ATTENTION
+    // status, because that is the tab the clinical inbox sends a prescriber
     // to — an inbox saying "3 orders await clarification" over a page holding
     // none of them is the defect this fixes, and no page size makes it go away
     // on a busy tenant.
+    //
+    // It makes the bucket much more complete, NOT provably complete, and the
+    // page deliberately does not claim otherwise: the filtered query has the
+    // same 200-row ceiling, and `tabForStatus` also files any status this
+    // build has never heard of under "Needs attention", which no status
+    // filter can ask for. The truncation banner therefore goes on saying the
+    // counts are a minimum.
     forkJoin({
       page: this.prescriptionService.list().pipe(
         map((rows) => ({ rows, failed: false })),
@@ -647,13 +645,11 @@ export class PrescriptionsComponent implements OnInit {
         if (res.page.failed) {
           // Nothing is rendered as empty: the list keeps whatever it held and
           // the failure is said out loud, as before.
-          this.attentionComplete.set(false);
           this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.LOAD_FAILED'));
           return;
         }
         const page = Array.isArray(res.page.rows) ? res.page.rows : [];
         this.pageRowCount.set(page.length);
-        this.attentionComplete.set(!res.attention.failed);
         this.prescriptions.set(this.mergeById(page, res.attention.rows));
         this.applyFilter();
       });
@@ -821,6 +817,12 @@ export class PrescriptionsComponent implements OnInit {
    */
   dispenseError = signal(false);
   routingError = signal(false);
+
+  /**
+   * True when the server holds more fills than the page that was fetched, so
+   * the list cannot be summed. See {@link #fillsAreCountable}.
+   */
+  private readonly dispensesTruncated = signal(false);
 
   /** Both halves gone: the panel has nothing but the failure to report. */
   readonly historyError = computed(() => this.dispenseError() && this.routingError());
@@ -1010,10 +1012,11 @@ export class PrescriptionsComponent implements OnInit {
     if (bucket === 'dispensed' || bucket === 'closed') return null;
 
     const expected = this.expectedQuantity();
-    if (expected != null && !this.dispenseError()) {
-      const dispensed = this.dispenseHistory()
-        .filter((d) => d.status !== 'CANCELLED')
-        .reduce((sum, d) => sum + (d.quantityDispensed ?? 0), 0);
+    if (expected != null && !this.dispenseError() && this.fillsAreCountable()) {
+      const dispensed = this.countableFills().reduce(
+        (sum, d) => sum + (d.quantityDispensed ?? 0),
+        0,
+      );
       // Only once something HAS been filled. "Nothing dispensed yet" is not a
       // remainder the prescriber needs told: it is the whole order, it would
       // appear on every signed prescription, and it would flash onto the
@@ -1026,6 +1029,37 @@ export class PrescriptionsComponent implements OnInit {
       }
     }
     return this.routingSnapshotRemainder();
+  });
+
+  /** The fills that count against the order: everything not cancelled. */
+  private readonly countableFills = computed(() =>
+    this.dispenseHistory().filter((d) => d.status !== 'CANCELLED'),
+  );
+
+  /**
+   * Whether the fills can be SUBTRACTED from the ordered quantity at all.
+   *
+   * <p>Two ways they cannot, and both make the live balance wrong rather than
+   * merely imprecise, so both send it back to the routing snapshot.
+   *
+   * <p>The list is PAGED — `initPharmacyHistory` asks for the 20 most recent
+   * fills. On an order with more than that, summing what arrived understates
+   * what has been dispensed and therefore overstates what is owed, and unlike
+   * the snapshot this figure reads as an authoritative balance.
+   * `dispensesTruncated` is set from the server's `totalElements`.
+   *
+   * <p>And a fill records its OWN unit. A 200 ml syrup dispensed as 2 bottles
+   * would be subtracted as "200 − 2 = 198", then labelled "ml". The backend
+   * makes the same unitless comparison, but only to pick a status threshold;
+   * this is the first place the number is printed to a clinician.
+   */
+  private readonly fillsAreCountable = computed<boolean>(() => {
+    if (this.dispensesTruncated()) return false;
+    const orderUnit = this.selectedPrescription()?.quantityUnit?.trim().toLowerCase();
+    return this.countableFills().every((d) => {
+      const fillUnit = d.unit?.trim().toLowerCase();
+      return !fillUnit || !orderUnit || fillUnit === orderUnit;
+    });
   });
 
   /**
@@ -1061,6 +1095,7 @@ export class PrescriptionsComponent implements OnInit {
     this.historyLoading.set(false);
     this.dispenseError.set(false);
     this.routingError.set(false);
+    this.dispensesTruncated.set(false);
   }
 
   private readonly historyRequest$ = new Subject<string>();
@@ -1102,6 +1137,11 @@ export class PrescriptionsComponent implements OnInit {
               prescriptionId,
               dispenseFailed: res.dispenses === null,
               routingFailed: res.routings === null,
+              // The fills are paged; the remainder may only be computed from
+              // them when the page IS the whole list.
+              dispensesTruncated:
+                (res.dispenses?.data?.totalElements ?? 0) >
+                (res.dispenses?.data?.content?.length ?? 0),
               dispenses: [...(res.dispenses?.data?.content ?? [])].sort(
                 (a, b) =>
                   eventTime(b.dispensedAt, b.createdAt) - eventTime(a.dispensedAt, a.createdAt),
@@ -1117,6 +1157,7 @@ export class PrescriptionsComponent implements OnInit {
                 prescriptionId,
                 dispenseFailed: true,
                 routingFailed: true,
+                dispensesTruncated: false,
                 dispenses: [] as DispenseResponse[],
                 routings: [] as RoutingDecisionResponse[],
               }),
@@ -1132,7 +1173,10 @@ export class PrescriptionsComponent implements OnInit {
         // Only overwrite a half that actually came back. A retry whose OTHER
         // half fails this time must not take away rows the prescriber could
         // read a second ago.
-        if (!res.dispenseFailed) this.dispenseHistory.set(res.dispenses);
+        if (!res.dispenseFailed) {
+          this.dispenseHistory.set(res.dispenses);
+          this.dispensesTruncated.set(res.dispensesTruncated);
+        }
         if (!res.routingFailed) this.routingHistory.set(res.routings);
         // A refusal or an outage is an explicit error state — never "no fills
         // recorded", which is the one thing a prescriber must not be told
@@ -1150,6 +1194,7 @@ export class PrescriptionsComponent implements OnInit {
     if (this.historyLoadedFor !== p.id) {
       this.dispenseHistory.set([]);
       this.routingHistory.set([]);
+      this.dispensesTruncated.set(false);
       this.historyLoadedFor = p.id;
     }
     this.dispenseError.set(false);
