@@ -368,14 +368,6 @@ public class Hl7MessageDispatcher {
     }
 
     /**
-     * One spelling of the sender's id for the whole MLLP surface. The
-     * dispatcher's pre-service rejects and the inbound services' own rejects
-     * have to land under the same {@code integration_id}, or an operator
-     * reading the DLQ for a misconfigured sender sees half its messages. The
-     * truncation that used to live here lives in {@link MllpRecordingContext}
-     * with the reason it exists.
-     */
-    /**
      * The scope for a sender that claimed an identity we could not verify, or
      * null when it did not really claim one.
      *
@@ -401,6 +393,17 @@ public class Hl7MessageDispatcher {
             header.sendingApplication(), header.sendingFacility());
     }
 
+    /**
+     * One spelling of the sender's id for the whole MLLP surface. The
+     * dispatcher's pre-service rejects and the inbound services' own rejects
+     * have to land under the same {@code integration_id}, or an operator
+     * reading the DLQ for a misconfigured sender sees half its messages. The
+     * truncation that used to live here lives in {@link MllpRecordingContext}
+     * with the reason it exists.
+     *
+     * <p>This is the value that goes in the <b>column</b>. For a correlation
+     * scope use {@link #senderScopeFor} instead — see why there.
+     */
     private static String integrationIdFor(Hl7MessageHeader header) {
         return MllpRecordingContext.integrationId(
             header.sendingApplication(), header.sendingFacility());

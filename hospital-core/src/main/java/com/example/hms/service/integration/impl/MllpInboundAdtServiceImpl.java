@@ -221,8 +221,16 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
                 // unbounded mint, but "nothing a sender controls may key a
                 // correlation id" is either a rule or it is not. The precise
                 // type still goes on the row.
+                // senderScope, not integrationId: the id is clamped to its
+                // column's 120 characters, so two allowlisted senders whose
+                // pair agrees in the first 120 would share a correlation id
+                // by construction - and the newer row supersedes the older in
+                // countUnresolvedDeadLetters, so one tenant's refusal would
+                // silently retire another's. The scope is never stored and so
+                // has no column to fit.
                 MllpRecordingContext.rejectionCorrelationId(
-                    integrationId, CORRELATION_TYPE, reason));
+                    MllpRecordingContext.senderScope(sendingApplication, sendingFacility),
+                    CORRELATION_TYPE, reason));
         } catch (RuntimeException ex) {
             log.warn("MLLP ADT message recorder threw for sender={}/{} reason={}",
                 sendingApplication, sendingFacility, reason, ex);

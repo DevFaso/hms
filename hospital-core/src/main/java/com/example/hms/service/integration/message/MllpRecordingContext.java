@@ -161,7 +161,6 @@ public final class MllpRecordingContext {
         return UUID.nameUUIDFromBytes(key.getBytes(StandardCharsets.UTF_8)).toString();
     }
 
-    /** Exactly what {@code MllpAllowedSenderServiceImpl.lookup} does. */
     /**
      * MSH-10 as it is safe to quote back, capped at the 20 characters HL7 v2
      * allows it.
@@ -199,6 +198,13 @@ public final class MllpRecordingContext {
             + "/" + normalised(sendingFacility);
     }
 
+    /**
+     * Exactly what {@code MllpAllowedSenderServiceImpl.lookup} does: trim and
+     * upper-case. The allowlist matches that way against values V62 stores
+     * canonically, so one sender may present its MSH-3/MSH-4 in any casing
+     * and still resolve — and everything derived from the pair has to agree
+     * with that, or one sender becomes several.
+     */
     private static String normalised(String value) {
         return StringUtils.hasText(value) ? value.trim().toUpperCase(Locale.ROOT) : "?";
     }

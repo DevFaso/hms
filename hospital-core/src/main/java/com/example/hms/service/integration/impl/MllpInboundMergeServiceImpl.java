@@ -220,8 +220,13 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
                 null,
                 IntegrationMessageStatus.FAILED,
                 withControlId(reason, messageControlId),
+                // senderScope, not integrationId - see the same call on
+                // MllpInboundAdtServiceImpl: the id is column-clamped, and a
+                // shared correlation id lets one sender's refusal supersede
+                // another's in the dead-letter count.
                 MllpRecordingContext.rejectionCorrelationId(
-                    integrationId, MESSAGE_TYPE, reason));
+                    MllpRecordingContext.senderScope(sendingApplication, sendingFacility),
+                    MESSAGE_TYPE, reason));
         } catch (RuntimeException ex) {
             log.warn("MLLP A40 message recorder threw for sender={}/{} reason={}",
                 sendingApplication, sendingFacility, reason, ex);
