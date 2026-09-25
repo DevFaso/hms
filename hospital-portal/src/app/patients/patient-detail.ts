@@ -1,5 +1,6 @@
 import {
   Component,
+  computed,
   inject,
   OnInit,
   signal,
@@ -458,19 +459,20 @@ export class PatientDetailComponent implements OnInit {
    * the tab hosts the cross-tenant chip and forwards the selection; a change
    * re-fetches under the new X-Hospital-Id.
    *
-   * Seeded from the LIVE scope, not null. `DocumentsTabComponent` reloads only
-   * when this input actually changes, and the value itself is never sent —
-   * the interceptor scopes the request — so a seed of null while the session
-   * is pinned to B meant the chip's "All hospitals" emitted null, matched the
-   * seed, and reloaded nothing: the chip then read "all" over B's documents.
-   * (Before `preserveScope`, the chip's own `enableGlobalView()` on mount hid
-   * this by forcing the two into agreement.)
+   * DERIVED from the live scope, not a signal the chip writes into.
+   *
+   * `DocumentsTabComponent` reloads only when this input actually changes, and
+   * the value itself is never sent — the interceptor scopes the request — so
+   * the input has to track whatever the interceptor will send or the two drift
+   * apart. A `null` seed did that immediately (the chip's "All hospitals"
+   * emitted null, matched the seed, reloaded nothing, and the chip then read
+   * "all" over the pinned hospital's documents); a value captured once at
+   * construction does it more slowly, as soon as anything else moves the
+   * scope while the chart is open. The chip mutates `RoleContextService`
+   * BEFORE it emits, so reading the service covers the chip's own picks too,
+   * and its `scopeChange` output is no longer needed here.
    */
-  readonly documentsScope = signal<string | null>(this.scopedHospitalId());
-
-  onDocumentsScopeChange(hospitalId: string | null): void {
-    this.documentsScope.set(hospitalId);
-  }
+  readonly documentsScope = computed(() => this.scopedHospitalId());
 
   /** Mirrors PatientDocumentStaffController.READ_ROLES: the roles that read a
    *  chart, no lab roles, never ROLE_PATIENT (their reads stay on /me). */

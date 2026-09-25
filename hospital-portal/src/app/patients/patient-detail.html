@@ -343,11 +343,7 @@
         reported no hospital in scope. `shell.html` passes it for the same
         reason.
       -->
-      <app-hospital-scope-chip
-        [disableUrlSync]="true"
-        [preserveScope]="true"
-        (scopeChange)="onDocumentsScopeChange($event)"
-      />
+      <app-hospital-scope-chip [disableUrlSync]="true" [preserveScope]="true" />
       <app-documents-tab [patientId]="patient()!.id" [hospitalScope]="documentsScope()" />
     }
 
