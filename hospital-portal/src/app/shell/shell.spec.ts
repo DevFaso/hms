@@ -347,7 +347,7 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(routes).not.toContain('/lab-release-worklist');
   });
 
-  it('pharmacy verifier reaches Dispensing and Stock Routing but not Prescriptions', () => {
+  it('pharmacy verifier reaches Dispensing, Stock Routing and Prescriptions', () => {
     const { items } = createComponent({
       activeRole: 'ROLE_PHARMACY_VERIFIER',
       roles: ['ROLE_PHARMACY_VERIFIER'],
@@ -358,12 +358,29 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     const routes = items.map((i) => i.route);
     expect(routes).toContain('/pharmacy/dispensing');
     expect(routes).toContain('/pharmacy/stock-routing');
-    // Gap G9: /prescriptions is withheld ON PURPOSE. The route guard admits
-    // the verifier and the pharmacist-verify ceremony lives there, but
-    // GET /prescriptions (and GET /prescriptions/{id}) do not admit the
-    // role, so the page would open on a "failed to load" toast. This
-    // expectation is the guard against "fixing" that into a 403.
-    expect(routes).not.toContain('/prescriptions');
+    // Gap G9, resolved: /prescriptions used to be withheld because GET
+    // /prescriptions and GET /prescriptions/{id} did not admit the role, so
+    // the entry opened on a "failed to load" toast. Both reads admit
+    // ROLE_PHARMACY_VERIFIER now (PrescriptionControllerTest pins them) and
+    // the route guard always did, so the page the pharmacist-verify and
+    // request-clarification ceremonies live on is finally reachable from the
+    // navigation. What this expectation now guards is the pairing: if the
+    // backend ever drops the role from those reads, this must come out with it.
+    expect(routes).toContain('/prescriptions');
+  });
+
+  it('pharmacy verifier gets exactly one Prescriptions entry when also a pharmacist', () => {
+    // The verifier's own nav block pushes Dispensing and Stock Routing. Its
+    // Prescriptions entry is deliberately NOT pushed there but added to the
+    // clinical item's roles list, so holding both roles cannot produce two.
+    const { items } = createComponent({
+      activeRole: null,
+      roles: ['ROLE_PHARMACIST', 'ROLE_PHARMACY_VERIFIER'],
+      wildcardPermission: false,
+      permissions: ['View Prescriptions'],
+    });
+
+    expect(items.filter((i) => i.route === '/prescriptions').length).toBe(1);
   });
 
   it('claims reviewer reaches Pharmacy Claims — its entire purpose', () => {

@@ -5661,8 +5661,8 @@
     "PATIENT": "Patient",
     "PRESCRIBED_BY": "Prescrito por",
     "PRESCRIBER": "Prescriber",
-    "QUANTITY": "Quantity",
-    "REFILLS": "Refills",
+    "QUANTITY": "Cantidad",
+    "REFILLS": "Renovaciones",
     "ROUTE": "Route",
     "SEARCH": "Search prescriptions...",
     "SELECT_HOSPITAL": "Select hospital",
@@ -5759,6 +5759,8 @@
       "PARTIAL_ERROR_DISPENSES": "No se pudieron cargar las dispensaciones, por lo que esto no es todo.",
       "PARTIAL_ERROR_ROUTINGS": "No se pudieron cargar las decisiones de derivación, por lo que esto no es todo."
     },
+    "QUANTITY_VALUE": "{{value}} {{unit}}",
+    "REFILLS_VALUE": "{{remaining}} de {{allowed}} restantes",
     "LIST_TRUNCATED": "Solo se muestran las recetas más recientes, por lo que estos totales son un mínimo. Use el buscador para encontrar una más antigua."
   },
   "PROFILE": {

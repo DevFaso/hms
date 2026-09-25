@@ -29,6 +29,7 @@ import { StaffService, StaffResponse } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { expandRoleEquivalents, roleSatisfies } from '../core/role-equivalence';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
@@ -166,6 +167,69 @@ export class PrescriptionsComponent implements OnInit {
 
   staffMembers = signal<StaffResponse[]>([]);
 
+  /**
+   * Roles `SecurityConfig`'s `GET /staff` matcher admits — first-match-wins
+   * and terminal, so this is the whole gate, not a hint.
+   *
+   * <p>This page's route is WIDER than that matcher: PHARMACIST and, since
+   * G9, PHARMACY_VERIFIER may open it and neither may read `/staff`. Firing
+   * the request anyway costs them a 403 on page open — silent in the UI
+   * (`SILENT_403_PATTERNS` covers `/staff`) but an unhandled error and a
+   * frontend-audit row all the same. The list only fills the prescriber
+   * dropdown in the create form, which those two roles cannot submit.
+   */
+  private static readonly STAFF_READ_ROLES = [
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_RECEPTIONIST',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_SUPER_ADMIN',
+    'ROLE_LAB_DIRECTOR',
+    'ROLE_LAB_MANAGER',
+    'ROLE_LAB_SCIENTIST',
+    'ROLE_LAB_TECHNICIAN',
+    'ROLE_QUALITY_MANAGER',
+  ];
+
+  /**
+   * Read live, not captured: the active role changes on a scope switch.
+   *
+   * <p>NOT `hasAnyActiveRole`, which matches the stored role name literally.
+   * The list above holds POST-expansion names, and a prescriber's JWT carries
+   * `ROLE_PHYSICIAN` or `ROLE_SURGEON` — the backend adds `ROLE_DOCTOR` before
+   * its own matcher runs, so those two are served, and a literal check here
+   * would leave the create form's prescriber dropdown permanently empty for
+   * exactly the people who write prescriptions. `roleSatisfies` /
+   * `expandRoleEquivalents` are the shared rule (role audit C2).
+   */
+  protected readonly canReadStaff = computed(() => {
+    const active = this.roleContext.activeRole;
+    if (active) {
+      return roleSatisfies(PrescriptionsComponent.STAFF_READ_ROLES, active);
+    }
+    return expandRoleEquivalents(this.roleContext.activeRoles).some((r) =>
+      PrescriptionsComponent.STAFF_READ_ROLES.includes(r),
+    );
+  });
+
+  private loadPrescribers(): void {
+    if (!this.canReadStaff()) {
+      this.staffMembers.set([]);
+      return;
+    }
+    this.staffService
+      .list()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (s) => this.staffMembers.set(s ?? []),
+        // Said out loud rather than rendered as an empty dropdown: a
+        // prescriber who cannot find their own name would otherwise assume
+        // the list is simply short.
+        error: () => this.toast.error(this.translate.instant('STAFF.LOAD_FAILED')),
+      });
+  }
+
   // Patient picker
   patientQuery = signal('');
   patientSuggestions = signal<PatientResponse[]>([]);
@@ -208,7 +272,7 @@ export class PrescriptionsComponent implements OnInit {
     this.scopeUrl.applyUrlScopeSync(this.route);
 
     this.load();
-    this.staffService.list().subscribe((s) => this.staffMembers.set(s ?? []));
+    this.loadPrescribers();
     this.initPatientSearch();
     this.initPharmacyHistory();
 
@@ -589,25 +653,101 @@ export class PrescriptionsComponent implements OnInit {
     });
   }
 
-  /** Re-fetch under the new cross-tenant scope when the chip emits. */
+  /**
+   * Re-fetch under the new cross-tenant scope when the chip emits.
+   *
+   * <p>The prescriber list comes too. `canReadStaff` is read live precisely so
+   * that a scope switch can change the answer, and it only ever ran at
+   * `ngOnInit`: someone who opened the page as a pharmacist and switched to
+   * their doctor role kept the empty prescriber dropdown they started with,
+   * because nothing re-asked.
+   */
   onScopeChange(_hospitalId: string | null): void {
     this.load();
+    this.loadPrescribers();
   }
+
+  /**
+   * Gap G12 — the statuses that make up "Needs attention", as the backend
+   * `status` filter understands them. Derived from {@link ATTENTION_REASONS}
+   * rather than re-listed, for the same reason {@link TAB_BY_STATUS} is: a
+   * status flagged in one place and not the other is the only failure mode
+   * that matters here.
+   */
+  private static readonly ATTENTION_STATUSES = ATTENTION_REASONS.map((r) => r.status);
+
+  /**
+   * How many rows the UNFILTERED page returned. Tracked separately from
+   * `prescriptions()` because the attention rows are merged into that signal
+   * and would otherwise push it past the page size and make every load look
+   * truncated.
+   */
+  private readonly pageRowCount = signal(0);
 
   load(): void {
     this.loading.set(true);
-    this.prescriptionService.list().subscribe({
-      next: (res) => {
-        const list = Array.isArray(res) ? res : [];
-        this.prescriptions.set(list);
+    // Two requests, because they answer different questions. The first is the
+    // page: the newest 200 prescriptions, whatever their status, which is what
+    // five of the six tabs list. The second is the newest 200 in an ATTENTION
+    // status, because that is the tab the clinical inbox sends a prescriber
+    // to — an inbox saying "3 orders await clarification" over a page holding
+    // none of them is the defect this fixes, and no page size makes it go away
+    // on a busy tenant.
+    //
+    // It makes the bucket much more complete, NOT provably complete, and the
+    // page deliberately does not claim otherwise: the filtered query has the
+    // same 200-row ceiling, and `tabForStatus` also files any status this
+    // build has never heard of under "Needs attention", which no status
+    // filter can ask for. The truncation banner therefore goes on saying the
+    // counts are a minimum.
+    forkJoin({
+      page: this.prescriptionService.list().pipe(
+        map((rows) => ({ rows, failed: false })),
+        catchError(() => of({ rows: [] as PrescriptionResponse[], failed: true })),
+      ),
+      attention: this.prescriptionService
+        .list({ statuses: PrescriptionsComponent.ATTENTION_STATUSES })
+        .pipe(
+          map((rows) => ({ rows, failed: false })),
+          catchError(() => of({ rows: [] as PrescriptionResponse[], failed: true })),
+        ),
+    })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((res) => {
+        this.loading.set(false);
+        if (res.page.failed) {
+          // Nothing is rendered as empty: the list keeps whatever it held and
+          // the failure is said out loud, as before.
+          this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.LOAD_FAILED'));
+          return;
+        }
+        const page = Array.isArray(res.page.rows) ? res.page.rows : [];
+        this.pageRowCount.set(page.length);
+        this.prescriptions.set(this.mergeById(page, res.attention.rows));
         this.applyFilter();
-        this.loading.set(false);
-      },
-      error: () => {
-        this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.LOAD_FAILED'));
-        this.loading.set(false);
-      },
-    });
+      });
+  }
+
+  /**
+   * The page plus the attention rows it did not reach, newest first.
+   *
+   * <p>De-duplicated on id — the two queries overlap by design, since a
+   * recent PENDING_CLARIFICATION is on both — and re-sorted, because
+   * appending the second result would otherwise break the `createdAt,desc`
+   * order the page was fetched in. A row with no `createdAt` sorts last
+   * rather than to the top, where a missing timestamp would read as "just
+   * now".
+   */
+  private mergeById(
+    page: PrescriptionResponse[],
+    extra: PrescriptionResponse[],
+  ): PrescriptionResponse[] {
+    const byId = new Map<string, PrescriptionResponse>();
+    for (const row of page) byId.set(row.id, row);
+    for (const row of extra ?? []) byId.set(row.id, row);
+    return [...byId.values()].sort(
+      (a, b) => eventTime(b.createdAt, null) - eventTime(a.createdAt, null),
+    );
   }
 
   setTab(tab: PrescriptionTab): void {
@@ -662,7 +802,7 @@ export class PrescriptionsComponent implements OnInit {
    * "Needs attention 0" is worse than no count at all.
    */
   readonly listTruncated = computed(
-    () => this.prescriptions().length >= PrescriptionService.LIST_PAGE_SIZE,
+    () => this.pageRowCount() >= PrescriptionService.LIST_PAGE_SIZE,
   );
 
   /** True while the prescriber, not the pharmacy, is the one holding this up. */
@@ -717,25 +857,22 @@ export class PrescriptionsComponent implements OnInit {
   ];
 
   /**
-   * A super-admin in GLOBAL view has no hospital scope, and both history
-   * services start with `roleValidator.requireActiveHospitalId()`, which
-   * returns **null** for exactly that caller and is then dereferenced
-   * (`hospitalId.equals(prescription.getHospital().getId())`) — two 500s and
-   * an error box on a page that is explicitly cross-tenant. Reported to the
-   * coordinator as a backend defect; this is the client half, which declines
-   * to fire the calls and says why instead.
-   */
-  protected readonly historyNeedsScope = computed(() => this.isSuperAdmin() && this.globalView());
-
-  /**
    * Read live off the role signal rather than captured at construction: the
    * active role set changes under a hospital-scope switch, and a panel gated
    * on a constructor snapshot keeps the answer it was born with.
+   *
+   * <p>No global-view exception any more. Both history services used to open
+   * with `roleValidator.requireActiveHospitalId()` and dereference its result,
+   * which is **null** for a super-admin in global view — two 500s on a page
+   * that is explicitly cross-tenant, so this panel used to decline to fire the
+   * calls and ask for a hospital instead. #740 fixed that at the source: the
+   * reads now treat that caller the way the rest of the read surface does (no
+   * hospital, no narrowing), so the message would suppress a panel the backend
+   * is willing to serve. The panel is read-only — no routing WRITE lives in
+   * it, and #740 deliberately kept those refusing without a scope.
    */
-  protected readonly canReadPharmacyHistory = computed(
-    () =>
-      this.roleContext.hasAnyActiveRole(PrescriptionsComponent.HISTORY_ROLES) &&
-      !this.historyNeedsScope(),
+  protected readonly canReadPharmacyHistory = computed(() =>
+    this.roleContext.hasAnyActiveRole(PrescriptionsComponent.HISTORY_ROLES),
   );
 
   dispenseHistory = signal<DispenseResponse[]>([]);
@@ -750,6 +887,12 @@ export class PrescriptionsComponent implements OnInit {
    */
   dispenseError = signal(false);
   routingError = signal(false);
+
+  /**
+   * True when the server holds more fills than the page that was fetched, so
+   * the list cannot be summed. See {@link #fillsAreCountable}.
+   */
+  private readonly dispensesTruncated = signal(false);
 
   /** Both halves gone: the panel has nothing but the failure to report. */
   readonly historyError = computed(() => this.dispenseError() && this.routingError());
@@ -848,8 +991,8 @@ export class PrescriptionsComponent implements OnInit {
   });
 
   /**
-   * What the prescription still owes — the figure the SERVER computed, taken
-   * off the latest routing decision's `remainingQuantity`
+   * The remainder the SERVER computed, taken off the latest routing
+   * decision's `remainingQuantity`
    * (`FillAccounting.remaining` at the moment that routing was decided).
    *
    * <p>It is not derived from the dispense rows, and an earlier draft of this
@@ -874,14 +1017,8 @@ export class PrescriptionsComponent implements OnInit {
    *
    * <p>In both cases this returns null and the row is simply absent — the
    * per-fill "dispensed / requested" column below still shows what happened.
-   * A prescription-level remainder needs `quantity` and `refillsUsed` on
-   * PrescriptionResponseDTO, which it does not carry.
    */
-  readonly outstandingQuantity = computed<number | null>(() => {
-    const rx = this.selectedPrescription();
-    if (!rx) return null;
-    const bucket = this.tabForStatus(rx.status);
-    if (bucket === 'dispensed' || bucket === 'closed') return null;
+  private readonly routingSnapshotRemainder = computed<number | null>(() => {
     const decision = this.routingHistory()[0];
     const remaining = decision?.remainingQuantity;
     if (remaining == null || remaining <= 0) return null;
@@ -896,6 +1033,139 @@ export class PrescriptionsComponent implements OnInit {
     return remaining;
   });
 
+  /**
+   * The expected LIFETIME quantity of the order (gap G13):
+   * `quantity * (1 + refillsUsed)`, which is the arithmetic
+   * `DispenseServiceImpl.updatePrescriptionStatusFromHistory` runs. Null when
+   * the row carries no quantity — the column is nullable and pre-dates the
+   * pharmacy module, so a legacy order has none and the snapshot below is
+   * still the only answer available.
+   */
+  private readonly expectedQuantity = computed<number | null>(() => {
+    const rx = this.selectedPrescription();
+    const ordered = rx?.quantity;
+    if (ordered == null || ordered <= 0) return null;
+    const refillsUsed = rx?.refillsUsed ?? 0;
+    return ordered * (1 + Math.max(0, refillsUsed));
+  });
+
+  /**
+   * What the prescription still owes.
+   *
+   * <p>Computed off the prescription itself now that the response carries
+   * `quantity` and `refillsUsed` (gap G13): expected lifetime quantity minus
+   * the sum of the fills that were not cancelled — the same comparison the
+   * backend makes when it decides between PARTIALLY_FILLED and DISPENSED.
+   * That is a LIVE balance, where {@link #routingSnapshotRemainder} is the
+   * figure a routing decision froze at the moment it was taken, and it needed
+   * two guards to stay honest afterwards.
+   *
+   * <p>The snapshot is still the fallback, for three cases it is the only
+   * answer to: a row with no `quantity` on it, a fill list that failed to
+   * load (where "expected minus nothing" would claim the whole order is
+   * owed), and an order nothing has been filled against yet — a back order,
+   * where the remainder the pharmacy recorded is on the routing decision.
+   * The tab-bucket guard applies to both — everything under `dispensed` or
+   * `closed` is finished with the hospital, and `printForPatient` writes a
+   * `remainingQuantity` and creates no dispense row at all, so a printed
+   * prescription would otherwise claim a remainder forever with no fill able
+   * to clear it.
+   *
+   * <p>Rounded to two decimals: the quantity column is `numeric(12,2)` and
+   * the subtraction is in binary floating point, so 30 − 10.1 must not render
+   * as 19.899999999999999.
+   */
+  readonly outstandingQuantity = computed<number | null>(() => {
+    const rx = this.selectedPrescription();
+    if (!rx) return null;
+    const bucket = this.tabForStatus(rx.status);
+    if (bucket === 'dispensed' || bucket === 'closed') return null;
+
+    const expected = this.expectedQuantity();
+    if (expected != null && !this.dispenseError() && this.fillsAreCountable()) {
+      const dispensed = this.countableFills().reduce(
+        (sum, d) => sum + (d.quantityDispensed ?? 0),
+        0,
+      );
+      // Only once something HAS been filled. "Nothing dispensed yet" is not a
+      // remainder the prescriber needs told: it is the whole order, it would
+      // appear on every signed prescription, and it would flash onto the
+      // panel while the fill list was still in flight. A back order with no
+      // fill still reports one — through the routing snapshot below, which is
+      // where the pharmacy actually recorded it.
+      if (dispensed > 0) {
+        const remaining = Math.round((expected - dispensed) * 100) / 100;
+        if (remaining === 0) return null;
+        // A NEGATIVE balance means the two halves disagree: the fills are
+        // fetched when the panel opens, `quantity`/`refillsUsed` came with
+        // the list, and a refill approved and filled in between leaves the
+        // row's `refillsUsed` behind. Reporting "nothing owed" there would
+        // hide a real remainder, so the server's own figure is used instead.
+        if (remaining > 0) return remaining;
+      }
+    }
+    return this.routingSnapshotRemainder();
+  });
+
+  /** The fills that count against the order: everything not cancelled. */
+  private readonly countableFills = computed(() =>
+    this.dispenseHistory().filter((d) => d.status !== 'CANCELLED'),
+  );
+
+  /**
+   * Whether the fills can be SUBTRACTED from the ordered quantity at all.
+   *
+   * <p>Two ways they cannot, and both make the live balance wrong rather than
+   * merely imprecise, so both send it back to the routing snapshot.
+   *
+   * <p>The list is PAGED — `initPharmacyHistory` asks for the 20 most recent
+   * fills. On an order with more than that, summing what arrived understates
+   * what has been dispensed and therefore overstates what is owed, and unlike
+   * the snapshot this figure reads as an authoritative balance.
+   * `dispensesTruncated` is set from the server's `totalElements`.
+   *
+   * <p>And a fill records its OWN unit. A 200 ml syrup dispensed as 2 bottles
+   * would be subtracted as "200 − 2 = 198", then labelled "ml". The backend
+   * makes the same unitless comparison, but only to pick a status threshold;
+   * this is the first place the number is printed to a clinician.
+   */
+  private readonly fillsAreCountable = computed<boolean>(() => {
+    if (this.dispensesTruncated()) return false;
+    const orderUnit = this.selectedPrescription()?.quantityUnit?.trim().toLowerCase();
+    // A fill that declares no unit is taken to be in the order's. A fill that
+    // declares one the order does not — including an order that declares none
+    // at all, which is the legacy row this whole fallback exists for — is not
+    // subtractable, and licensing it there would be the "200 ml dispensed as
+    // 2 bottles" failure by another route.
+    return this.countableFills().every((d) => {
+      const fillUnit = d.unit?.trim().toLowerCase();
+      return !fillUnit || fillUnit === orderUnit;
+    });
+  });
+
+  /**
+   * The unit the remainder is counted in — "comprimés", "flacons". It is the
+   * ORDER's unit, so it labels the routing snapshot just as correctly as the
+   * computed balance: both are quantities of the same prescription. Null when
+   * the row carries no unit, and the number then renders bare, as it always
+   * did.
+   */
+  readonly outstandingQuantityUnit = computed<string | null>(
+    () => this.selectedPrescription()?.quantityUnit?.trim() || null,
+  );
+
+  /**
+   * Refills granted and left (gap G13). Rendered only when the prescriber
+   * actually granted one: "0 of 0" on the great majority of orders would be
+   * a row of noise on every detail panel.
+   */
+  hasRefills(p: PrescriptionResponse): boolean {
+    // `refillsRemaining` is nullable. "0 of 2 remaining" for a row that does
+    // not say how many are left presents unknown as none, which is the
+    // confident-wrong number the rest of this panel works to avoid.
+    return (p.refillsAllowed ?? 0) > 0 && p.refillsRemaining != null;
+  }
+
   viewDetail(p: PrescriptionResponse): void {
     this.selectedPrescription.set(p);
     this.loadPharmacyHistory(p);
@@ -909,6 +1179,7 @@ export class PrescriptionsComponent implements OnInit {
     this.historyLoading.set(false);
     this.dispenseError.set(false);
     this.routingError.set(false);
+    this.dispensesTruncated.set(false);
   }
 
   private readonly historyRequest$ = new Subject<string>();
@@ -950,6 +1221,11 @@ export class PrescriptionsComponent implements OnInit {
               prescriptionId,
               dispenseFailed: res.dispenses === null,
               routingFailed: res.routings === null,
+              // The fills are paged; the remainder may only be computed from
+              // them when the page IS the whole list.
+              dispensesTruncated:
+                (res.dispenses?.data?.totalElements ?? 0) >
+                (res.dispenses?.data?.content?.length ?? 0),
               dispenses: [...(res.dispenses?.data?.content ?? [])].sort(
                 (a, b) =>
                   eventTime(b.dispensedAt, b.createdAt) - eventTime(a.dispensedAt, a.createdAt),
@@ -965,6 +1241,7 @@ export class PrescriptionsComponent implements OnInit {
                 prescriptionId,
                 dispenseFailed: true,
                 routingFailed: true,
+                dispensesTruncated: false,
                 dispenses: [] as DispenseResponse[],
                 routings: [] as RoutingDecisionResponse[],
               }),
@@ -980,7 +1257,10 @@ export class PrescriptionsComponent implements OnInit {
         // Only overwrite a half that actually came back. A retry whose OTHER
         // half fails this time must not take away rows the prescriber could
         // read a second ago.
-        if (!res.dispenseFailed) this.dispenseHistory.set(res.dispenses);
+        if (!res.dispenseFailed) {
+          this.dispenseHistory.set(res.dispenses);
+          this.dispensesTruncated.set(res.dispensesTruncated);
+        }
         if (!res.routingFailed) this.routingHistory.set(res.routings);
         // A refusal or an outage is an explicit error state — never "no fills
         // recorded", which is the one thing a prescriber must not be told
@@ -998,6 +1278,7 @@ export class PrescriptionsComponent implements OnInit {
     if (this.historyLoadedFor !== p.id) {
       this.dispenseHistory.set([]);
       this.routingHistory.set([]);
+      this.dispensesTruncated.set(false);
       this.historyLoadedFor = p.id;
     }
     this.dispenseError.set(false);
