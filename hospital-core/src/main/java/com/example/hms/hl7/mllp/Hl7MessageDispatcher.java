@@ -121,10 +121,21 @@ public class Hl7MessageDispatcher {
             recordReject(MllpRecordingContext.integrationId(null, null),
                 null, "UNKNOWN", hl7Body,
                 "Invalid MSH: " + ex.getMessage(), "invalid MSH",
-                // No parsed header, so no claimed sender either: every
-                // unreadable-MSH rejection genuinely is the same problem from
-                // the same unknown party.
-                MllpRecordingContext.integrationId(null, null));
+                // No scope, so no dedupe: a random id per row and every
+                // occurrence keeps its own counted entry and its own body.
+                //
+                // A placeholder scope was tried here and is wrong twice over.
+                // It is shared across senders, so anyone reaching the port
+                // could supersede a real partner's outstanding entry - the
+                // thing the not-allowlisted path was fixed for. And because
+                // recordRecurringFailure stores the body on the first
+                // occurrence of an id, one shared id means that after the
+                // first malformed frame ever recorded, no unparseable-MSH
+                // message body is ever stored again, for anyone - which
+                // destroys exactly the evidence the line above argues we must
+                // keep. There is no sender to bound by when the header is the
+                // thing that would not parse.
+                null);
             Hl7MessageHeader fallback = new Hl7MessageHeader(
                 "|", "^~\\&", "?", "?", "HMS", "HMS", "", "ACK", "?", "P", "2.5"
             );

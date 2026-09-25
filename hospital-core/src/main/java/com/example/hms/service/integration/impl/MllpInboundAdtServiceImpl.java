@@ -215,7 +215,14 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
                 null,
                 IntegrationMessageStatus.FAILED,
                 withControlId(reason, messageControlId),
-                MllpRecordingContext.rejectionCorrelationId(integrationId, messageType, reason));
+                // CORRELATION_TYPE, not messageType: the trigger event comes
+                // off the message. The dispatcher only routes five of them so
+                // the blast radius was a 5x multiplier rather than an
+                // unbounded mint, but "nothing a sender controls may key a
+                // correlation id" is either a rule or it is not. The precise
+                // type still goes on the row.
+                MllpRecordingContext.rejectionCorrelationId(
+                    integrationId, CORRELATION_TYPE, reason));
         } catch (RuntimeException ex) {
             log.warn("MLLP ADT message recorder threw for sender={}/{} reason={}",
                 sendingApplication, sendingFacility, reason, ex);
@@ -227,6 +234,12 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
             ? reason + " (MSH-10 " + messageControlId.trim() + ")"
             : reason;
     }
+
+    /**
+     * Stands in for the message type in this path's correlation keys, so the
+     * key depends on nothing the sender writes.
+     */
+    private static final String CORRELATION_TYPE = "ADT";
 
     private static String messageTypeOf(ParsedAdtMessage parsed) {
         String trigger = parsed == null ? null : parsed.triggerEvent();

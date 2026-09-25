@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -51,6 +52,12 @@ public class IntegrationMessageRecorder {
      * over-long value would silently drop the row instead of recording it.
      */
     static final int MAX_MESSAGE_TYPE_CHARS = 64;
+    /**
+     * How long one stored body serves for a repeating problem. Long enough
+     * that a retry timer cannot multiply the copies, short enough that a
+     * problem which comes back after being cleared brings its own evidence.
+     */
+    static final Duration BODY_DEDUPE_WINDOW = Duration.ofHours(24);
     private static final int MAX_ERROR_CHARS = 2_000;
 
     private final IntegrationMessageEventRepository repository;
@@ -159,6 +166,13 @@ public class IntegrationMessageRecorder {
      * badge stays at one entry, and the stored bodies are bounded by the
      * number of distinct problems rather than by the sender's retry timer.
      *
+     * <p>"First" means first within {@link #BODY_DEDUPE_WINDOW}, not first
+     * ever. An all-history check would bound the storage and lose the
+     * evidence: a vendor whose framing bug was diagnosed and cleared in
+     * January, shipping a different failure in June that lands on the same
+     * reason, would leave an operator a dead letter with nothing to look at.
+     * One body per problem per day is bounded and still diagnosable.
+     *
      * <p>Two honest limits. Rows are still one per attempt — small ones now,
      * but the table still grows, and retention remains an open question for
      * whoever owns this surface. And the check is a read followed by a write
@@ -182,7 +196,8 @@ public class IntegrationMessageRecorder {
         String payloadToStore = payload;
         if (correlationId != null && payload != null) {
             try {
-                if (repository.existsByCorrelationId(correlationId)) {
+                if (repository.existsByCorrelationIdAndReceivedAtAfter(
+                        correlationId, LocalDateTime.now().minus(BODY_DEDUPE_WINDOW))) {
                     payloadToStore = null;
                 }
             } catch (RuntimeException ex) {

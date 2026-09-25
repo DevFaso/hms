@@ -73,12 +73,20 @@ public interface IntegrationMessageEventRepository
     long countUnresolvedDeadLetters();
 
     /**
-     * Whether anything has already been recorded under this correlation id.
+     * Whether anything has been recorded under this correlation id
+     * <em>recently</em>.
      *
      * <p>Used by {@code IntegrationMessageRecorder} to store a rejected
-     * message's body once per problem instead of once per retry: the first
-     * occurrence carries the payload, later ones carry only the reason. The
-     * partial index on {@code correlation_id} (V89) serves this.
+     * message's body once per problem per window instead of once per retry:
+     * the first occurrence in the window carries the payload, the retries
+     * behind it carry only the reason. The partial index on
+     * {@code correlation_id} (V89) serves this.
+     *
+     * <p>The window is what keeps the bound from turning into amnesia. An
+     * all-history check would mean that a vendor whose January framing bug
+     * was diagnosed and cleared gets no body stored for a <em>different</em>
+     * June failure that lands on the same reason — an operator left with a
+     * dead letter and nothing to look at.
      */
-    boolean existsByCorrelationId(String correlationId);
+    boolean existsByCorrelationIdAndReceivedAtAfter(String correlationId, LocalDateTime after);
 }

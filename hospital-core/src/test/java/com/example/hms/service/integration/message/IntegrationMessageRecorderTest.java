@@ -16,6 +16,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -184,7 +185,8 @@ class IntegrationMessageRecorderTest {
         // thousands of full copies of it - PID and all - while the badge
         // reads 1, which is worse than the visible version.
         when(repository.save(any(IntegrationMessageEvent.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(repository.existsByCorrelationId("corr-1")).thenReturn(false, true, true);
+        when(repository.existsByCorrelationIdAndReceivedAtAfter(eq("corr-1"), any()))
+            .thenReturn(false, true, true);
 
         for (int i = 0; i < 3; i++) {
             recorder.recordRecurringFailure(
@@ -212,7 +214,8 @@ class IntegrationMessageRecorderTest {
         // Best-effort like the rest of this class, and the safe direction is
         // an extra copy rather than no evidence at all.
         when(repository.save(any(IntegrationMessageEvent.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(repository.existsByCorrelationId("corr-2")).thenThrow(new RuntimeException("DB down"));
+        when(repository.existsByCorrelationIdAndReceivedAtAfter(eq("corr-2"), any()))
+            .thenThrow(new RuntimeException("DB down"));
 
         recorder.recordRecurringFailure(
             "MLLP:REG/HOSP-B", UUID.randomUUID(),
@@ -233,7 +236,8 @@ class IntegrationMessageRecorderTest {
             IntegrationMessageDirection.INBOUND, "ADT^A01",
             "MSH|the whole message", "unparseable ADT^A01", null);
 
-        verify(repository, org.mockito.Mockito.never()).existsByCorrelationId(any());
+        verify(repository, org.mockito.Mockito.never())
+            .existsByCorrelationIdAndReceivedAtAfter(any(), any());
         ArgumentCaptor<IntegrationMessageEvent> cap = ArgumentCaptor.forClass(IntegrationMessageEvent.class);
         verify(repository).save(cap.capture());
         assertThat(cap.getValue().getPayload()).isEqualTo("MSH|the whole message");
