@@ -20,7 +20,12 @@ import { RoleContextService } from '../core/role-context.service';
  *    chip's "All hospitals" over a pinned session emitted null, matched the
  *    seed and reloaded nothing.
  *
- * Neither had a test, and both are one template edit away from returning.
+ * This file guards the SECOND of those, which is component state. The first
+ * is a template binding — `[preserveScope]="true"` on the chip — and what it
+ * relies on is covered where that contract lives, in
+ * `hospital-scope-chip.component.spec.ts`; deleting the binding here would
+ * still slip through, and rendering the whole Documents tab to catch it costs
+ * more than it is worth.
  */
 describe('PatientDetailComponent — documents scope', () => {
   function roleContext(): RoleContextService {
@@ -53,7 +58,7 @@ describe('PatientDetailComponent — documents scope', () => {
     expect(documentsScope()).toBeNull();
   });
 
-  it('is null only when the session really has no scope', () => {
+  it('reports the assignment for a plain clinician, and null for no scope at all', () => {
     TestBed.configureTestingModule({
       imports: [TranslateModule.forRoot()],
       providers: [provideRouter([]), provideHttpClient(withXhr()), provideHttpClientTesting()],
@@ -66,5 +71,9 @@ describe('PatientDetailComponent — documents scope', () => {
       () => new PatientDetailComponent().documentsScope,
     );
     expect(documentsScope()).toBe('h-1');
+
+    // No assignment at all — the state the Labs tab's own message is for.
+    ctx.activeHospitalId = null;
+    expect(documentsScope()).toBeNull();
   });
 });

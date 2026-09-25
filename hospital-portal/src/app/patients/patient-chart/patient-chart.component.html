@@ -310,8 +310,17 @@
       its own — both changes of their own, and both noted for the coordinator.
       Until then this says what is true for both accounts that reach it.
     -->
+    <!--
+      Two messages, because only a super-admin HAS a hospital selector: the
+      chip renders behind `@if (isSuperAdmin())`, so telling anyone else to
+      use one is an instruction they cannot follow — the same dead end the
+      shared hint creates, just softer.
+    -->
     <p class="labs-hint" role="status" data-testid="labs-no-hospital">
-      {{ 'CHART.LAB_NO_HOSPITAL' | translate }}
+      {{
+        (hasHospitalPicker() ? 'CHART.LAB_NO_HOSPITAL' : 'CHART.LAB_NO_HOSPITAL_ASSIGNMENT')
+          | translate
+      }}
     </p>
   }
   @if (section() === 'labs' && canViewLabs() && labsScoped()) {
