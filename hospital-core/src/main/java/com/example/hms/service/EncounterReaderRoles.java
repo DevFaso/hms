@@ -2,7 +2,6 @@ package com.example.hms.service;
 
 import com.example.hms.config.SecurityConstants;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 
 import java.util.Set;
 
@@ -140,19 +139,7 @@ public final class EncounterReaderRoles {
      *                        for the endpoint being served, never a union
      */
     public static boolean isPatientOnly(Authentication auth, Set<String> nonSubjectRoles) {
-        if (auth == null) {
-            return false;
-        }
-        boolean patient = false;
-        for (GrantedAuthority authority : auth.getAuthorities()) {
-            String name = authority.getAuthority();
-            if (nonSubjectRoles.contains(name)) {
-                return false;
-            }
-            if (SecurityConstants.ROLE_PATIENT.equals(name)) {
-                patient = true;
-            }
-        }
-        return patient;
+        // One implementation, shared with the prescription read.
+        return ReaderRolePredicates.isPatientOnly(auth, nonSubjectRoles);
     }
 }
