@@ -130,8 +130,11 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
                 || !isRegisteredHere(retiringPatientId, hospitalId)) {
             // Same outcome as the unknown identifier above — same ACK code,
             // same ACK text. The reason survives on the integration message
-            // row, where the operator who owns the sender can read it and the
-            // sender cannot.
+            // row, which the sender cannot read. Nor, today, can the
+            // hospital's own integration operator: the only read surface is
+            // /super-admin/integration-messages (SUPER_ADMIN), so diagnosing
+            // a misconfigured sender means escalating. Widening that surface
+            // is a separate change.
             log.warn("MLLP A40 cross-tenant reject — the two patients are not both "
                 + "registered at hospital={} (sender={}/{})",
                 hospitalId, sendingApplication, sendingFacility);
@@ -203,10 +206,24 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
         }
     }
 
+    /**
+     * {@code integration_message_event.integration_id} is
+     * {@code VARCHAR(120) NOT NULL}, and HL7 v2.5 permits 180 characters in
+     * each of MSH-3 and MSH-4. Truncate for the same reason
+     * {@code Hl7MessageDispatcher.integrationIdFor} does: an over-long id
+     * fails the recorder insert, the recorder swallows it, and the DLQ row
+     * disappears — which on this path is the only surviving record of the
+     * rejection.
+     */
+    private static final int RECORDER_INTEGRATION_ID_MAX = 120;
+
     private static String buildIntegrationId(String app, String fac) {
         String safeApp = StringUtils.hasText(app) ? app.trim() : "?";
         String safeFac = StringUtils.hasText(fac) ? fac.trim() : "?";
-        return "MLLP:" + safeApp + "/" + safeFac;
+        String raw = "MLLP:" + safeApp + "/" + safeFac;
+        return raw.length() > RECORDER_INTEGRATION_ID_MAX
+            ? raw.substring(0, RECORDER_INTEGRATION_ID_MAX)
+            : raw;
     }
 
     private static UUID organizationIdOf(Hospital hospital) {

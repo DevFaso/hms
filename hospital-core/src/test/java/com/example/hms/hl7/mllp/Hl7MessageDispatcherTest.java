@@ -123,12 +123,19 @@ class Hl7MessageDispatcherTest {
     }
 
     @Test
-    void noDomainOutcomeCanProduceAnAr() {
+    void noOutcomeFromAnyInboundHandlerProducesAnAr() {
         // AR is reserved for the dispatcher's own transport-level refusals
         // (bad MSH, sender not allowlisted, unsupported type) — none of which
-        // depend on tenant data. Every outcome a domain handler can return
-        // maps to AA or AE, so no handler can reopen the enumeration oracle
-        // by picking a different one.
+        // depend on tenant data. Every outcome ANY of the three domain
+        // handlers can return maps to AA or AE, so none of them can reopen
+        // the enumeration oracle by picking a different constant. All three
+        // handlers, not just the lab one: the oracle this PR closes lived in
+        // the other two.
+        //
+        // The enum assertion is the other half of the guard. A fourth
+        // constant would not be covered by the loop, and
+        // REJECTED_CROSS_TENANT is precisely the constant whose return this
+        // is meant to prevent.
         assertThat(MllpInboundOutcome.values())
             .containsExactlyInAnyOrder(
                 MllpInboundOutcome.ACCEPTED,
@@ -140,10 +147,20 @@ class Hl7MessageDispatcherTest {
                    + "PID|1||p\r"
                    + "OBR|1|ACC-OTHER||GLU^Glucose|||20260428\r"
                    + "OBX|1|NM|GLU^Glucose||5.6|mmol/L|||N\r";
+        String adt = "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260428||ADT^A08|MSG-8|P|2.5\r"
+                   + "PID|1||MRN-ANY||DOE^JANE\r";
+
         for (MllpInboundOutcome outcome : MllpInboundOutcome.values()) {
             when(inboundLab.processOruR01(any(), eq(hospital), anyString(), anyString(),
                 any(), anyString())).thenReturn(outcome);
+            when(inboundAdt.processAdt(any(), eq(hospital), anyString(), anyString(),
+                any(), any())).thenReturn(outcome);
+            when(inboundMerge.processMerge(any(), eq(hospital), anyString(), anyString(),
+                any(), any())).thenReturn(outcome);
+
             assertThat(dispatcher.dispatch(oru, "10.0.0.1:1")).doesNotContain("MSA|AR|");
+            assertThat(dispatcher.dispatch(adt, "10.0.0.1:1")).doesNotContain("MSA|AR|");
+            assertThat(dispatcher.dispatch(A40, "10.0.0.1:1")).doesNotContain("MSA|AR|");
         }
     }
 

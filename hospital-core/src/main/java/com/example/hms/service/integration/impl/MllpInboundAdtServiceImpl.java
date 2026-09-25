@@ -135,10 +135,15 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
                 + "(sender={}/{})",
                 patient.getId(), receivingHospital.getId(),
                 sendingApplication, sendingFacility);
-            // The reason the ACK cannot carry. An operator reading the
-            // integration DLQ sees "cross-tenant rejection" and knows the
-            // sender is pointed at the wrong hospital; the sender sees the
-            // same three letters it would get for a typo.
+            // The reason the ACK cannot carry. The integration DLQ row
+            // says "cross-tenant rejection", so the misconfiguration is
+            // diagnosable; the sender sees the same three letters it would
+            // get for a typo. That surface is
+            // /super-admin/integration-messages, SUPER_ADMIN only — a
+            // hospital's own integration operator cannot read it today and
+            // has to escalate. Widening it is a separate change; what this
+            // one guarantees is that the reason is written down somewhere the
+            // sender is not.
             recordReject(integrationId, organizationId, messageType, rawMessageBody,
                 "cross-tenant rejection");
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
@@ -206,10 +211,24 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
         }
     }
 
+    /**
+     * {@code integration_message_event.integration_id} is
+     * {@code VARCHAR(120) NOT NULL}, and HL7 v2.5 permits 180 characters in
+     * each of MSH-3 and MSH-4. Truncate for the same reason
+     * {@code Hl7MessageDispatcher.integrationIdFor} does: an over-long id
+     * fails the recorder insert, the recorder swallows it, and the DLQ row
+     * disappears — which on this path is the only surviving record of the
+     * rejection.
+     */
+    private static final int RECORDER_INTEGRATION_ID_MAX = 120;
+
     private static String buildIntegrationId(String app, String fac) {
         String safeApp = StringUtils.hasText(app) ? app.trim() : "?";
         String safeFac = StringUtils.hasText(fac) ? fac.trim() : "?";
-        return "MLLP:" + safeApp + "/" + safeFac;
+        String raw = "MLLP:" + safeApp + "/" + safeFac;
+        return raw.length() > RECORDER_INTEGRATION_ID_MAX
+            ? raw.substring(0, RECORDER_INTEGRATION_ID_MAX)
+            : raw;
     }
 
     private static String messageTypeOf(ParsedAdtMessage parsed) {

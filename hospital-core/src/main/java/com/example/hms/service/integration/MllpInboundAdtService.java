@@ -24,12 +24,15 @@ public interface MllpInboundAdtService {
      * this PR is in a position to make. The patient must already be
      * registered through the existing intake flow.
      */
-    MllpInboundOutcome processAdt(
+    default MllpInboundOutcome processAdt(
         ParsedAdtMessage parsed,
         Hospital receivingHospital,
         String sendingApplication,
         String sendingFacility
-    );
+    ) {
+        return processAdt(parsed, receivingHospital, sendingApplication, sendingFacility,
+            null, null);
+    }
 
     /**
      * Variant that also carries the inbound MSH-10 message control id.
@@ -68,15 +71,20 @@ public interface MllpInboundAdtService {
      * <p>That row is the only place a cross-tenant refusal is distinguishable
      * from an unknown MRN. The ACK deliberately is not: see
      * {@link MllpInboundOutcome}.
+     *
+     * <p>This is the interface's <b>abstract</b> method, and the narrower
+     * overloads above are the defaults, rather than the other way round. An
+     * implementation that satisfied a 4-argument contract and inherited a
+     * default that threw the body away would compile, wire into the
+     * dispatcher, and silently write no DLQ row for any rejection — and that
+     * row is the whole compensating control for the indistinguishable ACK.
      */
-    default MllpInboundOutcome processAdt(
+    MllpInboundOutcome processAdt(
         ParsedAdtMessage parsed,
         Hospital receivingHospital,
         String sendingApplication,
         String sendingFacility,
         String messageControlId,
         String rawMessageBody
-    ) {
-        return processAdt(parsed, receivingHospital, sendingApplication, sendingFacility);
-    }
+    );
 }
