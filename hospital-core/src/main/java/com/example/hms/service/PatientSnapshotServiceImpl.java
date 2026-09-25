@@ -117,11 +117,14 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             // and accounted is not a state this endpoint can be in.
             //
             // Refusing is also what makes closing the two lab reads worth
-            // anything. GET /lab-orders?patientId= and
-            // GET /patients/{id}/lab-results now refuse a scopeless caller; this
-            // drawer served the same rows (labOrderRepository.findByPatient_Id
-            // in buildPendingOrders, the very finder those PRs abandon) to the
-            // same caller through a different door.
+            // anything. #735 (GET /patients/{id}/lab-results) and #739
+            // (GET /lab-orders?patientId=) refuse a scopeless caller — both are
+            // open at the time of writing, not merged — and this drawer served
+            // the same rows to the same caller through a different door:
+            // buildPendingOrders called labOrderRepository.findByPatient_Id, the
+            // very finder #739 abandons. This guard is right whether or not
+            // those land: an unaccounted cross-tenant read is not made
+            // acceptable by a sibling still serving one.
             //
             // 404, and the same key the refusal takes when the patient really
             // is missing, three lines down: a caller who could not establish
