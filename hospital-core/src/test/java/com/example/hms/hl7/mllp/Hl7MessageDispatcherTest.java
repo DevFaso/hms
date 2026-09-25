@@ -256,11 +256,10 @@ class Hl7MessageDispatcherTest {
             contains("Invalid MSH"),
             // isNull(), not any(): a correlation id here would be shared by
             // every sender on the platform, because there is no parsed header
-            // to distinguish them. That silences one sender's dead letter with
-            // another's traffic and, since the body is stored on a
-            // correlation id's first occurrence in a window, stops any
-            // unparseable-MSH body being stored at all. any() is what let an
-            // earlier revision ship exactly that.
+            // to distinguish them - so one row would absorb all of them, each
+            // overwriting the last one's stored body and superseding its
+            // place in the count. any() is what let an earlier revision ship
+            // exactly that.
             isNull());
     }
 

@@ -226,7 +226,15 @@ public class IntegrationMessageRecorder {
                         correlationId, IntegrationMessageStatus.FAILED,
                         LocalDateTime.now().minus(BODY_DEDUPE_WINDOW));
                 if (earlier.isPresent()) {
-                    return foldIntoExisting(earlier.get(), messageType, payload, errorMessage);
+                    IntegrationMessageEvent folded =
+                        foldIntoExisting(earlier.get(), messageType, payload, errorMessage);
+                    if (folded != null) {
+                        return folded;
+                    }
+                    // The fold lost a race, or the row went away. Fall through
+                    // to an insert for the same reason a failed lookup does:
+                    // on this path the row is the only evidence there is, and
+                    // an extra copy beats none.
                 }
             } catch (RuntimeException ex) {
                 // Best-effort like the rest of this class, and the safe
@@ -250,16 +258,27 @@ public class IntegrationMessageRecorder {
      * transaction of its own — which is what keeps a failure here from
      * poisoning anything the caller is doing.
      *
-     * <p>Never throws: a failure is logged and the caller gets null, exactly
-     * as a failed insert does. Private, so nothing else can come to depend on
-     * the propagation it does not have.
+     * <p>Never throws. Returns null when the update could not be applied —
+     * a lost merge race, a row deleted underneath us — and the caller then
+     * inserts instead, because dropping the occurrence entirely would be the
+     * one outcome this path cannot afford. Private, so nothing else can come
+     * to depend on the propagation it does not have.
      */
     private IntegrationMessageEvent foldIntoExisting(
         IntegrationMessageEvent existing, String messageType, String payload,
         String errorMessage) {
         try {
-            existing.setAttemptCount(existing.getAttemptCount() + 1);
-            existing.setLastAttemptedAt(LocalDateTime.now());
+            existing.setAttemptCount(safeIncrement(existing.getAttemptCount()));
+            LocalDateTime now = LocalDateTime.now();
+            existing.setLastAttemptedAt(now);
+            // receivedAt too, not just lastAttemptedAt: the operator-facing
+            // search orders by receivedAt and filters fromDate/toDate on it,
+            // so a row left at the timestamp of the first attempt drops out of
+            // "what is failing in the last hour" and sinks below unrelated
+            // newer traffic - while the badge still counts it. The row now
+            // means "this problem, as of now", which is also what keeps an
+            // actively retrying feed inside the fold window.
+            existing.setReceivedAt(now);
             // The type travels with the payload and the reason. Some scopes
             // deliberately span message types - a de-allowlisted sender's
             // whole feed is one problem - so without this a row could read

@@ -124,17 +124,14 @@ public class Hl7MessageDispatcher {
                 // No scope, so no dedupe: a random id per row and every
                 // occurrence keeps its own counted entry and its own body.
                 //
-                // A placeholder scope was tried here and is wrong twice over.
-                // It is shared across senders, so anyone reaching the port
-                // could supersede a real partner's outstanding entry - the
-                // thing the not-allowlisted path was fixed for. And because
-                // recordRecurringFailure stores the body on the first
-                // occurrence of an id, one shared id means that after the
-                // first malformed frame ever recorded, no unparseable-MSH
-                // message body is ever stored again, for anyone - which
-                // destroys exactly the evidence the line above argues we must
-                // keep. There is no sender to bound by when the header is the
-                // thing that would not parse.
+                // A placeholder scope was tried here and is wrong: it is
+                // shared across every sender, so one platform-wide row would
+                // absorb all of them - anyone reaching the port could
+                // supersede a real partner's outstanding entry, overwrite its
+                // stored body with their own junk, and leave a count of one
+                // naming whoever sent last. That is the thing the
+                // not-allowlisted path was fixed for. There is no sender to
+                // bound by when the header is the thing that would not parse.
                 null);
             Hl7MessageHeader fallback = new Hl7MessageHeader(
                 "|", "^~\\&", "?", "?", "HMS", "HMS", "", "ACK", "?", "P", "2.5"
@@ -291,26 +288,27 @@ public class Hl7MessageDispatcher {
      *
      * <p>Three of these paths answer AE, which HL7 senders treat as
      * transient and retry on a timer. A stable {@code correlationScope} +
-     * {@code reasonKey} keeps that storm to <b>one counted dead letter</b>
-     * per (sender, problem), because
-     * {@code countUnresolvedDeadLetters} discounts a {@code FAILED} row once
-     * a later row shares its correlation id.
+     * {@code reasonKey} identifies the problem across those retries; what
+     * {@code recordRecurringFailure} then does with that identity is
+     * <b>fold the retry into the row it is a retry of</b> — one row per
+     * problem per window, holding the latest body, with
+     * {@code attemptCount} counting the rest.
      *
-     * <p><b>The body is stored once per problem, not once per retry.</b>
-     * That is {@code recordRecurringFailure}, not the correlation id on its
-     * own: a stable id only stops the retries being <em>counted</em>, and
-     * every one of them still inserts a row, so keying alone would have left
-     * a vendor writing thousands of full copies of a message — PID and all —
-     * into a table with no retention while the badge read 1. A bounded badge
-     * over unbounded PHI is worse than the visible version, because it claims
-     * the problem is handled. So the first occurrence carries the body, which
-     * is the evidence an operator needs for a message nobody could parse, and
-     * later occurrences carry the reason alone.
+     * <p>The correlation id alone would not have been enough, and it is worth
+     * being precise about why, because the obvious reading is wrong: a stable
+     * id only stops the retries being <em>counted</em>, while
+     * {@code recordMessage} still inserts on every call. Keying alone would
+     * have left a vendor writing thousands of full copies of a message — PID
+     * and all — into a table with no retention, while the badge read 1. A
+     * bounded badge over unbounded PHI is worse than the visible version,
+     * because it claims the problem is handled.
      *
-     * <p>What is bounded: counted dead letters (one per sender and problem)
-     * and stored bodies (one per sender and problem). What is not: the row
-     * count, still one small row per attempt, on a table with no retention
-     * policy. That last one is reported, not solved here.
+     * <p>So: rows, stored bodies and counted dead letters are all bounded by
+     * the number of distinct problems rather than by the sender's retry
+     * timer. The body is kept — for a message nobody could parse it is the
+     * only evidence there is — and it is the current one rather than a stale
+     * first, because the row the badge counts and the row holding the
+     * evidence have to be the same row.
      *
      * <p>{@code reasonKey} is separate from {@code reason} on purpose, and
      * {@code correlationScope} is separate from {@code integrationId} for the

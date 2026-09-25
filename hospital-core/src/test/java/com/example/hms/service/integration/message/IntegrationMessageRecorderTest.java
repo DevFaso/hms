@@ -11,6 +11,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -194,6 +195,9 @@ class IntegrationMessageRecorderTest {
             .attemptCount(1)
             .build();
         existing.setId(UUID.randomUUID());
+        LocalDateTime firstSeen = LocalDateTime.now().minusHours(6);
+        existing.setReceivedAt(firstSeen);
+        existing.setLastAttemptedAt(firstSeen);
         when(repository.findFirstByCorrelationIdAndStatusAndReceivedAtAfterOrderByReceivedAtDesc(
             eq("corr-1"), eq(IntegrationMessageStatus.FAILED), any())).thenReturn(Optional.of(existing));
         when(repository.save(any(IntegrationMessageEvent.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -214,6 +218,11 @@ class IntegrationMessageRecorderTest {
         // reading ORU^R01 while holding an ADT^A08 contradicts itself.
         assertThat(folded.getMessageType()).isEqualTo("ADT^A08");
         assertThat(folded.getAttemptCount()).isEqualTo(2);
+        // receivedAt moves too: the operator-facing search orders by it and
+        // filters on it, so a row frozen at the first attempt drops out of
+        // "what is failing right now" while the badge still counts it.
+        assertThat(folded.getReceivedAt()).isAfterOrEqualTo(firstSeen);
+        assertThat(folded.getLastAttemptedAt()).isAfterOrEqualTo(firstSeen);
         assertThat(folded.getStatus()).isEqualTo(IntegrationMessageStatus.FAILED);
         assertThat(folded.getCorrelationId()).isEqualTo("corr-1");
     }
@@ -256,6 +265,40 @@ class IntegrationMessageRecorderTest {
         ArgumentCaptor<IntegrationMessageEvent> cap = ArgumentCaptor.forClass(IntegrationMessageEvent.class);
         verify(repository).save(cap.capture());
         assertThat(cap.getValue().getPayload()).isEqualTo("MSH|the whole message");
+    }
+
+    @Test
+    void aFoldThatLosesItsRaceStillRecordsTheOccurrence() {
+        // Two workers retry together, both read the same row, one merge loses.
+        // Dropping that occurrence would leave the row's attempt count and its
+        // body a version behind with nothing saying so - and on this path the
+        // row is the only evidence there is, so the fallback is an insert for
+        // the same reason a failed lookup gets one.
+        IntegrationMessageEvent existing = IntegrationMessageEvent.builder()
+            .integrationId("MLLP:REG/HOSP-B")
+            .direction(IntegrationMessageDirection.INBOUND)
+            .messageType("ADT^A01")
+            .correlationId("corr-race")
+            .status(IntegrationMessageStatus.FAILED)
+            .attemptCount(1)
+            .build();
+        existing.setId(UUID.randomUUID());
+        when(repository.findFirstByCorrelationIdAndStatusAndReceivedAtAfterOrderByReceivedAtDesc(
+            eq("corr-race"), eq(IntegrationMessageStatus.FAILED), any()))
+            .thenReturn(Optional.of(existing));
+        when(repository.save(any(IntegrationMessageEvent.class)))
+            .thenThrow(new RuntimeException("lost the merge race"))
+            .thenAnswer(inv -> inv.getArgument(0));
+
+        IntegrationMessageEvent recorded = recorder.recordRecurringFailure(
+            "MLLP:REG/HOSP-B", UUID.randomUUID(),
+            IntegrationMessageDirection.INBOUND, "ADT^A01",
+            "MSH|the whole message", "unparseable ADT^A01", "corr-race");
+
+        assertThat(recorded).isNotNull();
+        assertThat(recorded.getId()).isNull();
+        assertThat(recorded.getPayload()).isEqualTo("MSH|the whole message");
+        verify(repository, org.mockito.Mockito.times(2)).save(any(IntegrationMessageEvent.class));
     }
 
     @Test
