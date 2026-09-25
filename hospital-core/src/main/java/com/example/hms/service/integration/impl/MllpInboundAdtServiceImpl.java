@@ -108,8 +108,9 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
         // primitive: an allowlisted sender could send one A08 per
         // candidate MRN and collect the MRNs that exist in hospitals it
         // cannot see. Same fix the ORU^R01 path took in #715.
-        // OPEN QUESTION, not a decision: this accepts an INACTIVE
-        // registration. The repository offers findByPatientIdAndHospitalId
+        // OPEN QUESTION, not a decision (and the same one is documented on
+        // MllpInboundMergeServiceImpl.isRegisteredHere): this accepts an
+        // INACTIVE registration. The repository offers findByPatientIdAndHospitalId
         // AndActiveTrue and this does not use it, so a patient whose
         // registration here was closed - transferred out, episode ended - is
         // still writable by this hospital's HL7 sender. There is an argument

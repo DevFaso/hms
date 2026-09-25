@@ -60,6 +60,17 @@ means the same ACK code *and the same ACK text*: the MLLP paths return
 return, because a constant that exists only to produce a different answer
 is how this was reintroduced twice (see the `hl7-mllp-integration` skill).
 
+**404 and 403 answer different questions, and the file says both.** The rule
+above is about *exists, but not yours* — that must be indistinguishable from
+*does not exist*, because the caller named a real identifier and the answer
+would confirm it. A **403 is correct where nothing was named**: a caller with
+no tenant pinned at all (a super-admin with no `X-Hospital-Id`) is being told
+to pin one, which reveals nothing about any identifier, and that is the
+write-side pattern on `EncounterFhirWriteService` and
+`ObservationFhirWriteService` further down this file. Deny-on-null and
+collapse-on-mismatch are the two halves, not alternatives: reject the unpinned
+caller loudly, and refuse the wrong-tenant identifier invisibly.
+
 Two traps, both of which were real defects here:
 
 - **An accept leaks as readily as a reject.** A no-op or already-done
@@ -83,8 +94,9 @@ Every cross-tenant rejection MUST emit an audit event via
 misconfigured senders + permission-creep bugs. Live in
 `security/audit/CrossTenantReadAudit.java`.
 
-Known exception, stated so it is not copied as the pattern: the MLLP
-inbound ADT and A40 paths emit no `CrossTenantReadAudit`. There is no
+Known exception, stated so it is not copied as the pattern: **none of the
+three MLLP inbound paths** — ORU^R01, ADT and A40 — emit a
+`CrossTenantReadAudit`. There is no
 security context on an MLLP worker thread and so no principal to attribute
 the attempt to — which is also why those paths enforce the tenant boundary
 themselves rather than relying on the service guards. They record the
