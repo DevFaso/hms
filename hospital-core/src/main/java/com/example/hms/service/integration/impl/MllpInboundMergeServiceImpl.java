@@ -84,10 +84,17 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // Deliberately NOT auto-provisioned. An unrecognised identifier in
             // a merge message means the two systems disagree about who exists,
             // and inventing the missing side would bake that disagreement in.
-            // Which side was unknown stays out of the log line, and the
-            // identifiers stay out of it altogether: an MRN is PHI.
-            log.warn("MLLP A40 rejected — unknown identifier(s) (sender={}/{} hospital={})",
-                sendingApplication, sendingFacility, hospitalId);
+            // The MRNs stay out of the log — PID-3 is PHI wherever a log ends
+            // up — but WHICH side was unknown does not, and neither does
+            // MSH-10. An earlier revision scrubbed those too: that protected
+            // nobody, because the log is not sender-readable, and it left an
+            // operator told "our merge was rejected" with no way to tell
+            // which message or which side. Scrubbing that buys no privacy
+            // and loses the diagnosis.
+            log.warn("MLLP A40 rejected — unknown identifier(s): surviving known={} "
+                + "prior known={} (sender={}/{} hospital={} msgCtrlId={})",
+                survivor.isPresent(), retiree.isPresent(),
+                sendingApplication, sendingFacility, hospitalId, messageControlId);
             recordReject(receivingHospital, sendingApplication, sendingFacility,
                 messageControlId, "identifier not found");
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
@@ -133,6 +140,11 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
         // documents; it cannot be closed by reordering, because there is no
         // patient id to look up until EMPI has resolved one. What is closed
         // here is the part that was free.
+        // Two lookups even when both identifiers resolve to the same patient
+        // (the resend case below). Skipping the second there would make an
+        // already-merged pair one query cheaper than a pair that is not,
+        // which is timeable - the duplicate is the price of not putting a
+        // distinguishable answer back in a different form.
         boolean survivorIsOurs = isRegisteredHere(survivingPatientId, hospitalId);
         boolean retireeIsOurs = isRegisteredHere(retiringPatientId, hospitalId);
         if (!survivorIsOurs || !retireeIsOurs) {
@@ -143,9 +155,13 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // /super-admin/integration-messages (SUPER_ADMIN), so diagnosing a
             // misconfigured sender means escalating. Widening that surface is
             // a separate change.
-            log.warn("MLLP A40 cross-tenant reject — the two patients are not both "
-                + "registered at hospital={} (sender={}/{})",
-                hospitalId, sendingApplication, sendingFacility);
+            // Patient ids, not MRNs. An id is not PHI by this codebase's own
+            // standard — the ADT path next door logs patient={} — and it is
+            // what tells an operator which merge was refused.
+            log.warn("MLLP A40 cross-tenant reject — surviving={} registered={} "
+                + "prior={} registered={} at hospital={} (sender={}/{} msgCtrlId={})",
+                survivingPatientId, survivorIsOurs, retiringPatientId, retireeIsOurs,
+                hospitalId, sendingApplication, sendingFacility, messageControlId);
             recordReject(receivingHospital, sendingApplication, sendingFacility,
                 messageControlId, "cross-tenant rejection");
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
@@ -258,6 +274,18 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
      * with no principal — there is no user on an MLLP thread — so
      * {@code mergedBy} is null and this note is the only provenance the row
      * carries. Worth being specific in.
+     *
+     * <p><b>The MRNs stay here, and this is the one place on this path they
+     * do.</b> They are scrubbed from every log line because a log is copied,
+     * shipped and retained where PHI should not go. A merge event is a
+     * clinical record of an identity change: without the two identifiers it
+     * is unauditable, and "which records were joined" is the whole content of
+     * the row.
+     *
+     * <p>Recorded as debt rather than settled here: it lands in
+     * {@code EmpiMergeEvent.notes}, plain {@code TEXT} with no
+     * {@code EncryptedStringConverter}. Applying one is worth doing and would
+     * have to cover every existing row, which is not this change's to make.
      */
     private String buildNotes(String survivingMrn, String priorMrn,
                               String sendingApplication, String sendingFacility,
