@@ -47,6 +47,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -2381,6 +2382,91 @@ class PrescriptionServiceImplTest {
         assertThat(prescriptionService.list(null, null, null, statuses, pageable, Locale.ENGLISH)).isEmpty();
         verify(prescriptionRepository).findByStatusIn(statuses, pageable);
         verify(prescriptionRepository, never()).findAll(any(Pageable.class));
+    }
+
+    /* ── The super-admin global view: requireActiveHospitalId returns null ── */
+
+    @Test
+    void list_withPatientFilter_andNoHospitalScope_usesTheUnscopedQueries() {
+        Pageable pageable = PageRequest.of(0, 10);
+        List<com.example.hms.enums.PrescriptionStatus> statuses =
+            List.of(com.example.hms.enums.PrescriptionStatus.SIGNED);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(prescriptionRepository.findByPatient_Id(patientId, pageable)).thenReturn(Page.empty());
+        when(prescriptionRepository.findByPatient_IdAndStatusIn(patientId, statuses, pageable))
+            .thenReturn(Page.empty());
+
+        assertThat(prescriptionService.list(patientId, null, null, null, pageable, Locale.ENGLISH)).isEmpty();
+        assertThat(prescriptionService.list(patientId, null, null, statuses, pageable, Locale.ENGLISH)).isEmpty();
+
+        verify(prescriptionRepository).findByPatient_Id(patientId, pageable);
+        verify(prescriptionRepository).findByPatient_IdAndStatusIn(patientId, statuses, pageable);
+        // No hospital scope means no cross-hospital reach to record.
+        verifyNoInteractions(reachRecorder);
+    }
+
+    @Test
+    void list_withStaffFilter_andNoHospitalScope_usesTheUnscopedQueries() {
+        Pageable pageable = PageRequest.of(0, 10);
+        List<com.example.hms.enums.PrescriptionStatus> statuses =
+            List.of(com.example.hms.enums.PrescriptionStatus.DISPENSED);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(prescriptionRepository.findByStaff_Id(staffId, pageable)).thenReturn(Page.empty());
+        when(prescriptionRepository.findByStaff_IdAndStatusIn(staffId, statuses, pageable))
+            .thenReturn(Page.empty());
+
+        assertThat(prescriptionService.list(null, staffId, null, null, pageable, Locale.ENGLISH)).isEmpty();
+        assertThat(prescriptionService.list(null, staffId, null, statuses, pageable, Locale.ENGLISH)).isEmpty();
+
+        verify(prescriptionRepository).findByStaff_Id(staffId, pageable);
+        verify(prescriptionRepository).findByStaff_IdAndStatusIn(staffId, statuses, pageable);
+    }
+
+    @Test
+    void list_withEncounterFilter_andNoHospitalScope_usesTheUnscopedQueries() {
+        Pageable pageable = PageRequest.of(0, 10);
+        List<com.example.hms.enums.PrescriptionStatus> statuses =
+            List.of(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(prescriptionRepository.findByEncounter_Id(encounterId, pageable)).thenReturn(Page.empty());
+        when(prescriptionRepository.findByEncounter_IdAndStatusIn(encounterId, statuses, pageable))
+            .thenReturn(Page.empty());
+
+        assertThat(prescriptionService.list(null, null, encounterId, null, pageable, Locale.ENGLISH)).isEmpty();
+        assertThat(prescriptionService.list(null, null, encounterId, statuses, pageable, Locale.ENGLISH)).isEmpty();
+
+        verify(prescriptionRepository).findByEncounter_Id(encounterId, pageable);
+        verify(prescriptionRepository).findByEncounter_IdAndStatusIn(encounterId, statuses, pageable);
+    }
+
+    @Test
+    void list_withNoFilterAtAll_andNoHospitalScope_fallsBackToFindAll() {
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(prescriptionRepository.findAll(pageable)).thenReturn(Page.empty());
+
+        assertThat(prescriptionService.list(null, null, null, null, pageable, Locale.ENGLISH)).isEmpty();
+        verify(prescriptionRepository).findAll(pageable);
+    }
+
+    @Test
+    void list_withAnAllNullStatusList_behavesAsNoFilter() {
+        // Spring binds `?status=` to a single-element list holding null. It is
+        // not "no status can match" — see list_withEmptyStatusFilter.
+        Pageable pageable = PageRequest.of(0, 10);
+        List<com.example.hms.enums.PrescriptionStatus> statuses =
+            java.util.Arrays.asList((com.example.hms.enums.PrescriptionStatus) null);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(prescriptionRepository.findAll(pageable)).thenReturn(Page.empty());
+
+        assertThat(prescriptionService.list(null, null, null, statuses, pageable, Locale.ENGLISH)).isEmpty();
+        verify(prescriptionRepository).findAll(pageable);
+        verify(prescriptionRepository, never()).findByStatusIn(any(), any(Pageable.class));
     }
 
     @Test
