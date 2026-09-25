@@ -190,6 +190,54 @@ class LabModelsTest {
 
         val matchingUnit = wrongUnit.copy(referenceRange = "3.9 - 6.1 mmol/L")
         assertTrue(matchingUnit.isGradedNormal)
+
+        // A substring test would pass all three of these: g/dL is inside
+        // mg/dL, mol/L inside mmol/L, U/L inside mU/L.
+        val substringTraps = listOf(
+            "g/dL" to "70 - 110 mg/dL",
+            "mol/L" to "3.9 - 6.1 mmol/L",
+            "U/L" to "10 - 40 mU/L"
+        )
+        for ((rowUnit, shownRange) in substringTraps) {
+            val trap = ungraded.copy(value = "5.4", unit = rowUnit, referenceRange = shownRange)
+            assertFalse("$rowUnit must not match $shownRange", trap.isGradedNormal)
+        }
+
+        // A unit that contains digits still matches itself.
+        val digitsInUnit = ungraded.copy(
+            value = "7.2", unit = "x10^9/L", referenceRange = "4 - 11 x10^9/L"
+        )
+        assertTrue(digitsInUnit.isGradedNormal)
+
+        // A range with no unit token at all is the ordinary single-range case
+        // and keeps its grading.
+        val noUnitOnRange = ungraded.copy(value = "5.4", unit = "mmol/L", referenceRange = "3.9 - 6.1")
+        assertTrue(noUnitOnRange.isGradedNormal)
+    }
+
+    /**
+     * Withholding the tick is not enough: the number pair alone tells a
+     * patient reading 5.4 mmol/L against "70 - 110 mg/dL" that something is
+     * badly wrong.
+     */
+    @Test
+    fun aReferenceRangeInAnotherUnitIsNotShownAtAll() {
+        val mismatched = LabResultDto(
+            id = "m", testName = "Glucose", value = "5.4", unit = "mmol/L",
+            referenceRange = "70 - 110 mg/dL", status = "NORMAL", released = true
+        )
+        assertNull(mismatched.displayReferenceRange)
+        assertTrue(mismatched.referenceRangeUnitMismatch)
+
+        val matched = mismatched.copy(referenceRange = "3.9 - 6.1 mmol/L")
+        assertEquals("3.9 - 6.1 mmol/L", matched.displayReferenceRange)
+        assertFalse(matched.referenceRangeUnitMismatch)
+
+        // A pending row has neither: the backend redacts the range, and there
+        // is nothing to explain away.
+        val pending = mismatched.copy(released = false, status = "PENDING")
+        assertNull(pending.displayReferenceRange)
+        assertFalse(pending.referenceRangeUnitMismatch)
     }
 
     /** A pending row's `resultedAt` is the analyzer's, not the lab's. */

@@ -21,9 +21,15 @@ class LabResultsViewModel @Inject constructor(private val api: ApiService) : Vie
     private val _loadFailed = MutableStateFlow(false)
     val loadFailed: StateFlow<Boolean> = _loadFailed.asStateFlow()
 
-    init { load() }
-
+    /**
+     * Declared ABOVE `init` on purpose: Kotlin runs property initialisers and
+     * init blocks in declaration order, so with this below it the initial
+     * `load()` set the job and the initialiser then reset it to null — and a
+     * pull-to-refresh or a Retry during that first load raced it after all.
+     */
     private var loadJob: Job? = null
+
+    init { load() }
 
     fun load() {
         if (loadJob?.isActive == true) return

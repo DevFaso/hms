@@ -56,16 +56,25 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
     val outcome: StateFlow<Outcome?> = _outcome
     fun clearOutcome() { _outcome.value = null }
 
+    /**
+     * Declared ABOVE `init` on purpose: Kotlin runs property initialisers and
+     * init blocks in declaration order, so with this below it the initial
+     * `load()` set the job and the initialiser then reset it to null — and a
+     * reload from `requestRefill`/`cancelRefill` during that first load
+     * overlapped it after all.
+     */
+    private var loadJob: Job? = null
+
     init { load() }
 
     /**
      * Returns the Job: a caller that has to READ the refreshed lists — the
      * refill-refusal branch below — must join it, because
      * `viewModelScope.launch` returns at the first suspension point and the
-     * flows still hold the pre-request values.
+     * flows still hold the pre-request values. Such a caller wants
+     * [awaitFreshLoad], not this: the job returned here may be one that was
+     * already in flight.
      */
-    private var loadJob: Job? = null
-
     fun load(): Job {
         // One at a time. There are now four triggers (init, three per-tab
         // retries) plus the joined reload in requestRefill/cancelRefill: two
@@ -171,6 +180,23 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
         }
     }
 
+    /**
+     * A load whose reads are guaranteed to have been issued AFTER this call.
+     *
+     * `load()` deduplicates, so a mutation that simply joined it could be
+     * handed a job whose GETs went out before its own POST — the caller would
+     * then decide the button state, or pick the refusal message, from
+     * pre-mutation data. Joining the in-flight one first and then starting a
+     * fresh read is the correction rather than bypassing the dedupe outright:
+     * two concurrent loads are what the guard exists to prevent, and this
+     * keeps them sequential. `viewModelScope` is main-dispatched, so the
+     * check and the relaunch cannot interleave with another caller.
+     */
+    private suspend fun awaitFreshLoad() {
+        loadJob?.takeIf { it.isActive }?.join()
+        load().join()
+    }
+
     /** Withdraws a refill request the provider has not acted on yet. */
     fun cancelRefill(refillId: String) {
         viewModelScope.launch {
@@ -182,7 +208,7 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                     // that fails a second later would replace "Refill cancelled"
                     // with "Could not refresh" — so the patient would never
                     // learn the cancellation went through.
-                    load().join()
+                    awaitFreshLoad()
                     _outcome.value = Outcome(R.string.refill_cancelled)
                 } else {
                     // Reload on refusal too: `cancelMyRefill` refuses a request
@@ -190,7 +216,7 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                     // stale REQUESTED badge and its Cancel button stay on
                     // screen, so the patient taps into the same 400 forever.
                     val detail = serverMessage(resp.errorBody()?.string())
-                    load().join()
+                    awaitFreshLoad()
                     _outcome.value =
                         Outcome(R.string.refill_cancel_failed, detail ?: "HTTP ${resp.code()}")
                 }
@@ -215,7 +241,7 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                     // outcome too, and an unjoined reload that fails a second
                     // later replaced "Refill requested" with "Could not refresh"
                     // — so the patient never learned the request went through.
-                    load().join()
+                    awaitFreshLoad()
                     _outcome.value = Outcome(R.string.refill_requested)
                 } else {
                     val detail = serverMessage(resp.errorBody()?.string())
@@ -226,7 +252,7 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                     // button render. Without the join this branch could never
                     // be taken, and the server's English sentence went straight
                     // into a French snackbar.
-                    load().join()
+                    awaitFreshLoad()
                     // requestMedicationRefill checks isRefillable() BEFORE the
                     // one-open-request guard, so a prescription discontinued
                     // since the screen loaded is refused for that reason even

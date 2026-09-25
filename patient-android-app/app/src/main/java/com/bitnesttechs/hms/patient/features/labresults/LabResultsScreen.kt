@@ -93,9 +93,11 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
             // reads stale results with no sign the reload failed.
             if (loadFailed && results.isNotEmpty()) {
                 item {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        // Weighted: the French string is long enough to fill
+                        // the row and collapse "Réessayer" to nothing.
                         Text(stringResource(R.string.refresh_failed),
+                            modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         TextButton(onClick = { viewModel.load() }) {
@@ -173,7 +175,9 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                                         style = MaterialTheme.typography.bodySmall,
                                         fontWeight = FontWeight.Medium)
                                 }
-                                lab.referenceRange?.let {
+                                // Only when the range is this result's own; the
+                                // dialog explains the omission, a list cell cannot.
+                                lab.displayReferenceRange?.let {
                                     Text(stringResource(R.string.lab_reference_with_value, it),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -247,7 +251,15 @@ internal fun LabResultDetailDialog(lab: LabResultDto, onDismiss: () -> Unit) {
                     }
                 } else {
                     lab.valueWithUnit?.let { DetailRow(stringResource(R.string.lab_value), it) }
-                    lab.referenceRange?.let { DetailRow(stringResource(R.string.reference_range), it) }
+                    lab.displayReferenceRange?.let {
+                        DetailRow(stringResource(R.string.reference_range), it)
+                    }
+                    if (lab.referenceRangeUnitMismatch) {
+                        // Say why it is missing rather than drop it silently.
+                        Text(stringResource(R.string.lab_reference_range_unit_mismatch),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
 
                     // Only when there IS an interpretation: a released row
                     // whose status this build cannot name has none, and an

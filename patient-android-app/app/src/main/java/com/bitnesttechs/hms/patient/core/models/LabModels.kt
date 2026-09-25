@@ -91,16 +91,7 @@ data class LabResultDto(
             // a green tick for a comparison that never happened.
             val raw = value?.trim().orEmpty()
             if (raw.isEmpty() || raw.toDoubleOrNull() == null) return false
-            // The range shown and the range graded against are not necessarily
-            // the same one: `formatReferenceRange` always formats `ranges[0]`,
-            // while `determineSeverityFlag` grades against
-            // `findMatchingRange(resultUnit, …)`. On a test configured with two
-            // unit-specific ranges, the row can be graded NORMAL in mmol/L and
-            // displayed against the mg/dL limits — an all-clear beside a range
-            // the value is nowhere near. If the row has a unit, only claim the
-            // grading when the displayed range is in that unit.
-            val unit = unit?.trim().orEmpty()
-            return unit.isEmpty() || referenceRange.orEmpty().contains(unit, ignoreCase = true)
+            return referenceRangeApplies
         }
 
     /** The value with its unit, or null while the result is pending. */
@@ -125,6 +116,70 @@ data class LabResultDto(
 
     val tone: StatusTone
         get() = if (isNormal && !isGradedNormal) StatusTone.NEUTRAL else displayStatus.tone
+
+    /**
+     * Whether the reference range on the wire is the one THIS result was
+     * measured against.
+     *
+     * The range shown and the range graded against are not necessarily the
+     * same: `formatReferenceRange` always formats `ranges[0]`, while
+     * `determineSeverityFlag` grades against `findMatchingRange(resultUnit,
+     * …)`. On a test configured with two unit-specific ranges, the row can be
+     * graded NORMAL in mmol/L and displayed against the mg/dL limits.
+     *
+     * NOT complete cover, and it cannot be from here: when `ranges[0]` has no
+     * unit of its own, `formatReferenceRange` stamps the RESULT's unit onto
+     * its numbers, so the displayed string always carries this row's unit,
+     * this check always passes, and the limits are mislabelled with a unit
+     * they were never expressed in. That is a server-side defect and is filed
+     * as one; nothing the app can see distinguishes it.
+     */
+    val referenceRangeApplies: Boolean
+        get() {
+            val unit = unit?.trim().orEmpty()
+            if (unit.isEmpty()) return true
+            return rangeIsInUnit(referenceRange.orEmpty().trimEnd(), unit)
+        }
+
+    /**
+     * The reference range to put in front of the patient, or null when it is
+     * not this result's.
+     *
+     * Withholding the green tick is not enough on its own: a patient reading
+     * "5.4 mmol/L" against limits of "70 - 110 mg/dL" concludes something is
+     * badly wrong from the number pair alone. Where the range is not theirs
+     * the UI says so rather than showing it.
+     */
+    val displayReferenceRange: String?
+        get() = referenceRange?.takeIf { it.isNotBlank() && !isPending && referenceRangeApplies }
+
+    /** True when there IS a range but it is not in this result's unit. */
+    val referenceRangeUnitMismatch: Boolean
+        get() = !isPending && !referenceRange.isNullOrBlank() && !referenceRangeApplies
+
+    /**
+     * Whether a formatted reference range is expressed in [unit].
+     *
+     * A SUBSTRING test is not enough: `g/dL` is a substring of `mg/dL`,
+     * `mol/L` of `mmol/L`, `U/L` of `mU/L` — so the very mismatch this guards
+     * against would pass it. `formatReferenceRange` appends `" " + unit`, so
+     * the unit is the suffix and the character before it is a separator;
+     * requiring that boundary also keeps units that contain digits
+     * (`x10^9/L`) working, which trailing-non-digit extraction would not.
+     *
+     * A range with no unit token at all is accepted. `formatReferenceRange`
+     * omits the unit only when NEITHER the range nor the result carries one,
+     * so there is no unit to disagree about, and the ambiguity being guarded
+     * against arises only when a test has SEVERAL unit-specific ranges.
+     * Withholding the green there would be a large regression for no safety
+     * gain.
+     */
+    private fun rangeIsInUnit(range: String, unit: String): Boolean {
+        if (range.isEmpty() || range.last().isDigit()) return true
+        if (!range.endsWith(unit, ignoreCase = true)) return false
+        val boundary = range.length - unit.length - 1
+        return boundary < 0 || !range[boundary].isLetterOrDigit()
+    }
 
     /** The date worth showing: a pending row's `resultedAt` is not its own. */
     val displayDate: String? get() = if (isPending) collectedAt else (resultedAt ?: collectedAt)

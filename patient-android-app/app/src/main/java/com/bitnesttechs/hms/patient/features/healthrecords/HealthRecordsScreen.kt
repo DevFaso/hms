@@ -241,7 +241,7 @@ private fun LabsTab(labs: List<LabResultDto>) {
                 details = {
                     DetailGrid(
                         DetailItem(stringResource(R.string.result), lab.valueWithUnit, Icons.Default.Science),
-                        DetailItem(stringResource(R.string.range), lab.referenceRange.takeUnless { lab.isPending }, Icons.Default.Info),
+                        DetailItem(stringResource(R.string.range), lab.displayReferenceRange, Icons.Default.Info),
                         DetailItem(stringResource(R.string.status), stringResource(lab.statusLabelRes), Icons.Default.Warning),
                         DetailItem(stringResource(R.string.ordered_at), lab.collectedAt?.take(10), Icons.Default.CalendarMonth),
                         DetailItem(stringResource(R.string.result_date), lab.resultedAt?.takeUnless { lab.isPending }?.take(10), Icons.Default.CalendarMonth),
