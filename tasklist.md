@@ -3333,6 +3333,98 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   70-110 mg/dL draws a conclusion, and self-interpretation is the whole point
   of showing a range. Unowned.
 
+- **Access-control gaps found by chasing other access-control gaps.** Each was
+  found while fixing something adjacent, which is the argument for finishing a
+  family rather than the one instance that was reported.
+  - **`GET /encounters/{encounterId}/avs` has no access control at all** — not
+    a missing ownership check, no hospital scope either.
+    `EncounterServiceImpl.getAfterVisitSummary` does a bare `findById`,
+    confirms `checkoutTimestamp` is non-null, and maps; the controller does not
+    even take the authentication object, while the `checkOut` handler twenty
+    lines above resolves username, super-admin and hospital scope properly. Any
+    authenticated caller in the role set — which includes ROLE_PATIENT and
+    ROLE_RECEPTIONIST — reads ANY after-visit summary on the platform, across
+    every tenant, given an encounter id. An AVS carries diagnoses, medications
+    and discharge instructions. Owned by `fix/encounter-read-access-control`.
+  - `GET /encounters/{id}` has hospital scope and no ownership, so a patient
+    reads another patient's encounter within their own hospital. Same branch.
+  - `GET /prescriptions/{id}` had the same ownership gap, bounded to the
+    patient's own hospital because a patient principal always resolves one.
+    Closed by `fix/prescription-read-patient-ownership`.
+
+- **Two traps that made a security fix break the thing it protected**, both hit
+  during the above and both worth knowing before writing the next one.
+  - `authService.getCurrentUserId()` returns an id only for a
+    `CustomUserDetails` principal and THROWS on a `JwtAuthenticationToken`, so
+    a guard built on it answers 401 to a patient reading their own record once
+    OIDC is on. Use `ControllerAuthUtils.resolveUserId`, and test against a
+    real `JwtAuthenticationToken` with an `appUserId` claim rather than a
+    password-path double.
+  - `RoleExpansion` runs on the password path but **not** on the Keycloak path,
+    so a role set that leans on `ROLE_DOCTOR` expansion silently excludes
+    physicians and surgeons in a Keycloak deployment. Name them explicitly.
+
+- **`clinical.patient_diagnoses` has no `hospital_id` column at all** (V14), so
+  the patient-snapshot drawer reads it patient-wide — unfiltered, not tested by
+  `maySurface`, unaccounted — and it cannot be scoped without a migration.
+  Deriving the scope from `diagnosedBy.getHospital()` is the subject-derived
+  approach rejected twice elsewhere in this list. `fix/snapshot-and-review-
+  queue-scope` swaps in the shared chart-access gate, which ENLARGES who
+  reaches this read, so it is a live trade-off rather than inherited debt.
+  **Three options and it is a product call: add the column by migration, drop
+  the legacy read, or accept and record it.** Unowned, awaiting that decision.
+
+- **Residuals from the access-control work, none blocking.**
+  - `EncounterServiceImpl`'s sibling: `getInboxItems` keeps six more
+    staff-id-filtered reads (consults, signatures, encounters, clarification
+    counts, pharmacy notifications, refills). Not the same read as the review
+    queue — those are items addressed TO the clinician rather than their own
+    order history — so scoping them is a product question. Unowned.
+  - `patientRepository.findByUserId` is a derived `Optional` query and
+    `V113__patients_user_id_integrity.sql` creates `uq_patient_user_id` only
+    when no duplicates exist, so a tenant carrying duplicates gets a 500
+    instead of the uniform 404. Pre-existing and shared by every
+    `/me/patient/*` read. Unowned.
+  - `getPrescriptionAfterWrite` is a public method that deliberately skips an
+    authorization check, guarded only by a javadoc. An enforcement test pinning
+    its three callers, in the shape of `SchedulerLockCoverageTest`, would stop
+    that drifting. Unowned.
+  - `ROLE_ADMIN` sits on the `/prescriptions` route guard and nav item and on
+    neither backend read, and `RoleExpansion` grants it nothing, so an admin
+    opening the page gets "failed to load". Unowned.
+  - `reachRecorder.recordReach` now derives reach from the status-filtered
+    page, so a narrowed read records a narrower treatment-relationship trail.
+    No caller combines `patientId` with `status` today; the API permits it.
+    Needs a decision from whoever owns E8/E9 reach. Unowned.
+  - The prescriptions page's `HISTORY_ROLES` and `VERIFIER_ROLES` gates use
+    `hasAnyActiveRole` against `ROLE_DOCTOR` — the portal half of the
+    equivalence split, on a page where it was fixed for one gate and not the
+    others. Unowned.
+  - `integration_message_event.payload` is plain TEXT with no
+    `EncryptedStringConverter`, and the dispatcher's parse-failure rows put raw
+    HL7 in it. The body is the only diagnostic for an unparseable message, so
+    the answer is encryption or retention, not deletion. Unowned.
+  - The two `REJECTED_INVALID` exits on the A40 path record no dead letter at
+    all, so a malformed merge leaves no evidence. Unowned.
+
+- **Both patient apps still print raw wire enums on the health-records
+  screens** — treatment plans (`REVISIONS_REQUIRED`) and referrals
+  (`ACKNOWLEDGED`), in English inside the French build. The lab and pharmacy
+  families were fixed in #728/#729; this family was not, and #732's body
+  briefly claimed otherwise before being corrected. Unowned.
+
+- **iOS `MedicalHistoryView` has no entry point.** Nothing in the app
+  constructs it, so its 31 strings were latent rather than in front of
+  patients. `fix/ios-missing-localized-keys` defines them anyway; whether the
+  screen should be reachable is a separate product decision. Unowned.
+
+- **The iOS `disclosures_role_*` fallback is English.** `roleLabel` humanises
+  an unknown token, which is correct behaviour, but the humanised form is
+  English — so a French patient reads "Lab Technician" on the screen that tells
+  them who opened their record. Addressed in
+  `fix/ios-missing-localized-keys`; recorded because the fallback pattern
+  exists elsewhere.
+
 - **Two layers of this codebase disagree about role equivalence.**
   `RoleExpansion` grants a physician or surgeon ROLE_DOCTOR while the
   authorities are built, so both clear a `hasAnyRole('DOCTOR')` annotation.
@@ -3346,14 +3438,23 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   the rule for anyone adding a control is: read what the SERVICE does, not
   only the annotation.
 
-- **The cross-tenant oracle is still open on the ADT and merge inbound
-  paths.** `MllpInboundAdtServiceImpl` and `MllpInboundMergeServiceImpl` still
-  answer `REJECTED_CROSS_TENANT` → AR when the referenced patient exists but
-  belongs to another hospital, while an unknown one answers AE, so an
-  allowlisted sender can learn that an MRN exists in a hospital it cannot read.
-  #715 collapsed the two outcomes for the lab (ORU^R01) path only; the same
-  one-line change is owed on both, with the reason kept in the integration
-  message row rather than in the ACK.
+- **~~The cross-tenant oracle is still open on the ADT and merge inbound
+  paths.~~ Closed by `fix/adt-merge-cross-tenant-oracle`.** Both services
+  answered AR for a patient belonging to another hospital while an unknown one
+  answered AE, so an allowlisted sender could learn that an MRN exists in a
+  hospital it cannot read. The constant that carried the distinction is
+  removed from the enum entirely, so no handler can reopen it, and the reason
+  now lives in the integration message row rather than the ACK.
+
+  Two things that branch found which were not in this bullet. The A40 merge
+  path had a **second** oracle wearing an accept: the already-merged no-op
+  answered AA *before* the tenant gate, so a sender could learn that two
+  identifiers it does not own resolve to one patient elsewhere. And the two
+  answers were still separable by **timing** — a short-circuited `||` made one
+  case cost one query and its sibling two — which is now equalised. Partial
+  ownership of an A40's two patients answers like owning neither, and the cost
+  of that is stated on the PR: a legitimate merge where one side was only ever
+  registered elsewhere now gets an unhelpful not-found.
 
 - **Role equivalence stops at the annotation, and two layers disagree about
   it.** `RoleExpansion` maps PHYSICIAN and SURGEON onto ROLE_DOCTOR while the
