@@ -7288,7 +7288,7 @@
     "LABS": "Laboratorio",
     "LAB_AWAITING_RELEASE": "Pendiente de publicación por el laboratorio",
     "LAB_IN_HOUSE": "Laboratorio interno",
-    "LAB_NO_HOSPITAL": "Los resultados de laboratorio se muestran de un hospital a la vez, y esta cuenta no tiene ninguno definido. Defina un ámbito hospitalario o pida a un administrador que revise su asignación.",
+    "LAB_NO_HOSPITAL": "Los resultados de laboratorio se muestran de un hospital a la vez, y esta cuenta no tiene ninguno definido. Pida a un administrador que revise su asignación hospitalaria.",
     "LAB_ORDERED_AT": "Solicitado el",
     "LAB_ORDERED_BY": "Solicitado por",
     "LAB_ORDERS": "Órdenes de laboratorio",
