@@ -129,6 +129,24 @@ public final class PartnerNoShowReason {
         return marker >= 0 ? marker : segmentStartIndexOf(stored, LEGACY_PREFIX);
     }
 
+    /**
+     * A client-authored routing reason with any no-show token neutralised.
+     *
+     * <p>The reason and the no-show marker share one column, and index 0 is
+     * where an authored reason starts — the very position a real no-show
+     * segment also occupies when the decision had no earlier reason. The two
+     * cannot be told apart after the fact, so they are kept apart before it:
+     * a reason arriving with either token has it bracketed as quoted text, and
+     * the decision reads back as the ordinary route it is.
+     */
+    public static String defuseAuthoredReason(String authored) {
+        if (authored == null || authored.isBlank()) {
+            return authored;
+        }
+        return authored.replace(MARKER, "\"" + MARKER + "\"")
+                .replace(LEGACY_PREFIX, "\"" + LEGACY_PREFIX + "\"");
+    }
+
     /** The first index at which {@code token} begins a segment, or -1. */
     private static int segmentStartIndexOf(String stored, String token) {
         int from = 0;

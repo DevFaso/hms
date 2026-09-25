@@ -26,6 +26,20 @@ import { PrescriptionService } from '../../services/prescription.service';
 export type ClarificationMode = 'PHARMACY' | 'PRESCRIBER';
 
 /**
+ * The two ways of saying "there is an exchange here you cannot read".
+ *
+ * `labelKey` is the field name on purpose — check-i18n-referenced-keys.mjs
+ * reads it, so a typo fails the gate instead of rendering the raw key; a key
+ * chosen in a `.ts` branch is invisible to it otherwise.
+ */
+const HIDDEN_ANSWER = {
+  /** An answer IS waiting: clarificationResolvedAt says so. */
+  stated: { labelKey: 'PRESCRIPTIONS.CLARIFICATION.ANSWER_NOT_VISIBLE' },
+  /** One may be: the row is flagged, but the timestamp has been cleared. */
+  hedged: { labelKey: 'PRESCRIPTIONS.CLARIFICATION.ANSWER_MAY_NOT_BE_VISIBLE' },
+};
+
+/**
  * The pharmacist-to-prescriber clarification exchange (gap G5), as one
  * control that can be dropped into a row's action cell.
  *
@@ -321,17 +335,29 @@ export class PrescriptionClarificationComponent {
   protected readonly titleId = computed(() => `rx-clarify-title-${this.prescriptionId()}`);
 
   /**
-   * The row IS carrying an answer this user cannot read.
+   * The row may be carrying an exchange this user cannot read, and which of
+   * the two sentences says so.
    *
-   * <p>No longer a conditional: {@code clarificationResolvedAt} says an
-   * answer is waiting outright, so a PHARMACY_VERIFIER — who may raise a
-   * question but is not on {@code GET /prescriptions/{id}} — is told that
-   * plainly. The attention reason is still accepted for a payload from a
-   * backend that predates the timestamp, where it remains a maybe.
+   * <p>{@code null} for a role that can read it, and for a row with nothing to
+   * hide. Otherwise a key:
+   *
+   * <ul>
+   *   <li>Stated, when {@code clarificationResolvedAt} is set: an answer IS
+   *       waiting, so a PHARMACY_VERIFIER — who may raise a question but is
+   *       not on {@code GET /prescriptions/{id}} — is told so plainly.</li>
+   *   <li>Hedged, on any other flagged row: the backend clears that timestamp
+   *       as soon as the pharmacy acts on the answer, so a row that was
+   *       answered and then partly filled carries a real exchange and no
+   *       timestamp. Saying nothing there invites a second question about
+   *       something already answered.</li>
+   * </ul>
    */
-  protected readonly mayHideAnswer = computed(
-    () => this.isPharmacy() && !this.canReadExchange() && this.hasAnswer(),
-  );
+  protected readonly hiddenAnswerKey = computed(() => {
+    if (!this.isPharmacy() || this.canReadExchange()) return null;
+    if (this.hasAnswer()) return HIDDEN_ANSWER.stated.labelKey;
+    if (this.attentionReason()) return HIDDEN_ANSWER.hedged.labelKey;
+    return null;
+  });
 
   /**
    * There is an exchange on screen, or a reason there is not.

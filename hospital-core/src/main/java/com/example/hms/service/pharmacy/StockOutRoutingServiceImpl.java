@@ -122,9 +122,19 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     public StockCheckResultDTO checkStock(UUID prescriptionId) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         Prescription prescription = findPrescription(prescriptionId, hospitalId);
+        // Every question below — what is on hand, which partners exist — is
+        // asked OF A HOSPITAL, so it is asked of the one that wrote the order,
+        // not of the caller's scope. For a scoped caller they are the same
+        // hospital (findPrescription has just proved it). For a super-admin in
+        // global view the caller's scope is null, and passing that down would
+        // have answered "0 on hand, no partner pharmacies" with confidence —
+        // a wrong clinical answer that the page then offers a back order on.
+        UUID orderHospitalId = prescription.getHospital() != null
+                ? prescription.getHospital().getId()
+                : hospitalId;
 
         // Find the medication catalog item for this prescription
-        MedicationCatalogItem catalogItem = resolveCatalogItem(prescription, hospitalId);
+        MedicationCatalogItem catalogItem = resolveCatalogItem(prescription, orderHospitalId);
 
         BigDecimal totalOnHand = BigDecimal.ZERO;
 
@@ -132,7 +142,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         if (catalogItem != null) {
             List<InventoryItem> items = inventoryItemRepository
                     .findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(
-                            hospitalId, catalogItem.getId());
+                            orderHospitalId, catalogItem.getId());
             for (InventoryItem item : items) {
                 if (item.getPharmacy() != null
                         && item.getPharmacy().getPharmacyType() == PharmacyType.HOSPITAL_DISPENSARY
@@ -148,7 +158,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         List<PartnerOptionDTO> partnerOptions = new ArrayList<>();
         if (!sufficient) {
             List<Pharmacy> partners = pharmacyRepository.findByHospitalIdAndPharmacyTypeInAndActiveTrue(
-                    hospitalId, EXTERNAL_PHARMACY_TYPES);
+                    orderHospitalId, EXTERNAL_PHARMACY_TYPES);
             for (Pharmacy partner : partners) {
                 boolean hasOnFormulary = false;
                 if (catalogItem != null) {
@@ -227,6 +237,11 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
         // Create routing decision
         dto.setRoutingType(RoutingType.PARTNER);
+        // The reason is client free text and shares a column with the no-show
+        // marker, so a pharmacist typing one (by accident or not) would give
+        // their own routing reason a translated "the partner never delivered"
+        // flag and lose the sentence out of the reason. Defanged on the way in.
+        dto.setReason(PartnerNoShowReason.defuseAuthoredReason(dto.getReason()));
         PrescriptionRoutingMapper.RoutingContext ctx = new PrescriptionRoutingMapper.RoutingContext(
                 prescription, targetPharmacy, currentUser, patient, remaining);
         PrescriptionRoutingDecision decision = routingMapper.toEntity(dto, ctx);

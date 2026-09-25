@@ -467,10 +467,28 @@ class DispenseServiceImplTest {
         @DisplayName("should throw when prescription not found")
         void shouldThrowWhenPrescriptionNotFound() {
             DispenseRequestDTO dto = buildRequest();
+            // Scoped caller: the lookup is the thing under test here, so the
+            // hospital must be present or the null-scope guard answers first.
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.createDispense(dto))
                     .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("a super-admin in GLOBAL view is refused: recording a fill is a write")
+        void globalViewSuperAdminCannotRecordAFill() {
+            DispenseRequestDTO dto = buildRequest();
+
+            // Reading across tenants is what global view is for; booking a
+            // stock movement against one hospital's order is not. Refused
+            // before this change too — as a 500 from the dereference.
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            verify(dispenseRepository, never()).save(any());
         }
 
         @Test

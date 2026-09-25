@@ -5584,6 +5584,7 @@
       "ANSWER_HINT": "Sending your answer returns the prescription to the pharmacy work queue with the status it had before the question.",
       "ANSWER_INPUT_LABEL": "Your answer (optional)",
       "ANSWER_LABEL": "Prescriber's answer",
+      "ANSWER_MAY_NOT_BE_VISIBLE": "Your current role cannot open the prescription record, so if an earlier question was raised, neither it nor the prescriber's answer can be shown here.",
       "ANSWER_NOT_VISIBLE": "Your current role cannot open the prescription record, so the prescriber's answer on this order cannot be shown here.",
       "ANSWER_PLACEHOLDER": "Answer the pharmacist, or leave this empty if you corrected the prescription itself.",
       "ASK": "Ask the prescriber",

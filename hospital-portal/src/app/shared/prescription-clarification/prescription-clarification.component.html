@@ -69,14 +69,15 @@
              The work-queue projection carries the cue but never the words —
              it is served to roles the prescription read refuses — so the
              text is fetched from the prescription record on every open. -->
-        <!-- Stated, not hedged: clarificationResolvedAt says an answer is
-             waiting whatever else the row reports, so a verifier — who may
-             raise a question but is not on GET /prescriptions/{id} — is
-             told plainly that there is an answer they cannot read, instead
-             of being shown a bare "ask a question" form. -->
-        @if (mayHideAnswer()) {
+        <!-- Stated when clarificationResolvedAt says an answer is waiting,
+             hedged on any other flagged row (the backend clears that
+             timestamp once the pharmacy acts, so an answered-then-filled row
+             carries a real exchange and no timestamp). Either way a verifier
+             — who may raise a question but is not on GET /prescriptions/{id}
+             — is told rather than shown a bare "ask a question" form. -->
+        @if (hiddenAnswerKey(); as hiddenKey) {
           <p class="clarify-note" data-testid="rx-clarification-unreadable">
-            {{ 'PRESCRIPTIONS.CLARIFICATION.ANSWER_NOT_VISIBLE' | translate }}
+            {{ hiddenKey | translate }}
           </p>
         }
         @if (showExchange()) {

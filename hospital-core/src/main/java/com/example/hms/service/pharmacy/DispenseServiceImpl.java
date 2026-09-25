@@ -356,6 +356,13 @@ public class DispenseServiceImpl implements DispenseService {
     }
 
     private Prescription loadAndValidatePrescription(DispenseRequestDTO dto, UUID hospitalId) {
+        // A null hospital is a super-admin in GLOBAL view. Recording a fill is
+        // an act on one hospital's order, not a cross-tenant read, so it is
+        // refused — which is what happened before too, as a 500 from the
+        // dereference below. Same stance and same 404 as the routing writes.
+        if (hospitalId == null) {
+            throw new ResourceNotFoundException("prescription.notfound");
+        }
         Prescription prescription = prescriptionRepository.findById(dto.getPrescriptionId())
                 .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
 

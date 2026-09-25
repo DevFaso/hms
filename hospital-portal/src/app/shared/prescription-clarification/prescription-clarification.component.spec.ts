@@ -413,11 +413,7 @@ describe('PrescriptionClarificationComponent', () => {
     );
   });
 
-  it('tells a verifier an unreadable answer is waiting even when the reason is masked', () => {
-    // attentionReason reports PENDING_STOCK, not CLARIFICATION_RESOLVED, so
-    // the reason says nothing about the answer; clarificationResolvedAt does,
-    // and the verifier — who cannot read the text — is told rather than shown
-    // a bare form.
+  it('never fires the exchange read for a role the endpoint refuses', () => {
     create(['ROLE_PHARMACY_VERIFIER'], {
       mode: 'PHARMACY',
       status: 'PENDING_STOCK',
@@ -428,12 +424,13 @@ describe('PrescriptionClarificationComponent', () => {
     fixture.detectChanges();
 
     expect(prescriptions.getById).not.toHaveBeenCalled();
-    expect(el('rx-clarification-unreadable')).not.toBeNull();
   });
 
-  it('gives a verifier no warning on a flagged row that carries no answer', () => {
-    // A back order is a reason to look at the row; it is not an exchange, and
-    // the note used to be shown on any reason at all.
+  it('hedges the note on a flagged row whose answer timestamp has been cleared', () => {
+    // The backend clears clarificationResolvedAt as soon as the pharmacy acts
+    // on the answer, so an answered-then-partly-filled row carries a real
+    // exchange and no timestamp. Saying nothing invites a verifier to ask
+    // again about something already answered.
     create(['ROLE_PHARMACY_VERIFIER'], {
       mode: 'PHARMACY',
       status: 'PENDING_STOCK',
@@ -442,7 +439,24 @@ describe('PrescriptionClarificationComponent', () => {
     el('rx-clarification-open-rx-1')!.click();
     fixture.detectChanges();
 
-    expect(el('rx-clarification-unreadable')).toBeNull();
+    expect(el('rx-clarification-unreadable')!.textContent).toContain(
+      'PRESCRIPTIONS.CLARIFICATION.ANSWER_MAY_NOT_BE_VISIBLE',
+    );
+  });
+
+  it('states the note outright once an answer is actually waiting', () => {
+    create(['ROLE_PHARMACY_VERIFIER'], {
+      mode: 'PHARMACY',
+      status: 'PENDING_STOCK',
+      attentionReason: 'PENDING_STOCK',
+      clarificationResolvedAt: '2026-09-24T09:00:00',
+    });
+    el('rx-clarification-open-rx-1')!.click();
+    fixture.detectChanges();
+
+    expect(el('rx-clarification-unreadable')!.textContent).toContain(
+      'PRESCRIPTIONS.CLARIFICATION.ANSWER_NOT_VISIBLE',
+    );
   });
 
   it('labels the button "read the answer" on a row the status reason masks', () => {

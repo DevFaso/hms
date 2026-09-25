@@ -5584,6 +5584,7 @@
       "ANSWER_HINT": "L'envoi de votre réponse renvoie l'ordonnance dans la file de travail de la pharmacie avec le statut qu'elle avait avant la question.",
       "ANSWER_INPUT_LABEL": "Votre réponse (facultative)",
       "ANSWER_LABEL": "Réponse du prescripteur",
+      "ANSWER_MAY_NOT_BE_VISIBLE": "Votre rôle actuel ne peut pas ouvrir le dossier de l'ordonnance : si une question a déjà été posée, ni celle-ci ni la réponse du prescripteur ne peuvent être affichées ici.",
       "ANSWER_NOT_VISIBLE": "Votre rôle actuel ne peut pas ouvrir le dossier de l'ordonnance : la réponse du prescripteur sur cette ordonnance ne peut pas être affichée ici.",
       "ANSWER_PLACEHOLDER": "Répondez au pharmacien, ou laissez vide si vous avez corrigé l'ordonnance elle-même.",
       "ASK": "Interroger le prescripteur",

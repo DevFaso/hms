@@ -100,6 +100,38 @@ class PartnerNoShowReasonTest {
     }
 
     @Test
+    @DisplayName("a reason a client authored cannot claim to be a no-show")
+    void defusesAnAuthoredMarker() {
+        // Index 0 is where an authored reason starts AND where a real no-show
+        // segment sits when the decision had no earlier reason, so the two
+        // cannot be told apart afterwards. They are kept apart beforehand.
+        String defused = PartnerNoShowReason.defuseAuthoredReason(
+                "[PARTNER_NO_SHOW] I am not really one");
+
+        assertThat(PartnerNoShowReason.isNoShow(defused)).isFalse();
+        assertThat(PartnerNoShowReason.withoutNoShow(defused)).isEqualTo(defused);
+
+        String legacyShaped = PartnerNoShowReason.defuseAuthoredReason(
+                "Partner no-show: last time, so routing elsewhere");
+        assertThat(PartnerNoShowReason.isNoShow(legacyShaped)).isFalse();
+
+        assertThat(PartnerNoShowReason.defuseAuthoredReason("Nearest partner has stock"))
+                .isEqualTo("Nearest partner has stock");
+        assertThat(PartnerNoShowReason.defuseAuthoredReason(null)).isNull();
+    }
+
+    @Test
+    @DisplayName("a real no-show recorded over a defused reason still decodes")
+    void decodesOverADefusedReason() {
+        String stored = PartnerNoShowReason.compose(
+                PartnerNoShowReason.defuseAuthoredReason("[PARTNER_NO_SHOW] not really"),
+                "but this time nobody came");
+
+        assertThat(PartnerNoShowReason.isNoShow(stored)).isTrue();
+        assertThat(PartnerNoShowReason.freeText(stored)).isEqualTo("but this time nobody came");
+    }
+
+    @Test
     @DisplayName("but a real no-show after such a reason still decodes")
     void stillDecodesAfterAReasonThatMentionsIt() {
         String stored = PartnerNoShowReason.compose(

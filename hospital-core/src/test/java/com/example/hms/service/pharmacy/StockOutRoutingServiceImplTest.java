@@ -956,6 +956,29 @@ class StockOutRoutingServiceImplTest {
         }
 
         @Test
+        @DisplayName("checkStock asks the ORDER's hospital, not the caller's empty scope")
+        void checkStockUsesTheOrdersHospital() {
+            // Passing a null scope down would have answered "0 on hand, no
+            // partner pharmacies" with confidence — a wrong clinical answer
+            // the page then offers a back order on.
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(medicationCatalogItemRepository.findByHospitalIdAndCode(hospitalId, "AMOX500"))
+                    .thenReturn(Optional.of(catalogItem));
+            when(inventoryItemRepository
+                    .findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(
+                            hospitalId, catalogItem.getId()))
+                    .thenReturn(java.util.List.of());
+            when(pharmacyRepository.findByHospitalIdAndPharmacyTypeInAndActiveTrue(
+                    eq(hospitalId), any())).thenReturn(java.util.List.of(partnerPharmacy));
+
+            StockCheckResultDTO result = service.checkStock(prescriptionId);
+
+            assertThat(result.getPartnerPharmacies()).hasSize(1);
+            verify(medicationCatalogItemRepository).findByHospitalIdAndCode(hospitalId, "AMOX500");
+        }
+
+        @Test
         @DisplayName("a write is still refused without a hospital, as a 404 rather than a 500")
         void writesStillNeedAHospital() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(null);
