@@ -179,7 +179,9 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
       .withContext(
         'without a reload the row keeps its pre-dispatch status and its SMS button, and a second click supersedes the decision just made',
       )
-      .toBe(listCallsBefore + 1);
+      // Two calls per reload since G12: the unfiltered page and the
+      // status-filtered "Needs attention" bucket.
+      .toBe(listCallsBefore + 2);
     expect(component.dispatching()).toBeFalse();
   });
 
@@ -579,6 +581,7 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
   let fixture: ComponentFixture<PrescriptionsComponent>;
   let component: PrescriptionsComponent;
   let pharmacyService: jasmine.SpyObj<PharmacyService>;
+  let prescriptionServiceSpy: jasmine.SpyObj<PrescriptionService>;
 
   function makeRx(over: Partial<PrescriptionResponse> = {}): PrescriptionResponse {
     return {
@@ -646,6 +649,12 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
 
   interface SetupOptions {
     list?: PrescriptionResponse[];
+    /**
+     * G12 — what the status-filtered "Needs attention" request returns.
+     * Defaults to an empty page; pass a throwing observable to exercise the
+     * fallback.
+     */
+    attention?: Observable<PrescriptionResponse[]>;
     roles?: string[];
     superAdmin?: boolean;
     globalView?: boolean;
@@ -659,7 +668,13 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     const prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
       'list',
     ]);
-    prescriptionService.list.and.returnValue(of(opts.list ?? []));
+    // G12: the page and the status-filtered attention bucket are two calls
+    // against the same method, told apart by the `statuses` filter.
+    prescriptionService.list.and.callFake((filters?: { statuses?: string[] }) =>
+      filters?.statuses ? (opts.attention ?? of([])) : of(opts.list ?? []),
+    );
+
+    prescriptionServiceSpy = prescriptionService;
 
     const staffService = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
     staffService.list.and.returnValue(of([]));
@@ -727,13 +742,18 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
       ],
     }).compileComponents();
 
-    // The one key in this block that interpolates. Loaded for real so the
-    // assertion below tests the PARAMETER NAME too: ngx-translate renders a
-    // missing key as the key itself, which would pass either way.
+    // The interpolating keys in this block, loaded for real so the assertions
+    // below test the PARAMETER NAMES too: ngx-translate renders a missing key
+    // as the key itself, which would pass either way.
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation(
       'en',
-      { PRESCRIPTIONS: { PHARMACY: { AT: 'at {{pharmacy}}' } } },
+      {
+        PRESCRIPTIONS: {
+          PHARMACY: { AT: 'at {{pharmacy}}', OUTSTANDING_VALUE: '{{value}} {{unit}}' },
+          REFILLS_VALUE: '{{remaining}} of {{allowed}} remaining',
+        },
+      },
       true,
     );
     translate.use('en');
@@ -946,6 +966,184 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
 
     expect(component.outstandingQuantity()).toBeNull();
     expect(el('[data-testid="rx-outstanding-quantity"]')).toBeNull();
+  });
+
+  /* ── G13: the remainder off the prescription, with its unit ───────── */
+
+  it('computes the remainder from the order itself and renders its unit', async () => {
+    // 30 ordered, one refill released, so 60 are expected over the order's
+    // life; 25 have been dispensed. The routing snapshot deliberately
+    // disagrees — the live balance is what must win.
+    const rx = makeRx({
+      status: 'PARTIALLY_FILLED',
+      quantity: 30,
+      quantityUnit: 'comprimés',
+      refillsUsed: 1,
+    });
+    await setup({
+      list: [rx],
+      routings: of(page([makeRouting({ remainingQuantity: 99 })])),
+      dispenses: of(page([makeDispense({ quantityDispensed: 25 })])),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(component.outstandingQuantity()).toBe(35);
+    expect(component.outstandingQuantityUnit()).toBe('comprimés');
+    const rendered = el('[data-testid="rx-outstanding-quantity"]')!.textContent!;
+    expect(rendered).toContain('35');
+    expect(rendered)
+      .withContext('a bare number could as easily be millilitres as tablets')
+      .toContain('comprimés');
+  });
+
+  it('claims no remainder on an order nothing has been filled against', async () => {
+    // "Expected minus nothing" is the whole order, which would put an
+    // outstanding row on every signed prescription and flash onto the panel
+    // while the fill list was still in flight.
+    const rx = makeRx({ status: 'SIGNED', quantity: 30, quantityUnit: 'comprimés' });
+    await setup({ list: [rx] });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(component.outstandingQuantity()).toBeNull();
+    expect(el('[data-testid="rx-outstanding-quantity"]')).toBeNull();
+  });
+
+  it('ignores a cancelled fill when computing the remainder', async () => {
+    const rx = makeRx({ status: 'PARTIALLY_FILLED', quantity: 30, quantityUnit: 'comprimés' });
+    await setup({
+      list: [rx],
+      dispenses: of(
+        page([
+          makeDispense({ id: 'd-1', quantityDispensed: 10 }),
+          makeDispense({ id: 'd-2', quantityDispensed: 20, status: 'CANCELLED' }),
+        ]),
+      ),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    // The backend excludes a cancelled fill from the dispensed total too;
+    // counting it here would hide 20 tablets that are genuinely still owed.
+    expect(component.outstandingQuantity()).toBe(20);
+  });
+
+  it('falls back to the routing snapshot when the fills could not be loaded', async () => {
+    // "Expected minus nothing" would claim the whole order is outstanding on
+    // a prescription that may be nearly complete.
+    const rx = makeRx({ status: 'PENDING_STOCK', quantity: 30, quantityUnit: 'comprimés' });
+    await setup({
+      list: [rx],
+      routings: of(page([makeRouting({ remainingQuantity: 12 })])),
+      dispenses: throwError(() => new Error('boom')),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(component.outstandingQuantity()).toBe(12);
+    // The unit is the ORDER's, so it labels the snapshot just as correctly.
+    expect(el('[data-testid="rx-outstanding-quantity"]')!.textContent).toContain('comprimés');
+  });
+
+  it('shows the ordered quantity and the refills granted', async () => {
+    const rx = makeRx({
+      status: 'SIGNED',
+      quantity: 30,
+      quantityUnit: 'comprimés',
+      refillsAllowed: 2,
+      refillsRemaining: 1,
+    });
+    await setup({ list: [rx] });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(el('[data-testid="rx-quantity"]')!.textContent).toContain('comprimés');
+    expect(component.hasRefills(rx)).toBeTrue();
+    expect(el('[data-testid="rx-refills"]')).not.toBeNull();
+  });
+
+  it('hides the refills row when none were granted', async () => {
+    const rx = makeRx({ status: 'SIGNED', quantity: 30, refillsAllowed: 0 });
+    await setup({ list: [rx] });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(component.hasRefills(rx)).toBeFalse();
+    expect(el('[data-testid="rx-refills"]')).toBeNull();
+  });
+
+  /* ── G12: the status filter ───────────────────────────────────────── */
+
+  it('asks the backend for the whole attention bucket, by status', async () => {
+    await setup();
+
+    const statuses = prescriptionServiceSpy.list.calls
+      .allArgs()
+      .map((args) => (args[0] as { statuses?: string[] } | undefined)?.statuses)
+      .find((s) => !!s);
+
+    expect(statuses)
+      .withContext('the page is a slice of the tenant; the attention tab must not be')
+      .toEqual(ATTENTION_REASONS.map((r) => r.status));
+  });
+
+  it('merges an attention row the page never reached and counts it', async () => {
+    // The defect: the clinical inbox says an order awaits clarification and
+    // the page, being the newest 200 rows, does not contain it.
+    const onPage = makeRx({ id: 'rx-page', status: 'SIGNED', createdAt: '2026-09-20T08:00:00' });
+    const older = makeRx({
+      id: 'rx-old',
+      status: 'PENDING_CLARIFICATION',
+      createdAt: '2026-01-02T08:00:00',
+    });
+    await setup({ list: [onPage], attention: of([older]) });
+
+    expect(component.prescriptions().map((p) => p.id)).toEqual(['rx-page', 'rx-old']);
+    expect(component.countInTab('attention')).toBe(1);
+    expect(component.attentionComplete()).toBeTrue();
+
+    component.setTab('attention');
+    expect(component.filtered().map((p) => p.id)).toEqual(['rx-old']);
+  });
+
+  it('does not double-count a row both queries returned', async () => {
+    const shared = makeRx({ id: 'rx-1', status: 'PENDING_CLARIFICATION' });
+    await setup({ list: [shared], attention: of([shared]) });
+
+    expect(component.prescriptions().length).toBe(1);
+    expect(component.countInTab('attention')).toBe(1);
+  });
+
+  it('keeps the page and says the counts are a minimum when the attention query fails', async () => {
+    await setup({
+      list: [makeRx({ id: 'rx-1', status: 'SIGNED' })],
+      attention: throwError(() => new Error('boom')),
+    });
+
+    // Nothing is swallowed as empty data: the page is still there, and the
+    // truncation banner goes on saying the counts are a lower bound.
+    expect(component.prescriptions().map((p) => p.id)).toEqual(['rx-1']);
+    expect(component.attentionComplete()).toBeFalse();
+  });
+
+  it('says the attention count is exact on a truncated page, and only then', async () => {
+    const full = Array.from({ length: PrescriptionService.LIST_PAGE_SIZE }, (_, i) =>
+      makeRx({ id: 'rx-' + i, status: 'SIGNED' }),
+    );
+    await setup({ list: full });
+    fixture.detectChanges();
+
+    expect(component.listTruncated())
+      .withContext('the merged attention rows must not be what makes the page look truncated')
+      .toBeTrue();
+    expect(el('[data-testid="rx-attention-count-exact"]')).not.toBeNull();
   });
 
   it('drops a routing remainder that a later fill has made stale', async () => {

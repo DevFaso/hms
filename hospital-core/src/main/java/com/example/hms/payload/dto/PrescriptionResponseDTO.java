@@ -45,6 +45,28 @@ public class PrescriptionResponseDTO {
     private String instructions;
     private String notes;
 
+    /* ── What was ordered, and what is left of it (gap G13) ──────────────
+     *
+     * The prescriber could be shown a remainder but not its unit: the
+     * response carried neither the ordered quantity nor the refill counters,
+     * so "outstanding 20" rendered as a bare number and the only remainder
+     * available at all was a routing decision's snapshot.
+     *
+     * {@code refillsUsed} is here because the expected LIFETIME quantity is
+     * {@code quantity * (1 + refillsUsed)} — the same arithmetic
+     * {@code DispenseServiceImpl} runs — so without it a second fill cannot
+     * be told from an over-dispense. {@code refillsAllowed} and
+     * {@code refillsRemaining} come with it: they are what
+     * {@code PatientMedicationResponseDTO} already tells the patient about
+     * the very same row, and a prescriber reading the order should not have
+     * to open the medication list to learn what they granted.
+     */
+    private java.math.BigDecimal quantity;
+    private String quantityUnit;
+    private Integer refillsAllowed;
+    private Integer refillsRemaining;
+    private Integer refillsUsed;
+
     private String status;
 
     /**

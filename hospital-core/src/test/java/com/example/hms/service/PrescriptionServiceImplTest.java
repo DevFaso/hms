@@ -431,7 +431,7 @@ class PrescriptionServiceImplTest {
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId), pageable)).thenReturn(page);
         when(prescriptionMapper.toResponseDTO(prescription)).thenReturn(dto);
 
-        Page<PrescriptionResponseDTO> result = prescriptionService.list(patientId, null, null, pageable, Locale.ENGLISH);
+        Page<PrescriptionResponseDTO> result = prescriptionService.list(patientId, null, null, null, pageable, Locale.ENGLISH);
 
         assertThat(result.getContent()).containsExactly(dto);
         verify(prescriptionRepository).findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId), pageable);
@@ -449,7 +449,7 @@ class PrescriptionServiceImplTest {
         when(prescriptionRepository.findByHospital_Id(hospitalId, pageable)).thenReturn(page);
         when(prescriptionMapper.toResponseDTO(prescription)).thenReturn(dto);
 
-        Page<PrescriptionResponseDTO> result = prescriptionService.list(null, null, null, pageable, Locale.ENGLISH);
+        Page<PrescriptionResponseDTO> result = prescriptionService.list(null, null, null, null, pageable, Locale.ENGLISH);
 
         assertThat(result.getContent()).containsExactly(dto);
         verify(prescriptionRepository).findByHospital_Id(hospitalId, pageable);
@@ -528,7 +528,7 @@ class PrescriptionServiceImplTest {
         when(prescriptionRepository.findByStaff_IdAndHospital_Id(staffId, hospitalId, pageable)).thenReturn(page);
         when(prescriptionMapper.toResponseDTO(prescription)).thenReturn(dto);
 
-        Page<PrescriptionResponseDTO> result = prescriptionService.list(null, staffId, null, pageable, Locale.ENGLISH);
+        Page<PrescriptionResponseDTO> result = prescriptionService.list(null, staffId, null, null, pageable, Locale.ENGLISH);
 
         assertThat(result.getContent()).containsExactly(dto);
         verify(prescriptionRepository).findByStaff_IdAndHospital_Id(staffId, hospitalId, pageable);
@@ -545,7 +545,7 @@ class PrescriptionServiceImplTest {
         when(prescriptionRepository.findByEncounter_IdAndHospital_Id(encounterId, hospitalId, pageable)).thenReturn(page);
         when(prescriptionMapper.toResponseDTO(prescription)).thenReturn(dto);
 
-        Page<PrescriptionResponseDTO> result = prescriptionService.list(null, null, encounterId, pageable, Locale.ENGLISH);
+        Page<PrescriptionResponseDTO> result = prescriptionService.list(null, null, encounterId, null, pageable, Locale.ENGLISH);
 
         assertThat(result.getContent()).containsExactly(dto);
         verify(prescriptionRepository).findByEncounter_IdAndHospital_Id(encounterId, hospitalId, pageable);
@@ -1693,7 +1693,7 @@ class PrescriptionServiceImplTest {
         when(prescriptionRepository.findByHospital_Id(eq(hospitalId), any(Pageable.class)))
             .thenReturn(Page.empty());
 
-        Page<PrescriptionResponseDTO> result = prescriptionService.list(null, null, null,
+        Page<PrescriptionResponseDTO> result = prescriptionService.list(null, null, null, null,
             org.springframework.data.domain.PageRequest.of(0, 10), Locale.ENGLISH);
         assertThat(result).isEmpty();
         verify(prescriptionRepository).findByHospital_Id(eq(hospitalId), any(Pageable.class));
@@ -2244,7 +2244,7 @@ class PrescriptionServiceImplTest {
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospId), pageable))
             .thenReturn(Page.empty());
 
-        Page<PrescriptionResponseDTO> result = prescriptionService.list(patientId, null, null, pageable, Locale.ENGLISH);
+        Page<PrescriptionResponseDTO> result = prescriptionService.list(patientId, null, null, null, pageable, Locale.ENGLISH);
         assertThat(result).isEmpty();
     }
 
@@ -2257,7 +2257,7 @@ class PrescriptionServiceImplTest {
         when(prescriptionRepository.findByStaff_IdAndHospital_Id(staffId, hospId, pageable))
             .thenReturn(Page.empty());
 
-        Page<PrescriptionResponseDTO> result = prescriptionService.list(null, staffId, null, pageable, Locale.ENGLISH);
+        Page<PrescriptionResponseDTO> result = prescriptionService.list(null, staffId, null, null, pageable, Locale.ENGLISH);
         assertThat(result).isEmpty();
     }
 
@@ -2270,7 +2270,7 @@ class PrescriptionServiceImplTest {
         when(prescriptionRepository.findByEncounter_IdAndHospital_Id(encounterId, hospId, pageable))
             .thenReturn(Page.empty());
 
-        Page<PrescriptionResponseDTO> result = prescriptionService.list(null, null, encounterId, pageable, Locale.ENGLISH);
+        Page<PrescriptionResponseDTO> result = prescriptionService.list(null, null, encounterId, null, pageable, Locale.ENGLISH);
         assertThat(result).isEmpty();
     }
 
@@ -2283,8 +2283,104 @@ class PrescriptionServiceImplTest {
         when(prescriptionRepository.findByHospital_Id(hospId, pageable))
             .thenReturn(Page.empty());
 
-        Page<PrescriptionResponseDTO> result = prescriptionService.list(null, null, null, pageable, Locale.ENGLISH);
+        Page<PrescriptionResponseDTO> result = prescriptionService.list(null, null, null, null, pageable, Locale.ENGLISH);
         assertThat(result).isEmpty();
+    }
+
+    /* ── Gap G12: the status filter ──────────────────────────────────── */
+
+    @Test
+    void list_withStatusFilter_usesTheStatusScopedQuery() {
+        UUID hospId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        List<com.example.hms.enums.PrescriptionStatus> statuses =
+            List.of(com.example.hms.enums.PrescriptionStatus.PENDING_CLARIFICATION,
+                    com.example.hms.enums.PrescriptionStatus.PENDING_STOCK);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospId);
+        when(prescriptionRepository.findByHospital_IdAndStatusIn(hospId, statuses, pageable))
+            .thenReturn(Page.empty());
+
+        assertThat(prescriptionService.list(null, null, null, statuses, pageable, Locale.ENGLISH)).isEmpty();
+        verify(prescriptionRepository).findByHospital_IdAndStatusIn(hospId, statuses, pageable);
+        verify(prescriptionRepository, never()).findByHospital_Id(any(UUID.class), any(Pageable.class));
+    }
+
+    @Test
+    void list_withEmptyStatusFilter_behavesAsNoFilter() {
+        // `?status=` binds to an empty list. Returning an empty page for it
+        // would be the same silent lie the filter exists to remove.
+        UUID hospId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospId);
+        when(prescriptionRepository.findByHospital_Id(hospId, pageable)).thenReturn(Page.empty());
+
+        assertThat(prescriptionService.list(null, null, null, List.of(), pageable, Locale.ENGLISH)).isEmpty();
+        verify(prescriptionRepository).findByHospital_Id(hospId, pageable);
+    }
+
+    @Test
+    void list_withStatusFilter_andStaffFilter_usesTheCombinedQuery() {
+        UUID hospId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        List<com.example.hms.enums.PrescriptionStatus> statuses =
+            List.of(com.example.hms.enums.PrescriptionStatus.PENDING_CLARIFICATION);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospId);
+        when(prescriptionRepository.findByStaff_IdAndHospital_IdAndStatusIn(staffId, hospId, statuses, pageable))
+            .thenReturn(Page.empty());
+
+        assertThat(prescriptionService.list(null, staffId, null, statuses, pageable, Locale.ENGLISH)).isEmpty();
+        verify(prescriptionRepository).findByStaff_IdAndHospital_IdAndStatusIn(staffId, hospId, statuses, pageable);
+    }
+
+    @Test
+    void list_withStatusFilter_andPatientFilter_stillCrossesTheReadableHospitals() {
+        UUID hospId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        List<com.example.hms.enums.PrescriptionStatus> statuses =
+            List.of(com.example.hms.enums.PrescriptionStatus.SIGNED);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospId);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospId))).thenReturn(Set.of(hospId));
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdInAndStatusIn(
+                patientId, Set.of(hospId), statuses, pageable)).thenReturn(Page.empty());
+
+        assertThat(prescriptionService.list(patientId, null, null, statuses, pageable, Locale.ENGLISH)).isEmpty();
+        verify(prescriptionRepository)
+            .findByPatient_IdAndHospital_IdInAndStatusIn(patientId, Set.of(hospId), statuses, pageable);
+    }
+
+    @Test
+    void list_withStatusFilter_andEncounterFilter_usesTheCombinedQuery() {
+        UUID hospId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        List<com.example.hms.enums.PrescriptionStatus> statuses =
+            List.of(com.example.hms.enums.PrescriptionStatus.DISPENSED);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospId);
+        when(prescriptionRepository.findByEncounter_IdAndHospital_IdAndStatusIn(encounterId, hospId, statuses, pageable))
+            .thenReturn(Page.empty());
+
+        assertThat(prescriptionService.list(null, null, encounterId, statuses, pageable, Locale.ENGLISH)).isEmpty();
+        verify(prescriptionRepository)
+            .findByEncounter_IdAndHospital_IdAndStatusIn(encounterId, hospId, statuses, pageable);
+    }
+
+    @Test
+    void list_withStatusFilter_andNoHospitalScope_usesTheCrossTenantStatusQuery() {
+        // The super-admin global view: requireActiveHospitalId returns null.
+        Pageable pageable = PageRequest.of(0, 10);
+        List<com.example.hms.enums.PrescriptionStatus> statuses =
+            List.of(com.example.hms.enums.PrescriptionStatus.PENDING_CLARIFICATION);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(prescriptionRepository.findByStatusIn(statuses, pageable)).thenReturn(Page.empty());
+
+        assertThat(prescriptionService.list(null, null, null, statuses, pageable, Locale.ENGLISH)).isEmpty();
+        verify(prescriptionRepository).findByStatusIn(statuses, pageable);
+        verify(prescriptionRepository, never()).findAll(any(Pageable.class));
     }
 
     @Test

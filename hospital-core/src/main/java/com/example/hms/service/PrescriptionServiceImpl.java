@@ -461,9 +461,23 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
     @Override
     @Transactional
-    public Page<PrescriptionResponseDTO> list(UUID patientId, UUID staffId, UUID encounterId, Pageable pageable, Locale locale) {
+    public Page<PrescriptionResponseDTO> list(UUID patientId, UUID staffId, UUID encounterId,
+                                              List<PrescriptionStatus> statuses,
+                                              Pageable pageable, Locale locale) {
         // ── Hospital scope enforcement: mandatory for non-superadmin ──
         UUID hospitalId = roleValidator.requireActiveHospitalId();
+
+        // Gap G12. An empty list is treated as "no filter", not as "no status
+        // can match": `?status=` on a URL arrives here as an empty list, and
+        // silently returning an empty page for it would be the same class of
+        // lie the filter exists to remove. Duplicates collapse; order is
+        // irrelevant to an IN clause.
+        List<PrescriptionStatus> filter = (statuses == null || statuses.isEmpty())
+            ? null
+            : statuses.stream().filter(java.util.Objects::nonNull).distinct().toList();
+        if (filter != null && filter.isEmpty()) {
+            filter = null;
+        }
 
         if (patientId != null) {
             if (hospitalId != null) {
@@ -472,35 +486,53 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 // accounted. Prescriptions carry no sensitivity tag (V158).
                 UUID requesterUserId = authService.getCurrentUserId();
                 Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
-                Page<Prescription> rows = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, pageable);
+                Page<Prescription> rows = filter == null
+                    ? prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, pageable)
+                    : prescriptionRepository.findByPatient_IdAndHospital_IdInAndStatusIn(patientId, readable, filter, pageable);
                 reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
                     CrossHospitalReachRecorder.reachOf(rows.getContent().stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospitalId),
                     "Cross-hospital prescription read on the treatment relationship");
                 return rows.map(prescriptionMapper::toResponseDTO);
             }
-            return prescriptionRepository.findByPatient_Id(patientId, pageable)
+            return (filter == null
+                    ? prescriptionRepository.findByPatient_Id(patientId, pageable)
+                    : prescriptionRepository.findByPatient_IdAndStatusIn(patientId, filter, pageable))
                 .map(prescriptionMapper::toResponseDTO);
         }
         if (staffId != null) {
             if (hospitalId != null) {
-                return prescriptionRepository.findByStaff_IdAndHospital_Id(staffId, hospitalId, pageable)
+                return (filter == null
+                        ? prescriptionRepository.findByStaff_IdAndHospital_Id(staffId, hospitalId, pageable)
+                        : prescriptionRepository.findByStaff_IdAndHospital_IdAndStatusIn(staffId, hospitalId, filter, pageable))
                     .map(prescriptionMapper::toResponseDTO);
             }
-            return prescriptionRepository.findByStaff_Id(staffId, pageable)
+            return (filter == null
+                    ? prescriptionRepository.findByStaff_Id(staffId, pageable)
+                    : prescriptionRepository.findByStaff_IdAndStatusIn(staffId, filter, pageable))
                 .map(prescriptionMapper::toResponseDTO);
         }
         if (encounterId != null) {
             if (hospitalId != null) {
-                return prescriptionRepository.findByEncounter_IdAndHospital_Id(encounterId, hospitalId, pageable)
+                return (filter == null
+                        ? prescriptionRepository.findByEncounter_IdAndHospital_Id(encounterId, hospitalId, pageable)
+                        : prescriptionRepository.findByEncounter_IdAndHospital_IdAndStatusIn(encounterId, hospitalId, filter, pageable))
                     .map(prescriptionMapper::toResponseDTO);
             }
-            return prescriptionRepository.findByEncounter_Id(encounterId, pageable)
+            return (filter == null
+                    ? prescriptionRepository.findByEncounter_Id(encounterId, pageable)
+                    : prescriptionRepository.findByEncounter_IdAndStatusIn(encounterId, filter, pageable))
                 .map(prescriptionMapper::toResponseDTO);
         }
         if (hospitalId != null) {
-            return prescriptionRepository.findByHospital_Id(hospitalId, pageable).map(prescriptionMapper::toResponseDTO);
+            return (filter == null
+                    ? prescriptionRepository.findByHospital_Id(hospitalId, pageable)
+                    : prescriptionRepository.findByHospital_IdAndStatusIn(hospitalId, filter, pageable))
+                .map(prescriptionMapper::toResponseDTO);
         }
-        return prescriptionRepository.findAll(pageable).map(prescriptionMapper::toResponseDTO);
+        return (filter == null
+                ? prescriptionRepository.findAll(pageable)
+                : prescriptionRepository.findByStatusIn(filter, pageable))
+            .map(prescriptionMapper::toResponseDTO);
     }
 
     @Override

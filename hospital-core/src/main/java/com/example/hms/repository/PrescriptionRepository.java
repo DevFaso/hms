@@ -61,6 +61,42 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
     Page<Prescription> findByEncounter_IdAndHospital_Id(UUID encounterId, UUID hospitalId, Pageable pageable);
 
+    /* ── Gap G12: the same finders, restricted to a set of statuses ──────
+     *
+     * One derived finder per branch of PrescriptionServiceImpl.list rather
+     * than a Specification: every read above carries an @EntityGraph, and a
+     * Specification query drops it, which would put the mapper's four lazy
+     * associations back on a per-row lazy load.
+     */
+
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    Page<Prescription> findByStatusIn(Collection<PrescriptionStatus> statuses, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    Page<Prescription> findByPatient_IdAndStatusIn(
+        UUID patientId, Collection<PrescriptionStatus> statuses, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital", "hospital"})
+    Page<Prescription> findByPatient_IdAndHospital_IdInAndStatusIn(
+        UUID patientId, Collection<UUID> hospitalIds,
+        Collection<PrescriptionStatus> statuses, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    Page<Prescription> findByStaff_IdAndStatusIn(
+        UUID staffId, Collection<PrescriptionStatus> statuses, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    Page<Prescription> findByStaff_IdAndHospital_IdAndStatusIn(
+        UUID staffId, UUID hospitalId, Collection<PrescriptionStatus> statuses, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    Page<Prescription> findByEncounter_IdAndStatusIn(
+        UUID encounterId, Collection<PrescriptionStatus> statuses, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    Page<Prescription> findByEncounter_IdAndHospital_IdAndStatusIn(
+        UUID encounterId, UUID hospitalId, Collection<PrescriptionStatus> statuses, Pageable pageable);
+
     /** Count prescriptions by prescribing staff and status (e.g. PENDING_CLARIFICATION). */
     long countByStaff_IdAndStatus(UUID staffId, PrescriptionStatus status);
 

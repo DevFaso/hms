@@ -594,20 +594,91 @@ export class PrescriptionsComponent implements OnInit {
     this.load();
   }
 
+  /**
+   * Gap G12 — the statuses that make up "Needs attention", as the backend
+   * `status` filter understands them. Derived from {@link ATTENTION_REASONS}
+   * rather than re-listed, for the same reason {@link TAB_BY_STATUS} is: a
+   * status flagged in one place and not the other is the only failure mode
+   * that matters here.
+   */
+  private static readonly ATTENTION_STATUSES = ATTENTION_REASONS.map((r) => r.status);
+
+  /**
+   * How many rows the UNFILTERED page returned. Tracked separately from
+   * `prescriptions()` because the attention rows are merged into that signal
+   * and would otherwise push it past the page size and make every load look
+   * truncated.
+   */
+  private readonly pageRowCount = signal(0);
+
+  /**
+   * True when the status-filtered attention query came back, so the "Needs
+   * attention" count is a TOTAL rather than a lower bound. False when that
+   * request failed and the tab falls back to whatever the unfiltered page
+   * happened to contain — which is exactly what this page did before the
+   * filter existed, and the truncation banner already says so.
+   */
+  readonly attentionComplete = signal(false);
+
   load(): void {
     this.loading.set(true);
-    this.prescriptionService.list().subscribe({
-      next: (res) => {
-        const list = Array.isArray(res) ? res : [];
-        this.prescriptions.set(list);
+    // Two requests, because they answer different questions. The first is the
+    // page: the newest 200 prescriptions, whatever their status, which is what
+    // five of the six tabs list. The second is the whole of "Needs attention",
+    // by status, because that is the tab the clinical inbox sends a prescriber
+    // to — an inbox saying "3 orders await clarification" over a page holding
+    // none of them is the defect this fixes, and no page size makes it go away
+    // on a busy tenant.
+    forkJoin({
+      page: this.prescriptionService.list().pipe(
+        map((rows) => ({ rows, failed: false })),
+        catchError(() => of({ rows: [] as PrescriptionResponse[], failed: true })),
+      ),
+      attention: this.prescriptionService
+        .list({ statuses: PrescriptionsComponent.ATTENTION_STATUSES })
+        .pipe(
+          map((rows) => ({ rows, failed: false })),
+          catchError(() => of({ rows: [] as PrescriptionResponse[], failed: true })),
+        ),
+    })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((res) => {
+        this.loading.set(false);
+        if (res.page.failed) {
+          // Nothing is rendered as empty: the list keeps whatever it held and
+          // the failure is said out loud, as before.
+          this.attentionComplete.set(false);
+          this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.LOAD_FAILED'));
+          return;
+        }
+        const page = Array.isArray(res.page.rows) ? res.page.rows : [];
+        this.pageRowCount.set(page.length);
+        this.attentionComplete.set(!res.attention.failed);
+        this.prescriptions.set(this.mergeById(page, res.attention.rows));
         this.applyFilter();
-        this.loading.set(false);
-      },
-      error: () => {
-        this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.LOAD_FAILED'));
-        this.loading.set(false);
-      },
-    });
+      });
+  }
+
+  /**
+   * The page plus the attention rows it did not reach, newest first.
+   *
+   * <p>De-duplicated on id — the two queries overlap by design, since a
+   * recent PENDING_CLARIFICATION is on both — and re-sorted, because
+   * appending the second result would otherwise break the `createdAt,desc`
+   * order the page was fetched in. A row with no `createdAt` sorts last
+   * rather than to the top, where a missing timestamp would read as "just
+   * now".
+   */
+  private mergeById(
+    page: PrescriptionResponse[],
+    extra: PrescriptionResponse[],
+  ): PrescriptionResponse[] {
+    const byId = new Map<string, PrescriptionResponse>();
+    for (const row of page) byId.set(row.id, row);
+    for (const row of extra ?? []) byId.set(row.id, row);
+    return [...byId.values()].sort(
+      (a, b) => eventTime(b.createdAt, null) - eventTime(a.createdAt, null),
+    );
   }
 
   setTab(tab: PrescriptionTab): void {
@@ -662,7 +733,7 @@ export class PrescriptionsComponent implements OnInit {
    * "Needs attention 0" is worse than no count at all.
    */
   readonly listTruncated = computed(
-    () => this.prescriptions().length >= PrescriptionService.LIST_PAGE_SIZE,
+    () => this.pageRowCount() >= PrescriptionService.LIST_PAGE_SIZE,
   );
 
   /** True while the prescriber, not the pharmacy, is the one holding this up. */
@@ -848,8 +919,8 @@ export class PrescriptionsComponent implements OnInit {
   });
 
   /**
-   * What the prescription still owes — the figure the SERVER computed, taken
-   * off the latest routing decision's `remainingQuantity`
+   * The remainder the SERVER computed, taken off the latest routing
+   * decision's `remainingQuantity`
    * (`FillAccounting.remaining` at the moment that routing was decided).
    *
    * <p>It is not derived from the dispense rows, and an earlier draft of this
@@ -874,14 +945,8 @@ export class PrescriptionsComponent implements OnInit {
    *
    * <p>In both cases this returns null and the row is simply absent — the
    * per-fill "dispensed / requested" column below still shows what happened.
-   * A prescription-level remainder needs `quantity` and `refillsUsed` on
-   * PrescriptionResponseDTO, which it does not carry.
    */
-  readonly outstandingQuantity = computed<number | null>(() => {
-    const rx = this.selectedPrescription();
-    if (!rx) return null;
-    const bucket = this.tabForStatus(rx.status);
-    if (bucket === 'dispensed' || bucket === 'closed') return null;
+  private readonly routingSnapshotRemainder = computed<number | null>(() => {
     const decision = this.routingHistory()[0];
     const remaining = decision?.remainingQuantity;
     if (remaining == null || remaining <= 0) return null;
@@ -895,6 +960,93 @@ export class PrescriptionsComponent implements OnInit {
     }
     return remaining;
   });
+
+  /**
+   * The expected LIFETIME quantity of the order (gap G13):
+   * `quantity * (1 + refillsUsed)`, which is the arithmetic
+   * `DispenseServiceImpl.updatePrescriptionStatusFromHistory` runs. Null when
+   * the row carries no quantity — the column is nullable and pre-dates the
+   * pharmacy module, so a legacy order has none and the snapshot below is
+   * still the only answer available.
+   */
+  private readonly expectedQuantity = computed<number | null>(() => {
+    const rx = this.selectedPrescription();
+    const ordered = rx?.quantity;
+    if (ordered == null || ordered <= 0) return null;
+    const refillsUsed = rx?.refillsUsed ?? 0;
+    return ordered * (1 + Math.max(0, refillsUsed));
+  });
+
+  /**
+   * What the prescription still owes.
+   *
+   * <p>Computed off the prescription itself now that the response carries
+   * `quantity` and `refillsUsed` (gap G13): expected lifetime quantity minus
+   * the sum of the fills that were not cancelled — the same comparison the
+   * backend makes when it decides between PARTIALLY_FILLED and DISPENSED.
+   * That is a LIVE balance, where {@link #routingSnapshotRemainder} is the
+   * figure a routing decision froze at the moment it was taken, and it needed
+   * two guards to stay honest afterwards.
+   *
+   * <p>The snapshot is still the fallback, for three cases it is the only
+   * answer to: a row with no `quantity` on it, a fill list that failed to
+   * load (where "expected minus nothing" would claim the whole order is
+   * owed), and an order nothing has been filled against yet — a back order,
+   * where the remainder the pharmacy recorded is on the routing decision.
+   * The tab-bucket guard applies to both — everything under `dispensed` or
+   * `closed` is finished with the hospital, and `printForPatient` writes a
+   * `remainingQuantity` and creates no dispense row at all, so a printed
+   * prescription would otherwise claim a remainder forever with no fill able
+   * to clear it.
+   *
+   * <p>Rounded to two decimals: the quantity column is `numeric(12,2)` and
+   * the subtraction is in binary floating point, so 30 − 10.1 must not render
+   * as 19.899999999999999.
+   */
+  readonly outstandingQuantity = computed<number | null>(() => {
+    const rx = this.selectedPrescription();
+    if (!rx) return null;
+    const bucket = this.tabForStatus(rx.status);
+    if (bucket === 'dispensed' || bucket === 'closed') return null;
+
+    const expected = this.expectedQuantity();
+    if (expected != null && !this.dispenseError()) {
+      const dispensed = this.dispenseHistory()
+        .filter((d) => d.status !== 'CANCELLED')
+        .reduce((sum, d) => sum + (d.quantityDispensed ?? 0), 0);
+      // Only once something HAS been filled. "Nothing dispensed yet" is not a
+      // remainder the prescriber needs told: it is the whole order, it would
+      // appear on every signed prescription, and it would flash onto the
+      // panel while the fill list was still in flight. A back order with no
+      // fill still reports one — through the routing snapshot below, which is
+      // where the pharmacy actually recorded it.
+      if (dispensed > 0) {
+        const remaining = Math.round((expected - dispensed) * 100) / 100;
+        return remaining > 0 ? remaining : null;
+      }
+    }
+    return this.routingSnapshotRemainder();
+  });
+
+  /**
+   * The unit the remainder is counted in — "comprimés", "flacons". It is the
+   * ORDER's unit, so it labels the routing snapshot just as correctly as the
+   * computed balance: both are quantities of the same prescription. Null when
+   * the row carries no unit, and the number then renders bare, as it always
+   * did.
+   */
+  readonly outstandingQuantityUnit = computed<string | null>(
+    () => this.selectedPrescription()?.quantityUnit?.trim() || null,
+  );
+
+  /**
+   * Refills granted and left (gap G13). Rendered only when the prescriber
+   * actually granted one: "0 of 0" on the great majority of orders would be
+   * a row of noise on every detail panel.
+   */
+  hasRefills(p: PrescriptionResponse): boolean {
+    return (p.refillsAllowed ?? 0) > 0;
+  }
 
   viewDetail(p: PrescriptionResponse): void {
     this.selectedPrescription.set(p);

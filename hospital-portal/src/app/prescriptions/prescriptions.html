@@ -85,6 +85,15 @@
     @if (listTruncated()) {
       <p class="muted list-truncated" role="status" data-testid="rx-list-truncated">
         {{ 'PRESCRIPTIONS.LIST_TRUNCATED' | translate }}
+        <!-- Gap G12: one of the counts IS exact, and saying so is the point of
+             fetching it separately. Without this the banner would go on
+             telling a prescriber that the number the clinical inbox sent them
+             here for is only a minimum. -->
+        @if (attentionComplete()) {
+          <span data-testid="rx-attention-count-exact">{{
+            'PRESCRIPTIONS.ATTENTION_COUNT_EXACT' | translate
+          }}</span>
+        }
       </p>
     }
     <div class="search-box">
@@ -294,6 +303,27 @@
               <span class="field-label">{{ 'PRESCRIPTIONS.DURATION' | translate }}</span
               ><span class="field-value">{{ rx.duration || '—' }}</span>
             </div>
+            <!-- Gap G13: what was ordered, and how many refills of it. -->
+            @if (rx.quantity) {
+              <div class="detail-field">
+                <span class="field-label">{{ 'PRESCRIPTIONS.QUANTITY' | translate }}</span
+                ><span class="field-value" data-testid="rx-quantity">{{
+                  rx.quantityUnit
+                    ? ('PRESCRIPTIONS.PHARMACY.OUTSTANDING_VALUE'
+                      | translate: { value: rx.quantity, unit: rx.quantityUnit })
+                    : rx.quantity
+                }}</span>
+              </div>
+            }
+            @if (hasRefills(rx)) {
+              <div class="detail-field">
+                <span class="field-label">{{ 'PRESCRIPTIONS.REFILLS' | translate }}</span
+                ><span class="field-value" data-testid="rx-refills">{{
+                  'PRESCRIPTIONS.REFILLS_VALUE'
+                    | translate: { remaining: rx.refillsRemaining ?? 0, allowed: rx.refillsAllowed }
+                }}</span>
+              </div>
+            }
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
               ><span class="field-value"
@@ -480,13 +510,19 @@
                     ><span class="field-value" data-testid="rx-last-refused-by">{{ refuser }}</span>
                   </div>
                 }
+                <!-- Gap G13: the remainder carries its unit now that the
+                     response carries `quantity`/`quantityUnit`. A bare "20"
+                     could as easily have been millilitres as tablets. -->
                 @if (outstandingQuantity(); as outstanding) {
                   <div class="detail-field">
                     <span class="field-label">{{
                       'PRESCRIPTIONS.PHARMACY.OUTSTANDING' | translate
                     }}</span
                     ><span class="field-value" data-testid="rx-outstanding-quantity">{{
-                      outstanding
+                      outstandingQuantityUnit()
+                        ? ('PRESCRIPTIONS.PHARMACY.OUTSTANDING_VALUE'
+                          | translate: { value: outstanding, unit: outstandingQuantityUnit() })
+                        : outstanding
                     }}</span>
                   </div>
                 }
