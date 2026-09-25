@@ -3156,13 +3156,17 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
     hospital context — not the patient apps, which hold ROLE_PATIENT and go
     through `/me/patient/lab-results`, a path that endpoint's `@PreAuthorize`
     excludes. Owned by `fix/patient-lab-read-requires-scope`.
-  - Three reads dereference `requireActiveHospitalId()`, which is null for a
-    super-admin in global view, so all three answer 500:
+  - Several reads dereference `requireActiveHospitalId()`, which is null for a
+    super-admin in global view, so they answer 500 rather than an answer:
     `DispenseServiceImpl.listByPrescription`,
-    `StockOutRoutingServiceImpl.listByPrescription`, and
+    `StockOutRoutingServiceImpl.listByPrescription`,
     `StockOutRoutingServiceImpl.listByPatient` via
-    `enforceDecisionHospitalScope` — the last behind
-    `GET /stock-out-routing/decisions/patient/{id}`, which permits SUPER_ADMIN.
+    `enforceDecisionHospitalScope` (behind
+    `GET /pharmacy/routing/decisions/patient/{patientId}`, which permits
+    SUPER_ADMIN), and `StockOutRoutingServiceImpl.checkStock`. Every WRITE path
+    in that class shares the same `!hospitalId.equals(...)` dereference, so the
+    count is "everything that calls it", not three — grep the call sites rather
+    than working from this list.
     A 500 is not a policy, and the answer is already settled elsewhere in the
     same class: `DispenseServiceImpl.enforceHospitalScope` treats a null
     hospital as an unscoped read for `listByPatient` and `listByPharmacy`. So
@@ -3179,11 +3183,12 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
     of them are worse.** Found while fixing the lab-result read; all three are
     `hospitalId != null ? scoped : unscoped` with the disclosure recording
     guarded on the same null.
-    - `LabOrderServiceImpl.searchLabOrders` — `LabOrderCustomRepositoryImpl
+    - `LabOrderServiceImpl.searchLabOrders`, and `getLabOrdersByPatientId` and
+      `getLabOrdersByStaffId` in the same class — `LabOrderCustomRepositoryImpl
       .buildPredicates` simply omits the hospital predicate when the id is
       null, so a staff caller with no resolvable scope gets every tenant's lab
-      ORDERS for the patient, and `recordPerformedHereReach(page, null)`
-      accounts nothing. This is the other half of the chart's Labs tab: with
+      ORDERS, and `recordPerformedHereReach(page, null)` accounts nothing. All
+      three carry it; fixing only the search closes one of three. This is the other half of the chart's Labs tab: with
       only `fix/patient-lab-read-requires-scope` merged, the tab refuses the
       results and still serves the orders. Owned by
       `fix/lab-order-search-requires-scope`.
@@ -3252,16 +3257,14 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   - `canSeeCritical`, `canAcknowledge` and `canReadBack` in `lab-results.ts`
     still take a role snapshot at construction, the shape #722 and #724 fixed
     for the release and sign controls. Unowned.
-  - `dashboard.ts`'s `acknowledgeResult` deletes rows from the local array and
-    persists nothing, so a physician can click three critical results away and
-    be shown the green "All results reviewed" card, with the rows returning on
-    the next refresh. #731 closes only the variant where the read had failed.
-    **The endpoint exists** — `POST /lab-results/{id}/acknowledge`
-    (`LabResultController:155`, admitting DOCTOR/NURSE/MIDWIFE and the lab
-    roles) — and `lab.service.ts:619` already wraps it as `acknowledgeResult`.
-    So this is a client defect with a one-line fix, not backend work; an
-    earlier draft of this bullet said there was no endpoint and was wrong.
-    Owned by `fix/portal-lab-chart-scope-and-followups`.
+  - ~~`dashboard.ts`'s `acknowledgeResult` deletes rows from the local array
+    and persists nothing, so a physician can click critical results away into a
+    green "All results reviewed" card.~~ **DONE in #731** (merged 2026-09-25):
+    `dashboard.ts:2595` now calls `labService.acknowledgeResult`, which posts
+    to `POST /lab-results/{id}/acknowledge`. Kept here only to record that two
+    earlier drafts of this bullet were wrong — the first said no endpoint
+    existed (it did, `LabResultController:155`), and the second filed work that
+    had already shipped.
   - The portal's `DispenseResponse` declares six fields `DispenseMapper` never
     sends (`patientName`, `pharmacyName`, `dispensedById`, `dispensedByName`,
     `verifiedById`, `verifiedByName`); the wire carries `dispensedBy` and
@@ -3271,9 +3274,11 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
     `AccessDeniedException` and returns the literal "Access denied", although
     several services compose a useful sentence there that no client can show.
     Unowned.
-  - `hospital-portal/src/app/pharmacy/stock-routing.ts` reads page 0, size 10,
-    with no sort — the same unordered-page defect #727 fixed on the
-    prescriptions list. Unowned.
+  - `hospital-portal/src/app/pharmacy/stock-routing.ts` pages properly
+    (`decisionsPage`, `decisionsTotalPages`) but passes no `sort`, so the
+    derived query's order is arbitrary and "page 2" is not a stable
+    continuation of page 1 — half of the defect #727 fixed on the prescriptions
+    list, not all of it. Unowned.
 
 - **The reference range a patient is shown is not always the range their
   result was graded against, and can be labelled with a unit it was never
@@ -3287,9 +3292,9 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   expressed in that unit, and the mismatch becomes undetectable from the client
   because the displayed string now always contains the row's unit.
 
-  Both patient apps mitigated what they could in #732/#733: they withhold the
-  green tick and the word "Normal" unless the displayed range is in the row's
-  own unit. That heuristic cannot see the fallback case, by construction. The
+  Both patient apps mitigate what they can in #732 and #733, which are still
+  open: they withhold the green tick and the word "Normal" unless the displayed
+  range is in the row's own unit. That heuristic cannot see the fallback case, by construction. The
   durable fix is server-side — format the range that was actually graded
   against, and never label a range with a unit that did not come with it — and
   it is not a cosmetic one: a patient reading 5.4 mmol/L against limits of
