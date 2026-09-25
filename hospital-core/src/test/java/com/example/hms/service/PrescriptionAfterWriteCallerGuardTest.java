@@ -43,11 +43,15 @@ class PrescriptionAfterWriteCallerGuardTest {
     private static final String UNGUARDED = "getPrescriptionAfterWrite";
     private static final String GUARDED = "getPrescriptionById";
 
-    /** The three endpoints that have already authorised and committed a write. */
+    /**
+     * The write endpoints that may skip the guard: the two that admit roles the
+     * by-id read does not. {@code /{id}/resolve-clarification} is deliberately
+     * NOT here — it is ROLE_DOCTOR-only, so the guard is a no-op for it and it
+     * stays on the guarded read.
+     */
     private static final Set<String> ALLOWED_WRITE_PATHS = Set.of(
         "/{id}/pharmacist-verify",
-        "/{id}/request-clarification",
-        "/{id}/resolve-clarification");
+        "/{id}/request-clarification");
 
     /** Any Spring handler mapping, with its path literal when it has one. */
     private static final Pattern MAPPING = Pattern.compile(
@@ -124,6 +128,11 @@ class PrescriptionAfterWriteCallerGuardTest {
                 calling.add(paths.get(i));
             }
         }
+        // Anything before the first mapping is field and constructor territory;
+        // a call there would be charged to no handler at all, so say so loudly.
+        assertThat(source.substring(0, starts.get(0)))
+            .as("%s must not be called outside a handler", call)
+            .doesNotContain(call + "(");
         return calling;
     }
 
@@ -134,12 +143,18 @@ class PrescriptionAfterWriteCallerGuardTest {
 
         int handler = source.indexOf("@GetMapping(\"/{id}\")");
         assertThat(handler).as("GET /prescriptions/{id} must still exist").isNotNegative();
-        Matcher preAuthorize = Pattern.compile("@PreAuthorize\\(\"([^\"]*)\"\\)")
-            .matcher(source.substring(handler));
-        assertThat(preAuthorize.find()).as("the by-id read must still be annotated").isTrue();
+
+        // Only as far as the handler's own signature: the annotation may be a
+        // concatenation of literals (it is, since #737 added a sixth role), so
+        // a regex demanding one quoted string would miss it and silently match
+        // the NEXT @PreAuthorize in the file — a different endpoint.
+        int signature = source.indexOf("public ResponseEntity", handler);
+        assertThat(signature).as("the by-id handler must still have a body").isGreaterThan(handler);
+        String annotation = source.substring(handler, signature);
+        assertThat(annotation).as("the by-id read must still be annotated").contains("@PreAuthorize");
 
         Set<String> admitted = new TreeSet<>();
-        Matcher role = Pattern.compile("'(ROLE_[A-Z_]+)'").matcher(preAuthorize.group(1));
+        Matcher role = Pattern.compile("'(ROLE_[A-Z_]+)'").matcher(annotation);
         while (role.find()) {
             admitted.add(role.group(1));
         }
@@ -163,6 +178,8 @@ class PrescriptionAfterWriteCallerGuardTest {
     private static String withoutComments(String source) {
         return source
             .replaceAll("(?s)/\\*.*?\\*/", " ")
-            .replaceAll("(?m)//.*$", " ");
+            // Not "//.*": a "https://..." literal would swallow the rest of its
+            // line, and a call after it on that line would go unseen.
+            .replaceAll("(?m)(^|[^:\"])//.*$", "$1 ");
     }
 }

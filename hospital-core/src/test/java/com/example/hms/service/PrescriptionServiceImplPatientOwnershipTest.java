@@ -206,7 +206,8 @@ class PrescriptionServiceImplPatientOwnershipTest {
     @Test
     @DisplayName("every clinical reader still reads any prescription at their hospital")
     void clinicalRolesAreUnaffected() {
-        for (String role : List.of("ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_PHARMACIST")) {
+        for (String role : List.of("ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_PHARMACIST",
+                "ROLE_PHARMACY_VERIFIER")) {
             SecurityContextHolder.clearContext();
             authenticateAs(role);
             UUID id = prescriptionFor(otherPatient());
@@ -274,14 +275,17 @@ class PrescriptionServiceImplPatientOwnershipTest {
     }
 
     @Test
-    @DisplayName("but the same principal reading through the patient door is refused")
-    void pharmacyVerifierWhoIsAlsoAPatientCannotReadAStranger() {
+    @DisplayName("and reads a colleague's order too, because #737 admits the role on the read")
+    void pharmacyVerifierWhoIsAlsoAPatientReadsAsAClinician() {
+        // Not a patient-door exemption: since #737 the by-id annotation admits
+        // ROLE_PHARMACY_VERIFIER outright, so the set mirrors it and the role
+        // reads as the clinician it is. The verifier may RAISE a clarification,
+        // so withholding the prescriber's answer would leave its own question
+        // unanswerable.
         authenticateAs("ROLE_PATIENT", "ROLE_PHARMACY_VERIFIER");
         UUID id = prescriptionFor(otherPatient());
 
-        assertThatThrownBy(() -> service.getPrescriptionById(id, Locale.ENGLISH))
-            .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining(NOT_FOUND_KEY);
+        assertThat(service.getPrescriptionById(id, Locale.ENGLISH).getId()).isEqualTo(id);
     }
 
     @Test

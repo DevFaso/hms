@@ -578,11 +578,21 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         permission: 'View Prescriptions',
         // Mirrors the /prescriptions RoleGuard (midwife added there in the
         // same change — the backend list endpoint always admitted midwives).
+        //
+        // Gap G9: ROLE_PHARMACY_VERIFIER was withheld because GET
+        // /prescriptions and GET /prescriptions/{id} did not admit it, so the
+        // entry would have opened a page that toasts "failed to load" — the
+        // role held /pharmacist-verify and /request-clarification and could
+        // read neither the order it was judging nor the prescriber's answer to
+        // its own question. Both reads admit it now
+        // (PrescriptionControllerTest pins them), the route guard always did,
+        // and the role carries the 'View Prescriptions' permission.
         roles: [
           'ROLE_DOCTOR',
           'ROLE_NURSE',
           'ROLE_MIDWIFE',
           'ROLE_PHARMACIST',
+          'ROLE_PHARMACY_VERIFIER',
           'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
@@ -1010,16 +1020,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // above omits the role, and it must — the inventory-page guards reject
     // verifiers. Only Dispensing + Stock Routing admit them (2026-08-23 audit).
     //
-    // Gap G9, re-audited 2026-09-24: there is deliberately NO /prescriptions
-    // entry here, and adding one would be a regression, not a fix. The route
-    // guard admits ROLE_PHARMACY_VERIFIER and the pharmacist-verify ceremony
-    // does live on that page, but the list the page opens with —
-    // GET /prescriptions — is @PreAuthorize'd to DOCTOR, NURSE, MIDWIFE,
-    // PHARMACIST, SUPER_ADMIN, and GET /prescriptions/{id} likewise omits the
-    // verifier. A nav entry would therefore land the role on a page that
-    // toasts "failed to load" every time. Until the backend admits the role
-    // to those two reads, the verifier's dispensing-side controls (including
-    // the G5 clarification, which the role IS on) are the reachable surface.
+    // Gap G9, resolved 2026-09-24: the role's /prescriptions entry is NOT
+    // pushed here — it is the clinical "Prescriptions" item above, whose
+    // roles list now names ROLE_PHARMACY_VERIFIER. Pushing a second copy
+    // would give a user holding PHARMACIST *and* PHARMACY_VERIFIER two
+    // identical entries.
     if (this.hasAnyRole(['ROLE_PHARMACY_VERIFIER'])) {
       items.push(
         {

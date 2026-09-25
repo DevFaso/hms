@@ -5759,6 +5759,8 @@
       "PARTIAL_ERROR_DISPENSES": "The fills could not be loaded, so this is not the whole picture.",
       "PARTIAL_ERROR_ROUTINGS": "The routing decisions could not be loaded, so this is not the whole picture."
     },
+    "QUANTITY_VALUE": "{{value}} {{unit}}",
+    "REFILLS_VALUE": "{{remaining}} of {{allowed}} remaining",
     "LIST_TRUNCATED": "Only the most recent prescriptions are listed, so these counts are a minimum. Use the search box to find an older one."
   },
   "PROFILE": {

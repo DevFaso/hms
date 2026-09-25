@@ -155,7 +155,15 @@ data class CurrentMedicationDto(
     @Json(name = "endDate") val endDate: String? = null,
     @Json(name = "prescribedBy") val prescribedBy: String? = null,
     @Json(name = "indication") val indication: String? = null
-)
+) {
+    /**
+     * Same `PatientMedicationServiceImpl.resolveStatus` wire values as
+     * [MedicationDto] — this DTO is the health-summary projection of the same
+     * rows, so it must not print `ON_HOLD` where the medications tab says
+     * "Not yet issued".
+     */
+    val statusEnum: MedicationStatus get() = MedicationStatus.fromWire(status)
+}
 
 // ── Profile Image Upload ──────────────────────────────────────────────────────
 

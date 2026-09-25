@@ -61,6 +61,14 @@ public class LabOrderServiceImpl implements LabOrderService {
     private static final String LAB_ORDER_NOT_FOUND = "laborder.notfound";
 
     /**
+     * Resolvable message key, not a sentence, and the same one
+     * {@code PatientChartAccess} and {@code PatientLabResultServiceImpl} throw:
+     * a scopeless read of one patient's record is refused identically wherever
+     * the chart asks for it, and says nothing about whether the patient exists.
+     */
+    private static final String MSG_PATIENT_NOT_FOUND = "patient.notFound";
+
+    /**
      * Ceiling on a single worklist page.
      *
      * <p>See {@link com.example.hms.utility.PageBounds}: 500 is well clear of
@@ -471,6 +479,64 @@ public class LabOrderServiceImpl implements LabOrderService {
     @Transactional(readOnly = true)
     public Page<LabOrderResponseDTO> searchLabOrders(UUID patientId, LocalDateTime fromDate, LocalDateTime toDate, Pageable pageable, Locale locale) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null && patientId != null) {
+            // One patient's record, asked for with no acting hospital.
+            //
+            // `buildPredicates` omits the hospital predicate entirely when the
+            // id is null, so this returned EVERY tenant's lab orders for the
+            // patient; and `recordPerformedHereReach` returns early on a null
+            // acting hospital, so not one of those foreign rows was accounted.
+            // That second half is not an oversight that could be patched here:
+            // a RECORD_SHARE row pairs a SOURCE hospital with an ACTING one,
+            // and in global view there is no acting hospital for the disclosure
+            // to be recorded against. Unscoped and accounted is not a state
+            // this endpoint can be in.
+            //
+            // Only a real super-admin in global view reaches this:
+            // requireActiveHospitalId returns null solely for the super-admin
+            // branch and throws BusinessException for everyone else. A scoped
+            // read is already whole — with an acting hospital the predicate
+            // admits only rows this hospital ordered or performs, and the
+            // performed-for-others rows are exactly the ones
+            // recordPerformedHereReach accounts.
+            //
+            // Narrow by design: the patient-less listing below is the platform
+            // worklist the lab screens page through, and a super-admin seeing
+            // it whole stays this service's behaviour (getAllLabOrders and
+            // getLabOrdersByLabTestDefinitionId still read that way — neither
+            // is filtered to one person). What is refused is the shape that is
+            // somebody's record rather than a worklist; getLabOrdersByPatientId
+            // and getLabOrdersByStaffId are refused for the same reason.
+            //
+            // Which makes this a line, not a wall, and that is worth saying
+            // plainly: the worklist below is still unscoped and still
+            // unaccounted, so a super-admin in global view can page it (the lab
+            // screens already ask for 500 a page) and filter to one patient on
+            // the client — the same rows, still no RECORD_SHARE row. Closing
+            // that means deciding what a platform-wide worklist is allowed to
+            // be, which is a product question this change does not answer. What
+            // it removes is the endpoint that served one patient's cross-tenant
+            // record directly, on request, to the chart.
+            //
+            // 404 on the patient, so the refusal says nothing about whether the
+            // rows exist.
+            //
+            // patient.notFound, not the patient.notfound this class throws in
+            // buildLabOrder: both keys exist and messages_en resolves them
+            // differently ("...with ID: {0}" vs "Patient not found"). The
+            // lowercase one is only reachable on the create/update path, never
+            // on this GET, so the answer to match is the chart's OTHER lab
+            // block, which throws the camelCase key through PatientChartAccess.
+            //
+            // Matching that key is the intent; it does not depend on the other
+            // block already refusing. This guard is right whether or not
+            // PatientLabResultServiceImpl refuses the same input — an
+            // unaccounted cross-tenant read is not made acceptable by a sibling
+            // still serving one, and the two agreeing is a property to reach,
+            // not a precondition. (At the time of writing it does still serve
+            // one; that is a defect there, not a reason to keep this one.)
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
+        }
         Page<LabOrder> page = labOrderRepository.search(hospitalId, patientId, fromDate, toDate,
             com.example.hms.utility.PageBounds.atMost(pageable, MAX_WORKLIST_PAGE_SIZE));
         recordPerformedHereReach(page.getContent(), hospitalId);
@@ -511,9 +577,17 @@ public class LabOrderServiceImpl implements LabOrderService {
                 .map(labOrderMapper::toLabOrderResponseDTO)
                 .toList();
         }
-        return labOrderRepository.findByPatient_Id(patientId).stream()
-            .map(labOrderMapper::toLabOrderResponseDTO)
-            .toList();
+        // The same hole searchLabOrders had, in the same shape: every tenant's
+        // orders for one patient, and the recordReach call above sits INSIDE
+        // the scoped branch, so none of it was accounted. This method is
+        // unconditionally patient-filtered, so the guard is just the null
+        // scope — no worklist reading to preserve.
+        //
+        // Guarded even though nothing calls it today: it is on LabOrderService
+        // with no @GetMapping anywhere (the only other mention is a javadoc in
+        // CrossHospitalReachRecorder), and a note in a pull request is not
+        // something whoever wires it up will read.
+        throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
     }
 
     @Override
@@ -526,9 +600,36 @@ public class LabOrderServiceImpl implements LabOrderService {
                 .map(labOrderMapper::toLabOrderResponseDTO)
                 .toList();
         }
-        return labOrderRepository.findByOrderingStaff_Id(staffId).stream()
-            .map(labOrderMapper::toLabOrderResponseDTO)
-            .toList();
+        // Same shape as the two patient reads, and it took checking to be sure,
+        // because the obvious reasoning says it cannot leak: a Staff ROW is
+        // pinned to one hospital (hospital_id NOT NULL, uq_staff_user_hospital
+        // on (user_id, hospital_id)), so a clinician working at two hospitals
+        // has two staff rows with two ids, and "this staff id's orders" looks
+        // like one tenant's data by construction.
+        //
+        // It is not. buildLabOrder takes the order's hospital from the ENCOUNTER
+        // or the requested hospitalId, looks the ordering Staff up independently
+        // by id, and authorizes canOrderLabTests(staff.getUser().getId(),
+        // hospital.getId()) — on the USER, who may hold assignments at several
+        // hospitals. Nothing anywhere compares staff.getHospital() to the
+        // order's hospital. So one staff id can own orders at more than one
+        // hospital, and this fallback unions them with no acting hospital to
+        // account the disclosure against — one clinician's order history across
+        // tenants, and with it every patient on it.
+        //
+        // Deriving the scope from the staff row instead was the tempting
+        // alternative and it is wrong twice over. It would manufacture an
+        // acting hospital the caller never scoped to, so the RECORD_SHARE row
+        // would name a hospital the caller is not acting at — falsifying the
+        // accounting rather than completing it; scope is a property of the
+        // CALLER, never of the subject being asked about. And it would not even
+        // answer the question: filtering to staff.getHospital() drops exactly
+        // the orders that staff placed elsewhere, which are the rows that make
+        // this cross-tenant in the first place.
+        //
+        // staff.notfound, the key this class already throws for a staff id it
+        // will not resolve, so the refusal is indistinguishable from one.
+        throw new ResourceNotFoundException("staff.notfound", staffId);
     }
 
     @Override

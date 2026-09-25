@@ -5759,6 +5759,8 @@
       "PARTIAL_ERROR_DISPENSES": "Les délivrances n'ont pas pu être chargées : ceci n'est donc pas complet.",
       "PARTIAL_ERROR_ROUTINGS": "Les décisions d'orientation n'ont pas pu être chargées : ceci n'est donc pas complet."
     },
+    "QUANTITY_VALUE": "{{value}} {{unit}}",
+    "REFILLS_VALUE": "{{remaining}} sur {{allowed}} restant(s)",
     "LIST_TRUNCATED": "Seules les ordonnances les plus récentes sont affichées : ces totaux sont donc un minimum. Utilisez la recherche pour en retrouver une plus ancienne."
   },
   "PROFILE": {

@@ -9,11 +9,12 @@ import java.util.Set;
  * One definition of "the caller is the patient and nobody else" for the
  * prescription reads.
  *
- * <p>{@code GET /prescriptions/{id}} admits four clinical roles plus
+ * <p>{@code GET /prescriptions/{id}} admits a handful of clinical roles plus
  * {@code ROLE_PATIENT}, so on that endpoint "holds ROLE_PATIENT and no
  * clinical reader role" is the same thing as "a pure patient principal" —
- * which is exactly why the set below must mirror the annotation and not
- * exceed it. Two decisions hang off it and they must not drift apart:
+ * which is exactly why the set below must mirror the annotation, neither
+ * exceeding nor falling short of it. Two decisions hang off it and they must
+ * not drift apart:
  * <ol>
  *   <li>the patient's copy omits the pharmacist-to-prescriber clarification
  *       exchange ({@code PrescriptionController.getById}), and</li>
@@ -40,18 +41,23 @@ public final class PrescriptionReaderRoles {
     /**
      * The roles that read a prescription as a clinician rather than as its
      * subject: exactly the non-patient roles {@code GET /prescriptions/{id}}
-     * admits, no more.
+     * admits, no more and no fewer.
      *
      * <p>Mirroring the annotation is the whole rule, and
-     * {@code PrescriptionReaderRolesMatchTheAnnotationTest} fails if the two
-     * ever disagree. Anything wider re-opens the door this guard closed: a
-     * principal holding a role the annotation does NOT admit reaches the
-     * handler only through {@code ROLE_PATIENT}, and exempting it would let it
-     * read a stranger’s prescription — and see the clarification exchange —
-     * on the strength of the patient role that let it in. That is the mistake
-     * the {@code ROLE_PHARMACY_VERIFIER} exemption made; the write endpoints
-     * that admit roles this read does not get their read-back from
-     * {@code PrescriptionService.getPrescriptionAfterWrite} instead.
+     * {@code PrescriptionAfterWriteCallerGuardTest.theRoleSetMirrorsTheAnnotation}
+     * fails if the two ever disagree — in either direction, because each is a
+     * different defect. Wider than the annotation re-opens the door this guard
+     * closed: a principal holding a role the annotation does NOT admit reaches
+     * the handler only through {@code ROLE_PATIENT}, so exempting it would let
+     * it read a stranger’s prescription on the strength of the patient role
+     * that let it in. Narrower refuses a clinician their colleagues’ orders.
+     *
+     * <p>{@code ROLE_PHARMACY_VERIFIER} is in the set because #737 added it to
+     * the annotation, and for the reason that PR gave: the role may RAISE a
+     * clarification, so withholding the prescriber’s answer from it would
+     * leave the question it asked unanswerable. A verifier who is also a
+     * patient of the hospital reads as a clinician here, as a pharmacist
+     * already did.
      *
      * <p>A consequence worth knowing, and NOT fixed here: on the OIDC path
      * {@code KeycloakJwtAuthenticationConverter} maps realm roles straight to
@@ -63,7 +69,8 @@ public final class PrescriptionReaderRoles {
      * on the OIDC path or in the annotation, not in an exemption here.
      */
     public static final Set<String> CLINICAL_READER_ROLES = Set.of(
-        "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_PHARMACIST");
+        "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_PHARMACIST",
+        "ROLE_PHARMACY_VERIFIER");
 
     private PrescriptionReaderRoles() {
     }

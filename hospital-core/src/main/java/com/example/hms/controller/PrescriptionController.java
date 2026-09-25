@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.PrescriptionRequestDTO;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
@@ -38,6 +39,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -174,11 +176,16 @@ public class PrescriptionController {
         @Valid @RequestBody(required = false) PrescriptionClarificationResolutionDTO request,
         Locale locale) {
         clarificationService.resolveClarification(id, request != null ? request.getResponse() : null);
-        return ResponseEntity.ok(prescriptionService.getPrescriptionAfterWrite(id, locale));
+        // The guarded read on purpose: this endpoint is ROLE_DOCTOR-only, so the
+        // ownership guard is a no-op for every caller that can reach it, and
+        // routing it through the unguarded read would widen that surface for
+        // nothing.
+        return ResponseEntity.ok(prescriptionService.getPrescriptionById(id, locale));
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST','ROLE_PATIENT')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST',"
+        + "'ROLE_PHARMACY_VERIFIER','ROLE_PATIENT')")
     @Operation(summary = "Get Prescription by ID", description = "Fetch a prescription by ID. A patient "
         + "receives their copy without the pharmacist-to-prescriber clarification exchange.")
     public ResponseEntity<PrescriptionResponseDTO> getById(
@@ -206,17 +213,42 @@ public class PrescriptionController {
         return PrescriptionReaderRoles.isPatientOnly(auth);
     }
 
+    /**
+     * Gap G9 — {@code ROLE_PHARMACY_VERIFIER} reads prescriptions.
+     *
+     * <p>The role's job IS the drug and the dose: it holds
+     * {@code /pharmacist-verify} and {@code /request-clarification}, both of
+     * which are judgments about the order as written. It could make neither
+     * without reading the order, and could not read the prescriber's answer to
+     * its own question. A narrower "verification projection" was considered and
+     * rejected: every field on the response — dose, route, frequency,
+     * duration, the co-sign and controlled-substance flags, the clarification
+     * exchange — is material to the check, and a second DTO would be a second
+     * place for the redaction rules to drift. The patient copy is untouched:
+     * {@link #isPatientOnly} still strips the clarification exchange for a
+     * principal holding only {@code ROLE_PATIENT}.
+     *
+     * <p>Gap G12 — the {@code status} filter. Without it the page is a slice
+     * of the tenant, so the clinical inbox could count N orders awaiting
+     * clarification while the list showed none of them. Absent, behaviour is
+     * exactly as before.
+     */
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST','ROLE_SUPER_ADMIN')")
-    @Operation(summary = "Search/List Prescriptions", description = "List prescriptions with optional filters + pagination. SUPER_ADMIN sees results across all hospitals.")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST',"
+        + "'ROLE_PHARMACY_VERIFIER','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Search/List Prescriptions",
+        description = "List prescriptions with optional filters + pagination. Repeat or "
+            + "comma-separate `status` to restrict the page to those PrescriptionStatus values; "
+            + "omit it for every status. SUPER_ADMIN sees results across all hospitals.")
     public ResponseEntity<Page<PrescriptionResponseDTO>> list(
         @RequestParam(required = false) UUID patientId,
         @RequestParam(required = false) UUID staffId,
         @RequestParam(required = false) UUID encounterId,
+        @RequestParam(required = false) List<PrescriptionStatus> status,
         @ParameterObject Pageable pageable,
         Locale locale) {
         return ResponseEntity.ok(
-            prescriptionService.list(patientId, staffId, encounterId, pageable, locale)
+            prescriptionService.list(patientId, staffId, encounterId, status, pageable, locale)
         );
     }
 
