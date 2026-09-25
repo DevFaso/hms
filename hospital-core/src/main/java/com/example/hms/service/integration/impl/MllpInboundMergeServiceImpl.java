@@ -53,15 +53,15 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
                 || !StringUtils.hasText(parsed.survivingMrn())
                 || !StringUtils.hasText(parsed.priorMrn())) {
             log.warn("MLLP A40 rejected — missing PID-3 or MRG-1 "
-                + "(sender={}/{} hospital={} msgCtrlId={})",
-                sendingApplication, sendingFacility,
+                + "(sender={} hospital={} msgCtrlId={})",
+                MllpRecordingContext.senderLabel(sendingApplication, sendingFacility),
                 receivingHospital != null ? receivingHospital.getId() : null,
                 safeControlId(messageControlId));
             return MllpInboundOutcome.REJECTED_INVALID;
         }
         if (receivingHospital == null || receivingHospital.getId() == null) {
-            log.warn("MLLP A40 rejected — no resolved hospital (sender={}/{} msgCtrlId={})",
-                sendingApplication, sendingFacility, safeControlId(messageControlId));
+            log.warn("MLLP A40 rejected — no resolved hospital (sender={} msgCtrlId={})",
+                MllpRecordingContext.senderLabel(sendingApplication, sendingFacility), safeControlId(messageControlId));
             return MllpInboundOutcome.REJECTED_INVALID;
         }
 
@@ -73,8 +73,8 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // The identifier itself stays out of the log line: PID-3 is an
             // MRN, and an MRN in a log is PHI wherever that log ends up.
             log.warn("MLLP A40 rejected — PID-3 and MRG-1 are the same identifier "
-                + "(sender={}/{} hospital={} msgCtrlId={})",
-                sendingApplication, sendingFacility, receivingHospital.getId(),
+                + "(sender={} hospital={} msgCtrlId={})",
+                MllpRecordingContext.senderLabel(sendingApplication, sendingFacility), receivingHospital.getId(),
                 safeControlId(messageControlId));
             return MllpInboundOutcome.REJECTED_INVALID;
         }
@@ -95,9 +95,9 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // was rejected" with no way to tell which message or which side.
             // Scrubbing that buys no privacy and loses the diagnosis.
             log.warn("MLLP A40 rejected — unknown identifier(s): surviving known={} "
-                + "prior known={} (sender={}/{} hospital={} msgCtrlId={})",
+                + "prior known={} (sender={} hospital={} msgCtrlId={})",
                 survivor.isPresent(), retiree.isPresent(),
-                sendingApplication, sendingFacility, hospitalId,
+                MllpRecordingContext.senderLabel(sendingApplication, sendingFacility), hospitalId,
                 safeControlId(messageControlId));
             recordReject(receivingHospital, sendingApplication, sendingFacility,
                 messageControlId, "identifier not found");
@@ -163,9 +163,9 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // standard — the ADT path next door logs patient={} — and it is
             // what tells an operator which merge was refused.
             log.warn("MLLP A40 cross-tenant reject — surviving={} registered={} "
-                + "prior={} registered={} at hospital={} (sender={}/{} msgCtrlId={})",
+                + "prior={} registered={} at hospital={} (sender={} msgCtrlId={})",
                 survivingPatientId, survivorIsOurs, retiringPatientId, retireeIsOurs,
-                hospitalId, sendingApplication, sendingFacility,
+                hospitalId, MllpRecordingContext.senderLabel(sendingApplication, sendingFacility),
                 safeControlId(messageControlId));
             recordReject(receivingHospital, sendingApplication, sendingFacility,
                 messageControlId, "cross-tenant rejection");
@@ -178,8 +178,8 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // a resend idempotent instead of parking a permanent AE in the
             // sender's queue for work that is already done.
             log.info("MLLP A40 no-op — both identifiers already resolve to patient {} "
-                + "(sender={}/{} hospital={} msgCtrlId={})",
-                survivingPatientId, sendingApplication, sendingFacility,
+                + "(sender={} hospital={} msgCtrlId={})",
+                survivingPatientId, MllpRecordingContext.senderLabel(sendingApplication, sendingFacility),
                 hospitalId, safeControlId(messageControlId));
             return MllpInboundOutcome.ACCEPTED;
         }
@@ -196,15 +196,15 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // Already merged, or a domain rule the merge service owns. AE
             // rather than AA: the sender's request was not applied and their
             // queue should say so.
-            log.warn("MLLP A40 refused by the merge service — sender={}/{} hospital={}: {}",
-                sendingApplication, sendingFacility, hospitalId, ex.getMessage());
+            log.warn("MLLP A40 refused by the merge service — sender={} hospital={}: {}",
+                MllpRecordingContext.senderLabel(sendingApplication, sendingFacility), hospitalId, ex.getMessage());
             return MllpInboundOutcome.REJECTED_INVALID;
         }
 
         log.info("MLLP A40 applied — patients {} <- {} "
-            + "sender={}/{} hospital={} msgCtrlId={}",
+            + "sender={} hospital={} msgCtrlId={}",
             survivingPatientId, retiringPatientId,
-            sendingApplication, sendingFacility, hospitalId,
+            MllpRecordingContext.senderLabel(sendingApplication, sendingFacility), hospitalId,
             safeControlId(messageControlId));
         return MllpInboundOutcome.ACCEPTED;
     }
@@ -250,8 +250,8 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
                     MllpRecordingContext.senderScope(sendingApplication, sendingFacility),
                     MESSAGE_TYPE, reason));
         } catch (RuntimeException ex) {
-            log.warn("MLLP A40 message recorder threw for sender={}/{} reason={}",
-                sendingApplication, sendingFacility, reason, ex);
+            log.warn("MLLP A40 message recorder threw for sender={} reason={}",
+                MllpRecordingContext.senderLabel(sendingApplication, sendingFacility), reason, ex);
         }
     }
 
@@ -270,10 +270,10 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
         return MllpRecordingContext.messageControlId(messageControlId);
     }
 
-    /** MSH-10 quoted back through the cap — see {@code MllpRecordingContext}. */
+    /** MSH-10 quoted back through the same cap the log lines use. */
     private static String withControlId(String reason, String messageControlId) {
-        String safeControlId = MllpRecordingContext.messageControlId(messageControlId);
-        return safeControlId != null ? reason + " (MSH-10 " + safeControlId + ")" : reason;
+        String safe = safeControlId(messageControlId);
+        return safe != null ? reason + " (MSH-10 " + safe + ")" : reason;
     }
 
     /** Resolve an MRN to its patient through EMPI, or empty if unknown. */
@@ -321,9 +321,10 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
     private String buildNotes(String survivingMrn, String priorMrn,
                               String sendingApplication, String sendingFacility,
                               String messageControlId) {
-        return "HL7 ADT^A40 from " + sendingApplication + "/" + sendingFacility
+        String safe = safeControlId(messageControlId);
+        return "HL7 ADT^A40 from "
+            + MllpRecordingContext.senderLabel(sendingApplication, sendingFacility)
             + ": MRN " + priorMrn + " merged into " + survivingMrn
-            + (StringUtils.hasText(messageControlId)
-                ? " (MSH-10 " + messageControlId + ")" : "");
+            + (safe != null ? " (MSH-10 " + safe + ")" : "");
     }
 }

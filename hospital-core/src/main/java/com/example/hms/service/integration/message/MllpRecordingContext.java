@@ -36,6 +36,9 @@ public final class MllpRecordingContext {
     /** MSH-10 is 20 characters in HL7 v2.5, and unvalidated on the wire. */
     private static final int CONTROL_ID_MAX = 20;
 
+    /** MSH-3 and MSH-4 are 180 characters in HL7 v2.5, equally unvalidated. */
+    private static final int HL7_FIELD_MAX = 180;
+
 
     private MllpRecordingContext() {}
 
@@ -205,6 +208,24 @@ public final class MllpRecordingContext {
      * and still resolve — and everything derived from the pair has to agree
      * with that, or one sender becomes several.
      */
+    /**
+     * The sender pair as it is safe to quote into a log line: normalised, and
+     * capped at the width the HL7 fields actually allow.
+     *
+     * <p>MSH-3 and MSH-4 are unvalidated — {@code Hl7MessageInspector} reads
+     * them verbatim with no length check — and the refusal paths log them on
+     * every message, including the ones an <em>unallowlisted</em> sender
+     * reaches. Capping MSH-10 and leaving these uncapped would have closed
+     * one sink and left the one next to it in the same line.
+     */
+    public static String senderLabel(String sendingApplication, String sendingFacility) {
+        return capped(normalised(sendingApplication)) + "/" + capped(normalised(sendingFacility));
+    }
+
+    private static String capped(String value) {
+        return value.length() > HL7_FIELD_MAX ? value.substring(0, HL7_FIELD_MAX) : value;
+    }
+
     private static String normalised(String value) {
         return StringUtils.hasText(value) ? value.trim().toUpperCase(Locale.ROOT) : "?";
     }
