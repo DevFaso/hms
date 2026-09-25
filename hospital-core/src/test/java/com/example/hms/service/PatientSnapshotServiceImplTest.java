@@ -22,7 +22,6 @@ import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.PatientAllergyRepository;
 import com.example.hms.repository.PatientDiagnosisRepository;
 import com.example.hms.repository.PatientProblemRepository;
-import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import org.junit.jupiter.api.Test;
@@ -64,7 +63,7 @@ import com.example.hms.model.Hospital;
 @SuppressWarnings("java:S100")
 class PatientSnapshotServiceImplTest {
 
-    @Mock private PatientRepository patientRepository;
+    @Mock private com.example.hms.service.support.PatientChartAccess patientChartAccess;
     @Mock private PatientAllergyRepository patientAllergyRepository;
     @Mock private PatientVitalSignRepository patientVitalSignRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
@@ -103,10 +102,12 @@ class PatientSnapshotServiceImplTest {
     private static final Set<UUID> READABLE = Set.of(HOSPITAL_ID);
 
     private void givenPatient(UUID patientId, Patient patient) {
-        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        // Lenient: the patient-not-found and refusal tests never get this far,
-        // and the cross-hospital test supplies its own wider readable set.
-        lenient().when(patient.isRegisteredInHospital(HOSPITAL_ID)).thenReturn(true);
+        // PatientChartAccess is the whole chart-read rule now (registration OR a
+        // treatment relationship, chart-restricted refused loudly, 404 for the
+        // rest), so the tests stub it rather than the repository and the
+        // registration flag.
+        when(patientChartAccess.require(eq(patientId), eq(HOSPITAL_ID))).thenReturn(patient);
+        // Lenient: the cross-hospital test supplies its own wider readable set.
         lenient().when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(HOSPITAL_ID)))
                 .thenReturn(READABLE);
     }
@@ -129,7 +130,8 @@ class PatientSnapshotServiceImplTest {
     @Test
     void getSnapshot_patientNotFound_shouldThrowResourceNotFoundException() {
         UUID patientId = UUID.randomUUID();
-        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
+        when(patientChartAccess.require(eq(patientId), eq(HOSPITAL_ID)))
+                .thenThrow(new ResourceNotFoundException("patient.notFound", patientId));
 
         assertThrows(ResourceNotFoundException.class, () -> service.getSnapshot(patientId, HOSPITAL_ID));
     }
@@ -1000,8 +1002,7 @@ class PatientSnapshotServiceImplTest {
         Hospital other = new Hospital();
         other.setId(otherHospitalId);
         Patient patient = stubPatient(patientId);
-        when(patient.isRegisteredInHospital(hospitalId)).thenReturn(true);
-        givenPatient(patientId, patient);
+        when(patientChartAccess.require(eq(patientId), eq(hospitalId))).thenReturn(patient);
         Prescription rx = new Prescription();
         rx.setMedicationName("Metformin");
         rx.setHospital(other);
@@ -1051,7 +1052,7 @@ class PatientSnapshotServiceImplTest {
         lenient().when(patient.getFirstName()).thenReturn("Alice");
         lenient().when(patient.getLastName()).thenReturn("Wong");
         lenient().when(patient.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
-        lenient().when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        lenient().when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
 
         // The key, not the resolved message: getMessage() is already resolved,
         // so only getMessageKey() pins that the refusal is a resolvable key and
@@ -1062,8 +1063,29 @@ class PatientSnapshotServiceImplTest {
                 .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
                 .isEqualTo("patient.notFound");
 
-        verify(patientRepository, never()).findByIdUnscoped(any());
+        verify(patientChartAccess, never()).require(any(), any());
         verify(labOrderRepository, never()).findByPatient_Id(any());
+        verify(recordAccessPolicy, never()).readableHospitalIds(any(), any(), any());
+        org.mockito.Mockito.verifyNoInteractions(reachRecorder);
+    }
+
+    /**
+     * The drawer is a chart read and now goes through the one chart-read rule,
+     * so a restricted chart refuses here exactly as the chart tabs do (E8 #54).
+     * It used to open on `patient.isRegisteredInHospital` alone, which does not
+     * know about restriction at all.
+     */
+    @Test
+    void aRestrictedChartIsRefusedByTheDrawerToo() {
+        UUID patientId = UUID.randomUUID();
+        when(patientChartAccess.require(eq(patientId), eq(HOSPITAL_ID)))
+                .thenThrow(new com.example.hms.exception.ChartRestrictedException(patientId));
+
+        org.assertj.core.api.Assertions
+                .assertThatThrownBy(() -> service.getSnapshot(patientId, HOSPITAL_ID))
+                .isInstanceOf(com.example.hms.exception.ChartRestrictedException.class);
+
+        // Refused before a single section is read.
         verify(recordAccessPolicy, never()).readableHospitalIds(any(), any(), any());
         org.mockito.Mockito.verifyNoInteractions(reachRecorder);
     }
@@ -1076,25 +1098,39 @@ class PatientSnapshotServiceImplTest {
     @Test
     void theRefusalIsIndistinguishableFromAMissingPatient() {
         UUID patientId = UUID.randomUUID();
-        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
+        // What PatientChartAccess throws for a patient that does not exist, or
+        // that this caller may not read \u2014 one answer for both, by design.
+        when(patientChartAccess.require(eq(patientId), eq(HOSPITAL_ID)))
+                .thenThrow(new ResourceNotFoundException("patient.notFound", patientId));
+        // And the scopeless call, stubbed to SUCCEED with a usable patient, so
+        // that removing the guard fails this test on the missing throw rather
+        // than on a stubbing miss or an NPE inside a half-built mock.
+        Patient reachable = mock(Patient.class);
+        lenient().when(reachable.getId()).thenReturn(patientId);
+        lenient().when(reachable.getFirstName()).thenReturn("Alice");
+        lenient().when(reachable.getLastName()).thenReturn("Wong");
+        lenient().when(reachable.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
+        lenient().when(patientChartAccess.require(eq(patientId), isNull())).thenReturn(reachable);
 
-        String refusedKey = org.assertj.core.api.Assertions
-                .catchThrowableOfType(() -> service.getSnapshot(patientId, null),
-                        ResourceNotFoundException.class)
-                .getMessageKey();
-        String missingKey = org.assertj.core.api.Assertions
-                .catchThrowableOfType(() -> service.getSnapshot(patientId, HOSPITAL_ID),
-                        ResourceNotFoundException.class)
-                .getMessageKey();
-
-        assertEquals(missingKey, refusedKey);
-        assertEquals("patient.notFound", refusedKey);
+        org.assertj.core.api.Assertions
+                .assertThatThrownBy(() -> service.getSnapshot(patientId, null))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
+                .isEqualTo("patient.notFound");
+        org.assertj.core.api.Assertions
+                .assertThatThrownBy(() -> service.getSnapshot(patientId, HOSPITAL_ID))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
+                .isEqualTo("patient.notFound");
     }
 
     /**
-     * The disclosure is no longer conditional on anything the caller controls:
-     * a scoped read always records the reach row, even when nothing foreign
-     * surfaced (an empty map is the honest answer, not a skipped row).
+     * The disclosure call is no longer conditional on anything the caller
+     * controls. It is the CALL that is unconditional, not the row:
+     * {@code CrossHospitalReachRecorder.recordReach} returns on an empty
+     * {@code perSource}, so a scoped read that surfaced nothing foreign still
+     * writes no {@code RECORD_SHARE} row — which is correct, and is why the
+     * caller may pass the reach unconditionally.
      */
     @Test
     void aScopedReadAlwaysRecordsTheReachRow() {

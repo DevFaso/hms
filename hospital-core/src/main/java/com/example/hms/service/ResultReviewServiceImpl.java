@@ -88,7 +88,6 @@ public class ResultReviewServiceImpl implements ResultReviewService {
     private final PrescriptionRepository prescriptionRepository;
     private final com.example.hms.repository.NotificationRepository notificationRepository;
     private final MessageSource messageSource;
-    private final com.example.hms.utility.RoleValidator roleValidator;
 
     /**
      * Resolvable message key, not a sentence, and the key this codebase already
@@ -98,7 +97,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
     private static final String MSG_STAFF_NOT_FOUND = "staff.notfound";
 
     @Override
-    public List<DoctorResultQueueItemDTO> getResultReviewQueue(UUID userId) {
+    public List<DoctorResultQueueItemDTO> getResultReviewQueue(UUID userId, UUID hospitalId) {
         log.info("Building result review queue for user: {}", userId);
 
         Optional<Staff> staffOpt = staffRepository.findFirstByUserIdOrderByCreatedAtAsc(userId);
@@ -133,13 +132,23 @@ public class ResultReviewServiceImpl implements ResultReviewService {
         // the clinician's home hospital whatever they are acting as, which is
         // neither what they asked for nor something any disclosure could be
         // accounted against.
-        UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
-            // requireActiveHospitalId returns null ONLY on its super-admin
-            // branches and throws BusinessException for everyone else, so this
-            // is a real super-admin in global view — reachable here because
+            // The scope MeController resolved for the whole request, not a
+            // second resolution taken here. RoleValidator.requireActiveHospitalId
+            // would have been the obvious call and is the wrong one: it reads
+            // HospitalContext.activeHospitalId, which JwtTokenProvider fills from
+            // primaryHospitalId when nothing is pinned, while the controller uses
+            // pinnedHospitalId() and then the caller's first active assignment.
+            // A multi-hospital clinician with nothing pinned would get a queue
+            // for one hospital beside a patient snapshot for another, on the same
+            // page, with nothing on screen saying so. It also throws
+            // BusinessException where every sibling /me endpoint still answers.
+            //
+            // Null therefore means what it means everywhere else in this
+            // controller: a super-admin in global view — reachable here because
             // RoleExpansion grants them ROLE_DOCTOR before the @PreAuthorize on
-            // GET /me/results/review-queue runs.
+            // GET /me/results/review-queue runs — or an ordinary clinician whose
+            // scope did not resolve at all.
             //
             // Refused rather than served unscoped, the same line #739 (open at
             // the time of writing, not merged) draws on getLabOrdersByStaffId,
@@ -154,6 +163,17 @@ public class ResultReviewServiceImpl implements ResultReviewService {
             // ordinary case — a super-admin with no staff row, who has no
             // clinical queue at all — answering [] exactly as before, so only
             // the leaking shape changes.
+            //
+            // And a refusal rather than an empty list, although the line above
+            // returns []. Those are different answers to different questions: no
+            // staff row means this caller has placed no orders, which [] states
+            // truthfully, whereas an unresolved scope means we cannot decide
+            // WHICH of their orders to show. dashboard.service.ts settled that
+            // for this exact endpoint when it deleted its catchError — "a 403 or
+            // an outage rendered as an empty queue is indistinguishable from
+            // nothing to review, which is exactly how a released result reaches
+            // nobody". An error a caller clears by picking a hospital beats a
+            // queue that silently claims there is nothing to review.
             log.warn("Result review queue refused: no hospital scope resolved for staff {}", staffId);
             throw new com.example.hms.exception.ResourceNotFoundException(MSG_STAFF_NOT_FOUND, staffId);
         }

@@ -81,14 +81,16 @@ class ResultReviewServiceImplTest {
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private com.example.hms.repository.NotificationRepository notificationRepository;
 
-    @Mock private com.example.hms.utility.RoleValidator roleValidator;
-
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
 
     @InjectMocks
     private ResultReviewServiceImpl service;
 
-    /** The hospital the caller is acting at for every queue test but the refusal one. */
+    /**
+     * The hospital MeController resolved for the caller. It is an argument now,
+     * not something the service looks up, so the queue and the patient snapshot
+     * on the same page cannot disagree about it.
+     */
     private static final UUID ACTING_HOSPITAL_ID = UUID.randomUUID();
 
     // Inbox labels follow the request locale; pin English so the literal
@@ -96,9 +98,6 @@ class ResultReviewServiceImplTest {
     @BeforeEach
     void pinLocale() {
         LocaleContextHolder.setLocale(Locale.ENGLISH);
-        // Lenient: the inbox tests never reach the scope lookup, and the
-        // refusal test re-stubs it to null.
-        lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(ACTING_HOSPITAL_ID);
     }
 
     @AfterEach
@@ -158,7 +157,7 @@ class ResultReviewServiceImplTest {
             when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(order));
             when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of(released));
 
-            List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId);
+            List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
             assertEquals(1, queue.size(), "queue for order status " + status);
             seen.addAll(queue);
         }
@@ -179,7 +178,7 @@ class ResultReviewServiceImplTest {
         when(collected.getStatus()).thenReturn(LabOrderStatus.COLLECTED);
         when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(collected));
 
-        assertEquals(0, service.getResultReviewQueue(userId).size());
+        assertEquals(0, service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID).size());
     }
 
     @Test
@@ -213,7 +212,7 @@ class ResultReviewServiceImplTest {
         when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(order));
         when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of(released, pending));
 
-        List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId);
+        List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertEquals(1, queue.size());
         assertEquals(released.getId(), queue.get(0).getId());
@@ -224,7 +223,7 @@ class ResultReviewServiceImplTest {
         UUID userId = UUID.randomUUID();
         givenNoStaffFor(userId);
 
-        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId);
+        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertNotNull(result);
         assertTrue(result.isEmpty());
@@ -245,7 +244,6 @@ class ResultReviewServiceImplTest {
         UUID userId = UUID.randomUUID();
         UUID staffId = UUID.randomUUID();
         givenStaffFor(userId, stubStaff(staffId));
-        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
         UUID otherHospitalId = UUID.randomUUID();
         LabOrder foreign = mock(LabOrder.class);
         // Stubbed so the test would SEE the leak if the unscoped finder ran again.
@@ -258,7 +256,7 @@ class ResultReviewServiceImplTest {
         // from a staff id this service will not resolve, and that it stays a
         // resolvable key rather than prose.
         org.assertj.core.api.Assertions
-                .assertThatThrownBy(() -> service.getResultReviewQueue(userId))
+                .assertThatThrownBy(() -> service.getResultReviewQueue(userId, null))
                 .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class)
                 .extracting(thrown ->
                         ((com.example.hms.exception.ResourceNotFoundException) thrown).getMessageKey())
@@ -299,7 +297,7 @@ class ResultReviewServiceImplTest {
                 .thenReturn(List.of(order));
         when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of(released));
 
-        List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId);
+        List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertEquals(1, queue.size());
         assertEquals(resultId, queue.get(0).getId());
@@ -341,7 +339,7 @@ class ResultReviewServiceImplTest {
         when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(order));
         when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of(labResult));
 
-        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId);
+        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertEquals(1, result.size());
         DoctorResultQueueItemDTO item = result.get(0);
@@ -383,7 +381,7 @@ class ResultReviewServiceImplTest {
         when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(order));
         when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of(labResult));
 
-        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId);
+        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertEquals("NORMAL", result.get(0).getAbnormalFlag());
         assertEquals("Lab test", result.get(0).getTestName()); // fallback when testDef is null
@@ -400,7 +398,7 @@ class ResultReviewServiceImplTest {
 
         when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(pendingOrder));
 
-        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId);
+        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertTrue(result.isEmpty());
     }
@@ -417,7 +415,7 @@ class ResultReviewServiceImplTest {
 
         when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(order));
 
-        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId);
+        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertTrue(result.isEmpty());
     }
@@ -459,7 +457,7 @@ class ResultReviewServiceImplTest {
         when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(order));
         when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of(normalResult, abnormalResult));
 
-        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId);
+        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertEquals(2, result.size());
         assertEquals("ABNORMAL", result.get(0).getAbnormalFlag(), "Abnormal should sort first");
@@ -1060,7 +1058,7 @@ class ResultReviewServiceImplTest {
         when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(order));
         when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of(result1, result2));
 
-        List<DoctorResultQueueItemDTO> results = service.getResultReviewQueue(userId);
+        List<DoctorResultQueueItemDTO> results = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertEquals(2, results.size());
         // result with date should come first, null date last
@@ -1138,7 +1136,7 @@ class ResultReviewServiceImplTest {
         when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(order));
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(result));
 
-        List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId);
+        List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertEquals(1, queue.size());
         assertEquals("ABNORMAL", queue.get(0).getAbnormalFlag());
@@ -1274,7 +1272,7 @@ class ResultReviewServiceImplTest {
         when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(order));
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(normal, critical));
 
-        List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId);
+        List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertEquals(2, queue.size());
         assertEquals("CRITICAL", queue.get(0).getAbnormalFlag());

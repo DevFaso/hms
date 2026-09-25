@@ -12,7 +12,6 @@ import com.example.hms.repository.PatientAllergyRepository;
 import com.example.hms.enums.ProblemStatus;
 import com.example.hms.repository.PatientDiagnosisRepository;
 import com.example.hms.repository.PatientProblemRepository;
-import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import lombok.RequiredArgsConstructor;
@@ -61,7 +60,7 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
 @Transactional(readOnly = true)
 public class PatientSnapshotServiceImpl implements PatientSnapshotService {
 
-    private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientChartAccess patientChartAccess;
     private final PatientAllergyRepository patientAllergyRepository;
     private final PatientVitalSignRepository patientVitalSignRepository;
     private final PrescriptionRepository prescriptionRepository;
@@ -100,9 +99,9 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             //
             // Every section below used to take a patient-wide branch on this
             // null: the readable set was never computed, the registration check
-            // three lines down was skipped, and `account()` no-ops on a null
-            // acting hospital, so not one foreign row was disclosed. The drawer
-            // returned the patient's record from every tenant, unaccounted.
+            // was skipped, and `account()` no-ops on a null acting hospital, so
+            // not one foreign row was disclosed. The drawer returned the
+            // patient's record from every tenant, unaccounted.
             //
             // Unlike the sibling reads this closes, the null here is NOT only a
             // super-admin's. MeController resolves it with
@@ -118,17 +117,27 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             //
             // Refusing is also what makes closing the two lab reads worth
             // anything. #735 (GET /patients/{id}/lab-results) and #739
-            // (GET /lab-orders?patientId=) refuse a scopeless caller — both are
-            // open at the time of writing, not merged — and this drawer served
-            // the same rows to the same caller through a different door:
-            // buildPendingOrders called labOrderRepository.findByPatient_Id, the
-            // very finder #739 abandons. This guard is right whether or not
+            // (GET /lab-orders?patientId=) refuse a scopeless caller, and this
+            // drawer served the same rows to the same caller through a different
+            // door: buildPendingOrders called labOrderRepository.findByPatient_Id,
+            // the very finder #739 abandons. This guard is right whether or not
             // those land: an unaccounted cross-tenant read is not made
             // acceptable by a sibling still serving one.
             //
-            // 404, and the same key the refusal takes when the patient really
-            // is missing, three lines down: a caller who could not establish
-            // scope learns nothing about whether the patient exists.
+            // Explicit, rather than relying on the chart-read rule below to
+            // produce nothing. PatientChartAccess.require denies a null scope
+            // for everyone but a super-admin, and for a super-admin
+            // readableHospitalIds returns an EMPTY set on a null acting
+            // hospital, so the scoped finders below would come back empty and
+            // the caller would be handed a hollow drawer presented as the
+            // patient's record. Rendering a failure to establish scope as "this
+            // patient has nothing" is the one thing this repo has ruled out
+            // repeatedly; say so with a status code instead.
+            //
+            // 404, and the same answer PatientChartAccess gives for a patient
+            // this caller may not read or that does not exist: a caller who
+            // could not establish scope learns nothing about whether the patient
+            // exists.
             //
             // Logged, because the response is deliberately opaque and a
             // scope-resolution failure and a genuine missing patient are very
@@ -139,13 +148,24 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             throw new com.example.hms.exception.ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
 
-        Patient patient = patientRepository.findByIdUnscoped(patientId)
-                .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException(
-                        MSG_PATIENT_NOT_FOUND, patientId));
-
-        if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new com.example.hms.exception.BusinessException("Patient is not registered at this hospital.");
-        }
+        // The one chart-read rule, not a second one. This used to be
+        // findByIdUnscoped + `patient.isRegisteredInHospital(hospitalId)`, which
+        // diverged from PatientChartAccess in three ways that all mattered once
+        // the null guard above made it the ONLY authorization on this endpoint:
+        //
+        //  - it threw BusinessException (400) with raw English prose, so "exists
+        //    but not registered here" was distinguishable from "no such patient"
+        //    (400 vs 404) and a scoped clinician could probe patient ids across
+        //    the platform — which would have made the 404 chosen above
+        //    pointless;
+        //  - it ignored patient.isChartRestricted(), so a restricted chart's
+        //    whole drawer opened on registration alone, while every chart tab
+        //    throws ChartRestrictedException (E8 #54);
+        //  - it had no treatment-relationship fallback, so a clinician at B
+        //    treating a patient registered only at A was refused the drawer
+        //    while the chart tabs opened for them (E9 #58) — the very rows the
+        //    readable set below exists to surface.
+        Patient patient = patientChartAccess.require(patientId, hospitalId);
 
         // E9 #60 — the snapshot follows the patient: every section reads the
         // policy's readable set (allergies stay patient-wide, #56) and every

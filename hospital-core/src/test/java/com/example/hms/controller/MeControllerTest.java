@@ -774,14 +774,14 @@ class MeControllerTest {
     void getResultReviewQueue_shouldReturnQueueItems() {
         List<DoctorResultQueueItemDTO> items = List.of(
                 DoctorResultQueueItemDTO.builder().testName("CBC").patientName("Pat C").build());
-        when(resultReviewService.getResultReviewQueue(testUserId)).thenReturn(items);
+        when(resultReviewService.getResultReviewQueue(eq(testUserId), any())).thenReturn(items);
 
         ResponseEntity<ApiResponseWrapper<List<DoctorResultQueueItemDTO>>> response =
                 controller.getResultReviewQueue(doctorAuth);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(1, requireBody(response).getData().size());
-        verify(resultReviewService).getResultReviewQueue(testUserId);
+        verify(resultReviewService).getResultReviewQueue(eq(testUserId), any());
     }
 
     // ========== GET /api/me/patients/{patientId}/snapshot ==========

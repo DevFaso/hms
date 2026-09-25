@@ -261,7 +261,11 @@ public class MeController {
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON')")
     public ResponseEntity<ApiResponseWrapper<List<DoctorResultQueueItemDTO>>> getResultReviewQueue(Authentication auth) {
         UUID userId = resolveUserId(auth);
-        List<DoctorResultQueueItemDTO> items = resultReviewService.getResultReviewQueue(userId);
+        // The same resolution getPatientSnapshot below uses: one scope for the
+        // whole controller, so two panels on one page cannot disagree about
+        // which hospital the caller is at.
+        UUID hospitalId = resolveHospitalId(auth).orElse(null);
+        List<DoctorResultQueueItemDTO> items = resultReviewService.getResultReviewQueue(userId, hospitalId);
         return ResponseEntity.ok(ApiResponseWrapper.success(items));
     }
 
