@@ -249,16 +249,6 @@ private fun LabsTab(labs: List<LabResultDto>) {
                         DetailItem(stringResource(R.string.performed_by), lab.performedBy, Icons.Default.Person),
                         DetailItem(stringResource(R.string.laboratory), lab.hospitalName, Icons.Default.LocalHospital)
                     )
-                    if (lab.referenceRangeUnitUncertain) {
-                        // Headed "Units", not "Range": it sits directly under a
-                        // DetailItem already labelled "Range", and two blocks
-                        // with the same heading — one a value, one a warning —
-                        // read as a duplicate rather than a caveat.
-                        DetailNote(
-                            stringResource(R.string.units),
-                            stringResource(R.string.lab_reference_range_unit_uncertain)
-                        )
-                    }
                     DetailNote(stringResource(R.string.notes), lab.notes)
                 }
             ) {

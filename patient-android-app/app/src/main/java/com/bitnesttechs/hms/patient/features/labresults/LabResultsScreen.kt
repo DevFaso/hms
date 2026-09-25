@@ -210,16 +210,6 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                if (lab.referenceRangeUnitUncertain) {
-                                    // The card is where the alarming
-                                    // juxtaposition appears — "5.4 mmol/L"
-                                    // directly above "70 - 110 mg/dL" — so the
-                                    // caveat belongs here too, not only in the
-                                    // dialog behind it.
-                                    Text(stringResource(R.string.lab_reference_range_unit_uncertain),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
                             }
                             lab.displayDate?.let {
                                 Text(stringResource(R.string.lab_date_with_value, it.take(10)),
@@ -291,11 +281,6 @@ internal fun LabResultDetailDialog(lab: LabResultDto, onDismiss: () -> Unit) {
                     lab.valueWithUnit?.let { DetailRow(stringResource(R.string.lab_value), it) }
                     lab.displayReferenceRange?.let {
                         DetailRow(stringResource(R.string.reference_range), it)
-                    }
-                    if (lab.referenceRangeUnitUncertain) {
-                        Text(stringResource(R.string.lab_reference_range_unit_uncertain),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
 
                     // Only when there IS an interpretation: a released row
