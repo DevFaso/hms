@@ -552,9 +552,17 @@ public class LabOrderServiceImpl implements LabOrderService {
                 .map(labOrderMapper::toLabOrderResponseDTO)
                 .toList();
         }
-        return labOrderRepository.findByPatient_Id(patientId).stream()
-            .map(labOrderMapper::toLabOrderResponseDTO)
-            .toList();
+        // The same hole searchLabOrders had, in the same shape: every tenant's
+        // orders for one patient, and the recordReach call above sits INSIDE
+        // the scoped branch, so none of it was accounted. This method is
+        // unconditionally patient-filtered, so the guard is just the null
+        // scope — no worklist reading to preserve.
+        //
+        // Guarded even though nothing calls it today: it is on LabOrderService
+        // with no @GetMapping anywhere (the only other mention is a javadoc in
+        // CrossHospitalReachRecorder), and a note in a pull request is not
+        // something whoever wires it up will read.
+        throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
     }
 
     @Override

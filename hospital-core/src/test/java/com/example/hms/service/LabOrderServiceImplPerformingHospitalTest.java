@@ -610,6 +610,32 @@ class LabOrderServiceImplPerformingHospitalTest {
         verify(labOrderMapper, never()).toLabOrderResponseDTO(foreign);
     }
 
+    /**
+     * {@code getLabOrdersByPatientId} carried the identical hole — with no
+     * acting hospital it fell through to every tenant's orders for the
+     * patient, and the reachRecorder call sits inside the scoped branch, so
+     * none of it was accounted. It is unconditionally patient-filtered, so
+     * there is no worklist reading to preserve and the guard is just the null
+     * scope. Nothing calls it today; it is guarded so that whoever wires it up
+     * does not ship the hole back.
+     */
+    @Test
+    void byPatientWithNoActiveHospitalRefusesInsteadOfReadingEveryTenant() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        LabOrder foreign = LabOrder.builder().hospital(third).patient(patient).build();
+        foreign.setId(UUID.randomUUID());
+        // Stubbed so the test would SEE the leak if the fallback ever ran again.
+        lenient().when(labOrderRepository.findByPatient_Id(patient.getId())).thenReturn(List.of(foreign));
+
+        assertThatThrownBy(() -> service.getLabOrdersByPatientId(patient.getId(), Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
+            .isEqualTo("patient.notFound");
+
+        verify(labOrderRepository, never()).findByPatient_Id(any());
+        verifyNoInteractions(reachRecorder);
+    }
+
     @Test
     void byPatientIncludesOrdersPerformedHereAndAccountsThemAsADisclosure() {
         UUID requester = UUID.randomUUID();
