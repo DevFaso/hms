@@ -3456,6 +3456,71 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   `PatientSnapshotServiceImpl` now states which sections are tested and which
   are not rather than reading as a guarantee. Unowned.
 
+- **There is no runtime hospital switcher for anyone who is not a super-admin,
+  and that becomes a clinical problem the moment the review queue is scoped.**
+  `hospital-scope-chip.component.html` is wrapped in `@if (isSuperAdmin())`,
+  and a staff member's `activeHospitalId` is written once by
+  `SessionScopeService` at bootstrap. So a clinician credentialed at two
+  hospitals has no way to change scope at all.
+
+  With `fix/snapshot-and-review-queue-scope` live, that means **a multi-hospital
+  clinician cannot reach their other hospital's lab review queue** — the picker
+  every new scope hint points at does not exist for them. Their other
+  hospital's released CRITICAL result is then reachable only through the
+  escalation sweep, which chases it as unacknowledged while the person who
+  would acknowledge it cannot see it. Scoping the queue is right; this is the
+  half that makes it usable.
+
+  The pieces exist: `RoleContextService.permittedHospitalIds` is already
+  populated by `SessionScopeService` from the live assignment table (E9 #55b).
+  What is missing is a staff-facing switcher driven by it. **This is a feature
+  and needs the user's decision**, and it is the largest open item left by
+  wave 3. Unowned.
+
+- **`/in-basket`'s sibling panel does not follow the picker either.**
+  `<app-in-basket-panel />` loads once in its own `ngOnInit` against
+  hospital-scoped endpoints, and the route is not `requiresHospitalScope`, so
+  `outletKey` never advances. After a scope switch the lab category shows one
+  hospital while the in-basket items and the unread badge still show the other.
+  Unowned.
+
+- **`RoleValidator.requireActiveHospitalId()` step 4 is authorities-based.** It
+  returns null on `isSuperAdminFromAuth()` when `HospitalContext` is
+  unpopulated, so an inflated authorities set can still resolve to an unbounded
+  read — on every caller of that method, not only the ones audited in wave 3.
+  Wants hardening centrally rather than guard by guard. Unowned.
+
+- **`ControllerAuthUtils` is being imported into services.** Both
+  `fix/prescription-read-patient-ownership` and
+  `fix/encounter-read-access-control` do it, for the same reason:
+  `authService.getCurrentUserId()` returns null (and throws) on a
+  `JwtAuthenticationToken`, so the service layer has nowhere else to resolve a
+  principal's user id. `resolveUserId` belongs in `security`/`utility`, or on
+  `RoleValidator` beside `getCurrentUserId()`, with that gap closed. A shared
+  refactor for after both land. Unowned.
+
+- **A role set that REMOVES subject status must not name expanded roles.**
+  Adding `ROLE_PHYSICIAN`/`ROLE_SURGEON` to a set is right when the set grants
+  access and backwards when it decides who is *not* a patient: no annotation on
+  these endpoints admits a surgeon, so over Keycloak — where `RoleExpansion`
+  does not run — a `ROLE_SURGEON` + `ROLE_PATIENT` principal enters through the
+  patient door and is then reclassified as a clinician, skipping the ownership
+  guard. Caught and backed out on `fix/encounter-read-access-control`; the
+  invariant now written there is **each set = its endpoint's `@PreAuthorize`
+  minus `ROLE_PATIENT`, nothing added**. Note the opposite for
+  `ROLE_SUPER_ADMIN`: `SUPER_ADMIN_INHERITS` contains `ROLE_PATIENT`, so a
+  super-admin must stay named or they are treated as a patient and refused
+  every record they do not own.
+
+- **Cross-hospital reads do not reach the three encounter by-id endpoints, and
+  on two of them that is a regression.** A clinician at hospital A who sees a
+  lawfully surfaced hospital-B encounter in the visit history and clicks
+  through to `/encounters/{id}/avs` or `/{id}/notes/history` now gets a 404;
+  before `fix/encounter-read-access-control` it worked, because nothing bounded
+  those reads at all. Wiring `readableHospitalIds`, `maySurface`, break-glass
+  and `recordReach` into three by-id reads is a design change and the
+  alternative was leaving cross-tenant PHI open. Unowned.
+
 - **Two layers of this codebase disagree about role equivalence.**
   `RoleExpansion` grants a physician or surgeon ROLE_DOCTOR while the
   authorities are built, so both clear a `hasAnyRole('DOCTOR')` annotation.
