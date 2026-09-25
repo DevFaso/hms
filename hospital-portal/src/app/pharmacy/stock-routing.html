@@ -134,8 +134,8 @@
                         <button
                           class="btn btn-sm btn-primary"
                           (click)="openPartnerForm(partner)"
-                          [disabled]="!scopeReady()"
-                          [disabled]="saving() || !partner.hasOnFormulary"
+                          [disabled]="saving() || !partner.hasOnFormulary || !scopeReady()"
+                          [attr.data-testid]="'route-here-' + partner.pharmacyId"
                         >
                           {{ 'PHARMACY.ROUTE_HERE' | translate }}
                         </button>
@@ -241,10 +241,12 @@
         </button>
       </div>
     </div>
-  } @else if (decisionsLoading()) {
-    <!-- Without this the card vanishes while a Retry is in flight — the rows
-         are already cleared and the error is reset — and an order whose
-         history is merely loading reads as one that was never routed. -->
+  } @else if (decisionsLoading() && decisions().length === 0) {
+    <!-- First load and Retry only: the rows are cleared and the error reset,
+         so without this the card vanishes and an order whose history is
+         merely loading reads as one that was never routed. Turning a page
+         keeps the table mounted — unmounting it would destroy the focused
+         Next button under the reader's cursor on every click. -->
     <div class="form-card form-card-accent">
       <h2>{{ 'PHARMACY.ROUTING_HISTORY' | translate }}</h2>
       <p class="muted" role="status" data-testid="routing-history-loading">
@@ -322,7 +324,7 @@
                   <button
                     class="btn btn-sm btn-success"
                     (click)="confirmPartnerDispense(d.id)"
-                    [disabled]="saving()"
+                    [disabled]="saving() || !scopeReady()"
                   >
                     {{ 'PHARMACY.CONFIRM_DISPENSE' | translate }}
                   </button>

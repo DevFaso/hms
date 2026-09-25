@@ -118,7 +118,9 @@ public final class PartnerNoShowReason {
             return null;
         }
         String text = stored.substring(idx + MARKER.length()).trim();
-        return text.isEmpty() ? null : text;
+        // Cleaned like the head in withoutNoShow: a quoted marker somebody
+        // typed lives in here too, and it is not for the prescriber to read.
+        return text.isEmpty() ? null : forDisplay(text);
     }
 
     /**

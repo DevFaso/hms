@@ -873,6 +873,27 @@ class StockOutRoutingServiceImplTest {
         }
 
         @Test
+        @DisplayName("the pharmacist's own words cannot carry a second marker")
+        void defusesTheAuthoredNoShowReason() {
+            PrescriptionRoutingDecision decision = accepted();
+            prescription.setStatus(PrescriptionStatus.PARTNER_ACCEPTED);
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(routingDecisionRepository.findById(decision.getId())).thenReturn(Optional.of(decision));
+            when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(routingMapper.toResponseDTO(decision))
+                    .thenReturn(RoutingDecisionResponseDTO.builder().status("CANCELLED").build());
+
+            service.partnerNoShow(decision.getId(), "[PARTNER_NO_SHOW] nobody there");
+
+            // One marker, the server's, and the words read back clean.
+            assertThat(decision.getReason().split(java.util.regex.Pattern.quote("[PARTNER_NO_SHOW]"), -1))
+                    .hasSize(3); // the real marker + the quoted one, so two splits
+            assertThat(PartnerNoShowReason.freeText(decision.getReason()))
+                    .isEqualTo("nobody there");
+        }
+
+        @Test
         @DisplayName("refuses a decision that is not an acceptance")
         void refusesNonAccepted() {
             PrescriptionRoutingDecision decision = accepted();

@@ -355,6 +355,12 @@ describe('StockRoutingComponent', () => {
     const print = fixture.nativeElement.querySelector('[data-testid="print-for-patient"]');
     expect(backOrder.disabled).toBeTrue();
     expect(print.disabled).toBeTrue();
+    // "Route here" is the control that starts a routing, and it carries its
+    // own disabled condition — a second [disabled] binding silently replaced
+    // the gate here once, so it is asserted rather than assumed.
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="route-here-partner-1"]').disabled,
+    ).toBeTrue();
 
     hasHospitalScope.set(true);
     fixture.detectChanges();
@@ -364,6 +370,9 @@ describe('StockRoutingComponent', () => {
     ).toBeFalse();
     expect(
       fixture.nativeElement.querySelector('[data-testid="print-for-patient"]').disabled,
+    ).toBeFalse();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="route-here-partner-1"]').disabled,
     ).toBeFalse();
   });
 

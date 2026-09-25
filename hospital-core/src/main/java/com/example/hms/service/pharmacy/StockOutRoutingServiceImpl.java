@@ -469,7 +469,13 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
         Prescription prescription = decision.getPrescription();
         decision.setStatus(RoutingDecisionStatus.CANCELLED);
-        decision.setReason(PartnerNoShowReason.compose(decision.getReason(), reason.trim()));
+        // The pharmacist's words are client text like any other, so they are
+        // defused before being composed: the marker in front of them is the
+        // server's assertion of the fact, and a second one inside them would
+        // both double it and reach the prescriber as a raw reserved token.
+        decision.setReason(PartnerNoShowReason.compose(
+                decision.getReason(),
+                PartnerNoShowReason.defuseAuthoredReason(reason.trim())));
         prescription.setStatus(PrescriptionStatus.SIGNED);
         // The partner that did not deliver is no longer this order's pharmacy.
         clearPharmacy(prescription);
