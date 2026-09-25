@@ -150,8 +150,7 @@ public class Hl7MessageDispatcher {
             // every message they send.
             log.warn("[MLLP {}] AR — sender {} not allowlisted (msgType={})",
                 remoteAddress,
-                MllpRecordingContext.senderLabel(
-                    header.sendingApplication(), header.sendingFacility()),
+                senderScopeSafeLabel(header),
                 header.messageType());
             recordReject(integrationIdFor(header), null,
                 header.messageType(), hl7Body,
@@ -215,8 +214,8 @@ public class Hl7MessageDispatcher {
                              String remoteAddress, Hospital hospital) {
         List<ParsedObservation> observations = messageBuilder.parseOruR01(hl7Body);
         if (observations == null || observations.isEmpty()) {
-            log.warn("[MLLP {}] ORU^R01 from {}/{} unparseable or without OBX segments",
-                remoteAddress, header.sendingApplication(), header.sendingFacility());
+            log.warn("[MLLP {}] ORU^R01 from {} unparseable or without OBX segments",
+                remoteAddress, senderScopeSafeLabel(header));
             // Service was never invoked, so record here. The successful
             // and post-service-reject paths are recorded inside the
             // service itself so the integration row carries the
@@ -238,9 +237,8 @@ public class Hl7MessageDispatcher {
                              String remoteAddress, Hospital hospital) {
         ParsedAdtMessage parsed = messageBuilder.parseAdtMessage(hl7Body, header.triggerEvent());
         if (parsed == null) {
-            log.warn("[MLLP {}] {} from {}/{} unparseable (missing PID-3 / segments)",
-                remoteAddress, header.messageType(),
-                header.sendingApplication(), header.sendingFacility());
+            log.warn("[MLLP {}] {} from {} unparseable (missing PID-3 / segments)",
+                remoteAddress, header.messageType(), senderScopeSafeLabel(header));
             recordReject(integrationIdFor(header), organizationIdOf(hospital),
                 header.messageType(), hl7Body,
                 "unparseable " + header.messageType() + " — missing PID-3 or required segments",
@@ -275,8 +273,8 @@ public class Hl7MessageDispatcher {
                                String remoteAddress, Hospital hospital) {
         Hl7v2MessageBuilder.ParsedMergeMessage parsed = messageBuilder.parseAdtA40(hl7Body);
         if (parsed == null) {
-            log.warn("[MLLP {}] ADT^A40 from {}/{} unparseable (missing PID-3 or MRG-1)",
-                remoteAddress, header.sendingApplication(), header.sendingFacility());
+            log.warn("[MLLP {}] ADT^A40 from {} unparseable (missing PID-3 or MRG-1)",
+                remoteAddress, senderScopeSafeLabel(header));
             recordReject(integrationIdFor(header), organizationIdOf(hospital),
                 "ADT^A40", hl7Body,
                 "unparseable ADT^A40 — missing PID-3 or MRG-1",
@@ -394,6 +392,12 @@ public class Hl7MessageDispatcher {
      * characters, and two senders agreeing on the first 120 would then share
      * a scope by construction. See {@code MllpRecordingContext.senderScope}.
      */
+    /** The sender pair, capped, for a log line. See MllpRecordingContext. */
+    private static String senderScopeSafeLabel(Hl7MessageHeader header) {
+        return MllpRecordingContext.senderLabel(
+            header.sendingApplication(), header.sendingFacility());
+    }
+
     private static String senderScopeFor(Hl7MessageHeader header) {
         return MllpRecordingContext.senderScope(
             header.sendingApplication(), header.sendingFacility());

@@ -224,6 +224,21 @@ public final class MllpRecordingContext {
         return capped(normalised(sendingApplication)) + "/" + capped(normalised(sendingFacility));
     }
 
+    /**
+     * The sender pair bounded but NOT re-cased, for somewhere the value is
+     * stored as provenance rather than compared as a key — persisted text
+     * that already exists in the partner's own casing, where normalising only
+     * the new rows would show two senders where there is one.
+     */
+    public static String cappedSenderPair(String sendingApplication, String sendingFacility) {
+        return capped(trimmedOrPlaceholder(sendingApplication))
+            + "/" + capped(trimmedOrPlaceholder(sendingFacility));
+    }
+
+    private static String trimmedOrPlaceholder(String value) {
+        return StringUtils.hasText(value) ? value.trim() : "?";
+    }
+
     private static String capped(String value) {
         return value.length() > HL7_FIELD_MAX ? value.substring(0, HL7_FIELD_MAX) : value;
     }

@@ -145,10 +145,17 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
         // patient id to look up until EMPI has resolved one. What is closed
         // here is the part that was free.
         // Two lookups even when both identifiers resolve to the same patient
-        // (the resend case below). Skipping the second there would make an
-        // already-merged pair one query cheaper than a pair that is not,
-        // which is timeable - the duplicate is the price of not putting a
-        // distinguishable answer back in a different form.
+        // (the resend case below), rather than skipping the second.
+        //
+        // Not because that one query is the difference that matters - it is
+        // not. An identifier that exists nowhere returns sixty lines above
+        // after two EMPI reads and never reaches these queries, so "exists at
+        // some tenant" and "exists nowhere" already differ by two registration
+        // queries however this branch is written. That is the residual
+        // MllpInboundOutcome documents and it cannot be closed by reordering.
+        // The reason for the duplicate is narrower: it costs nothing, and
+        // adding a conditional here would put a THIRD distinguishable timing
+        // class into the branch a prober actually drives, for no gain.
         boolean survivorIsOurs = isRegisteredHere(survivingPatientId, hospitalId);
         boolean retireeIsOurs = isRegisteredHere(retiringPatientId, hospitalId);
         if (!survivorIsOurs || !retireeIsOurs) {
@@ -327,9 +334,14 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
     private String buildNotes(String survivingMrn, String priorMrn,
                               String sendingApplication, String sendingFacility,
                               String messageControlId) {
+        // Capped, but NOT upper-cased. This is persisted provenance, not a
+        // key: rows written before this change carry the partner's own casing,
+        // and normalising only the new ones would show two senders where
+        // there is one. senderLabel is for logs, where one spelling per
+        // sender is what an operator greps.
         String safe = safeControlId(messageControlId);
         return "HL7 ADT^A40 from "
-            + MllpRecordingContext.senderLabel(sendingApplication, sendingFacility)
+            + MllpRecordingContext.cappedSenderPair(sendingApplication, sendingFacility)
             + ": MRN " + priorMrn + " merged into " + survivingMrn
             + (safe != null ? " (MSH-10 " + safe + ")" : "");
     }

@@ -130,8 +130,11 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                 .findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
                     senderApp, senderFac, controlId);
             if (existing.isPresent()) {
-                log.info("MLLP ORU^R01 replay — sender={} controlId={} already persisted (labResult {}); ACCEPTED without re-insert",
-                    senderApp, senderFac, controlId, existing.get().getId());
+                log.info("MLLP ORU^R01 replay — sender={} controlId={} already persisted "
+                        + "(labResult {}); ACCEPTED without re-insert",
+                    MllpRecordingContext.senderLabel(senderApp, senderFac),
+                    MllpRecordingContext.messageControlId(controlId),
+                    existing.get().getId());
                 recordInboundMessage(integrationId, organizationId, rawMessageBody,
                     IntegrationMessageStatus.RECEIVED, "duplicate (sender, MSH-10); replayed");
                 return MllpInboundOutcome.ACCEPTED;

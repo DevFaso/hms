@@ -185,7 +185,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         log.info("ADT visit-sync reconciled — admission={} visit={} sender={} hospital={} event={} result={} msgCtrlId={}",
             row.getId(), ctx.visitNumber, MllpRecordingContext.senderLabel(ctx.app, ctx.fac),
             ctx.hospitalId,
-            ctx.parsed.triggerEvent(), result, ctx.controlId);
+            ctx.parsed.triggerEvent(), result,
+            MllpRecordingContext.messageControlId(ctx.controlId));
         return Optional.of(result);
     }
 
@@ -219,9 +220,9 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             emitAdmissionLifecycleAudit(
                 AuditEventType.ADMISSION_DISCHARGED, row, ctx,
                 String.format(
-                    "ADT^A03 discharge — visit=%s sender=%s/%s hospital=%s patient=%s dischargeAt=%s msgCtrlId=%s",
-                    ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
-                    ctx.patient.getId(), dischargeAt, ctx.controlId));
+                    "ADT^A03 discharge — visit=%s sender=%s hospital=%s patient=%s dischargeAt=%s msgCtrlId=%s",
+                    ctx.visitNumber, MllpRecordingContext.cappedSenderPair(ctx.app, ctx.fac), ctx.hospitalId,
+                    ctx.patient.getId(), dischargeAt, MllpRecordingContext.messageControlId(ctx.controlId)));
         }
         return VisitProjectionResult.ADMISSION_DISCHARGED;
     }
@@ -254,13 +255,13 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         emitAdmissionLifecycleAudit(
             AuditEventType.ADMISSION_TRANSFERRED, row, ctx,
             String.format(
-                "ADT^A02 transfer — visit=%s sender=%s/%s hospital=%s patient=%s destination=%s resolved=%s previous=%s msgCtrlId=%s",
-                ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
+                "ADT^A02 transfer — visit=%s sender=%s hospital=%s patient=%s destination=%s resolved=%s previous=%s msgCtrlId=%s",
+                ctx.visitNumber, MllpRecordingContext.cappedSenderPair(ctx.app, ctx.fac), ctx.hospitalId,
                 ctx.patient.getId(),
                 destination == null ? "" : destination,
                 resolved != null ? resolved.getId() : NULL_HOSPITAL_PLACEHOLDER,
                 previous != null ? previous.getId() : NULL_HOSPITAL_PLACEHOLDER,
-                ctx.controlId));
+                MllpRecordingContext.messageControlId(ctx.controlId)));
         return VisitProjectionResult.ADMISSION_TRANSFERRED;
     }
 
@@ -330,7 +331,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         log.info("ADT visit-sync reconciled — encounter={} visit={} sender={} hospital={} event={} msgCtrlId={}",
             row.getId(), ctx.visitNumber, MllpRecordingContext.senderLabel(ctx.app, ctx.fac),
             ctx.hospitalId,
-            ctx.parsed.triggerEvent(), ctx.controlId);
+            ctx.parsed.triggerEvent(),
+            MllpRecordingContext.messageControlId(ctx.controlId));
         return Optional.of(VisitProjectionResult.ENCOUNTER_RECONCILED);
     }
 
@@ -399,7 +401,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         log.info("ADT visit-sync auto-created admission={} visit={} sender={} hospital={} patient={} provider={} msgCtrlId={}",
             admission.getId(), ctx.visitNumber, MllpRecordingContext.senderLabel(ctx.app, ctx.fac),
             ctx.hospitalId,
-            ctx.patient.getId(), ac.provider().getId(), ctx.controlId);
+            ctx.patient.getId(), ac.provider().getId(),
+            MllpRecordingContext.messageControlId(ctx.controlId));
         return Optional.of(VisitProjectionResult.ADMISSION_AUTOCREATED);
     }
 
@@ -560,7 +563,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         log.info("ADT A04 auto-created encounter={} visit={} sender={} hospital={} patient={} staff={} msgCtrlId={}",
             encounter.getId(), ctx.visitNumber, MllpRecordingContext.senderLabel(ctx.app, ctx.fac),
             ctx.hospitalId,
-            ctx.patient.getId(), ac.provider().getId(), ctx.controlId);
+            ctx.patient.getId(), ac.provider().getId(),
+            MllpRecordingContext.messageControlId(ctx.controlId));
         return Optional.of(VisitProjectionResult.ENCOUNTER_AUTOCREATED);
     }
 
@@ -634,8 +638,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
                 .entityType(AUDIT_ENTITY_ENCOUNTER)
                 .resourceId(encounter.getId().toString())
                 .eventDescription(String.format(
-                    "ADT^A04 auto-create — visit=%s sender=%s/%s hospital=%s patient=%s msgCtrlId=%s",
-                    ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
+                    "ADT^A04 auto-create — visit=%s sender=%s hospital=%s patient=%s msgCtrlId=%s",
+                    ctx.visitNumber, MllpRecordingContext.cappedSenderPair(ctx.app, ctx.fac), ctx.hospitalId,
                     ctx.patient.getId(), ctx.controlId))
                 .build();
             auditEventLogService.logEvent(request);
@@ -658,8 +662,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
                 .entityType(AUDIT_ENTITY_ADMISSION)
                 .resourceId(admission.getId().toString())
                 .eventDescription(String.format(
-                    "ADT^A01 auto-create — visit=%s sender=%s/%s hospital=%s patient=%s msgCtrlId=%s",
-                    ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
+                    "ADT^A01 auto-create — visit=%s sender=%s hospital=%s patient=%s msgCtrlId=%s",
+                    ctx.visitNumber, MllpRecordingContext.cappedSenderPair(ctx.app, ctx.fac), ctx.hospitalId,
                     ctx.patient.getId(), ctx.controlId))
                 .build();
             auditEventLogService.logEvent(request);
