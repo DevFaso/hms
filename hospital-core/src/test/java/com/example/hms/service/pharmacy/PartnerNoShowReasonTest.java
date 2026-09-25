@@ -1,5 +1,6 @@
 package com.example.hms.service.pharmacy;
 
+import com.example.hms.exception.BusinessException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -34,16 +35,6 @@ class PartnerNoShowReasonTest {
     }
 
     @Test
-    @DisplayName("rows written before the marker decode the same way — no migration needed")
-    void decodesTheLegacyLiteral() {
-        String legacy = "Nearest partner has stock | Partner no-show: nobody at the counter";
-
-        assertThat(PartnerNoShowReason.isNoShow(legacy)).isTrue();
-        assertThat(PartnerNoShowReason.withoutNoShow(legacy)).isEqualTo("Nearest partner has stock");
-        assertThat(PartnerNoShowReason.freeText(legacy)).isEqualTo("nobody at the counter");
-    }
-
-    @Test
     @DisplayName("the pharmacist's own words may contain the separator")
     void freeTextMayContainTheSeparator() {
         String stored = PartnerNoShowReason.compose("Out of stock", "waited Monday | and Tuesday");
@@ -64,101 +55,33 @@ class PartnerNoShowReasonTest {
     }
 
     @Test
-    @DisplayName("the column is 1024 characters and the EXISTING reason gives way, never the marker")
-    void truncatesTheExistingReasonRatherThanTheMarker() {
-        String stored = PartnerNoShowReason.compose("x".repeat(1000), "y".repeat(500));
+    @DisplayName("the old English phrase is prose now, not a fact: never decoded, never altered")
+    void theLegacyPhraseIsJustText() {
+        // It is indistinguishable from a routing reason somebody typed, and
+        // reading it as the fact produced three separate defects. A row
+        // already in the table renders exactly as it does today.
+        String legacy = "Nearest partner has stock | Partner no-show: nobody at the counter";
 
-        // Truncating the tail would have sliced through the marker and the
-        // no-show would have vanished from the API on a CANCELLED decision.
-        assertThat(stored).hasSize(1024);
-        assertThat(PartnerNoShowReason.isNoShow(stored)).isTrue();
-        assertThat(PartnerNoShowReason.freeText(stored)).isEqualTo("y".repeat(500));
-    }
+        assertThat(PartnerNoShowReason.isNoShow(legacy)).isFalse();
+        assertThat(PartnerNoShowReason.withoutNoShow(legacy)).isEqualTo(legacy);
+        assertThat(PartnerNoShowReason.freeText(legacy)).isNull();
+        assertThat(PartnerNoShowReason.forDisplay(legacy)).isEqualTo(legacy);
 
-    @Test
-    @DisplayName("words too long for the column on their own keep the marker and lose the tail")
-    void truncatesTheWordsOnlyWhenTheyAloneOverflow() {
-        String stored = PartnerNoShowReason.compose("Nearest partner has stock", "z".repeat(1200));
-
-        assertThat(stored).hasSize(1024).startsWith("[PARTNER_NO_SHOW] ");
-        assertThat(PartnerNoShowReason.isNoShow(stored)).isTrue();
-    }
-
-    @Test
-    @DisplayName("a routing reason that merely mentions a no-show is not one")
-    void onlyASegmentStartCounts() {
-        // Free text the pharmacist typed at route-to-partner time. Treating it
-        // as the fact would put a translated "the partner never delivered" on
-        // a decision nobody recorded one for, and strip their sentence out.
-        String typed = "Partner no-show last month, so routing elsewhere";
-
-        assertThat(PartnerNoShowReason.isNoShow(typed)).isFalse();
-        assertThat(PartnerNoShowReason.withoutNoShow(typed)).isEqualTo(typed);
-
-        String midSentence = "Rerouted because Partner no-show: was recorded before";
-        assertThat(PartnerNoShowReason.isNoShow(midSentence)).isFalse();
-        assertThat(PartnerNoShowReason.withoutNoShow(midSentence)).isEqualTo(midSentence);
+        String typed = "Partner no-show: last time, so routing elsewhere";
+        assertThat(PartnerNoShowReason.forDisplay(typed)).isEqualTo(typed);
+        assertThat(PartnerNoShowReason.defuseAuthoredReason(typed)).isEqualTo(typed);
     }
 
     @Test
     @DisplayName("a reason a client authored cannot claim to be a no-show")
     void defusesAnAuthoredMarker() {
-        // Index 0 is where an authored reason starts AND where a real no-show
-        // segment sits when the decision had no earlier reason, so the two
-        // cannot be told apart afterwards. They are kept apart beforehand.
         String defused = PartnerNoShowReason.defuseAuthoredReason(
                 "[PARTNER_NO_SHOW] I am not really one");
 
         assertThat(PartnerNoShowReason.isNoShow(defused)).isFalse();
-        assertThat(PartnerNoShowReason.withoutNoShow(defused)).isEqualTo(defused);
-
-        String legacyShaped = PartnerNoShowReason.defuseAuthoredReason(
-                "Partner no-show: last time, so routing elsewhere");
-        assertThat(PartnerNoShowReason.isNoShow(legacyShaped)).isFalse();
-
         assertThat(PartnerNoShowReason.defuseAuthoredReason("Nearest partner has stock"))
                 .isEqualTo("Nearest partner has stock");
         assertThat(PartnerNoShowReason.defuseAuthoredReason(null)).isNull();
-    }
-
-    @Test
-    @DisplayName("defusing a full-length reason is refused, not silently shortened")
-    void defusingRefusesRatherThanEatingWords() {
-        // The request is validated at the column's own 1024 and quoting adds
-        // two characters, so this would overflow the insert. Truncating would
-        // drop the end of a sentence the pharmacist wrote with nothing on
-        // screen to say so.
-        String full = "Partner no-show: " + "x".repeat(1024 - "Partner no-show: ".length());
-        assertThat(full).hasSize(1024);
-
-        assertThatThrownBy(() -> PartnerNoShowReason.defuseAuthoredReason(full))
-                .isInstanceOf(com.example.hms.exception.BusinessException.class)
-                .hasMessageContaining("Shorten it by at least 2 characters");
-    }
-
-    @Test
-    @DisplayName("a reason that still fits once quoted is defused, not refused")
-    void defusingAcceptsWhatFits() {
-        String fits = "Partner no-show: nobody at the counter";
-
-        String defused = PartnerNoShowReason.defuseAuthoredReason(fits);
-
-        assertThat(defused).hasSizeLessThanOrEqualTo(1024);
-        assertThat(PartnerNoShowReason.isNoShow(defused)).isFalse();
-    }
-
-    @Test
-    @DisplayName("the marker never reaches a reader, quoted or bare")
-    void forDisplayStripsTheToken() {
-        assertThat(PartnerNoShowReason.forDisplay(
-                PartnerNoShowReason.defuseAuthoredReason("[PARTNER_NO_SHOW] not really")))
-                .isEqualTo("not really");
-        // A row written before any of this, whose status does not corroborate.
-        assertThat(PartnerNoShowReason.forDisplay("Partner no-show: noted on the call"))
-                .isEqualTo("noted on the call");
-        assertThat(PartnerNoShowReason.forDisplay("Nearest partner has stock"))
-                .isEqualTo("Nearest partner has stock");
-        assertThat(PartnerNoShowReason.forDisplay(null)).isNull();
     }
 
     @Test
@@ -173,14 +96,31 @@ class PartnerNoShowReasonTest {
     }
 
     @Test
-    @DisplayName("but a real no-show after such a reason still decodes")
-    void stillDecodesAfterAReasonThatMentionsIt() {
-        String stored = PartnerNoShowReason.compose(
-                "Partner no-show last month, so routing elsewhere", "again, nobody came");
+    @DisplayName("the marker never reaches a reader, and nothing else is stripped with it")
+    void forDisplayStripsOnlyTheMarker() {
+        assertThat(PartnerNoShowReason.forDisplay(
+                PartnerNoShowReason.defuseAuthoredReason("[PARTNER_NO_SHOW] not really")))
+                .isEqualTo("not really");
+        assertThat(PartnerNoShowReason.forDisplay("Nearest partner has stock"))
+                .isEqualTo("Nearest partner has stock");
+        assertThat(PartnerNoShowReason.forDisplay(null)).isNull();
+    }
 
+    @Test
+    @DisplayName("words too long for the column are refused, not silently shortened")
+    void refusesRatherThanEatingWords() {
+        assertThatThrownBy(() -> PartnerNoShowReason.compose(null, "y".repeat(1200)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Shorten it by at least");
+    }
+
+    @Test
+    @DisplayName("an earlier reason gives way so the marker always survives the column")
+    void truncatesTheExistingReasonRatherThanTheMarker() {
+        String stored = PartnerNoShowReason.compose("x".repeat(1000), "y".repeat(500));
+
+        assertThat(stored).hasSize(1024);
         assertThat(PartnerNoShowReason.isNoShow(stored)).isTrue();
-        assertThat(PartnerNoShowReason.freeText(stored)).isEqualTo("again, nobody came");
-        assertThat(PartnerNoShowReason.withoutNoShow(stored))
-                .isEqualTo("Partner no-show last month, so routing elsewhere");
+        assertThat(PartnerNoShowReason.freeText(stored)).isEqualTo("y".repeat(500));
     }
 }

@@ -946,6 +946,7 @@ class StockOutRoutingServiceImplTest {
             RoutingDecisionResponseDTO dto = RoutingDecisionResponseDTO.builder().build();
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
             when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
             when(routingDecisionRepository.findByPrescriptionId(prescriptionId, pageable))
                     .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(decision)));
@@ -962,6 +963,7 @@ class StockOutRoutingServiceImplTest {
             // partner pharmacies" with confidence — a wrong clinical answer
             // the page then offers a back order on.
             when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
             when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
             when(medicationCatalogItemRepository.findByHospitalIdAndCode(hospitalId, "AMOX500"))
                     .thenReturn(Optional.of(catalogItem));
@@ -984,6 +986,7 @@ class StockOutRoutingServiceImplTest {
             prescription.setHospital(null);
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
             when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
 
             assertThatThrownBy(() -> service.checkStock(prescriptionId))
@@ -993,6 +996,8 @@ class StockOutRoutingServiceImplTest {
         @Test
         @DisplayName("a write is still refused without a hospital, as a 404 rather than a 500")
         void writesStillNeedAHospital() {
+            // No claim stub: the write helper refuses on the missing hospital
+            // before anything asks whether this is a real super-admin.
             when(roleValidator.requireActiveHospitalId()).thenReturn(null);
 
             assertThatThrownBy(() -> service.printForPatient(prescriptionId))
@@ -1013,11 +1018,32 @@ class StockOutRoutingServiceImplTest {
             RoutingDecisionResponseDTO dto = RoutingDecisionResponseDTO.builder().build();
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
             when(routingDecisionRepository.findByDecidedForPatientId(patient.getId(), pageable))
                     .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(decision)));
             when(routingMapper.toResponseDTO(decision)).thenReturn(dto);
 
             assertThat(service.listByPatient(patient.getId(), pageable).getContent()).containsExactly(dto);
+        }
+
+        @Test
+        @DisplayName("a null hospital WITHOUT the JWT claim is refused, not served cross-tenant")
+        void inflatedAuthoritiesDoNotEarnAnUnscopedRead() {
+            // requireActiveHospitalId also returns null from its step-4
+            // fallback on the AUTHORITIES, and RoleValidator's own Javadoc
+            // warns those can be inflated by an impersonation context. Before
+            // this PR that principal hit the dereference and got a 500, which
+            // blocked the read by accident; serving them another tenant's
+            // routing history instead would be an escalation.
+            org.springframework.data.domain.Pageable pageable =
+                    org.springframework.data.domain.PageRequest.of(0, 10);
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+            assertThatThrownBy(() -> service.listByPrescription(prescriptionId, pageable))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
         }
     }
 

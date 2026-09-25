@@ -34,14 +34,17 @@ class PrescriptionRoutingMapperTest {
     }
 
     @Test
-    @DisplayName("a row written before the marker decodes identically — nothing has to be rewritten")
-    void decodesLegacyRows() {
+    @DisplayName("a row written before the marker is prose: shown as it stands, flagged as nothing")
+    void doesNotDecodeLegacyRows() {
+        // The phrase is indistinguishable from a routing reason a pharmacist
+        // typed, so it is not read as the fact. Those rows render exactly as
+        // they do today; converting them is a data migration.
         RoutingDecisionResponseDTO dto = mapper.toResponseDTO(
                 withReason("Partner no-show: nobody at the counter"));
 
-        assertThat(dto.isPartnerNoShow()).isTrue();
-        assertThat(dto.getNoShowReason()).isEqualTo("nobody at the counter");
-        assertThat(dto.getReason()).isNull();
+        assertThat(dto.isPartnerNoShow()).isFalse();
+        assertThat(dto.getNoShowReason()).isNull();
+        assertThat(dto.getReason()).isEqualTo("Partner no-show: nobody at the counter");
     }
 
     @Test
@@ -70,8 +73,8 @@ class PrescriptionRoutingMapperTest {
 
         assertThat(dto.isPartnerNoShow()).isFalse();
         assertThat(dto.getNoShowReason()).isNull();
-        // The words survive; only the machine token is kept off the screen.
-        assertThat(dto.getReason()).isEqualTo("last time, so routing elsewhere");
+        // The sentence reaches the prescriber exactly as it was typed.
+        assertThat(dto.getReason()).isEqualTo("Partner no-show: last time, so routing elsewhere");
     }
 
     @Test
@@ -95,10 +98,29 @@ class PrescriptionRoutingMapperTest {
         PrescriptionRoutingDecision backOrder = PrescriptionRoutingDecision.builder()
                 .routingType(RoutingType.BACKORDER)
                 .status(RoutingDecisionStatus.CANCELLED)
-                .reason("Partner no-show: noted on the supplier call")
+                .reason(PartnerNoShowReason.compose(null, "noted on the supplier call"))
                 .build();
 
         assertThat(mapper.toResponseDTO(backOrder).isPartnerNoShow()).isFalse();
+    }
+
+    @Test
+    @DisplayName("a superseded partner decision is not relabelled a no-show")
+    void aSupersededDecisionIsNotANoShow() {
+        // supersedeOpenDecisions and the SMS re-dispatch both leave a PARTNER
+        // decision CANCELLED without anyone recording a no-show. Only the
+        // marker the no-show path writes says one happened.
+        PrescriptionRoutingDecision superseded = PrescriptionRoutingDecision.builder()
+                .routingType(RoutingType.PARTNER)
+                .status(RoutingDecisionStatus.CANCELLED)
+                .reason("Partner no-show: last time, so routing here | Superseded: re-dispatched")
+                .build();
+
+        RoutingDecisionResponseDTO dto = mapper.toResponseDTO(superseded);
+
+        assertThat(dto.isPartnerNoShow()).isFalse();
+        assertThat(dto.getReason())
+                .isEqualTo("Partner no-show: last time, so routing here | Superseded: re-dispatched");
     }
 
     @Test

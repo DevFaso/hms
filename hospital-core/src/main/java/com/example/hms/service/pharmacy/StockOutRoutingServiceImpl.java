@@ -508,18 +508,32 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     // ── Private helpers ──
 
     /**
-     * Scope for a READ. A null {@code hospitalId} is a real super-admin in
-     * GLOBAL view, not a missing check: {@code requireActiveHospitalId}
-     * returns null for exactly that caller, who has no single hospital to be
-     * in scope for. The row is therefore not narrowed rather than rejected —
-     * the stance of {@code DispenseServiceImpl.enforceHospitalScope},
+     * Scope for a READ. A null {@code hospitalId} means a super-admin in
+     * GLOBAL view, who has no single hospital to be in scope for, and the row
+     * is then not narrowed — the stance of
+     * {@code DispenseServiceImpl.enforceHospitalScope},
      * {@code PrescriptionClarificationService.findInScope} and the rest of the
-     * hospital-scoped read surface. Dereferencing it answered the global-view
-     * super-admin with a 500 on every routing read.
+     * hospital-scoped read surface. Dereferencing it answered that caller with
+     * a 500 on every routing read.
+     *
+     * <p><b>Null alone is not the licence.</b> {@code requireActiveHospitalId}
+     * has a second way of returning null: step 4 falls back to
+     * {@code isSuperAdminFromAuth()}, which reads the AUTHORITIES, and
+     * {@code RoleValidator}'s own Javadoc warns those can be inflated — an
+     * impersonation context could carry ROLE_SUPER_ADMIN without the token
+     * having been minted for one. Before this PR such a principal hit the
+     * dereference and got a 500, which blocked the read by accident; widening
+     * it to a cross-tenant read of another hospital's orders would be a real
+     * escalation. So the unscoped path is gated on the discrete JWT claim,
+     * the only safe signal for a cross-tenant decision, and anyone else with
+     * no hospital is refused as before — as a 404 rather than a 500.
      */
     private Prescription findPrescription(UUID prescriptionId, UUID hospitalId) {
         Prescription prescription = prescriptionRepository.findById(prescriptionId)
                 .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
+        if (hospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
+            throw new ResourceNotFoundException("prescription.notfound");
+        }
         if (hospitalId != null
                 && (prescription.getHospital() == null
                     || !hospitalId.equals(prescription.getHospital().getId()))) {
@@ -554,6 +568,11 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
      */
     private void enforceDecisionHospitalScope(PrescriptionRoutingDecision decision, UUID hospitalId) {
         if (decision.getPrescription() == null) {
+            throw new ResourceNotFoundException("routing.decision.notfound");
+        }
+        // Same reasoning as findPrescription: a null hospital only licenses an
+        // unscoped read for a principal the JWT itself calls a super-admin.
+        if (hospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
             throw new ResourceNotFoundException("routing.decision.notfound");
         }
         if (hospitalId != null

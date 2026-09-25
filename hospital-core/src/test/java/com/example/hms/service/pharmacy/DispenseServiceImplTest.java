@@ -843,9 +843,11 @@ class DispenseServiceImplTest {
             other.setId(UUID.randomUUID());
             prescription.setHospital(other);
 
-            // requireActiveHospitalId returns null for exactly that caller;
-            // dereferencing it used to answer the cross-tenant view with a 500.
+            // requireActiveHospitalId returns null for that caller, and the
+            // discrete JWT claim is what says the null is a real super-admin
+            // rather than an inflated authorities collection.
             when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
             when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
             when(dispenseRepository.findByPrescriptionId(prescriptionId, pageable))
                     .thenReturn(new PageImpl<>(List.of(d)));
@@ -853,6 +855,24 @@ class DispenseServiceImplTest {
 
             assertThat(service.listByPrescription(prescriptionId, pageable).getContent())
                     .containsExactly(dto);
+        }
+
+        @Test
+        @DisplayName("a null hospital WITHOUT the JWT claim is refused, not served cross-tenant")
+        void inflatedAuthoritiesDoNotEarnAnUnscopedRead() {
+            Pageable pageable = PageRequest.of(0, 20);
+            Hospital other = new Hospital();
+            other.setId(UUID.randomUUID());
+            prescription.setHospital(other);
+
+            // The step-4 fallback in requireActiveHospitalId reads the
+            // AUTHORITIES, which RoleValidator warns can be inflated.
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+            assertThatThrownBy(() -> service.listByPrescription(prescriptionId, pageable))
+                    .isInstanceOf(ResourceNotFoundException.class);
         }
 
         @Test

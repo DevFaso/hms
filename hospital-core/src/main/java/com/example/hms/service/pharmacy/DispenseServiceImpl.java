@@ -617,6 +617,14 @@ public class DispenseServiceImpl implements DispenseService {
         // Dereferencing it instead answered that caller with a 500.
         Prescription prescription = prescriptionRepository.findById(prescriptionId)
                 .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
+        // Null alone is not the licence: requireActiveHospitalId also returns
+        // null from its step-4 fallback on the AUTHORITIES, which RoleValidator
+        // warns can be inflated. Only the discrete JWT claim may read across
+        // tenants; anyone else without a hospital is refused, as they
+        // effectively were by the 500 this replaces.
+        if (hospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
+            throw new ResourceNotFoundException("prescription.notfound");
+        }
         if (hospitalId != null
                 && (prescription.getHospital() == null
                     || !hospitalId.equals(prescription.getHospital().getId()))) {
@@ -1120,6 +1128,11 @@ public class DispenseServiceImpl implements DispenseService {
     }
 
     private void enforceHospitalScope(Pharmacy pharmacy, UUID hospitalId) {
+        // Pre-existing null-tolerance, now qualified the same way as the
+        // routing reads: an unscoped view belongs to a real super-admin.
+        if (hospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
+            throw new ResourceNotFoundException("pharmacy.notfound");
+        }
         if (hospitalId != null && pharmacy != null && pharmacy.getHospital() != null
                 && !pharmacy.getHospital().getId().equals(hospitalId)) {
             throw new ResourceNotFoundException("pharmacy.notfound");
