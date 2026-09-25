@@ -331,9 +331,14 @@
 
     <!-- ═══ Documents Tab (what the patient uploaded through the portal) ═══ -->
     @if (activeTab() === 'documents' && canViewDocuments()) {
-      <!-- Super-admin only (display:none otherwise): the tab is hospital-pinned
-           and the chart has no other scope selector, so "select a hospital
-           first" must be actionable right here. -->
+      <!--
+        Super-admin only — the chip is behind `@if (isSuperAdmin())`, so for
+        anyone else it is not rendered at all, not hidden. The tab is
+        hospital-pinned and this route carries no `requiresHospitalScope`, so
+        the shell's chip is absent: this is the ONLY hospital selector on the
+        patient chart, which is why the Labs tab's unscoped message points a
+        super-admin at it by name.
+      -->
       <!--
         `preserveScope` is not optional: without it `ngOnInit` runs
         `applyUrlScopeSync`, /patients/:id carries no `?hospitalId=`, and the

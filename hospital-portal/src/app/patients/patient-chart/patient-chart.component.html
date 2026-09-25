@@ -314,7 +314,11 @@
       Two messages, because only a super-admin HAS a hospital selector: the
       chip renders behind `@if (isSuperAdmin())`, so telling anyone else to
       use one is an instruction they cannot follow — the same dead end the
-      shared hint creates, just softer.
+      shared hint creates, just softer. And the one that DOES have it names
+      where: there is no chip on this tab either (only the Documents tab
+      embeds one, and /patients carries no `requiresHospitalScope`, so the
+      shell's is absent), so "use the selector" alone would send a
+      super-admin looking for something that is not on screen.
     -->
     <p class="labs-hint" role="status" data-testid="labs-no-hospital">
       {{

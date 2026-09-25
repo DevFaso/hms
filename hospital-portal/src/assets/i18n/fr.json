@@ -7288,7 +7288,7 @@
     "LABS": "Laboratoire",
     "LAB_AWAITING_RELEASE": "En attente de publication par le laboratoire",
     "LAB_IN_HOUSE": "Laboratoire interne",
-    "LAB_NO_HOSPITAL": "Les résultats de laboratoire s'affichent pour un hôpital à la fois, et aucun n'est actuellement défini. Choisissez-en un dans le sélecteur d'hôpital.",
+    "LAB_NO_HOSPITAL": "Les résultats de laboratoire s'affichent pour un hôpital à la fois, et aucun n'est actuellement défini. Choisissez-en un avec le sélecteur d'hôpital de l'onglet Documents de ce patient.",
     "LAB_NO_HOSPITAL_ASSIGNMENT": "Les résultats de laboratoire s'affichent pour un hôpital à la fois, et aucun n'est actuellement défini pour ce compte. Demandez à un administrateur de vérifier votre affectation hospitalière.",
     "LAB_ORDERED_AT": "Prescrit le",
     "LAB_ORDERED_BY": "Prescrit par",
