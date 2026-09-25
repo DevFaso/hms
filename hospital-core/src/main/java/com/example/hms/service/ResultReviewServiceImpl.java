@@ -141,8 +141,9 @@ public class ResultReviewServiceImpl implements ResultReviewService {
             // RoleExpansion grants them ROLE_DOCTOR before the @PreAuthorize on
             // GET /me/results/review-queue runs.
             //
-            // Refused rather than served unscoped, the same line #739 drew on
-            // getLabOrdersByStaffId, which is this same read by another name: a
+            // Refused rather than served unscoped, the same line #739 (open at
+            // the time of writing, not merged) draws on getLabOrdersByStaffId,
+            // which is this same read by another name: a
             // queue filtered to one person is that person's record, not a
             // worklist, and there is no acting hospital for a RECORD_SHARE row
             // to name. A super-admin who wants a clinician's queue picks a
