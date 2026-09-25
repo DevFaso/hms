@@ -3,7 +3,7 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, throwError, Subject } from 'rxjs';
 
 import { ToastService } from '../core/toast.service';
 import { PharmacyService } from '../services/pharmacy.service';
@@ -240,6 +240,49 @@ describe('StockRoutingComponent', () => {
     // nothing — stay on screen for a prescription nobody is looking at.
     component.prescriptionId = '';
     component.loadDecisions();
+
+    expect(component.decisionsError()).toBeFalse();
+    expect(component.decisions()).toEqual([]);
+  });
+
+  it('a late failure from an older read cannot wipe a newer history', () => {
+    // The error handler clears the table, so an unguarded race is destructive:
+    // page forward while the first read is still out and the first failure
+    // lands last, erasing rows the second read had already delivered.
+    const first = new Subject<any>();
+    const second = new Subject<any>();
+    pharmacySvc.listRoutingDecisionsByPrescription.and.returnValues(first, second);
+
+    component.prescriptionId = 'rx-1';
+    component.loadDecisions();
+    component.loadDecisions();
+
+    second.next(decisionsResponse);
+    second.complete();
+    expect(component.decisions().length).toBe(1);
+
+    // The superseded read answers last, and is ignored.
+    first.error({ status: 500 });
+
+    expect(component.decisions().length).toBe(1);
+    expect(component.decisionsError()).toBeFalse();
+  });
+
+  it("does not attribute the previous order's history to a new prescription", () => {
+    pharmacySvc.listRoutingDecisionsByPrescription.and.returnValue(
+      throwError(() => ({ status: 500 })),
+    );
+    component.prescriptionId = 'rx-1';
+    component.checkStock();
+    fixture.detectChanges();
+    expect(component.decisionsError()).toBeTrue();
+
+    // A different prescription whose own lookup fails: the red panel and the
+    // rows belong to rx-1 and must not be read as rx-2's.
+    pharmacySvc.checkStock.and.returnValue(throwError(() => ({ status: 500 })));
+    component.prescriptionId = 'rx-2';
+    component.checkStock();
+    fixture.detectChanges();
 
     expect(component.decisionsError()).toBeFalse();
     expect(component.decisions()).toEqual([]);

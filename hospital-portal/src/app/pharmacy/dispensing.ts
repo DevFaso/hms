@@ -48,14 +48,14 @@ export const QUEUE_ATTENTION_REASONS: readonly { reason: string; labelKey: strin
   { reason: 'CLARIFICATION_RESOLVED', labelKey: 'PHARMACY.ATTENTION.CLARIFICATION_RESOLVED' },
 ];
 
+/** The reason whose label already says the prescriber answered. */
+const CLARIFICATION_RESOLVED_LABEL_KEY = 'PHARMACY.ATTENTION.CLARIFICATION_RESOLVED';
+
 /**
  * A reason this build has never heard of still flags the row. A row the
  * pharmacist should look at is the point; a value added to the backend after
  * this build shipped is exactly the case a hard-coded list gets wrong.
  */
-/** The reason whose label already says the prescriber answered. */
-const CLARIFICATION_RESOLVED_LABEL_KEY = 'PHARMACY.ATTENTION.CLARIFICATION_RESOLVED';
-
 export const UNRECOGNISED_ATTENTION = {
   labelKey: 'PHARMACY.ATTENTION.UNRECOGNISED',
 };

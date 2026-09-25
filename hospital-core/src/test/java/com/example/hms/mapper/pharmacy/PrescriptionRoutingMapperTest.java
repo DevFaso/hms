@@ -54,6 +54,38 @@ class PrescriptionRoutingMapperTest {
     }
 
     @Test
+    @DisplayName("a PENDING decision is never a no-show, whatever its reason says")
+    void requiresTheStatusToCorroborate() {
+        // A row already in the table whose authored reason happens to begin
+        // with the legacy phrase. defuseAuthoredReason only protects rows
+        // written from now on, so the status is the other half of the answer.
+        PrescriptionRoutingDecision pending = PrescriptionRoutingDecision.builder()
+                .routingType(RoutingType.PARTNER)
+                .status(RoutingDecisionStatus.PENDING)
+                .reason("Partner no-show: last time, so routing elsewhere")
+                .build();
+
+        RoutingDecisionResponseDTO dto = mapper.toResponseDTO(pending);
+
+        assertThat(dto.isPartnerNoShow()).isFalse();
+        assertThat(dto.getNoShowReason()).isNull();
+        // And the reason is handed over untouched, not stripped.
+        assertThat(dto.getReason()).isEqualTo("Partner no-show: last time, so routing elsewhere");
+    }
+
+    @Test
+    @DisplayName("a CANCELLED back order is not a partner no-show either")
+    void requiresThePartnerRoutingType() {
+        PrescriptionRoutingDecision backOrder = PrescriptionRoutingDecision.builder()
+                .routingType(RoutingType.BACKORDER)
+                .status(RoutingDecisionStatus.CANCELLED)
+                .reason("Partner no-show: noted on the supplier call")
+                .build();
+
+        assertThat(mapper.toResponseDTO(backOrder).isPartnerNoShow()).isFalse();
+    }
+
+    @Test
     @DisplayName("a null entity maps to null")
     void nullEntity() {
         assertThat(mapper.toResponseDTO(null)).isNull();
