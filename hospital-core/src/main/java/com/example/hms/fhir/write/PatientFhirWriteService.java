@@ -15,7 +15,8 @@ import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
-import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.exception.BusinessException;
+import com.example.hms.utility.RoleValidator;
 import com.example.hms.service.AuditEventLogService;
 import org.hl7.fhir.r4.model.OperationOutcome;
 import org.slf4j.Logger;
@@ -46,7 +47,8 @@ import java.util.UUID;
  * </ul>
  *
  * <p>Cross-tenant: both operations are anchored on the caller's active
- * hospital (no scope → 403). PUT refuses a patient not registered there, and
+ * hospital (no scope → 403; a verified super-admin in global view writes
+ * unscoped). PUT refuses a patient not actively registered there, and
  * the conditional-create lookup refuses an identifier system naming any other
  * hospital, each with exactly the 404 a nonexistent patient or MRN gets — an
  * unknown id and another tenant's id are indistinguishable (the rule HL7
@@ -67,19 +69,22 @@ public class PatientFhirWriteService {
     private final PatientRepository patientRepository;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final AuditEventLogService auditEventLogService;
+    private final RoleValidator roleValidator;
 
     public PatientFhirWriteService(
         FhirWriteProperties writeProperties,
         PatientFhirMapper patientMapper,
         PatientRepository patientRepository,
         PatientHospitalRegistrationRepository registrationRepository,
-        AuditEventLogService auditEventLogService
+        AuditEventLogService auditEventLogService,
+        RoleValidator roleValidator
     ) {
         this.writeProperties = writeProperties;
         this.patientMapper = patientMapper;
         this.patientRepository = patientRepository;
         this.registrationRepository = registrationRepository;
         this.auditEventLogService = auditEventLogService;
+        this.roleValidator = roleValidator;
     }
 
     public boolean isEnabled() {
@@ -99,16 +104,24 @@ public class PatientFhirWriteService {
      * so a writer pinned to hospital A could overwrite the contact and address
      * of a patient registered only at B, and read the whole resource back.
      *
-     * <p>No oracle: an id that exists nowhere and an id registered only at
-     * another hospital get the same 404 with the same body, and cost the same
-     * single registration query, so a writer cannot sort candidate ids into
-     * "real somewhere else" and "not real".
+     * <p>The registration must be ACTIVE, as {@code conditionalCreate} already
+     * requires: a patient discharged or transferred away from hospital A is not
+     * A's to overwrite any more.
+     *
+     * <p>No oracle: an id that exists nowhere, an id registered only at another
+     * hospital, and an id whose registration here is no longer active all get
+     * the same 404 with the same body, and cost the same single registration
+     * query, so a writer cannot sort candidate ids into "real somewhere else"
+     * and "not real".
+     *
+     * <p>A verified super-admin in global view (no hospital pinned) writes
+     * unscoped, as before this gate; see {@link #resolveWriteScope}.
      */
     @Transactional
     public Patient update(UUID patientId, org.hl7.fhir.r4.model.Patient fhirIn) {
         ensureEnabled();
-        UUID hospitalId = requireHospitalScope();
-        Patient existing = findRegisteredAt(patientId, hospitalId)
+        UUID hospitalId = resolveWriteScope();
+        Patient existing = findWritable(patientId, hospitalId)
             .orElseThrow(() -> patientNotFound(patientId));
         patientMapper.applyFhirUpdates(existing, fhirIn);
         Patient saved = patientRepository.save(existing);
@@ -129,7 +142,9 @@ public class PatientFhirWriteService {
     @Transactional(readOnly = true)
     public Patient conditionalCreate(String ifNoneExistRaw, org.hl7.fhir.r4.model.Patient fhirIn) {
         ensureEnabled();
-        UUID callerHospitalId = requireHospitalScope();
+        // Request-shape validation reads no data, so it cannot be an existence
+        // oracle and keeps its documented 422 answers. The scope is resolved
+        // after it and before the lookup - scope-before-LOOKUP is the rule.
         if (ifNoneExistRaw == null || ifNoneExistRaw.isBlank()) {
             throw unprocessable(
                 "POST /Patient requires an If-None-Exist header — auto-provisioning is disabled.",
@@ -150,13 +165,16 @@ public class PatientFhirWriteService {
             )
         );
 
+        UUID callerHospitalId = resolveWriteScope();
         // The hospital in the identifier system comes from the REQUEST. Only the
         // caller's own active hospital may be searched: another hospital's MRN
         // space answers exactly like an MRN that matches nothing, never with the
-        // other hospital's patient.
-        List<PatientHospitalRegistration> matches = callerHospitalId.equals(mrn.hospitalId())
-            ? registrationRepository.findActiveByHospitalIdAndIdentifier(mrn.hospitalId(), mrn.mrn())
-            : List.of();
+        // other hospital's patient. A verified super-admin in global view
+        // (null) may name any hospital.
+        List<PatientHospitalRegistration> matches =
+            callerHospitalId == null || callerHospitalId.equals(mrn.hospitalId())
+                ? registrationRepository.findActiveByHospitalIdAndIdentifier(mrn.hospitalId(), mrn.mrn())
+                : List.of();
 
         long activeMrnMatches = matches.stream()
             .filter(r -> r != null && r.getMrn() != null
@@ -197,36 +215,54 @@ public class PatientFhirWriteService {
     }
 
     /**
-     * The caller's active hospital, from the authenticated principal's
-     * {@code HospitalContext} (an {@code X-Hospital-Id} pin is honoured only
-     * inside the principal's permitted scope). No scope is refused up front as
-     * 403, like the Encounter and Observation write paths: "pin a hospital"
-     * reveals nothing about any identifier.
+     * The hospital this write is scoped to, or {@code null} for a verified
+     * super-admin in global view.
+     *
+     * <p>Resolved through {@code RoleValidator.requireActiveHospitalId()}, not
+     * the raw {@code HospitalContext}: for a super-admin with no
+     * {@code X-Hospital-Id} the raw context still carries a JWT-derived home
+     * hospital, which would silently scope a global-view super-admin to it (and
+     * refuse one with no home hospital outright). A null is honoured as global
+     * view only when {@code isSuperAdminFromJwtClaim()} agrees - the precedent
+     * of #746 and the pharmacy services; the authorities alone are not enough.
+     * Anyone else with no hospital gets a 403 that names no identifier.
      */
-    private static UUID requireHospitalScope() {
-        UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
-        if (hospitalId == null) {
-            OperationOutcome outcome = new OperationOutcome();
-            outcome.addIssue()
-                .setSeverity(OperationOutcome.IssueSeverity.ERROR)
-                .setCode(OperationOutcome.IssueType.FORBIDDEN)
-                .setDiagnostics("FHIR Patient writes require an active hospital scope; supply "
-                    + "X-Hospital-Id or authenticate as a hospital-scoped user.");
-            throw new ForbiddenOperationException("An active hospital scope is required.", outcome);
+    private UUID resolveWriteScope() {
+        UUID hospitalId;
+        try {
+            hospitalId = roleValidator.requireActiveHospitalId();
+        } catch (BusinessException ex) {
+            // Nothing resolved for a non-super-admin: HAPI would render the
+            // BusinessException as a 500. It is the "pin a hospital" answer.
+            throw noHospitalScope();
+        }
+        if (hospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
+            throw noHospitalScope();
         }
         return hospitalId;
     }
 
+    private static ForbiddenOperationException noHospitalScope() {
+        OperationOutcome outcome = new OperationOutcome();
+        outcome.addIssue()
+            .setSeverity(OperationOutcome.IssueSeverity.ERROR)
+            .setCode(OperationOutcome.IssueType.FORBIDDEN)
+            .setDiagnostics("FHIR Patient writes require an active hospital scope; supply "
+                + "X-Hospital-Id or authenticate as a hospital-scoped user.");
+        return new ForbiddenOperationException("An active hospital scope is required.", outcome);
+    }
+
     /**
-     * The patient, only when registered at {@code hospitalId}. The registration
-     * is asked first so that a missing id and another hospital's id cost the
-     * same one query and come back the same empty.
+     * The patient, only when ACTIVELY registered at {@code hospitalId}; one
+     * query whether the id is missing, foreign or discharged. For a verified
+     * super-admin in global view ({@code null}), any patient.
      */
-    private Optional<Patient> findRegisteredAt(UUID patientId, UUID hospitalId) {
-        if (!registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)) {
-            return Optional.empty();
+    private Optional<Patient> findWritable(UUID patientId, UUID hospitalId) {
+        if (hospitalId == null) {
+            return patientRepository.findById(patientId);
         }
-        return patientRepository.findById(patientId);
+        return registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId)
+            .map(PatientHospitalRegistration::getPatient);
     }
 
     /**

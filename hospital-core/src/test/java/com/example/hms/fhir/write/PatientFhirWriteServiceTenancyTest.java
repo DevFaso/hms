@@ -4,6 +4,8 @@ import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
 import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
+import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.fhir.FhirWriteProperties;
 import com.example.hms.fhir.mapper.PatientFhirMapper;
 import com.example.hms.fhir.mapper.PatientFhirMapper.MrnIdentifier;
@@ -14,6 +16,7 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.AuditEventLogService;
+import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,14 +41,17 @@ import static org.mockito.Mockito.when;
 
 /**
  * FHIR {@code PUT /Patient/{id}} and the conditional {@code POST /Patient} are
- * anchored on the caller's active hospital, and a patient (or MRN) that lives
- * only at another hospital answers exactly like one that does not exist.
+ * anchored on the caller's active hospital, and a patient (or MRN) that the
+ * caller's hospital does not actively hold answers exactly like one that does
+ * not exist.
  *
  * <p>Every refusal test asks the SAME question in two worlds (the subject
- * exists at another hospital, or it exists nowhere) and requires the answers
- * to be identical in status AND body, the OperationOutcome HAPI renders.
- * Comparing status alone would pass a 404 whose wording still told the two
- * worlds apart.
+ * exists somewhere the caller may not write, or it exists nowhere) and
+ * requires the answers to be identical in status AND body, the
+ * OperationOutcome HAPI renders.
+ *
+ * <p>The scope comes from {@code RoleValidator.requireActiveHospitalId()},
+ * whose null is honoured as global view only for a verified super-admin.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -58,6 +64,7 @@ class PatientFhirWriteServiceTenancyTest {
     @Mock private PatientRepository patientRepository;
     @Mock private PatientHospitalRegistrationRepository registrationRepository;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private RoleValidator roleValidator;
 
     private PatientFhirWriteService service;
     private final UUID callerHospital = UUID.randomUUID();
@@ -68,7 +75,7 @@ class PatientFhirWriteServiceTenancyTest {
         FhirWriteProperties properties = new FhirWriteProperties();
         properties.setEnabled(true);
         service = new PatientFhirWriteService(
-            properties, patientMapper, patientRepository, registrationRepository, auditEventLogService);
+            properties, patientMapper, patientRepository, registrationRepository, auditEventLogService, roleValidator);
         when(patientRepository.save(any(Patient.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -80,11 +87,11 @@ class PatientFhirWriteServiceTenancyTest {
     /* ── PUT /Patient/{id} ─────────────────────────────────────────────── */
 
     @Test
-    void putUpdatesAPatientRegisteredAtTheCallersHospital() {
+    void putUpdatesAPatientActivelyRegisteredAtTheCallersHospital() {
         scope(callerHospital);
         Patient mine = patient();
-        when(registrationRepository.existsByPatientIdAndHospitalId(mine.getId(), callerHospital)).thenReturn(true);
-        when(patientRepository.findById(mine.getId())).thenReturn(Optional.of(mine));
+        when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(mine.getId(), callerHospital))
+            .thenReturn(Optional.of(registration(mine, true)));
 
         org.hl7.fhir.r4.model.Patient body = new org.hl7.fhir.r4.model.Patient();
         assertThat(service.update(mine.getId(), body)).isSameAs(mine);
@@ -97,11 +104,10 @@ class PatientFhirWriteServiceTenancyTest {
     void putOnAnotherHospitalsPatientIsByteIdenticalToAMissingId() {
         scope(callerHospital);
         UUID patientId = UUID.randomUUID();
-        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, callerHospital)).thenReturn(false);
 
         // World 1: the id is a real patient, registered only at another hospital.
         // findById answering it is what TenantAwareJpaRepository does for a
-        // super-admin, or for a caller also permitted at that other hospital.
+        // caller also permitted at that other hospital.
         Patient foreign = patient();
         foreign.setId(patientId);
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(foreign));
@@ -119,27 +125,81 @@ class PatientFhirWriteServiceTenancyTest {
     }
 
     @Test
-    void putAsksOnlyTheRegistrationWhenThePatientIsNotTheCallers() {
-        // Cost parity: a foreign id must not cost a second query that a missing
-        // id does not; the registration is the one question asked.
+    void putOnAPatientWhoLeftTheCallersHospitalIsByteIdenticalToAMissingId() {
+        // Discharged or transferred away: the registration here still exists
+        // but is no longer active. It is not this hospital's to overwrite.
         scope(callerHospital);
         UUID patientId = UUID.randomUUID();
-        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, callerHospital)).thenReturn(false);
+        Patient left = patient();
+        left.setId(patientId);
+
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, callerHospital)).thenReturn(true);
+        when(registrationRepository.findByPatientIdAndHospitalId(patientId, callerHospital))
+            .thenReturn(Optional.of(registration(left, false)));
+        when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, callerHospital))
+            .thenReturn(Optional.empty());
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(left));
+        Throwable inactive = catchThrowable(() -> service.update(patientId, new org.hl7.fhir.r4.model.Patient()));
+
+        Mockito.reset(registrationRepository, patientRepository);
+        Throwable nowhere = catchThrowable(() -> service.update(patientId, new org.hl7.fhir.r4.model.Patient()));
+
+        assertIdenticalRefusal(inactive, nowhere);
+        assertThat(nowhere).isInstanceOf(ResourceNotFoundException.class);
+        verify(patientMapper, never()).applyFhirUpdates(any(), any());
+    }
+
+    @Test
+    void aRefusedPutAsksOneQueryAndNeverLoadsThePatient() {
+        scope(callerHospital);
+        UUID patientId = UUID.randomUUID();
 
         org.hl7.fhir.r4.model.Patient body = new org.hl7.fhir.r4.model.Patient();
         assertThatThrownBy(() -> service.update(patientId, body)).isInstanceOf(ResourceNotFoundException.class);
+
+        verify(registrationRepository).findByPatientIdAndHospitalIdAndActiveTrue(patientId, callerHospital);
         verify(patientRepository, never()).findById(any());
     }
 
     @Test
-    void putWithoutAHospitalScopeIsForbidden() {
-        HospitalContextHolder.setContext(HospitalContext.builder().build());
+    void putWithANullScopeTheVerifiedFlagDoesNotBackIsForbidden() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
         UUID patientId = UUID.randomUUID();
 
         org.hl7.fhir.r4.model.Patient body = new org.hl7.fhir.r4.model.Patient();
         assertThatThrownBy(() -> service.update(patientId, body)).isInstanceOf(ForbiddenOperationException.class);
-        verify(registrationRepository, never()).existsByPatientIdAndHospitalId(any(), any());
+        verify(patientRepository, never()).findById(any());
         verify(patientRepository, never()).save(any());
+    }
+
+    @Test
+    void putWhenNoHospitalResolvesIsA403NotA500() {
+        when(roleValidator.requireActiveHospitalId()).thenThrow(new BusinessException("Hospital context required."));
+        UUID patientId = UUID.randomUUID();
+
+        org.hl7.fhir.r4.model.Patient body = new org.hl7.fhir.r4.model.Patient();
+        assertThatThrownBy(() -> service.update(patientId, body)).isInstanceOf(ForbiddenOperationException.class);
+    }
+
+    @Test
+    void aVerifiedSuperAdminInGlobalViewIsNotScopedToTheirJwtHomeHospital() {
+        // The raw HospitalContext still carries the JWT-derived home hospital
+        // for a super-admin with no X-Hospital-Id. Reading it scoped a
+        // global-view super-admin to that hospital; RoleValidator drops it.
+        UUID homeHospital = UUID.randomUUID();
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .superAdmin(true).activeHospitalId(homeHospital).build());
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        Patient elsewhere = patient();
+        when(patientRepository.findById(elsewhere.getId())).thenReturn(Optional.of(elsewhere));
+
+        org.hl7.fhir.r4.model.Patient body = new org.hl7.fhir.r4.model.Patient();
+        assertThat(service.update(elsewhere.getId(), body)).isSameAs(elsewhere);
+
+        verify(registrationRepository, never()).findByPatientIdAndHospitalIdAndActiveTrue(any(), any());
+        verify(patientRepository).save(elsewhere);
     }
 
     /* ── POST /Patient + If-None-Exist ─────────────────────────────────── */
@@ -150,7 +210,7 @@ class PatientFhirWriteServiceTenancyTest {
         Patient mine = patient();
         stubMrnToken(callerHospital);
         when(registrationRepository.findActiveByHospitalIdAndIdentifier(callerHospital, MRN))
-            .thenReturn(List.of(registration(mine)));
+            .thenReturn(List.of(registration(mine, true)));
 
         assertThat(service.conditionalCreate(ifNoneExist(callerHospital), new org.hl7.fhir.r4.model.Patient()))
             .isSameAs(mine);
@@ -164,7 +224,7 @@ class PatientFhirWriteServiceTenancyTest {
 
         // World 1: the MRN is live at the other hospital.
         when(registrationRepository.findActiveByHospitalIdAndIdentifier(otherHospital, MRN))
-            .thenReturn(List.of(registration(patient())));
+            .thenReturn(List.of(registration(patient(), true)));
         Throwable elsewhere = catchThrowable(() ->
             service.conditionalCreate(header, new org.hl7.fhir.r4.model.Patient()));
 
@@ -179,14 +239,43 @@ class PatientFhirWriteServiceTenancyTest {
     }
 
     @Test
-    void conditionalCreateWithoutAHospitalScopeIsForbidden() {
-        HospitalContextHolder.setContext(HospitalContext.builder().build());
+    void aVerifiedSuperAdminInGlobalViewMayNameAnyHospitalsMrn() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        Patient theirs = patient();
+        stubMrnToken(otherHospital);
+        when(registrationRepository.findActiveByHospitalIdAndIdentifier(otherHospital, MRN))
+            .thenReturn(List.of(registration(theirs, true)));
+
+        assertThat(service.conditionalCreate(ifNoneExist(otherHospital), new org.hl7.fhir.r4.model.Patient()))
+            .isSameAs(theirs);
+    }
+
+    @Test
+    void conditionalCreateWithANullScopeTheVerifiedFlagDoesNotBackIsForbidden() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+        stubMrnToken(otherHospital);
         String header = ifNoneExist(otherHospital);
         org.hl7.fhir.r4.model.Patient body = new org.hl7.fhir.r4.model.Patient();
 
         assertThatThrownBy(() -> service.conditionalCreate(header, body))
             .isInstanceOf(ForbiddenOperationException.class);
         verify(registrationRepository, never()).findActiveByHospitalIdAndIdentifier(any(), any());
+    }
+
+    @Test
+    void aMalformedRequestKeepsItsDocumented422EvenWithNoScope() {
+        // Shape validation reads no data, so it runs before the scope: a
+        // missing If-None-Exist is still 422, not "scope required".
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+        org.hl7.fhir.r4.model.Patient body = new org.hl7.fhir.r4.model.Patient();
+
+        assertThatThrownBy(() -> service.conditionalCreate(null, body))
+            .isInstanceOf(UnprocessableEntityException.class)
+            .hasMessageContaining("If-None-Exist");
+        verify(roleValidator, never()).requireActiveHospitalId();
     }
 
     /* ── helpers ───────────────────────────────────────────────────────── */
@@ -204,6 +293,10 @@ class PatientFhirWriteServiceTenancyTest {
             .isEqualTo(FHIR.newJsonParser().encodeResourceToString(b.getOperationOutcome()));
     }
 
+    private void scope(UUID hospitalId) {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+    }
+
     private void stubMrnToken(UUID hospitalInToken) {
         when(patientMapper.parseMrnSearchToken(any()))
             .thenReturn(Optional.of(new MrnIdentifier(hospitalInToken, MRN)));
@@ -213,10 +306,11 @@ class PatientFhirWriteServiceTenancyTest {
         return "identifier=urn:hms:hospital:" + hospitalId + ":mrn|" + MRN;
     }
 
-    private static PatientHospitalRegistration registration(Patient patient) {
+    private static PatientHospitalRegistration registration(Patient patient, boolean active) {
         PatientHospitalRegistration registration = new PatientHospitalRegistration();
         registration.setMrn(MRN);
         registration.setPatient(patient);
+        registration.setActive(active);
         return registration;
     }
 
@@ -224,9 +318,5 @@ class PatientFhirWriteServiceTenancyTest {
         Patient patient = new Patient();
         patient.setId(UUID.randomUUID());
         return patient;
-    }
-
-    private static void scope(UUID hospitalId) {
-        HospitalContextHolder.setContext(HospitalContext.builder().activeHospitalId(hospitalId).build());
     }
 }
