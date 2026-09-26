@@ -99,12 +99,12 @@ and a patient's mobile-app token reached every provider. Two rules follow:
   own matcher above the `/fhir/**` one** (first match wins, and the reader
   matcher is terminal) — never a wider reader set.
 - **A role gate is not a tenant gate.** Admission says nothing about which
-  hospital's rows a reader may see; this matcher must never be widened or
-  narrowed to stand in for tenant scoping.
+  hospital's rows a reader may see — that is the tenant boundary below; this
+  matcher must never be widened or narrowed to stand in for tenant scoping.
 - **The matcher sees the UNION of the caller's roles** across all their
-  hospitals. The tenant layer must check the role held at the hospital the
-  request is bound to — a DOCTOR at A who is a RECEPTIONIST at B passes the
-  matcher while acting at B.
+  hospitals: a DOCTOR at A who is a RECEPTIONIST at B passes it while acting
+  at B. The tenant boundary below checks the role held at the bound hospital
+  and refuses that caller at B.
 - **No machine role is admitted.** `ROLE_FHIR_CLIENT` cannot be provisioned
   today, and `KeycloakJwtAuthenticationConverter` maps a role of any realm
   client to `ROLE_*` — admitting it would let an unrelated client role named
@@ -114,6 +114,44 @@ and a patient's mobile-app token reached every provider. Two rules follow:
 `FhirRoleGateIT` sends real tokens through the real filter chain: an
 HMS-minted JWT (through `JwtAuthenticationFilter` and `RoleExpansion`) and a
 Keycloak-shaped RS256 JWT (through the real `KeycloakJwtAuthenticationConverter`).
+
+## Tenant boundary — one interceptor, not per-provider guards
+
+`FhirTenantBoundaryInterceptor` bounds every FHIR request to the caller's
+hospital; `FhirTenantBoundary` is the one definition of "visible at this
+hospital". Before it, four providers (`Encounter`, `Condition`,
+`MedicationRequest`, `Immunization`) read with bare `findById` /
+`findByPatient_Id` on entities that are not `TenantScoped`, so any bearer
+token read every hospital's rows. Do not fix a tenancy gap by adding a guard
+to one provider method: teach the boundary.
+
+- **Adding a provider:** add its type — and every id prefix its mapper
+  mints (`labresult-`, `vital-<uuid>-<component>`, `upl-`, ...) — to
+  `FhirTenantBoundary.KNOWN_TYPES` and `visibleIdParts`, with a literal JPQL
+  query. Until then every read and search of it is refused (fail closed), and
+  `FhirTenantBoundaryIT.everyProviderIsCovered` fails.
+- **The bound hospital comes from the principal.** `boundHospital` accepts the
+  active hospital only when the principal holds it (or is a super-admin who
+  pinned it). `HospitalContextRequestOverrides` takes `X-Hospital-Id` for ANY
+  hospital when the principal holds none, so never read `getActiveHospitalId()`
+  on a FHIR path as if it were validated — read the bound value.
+- **The role is checked at the bound hospital, not in the union.**
+  `holdsRoleAt` asks whether the principal holds a role the operation needs
+  (`requiredRoleCodes`: readers / `$export` admin / writers) AT the bound
+  hospital — live assignments for an HMS token, the `role_assignments`
+  claim for a Keycloak token. Any path matcher sees only the union of the
+  caller's roles across hospitals.
+- **Indistinguishable by construction.** The named-id gate runs before the
+  provider and asks only "is it visible here", so a foreign id, a missing id
+  and a malformed id all get `new ResourceNotFoundException(request.getId())`.
+  The pre-check is load-bearing, not redundant with the output filter:
+  without it, `GET Patient/{foreign}` was a 500 (the mapper's lazy load) while
+  an unknown id was a 404.
+- **`$everything` is the one output-filter exemption** (`SELF_SCOPED_OPERATIONS`):
+  its sections follow the E8 policy across hospitals. Its named-id gate still
+  applies. A new self-scoped operation needs the same explicit listing.
+- **Totals:** searches lose `_count` / `_offset` at the boundary so the bundle
+  the filter corrects is the whole (provider-capped) result.
 
 ## FHIR write API (Patient — row 20 foundation)
 

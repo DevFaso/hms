@@ -46,25 +46,58 @@ design until terminology binding (gap #5) and the inbound MLLP listener
     `SURGEON`, `NURSE`, `MIDWIFE`, `SUPER_ADMIN`.
 
   A patient token, and every non-clinical staff role, gets 403.
-- **Reads are NOT tenant-scoped yet.** The role gate above says who may use
-  FHIR, not which hospital's rows they see. `Encounter`, `Condition`,
-  `MedicationRequest` and `Immunization` read with no hospital filter at all
-  (bare `findById` / `findByPatient_Id` on entities that are not
-  `TenantScoped`), and `Patient` is scoped to every hospital and organisation
-  the caller holds rather than the one it is acting in. An admitted caller
-  can therefore read other hospitals' rows until the per-hospital tenant
-  boundary (the follow-up to the role gate) lands.
+- **Tenancy is enforced once, at the servlet, by `FhirTenantBoundaryInterceptor`**
+  — not by the providers, four of which (`Encounter`, `Condition`,
+  `MedicationRequest`, `Immunization`) read with no hospital filter. The
+  JPA repositories do not scope these entities (they are not `TenantScoped`),
+  and where they do (`Patient`) they scope to every permitted hospital and
+  organisation, not the one the request is acting in. See
+  [Tenant boundary](#tenant-boundary) below.
 - The role gate checks the **union** of the caller's roles across all their
   hospitals (a Spring Security path matcher sees only flat authorities): a
-  DOCTOR at A who is a RECEPTIONIST at B passes while acting at B. The tenant
-  boundary must check the role held **at the hospital the request is bound
-  to**.
+  DOCTOR at A who is a RECEPTIONIST at B passes it while acting at B. The
+  tenant boundary then checks the role held **at the hospital the request is
+  bound to**, and refuses that caller at B.
 - There is no integration identity yet: no machine role is provisioned in
   any migration or in the realm, and no realm client has service accounts
   enabled. An integration signs in as a staff user and is gated by that
   user's role.
 - CSRF is exempted on `/fhir/**` (server-to-server clients use Bearer JWT,
   not browser cookies).
+
+## Tenant boundary
+
+`FhirTenantBoundaryInterceptor` (registered first in `FhirConfig`) bounds
+every request except `metadata` to one hospital, for every provider:
+
+1. **Bind.** The hospital comes from the authenticated principal —
+   `FhirTenantBoundary.boundHospital`: the active hospital, only if the
+   principal holds it. `X-Hospital-Id` selects among the principal's own
+   hospitals; a super-admin must supply it (global view is refused). No
+   hospital → `403` + `OperationOutcome(forbidden)` before any provider runs.
+   The caller must also hold, **at that hospital**, a role the request needs
+   — reads: `DOCTOR`, `PHYSICIAN`, `SURGEON`, `NURSE`, `MIDWIFE`,
+   `RADIOLOGIST`, `ANESTHESIOLOGIST`, `PHYSIOTHERAPIST`; `$export`:
+   `HOSPITAL_ADMIN`; every other method: `DOCTOR`, `PHYSICIAN`, `SURGEON`,
+   `NURSE`, `MIDWIFE` (a super-admin is global). Spring Security's authorities
+   are the union across hospitals, so a doctor at A who is a receptionist at B
+   is refused while acting at B. HMS tokens are checked against the live
+   assignments; Keycloak tokens against their `role_assignments` claim.
+2. **Gate the named id.** `GET`/`PUT` `<Type>/{id}` and
+   `Patient/{id}/$everything` answer `404` unless the resource is visible at
+   that hospital, with the same `ResourceNotFoundException` a provider throws
+   for an unknown id — the provider never runs, so another hospital's row, a
+   row that does not exist and an unparsable id answer identically.
+3. **Filter the response.** Search bundles lose the entries not visible at the
+   hospital and their `total` is corrected; `_count` / `_offset` are removed
+   before the provider runs so the total is exact. `$everything` is exempt from
+   this step (its sections follow the E8 treatment-relationship policy).
+
+Visibility (`FhirTenantBoundary`): the row's own hospital, except `Patient`
+and patient-uploaded `DocumentReference` (registered at the hospital) and lab
+orders/results (ordering hospital or performing laboratory). A resource type
+the boundary has not been taught is refused entirely; `FhirTenantBoundaryIT`
+fails the build if a provider's type is missing.
 
 ## Quick smoke test
 
@@ -123,8 +156,10 @@ matches the WHO SMART Guideline profiles used by DHIS2.
 ## Known gaps (intentional, deferred)
 
 - **No CRUD writes** — read-only until terminology bindings land.
-- **No paging** — `_count` / `_offset` ignored. First 50–250 results returned
-  depending on resource.
+- **No paging** — `_count` / `_offset` are removed from every search by the
+  tenant boundary. First 50–250 results returned depending on resource (the
+  cap applies before the boundary filters, so a patient with more rows at
+  other hospitals than the cap can see fewer of their own).
 - **No `_include` / `_revinclude`** beyond what HAPI advertises by default.
 - **CDS Hooks 1.0** is now available — see [`cds-hooks.md`](cds-hooks.md).
 - **SMART-on-FHIR App Launch 1.0** discovery is now available — see

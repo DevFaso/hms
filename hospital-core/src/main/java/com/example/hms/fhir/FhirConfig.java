@@ -25,8 +25,10 @@ import java.util.List;
  * advertises every registered provider, so adding a new {@link IResourceProvider}
  * bean is sufficient to surface it on the wire.
  *
- * <p>Two HAPI interceptors are layered on top:
+ * <p>Three HAPI interceptors are layered on top:
  * <ul>
+ *   <li>{@link FhirTenantBoundaryInterceptor} — bounds every read, search
+ *       and operation to the caller's hospital, for every provider.</li>
  *   <li>{@link SmartConfigurationInterceptor} — serves the spec-conformant
  *       {@code .well-known/smart-configuration} endpoint inside the FHIR
  *       servlet space.</li>
@@ -53,6 +55,7 @@ public class FhirConfig {
         FhirWriteProperties fhirWriteProperties,
         FhirOperationsProperties fhirOperationsProperties,
         FhirBulkExportOperationProvider fhirBulkExportOperationProvider,
+        FhirTenantBoundaryInterceptor fhirTenantBoundaryInterceptor,
         @Value("${app.fhir.serverBaseUrl:/api/fhir}") String serverBaseUrl
     ) {
         RestfulServer server = new RestfulServer(fhirContext);
@@ -73,6 +76,9 @@ public class FhirConfig {
         // PatientFhirResourceProvider itself (resource-level @Operation).
         server.registerProvider(fhirBulkExportOperationProvider);
         server.setDefaultPrettyPrint(true);
+        // Registered first and ordered first: nothing reaches a provider, and
+        // nothing leaves the server, without passing the tenant boundary.
+        server.registerInterceptor(fhirTenantBoundaryInterceptor);
         server.registerInterceptor(new ResponseHighlighterInterceptor());
         server.registerInterceptor(smartConfigurationInterceptor);
         server.setServerConformanceProvider(
