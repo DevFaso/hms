@@ -1502,7 +1502,10 @@ that exists rather than inventing one.
   The merge service, alias reassignment and PATIENT_MERGE audit did already
   exist from #439/#449, so this is the inbound trigger — but it is **not** the
   thin adapter the entry implied, and the reason is a security one.
-  ⚠ **EVERY EMPI TENANT GUARD IS A NO-OP ON AN MLLP THREAD.**
+  ⚠ **EVERY EMPI TENANT GUARD IS A NO-OP ON AN MLLP THREAD.** *(No longer
+  true, 2026-09-26: the guards now THROW or refuse on a thread with no
+  context, so every inbound A40 may be refused — see batch 3's first item in
+  Standing platform debt, `fix/hl7-a40-merge-scope`.)*
   `EmpiServiceImpl.isVisibleToCaller` resolves the caller's hospital from the
   security context and treats a **null** active hospital as "unscoped, allow";
   `requirePatientInTenant` returns early on the same null. There is no security
@@ -2230,7 +2233,10 @@ it in batch 3); the Keycloak converter (`fix/keycloak-role-conversion`); the
 prescription staff-owner read (`fix/prescription-read-staff-owner`); and the
 `/users` follow-ups (`fix/users-directory-and-email`: the directory scoped to
 the caller's hospitals, a self email change needing the current password).
-The rest of this list moves to batch 3 behind the design.
+Added to it because it may be a prod outage: the inbound A40 merge
+(`fix/hl7-a40-merge-scope`, see batch 3's first item). In batch 2 from the
+list below: the ownership sweep, the Keycloak converter, the prescription
+twin, and the resolver as a design document only.
 - **Patient-admitting reads by patient id with no ownership check.**
   `GET /consultations/patient/{patientId}` admits `PATIENT` and passes the id
   straight to `getConsultationsForPatient`, so a patient holding a
@@ -2243,6 +2249,9 @@ The rest of this list moves to batch 3 behind the design.
   (`requireIdentifiersFree`, case-insensitive, deleted accounts included, on
   both the admin and self paths). Existing case-variant rows are not
   repaired.
+Moved to batch 3 (behind the design): the resolver unification itself, stale
+JWT hospital claims, the authority-derived `ctx.isSuperAdmin()` and
+`CrossTenantReadAudit`, and the dead `hasAuthority` clauses with their ratchet.
 - One tenant resolver: `RoleValidator.requireActiveHospitalId()` and
   `ControllerAuthUtils.resolveHospitalScope` agree on super-admin semantics;
   step 4's authorities-only global view goes; the raw-context readers
@@ -2257,13 +2266,20 @@ The rest of this list moves to batch 3 behind the design.
   `@PreAuthorize` with its `SecurityConfig` matcher.
 - Staff who are also patients: the prescription twin of #754.
 
-**Batch 3 — pharmacy and lab, finished.** First: **inbound HL7 A40 merges may
+**Batch 3 — the resolver, then pharmacy and lab, finished.** The security
+items moved from batch 2 above come first, led by the one-resolver PR that
+follows the design document. **Pulled forward into batch 2** because it may be
+a prod outage (`fix/hl7-a40-merge-scope`): **inbound HL7 A40 merges may
 fail on prod today, before any tenant logic.** `MllpInboundMergeServiceImpl
 .processMerge` calls `empiService.mergePatients` with no `HospitalContext`
 and no authentication, and `requirePatientInTenant` calls
 `requireActiveHospitalId()`, which throws `HOSPITAL_CONTEXT_REQUIRED` on a
 thread with neither (`requirePatientInTenant` landed 2026-08-20, six days
-before inbound A40 shipped). Found reviewing #773; unverified end to end —
+before inbound A40 shipped), and since #773 even a null scope is refused
+without a verified super-admin, so `processMerge` answers REJECTED_INVALID
+(AE) to every A40. The #527 entry's "every EMPI tenant guard is a no-op on
+an MLLP thread" predates `requirePatientInTenant` and is no longer true.
+Found reviewing #773; unverified end to end —
 prove it with a test through the real dispatcher and EMPI, then decide how
 the MLLP thread supplies the receiving hospital. Then the items under "The pharmacy and
 laboratory flows: what wave 2 left underneath it" that remain unowned; the
@@ -2748,13 +2764,17 @@ questions below need a clinician, not an engineer.
   siblings are the shape of what exists today: source scans that assert
   ordering, not reachability.
 - **~~Lab results were fetched cross-tenant and filtered in memory.~~ Closed
-  by #775** (`findPatientResultsReadableAt`, the #751 predicate, on five
-  callers; `findAllPatientResults` for the two global-view reads; paging
-  tie-broken by id). Still open, a product question: the staff lab views
-  (chart review's scoped branch, `PatientLabResultServiceImpl`'s staff
-  branch) use an ordered-only finder, so a result a hospital's own lab
-  performed for another hospital is not shown there; the query's
-  performed-here clause is kept, unused, for that decision. What it was:
+  by #775**: the timeline and the doctor record query
+  `findPatientResultsReadableAt` with no acting hospital (ordered-at-readable
+  rows only, so nothing unreadable is loaded); the two global-view reads use
+  `findAllPatientResults`; a fifth caller, `getLabResultsByPatientId`, had no
+  caller and was deleted; paging is tie-broken by id. Still open, a product
+  question: **every** staff lab surface is ordered-only — the timeline, the
+  doctor record, chart review's scoped branch and
+  `PatientLabResultServiceImpl`'s staff branch — so a result a hospital's own
+  lab performed for another hospital is shown on none of them. The query's
+  performed-here clause (#751's rule) is kept, unused, for that decision.
+  What it was:
   `collectLabResultEntries` calls `findByLabOrder_Patient_Id(patientId)` with no
   hospital predicate, then discards unreadable rows in the stream — so every row
   from a hospital the caller may NOT read is still hydrated with all eight
@@ -2911,17 +2931,22 @@ questions below need a clinician, not an engineer.
   while `uq_user_username` (V1_1) indexes the username verbatim, so `Victim` and
   `victim` are two accounts sharing one throttle key: any move of state under a
   rename lets one account clear or inherit another's lockout, which is worse
-  than the leak it closes. Tried and reverted in #573. Two things have to change
+  than the leak it closes. Tried and reverted in #573. **Both prerequisites
+  below are now met by #776** (a caller check on `PUT /users/{id}`, and
+  `requireIdentifiersFree`, a case-insensitive uniqueness check on username
+  and email), so what remains is only the last one: a case-insensitive unique
+  index on `username`, or a throttle keyed on the user id. As first written:
+  two things have to change
   first — an `@PreAuthorize` on `PUT /users/{id}` **and a uniqueness check on
-  `dto.getUsername()`, which `updateUser` does not have at all** (unlike
+  `dto.getUsername()`, which `updateUser` did not have at all** (unlike
   `changeOwnUsername`, whose `findByUsername` is already case-insensitive:
   `where lower(u.username) = lower(:username)`), and either a case-insensitive
   unique index on `username` or a throttle keyed on the user id rather than the
   name. The missing uniqueness check is the more serious half on its own: a
   rename to a case variant leaves two rows that the case-insensitive
   `findByUsername` cannot resolve, which breaks login for both accounts.
-  Until then the leak stands, and it is small next to the ungated endpoint that
-  already lets any authenticated caller set another user's password.
+  The stranded-lockout leak stands until the index or the id-keyed throttle
+  lands; only administrators can rename another account now.
 
 - **~~An account takeover, live on prod.~~ Closed by #776**, which also
   closed the admin-register escalation its review found: any registrar role
@@ -2947,15 +2972,15 @@ questions below need a clinician, not an engineer.
   applied the password, username, email and `active` from the body with no
   caller check, so the gap below was not a missing annotation but any
   authenticated principal setting any account's password.
-  **`/users` has no role check on five of its seven endpoints.** Only
+  Before #776, `/users` had no role check on five of its seven endpoints: only
   `POST /users/admin-register` and
-  `PATCH /users/{id}/restore` carry `@PreAuthorize`; `GET /users`,
+  `PATCH /users/{id}/restore` carried `@PreAuthorize`; `GET /users`,
   `GET /users/{id}`, `GET /users/search`, `PUT /users/{id}` and
-  `DELETE /users/{id}` have none, and `SecurityConfig` matches only the
-  register path, so they fall through to `anyRequest().authenticated()`. Any
-  authenticated user can therefore list every account and edit any one of
-  them — `PUT` accepts `password` and `active`. `restoreUser` additionally
-  applies no tenant check to its target. Gating this is not a one-liner: the
+  `DELETE /users/{id}` had none, and `SecurityConfig` matched only the
+  register path, so they fell through to `anyRequest().authenticated()`. Any
+  authenticated user could therefore list every account and edit any one of
+  them — `PUT` accepted `password` and `active`. `restoreUser` applied no
+  tenant check to its target. Gating this is not a one-liner: the
   reads are consumed by chat and staff-list for ordinary staff, and
   `patient-form` calls `DELETE` as a receptionist to compensate a failed
   patient create, so each verb needs its own role set. Surfaced by the #572
@@ -3683,7 +3708,7 @@ questions below need a clinician, not an engineer.
   merges whatever GitHub shows as ready, a self-readied PR ships its open
   findings. The skill needs a coordinator mode in which the agent pushes, hands
   back and leaves the PR a draft. **This is the most important process fix from
-  the wave.** Owned by `chore/pr-review-coordinator-mode` (batch 1).
+  the wave.**
 
 - **~~The FHIR read API was open to every authenticated user, across every
   tenant.~~ Closed by #752 (who may reach `/fhir/**`: the chart-reader roles,
