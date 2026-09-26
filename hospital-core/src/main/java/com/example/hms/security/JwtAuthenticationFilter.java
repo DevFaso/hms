@@ -282,19 +282,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return true;
     }
 
-    /**
-     * Delegates to the shared
-     * {@link HospitalContextRequestOverrides#applyRequestOverrides} so the
-     * legacy bearer path and the OIDC path
-     * ({@code KeycloakHospitalContextFilter}) honour the
-     * {@code X-Hospital-Id} header identically. Behaviour is unchanged
-     * vs. the inline implementation; the only difference is log-line
-     * prefix ({@code [AUTH]} now, was {@code [JWT]}).
-     */
-    private HospitalContext applyRequestOverrides(HospitalContext context, HttpServletRequest request) {
-        return HospitalContextRequestOverrides.applyRequestOverrides(context, request);
-    }
-
     private String getJwtFromRequest(HttpServletRequest request) {
         // 1. Standard Authorization header
         String bearerToken = request.getHeader(HEADER_STRING);
@@ -314,7 +301,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
             HospitalContext context = tokenProvider.extractHospitalContext(jwt, authentication);
-            context = applyRequestOverrides(context, request);
+            context = HospitalContextRequestOverrides.applyRequestOverrides(context, request);
             HospitalContextHolder.setContext(context);
             tokenProvider.extractImpersonationContext(jwt)
                 .ifPresent(ImpersonationContextHolder::set);

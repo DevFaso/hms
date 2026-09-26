@@ -7,24 +7,18 @@ import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.payload.dto.PharmacyLocationResponseDTO;
 import com.example.hms.repository.pharmacy.PharmacyRepository;
 import com.example.hms.service.PharmacyDirectoryService;
-import com.example.hms.utility.RoleValidator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.UUID;
@@ -36,7 +30,6 @@ import java.util.UUID;
 public class PharmacyDirectoryController {
 
     private final PharmacyDirectoryService pharmacyDirectoryService;
-    private final RoleValidator roleValidator;
     private final PharmacyRepository pharmacyRepository;
     private final ControllerAuthUtils authUtils;
 
@@ -50,15 +43,10 @@ public class PharmacyDirectoryController {
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST')")
     public ResponseEntity<List<PharmacyOptionDTO>> listCommunityPharmacies(
         @RequestParam(required = false) UUID hospitalId,
-        @RequestHeader(value = "X-Hospital-Id", required = false) UUID headerHospitalId,
         Authentication auth
     ) {
         authUtils.requireAuth(auth);
-        UUID resolvedHospital = authUtils.resolveHospitalScope(auth, hospitalId, headerHospitalId, true);
-        if (resolvedHospital == null) {
-            throw new BusinessException(
-                "Hospital context is required. Provide hospitalId parameter, X-Hospital-Id header, or include hospitalId claim in the token.");
-        }
+        UUID resolvedHospital = resolveHospital(auth, hospitalId);
         List<Pharmacy> community = pharmacyRepository
             .findByHospitalIdAndPharmacyTypeAndActiveTrue(resolvedHospital, PharmacyType.COMMUNITY_PHARMACY);
         List<Pharmacy> partner = pharmacyRepository
@@ -81,70 +69,45 @@ public class PharmacyDirectoryController {
     public ResponseEntity<List<PharmacyLocationResponseDTO>> listPatientPharmacies(
         @PathVariable UUID patientId,
         @RequestParam(required = false) UUID hospitalId,
-        @RequestHeader(value = "X-Hospital-Id", required = false) UUID headerHospitalId,
         Authentication auth
     ) {
-        requireAuth(auth);
-        UUID resolvedHospital = resolveHospitalContext(auth, hospitalId, headerHospitalId);
+        authUtils.requireAuth(auth);
+        UUID resolvedHospital = resolveHospital(auth, hospitalId);
         List<PharmacyLocationResponseDTO> pharmacies = pharmacyDirectoryService
             .listPatientPharmacies(patientId, resolvedHospital);
         return ResponseEntity.ok(pharmacies);
     }
 
-    private void requireAuth(Authentication auth) {
-        if (auth == null || !auth.isAuthenticated()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,
-                "Authentication is required for pharmacy directory access.");
+    /**
+     * The hospital both handlers act at, resolved the way the rest of the
+     * codebase resolves it, never from a raw caller-supplied value.
+     *
+     * <p>{@link ControllerAuthUtils#resolveHospitalScope} validates a
+     * {@code hospitalId} parameter against the caller's active assignments
+     * (any hospital for a super-admin), then falls back to the request
+     * context (the {@code X-Hospital-Id} header after the security filters
+     * validated it) and the assignment table. It answers {@code null} for a
+     * super-admin who named no hospital parameter even when their scope chip
+     * pinned one, so the validated context is consulted once more for that
+     * case. A super-admin does reach these handlers: {@code RoleExpansion}
+     * grants {@code ROLE_SUPER_ADMIN} holders {@code ROLE_DOCTOR} and
+     * {@code ROLE_NURSE}, which the {@code @PreAuthorize} admits.
+     *
+     * <p>{@code /patients/{patientId}} used to return the raw parameter, then
+     * the raw {@code X-Hospital-Id} header, unchecked, so any clinician could
+     * name another hospital and be served the pharmacy options of a patient
+     * registered there. {@code /community} validated both, but read the header
+     * itself rather than the context the filters validated.
+     */
+    private UUID resolveHospital(Authentication auth, UUID requestedHospitalId) {
+        UUID resolved = authUtils.resolveHospitalScope(auth, requestedHospitalId, true);
+        if (resolved == null) {
+            resolved = authUtils.contextHospitalId();
         }
-    }
-
-    private UUID resolveHospitalContext(Authentication auth, UUID requestedHospitalId, UUID headerHospitalId) {
-        if (requestedHospitalId != null) {
-            return requestedHospitalId;
+        if (resolved == null) {
+            throw new BusinessException(
+                "Hospital context is required. Provide hospitalId parameter or select an active hospital.");
         }
-        if (headerHospitalId != null) {
-            return headerHospitalId;
-        }
-        UUID fromToken = extractHospitalId(auth);
-        if (fromToken != null) {
-            return fromToken;
-        }
-        UUID fromAssignment = roleValidator.getCurrentHospitalId();
-        if (fromAssignment != null) {
-            return fromAssignment;
-        }
-        throw new BusinessException("Hospital context is required. Provide hospitalId parameter, X-Hospital-Id header, or include hospitalId claim in the token.");
-    }
-
-    private UUID extractHospitalId(Authentication auth) {
-        if (auth instanceof JwtAuthenticationToken jat) {
-            Jwt jwt = jat.getToken();
-            for (String claimKey : List.of("primaryHospitalId", "hospitalId")) {
-                UUID result = tryParseUuidClaim(jwt, claimKey);
-                if (result != null) {
-                    return result;
-                }
-            }
-        }
-        return null;
-    }
-
-    private static UUID tryParseUuidClaim(Jwt jwt, String claimKey) {
-        String direct = jwt.getClaimAsString(claimKey);
-        if (direct != null && !direct.isBlank()) {
-            try {
-                return UUID.fromString(direct);
-            } catch (IllegalArgumentException ignored) { /* try raw */ }
-        }
-        Object raw = jwt.getClaims().get(claimKey);
-        if (raw instanceof UUID uuid) {
-            return uuid;
-        }
-        if (raw instanceof String str && !str.isBlank()) {
-            try {
-                return UUID.fromString(str);
-            } catch (IllegalArgumentException ignored) { /* not a valid UUID */ }
-        }
-        return null;
+        return resolved;
     }
 }

@@ -2,6 +2,9 @@ package com.example.hms.security.context;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.mock.web.MockHttpServletRequest;
 
 import java.util.Set;
@@ -117,16 +120,55 @@ class HospitalContextRequestOverridesTest {
     }
 
     @Test
-    void emptyPermittedScopeAllowsOverride() {
-        // A user with no explicit permitted scope (e.g. global staff) is
-        // not blocked from picking an active hospital — matches the
-        // legacy filter's behaviour.
+    void emptyPermittedScopeIgnoresOverride() {
+        // An empty permitted set means the principal holds no hospital —
+        // a patient's global ROLE_PATIENT assignment, a user revoked after
+        // sign-in (legacy HMS-token path, which reads the set live), a
+        // Keycloak token with no hospital claims. It used to be
+        // read as "may pick any", which let each of them act at whatever
+        // hospital the header named.
         HospitalContext context = HospitalContext.builder().build();
 
         HospitalContext result = HospitalContextRequestOverrides
             .applyRequestOverrides(context, requestWithHeader(hospitalA.toString()));
 
+        assertThat(result.getActiveHospitalId())
+            .as("no permitted hospital, so no hospital the header may make active")
+            .isNull();
+        assertThat(result.isHeaderOverridden()).isFalse();
+        assertThat(result.pinnedHospitalId()).isNull();
+    }
+
+    @Test
+    void emptyPermittedScopeKeepsTheTokenActiveHospital() {
+        // Whatever the token resolved stays put: the header cannot replace
+        // it even when the set is empty (a Keycloak hospital_id claim with no
+        // role_assignments still lands in the set, so this is the defensive
+        // shape, not a real token).
+        HospitalContext context = HospitalContext.builder()
+            .activeHospitalId(hospitalA)
+            .build();
+
+        HospitalContext result = HospitalContextRequestOverrides
+            .applyRequestOverrides(context, requestWithHeader(hospitalB.toString()));
+
         assertThat(result.getActiveHospitalId()).isEqualTo(hospitalA);
+        assertThat(result.isHeaderOverridden()).isFalse();
+    }
+
+    @Test
+    void superAdminWithEmptyPermittedScopeCanStillOverride() {
+        // A platform super-admin often holds no hospital assignment at all;
+        // the chip-scoped view must keep working for them.
+        HospitalContext context = HospitalContext.builder()
+            .superAdmin(true)
+            .build();
+
+        HospitalContext result = HospitalContextRequestOverrides
+            .applyRequestOverrides(context, requestWithHeader(hospitalC.toString()));
+
+        assertThat(result.getActiveHospitalId()).isEqualTo(hospitalC);
+        assertThat(result.isHeaderOverridden()).isTrue();
     }
 
     @Test
@@ -143,14 +185,36 @@ class HospitalContextRequestOverridesTest {
     }
 
     @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void malformedHeaderValueIsNotLogged(CapturedOutput output) {
+        // Caller-controlled: a CR/LF in it would forge a log line.
+        String forged = "x\r\n2026-01-01 INFO [AUTH] FORGED-LINE-MARKER";
+        HospitalContext context = HospitalContext.builder()
+            .activeHospitalId(hospitalA)
+            .permittedHospitalIds(Set.of(hospitalA))
+            .build();
+
+        HospitalContext result = HospitalContextRequestOverrides
+            .applyRequestOverrides(context, requestWithHeader(forged));
+
+        assertThat(result.getActiveHospitalId()).isEqualTo(hospitalA);
+        assertThat(output.getAll())
+            .as("the WARN is written")
+            .contains("Ignoring malformed X-Hospital-Id header")
+            .as("but never the caller's value")
+            .doesNotContain("FORGED-LINE-MARKER");
+    }
+
+    @Test
     void nullContextYieldsEmptyContextUnchanged() {
         HospitalContext result = HospitalContextRequestOverrides
             .applyRequestOverrides(null, requestWithHeader(hospitalA.toString()));
 
-        // Empty context has empty permitted scope → the override IS allowed
-        // (matches the existing rule). Just verify we don't NPE on null in.
+        // A null context is treated as the empty one: no permitted hospital,
+        // so the header is ignored. Also verifies we don't NPE on null in.
         assertThat(result).isNotNull();
-        assertThat(result.getActiveHospitalId()).isEqualTo(hospitalA);
+        assertThat(result.getActiveHospitalId()).isNull();
+        assertThat(result.isHeaderOverridden()).isFalse();
     }
 
     @Test

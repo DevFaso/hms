@@ -40,10 +40,23 @@ public final class HospitalContextRequestOverrides {
      * <ul>
      *   <li>No header / blank header → context returned unchanged.</li>
      *   <li>Malformed UUID → warning logged, context returned unchanged.</li>
-     *   <li>UUID outside the principal's permitted scope (and not super
-     *       admin) → warning logged, context returned unchanged.</li>
-     *   <li>Otherwise → context with {@code activeHospitalId} replaced
-     *       by the requested UUID.</li>
+     *   <li>Super admin → context with {@code activeHospitalId} replaced
+     *       by the requested UUID (the chip-scoped view).</li>
+     *   <li>UUID in the principal's permitted hospital set → context with
+     *       {@code activeHospitalId} replaced by the requested UUID.</li>
+     *   <li>Anything else → warning logged, context returned unchanged.
+     *       That includes a principal whose permitted set is EMPTY: an
+     *       empty set means the principal holds no hospital, not that it
+     *       may pick any. It is empty for a patient (ROLE_PATIENT is a
+     *       global, no-hospital assignment), for a Keycloak token with no
+     *       hospital claims, and, on the legacy HMS-token path only, for a
+     *       user whose assignments were revoked after sign-in: that path
+     *       reads the set live from the assignment table, while
+     *       {@code KeycloakHospitalContextResolver} builds it from the
+     *       token's {@code role_assignments} / {@code hospital_id} claims,
+     *       so a Keycloak user revoked at a hospital keeps it until the
+     *       token expires. Honouring the header for an empty set let each
+     *       of these principals act at any hospital it named.</li>
      * </ul>
      */
     public static HospitalContext applyRequestOverrides(HospitalContext context,
@@ -62,12 +75,17 @@ public final class HospitalContextRequestOverrides {
         try {
             requestedHospital = UUID.fromString(headerValue.trim());
         } catch (IllegalArgumentException ex) {
-            log.warn("[AUTH] Invalid {} header value: {}", HEADER_HOSPITAL_ID, headerValue);
+            // The value itself is not logged: it is caller-controlled, and a
+            // CR/LF in it would forge log lines. Its length is enough to tell
+            // a truncated id from garbage when supporting a client.
+            log.warn("[AUTH] Ignoring malformed {} header (length {})",
+                HEADER_HOSPITAL_ID, headerValue.length());
             return effective;
         }
 
+        // No empty-set escape: a principal with no permitted hospital has no
+        // hospital to switch to (see the javadoc above).
         boolean permitted = effective.isSuperAdmin()
-            || effective.getPermittedHospitalIds().isEmpty()
             || effective.getPermittedHospitalIds().contains(requestedHospital);
 
         if (!permitted) {
