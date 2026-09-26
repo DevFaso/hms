@@ -47,7 +47,7 @@ dependencies {
     implementation 'tools.jackson.datatype:jackson-datatype-hibernate7'
 
     // Hypersistence Utils (Hibernate JSON types)
-    implementation 'io.hypersistence:hypersistence-utils-hibernate-73:3.15.5'
+    implementation 'io.hypersistence:hypersistence-utils-hibernate-73:3.16.0'
 
     // PDF generation
     implementation 'com.itextpdf:kernel:8.0.2'
