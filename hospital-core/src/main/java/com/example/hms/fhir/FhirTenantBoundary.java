@@ -151,7 +151,7 @@ public class FhirTenantBoundary {
      *
      * @return the bound hospital, or {@code null} when the request has none
      */
-    static UUID boundHospital(HospitalContext context) {
+    public static UUID boundHospital(HospitalContext context) {
         if (context == null) {
             return null;
         }

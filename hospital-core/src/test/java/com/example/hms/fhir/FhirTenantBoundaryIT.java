@@ -298,6 +298,13 @@ class FhirTenantBoundaryIT {
             assertThat(normalisedBundle(foreign, patientQ.getId().toString()))
                 .as(type).isEqualTo(normalisedBundle(nobody, unknown));
         }
+
+        // _id search: a patient registered elsewhere answers like nobody (it used to be a 500).
+        ResponseEntity<String> foreignId = get("/fhir/Patient?_id=" + patientQ.getId(), token, null);
+        ResponseEntity<String> nobodyId = get("/fhir/Patient?_id=" + unknown, token, null);
+        assertThat(foreignId.getStatusCode().value()).isEqualTo(200);
+        assertThat(normalisedBundle(foreignId, patientQ.getId().toString()))
+            .isEqualTo(normalisedBundle(nobodyId, unknown));
     }
 
     // ------------------------------------------------------------ the rules

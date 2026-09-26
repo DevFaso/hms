@@ -19,6 +19,8 @@ import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
 import ca.uhn.fhir.rest.server.exceptions.MethodNotAllowedException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
+import com.example.hms.fhir.FhirTenantBoundary;
+import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.fhir.everything.PatientEverythingParams;
 import com.example.hms.fhir.everything.PatientEverythingService;
 import com.example.hms.fhir.mapper.PatientFhirMapper;
@@ -57,13 +59,16 @@ public class PatientFhirResourceProvider implements IResourceProvider {
     private final PatientFhirMapper patientMapper;
     private final PatientFhirWriteService writeService;
     private final PatientEverythingService everythingService;
+    private final FhirTenantBoundary tenantBoundary;
 
     public PatientFhirResourceProvider(
         PatientRepository patientRepository,
         PatientFhirMapper patientMapper,
         PatientFhirWriteService writeService,
-        PatientEverythingService everythingService
+        PatientEverythingService everythingService,
+        FhirTenantBoundary tenantBoundary
     ) {
+        this.tenantBoundary = tenantBoundary;
         this.patientRepository = patientRepository;
         this.patientMapper = patientMapper;
         this.writeService = writeService;
@@ -101,9 +106,17 @@ public class PatientFhirResourceProvider implements IResourceProvider {
         @OptionalParam(name = "email") TokenParam email,
         @OptionalParam(name = "active") TokenParam active
     ) {
+        UUID boundHospital = FhirTenantBoundary.boundHospital(HospitalContextHolder.getContextOrEmpty());
         if (idParam != null && idParam.getValue() != null) {
             UUID uuid = tryParseUuid(idParam.getValue());
             if (uuid == null) return Collections.emptyList();
+            // Asked BEFORE loading: the tenant boundary filters the bundle on
+            // the way out, but a patient registered elsewhere in the caller's
+            // organisation used to fail in the mapper (500) before it got
+            // there, while an unknown id answered an empty bundle.
+            if (!tenantBoundary.isVisible("Patient", uuid.toString(), boundHospital)) {
+                return Collections.emptyList();
+            }
             return patientRepository.findById(uuid)
                 .map(patientMapper::toFhir)
                 .map(List::of)
@@ -127,7 +140,7 @@ public class PatientFhirResourceProvider implements IResourceProvider {
 
         var sort = Sort.by(Sort.Order.asc("lastName"), Sort.Order.asc("firstName"));
         // The page is capped, so it must be a page of the hospital the request
-        // is bound to: capping across every permitted hospital and then letting
+        // is bound to (the interceptor has already refused a request with none): capping across every permitted hospital and then letting
         // the tenant boundary drop the others silently loses the bound
         // hospital's own matches past the cap.
         var page = patientRepository.searchPatientsExtended(
@@ -136,7 +149,7 @@ public class PatientFhirResourceProvider implements IResourceProvider {
             normalizeDob(dob),
             phonePattern,
             emailPattern,
-            FhirTenancy.requireHospitalScope("Patient"),
+            boundHospital,
             activeFlag,
             PageRequest.of(0, DEFAULT_PAGE_SIZE, sort)
         );
