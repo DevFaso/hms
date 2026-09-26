@@ -189,22 +189,28 @@ public class EmpiServiceImpl implements EmpiService {
      * lacks one — a write against another tenant's patient that happened before
      * any identity-level guard could run.
      *
-     * <p>Registration, not {@code Patient.hospitalId}: a patient may legitimately
-     * be registered at several hospitals, and each of those hospitals may
-     * reconcile them. An ACTIVE registration, as the FHIR write gate counts
-     * since #750: a discharged registration is history, not a current claim on
-     * the patient.
+     * <p>Registration, not {@code Patient.hospitalId}, is what lets a hospital
+     * START a merge: a patient may be registered at several hospitals. But only
+     * the patient's home hospital can FINISH one today:
+     * {@code ensureIdentityForPatient} stamps a provisioned identity with
+     * {@code Patient.hospitalId}, and {@code mergeIdentities} admits only
+     * identities stamped with the caller's hospital, so any other hospital the
+     * patient is registered at gets the identity-not-found refusal there.
+     * Which hospital owns a master identity is an open design question.
+     *
+     * <p>Any registration counts, active or not: the commonest duplicate is a
+     * discharged patient who returns and is registered again, and the
+     * hospital that discharged them must be able to reconcile the two.
      *
      * <p>A null scope skips the check only for a verified super-admin in global
      * view; an unverified one gets the refusal a foreign patient gets.
      */
-    private void requirePatientInTenant(UUID patientId) {
-        CallerScope scope = callerScope();
+    private void requirePatientInTenant(UUID patientId, CallerScope scope) {
         if (scope.verifiedGlobalView()) {
             return;
         }
         if (scope.hospitalId() == null
-            || !registrationRepository.existsByPatientIdAndHospitalIdAndActiveTrue(patientId, scope.hospitalId())) {
+            || !registrationRepository.existsByPatientIdAndHospitalId(patientId, scope.hospitalId())) {
             throw new org.springframework.security.access.AccessDeniedException(
                 MessageUtil.resolve(MSG_MERGE_CROSS_TENANT));
         }
@@ -258,6 +264,11 @@ public class EmpiServiceImpl implements EmpiService {
     @Override
     @Transactional
     public EmpiMergeEventResponseDTO mergeIdentities(UUID primaryIdentityId, EmpiMergeRequestDTO request) {
+        return mergeIdentities(primaryIdentityId, request, callerScope());
+    }
+
+    private EmpiMergeEventResponseDTO mergeIdentities(UUID primaryIdentityId, EmpiMergeRequestDTO request,
+                                                      CallerScope scope) {
         // ── Tenant isolation, with no oracle. BOTH sides must belong to the
         // caller: the identity-to-identity check further down only proves the
         // two agree with each other, and two hospital-B identities agree
@@ -268,7 +279,6 @@ public class EmpiServiceImpl implements EmpiService {
         // partial permission; the HL7 A40 rule, #738). Both lookups run before
         // either is judged, so owning one side costs what owning neither does.
         // An unverified null scope sees nothing, so it lands here too. ──
-        CallerScope scope = callerScope();
         Optional<EmpiMasterIdentity> primaryLookup = findVisibleIdentity(primaryIdentityId, scope);
         Optional<EmpiMasterIdentity> secondaryLookup =
             findVisibleIdentity(request.getSecondaryIdentityId(), scope);
@@ -329,8 +339,9 @@ public class EmpiServiceImpl implements EmpiService {
         // creates a master identity (and emits IDENTITY_LINKED) for any patient
         // that lacks one. Deferring the check to mergeIdentities would leave that
         // write already done against another tenant's patient. ──
-        requirePatientInTenant(primaryPatientId);
-        requirePatientInTenant(secondaryPatientId);
+        CallerScope scope = callerScope();
+        requirePatientInTenant(primaryPatientId, scope);
+        requirePatientInTenant(secondaryPatientId, scope);
 
         EmpiMasterIdentity primary = ensureIdentityForPatient(primaryPatientId);
         EmpiMasterIdentity secondary = ensureIdentityForPatient(secondaryPatientId);
@@ -339,7 +350,7 @@ public class EmpiServiceImpl implements EmpiService {
         request.setSecondaryIdentityId(secondary.getId());
         request.setMergeType(mergeType != null ? mergeType : com.example.hms.enums.empi.EmpiMergeType.MANUAL);
         request.setNotes(notes);
-        return mergeIdentities(primary.getId(), request);
+        return mergeIdentities(primary.getId(), request, scope);
     }
 
     /**
@@ -546,11 +557,11 @@ public class EmpiServiceImpl implements EmpiService {
      *
      * <p>Every caller runs inside a transaction — and {@code mergePatients}
      * publishes {@code IDENTITY_LINKED} while provisioning, before
-     * {@code mergeIdentities} can still refuse; on the HL7 A40 path it shares a
-     * REQUIRED transaction with {@code MllpInboundMergeServiceImpl.processMerge}.
-     * A send made inline would leave consumers holding an event for a change a
-     * rollback erased. Deferring here, the one place every event passes, keeps
-     * every present and future caller on the same timing. The send itself stays
+     * {@code mergeIdentities} can still refuse, and a caller may run it inside
+     * its own wider transaction that rolls back afterwards. A send made inline
+     * would leave consumers holding an event for a change a rollback erased.
+     * Deferring here, the one place every event passes, keeps every present
+     * and future caller on the same timing. The send itself stays
      * asynchronous; with no transaction active it runs inline, as before (see
      * {@link TransactionCallbacks}).
      */

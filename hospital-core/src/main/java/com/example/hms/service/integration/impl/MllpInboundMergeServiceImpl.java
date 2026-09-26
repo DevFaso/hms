@@ -111,8 +111,8 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
         // these two identifiers are to each other.
         //
         // EmpiServiceImpl's own tenant checks resolve the caller's hospital
-        // from the security context, and there is none on this thread:
-        // isVisibleToCaller reads a null active hospital as "unscoped, allow".
+        // from the security context, and there is none on this thread, so they
+        // cannot be what decides which patients a sender may merge.
         // Without this, an allowlisted sender could merge any two patients in
         // the system. BOTH sides, not just one: merging a stranger's record
         // INTO a local patient is as damaging as the reverse, and only

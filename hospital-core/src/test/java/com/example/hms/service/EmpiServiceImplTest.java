@@ -759,8 +759,6 @@ class EmpiServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(callerHospital);
         when(registrationRepository.existsByPatientIdAndHospitalId(primaryPatientId, callerHospital))
             .thenReturn(false);
-        when(registrationRepository.existsByPatientIdAndHospitalIdAndActiveTrue(primaryPatientId, callerHospital))
-            .thenReturn(false);
 
         assertThatThrownBy(() -> empiService.mergePatients(
                 primaryPatientId, secondaryPatientId, EmpiMergeType.MANUAL, null))
@@ -950,39 +948,6 @@ class EmpiServiceImplTest {
         Mockito.verify(mergeEventRepository, Mockito.never()).save(any());
     }
 
-    /* ── Only an ACTIVE registration puts a patient in the caller's tenant ── */
-
-    @Test
-    void mergePatients_inactiveRegistrationIsRefusedLikeNoRegistration() {
-        renderMessagesWithArguments();
-        UUID callerHospital = UUID.randomUUID();
-        UUID primaryPatientId = UUID.randomUUID();
-        UUID secondaryPatientId = UUID.randomUUID();
-        when(roleValidator.requireActiveHospitalId()).thenReturn(callerHospital);
-        // The secondary is actively registered, so the primary alone decides.
-        when(registrationRepository.existsByPatientIdAndHospitalId(secondaryPatientId, callerHospital))
-            .thenReturn(true);
-        when(registrationRepository.existsByPatientIdAndHospitalIdAndActiveTrue(secondaryPatientId, callerHospital))
-            .thenReturn(true);
-
-        // World 1: the primary was never registered here.
-        Throwable unregistered = catchThrowable(() -> empiService.mergePatients(
-            primaryPatientId, secondaryPatientId, EmpiMergeType.MANUAL, null));
-
-        // World 2: the primary has a registration row here, but it is discharged.
-        when(registrationRepository.existsByPatientIdAndHospitalId(primaryPatientId, callerHospital))
-            .thenReturn(true);
-        when(registrationRepository.existsByPatientIdAndHospitalIdAndActiveTrue(primaryPatientId, callerHospital))
-            .thenReturn(false);
-        Throwable discharged = catchThrowable(() -> empiService.mergePatients(
-            primaryPatientId, secondaryPatientId, EmpiMergeType.MANUAL, null));
-
-        assertIdenticalRefusal(discharged, unregistered);
-        assertThat(discharged).isExactlyInstanceOf(AccessDeniedException.class);
-        Mockito.verify(patientRepository, Mockito.never()).findByIdUnscoped(any());
-        Mockito.verify(masterIdentityRepository, Mockito.never()).save(any());
-    }
-
     /* ── EMPI events leave only after the transaction commits ──────────────
        Driven through a real AbstractPlatformTransactionManager and
        TransactionTemplate: Spring's own begin / commit / rollback and
@@ -1017,7 +982,7 @@ class EmpiServiceImplTest {
     private final TransactionTemplate transaction = new TransactionTemplate(new ResourcelessTransactionManager());
 
     /**
-     * A pinned caller at {@code callerHospital} with both patients actively
+     * A pinned caller at {@code callerHospital} with both patients
      * registered there; the primary's identity is stamped {@code primaryStamp};
      * the secondary has none, so mergePatients provisions it (IDENTITY_LINKED).
      * Returns the two patient ids.
@@ -1027,8 +992,6 @@ class EmpiServiceImplTest {
         when(kafkaTemplateProvider.getIfAvailable()).thenReturn(kafkaTemplate);
         when(roleValidator.requireActiveHospitalId()).thenReturn(callerHospital);
         when(registrationRepository.existsByPatientIdAndHospitalId(any(), eq(callerHospital))).thenReturn(true);
-        when(registrationRepository.existsByPatientIdAndHospitalIdAndActiveTrue(any(), eq(callerHospital)))
-            .thenReturn(true);
 
         Map<UUID, EmpiMasterIdentity> store = new LinkedHashMap<>();
         when(masterIdentityRepository.save(any(EmpiMasterIdentity.class))).thenAnswer(inv -> {
@@ -1077,10 +1040,10 @@ class EmpiServiceImplTest {
     }
 
     @Test
-    void mergePatients_sharingAnOuterTransactionThatRollsBackSendsNothing() {
-        // The HL7 A40 shape: MllpInboundMergeServiceImpl.processMerge and
-        // mergePatients share one REQUIRED transaction. The merge succeeds; the
-        // outer work then fails, and the merge never happened.
+    void mergePatients_outerTransactionRollingBackAfterASuccessfulMergeSendsNothing() {
+        // mergePatients joins the caller's REQUIRED transaction. The merge
+        // succeeds; the caller's own work then fails, the whole transaction
+        // rolls back, and the merge never happened.
         UUID callerHospital = UUID.randomUUID();
         UUID[] patients = kafkaMergeFixture(callerHospital, callerHospital);
 
