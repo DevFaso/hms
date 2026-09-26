@@ -3546,46 +3546,94 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   back and leaves the PR a draft. **This is the most important process fix from
   the wave.** Unowned.
 
-- **OPEN, LIVE ON DEVELOP: the FHIR read API is open to every authenticated
-  user, across every tenant.** `FhirConfig` mounts the server with no `@Conditional`; `/fhir/**`
-  had no role rule and fell through to `anyRequest().authenticated()`; there is
-  no FHIR authorization interceptor; and `EncounterFhirResourceProvider` read
-  through unfiltered `findById`/`findByPatient_Id` on an entity that is not
-  `TenantScoped`. So a patient, with an ordinary mobile-app token, can read
-  any encounter on the platform. Reported for Condition, MedicationRequest and
-  Immunization too. **Not fixed until both PRs merge.** Layer 1 (who may reach
-  `/fhir/**`) is `fix/fhir-role-gate` (#752); layer 2 (per-hospital filtering,
-  one interceptor rather than per-method guards) is `fix/fhir-read-tenancy`
-  (#755).
-  Two constraints layer 2 must honour, recorded because a path-level matcher
-  cannot: a user's roles are checked as the union across all their hospitals,
-  so a doctor at A who is a receptionist at B passes while acting at B - layer
-  2 must check the role held **at the active hospital**; and `ROLE_FHIR_CLIENT`
-  cannot be legitimately granted today while `KeycloakJwtAuthenticationConverter`
-  normalises a role from any realm client into `ROLE_*`, so admitting it would
-  let an unrelated client role grant whole-chart read. The FHIR write gate is
-  also wider than it should be - every reader role can write when
-  `FHIR_WRITE_ENABLED` is on - which is narrower than before but not right.
+- **~~The FHIR read API was open to every authenticated user, across every
+  tenant.~~ Closed by #752 (who may reach `/fhir/**`: the chart-reader roles,
+  checked in `SecurityConfig`) and #755 (`FhirTenantBoundaryInterceptor`: every
+  request bound to a hospital the principal holds, the role checked AT that
+  hospital, named ids gated before the provider, search bundles filtered).**
+  What the two left, none of it a cross-hospital read:
+  - **FHIR `Patient` read and search return 500 for every caller** - on prod
+    too, before and after these PRs. `PatientFhirMapper` loads
+    `hospitalRegistrations` lazily with no session open. The same shape makes
+    a conditional create, or a PUT that changes nothing, answer 500 after the
+    write has committed. A mapper/transaction fix. Unowned.
+  - **`X-Hospital-Id` is honoured for ANY hospital when the principal holds
+    none** (`HospitalContextRequestOverrides`): a Keycloak token without
+    hospital claims, or an HMS token whose assignments were revoked after
+    sign-in. #755 stopped trusting `getActiveHospitalId()` on FHIR paths
+    only; **every other endpoint that reads the active hospital still trusts
+    it.** Platform-wide, and the most important item here. Unowned.
+  - **No lab or reception role passes either layer**, so `Slot`,
+    `Appointment`, `ServiceRequest`, `DiagnosticReport` and `Observation` are
+    refused to their natural consumers. Nothing in the portal or the apps
+    calls `/api/fhir`; whether any external integration does on prod is a
+    question for the product owner. Per-resource matchers if it does.
+  - **`KeycloakJwtAuthenticationConverter` does not run `RoleExpansion`**, so
+    both layers name PHYSICIAN and SURGEON explicitly, and every other
+    `ROLE_DOCTOR` guard misses them over Keycloak.
+  - A Keycloak token is bound through `hospital_id` but its role is read only
+    from `role_assignments`, so a user provisioned without that attribute is
+    refused. Fails closed; would lock such users out.
+  - `FhirTenancy.requireHospitalScope` and the write, `$everything` and bulk
+    services still read `getActiveHospitalId()`. They agree with the bound
+    hospital only because the interceptor runs first; they should delegate to
+    `FhirTenantBoundary.boundHospital`.
+  - `/fhir-bulk-status` (status, cancel, download) is outside the HAPI
+    servlet, so the boundary does not cover it: union of roles plus the
+    unvalidated active hospital. Behind the export flag, off by default.
+  - `PatientFhirMapper` emits one MRN per registered hospital, so a read
+    reveals the patient's other hospitals. FHIR conditional create looks an
+    MRN up at whatever hospital the identifier names, so 404 against 412
+    tells a caller whether it exists there, and the audit description carries
+    the MRN (write flag, off by default).
+  - The four previously unscoped providers cap their queries before the
+    boundary filters (MedicationRequest at 200) and load foreign rows first.
+    `Bundle.total` is reduced by every withheld entry, `_include` ones too -
+    latent until a provider supports `_include`.
+  - Access control now runs before the flag-off contract, so a caller without
+    the role gets 403/404 where the documented answer was 405 (write off) or
+    501 (`$export` off). Deliberate; the `fhir-r4-api` skill's "405 before any
+    validation" wording needs updating to match.
+  - `POST Patient/{id}/$everything` and `HEAD` fall to the writer matcher, so
+    a consulting clinician is refused the POST form of a read they may GET.
+  - SMART discovery still advertises `patient/*.read`, which the gate refuses.
+  - The reader role set is defined twice (`SecurityConfig` and
+    `FhirTenantBoundary.READ_ROLE_CODES`), and `holdsRoleAt` re-parses roles
+    beside `RoleValidator.expandCodes`. One constant, one parser.
+  - Sonar on #752/#755, all minor: the `"/fhir/**"` and `"Patient"` literals,
+    two swapped `assertEquals` arguments, `PatientFhirResourceProvider.search`
+    one point over the complexity limit, a hidden field in
+    `FhirTenantBoundaryIT`, two S5778 lambdas. (Its S6809 on
+    `FhirTenantBoundary.isVisible` is a false positive: the caller is itself
+    `@Transactional`.)
 
-- **Cross-tenant defects on the FHIR write and EMPI paths.** `PUT /Patient/{id}`
-  had no tenant gate (dormant: `FHIR_WRITE_ENABLED` defaults off), and its
-  first fix checked a registration without checking it was `active`, so a
-  discharged patient's former hospital could still overwrite them;
-  `ObservationFhirWriteService.updateLabResult` answered 404 for a missing
-  result and 403 for another tenant's - an existence oracle; and EMPI
-  `mergeIdentities` did the same across 404 and 403. Owned by
-  `fix/fhir-write-and-empi-tenancy` (#750). Separately, `mergePatients` now
-  answers a misleading not-found for a legitimate merge whose identity is
-  stamped with the patient's first hospital - which hospital owns an identity
-  is an open design question. Unowned.
+- **~~Cross-tenant defects on the FHIR write and EMPI paths.~~ Closed by
+  #750:** `PUT /Patient/{id}` counts only an ACTIVE registration at the
+  caller's hospital, and another tenant's lab result or identity answers
+  exactly like a missing one. Still open:
+  - EMPI `mergeIdentities` treats a missing scope as global view without the
+    verified-super-admin check #751 added for lab results. No production path
+    found; a one-line fix. Unowned.
+  - `/merge-by-patient` checks the patient with `existsByPatientIdAndHospitalId`,
+    which ignores `active`, so a patient who left still counts. Unowned.
+  - `mergePatients` publishes `IDENTITY_LINKED` to Kafka before it can refuse;
+    the transaction rolls back but the event has gone. Publish after commit.
+  - A verified super-admin in global view may write `Patient` unscoped, which
+    contradicts `FhirTenancy`'s must-pin rule. Belongs with the resolver
+    unification below.
+  - `ObservationFhirWriteService` still reads the raw context.
+  - `mergePatients` answers a misleading not-found for a legitimate merge
+    whose identity is stamped with the patient's first hospital - which
+    hospital owns an identity is an open design question. Unowned.
 
-- **OPEN, LIVE ON DEVELOP: lab trend history is readable across every
-  tenant.**
-  `GET /lab-results/patient/{patientId}/test/{testDefinitionId}/compare-sequential`
-  has no scope check at all and returns the patient's name with twelve
-  results; **not fixed until #751 merges**; the same unscoped query fed the trend on `GET /lab-results/{id}` and
-  `/{id}/compare`. Owned by `fix/lab-result-null-pin` (#751), which also makes
-  a null hospital pin unscoped only for a verified super-admin. Found in that
+- **~~Lab trend history was readable across every tenant.~~ Closed by
+  #751.** `GET /lab-results/patient/{patientId}/test/{testDefinitionId}/compare-sequential`
+  had no scope check at all and returned the patient's name with twelve
+  results, and the same unscoped query fed the trend on `GET /lab-results/{id}`
+  and `/{id}/compare`. The trend now reads only rows the caller's hospital
+  ordered, performed or may see on a treatment relationship
+  (`findTrendReadableAt`, tested against the database), and a null hospital
+  pin is unscoped only for a verified super-admin. Found in that
   work: fourteen existing tests had been passing **only because of** the null
   defect - the suite never set a hospital scope, so the checks were skipped.
   Still open: `compare-sequential` has no restricted-chart (E8 #54) refusal,
@@ -3627,16 +3675,51 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
     per field. Unowned.
   - `EmpiMergeEvent.notes` stores both MRNs and the raw sender pair as
     unconverted plain TEXT, the one place they survive the log scrub. Unowned.
+  - Deferred by #753 (sender fields bounded at parse, refuse never truncate):
+    - MSH-10 is quoted (`quotedControlId`) only in the ADT/A40 dead-letter
+      reasons and the log lines #753 touched. The A02, A03 and auto-create
+      audit descriptions and the older log lines format it raw, so a sender
+      can put ANSI escapes or line separators in persisted audit text.
+      Changing them changes stored text; its own PR.
+    - Three A40 refusals (same identifier, missing PID-3/MRG-1, no hospital)
+      write no `integration_message_event` row and log no MSH-10.
+    - A refused MSH-3/MSH-4 row records no MSH-10, although the AR now echoes it.
+    - The ORU replay key and the projection's control id use `trim()`, so
+      `ABC` and `ABC` plus a control character collapse into one idempotency
+      key. Changes idempotency; needs its own decision.
+    - The A02 over-width marker sits in the unquoted `destination=` slot, so a
+      sender can write the marker text itself.
+    - An over-width PV1-19 is dropped with AA and no dead letter (invisible
+      before #753 as well).
+    - HTTP HL7 ingest answers 404 `laborder.notfound` for an over-width field
+      where a 400 naming the field would be honest.
+    - There is no general quoting helper for sender text: `quoted()` is
+      private and the public helpers are MSH-10-specific.
   - The skill audit: several skills still contradict the code and each other
     on raw-context reads, resolver choice and the MLLP correlation key. Worth
     one pass over all the skills against the code, rather than piecemeal inside
-    PRs whose job is something else. Unowned.
+    PRs whose job is something else. Unowned. Note: #758 deliberately cut the
+    multi-tenancy skill's "Resolving the tenant" section to four invariants,
+    because prose kept contradicting itself describing two resolvers that
+    disagree; the detail goes back only after the resolvers are unified.
 
 - **Staff who are also patients, and the prescription twin.** The encounter
   follow-up (#754) lets a staff member read her own after-visit summary from
   another hospital. `/prescriptions/{id}` has the same refusal for a staff
   member reading her own prescription, and the step-4 null-scope fail-open that
-  #746 closed for encounters. Unowned.
+  #746 closed for encounters. Unowned. Filed by #754 against its own fallback:
+  - `ReaderRolePredicates.holdsPatientRole` is true for EVERY super-admin on
+    the password path, because `RoleExpansion.SUPER_ADMIN_INHERITS` includes
+    `ROLE_PATIENT`. Accepted for the encounter fallback (documented there);
+    any new caller must weigh it. The suite never exercises an expanded
+    super-admin: `authenticateAs("ROLE_SUPER_ADMIN")` bypasses `RoleExpansion`.
+  - Not covered: a staff member with no resolvable hospital, cross-hospital
+    reach recording for the staff-owner read, an OIDC test on the staff path,
+    and the timing difference between the two refusals.
+  - Cleanup: `callerOwns` duplicated, `isPatientOnly` could take
+    `ReadEndpoint`, `ownerFallback` set on scopes that never use it, and the
+    refusal tests call `x.getId()` inside `captureNotFound`'s lambda (Sonar
+    S5778).
 
 - **`PatientRepositoryRegistrationScopeTest` fails non-deterministically in
   CI, and the cause is heap exhaustion, not the test.** It failed on three PRs
@@ -3653,9 +3736,15 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   logged and ignored once per context start, in passing runs as well as
   failing ones. Found alongside it: every `@SpringBootTest` on the test profile
   shared one H2 database name, so each context start dropped and rebuilt the
-  schema under the others. Both are addressed by
-  `fix/flaky-registration-scope-test` (#757): a context-cache cap and one H2
-  database per context.
+  schema under the others. **Closed by #757**: the context cache is capped
+  at 8 in `src/test/resources/spring.properties` (so the IDE runner gets it
+  too) and every context has its own H2 database. **Known risk it carries:**
+  one database per context removes the implicit wipe every context start
+  used to do, so a class reusing a cached context sees rows earlier classes
+  left. The current order passes. A failure that appears only in the full
+  suite, on rows the test did not insert (a duplicate key, an unexpected
+  count), is this and not a flake; the fix is for that class to clean up
+  after itself, not to share a database again.
 
 - **Two layers of this codebase disagree about role equivalence.**
   `RoleExpansion` grants a physician or surgeon ROLE_DOCTOR while the
