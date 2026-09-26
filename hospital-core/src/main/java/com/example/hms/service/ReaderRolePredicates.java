@@ -62,6 +62,26 @@ public final class ReaderRolePredicates {
      * linked to a patient row whose portal role was never granted or has been
      * revoked, and such an account must not read that record through its
      * clinical role.
+     *
+     * <p><b>A super-admin always satisfies this, on the password path.</b>
+     * {@code RoleExpansion.SUPER_ADMIN_INHERITS} includes {@code ROLE_PATIENT},
+     * so an expanded super-admin "holds" it whether or not it was ever granted
+     * to them, and "a link is not a grant" does not hold for that one role.
+     * It is accepted, deliberately, for the encounter-read ownership
+     * fallback, because it widens nothing a super-admin could not already
+     * reach: a verified super-admin in global view already reads every
+     * tenant; a super-admin pinned to one hospital gains through the fallback
+     * only records their OWN account owns elsewhere, and the pin is a view
+     * choice rather than a boundary; an unverified one (the step-4 road of
+     * {@code requireActiveHospitalId()}) is refused before any lookup, so it
+     * never reaches the fallback. A NEW caller of this method must weigh that
+     * exception for itself — it is not a general-purpose "is really a
+     * patient" test.
+     *
+     * <p>The tests do not exercise this. {@code authenticateAs("ROLE_SUPER_ADMIN")}
+     * in the encounter read-access suite builds the authorities directly and
+     * bypasses {@code RoleExpansion}, so its super-admin principal never holds
+     * {@code ROLE_PATIENT}. A green suite says nothing about an expanded one.
      */
     public static boolean holdsPatientRole(Authentication auth) {
         if (auth == null) {
