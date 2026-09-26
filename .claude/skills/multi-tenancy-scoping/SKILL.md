@@ -43,8 +43,10 @@ boolean registered = registrationRepository
     .findByPatientIdAndHospitalId(patient.getId(), hospitalId)
     .isPresent();
 if (!registered) {
-    // Refuse with EXACTLY the answer the caller gets for something that
-    // does not exist anywhere. Never a distinguishable "not yours".
+    // EXACTLY the answer a caller gets for something that does not exist
+    // anywhere: same exception, same status, same text. Never a
+    // distinguishable "not yours" - and never fall through.
+    throw notFound("Patient/" + patient.getId() + " not found");
 }
 ```
 
@@ -88,49 +90,27 @@ for an unknown lab result and 403 ("does not belong to the active hospital
 scope") for another tenant's, which is exactly the oracle above. It is
 tracked as a defect to fix.
 
-### Resolving the tenant, and what this skill will not promise
+### Resolving the tenant
 
-Two invariants that should hold for a request naming a **specific
-entity** (a read, write or delete by id). They are a target, not a
-description of today — not every endpoint follows them yet:
+What holds on every path:
 
-- **Resolve the tenant through the endpoint's own resolver**, not a
-  hand-rolled null check on the raw hospital context.
-- **Refuse before any lookup** when that resolver yields no tenant, and
-  never read "no tenant" as "unscoped, allow" for that entity. Decided
-  before anything is looked up, the refusal is identical for every
-  identifier the caller could name, so it confirms nothing.
+- **Two tenant resolvers exist, with different super-admin semantics** —
+  `RoleValidator.requireActiveHospitalId()` and
+  `ControllerAuthUtils.resolveHospitalScope`. That inconsistency is
+  tracked as debt.
+- **Resolve through the endpoint's own resolver.** Never hand-roll a read
+  of the raw hospital context.
+- **Refuse before any lookup when no tenant resolves.** Decided before
+  anything is looked up, the refusal is the same for every identifier the
+  caller could name, so it confirms nothing.
+- **A cross-tenant mismatch always answers exactly like a miss** — the
+  gate above.
 
-This does not apply to the super-admin cross-tenant flows this skill
-sanctions above (the `*Unscoped` repository variants, EMPI merge, the
-`/super-admin` detail endpoints): those are deliberately unscoped, and a
-refusal there would break them.
-
-List and aggregate surfaces are different: for a **super-admin**, "no
-tenant" can mean *global view* by design. But **a null scope never means
-global on its own.** `ControllerAuthUtils.resolveHospitalScope` also
-returns `null` for a hospital admin or clinician whose scope does not
-resolve, and a list that read that null as "return everything" would hand
-them every tenant's rows — full PHI, not just existence. Treat null as
-global only after confirming the caller is a super-admin; for anyone else it
-is a refusal.
-
-What the resolvers return for a super-admin with no tenant pinned is **not
-consistent, and this skill deliberately does not state a value.** There are
-two resolvers with different super-admin semantics —
-`RoleValidator.requireActiveHospitalId()`, and
-`ControllerAuthUtils.resolveHospitalScope`, which ignores `X-Hospital-Id`
-and instead honours a caller-supplied `hospitalId` (the query parameter,
-or the request body on its four-argument overload) — and the raw context
-(`HospitalContextHolder.getContextOrEmpty().getActiveHospitalId()`) is
-populated differently by auth path: from the JWT's `hospital_id` claim on
-the Keycloak path, from live assignments on the password path. A helper
-that encodes one pin rule does exist — `HospitalContext.pinnedHospitalId()`
-— and seven services and three controller or support classes call it, but
-not every resolver does, and some services still inline their own check.
-That inconsistency is tracked as debt. Until it is resolved, rely on the endpoint's own resolver and
-test the unpinned-super-admin case on that endpoint, rather than reasoning
-from a rule written here.
+The detail is deliberately omitted until the two resolvers are unified:
+what each returns for an unpinned super-admin, which flows are exempt, and
+when a null scope may mean a global view. The code has no single rule for
+prose to state, and every attempt to write one here contradicted itself.
+Do not re-add it; test the case on the endpoint instead.
 
 `PatientHospitalRegistration` is the authoritative table. A patient can
 be registered at multiple hospitals over time; never assume a single
@@ -145,12 +125,6 @@ other caller and writes `DATA_ACCESS` with status `SUCCESS`. This section
 used to say every cross-tenant rejection MUST emit it; followed literally,
 that records nothing for an ordinary user and a false successful-read row
 for a super-admin. No rejection path emits it, and none should.
-
-To audit a refusal, use the general audit API:
-`AuditEventLogService.logEvent` with `AuditStatus.FAILURE`, as
-`ReceptionServiceImpl` does for a denied status update and
-`PartnerExchangeService.auditUnmatched` does with `SECURITY_ALERT_TRIGGERED`.
-There is no cross-tenant-specific refusal event.
 
 The MLLP inbound paths have no principal on the worker thread and record a
 refusal on an `integration_message_event` row instead. The ADT and A40
@@ -295,8 +269,8 @@ reliably, for the reason given under "Resolving the tenant".
 
 The exception: read-only aggregate dashboards (row 32 KPI) where
 the documented behaviour is "super-admin without X-Hospital-Id
-returns an empty rollup". (Which resolver they use is not stated
-here — see "Resolving the tenant" above.)
+returns an empty rollup". (How they resolve the tenant is in
+"Aggregate / dashboard queries" above.)
 
 ### Aggregate queries must group by a stable key, not display name
 
