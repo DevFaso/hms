@@ -80,11 +80,19 @@ class RoleExpansionTest {
 
         assertThat(jwt).as("JwtTokenProvider expands through RoleExpansion").contains("RoleExpansion.expand(");
         assertThat(config).as("SecurityConfig maps through RoleExpansion").contains("RoleExpansion.authoritiesMapper()");
-        assertThat(Files.readString(KEYCLOAK_CONVERTER, StandardCharsets.UTF_8))
-            .as("the Keycloak converter expands through RoleExpansion").contains("RoleExpansion.expand(");
         // ROLE_STAFF appears in an inheritance list and nowhere else in the
         // JWT provider; in SecurityConfig it belongs only to request matchers.
         assertThat(jwt).as("no inline inheritance list in JwtTokenProvider").doesNotContain("ROLE_STAFF");
+        String converter = Files.readString(KEYCLOAK_CONVERTER, StandardCharsets.UTF_8);
+        assertThat(converter).as("the Keycloak converter expands through RoleExpansion").contains("RoleExpansion.expand(");
+        // Same test as for JwtTokenProvider: roles that appear only in an
+        // inheritance list have no business in the converter.
+        assertThat(converter).as("no inline inheritance list in the Keycloak converter")
+            .doesNotContain("ROLE_STAFF")
+            .doesNotContain("ROLE_LAB_SCIENTIST")
+            .doesNotContain("ROLE_RECEPTIONIST")
+            .as("no inline doctor equivalence in the Keycloak converter")
+            .doesNotContain("ROLE_SURGEON");
         assertThat(config).as("no inline inheritance list in SecurityConfig")
             .doesNotContain("ROLE_STAFF, ROLE_PATIENT")
             .doesNotContain("inherited.forEach");
