@@ -123,8 +123,8 @@ class LabResultServiceImplNullScopeTest {
         when(labResultRepository.findById(missingId)).thenReturn(Optional.empty());
         when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
         when(labResultMapper.toResponseDTO(any(LabResult.class))).thenReturn(mapped);
-        when(labResultRepository
-            .findTop12ByLabOrder_Patient_IdAndLabOrder_LabTestDefinition_IdOrderByResultDateDesc(any(), any()))
+        when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(),
+                org.mockito.ArgumentMatchers.anyBoolean(), any()))
             .thenReturn(List.of(result));
         when(criticalValueNotificationService.recordReadBack(any(), any(), any(), any())).thenReturn(result);
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());

@@ -245,7 +245,7 @@ class LabResultServiceImplPerformingHospitalTest {
     void resultIsReadableByBothHospitalsAndNotByAThird() {
         when(labResultRepository.findById(result.getId())).thenReturn(Optional.of(result));
         when(labResultMapper.toResponseDTO(result)).thenReturn(mapped);
-        org.mockito.Mockito.lenient().when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), any()))
+        org.mockito.Mockito.lenient().when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
             .thenReturn(List.of());
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());

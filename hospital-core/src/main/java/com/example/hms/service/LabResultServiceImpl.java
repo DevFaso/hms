@@ -61,9 +61,6 @@ public class LabResultServiceImpl implements LabResultService {
 
     private static final String LAB_RESULT_NOT_FOUND = "labresult.notfound";
     private static final String LAB_ORDER_NOT_FOUND = "laborder.notfound";
-    /** The text {@code RoleValidator.requireActiveHospitalId()} refuses a caller with no hospital with. */
-    private static final String HOSPITAL_CONTEXT_REQUIRED =
-        "Hospital context required. Please select an active hospital or include X-Hospital-Id header.";
 
     private static final Logger LOG = LoggerFactory.getLogger(LabResultServiceImpl.class);
 
@@ -93,6 +90,8 @@ public class LabResultServiceImpl implements LabResultService {
         "Cross-hospital lab result read on the treatment relationship";
     /** How many of a patient's results for one test a trend shows. */
     private static final int TREND_WINDOW = 12;
+    /** Fills the trend query's IN list in global view, where it must match nothing. */
+    private static final UUID NO_HOSPITAL = new UUID(0L, 0L);
     private final com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
 
     /**
@@ -516,10 +515,13 @@ public class LabResultServiceImpl implements LabResultService {
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
 
         requireResultInActiveHospital(labResult);
-        recordPerformedHereReach(List.of(labResult));
+
+        // The result and the trend around it are one read, accounted once.
+        List<LabResult> trend = readableTrendFor(labResult);
+        recordReadReach(List.of(labResult), trend);
 
         LabResultResponseDTO response = labResultMapper.toResponseDTO(labResult);
-        response.setTrendHistory(buildTrendHistory(labResult));
+        response.setTrendHistory(toTrendPoints(trend));
         return response;
     }
 
@@ -734,7 +736,7 @@ public class LabResultServiceImpl implements LabResultService {
     private UUID listScopeOrVerifiedGlobalView() {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
-            throw new BusinessException(HOSPITAL_CONTEXT_REQUIRED);
+            throw new BusinessException(RoleValidator.HOSPITAL_CONTEXT_REQUIRED);
         }
         return activeHospitalId;
     }
@@ -1331,7 +1333,13 @@ public class LabResultServiceImpl implements LabResultService {
         labResultRepository.save(result);
     }
 
-    private List<LabResultTrendPointDTO> buildTrendHistory(LabResult source) {
+    /**
+     * The readable trend around a result the caller already passed
+     * {@code requireResultInActiveHospital} for, so a null scope here is a
+     * verified super-admin in global view. Not accounted: the caller accounts
+     * the result and its trend together.
+     */
+    private List<LabResult> readableTrendFor(LabResult source) {
         LabOrder labOrder = source.getLabOrder();
         if (labOrder == null
             || labOrder.getPatient() == null
@@ -1340,17 +1348,8 @@ public class LabResultServiceImpl implements LabResultService {
             || labOrder.getLabTestDefinition().getId() == null) {
             return List.of();
         }
-
-        UUID patientId = labOrder.getPatient().getId();
-        UUID testDefinitionId = labOrder.getLabTestDefinition().getId();
-        // The caller already passed requireResultInActiveHospital, so a null
-        // here is a verified super-admin in global view.
-        UUID actingHospitalId = actingHospitalOrVerifiedGlobalView(LAB_RESULT_NOT_FOUND);
-
-        List<LabResult> rawTrend = readableTrendRows(patientId, testDefinitionId, actingHospitalId);
-        recordTrendReach(patientId, actingHospitalId, rawTrend, source.getId());
-
-        return toTrendPoints(rawTrend);
+        return readableTrendRows(labOrder.getPatient().getId(), labOrder.getLabTestDefinition().getId(),
+            actingHospitalOrVerifiedGlobalView(LAB_RESULT_NOT_FOUND));
     }
 
     private List<LabResultTrendPointDTO> toTrendPoints(List<LabResult> rows) {
@@ -1366,7 +1365,7 @@ public class LabResultServiceImpl implements LabResultService {
      * hospital may read.
      *
      * <p>Every trend read here used to call the unscoped
-     * {@code findTop12ByLabOrder_Patient_IdAndLabOrder_LabTestDefinition_Id...}
+     * {@code findTop12ByLabOrder_Patient_IdAndLabOrder_LabTestDefinition_Id...} (now deleted)
      * finder: {@code GET /lab-results/patient/{patientId}/test/{id}/compare-
      * sequential} handed any clinician at any hospital another hospital's
      * patient's last twelve values with the patient's name, and the trend on
@@ -1384,18 +1383,23 @@ public class LabResultServiceImpl implements LabResultService {
      *
      * <p>{@code actingHospitalId == null} is reached only by a verified
      * super-admin in global view (the callers gate it), who keeps the
-     * unscoped trend the result itself is shown under.
+     * cross-hospital trend the result itself is shown under. It goes through
+     * the same query, with its {@code globalView} flag: there is no unscoped
+     * trend finder left to call.
      */
     private List<LabResult> readableTrendRows(UUID patientId, UUID testDefinitionId, UUID actingHospitalId) {
+        org.springframework.data.domain.PageRequest window =
+            org.springframework.data.domain.PageRequest.of(0, TREND_WINDOW);
         if (actingHospitalId == null) {
-            return labResultRepository
-                .findTop12ByLabOrder_Patient_IdAndLabOrder_LabTestDefinition_IdOrderByResultDateDesc(patientId, testDefinitionId);
+            // PostgreSQL rejects an empty IN list; the nil UUID names no hospital.
+            return labResultRepository.findTrendReadableAt(patientId, testDefinitionId,
+                Set.of(NO_HOSPITAL), null, true, window);
         }
         Set<UUID> readable = new java.util.HashSet<>(
             recordAccessPolicy.readableHospitalIds(authService.getCurrentUserId(), patientId, actingHospitalId));
         readable.add(actingHospitalId);
         return labResultRepository.findTrendReadableAt(patientId, testDefinitionId, readable, actingHospitalId,
-                org.springframework.data.domain.PageRequest.of(0, TREND_WINDOW))
+                false, window)
             .stream()
             .filter(r -> isReadableAt(r, actingHospitalId, readable))
             .limit(TREND_WINDOW)
@@ -1413,22 +1417,31 @@ public class LabResultServiceImpl implements LabResultService {
     }
 
     /**
-     * Accounts the trend rows another hospital owns, the way the other patient
-     * reads do: rows this laboratory performed for another hospital under the
-     * performing-laboratory description, rows opened by the treatment
-     * relationship under the patient-read one. {@code alreadyAccounted} is the
-     * row the caller has accounted itself (the result a trend hangs off).
+     * Accounts everything one read surfaced, once: the result(s) the read is
+     * about and the trend shown with them, deduplicated by id so the result a
+     * trend hangs off is counted exactly once. Rows this laboratory performed
+     * for another hospital go under the performing-laboratory description,
+     * rows opened by the treatment relationship under the patient-read one -
+     * one batch each, so one read is one disclosure per source and reason.
      *
      * <p>Never throws: accounting a read must not fail it.
      */
-    private void recordTrendReach(UUID patientId, UUID actingHospitalId, List<LabResult> rows, UUID alreadyAccounted) {
-        if (actingHospitalId == null || rows.isEmpty()) {
+    private void recordReadReach(List<LabResult> shown, List<LabResult> trend) {
+        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+        if (actingHospitalId == null) {
             return;
         }
-        List<LabResult> surfaced = rows.stream()
-            .filter(r -> alreadyAccounted == null || !alreadyAccounted.equals(r.getId()))
-            .toList();
+        java.util.Map<UUID, LabResult> byId = new java.util.LinkedHashMap<>();
+        java.util.stream.Stream.concat(shown.stream(), trend.stream())
+            .filter(r -> r != null && r.getId() != null)
+            .forEach(r -> byId.putIfAbsent(r.getId(), r));
+        List<LabResult> surfaced = List.copyOf(byId.values());
+        if (surfaced.isEmpty()) {
+            return;
+        }
         recordPerformedHereReach(surfaced);
+        UUID patientId = surfaced.get(0).getLabOrder() != null && surfaced.get(0).getLabOrder().getPatient() != null
+            ? surfaced.get(0).getLabOrder().getPatient().getId() : null;
         try {
             List<UUID> treatmentSources = surfaced.stream()
                 .map(LabResult::getLabOrder)
@@ -1454,7 +1467,7 @@ public class LabResultServiceImpl implements LabResultService {
     private UUID requireHospitalScopeForPatientRead() {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId == null) {
-            throw new BusinessException(HOSPITAL_CONTEXT_REQUIRED);
+            throw new BusinessException(RoleValidator.HOSPITAL_CONTEXT_REQUIRED);
         }
         return activeHospitalId;
     }
@@ -1497,10 +1510,11 @@ public class LabResultServiceImpl implements LabResultService {
         UUID patientId = labOrder.getPatient().getId();
         UUID testDefinitionId = labOrder.getLabTestDefinition().getId();
 
-        // requireResultInActiveHospital passed: null is a verified super-admin.
-        UUID actingHospitalId = actingHospitalOrVerifiedGlobalView(LAB_RESULT_NOT_FOUND);
-        List<LabResult> trendResults = readableTrendRows(patientId, testDefinitionId, actingHospitalId);
-        recordTrendReach(patientId, actingHospitalId, trendResults, current.getId());
+        List<LabResult> trendResults = readableTrendFor(current);
+        // The compared result is returned with the patient's name, so it is
+        // accounted with its trend - it used to be passed as "already
+        // accounted" while nothing had accounted it.
+        recordReadReach(List.of(current), trendResults);
 
         LabResult previous = trendResults.stream()
             .filter(r -> r.getResultDate().isBefore(current.getResultDate()))
@@ -1544,7 +1558,7 @@ public class LabResultServiceImpl implements LabResultService {
         if (allResults.isEmpty()) {
             return List.of();
         }
-        recordTrendReach(patientId, actingHospitalId, allResults, null);
+        recordReadReach(allResults, List.of());
         // Every row shares the patient and the test, so the trend each
         // comparison carries is this one list; it used to be re-queried once
         // per row, unscoped.

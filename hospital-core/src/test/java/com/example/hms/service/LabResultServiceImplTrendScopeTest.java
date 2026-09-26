@@ -119,9 +119,9 @@ class LabResultServiceImplTrendScopeTest {
     @Test
     void aClinicianAtBGetsNothingForAPatientOnlyAtA_exactlyLikeAnUnknownPatient() {
         LabResult atA = row(hospitalA, null, 1);
-        when(labResultRepository.findTrendReadableAt(eq(patient.getId()), eq(test.getId()), any(), any(), any()))
+        when(labResultRepository.findTrendReadableAt(eq(patient.getId()), eq(test.getId()), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
             .thenReturn(List.of(atA));
-        when(labResultRepository.findTrendReadableAt(eq(unknownPatientId), eq(test.getId()), any(), any(), any()))
+        when(labResultRepository.findTrendReadableAt(eq(unknownPatientId), eq(test.getId()), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
             .thenReturn(List.of());
 
         List<LabResultComparisonDTO> foreign = service.compareSequentialResults(patient.getId(), test.getId(), Locale.ENGLISH);
@@ -129,8 +129,7 @@ class LabResultServiceImplTrendScopeTest {
 
         assertThat(foreign).isEmpty();
         assertThat(foreign).isEqualTo(unknown);
-        verify(labResultRepository, never())
-            .findTop12ByLabOrder_Patient_IdAndLabOrder_LabTestDefinition_IdOrderByResultDateDesc(any(), any());
+        verify(labResultRepository, never()).findTrendReadableAt(any(), any(), any(), any(), eq(true), any());
         verify(reachRecorder, never()).recordReach(any(), any(), any(), any(), anyMap(), any());
     }
 
@@ -141,7 +140,7 @@ class LabResultServiceImplTrendScopeTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<UUID>> readable = ArgumentCaptor.forClass(Collection.class);
         verify(labResultRepository).findTrendReadableAt(eq(patient.getId()), eq(test.getId()),
-            readable.capture(), eq(hospitalB.getId()), any());
+            readable.capture(), eq(hospitalB.getId()), eq(false), any());
         assertThat(readable.getValue()).containsExactly(hospitalB.getId());
     }
 
@@ -150,7 +149,7 @@ class LabResultServiceImplTrendScopeTest {
         LabResult orderedAtB = row(hospitalB, null, 1);
         LabResult performedAtBForA = row(hospitalA, hospitalB, 2);
         LabResult atA = row(hospitalA, null, 3);
-        when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), any()))
+        when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
             .thenReturn(List.of(orderedAtB, performedAtBForA, atA));
 
         List<LabResultComparisonDTO> comparisons =
@@ -167,7 +166,7 @@ class LabResultServiceImplTrendScopeTest {
         when(recordAccessPolicy.readableHospitalIds(actorId, patient.getId(), hospitalB.getId()))
             .thenReturn(Set.of(hospitalB.getId(), hospitalT.getId()));
         LabResult atT = row(hospitalT, null, 1);
-        when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), any())).thenReturn(List.of(atT));
+        when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(List.of(atT));
 
         List<LabResultComparisonDTO> comparisons =
             service.compareSequentialResults(patient.getId(), test.getId(), Locale.ENGLISH);
@@ -189,9 +188,7 @@ class LabResultServiceImplTrendScopeTest {
 
         assertThat(catchThrowable(() -> service.compareSequentialResults(patientId, testId, Locale.ENGLISH)))
             .isExactlyInstanceOf(BusinessException.class);
-        verify(labResultRepository, never()).findTrendReadableAt(any(), any(), any(), any(), any());
-        verify(labResultRepository, never())
-            .findTop12ByLabOrder_Patient_IdAndLabOrder_LabTestDefinition_IdOrderByResultDateDesc(any(), any());
+        verify(labResultRepository, never()).findTrendReadableAt(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any());
     }
 
     @Test
@@ -200,7 +197,7 @@ class LabResultServiceImplTrendScopeTest {
         LabResult atA = row(hospitalA, null, 2);
         when(labResultRepository.findById(mine.getId())).thenReturn(Optional.of(mine));
         when(labResultMapper.toResponseDTO(mine)).thenReturn(LabResultResponseDTO.builder().id("mine").build());
-        when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), any()))
+        when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
             .thenReturn(List.of(mine, atA));
 
         LabResultResponseDTO response = service.getLabResultById(mine.getId(), Locale.ENGLISH);
@@ -214,7 +211,7 @@ class LabResultServiceImplTrendScopeTest {
         LabResult mine = row(hospitalB, null, 1);
         LabResult atA = row(hospitalA, null, 2);
         when(labResultRepository.findById(mine.getId())).thenReturn(Optional.of(mine));
-        when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), any()))
+        when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
             .thenReturn(List.of(mine, atA));
 
         LabResultComparisonDTO comparison = service.compareLabResults(mine.getId(), Locale.ENGLISH);
@@ -222,6 +219,67 @@ class LabResultServiceImplTrendScopeTest {
         assertThat(comparison.getTrendHistory()).extracting(LabResultTrendPointDTO::getLabResultId)
             .containsExactly(mine.getId().toString());
         assertThat(comparison.getPreviousResult()).isNull();
+    }
+
+    @Test
+    void comparingAResultAnotherHospitalOrderedIsAccounted() {
+        // /compare returns the result with the patient's name. It used to pass
+        // the result to the accounting as "already accounted" while nothing
+        // had accounted it: a performing-lab comparison left no disclosure row.
+        LabResult performedAtBForA = row(hospitalA, hospitalB, 1);
+        when(labResultRepository.findById(performedAtBForA.getId())).thenReturn(Optional.of(performedAtBForA));
+        when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
+            .thenReturn(List.of());
+
+        service.compareLabResults(performedAtBForA.getId(), Locale.ENGLISH);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<UUID, Map<String, Long>>> batch = ArgumentCaptor.forClass(Map.class);
+        verify(reachRecorder).recordBatchedReach(batch.capture(), eq(hospitalB.getId()), eq(actorId), any(), any());
+        assertThat(batch.getValue()).containsEntry(patient.getId(), Map.of(hospitalA.getId().toString(), 1L));
+    }
+
+    @Test
+    void aResultAndItsTrendAreOneDisclosure() {
+        // getLabResultById used to write one batch for the result and a second
+        // for its trend: two disclosures on the patient's report for one read.
+        LabResult shown = row(hospitalA, hospitalB, 1);
+        LabResult earlier = row(hospitalA, hospitalB, 5);
+        when(labResultRepository.findById(shown.getId())).thenReturn(Optional.of(shown));
+        when(labResultMapper.toResponseDTO(shown)).thenReturn(LabResultResponseDTO.builder().id("shown").build());
+        when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
+            .thenReturn(List.of(shown, earlier));
+
+        service.getLabResultById(shown.getId(), Locale.ENGLISH);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<UUID, Map<String, Long>>> batch = ArgumentCaptor.forClass(Map.class);
+        verify(reachRecorder, org.mockito.Mockito.times(1))
+            .recordBatchedReach(batch.capture(), eq(hospitalB.getId()), eq(actorId), any(), any());
+        // The shown result is also the newest trend point: counted once, not twice.
+        assertThat(batch.getValue()).containsEntry(patient.getId(), Map.of(hospitalA.getId().toString(), 2L));
+    }
+
+    @Test
+    void aVerifiedSuperAdminInGlobalViewReadsTheTrendThroughTheSameQuery() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        LabResult atA = row(hospitalA, null, 1);
+        when(labResultRepository.findById(atA.getId())).thenReturn(Optional.of(atA));
+        when(labResultMapper.toResponseDTO(atA)).thenReturn(LabResultResponseDTO.builder().id("atA").build());
+        when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), eq(true), any()))
+            .thenReturn(List.of(atA));
+
+        LabResultResponseDTO response = service.getLabResultById(atA.getId(), Locale.ENGLISH);
+
+        assertThat(response.getTrendHistory()).hasSize(1);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<UUID>> readable = ArgumentCaptor.forClass(Collection.class);
+        verify(labResultRepository).findTrendReadableAt(eq(patient.getId()), eq(test.getId()),
+            readable.capture(), org.mockito.ArgumentMatchers.isNull(), eq(true), any());
+        // Never an empty IN list, and the filler names no hospital.
+        assertThat(readable.getValue()).isNotEmpty()
+            .doesNotContain(hospitalA.getId(), hospitalB.getId(), hospitalT.getId());
     }
 
     /** A result for the patient and test, ordered at {@code ordering}, sent to {@code performing} when not null. */

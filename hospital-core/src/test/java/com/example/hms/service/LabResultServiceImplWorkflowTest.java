@@ -172,6 +172,7 @@ class LabResultServiceImplWorkflowTest {
                 org.mockito.ArgumentMatchers.eq(labTestDefinition.getId()),
                 any(),
                 org.mockito.ArgumentMatchers.eq(hospitalId),
+                org.mockito.ArgumentMatchers.eq(false),
                 any())
         ).thenReturn(List.of(current, previous));
         when(labResultMapper.toResponseDTO(current)).thenReturn(baseResponse);
