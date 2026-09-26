@@ -9,15 +9,78 @@
         </span>
       }
     </div>
+    <!--
+      The picker sits in the card head rather than inside the no-scope branch
+      below: the dashboard is not `requiresHospitalScope`, so the shell draws
+      no scope bar above it, and a chip that lived only in that branch would
+      vanish on the first pick, leaving no way to switch hospital or return to
+      global view from here. It hides itself for anyone but a super-admin.
+
+      It is not literally always on screen: the whole panel sits inside the
+      dashboard's `activeView() === 'doctor'` block, which is gated on
+      `!loading()`, and a pick reloads the page's data — so the chip is
+      recreated (and re-fetches its label) on each pick and is absent while
+      the reload is in flight. Hoisting it out of the panel is a dashboard
+      layout change, reported rather than made here.
+
+      `preserveScope` keeps the session's pick rather than resetting to global
+      view on mount; `disableUrlSync` governs the separate WRITE path, and is
+      on because the dashboard does not read `?hospitalId=`.
+    -->
+    <app-hospital-scope-chip [preserveScope]="true" [disableUrlSync]="true" />
     <a routerLink="/lab" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
   </div>
 
-  @if (results().length === 0) {
+  <!--
+    Only when there is nothing to replace. A dashboard refresh re-reads this
+    queue, and swapping a populated, readable list for a spinner every time is
+    worse than letting the rows stand until the new ones land.
+  -->
+  <!--
+    No hospital in scope FIRST, ahead of loading, error and empty: the queue
+    was never read. The green "all results reviewed" card below would be a
+    false all-clear, and the error card would blame an outage.
+  -->
+  @if (!scoped()) {
+    <app-hospital-scope-hint />
+  } @else if (loading() && results().length === 0) {
+    <div class="rp-loading" aria-live="polite">
+      <span class="rp-spinner"></span>
+      <span>{{ 'common.loading' | translate }}</span>
+    </div>
+  } @else if (loadError() && results().length === 0) {
+    <div class="rp-error">
+      <span class="material-symbols-outlined">error</span>
+      <p>{{ 'DASHBOARD.RESULTS_LOAD_ERROR' | translate }}</p>
+      <button type="button" class="rp-retry" (click)="requestReload()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (results().length === 0) {
     <div class="rp-empty">
       <span class="material-symbols-outlined">check_circle</span>
       <p>{{ 'DASHBOARD.ALL_RESULTS_REVIEWED' | translate }}</p>
     </div>
   } @else {
+    <!--
+      A failed refresh over rows that are still held: state it, keep them. An
+      error card where three critical results had been is worse than the rows
+      plus a notice.
+    -->
+    @if (loadError()) {
+      <p class="rp-stale" role="status">
+        {{ 'DASHBOARD.RESULTS_LOAD_ERROR' | translate }}
+        <!--
+          Reachable during an in-flight read, and left enabled: the
+          request-sequence guard in `loadResultReviewQueue` makes an overlap
+          safe, and disabling it would remove the only escape from a request
+          that never settles. See the in-basket twin.
+        -->
+        <button type="button" class="rp-retry" (click)="requestReload()">
+          {{ 'COMMON.RETRY' | translate }}
+        </button>
+      </p>
+    }
     <div class="rp-sections">
       <!-- Critical -->
       @if (criticalResults().length > 0) {
@@ -49,13 +112,30 @@
               >
                 <span class="material-symbols-outlined">open_in_new</span>
               </a>
-              <button
-                class="rp-ack-btn"
-                [title]="'DASHBOARD.ACKNOWLEDGE' | translate"
-                (click)="acknowledgeResult(r.id); $event.stopPropagation()"
+              <!--
+                A CRITICAL result cannot be dismissed: `LabResultServiceImpl
+                .acknowledgeResult` refuses one that was notified and not read
+                back, and `CriticalValueNotificationService` stamps
+                `criticalNotifiedAt` on every critical result at creation — so
+                a ✓ here is a guaranteed 400 and the escalation sweep goes on
+                paging. The read-back ceremony lives on /lab-results
+                (LabResultsComponent.openReadBack) — NOT /lab, which is the
+                orders bench and has no such control — so this sends the
+                physician there instead of offering one that cannot work.
+                The page takes no deep link, so the tooltip names the row to
+                look for rather than leaving them to scan the whole list.
+              -->
+              <a
+                routerLink="/lab-results"
+                class="rp-action"
+                [title]="
+                  'DASHBOARD.READ_BACK_FOR'
+                    | translate: { test: r.testName, patient: r.patientName }
+                "
+                (click)="$event.stopPropagation()"
               >
-                <span class="material-symbols-outlined">done</span>
-              </button>
+                <span class="material-symbols-outlined">record_voice_over</span>
+              </a>
             </div>
           }
         </div>
@@ -93,6 +173,7 @@
               </a>
               <button
                 class="rp-ack-btn"
+                [disabled]="acknowledging().includes(r.id)"
                 [title]="'DASHBOARD.ACKNOWLEDGE' | translate"
                 (click)="acknowledgeResult(r.id); $event.stopPropagation()"
               >
@@ -135,6 +216,7 @@
               </a>
               <button
                 class="rp-ack-btn"
+                [disabled]="acknowledging().includes(r.id)"
                 [title]="'DASHBOARD.ACKNOWLEDGE' | translate"
                 (click)="acknowledgeResult(r.id); $event.stopPropagation()"
               >

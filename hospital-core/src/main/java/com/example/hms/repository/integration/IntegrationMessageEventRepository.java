@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -71,4 +72,31 @@ public interface IntegrationMessageEventRepository
         + "  AND later.lastAttemptedAt > m.lastAttemptedAt"
         + ")")
     long countUnresolvedDeadLetters();
+
+    /**
+     * The most recent row recorded under this correlation id within a
+     * window, if there is one.
+     *
+     * <p>Used by {@code IntegrationMessageRecorder.recordRecurringFailure} to
+     * fold a retry storm into the row it is a storm of, instead of inserting
+     * a fresh row — and a fresh copy of the message — per attempt. The partial
+     * index on {@code correlation_id} (V89) serves this.
+     *
+     * <p>The window is what keeps the fold from turning into amnesia. Without
+     * one, a vendor whose January framing bug was diagnosed and cleared would
+     * have a <em>different</em> June failure landing on the same reason
+     * silently absorbed into the January row.
+     *
+     * <p>{@code status} is why this is not simply "the newest row":
+     * {@code recordReplay} copies a row's correlation id onto the
+     * {@code REPLAYED} row it writes, so a finder that ignored status would
+     * let the vendor's next retry fold into the operator's replay — rewriting
+     * an audit row with a different message's body and, because
+     * {@code countUnresolvedDeadLetters} counts only {@code FAILED}, leaving
+     * the badge at zero for a feed that is still failing. Callers pass
+     * {@code FAILED}.
+     */
+    Optional<IntegrationMessageEvent>
+        findFirstByCorrelationIdAndStatusAndReceivedAtAfterOrderByReceivedAtDesc(
+            String correlationId, IntegrationMessageStatus status, LocalDateTime after);
 }

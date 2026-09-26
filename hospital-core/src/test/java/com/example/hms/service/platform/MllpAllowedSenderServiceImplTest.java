@@ -47,14 +47,19 @@ class MllpAllowedSenderServiceImplTest {
 
     private Hospital hospital;
     private UUID hospitalId;
+    private UUID organizationId;
 
     @BeforeEach
     void setUp() {
         service = new MllpAllowedSenderServiceImpl(senderRepository, hospitalRepository, mapper);
         hospitalId = UUID.randomUUID();
+        organizationId = UUID.randomUUID();
+        com.example.hms.model.Organization organization = new com.example.hms.model.Organization();
+        organization.setId(organizationId);
         hospital = new Hospital();
         hospital.setId(hospitalId);
         hospital.setName("Allowlisted Hospital");
+        hospital.setOrganization(organization);
     }
 
     private MllpAllowedSender persisted(UUID id, String app, String facility, boolean active) {
@@ -89,6 +94,71 @@ class MllpAllowedSenderServiceImplTest {
 
         Optional<Hospital> result = service.resolveHospital("Roche_Cobas", "lab_a");
         assertThat(result).contains(hospital);
+    }
+
+    @Test
+    @DisplayName("resolveHospital hands back a hospital whose organization can still be read")
+    void resolveHospitalInitialisesTheOrganization() {
+        // Every MLLP caller reads the organization off this hospital on a
+        // worker thread, after this read-only transaction has closed, to file
+        // the integration_message_event row under it. Hospital.organization is
+        // LAZY and Organization takes its id from a field-access @Id, so it
+        // has to be initialised here or every one of those rows lands with a
+        // null organization and the per-organization DLQ view never shows one.
+        when(senderRepository.findBySendingApplicationAndSendingFacilityAndActiveTrue("ROCHE_COBAS", "LAB_A"))
+            .thenReturn(Optional.of(persisted(UUID.randomUUID(), "ROCHE_COBAS", "LAB_A", true)));
+
+        Optional<Hospital> resolved = service.resolveHospital("Roche_Cobas", "lab_a");
+
+        assertThat(resolved).isPresent();
+        assertThat(resolved.get().getOrganization()).isNotNull();
+        assertThat(resolved.get().getOrganization().getId()).isEqualTo(organizationId);
+    }
+
+    @Test
+    @DisplayName("resolveHospital tolerates a hospital with no organization")
+    void resolveHospitalWithoutAnOrganization() {
+        // Hibernate.initialize(null) is a no-op, and organization_id is
+        // nullable; the initialisation must not turn that into an NPE.
+        hospital.setOrganization(null);
+        when(senderRepository.findBySendingApplicationAndSendingFacilityAndActiveTrue("ROCHE_COBAS", "LAB_A"))
+            .thenReturn(Optional.of(persisted(UUID.randomUUID(), "ROCHE_COBAS", "LAB_A", true)));
+
+        assertThat(service.resolveHospital("Roche_Cobas", "lab_a")).contains(hospital);
+    }
+
+    @Test
+    @DisplayName("resolveHospitalId answers the same lookup, as an identifier")
+    void resolveHospitalIdMatchesResolveHospital() {
+        // The HTTP HL7 ingest door calls this one rather than resolveHospital:
+        // Hospital maps its identifier with field access, so reading getId()
+        // off the association initialises the proxy, and doing that after the
+        // read-only transaction has closed is a LazyInitializationException.
+        // Resolving it inside removes the trap instead of documenting it.
+        when(senderRepository.findBySendingApplicationAndSendingFacilityAndActiveTrue("ROCHE_COBAS", "LAB_A"))
+            .thenReturn(Optional.of(persisted(UUID.randomUUID(), "ROCHE_COBAS", "LAB_A", true)));
+
+        assertThat(service.resolveHospitalId("Roche_Cobas", "lab_a")).contains(hospitalId);
+    }
+
+    @Test
+    @DisplayName("resolveHospitalId is empty for a blank pair, without asking the database")
+    void resolveHospitalIdEmptyOnBlank() {
+        assertThat(service.resolveHospitalId(null, "LAB_A")).isEmpty();
+        assertThat(service.resolveHospitalId("APP", "  ")).isEmpty();
+        verify(senderRepository, never())
+            .findBySendingApplicationAndSendingFacilityAndActiveTrue(any(), any());
+    }
+
+    @Test
+    @DisplayName("resolveHospitalId is empty for a sender that is not allowlisted")
+    void resolveHospitalIdEmptyOnMiss() {
+        // What the ingest door turns into its 404. An inactive or unknown pair
+        // must not resolve, or the allowlist is not a boundary.
+        when(senderRepository.findBySendingApplicationAndSendingFacilityAndActiveTrue(any(), any()))
+            .thenReturn(Optional.empty());
+
+        assertThat(service.resolveHospitalId("UNKNOWN", "LAB_X")).isEmpty();
     }
 
     @Test

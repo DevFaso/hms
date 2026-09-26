@@ -53,6 +53,7 @@ public class EmpiServiceImpl implements EmpiService {
     private static final String MSG_MERGE_SAME_IDENTITY = "empi.merge.sameIdentity";
     private static final String MSG_MERGE_ALREADY_MERGED = "empi.merge.alreadyMerged";
     private static final String MSG_MERGE_CROSS_TENANT = "empi.merge.crossTenant";
+    private static final String MSG_MERGE_IDENTITY_NOT_FOUND = "empi.merge.identityNotFound";
     private static final String MSG_MERGE_SAME_PATIENT = "empi.merge.samePatient";
     private static final String MSG_LINK_MISSING_PATIENT = "empi.link.missingPatient";
     private static final String MSG_LINK_ALIAS_INCOMPLETE = "empi.link.aliasIncomplete";
@@ -132,31 +133,34 @@ public class EmpiServiceImpl implements EmpiService {
      * different route. Super-admin remains able to reconcile those.
      */
     private boolean isVisibleToCaller(EmpiMasterIdentity identity) {
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        return isVisibleTo(identity, roleValidator.requireActiveHospitalId());
+    }
+
+    private static boolean isVisibleTo(EmpiMasterIdentity identity, UUID activeHospitalId) {
         return activeHospitalId == null
             || (identity.getHospitalId() != null && activeHospitalId.equals(identity.getHospitalId()));
     }
 
     /**
-     * Refuse a write against an identity the caller does not own.
+     * The identity, only when the caller may act on it; otherwise empty, the
+     * same empty a nonexistent id gives.
      *
      * <p>The merge endpoints are {@code HOSPITAL_ADMIN}-or-better, but
      * HOSPITAL_ADMIN is a PER-HOSPITAL role — so "is an admin" was never the same
-     * question as "is an admin HERE". Before this, the only tenant check on the
-     * merge path compared the two identities to each other and never to the
-     * caller, which let a hospital-A admin merge two hospital-B identities.
+     * question as "is an admin HERE". {@code findById} is scoped by
+     * {@code TenantScopeSpecification} to every hospital the caller is PERMITTED
+     * at, which is wider than the active one, so the visibility check is still
+     * needed on top of it.
      */
-    private void requireTenantAccess(EmpiMasterIdentity identity) {
-        if (!isVisibleToCaller(identity)) {
-            throw new org.springframework.security.access.AccessDeniedException(
-                MessageUtil.resolve(MSG_MERGE_CROSS_TENANT));
-        }
+    private Optional<EmpiMasterIdentity> findVisibleIdentity(UUID identityId, UUID activeHospitalId) {
+        return masterIdentityRepository.findById(identityId)
+            .filter(identity -> isVisibleTo(identity, activeHospitalId));
     }
 
     /**
      * Refuse a merge against a patient not registered at the caller's hospital.
      *
-     * <p>Needed in addition to {@link #requireTenantAccess} because
+     * <p>Needed in addition to {@link #findVisibleIdentity} because
      * {@code mergePatients} PROVISIONS a master identity for any patient that
      * lacks one — a write against another tenant's patient that happened before
      * any identity-level guard could run.
@@ -224,18 +228,24 @@ public class EmpiServiceImpl implements EmpiService {
     @Override
     @Transactional
     public EmpiMergeEventResponseDTO mergeIdentities(UUID primaryIdentityId, EmpiMergeRequestDTO request) {
-        EmpiMasterIdentity primary = masterIdentityRepository.findById(primaryIdentityId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_IDENTITY_NOT_FOUND, primaryIdentityId));
-
-        EmpiMasterIdentity secondary = masterIdentityRepository.findById(request.getSecondaryIdentityId())
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_IDENTITY_NOT_FOUND, request.getSecondaryIdentityId()));
-
-        // ── Tenant isolation: BOTH sides must belong to the caller. The
-        // identity-to-identity check further down only proves the two agree with
-        // each other; two hospital-B identities agree perfectly, and a hospital-A
-        // admin could merge them. ──
-        requireTenantAccess(primary);
-        requireTenantAccess(secondary);
+        // ── Tenant isolation, with no oracle. BOTH sides must belong to the
+        // caller: the identity-to-identity check further down only proves the
+        // two agree with each other, and two hospital-B identities agree
+        // perfectly. And an identity the caller may not see answers EXACTLY like
+        // one that does not exist — same status, same body, naming neither id —
+        // or a hospital-A admin pairs their own identity with candidate UUIDs
+        // and reads off which exist at other hospitals (partial ownership is not
+        // partial permission; the HL7 A40 rule, #738). Both lookups run before
+        // either is judged, so owning one side costs what owning neither does. ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        Optional<EmpiMasterIdentity> primaryLookup = findVisibleIdentity(primaryIdentityId, activeHospitalId);
+        Optional<EmpiMasterIdentity> secondaryLookup =
+            findVisibleIdentity(request.getSecondaryIdentityId(), activeHospitalId);
+        if (primaryLookup.isEmpty() || secondaryLookup.isEmpty()) {
+            throw new ResourceNotFoundException(MSG_MERGE_IDENTITY_NOT_FOUND);
+        }
+        EmpiMasterIdentity primary = primaryLookup.get();
+        EmpiMasterIdentity secondary = secondaryLookup.get();
 
         if (primary.getId().equals(secondary.getId())) {
             throw new BusinessException(MessageUtil.resolve(MSG_MERGE_SAME_IDENTITY));

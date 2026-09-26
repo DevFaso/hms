@@ -69,9 +69,14 @@ type ListOutcome = { ok: true; page: PatientDocumentPage } | { ok: false; messag
 export class DocumentsTabComponent implements OnInit, OnChanges {
   @Input({ required: true }) patientId = '';
   /**
-   * The super-admin's cross-tenant scope, forwarded by the chart so a change
-   * on the scope chip re-fetches under the new X-Hospital-Id. Non-super-admin
-   * hosts leave it null; the interceptor sends their own hospital.
+   * The hospital scope the host is reading under, so a change re-fetches.
+   *
+   * A CHANGE TRIGGER, not a parameter: the value is never sent, the
+   * interceptor scopes the request from `X-Hospital-Id`, and `ngOnChanges`
+   * below is the only thing that reads it. The host mirrors whatever the
+   * interceptor will send — for a plain clinician that is their own hospital
+   * id, not null, since a host that left it null could not notice a scope
+   * change it had never recorded.
    */
   @Input() hospitalScope: string | null = null;
 

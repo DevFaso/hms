@@ -25,6 +25,23 @@ export interface PrescriptionResponse {
   frequency: string;
   duration: string;
   notes: string;
+  /**
+   * What was ordered (gap G13), so a remainder can be rendered with its unit
+   * instead of as a bare number. Optional: the columns are nullable and
+   * pre-date the pharmacy module, so a legacy row carries neither.
+   */
+  quantity?: number | null;
+  quantityUnit?: string | null;
+  /**
+   * How many refills the prescriber granted, how many are left, and how many
+   * have actually been released back to the pharmacy. `refillsUsed` is the
+   * one the remainder arithmetic needs: the expected LIFETIME quantity is
+   * `quantity * (1 + refillsUsed)`, which is what `DispenseServiceImpl`
+   * compares the sum of the fills against.
+   */
+  refillsAllowed?: number | null;
+  refillsRemaining?: number | null;
+  refillsUsed?: number | null;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -61,7 +78,81 @@ export interface PrescriptionResponse {
   pharmacistVerifiedByUserId?: string | null;
   pharmacistVerifiedByName?: string | null;
   pharmacistVerificationNote?: string | null;
+
+  /* ── Pharmacy + dispatch state (gap G7, wave 1) ──────────────────── */
+
+  /**
+   * Where the prescription went: the partner pharmacy it was routed to, or the
+   * community pharmacy it was dispatched to by SMS. Null for an order still at
+   * the hospital's own dispensary — and also for one a partner REFUSED, because
+   * `StockOutRoutingServiceImpl` clears these three columns on a rejection and
+   * on a no-show. A PARTNER_REJECTED row therefore says nothing here about who
+   * refused it; only the routing history does.
+   */
+  pharmacyId?: string | null;
+  pharmacyName?: string | null;
+  pharmacyContact?: string | null;
+
+  /** `SMS` — the only channel PrescriptionSmsDispatchServiceImpl writes. */
+  dispatchChannel?: string | null;
+  /** `SENT` on the prescription row; a failure stays on the transmission. */
+  dispatchStatus?: string | null;
+  dispatchedAt?: string | null;
+
+  /**
+   * The current status while the pharmacy owns it (the backend mapper's
+   * PHARMACY_OWNED_STATUSES), null while the order is still the prescriber's.
+   * It is a PrescriptionStatus name — render it through
+   * `| enumLabel: 'prescriptionStatus'`, never raw.
+   */
+  lastPharmacyEvent?: string | null;
+  lastPharmacyEventAt?: string | null;
+
+  /* ── Pharmacist clarification (gap G5) ───────────────────────── */
+
+  /**
+   * Pharmacist clarification exchange (gap G5). The backend strips all four
+   * from the patient's copy of a prescription, so they are optional here and
+   * absent rather than blank when the reader is a patient.
+   */
+  clarificationReason?: string | null;
+  clarificationRequestedAt?: string | null;
+  clarificationResponse?: string | null;
+  clarificationResolvedAt?: string | null;
 }
+
+/**
+ * Every value `com.example.hms.enums.PrescriptionStatus` can send, in its
+ * declaration order.
+ *
+ * <p>This is a HAND-MAINTAINED copy — nothing in the portal build reads the
+ * Java enum — so a status added to the backend does not on its own fail a spec
+ * here: the exhaustiveness spec iterates this list, which would not yet know
+ * about it. Two things do catch it. `npm run i18n:enums` reads
+ * `PrescriptionStatus.java` and fails on a constant with no
+ * `PORTAL.ENUM.PRESCRIPTION_STATUS` key, and `tabForStatus` files an unmapped
+ * value under "Needs attention" rather than out of every tab. Keying the new
+ * status is what brings it here; the spec then holds the partition.
+ */
+export const PRESCRIPTION_STATUSES: readonly string[] = [
+  'DRAFT',
+  'PENDING_SIGNATURE',
+  'SIGNED',
+  'TRANSMITTED',
+  'TRANSMISSION_FAILED',
+  'CANCELLED',
+  'DISCONTINUED',
+  'PENDING_CLARIFICATION',
+  'DISPENSED',
+  'PARTIALLY_FILLED',
+  'PENDING_STOCK',
+  'REQUIRES_EXTERNAL_FILL',
+  'SENT_TO_PARTNER',
+  'PARTNER_ACCEPTED',
+  'PARTNER_REJECTED',
+  'PARTNER_DISPENSED',
+  'PRINTED_FOR_PATIENT',
+];
 
 export type PrescriptionStatusType =
   | 'DRAFT'
@@ -99,16 +190,48 @@ export class PrescriptionService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = '/prescriptions';
 
+  /**
+   * How many rows the prescriber's list asks for.
+   *
+   * <p>`GET /prescriptions` declares no `@PageableDefault`, so it was serving
+   * Spring's default page 0 of 20 from an UNORDERED derived query — an
+   * arbitrary twenty rows out of the tenant. That was survivable while the
+   * page only listed what it had; it stopped being survivable when the tabs
+   * started counting, because a "Needs attention 0" is a confident claim that
+   * nothing is waiting. The page still has a ceiling, and the UI says so when
+   * it is reached rather than pretending otherwise.
+   */
+  static readonly LIST_PAGE_SIZE = 200;
+
   list(filters?: {
     patientId?: string;
     staffId?: string;
     hospitalId?: string;
+    /**
+     * Gap G12 — restrict the page to these `PrescriptionStatus` values. One
+     * repeated `status` query parameter per value. Omitted or empty means
+     * every status, which is what the endpoint did before the filter existed.
+     */
+    statuses?: string[];
   }): Observable<PrescriptionResponse[]> {
-    let params = new HttpParams();
+    // An explicit size and sort. Without them the derived query's order is
+    // arbitrary, so "the first page" is not even the newest prescriptions:
+    // a prescriber told by the clinical inbox that N orders await
+    // clarification could find none of them here. Sorting by updatedAt was
+    // tried and dropped — it reorders the page for everyone and still loses
+    // the row on a busy day, because every sign, edit and fill bumps that
+    // column. The size and sort make the page deterministic; `statuses`
+    // makes a bucket COMPLETE, which is what the counts actually need.
+    let params = new HttpParams()
+      .set('size', PrescriptionService.LIST_PAGE_SIZE)
+      .set('sort', 'createdAt,desc');
     if (filters) {
       if (filters.patientId) params = params.set('patientId', filters.patientId);
       if (filters.staffId) params = params.set('staffId', filters.staffId);
       if (filters.hospitalId) params = params.set('hospitalId', filters.hospitalId);
+      for (const status of filters.statuses ?? []) {
+        params = params.append('status', status);
+      }
     }
     return this.http
       .get<{ content: PrescriptionResponse[] }>(this.baseUrl, { params })
@@ -160,6 +283,36 @@ export class PrescriptionService {
   pharmacistVerify(id: string, note?: string): Observable<PrescriptionResponse> {
     return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/pharmacist-verify`, {
       note: note?.trim() || undefined,
+    });
+  }
+
+  /**
+   * Gap G5, pharmacy side: the pharmacist sends the order back to its
+   * prescriber with a question. The backend moves it to
+   * PENDING_CLARIFICATION, which takes it off the dispense work queue, so
+   * the caller must make that consequence explicit before calling.
+   *
+   * <p>Pharmacist roles only (PHARMACIST, PHARMACY_VERIFIER, SUPER_ADMIN).
+   * The reason is required and capped at 1000 characters server-side.
+   */
+  requestClarification(id: string, reason: string): Observable<PrescriptionResponse> {
+    return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/request-clarification`, {
+      reason: reason.trim(),
+    });
+  }
+
+  /**
+   * Gap G5, prescriber side: a doctor with a staff profile at the
+   * prescribing hospital answers, and the order returns to the status it
+   * held when the question was asked.
+   *
+   * <p>The answer is optional — the doctor may have edited the order instead
+   * of, or as well as, replying — so an empty box sends no `response` at all
+   * rather than an empty string.
+   */
+  resolveClarification(id: string, response?: string): Observable<PrescriptionResponse> {
+    return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/resolve-clarification`, {
+      response: response?.trim() || undefined,
     });
   }
 

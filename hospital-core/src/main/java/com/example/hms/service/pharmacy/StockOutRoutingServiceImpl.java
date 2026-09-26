@@ -122,9 +122,24 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     public StockCheckResultDTO checkStock(UUID prescriptionId) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         Prescription prescription = findPrescription(prescriptionId, hospitalId);
+        // Every question below — what is on hand, which partners exist — is
+        // asked OF A HOSPITAL, so it is asked of the one that wrote the order,
+        // not of the caller's scope. For a scoped caller they are the same
+        // hospital (findPrescription has just proved it). For a super-admin in
+        // global view the caller's scope is null, and passing that down would
+        // have answered "0 on hand, no partner pharmacies" with confidence —
+        // a wrong clinical answer that the page then offers a back order on.
+        if (prescription.getHospital() == null) {
+            // Only reachable for a global-view super-admin, because the scoped
+            // path has already refused a hospital-less order. Answering it
+            // would mean feeding null into all three queries and reporting
+            // "0 on hand, no partners" about nothing.
+            throw new ResourceNotFoundException("prescription.notfound");
+        }
+        UUID orderHospitalId = prescription.getHospital().getId();
 
         // Find the medication catalog item for this prescription
-        MedicationCatalogItem catalogItem = resolveCatalogItem(prescription, hospitalId);
+        MedicationCatalogItem catalogItem = resolveCatalogItem(prescription, orderHospitalId);
 
         BigDecimal totalOnHand = BigDecimal.ZERO;
 
@@ -132,7 +147,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         if (catalogItem != null) {
             List<InventoryItem> items = inventoryItemRepository
                     .findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(
-                            hospitalId, catalogItem.getId());
+                            orderHospitalId, catalogItem.getId());
             for (InventoryItem item : items) {
                 if (item.getPharmacy() != null
                         && item.getPharmacy().getPharmacyType() == PharmacyType.HOSPITAL_DISPENSARY
@@ -148,7 +163,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         List<PartnerOptionDTO> partnerOptions = new ArrayList<>();
         if (!sufficient) {
             List<Pharmacy> partners = pharmacyRepository.findByHospitalIdAndPharmacyTypeInAndActiveTrue(
-                    hospitalId, EXTERNAL_PHARMACY_TYPES);
+                    orderHospitalId, EXTERNAL_PHARMACY_TYPES);
             for (Pharmacy partner : partners) {
                 boolean hasOnFormulary = false;
                 if (catalogItem != null) {
@@ -183,7 +198,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     @Transactional
     public RoutingDecisionResponseDTO routeToPartner(UUID prescriptionId, RoutingDecisionRequestDTO dto) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        Prescription prescription = findPrescription(prescriptionId, hospitalId);
+        Prescription prescription = findPrescriptionForWrite(prescriptionId, hospitalId);
         validateRoutableStatus(prescription);
 
         UUID targetPharmacyId = dto.getTargetPharmacyId();
@@ -227,6 +242,11 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
         // Create routing decision
         dto.setRoutingType(RoutingType.PARTNER);
+        // The reason is client free text and shares a column with the no-show
+        // marker, so a pharmacist typing one (by accident or not) would give
+        // their own routing reason a translated "the partner never delivered"
+        // flag and lose the sentence out of the reason. Defanged on the way in.
+        dto.setReason(PartnerNoShowReason.defuseAuthoredReason(dto.getReason()));
         PrescriptionRoutingMapper.RoutingContext ctx = new PrescriptionRoutingMapper.RoutingContext(
                 prescription, targetPharmacy, currentUser, patient, remaining);
         PrescriptionRoutingDecision decision = routingMapper.toEntity(dto, ctx);
@@ -254,7 +274,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     @Transactional
     public RoutingDecisionResponseDTO printForPatient(UUID prescriptionId) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        Prescription prescription = findPrescription(prescriptionId, hospitalId);
+        Prescription prescription = findPrescriptionForWrite(prescriptionId, hospitalId);
         validateRoutableStatus(prescription);
 
         User currentUser = resolveCurrentUser();
@@ -292,7 +312,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     @Transactional
     public RoutingDecisionResponseDTO backOrder(UUID prescriptionId, LocalDate estimatedRestockDate) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        Prescription prescription = findPrescription(prescriptionId, hospitalId);
+        Prescription prescription = findPrescriptionForWrite(prescriptionId, hospitalId);
         validateRoutableStatus(prescription);
 
         User currentUser = resolveCurrentUser();
@@ -340,7 +360,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         PrescriptionRoutingDecision decision = routingDecisionRepository.findById(routingDecisionId)
                 .orElseThrow(() -> new ResourceNotFoundException("routing.decision.notfound"));
-        enforceDecisionHospitalScope(decision, hospitalId);
+        enforceDecisionHospitalScopeForWrite(decision, hospitalId);
 
         if (decision.getRoutingType() != RoutingType.PARTNER) {
             throw new BusinessException("Only PARTNER routing decisions can receive partner responses");
@@ -390,7 +410,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         PrescriptionRoutingDecision decision = routingDecisionRepository.findById(routingDecisionId)
                 .orElseThrow(() -> new ResourceNotFoundException("routing.decision.notfound"));
-        enforceDecisionHospitalScope(decision, hospitalId);
+        enforceDecisionHospitalScopeForWrite(decision, hospitalId);
 
         if (decision.getRoutingType() != RoutingType.PARTNER) {
             throw new BusinessException("Only PARTNER routing decisions can confirm dispense");
@@ -434,7 +454,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         PrescriptionRoutingDecision decision = routingDecisionRepository.findById(routingDecisionId)
                 .orElseThrow(() -> new ResourceNotFoundException("routing.decision.notfound"));
-        enforceDecisionHospitalScope(decision, hospitalId);
+        enforceDecisionHospitalScopeForWrite(decision, hospitalId);
 
         if (reason == null || reason.isBlank()) {
             throw new BusinessException("Recording a partner no-show needs a reason.");
@@ -449,7 +469,13 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
         Prescription prescription = decision.getPrescription();
         decision.setStatus(RoutingDecisionStatus.CANCELLED);
-        decision.setReason(appendNoShowReason(decision.getReason(), reason.trim()));
+        // The pharmacist's words are client text like any other, so they are
+        // defused before being composed: the marker in front of them is the
+        // server's assertion of the fact, and a second one inside them would
+        // both double it and reach the prescriber as a raw reserved token.
+        decision.setReason(PartnerNoShowReason.compose(
+                decision.getReason(),
+                PartnerNoShowReason.defuseAuthoredReason(reason.trim())));
         prescription.setStatus(PrescriptionStatus.SIGNED);
         // The partner that did not deliver is no longer this order's pharmacy.
         clearPharmacy(prescription);
@@ -462,13 +488,6 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 routingDecisionId.toString());
 
         return routingMapper.toResponseDTO(saved);
-    }
-
-    /** Keeps the routing reason the decision was taken for, and adds why it ended. */
-    private static String appendNoShowReason(String existing, String noShowReason) {
-        String suffix = "Partner no-show: " + noShowReason;
-        String combined = existing == null || existing.isBlank() ? suffix : existing + " | " + suffix;
-        return combined.length() > 1024 ? combined.substring(0, 1024) : combined;
     }
 
     @Override
@@ -494,22 +513,88 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
     // ── Private helpers ──
 
+    /**
+     * Scope for a READ. A null {@code hospitalId} means a super-admin in
+     * GLOBAL view, who has no single hospital to be in scope for, and the row
+     * is then not narrowed — the stance of
+     * {@code DispenseServiceImpl.enforceHospitalScope},
+     * {@code PrescriptionClarificationService.findInScope} and the rest of the
+     * hospital-scoped read surface. Dereferencing it answered that caller with
+     * a 500 on every routing read.
+     *
+     * <p><b>Null alone is not the licence.</b> {@code requireActiveHospitalId}
+     * has a second way of returning null: step 4 falls back to
+     * {@code isSuperAdminFromAuth()}, which reads the AUTHORITIES, and
+     * {@code RoleValidator}'s own Javadoc warns those can be inflated — an
+     * impersonation context could carry ROLE_SUPER_ADMIN without the token
+     * having been minted for one. Before this PR such a principal hit the
+     * dereference and got a 500, which blocked the read by accident; widening
+     * it to a cross-tenant read of another hospital's orders would be a real
+     * escalation. So the unscoped path is gated on the discrete JWT claim,
+     * the only safe signal for a cross-tenant decision, and anyone else with
+     * no hospital is refused as before — as a 404 rather than a 500.
+     */
     private Prescription findPrescription(UUID prescriptionId, UUID hospitalId) {
         Prescription prescription = prescriptionRepository.findById(prescriptionId)
                 .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
-        if (prescription.getHospital() == null
-                || !hospitalId.equals(prescription.getHospital().getId())) {
+        if (hospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
+            throw new ResourceNotFoundException("prescription.notfound");
+        }
+        if (hospitalId != null
+                && (prescription.getHospital() == null
+                    || !hospitalId.equals(prescription.getHospital().getId()))) {
             throw new ResourceNotFoundException("prescription.notfound");
         }
         return prescription;
     }
 
+    /**
+     * Scope for a WRITE, which is a different question from a read.
+     *
+     * <p>Reading across tenants is what a super-admin in global view is for.
+     * ROUTING a prescription, recording a partner's answer or cancelling a
+     * partner's claim is an act on one hospital's order, and letting an
+     * unscoped caller do it would be a new permission rather than a bug fix —
+     * it is also not what happened before, since the unguarded dereference
+     * refused every one of these with a 500. The refusal is kept and only its
+     * shape is fixed: pick a hospital first, and the same 404 the rest of this
+     * surface answers with.
+     */
+    private Prescription findPrescriptionForWrite(UUID prescriptionId, UUID hospitalId) {
+        if (hospitalId == null) {
+            throw new ResourceNotFoundException("prescription.notfound");
+        }
+        return findPrescription(prescriptionId, hospitalId);
+    }
+
+    /**
+     * Same global-view stance as {@link #findPrescription} for the HOSPITAL
+     * check. A decision with no prescription is refused whoever is asking:
+     * every caller of this method goes on to read or act on that prescription.
+     */
     private void enforceDecisionHospitalScope(PrescriptionRoutingDecision decision, UUID hospitalId) {
-        if (decision.getPrescription() == null
-                || decision.getPrescription().getHospital() == null
-                || !hospitalId.equals(decision.getPrescription().getHospital().getId())) {
+        if (decision.getPrescription() == null) {
             throw new ResourceNotFoundException("routing.decision.notfound");
         }
+        // Same reasoning as findPrescription: a null hospital only licenses an
+        // unscoped read for a principal the JWT itself calls a super-admin.
+        if (hospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
+            throw new ResourceNotFoundException("routing.decision.notfound");
+        }
+        if (hospitalId != null
+                && (decision.getPrescription().getHospital() == null
+                    || !hospitalId.equals(decision.getPrescription().getHospital().getId()))) {
+            throw new ResourceNotFoundException("routing.decision.notfound");
+        }
+    }
+
+    /** Write counterpart of {@link #enforceDecisionHospitalScope}; see
+     * {@link #findPrescriptionForWrite} for why a write is not a read. */
+    private void enforceDecisionHospitalScopeForWrite(PrescriptionRoutingDecision decision, UUID hospitalId) {
+        if (hospitalId == null) {
+            throw new ResourceNotFoundException("routing.decision.notfound");
+        }
+        enforceDecisionHospitalScope(decision, hospitalId);
     }
 
     /**

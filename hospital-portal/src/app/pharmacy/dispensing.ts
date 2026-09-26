@@ -26,11 +26,50 @@ import {
 import { AuthService } from '../auth/auth.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { OfflineDispenseQueueService } from './offline-dispense-queue.service';
+import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
+
+/**
+ * Why a work-queue row is not a plain fill, keyed by the backend's
+ * `attentionReason`. The projection reports ONE reason by precedence
+ * (status, then an outstanding back order, then a clarification), so this
+ * map is exhaustive over that single value — "the prescriber has answered"
+ * is reported separately, on `clarificationResolvedAt`, because resolving a
+ * clarification restores the status the question was asked from and would
+ * otherwise be masked by it.
+ *
+ * `labelKey` is the field name on purpose — check-i18n-referenced-keys.mjs
+ * reads it, so a typo fails the gate instead of rendering the raw key.
+ */
+export const QUEUE_ATTENTION_REASONS: readonly { reason: string; labelKey: string }[] = [
+  { reason: 'PENDING_STOCK', labelKey: 'PHARMACY.ATTENTION.PENDING_STOCK' },
+  { reason: 'PARTNER_REJECTED', labelKey: 'PHARMACY.ATTENTION.PARTNER_REJECTED' },
+  { reason: 'PARTNER_ACCEPTED', labelKey: 'PHARMACY.ATTENTION.PARTNER_ACCEPTED' },
+  { reason: 'BACK_ORDER_OUTSTANDING', labelKey: 'PHARMACY.ATTENTION.BACK_ORDER_OUTSTANDING' },
+  { reason: 'CLARIFICATION_RESOLVED', labelKey: 'PHARMACY.ATTENTION.CLARIFICATION_RESOLVED' },
+];
+
+/** The reason whose label already says the prescriber answered. */
+const CLARIFICATION_RESOLVED_LABEL_KEY = 'PHARMACY.ATTENTION.CLARIFICATION_RESOLVED';
+
+/**
+ * A reason this build has never heard of still flags the row. A row the
+ * pharmacist should look at is the point; a value added to the backend after
+ * this build shipped is exactly the case a hard-coded list gets wrong.
+ */
+export const UNRECOGNISED_ATTENTION = {
+  labelKey: 'PHARMACY.ATTENTION.UNRECOGNISED',
+};
 
 @Component({
   selector: 'app-dispensing',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    PrescriptionClarificationComponent,
+  ],
   templateUrl: './dispensing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './dispensing.scss',
@@ -355,6 +394,36 @@ export class DispensingComponent implements OnInit, OnDestroy {
       default:
         return 'badge-info';
     }
+  }
+
+  /**
+   * Why this row is not a plain fill, or null for one that is.
+   *
+   * <p>`needsAttention` had been on the model since the backend added it and
+   * no template read it, so every one of these cues — a back order, a
+   * partner's refusal, an order sitting with a partner — reached the
+   * pharmacist as an ordinary row. Never the raw reason: it is an enum
+   * name, not a sentence.
+   */
+  attentionKey(rx: WorkQueuePrescription): string | null {
+    if (!rx.needsAttention && !rx.attentionReason) return null;
+    const match = QUEUE_ATTENTION_REASONS.find((r) => r.reason === rx.attentionReason);
+    return match ? match.labelKey : UNRECOGNISED_ATTENTION.labelKey;
+  }
+
+  /**
+   * Whether the row needs its own "the prescriber has answered" line.
+   *
+   * <p>False when the attention reason is ALREADY the clarification: with
+   * nothing of higher precedence to report the backend derives both from the
+   * same timestamp, and the row would say it twice. The line earns its place
+   * exactly when a status or a back order has taken the single reason — which
+   * is the case the cue exists for.
+   */
+  showsAnswerCue(rx: WorkQueuePrescription): boolean {
+    return (
+      !!rx.clarificationResolvedAt && this.attentionKey(rx) !== CLARIFICATION_RESOLVED_LABEL_KEY
+    );
   }
 
   /**

@@ -35,8 +35,8 @@ struct LabResultsView: View {
         }
         .navigationTitle("lab_results_title".localized)
         .refreshable { await vm.load() }
-        .alert("Error", isPresented: .constant(vm.errorMessage != nil)) {
-            Button("OK") { vm.errorMessage = nil }
+        .alert("error".localized, isPresented: .constant(vm.errorMessage != nil)) {
+            Button("ok".localized) { vm.errorMessage = nil }
         } message: { Text(vm.errorMessage ?? "") }
         .sheet(item: $selectedResult) { result in
             LabResultDetailSheet(result: result)
@@ -47,27 +47,31 @@ struct LabResultsView: View {
 // MARK: - Summary Row (list cell)
 struct LabResultSummaryRow: View {
     let result: LabResultDTO
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Image(systemName: result.abnormal ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                        .foregroundColor(result.abnormal ? .red : .green)
-                    Text(result.testName ?? "Test").font(.headline)
+                    Image(systemName: result.symbolName)
+                        .foregroundColor(result.tone.symbolColor)
+                    Text(result.testName ?? "test_name".localized).font(.headline)
                 }
-                if let range = result.referenceRange {
-                    Text("Reference: \(range)").font(.caption).foregroundColor(.secondary)
+                if result.isPending {
+                    Text("lab_result_pending".localized)
+                        .font(.caption).foregroundColor(.secondary)
+                } else {
+                    if let value = result.valueWithUnit {
+                        Text(value).font(.caption)
+                    }
+                    if let range = result.displayReferenceRange {
+                        Text(String(format: "reference_with_value".localized, range))
+                            .font(.caption).foregroundColor(.secondary)
+                    }
                 }
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
-                if result.isCritical {
-                    StatusBadge(text: "Critical", color: "red")
-                } else if result.abnormal {
-                    StatusBadge(text: "Abnormal", color: "orange")
-                } else {
-                    StatusBadge(text: result.statusDisplay, color: "green")
-                }
+                StatusBadge(text: result.statusDisplay, color: result.tone.badgeColor)
                 Image(systemName: "chevron.right")
                     .foregroundColor(.secondary).font(.caption)
             }
@@ -84,61 +88,99 @@ struct LabResultDetailSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Test Information") {
-                    detailRow("Test Name", result.testName ?? "—")
+                Section("test_information".localized) {
+                    detailRow("test_name".localized, result.testName ?? "—")
                     if let code = result.testCode, !code.isEmpty {
-                        detailRow("Test Code", code)
+                        detailRow("test_code".localized, code)
                     }
-                    detailRow("Status", result.statusDisplay)
-                    if let lab = result.labName, !lab.isEmpty {
-                        detailRow("Lab", lab)
+                    HStack {
+                        Text("status".localized).foregroundColor(.secondary)
+                        Spacer()
+                        StatusBadge(text: result.statusDisplay, color: result.tone.badgeColor)
+                    }
+                    if let lab = result.hospitalName, !lab.isEmpty {
+                        detailRow("laboratory".localized, lab)
                     }
                 }
 
-                Section("Results") {
-                    if let val = result.result {
-                        detailRow("Result", "\(val) \(result.unit ?? "")".trimmingCharacters(in: .whitespaces))
+                Section("lab_results_section".localized) {
+                    if result.isPending {
+                        // No value, no reference range and no interpretation:
+                        // an unreleased result is redacted server-side and
+                        // colouring it "normal" would tell the patient
+                        // something untrue.
+                        Label("lab_pending_explainer".localized, systemImage: "hourglass")
+                            .foregroundColor(.secondary)
                     } else {
-                        Text("Result pending").foregroundColor(.secondary)
-                    }
-                    if let range = result.referenceRange {
-                        detailRow("Reference Range", range)
-                    }
-                    if result.isCritical {
-                        Label("Critical value — contact your provider", systemImage: "exclamationmark.triangle.fill")
-                            .foregroundColor(.red)
-                    } else if result.abnormal {
-                        Label("Abnormal — review with your provider", systemImage: "exclamationmark.circle")
-                            .foregroundColor(.orange)
-                    } else {
-                        Label("Within normal range", systemImage: "checkmark.circle.fill")
-                            .foregroundColor(.green)
+                        if let value = result.valueWithUnit {
+                            detailRow("lab_value".localized, value)
+                        }
+                        if let range = result.displayReferenceRange {
+                            detailRow("reference_range".localized, range)
+                        }
+                        if result.isCritical {
+                            Label("lab_interpretation_critical".localized,
+                                  systemImage: "exclamationmark.triangle.fill")
+                                .foregroundColor(.red)
+                        } else if result.isAbnormal {
+                            Label("lab_interpretation_abnormal".localized,
+                                  systemImage: "exclamationmark.circle")
+                                .foregroundColor(.orange)
+                        } else if result.isGradedNormal {
+                            // Only when there WAS a range to be inside:
+                            // PatientLabResultServiceImpl.resolveStatus returns
+                            // NORMAL from statusOf(null) too, i.e. when nothing
+                            // graded the row at all, and a qualitative result
+                            // must not be told it is "within normal range".
+                            Label("lab_interpretation_normal".localized,
+                                  systemImage: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                        }
                     }
                 }
 
-                Section("Dates") {
-                    if let d = result.orderedDate { detailRow("Ordered", String(d.prefix(10))) }
-                    if let d = result.collectedDate { detailRow("Collected", String(d.prefix(10))) }
-                    if let d = result.resultDate { detailRow("Resulted", String(d.prefix(10))) }
+                Section("lab_dates_section".localized) {
+                    // Labelled "Ordered", not "Collected": PatientLabResultServiceImpl
+                    // fills collectedAt from LabOrder.getOrderDatetime(), and LabOrder
+                    // carries no sample-collection timestamp at all.
+                    if let d = result.collectedAt {
+                        detailRow("ordered_at".localized, String(d.prefix(10)))
+                    }
+                    // Not while pending: toResponse sets resultedAt BEFORE the
+                    // redaction early-return (fetchRows sorts on resultDate), so
+                    // an unreleased row still carries one — and printing
+                    // "Resulted: 22/09" two rows under "the laboratory has not
+                    // released this result yet" contradicts it.
+                    if !result.isPending, let d = result.resultedAt {
+                        detailRow("resulted".localized, String(d.prefix(10)))
+                    }
                 }
 
-                if let orderedBy = result.orderedBy, !orderedBy.isEmpty {
-                    Section("Provider") {
-                        detailRow("Ordered By", orderedBy)
+                // resolveStaffName returns nil whenever the order has no
+                // staff, so a result can carry a performer and no orderer;
+                // nesting one inside the other hid the performer entirely.
+                if result.orderedBy?.isEmpty == false || result.performedBy?.isEmpty == false {
+                    Section("provider".localized) {
+                        if let orderedBy = result.orderedBy, !orderedBy.isEmpty {
+                            detailRow("ordered_by".localized, orderedBy)
+                        }
+                        if let performedBy = result.performedBy, !performedBy.isEmpty {
+                            detailRow("performed_by".localized, performedBy)
+                        }
                     }
                 }
 
                 if let notes = result.notes, !notes.isEmpty {
-                    Section("Notes") {
+                    Section("notes".localized) {
                         Text(notes)
                     }
                 }
             }
-            .navigationTitle("Lab Result Details")
+            .navigationTitle("lab_result_details".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
+                    Button("done".localized) { dismiss() }
                 }
             }
         }

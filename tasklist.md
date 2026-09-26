@@ -3113,7 +3113,8 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   prescription dispensable in-house; refused and back-ordered prescriptions
   vanished from every screen; the prescriber was never notified of anything the
   pharmacy did; and no DTO carried which pharmacy a prescription went to.
-  Wave 1 (backend) = #715, #716, #717 (V162), #718, #719 (V161). Still owed:
+  Wave 1 (backend) = #715, #716, #717 (V162), #718, #719 (V161), plus the
+  follow-ups #720-#723 (V163, V164), all merged and live. Still owed:
   wave 2, the portal (lab tab on the patient chart, a lab category in the
   clinical inbox, the pending-release worklist screen, the pharmacist
   clarification UI, prescriber visibility of dispense and routing history, the
@@ -3123,20 +3124,631 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   should be a platform tenant with its own work queue, since today the only
   channel that crosses organisations is SMS.
 
-- **The cross-tenant oracle is still open on the ADT and merge inbound
-  paths.** `MllpInboundAdtServiceImpl` and `MllpInboundMergeServiceImpl` still
-  answer `REJECTED_CROSS_TENANT` → AR when the referenced patient exists but
-  belongs to another hospital, while an unknown one answers AE, so an
-  allowlisted sender can learn that an MRN exists in a hospital it cannot read.
-  #715 collapsed the two outcomes for the lab (ORU^R01) path only; the same
-  one-line change is owed on both, with the reason kept in the integration
-  message row rather than in the ACK.
+- **The HTTP HL7 ingest door had no tenant boundary of its own.** Closed by
+  this PR, recorded because it was never written down: `POST
+  /lab/hl7/adapter/inbound` took the lab order id from a request header the
+  caller chooses, and its `@PreAuthorize` says only that the caller may ingest
+  results somewhere - so an authorised lab user of one hospital could attach a
+  result to another hospital's order. #721 narrowed the waiver that made this
+  reachable and put it behind a property defaulting to off, which left the
+  endpoint safe but unusable by the interface accounts it exists for. The
+  boundary is now the MLLP allowlist, as on the MLLP transport: the message's
+  own sending pair must resolve to an active entry and the order must belong to
+  that entry's hospital, so the property is gone rather than flipped. The
+  operational consequence is that an analyzer posting over HTTP now needs an
+  allowlist row, exactly as one posting over MLLP always has.
 
-- **The co-sign path picks a doctor's oldest staff profile.** The
-  staff-profile lookup behind co-signature resolves by taking the first
-  profile it finds, so a doctor credentialed at two hospitals is matched to the
-  older one and refused at the newer. #717 fixed the clarification path only;
-  the co-sign path still needs the profile chosen by the active hospital.
+- **The pharmacy and laboratory flows: what wave 2 left underneath it.** The
+  portal and both apps now carry the two flows end to end (#724-#729) and the
+  HTTP HL7 ingest door has a tenant boundary (#730). These are the items the
+  review rounds turned up while doing it. Each names the stream picking it up,
+  so an unassigned one is genuinely unowned.
+
+  *Wrong or unsafe, backend.*
+  - `PatientLabResultServiceImpl.fetchRows` takes a fallback branch when the
+    hospital is null that runs `findByLabOrder_Patient_Id` — every tenant's
+    rows for that patient, past `RecordAccessPolicy.readableHospitalIds` — and
+    `getLabResults` then skips `recordReach`, which is guarded on a non-null
+    hospital. Legitimate on the patient-portal path (it is the patient's own
+    data); a cross-tenant unaudited read on the staff path. #731 stopped the
+    the chart from calling it that way, so the portal is no longer a caller, but
+    the endpoint is unchanged. The exposure is a STAFF token with no resolvable
+    hospital context — not the patient apps, which hold ROLE_PATIENT and go
+    through `/me/patient/lab-results`, a path that endpoint's `@PreAuthorize`
+    excludes. Owned by `fix/patient-lab-read-requires-scope`.
+  - Several reads dereference `requireActiveHospitalId()`, which is null for a
+    super-admin in global view, so they answer 500 rather than an answer:
+    `DispenseServiceImpl.listByPrescription`,
+    `StockOutRoutingServiceImpl.listByPrescription`,
+    `StockOutRoutingServiceImpl.listByPatient` via
+    `enforceDecisionHospitalScope` (behind
+    `GET /pharmacy/routing/decisions/patient/{patientId}`, which permits
+    SUPER_ADMIN), and `StockOutRoutingServiceImpl.checkStock`. Every WRITE path
+    in that class shares the same `!hospitalId.equals(...)` dereference, so the
+    count is "everything that calls it", not three — grep the call sites rather
+    than working from this list.
+    A 500 is not a policy, and the answer is already settled elsewhere in the
+    same class: `DispenseServiceImpl.enforceHospitalScope` treats a null
+    hospital as an unscoped read for `listByPatient` and `listByPharmacy`. So
+    this is three call sites out of step with a decision this codebase has
+    already taken, not an open question. Owned by
+    `fix/pharmacy-queue-cue-and-null-scope`.
+  - `GET /prescriptions` and `GET /prescriptions/{id}` omit
+    ROLE_PHARMACY_VERIFIER, so the role wave 2 gave the ability to RAISE a
+    clarification cannot read the prescriber's answer, and has no prescriptions
+    nav entry because one would land it on a page that 403s. Owned by
+    `feat/prescription-read-surface`.
+
+  - **The same unscoped-fallback shape exists in three more services, and two
+    of them are worse.** Found while fixing the lab-result read; all three are
+    `hospitalId != null ? scoped : unscoped` with the disclosure recording
+    guarded on the same null.
+    - `LabOrderServiceImpl.searchLabOrders`, and `getLabOrdersByPatientId` and
+      `getLabOrdersByStaffId` in the same class — `LabOrderCustomRepositoryImpl
+      .buildPredicates` simply omits the hospital predicate when the id is
+      null, so a staff caller with no resolvable scope gets every tenant's lab
+      ORDERS, and `recordPerformedHereReach(page, null)` accounts nothing. All
+      three carry it; fixing only the search closes one of three. This is the other half of the chart's Labs tab: with
+      only `fix/patient-lab-read-requires-scope` merged, the tab refuses the
+      results and still serves the orders. Owned by
+      `fix/lab-order-search-requires-scope`.
+    - `PatientMedicationServiceImpl.getMedicationsForPatient` — byte-for-byte
+      the same fallback, but ONE method serves both the staff controller and
+      the portal, so there is no flag to branch on. Fixing it means splitting
+      the service interface and touching the portal service and its tests. Not
+      the same fix, and bigger than it looks. Unowned.
+    - `PatientVitalSignServiceImpl.getRecentVitals` and `getLatestSnapshot` —
+      same shape, also shared between staff and portal, and with **no
+      `PatientChartAccess` gate and no reach recording at all**. The worst of
+      the three and the least like the others. Unowned.
+
+  - **Two more live cross-tenant reads of the same rows, behind different
+    doors.** Found while closing the lab-order one, and the first is worse than
+    anything above it.
+    - `PatientSnapshotServiceImpl:93` — `readable = hospitalId == null ? null
+      : ...` and every section then takes the null branch, including
+      `labOrderRepository.findByPatient_Id` at :318, while `account()` no-ops
+      on a null acting hospital so nothing is disclosed either. Live at
+      `GET /me/patients/{id}/snapshot`. Two things make it worse than the reads
+      already guarded: the controller uses `resolveHospitalId(auth)
+      .orElse(null)`, so an ORDINARY CLINICIAN whose scope fails lands there,
+      not only a super-admin; and it serves the same rows the lab guards now
+      refuse, so a caller turned away at `/lab-orders?patientId=X` can open the
+      snapshot drawer and get them. Owned by
+      `fix/snapshot-and-review-queue-scope`.
+    - `ResultReviewServiceImpl:106` — `findByOrderingStaff_Id(staffId)` with no
+      hospital scope at all, live at `GET /me/results/review-queue`. Owned by
+      the same branch.
+
+  - **`buildLabOrder` never binds the ordering staff to the order's hospital.**
+    It takes the hospital from the encounter or the requested id, looks Staff
+    up independently, and authorizes `canOrderLabTests` on the USER — who holds
+    assignments at several hospitals. So one staff id owns orders at several
+    hospitals and `findByOrderingStaff_Id` unions them. This is the root cause
+    under the staff-filtered leak above, and it is a WRITE-path change with its
+    own blast radius rather than a guard on each reader that inherits it.
+    Note for whoever takes it: deriving a read's scope from the staff row is
+    wrong twice over — it manufactures an acting hospital the caller never
+    scoped to, so the disclosure row would name a hospital they are not acting
+    at, and it would drop exactly the orders placed elsewhere, which are the
+    rows that make it cross-tenant. Scope is the caller's property, never the
+    subject's. Unowned.
+
+  - **`PatientChartAccess.require(patientId, null)` throws for any principal
+    the context does not mark a super-admin — which is every patient.** So a
+    portal patient with no `hospitalId` and no active registration already
+    gets a 404 from `getMyLabResults`, and the health summary swallows it into
+    a silently empty list via `safeLabResults`. The patient-portal branch of
+    the lab read is therefore dead code today, which is worth knowing before
+    anyone "simplifies" it away. `PatientChartAccess` is shared by fourteen
+    services, so this is its own job and not a side fix. Unowned.
+
+  *Finished screens that cannot say what they should, because the DTO has no
+  field for it.*
+  - `LabResultResponseDTO` carries neither `sourceMessageControlId` nor
+    `observationResultStatus` (both are on the entity), so the release worklist
+    cannot distinguish an instrument result from a hand-entered one, or a
+    preliminary from a final. `released == false` is no substitute: every row
+    on that queue is unreleased, so the column would be constant. Unowned.
+  - `WorkQueuePrescriptionDTO` has no `clarificationResolvedAt`, and
+    `attentionReason()` reports one reason by precedence while
+    `resolveClarification` restores the PREVIOUS status — so a question raised
+    on a PENDING_STOCK or PARTNER_REJECTED order comes back flagged with that
+    status and the pharmacist finds the answer only by opening the dialog on
+    speculation. Owned by `fix/pharmacy-queue-cue-and-null-scope`.
+  - `PrescriptionResponseDTO` has no `quantity`, `quantityUnit` or
+    `refillsUsed`, so the prescriber's outstanding-quantity figure falls back
+    to a routing-decision snapshot and renders a bare number with no unit.
+    `WorkQueuePrescriptionDTO` already carries them for the pharmacist. Owned
+    by `feat/prescription-read-surface`.
+  - `GET /prescriptions` has no status filter, so the clinical inbox can say
+    "N orders await clarification" while the page shows a slice containing
+    none of them. #727 made the page deterministic and large enough to count
+    from; that is a mitigation, not the fix. Owned by
+    `feat/prescription-read-surface`.
+
+  *Still open from the original audit.*
+  - G15 — there is no "ready for collection" state, so the message telling a
+    patient their prescription is ready still goes out after they have
+    collected it. Unowned.
+  - `REQUIRES_EXTERNAL_FILL` and `TRANSMISSION_FAILED` are states nothing
+    writes. #727 surfaces them under Needs attention so a legacy row carrying
+    one is not stuck, but whether they should exist at all is undecided.
+    Unowned.
+  - `StockOutRoutingServiceImpl.appendNoShowReason` composes the English
+    literal `"Partner no-show: "` into the reason it PERSISTS, which reaches
+    French and Spanish prescribers verbatim — stored prose cannot be
+    translated at render time. Owned by
+    `fix/pharmacy-queue-cue-and-null-scope`.
+  - The portal's `RoleContextService.hasAnyActiveRole` applies no role
+    expansion, while `RoleGuard` and the shell nav go through
+    `role-equivalence.ts`. Every in-component role gate is therefore narrower
+    than the route hosting it: a physician or surgeon is refused controls the
+    backend would serve them. #724 and #725 each hit this and fixed their own
+    control. Unowned, and it is a portal-wide change.
+  - `canSeeCritical`, `canAcknowledge` and `canReadBack` in `lab-results.ts`
+    still take a role snapshot at construction, the shape #722 and #724 fixed
+    for the release and sign controls. Unowned.
+  - ~~`dashboard.ts`'s `acknowledgeResult` deletes rows from the local array
+    and persists nothing, so a physician can click critical results away into a
+    green "All results reviewed" card.~~ **DONE in #731** (merged 2026-09-25):
+    `dashboard.ts:2595` now calls `labService.acknowledgeResult`, which posts
+    to `POST /lab-results/{id}/acknowledge`. Kept here only to record that two
+    earlier drafts of this bullet were wrong — the first said no endpoint
+    existed (it did, `LabResultController:155`), and the second filed work that
+    had already shipped.
+  - The portal's `DispenseResponse` declares six fields `DispenseMapper` never
+    sends (`patientName`, `pharmacyName`, `dispensedById`, `dispensedByName`,
+    `verifiedById`, `verifiedByName`); the wire carries `dispensedBy` and
+    `verifiedBy` as bare UUIDs. Nothing renders them today, so no dispenser
+    name is shown anywhere. Unowned.
+  - `GlobalExceptionHandler.handleAccessDenied` discards the message on every
+    `AccessDeniedException` and returns the literal "Access denied", although
+    several services compose a useful sentence there that no client can show.
+    Unowned.
+  - `hospital-portal/src/app/pharmacy/stock-routing.ts` pages properly
+    (`decisionsPage`, `decisionsTotalPages`) but passes no `sort`, so the
+    derived query's order is arbitrary and "page 2" is not a stable
+    continuation of page 1 — half of the defect #727 fixed on the prescriptions
+    list, not all of it. Unowned.
+
+- **The reference range a patient is shown is not always the range their
+  result was graded against, and can be labelled with a unit it was never
+  expressed in.** `PatientLabResultServiceImpl.formatReferenceRange` always
+  formats `ranges.get(0)`, while `LabResultMapper.determineSeverityFlag` grades
+  against `findMatchingRange(resultUnit, ...)`. On a test configured with two
+  unit-specific ranges those are different rows, so a value graded NORMAL in
+  mmol/L can be displayed beside the mg/dL limits. Worse, when `ranges[0]`
+  carries no unit of its own, `formatReferenceRange` stamps the RESULT's unit
+  onto its numbers as a fallback — so the patient reads limits that were never
+  expressed in that unit, and the mismatch becomes undetectable from the client
+  because the displayed string now always contains the row's unit.
+
+  Both patient apps mitigate what they can in #732 and #733, which are still
+  open: they withhold the green tick and the word "Normal" unless the displayed
+  range is in the row's own unit. That heuristic cannot see the fallback case, by construction. The
+  durable fix is server-side — format the range that was actually graded
+  against, and never label a range with a unit that did not come with it — and
+  it is not a cosmetic one: a patient reading 5.4 mmol/L against limits of
+  70-110 mg/dL draws a conclusion, and self-interpretation is the whole point
+  of showing a range. Unowned.
+
+- **Access-control gaps found by chasing other access-control gaps.** Each was
+  found while fixing something adjacent, which is the argument for finishing a
+  family rather than the one instance that was reported.
+  - **~~`GET /encounters/{encounterId}/avs` had no access control at all.~~
+    Closed by #746 (merged).** Not a missing ownership check - no hospital
+    scope either.
+    `EncounterServiceImpl.getAfterVisitSummary` does a bare `findById`,
+    confirms `checkoutTimestamp` is non-null, and maps; the controller does not
+    even take the authentication object, while the `checkOut` handler twenty
+    lines above resolves username, super-admin and hospital scope properly. Any
+    authenticated caller in the role set — which includes ROLE_PATIENT and
+    ROLE_RECEPTIONIST — reads ANY after-visit summary on the platform, across
+    every tenant, given an encounter id. An AVS carries diagnoses, medications
+    and discharge instructions. It was closed by #746 together with
+    `GET /encounters/{encounterId}/notes/history`, which had only an
+    `existsById` and was found by sweeping the controller.
+  - ~~`GET /encounters/{id}` had hospital scope and no ownership.~~ Closed by
+    #746 as well.
+  - `GET /prescriptions/{id}` had the same ownership gap, bounded to the
+    patient's own hospital because a patient principal always resolves one.
+    Closed by `fix/prescription-read-patient-ownership`.
+
+- **Two traps that made a security fix break the thing it protected**, both hit
+  during the above and both worth knowing before writing the next one.
+  - `authService.getCurrentUserId()` returns an id only for a
+    `CustomUserDetails` principal and THROWS on a `JwtAuthenticationToken`, so
+    a guard built on it answers 401 to a patient reading their own record once
+    OIDC is on. Use `ControllerAuthUtils.resolveUserId`, and test against a
+    real `JwtAuthenticationToken` with an `appUserId` claim rather than a
+    password-path double.
+  - `RoleExpansion` runs on the password path but **not** on the Keycloak path,
+    so a role set that leans on `ROLE_DOCTOR` expansion silently excludes
+    physicians and surgeons in a Keycloak deployment. Name them explicitly -
+    **but only in a set that GRANTS access.** In a set that decides who is
+    *not* a patient, naming them is backwards: see the bullet below on role
+    sets that remove subject status, where doing exactly this opened an
+    ownership bypass over Keycloak that had to be backed out.
+
+- **`clinical.patient_diagnoses` has no `hospital_id` column at all** (V14), so
+  the patient-snapshot drawer reads it patient-wide — unfiltered, not tested by
+  `maySurface`, unaccounted — and it cannot be scoped without a migration.
+  Deriving the scope from `diagnosedBy.getHospital()` is the subject-derived
+  approach rejected twice elsewhere in this list. `fix/snapshot-and-review-
+  queue-scope` swaps in the shared chart-access gate, which ENLARGES who
+  reaches this read, so it is a live trade-off rather than inherited debt.
+  **Three options and it is a product call: add the column by migration, drop
+  the legacy read, or accept and record it.** Unowned, awaiting that decision.
+
+- **Residuals from the access-control work, none blocking.**
+  - `ResultReviewServiceImpl.getInboxItems` (called from `MeController`)
+    keeps six more
+    staff-id-filtered reads (consults, signatures, encounters, clarification
+    counts, pharmacy notifications, refills). Not the same read as the review
+    queue — those are items addressed TO the clinician rather than their own
+    order history — so scoping them is a product question. Unowned.
+  - `patientRepository.findByUserId` is a derived `Optional` query and
+    `V113__patients_user_id_integrity.sql` creates `uq_patient_user_id` only
+    when no duplicates exist, so a tenant carrying duplicates gets a 500
+    instead of the uniform 404. Pre-existing and shared by every
+    `/me/patient/*` read. Unowned.
+  - ~~`getPrescriptionAfterWrite` was guarded only by a javadoc.~~ Closed:
+    `PrescriptionAfterWriteCallerGuardTest` (#744) pins its callers - two, the
+    write handlers, since `resolve-clarification` moved back to the guarded
+    read.
+  - `ROLE_ADMIN` sits on the `/prescriptions` route guard and nav item and on
+    neither backend read, and `RoleExpansion` grants it nothing, so an admin
+    opening the page gets "failed to load". Unowned.
+  - `reachRecorder.recordReach` now derives reach from the status-filtered
+    page, so a narrowed read records a narrower treatment-relationship trail.
+    No caller combines `patientId` with `status` today; the API permits it.
+    Needs a decision from whoever owns E8/E9 reach. Unowned.
+  - The prescriptions page's `HISTORY_ROLES` gate uses `hasAnyActiveRole`
+    against `ROLE_DOCTOR` - the portal half of the equivalence split, on a page
+    where it was fixed for another gate. (`VERIFIER_ROLES` is pharmacist,
+    pharmacy verifier and super-admin, with no `ROLE_DOCTOR`, so it does not
+    share the gap; do not add doctor equivalence there, or prescribers are
+    offered the verify button.) Unowned.
+  - `integration_message_event.payload` is plain TEXT with no
+    `EncryptedStringConverter`, and the dispatcher's parse-failure rows put raw
+    HL7 in it. The body is the only diagnostic for an unparseable message, so
+    the answer is encryption or retention, not deletion. Unowned.
+  - The two `REJECTED_INVALID` exits on the A40 path record no dead letter at
+    all, so a malformed merge leaves no evidence. Unowned.
+
+- **Both patient apps still print raw wire enums on the health-records
+  screens** — treatment plans (`REVISIONS_REQUIRED`) and referrals
+  (`ACKNOWLEDGED`), in English inside the French build. The lab and pharmacy
+  families were fixed in #728/#729; this family was not, and #732's body
+  briefly claimed otherwise before being corrected. Unowned.
+
+- **iOS `MedicalHistoryView` has no entry point.** Nothing in the app
+  constructs it, so its 31 strings were latent rather than in front of
+  patients. `fix/ios-missing-localized-keys` defines them anyway; whether the
+  screen should be reachable is a separate product decision. Unowned.
+
+- **The iOS `disclosures_role_*` fallback is English.** `roleLabel` humanises
+  an unknown token, which is correct behaviour, but the humanised form is
+  English — so a French patient reads "Lab Technician" on the screen that tells
+  them who opened their record. Addressed in
+  `fix/ios-missing-localized-keys`; recorded because the fallback pattern
+  exists elsewhere.
+
+- **`resolveHospitalId` silently scopes a super-admin to an incidental clinical
+  assignment, and the 404 then lies to them.** The resolver falls through
+  `pinnedHospitalId()` to the caller's **newest** active assignment
+  (`findAllDetailedByUserId` is `ORDER BY a.createdAt DESC`) and does so for a
+  super-admin as well. So a platform administrator who happens to hold any
+  clinical assignment is pinned to it without being told, and never reaches the
+  global-view guards that several endpoints document. The sharp case: that
+  administrator opens the patient-snapshot drawer on a patient registered only
+  at hospital B and receives a 404 that is *by design* indistinguishable from
+  "no such patient" — because scope silently resolved to A, their own
+  incidental assignment. The refusal is working exactly as specified and
+  telling them something false.
+
+  This is a shared resolver, so it reaches well beyond the two endpoints where
+  it was found; `fix/snapshot-and-review-queue-scope` corrected the Swagger and
+  javadoc claims there, but the behaviour is untouched and is the real item.
+  Deciding it means deciding what a platform administrator's default scope
+  should be, which is a product question. Unowned.
+
+- **The patient-snapshot drawer applies the cross-hospital sensitivity test to
+  four of its sections and not the rest.** `SensitivityClassifier` has
+  `effectiveCategory` overloads for `Encounter`, `Admission`, `Consultation`,
+  `PatientProblem` and `NursingNote` only, so medications, vitals, lab results
+  and pending orders are scoped but never tested by
+  `CrossHospitalRows.maySurface`. A foreign **sensitive** prescription or lab
+  result therefore surfaces on the same drawer where a foreign sensitive
+  encounter is withheld — the filter is doing half its job and the shape of the
+  half is invisible to the reader. Pre-existing; the javadoc on
+  `PatientSnapshotServiceImpl` now states which sections are tested and which
+  are not rather than reading as a guarantee. Unowned.
+
+- **There is no runtime hospital switcher for anyone who is not a super-admin,
+  and that becomes a clinical problem the moment the review queue is scoped.**
+  `hospital-scope-chip.component.html` is wrapped in `@if (isSuperAdmin())`,
+  and a staff member's `activeHospitalId` is written once by
+  `SessionScopeService` at bootstrap. So a clinician credentialed at two
+  hospitals has no way to change scope at all.
+
+  With `fix/snapshot-and-review-queue-scope` live, that means **a multi-hospital
+  clinician cannot reach their other hospital's lab review queue** — the picker
+  every new scope hint points at does not exist for them. Their other
+  hospital's released CRITICAL result is then reachable only through the
+  escalation sweep, which chases it as unacknowledged while the person who
+  would acknowledge it cannot see it. Scoping the queue is right; this is the
+  half that makes it usable.
+
+  The pieces exist: `RoleContextService.permittedHospitalIds` is already
+  populated by `SessionScopeService` from the live assignment table (E9 #55b).
+  What is missing is a staff-facing switcher driven by it. **This is a feature
+  and needs the user's decision**, and it is the largest open item left by
+  wave 3. Unowned.
+
+- **`/in-basket`'s sibling panel does not follow the picker either.**
+  `<app-in-basket-panel />` loads once in its own `ngOnInit` against
+  hospital-scoped endpoints, and the route is not `requiresHospitalScope`, so
+  `outletKey` never advances. After a scope switch the lab category shows one
+  hospital while the in-basket items and the unread badge still show the other.
+  Unowned.
+
+- **`RoleValidator.requireActiveHospitalId()` step 4 is authorities-based.** It
+  returns null on `isSuperAdminFromAuth()` when `HospitalContext` is
+  unpopulated, so an inflated authorities set can still resolve to an unbounded
+  read — on every caller of that method, not only the ones audited in wave 3.
+  Wants hardening centrally rather than guard by guard. Unowned.
+
+- **`ControllerAuthUtils` is being imported into services.** Both
+  `fix/prescription-read-patient-ownership` and
+  `fix/encounter-read-access-control` do it, for the same reason:
+  `authService.getCurrentUserId()` throws `UnauthorizedException` for any
+  principal that is not `CustomUserDetails`, including a
+  `JwtAuthenticationToken` - it never returns null, so a null check around it
+  on the OIDC path never fires, so the service layer has nowhere else to resolve a
+  principal's user id. `resolveUserId` belongs in `security`/`utility`, or on
+  `RoleValidator` beside `getCurrentUserId()`, with that gap closed. A shared
+  refactor for after both land. Unowned.
+
+- **A role set that REMOVES subject status must not name expanded roles.**
+  Adding `ROLE_PHYSICIAN`/`ROLE_SURGEON` to a set is right when the set grants
+  access and backwards when it decides who is *not* a patient: no annotation on
+  these endpoints admits a surgeon, so over Keycloak — where `RoleExpansion`
+  does not run — a `ROLE_SURGEON` + `ROLE_PATIENT` principal enters through the
+  patient door and is then reclassified as a clinician, skipping the ownership
+  guard. Caught and backed out on `fix/encounter-read-access-control`; the
+  invariant now written there is **each set = its endpoint's `@PreAuthorize`
+  minus `ROLE_PATIENT`, nothing added**. Note the opposite for
+  `ROLE_SUPER_ADMIN`: `SUPER_ADMIN_INHERITS` contains `ROLE_PATIENT`, so a
+  super-admin must stay named or they are treated as a patient and refused
+  every record they do not own.
+
+- **Cross-hospital reads do not reach the three encounter by-id endpoints, and
+  on two of them that is a regression.** A clinician at hospital A who sees a
+  lawfully surfaced hospital-B encounter in the visit history and clicks
+  through to `/encounters/{id}/avs` or `/{id}/notes/history` now gets a 404;
+  before `fix/encounter-read-access-control` it worked, because nothing bounded
+  those reads at all. Wiring `readableHospitalIds`, `maySurface`, break-glass
+  and `recordReach` into three by-id reads is a design change and the
+  alternative was leaving cross-tenant PHI open. Unowned.
+
+- **The `pr-review-response` skill tells every agent to ready its own PR, and
+  that is how PRs with open findings kept reaching a merge-ready state.** Step 6
+  ends with `gh pr ready <PR#>`. With several agents running at once, each one
+  that finished a review round did exactly what the skill said and readied its
+  own PR - including over findings the coordinator had sent minutes earlier.
+  Six PRs flipped to ready this way in one session; #750 was readied on the
+  exact commit that had three unaddressed must-fix findings against it, one a
+  super-admin regression, and #738 was merged in that state. Since this user
+  merges whatever GitHub shows as ready, a self-readied PR ships its open
+  findings. The skill needs a coordinator mode in which the agent pushes, hands
+  back and leaves the PR a draft. **This is the most important process fix from
+  the wave.** Unowned.
+
+- **OPEN, LIVE ON DEVELOP: the FHIR read API is open to every authenticated
+  user, across every tenant.** `FhirConfig` mounts the server with no `@Conditional`; `/fhir/**`
+  had no role rule and fell through to `anyRequest().authenticated()`; there is
+  no FHIR authorization interceptor; and `EncounterFhirResourceProvider` read
+  through unfiltered `findById`/`findByPatient_Id` on an entity that is not
+  `TenantScoped`. So a patient, with an ordinary mobile-app token, can read
+  any encounter on the platform. Reported for Condition, MedicationRequest and
+  Immunization too. **Not fixed until both PRs merge.** Layer 1 (who may reach
+  `/fhir/**`) is `fix/fhir-role-gate` (#752); layer 2 (per-hospital filtering,
+  one interceptor rather than per-method guards) is `fix/fhir-read-tenancy`
+  (#755).
+  Two constraints layer 2 must honour, recorded because a path-level matcher
+  cannot: a user's roles are checked as the union across all their hospitals,
+  so a doctor at A who is a receptionist at B passes while acting at B - layer
+  2 must check the role held **at the active hospital**; and `ROLE_FHIR_CLIENT`
+  cannot be legitimately granted today while `KeycloakJwtAuthenticationConverter`
+  normalises a role from any realm client into `ROLE_*`, so admitting it would
+  let an unrelated client role grant whole-chart read. The FHIR write gate is
+  also wider than it should be - every reader role can write when
+  `FHIR_WRITE_ENABLED` is on - which is narrower than before but not right.
+
+- **Cross-tenant defects on the FHIR write and EMPI paths.** `PUT /Patient/{id}`
+  had no tenant gate (dormant: `FHIR_WRITE_ENABLED` defaults off), and its
+  first fix checked a registration without checking it was `active`, so a
+  discharged patient's former hospital could still overwrite them;
+  `ObservationFhirWriteService.updateLabResult` answered 404 for a missing
+  result and 403 for another tenant's - an existence oracle; and EMPI
+  `mergeIdentities` did the same across 404 and 403. Owned by
+  `fix/fhir-write-and-empi-tenancy` (#750). Separately, `mergePatients` now
+  answers a misleading not-found for a legitimate merge whose identity is
+  stamped with the patient's first hospital - which hospital owns an identity
+  is an open design question. Unowned.
+
+- **OPEN, LIVE ON DEVELOP: lab trend history is readable across every
+  tenant.**
+  `GET /lab-results/patient/{patientId}/test/{testDefinitionId}/compare-sequential`
+  has no scope check at all and returns the patient's name with twelve
+  results; **not fixed until #751 merges**; the same unscoped query fed the trend on `GET /lab-results/{id}` and
+  `/{id}/compare`. Owned by `fix/lab-result-null-pin` (#751), which also makes
+  a null hospital pin unscoped only for a verified super-admin. Found in that
+  work: fourteen existing tests had been passing **only because of** the null
+  defect - the suite never set a hospital scope, so the checks were skipped.
+  Still open: `compare-sequential` has no restricted-chart (E8 #54) refusal,
+  because `PatientChartAccess.require` would refuse the performing laboratory;
+  `determineTrendDirection` throws an unhandled `NullPointerException` on a
+  missing value; and `getAllLabResults`, `getLabResultsByLabOrderId` and
+  `getLabResultsByPatientId` are unscoped but have no REST caller today.
+
+- **Two tenant resolvers disagree, and that is the root cause of a whole class
+  of defects found in this wave.** `RoleValidator.requireActiveHospitalId()` and
+  `ControllerAuthUtils.resolveHospitalScope` have different super-admin
+  semantics - the second ignores `X-Hospital-Id` and honours only
+  `?hospitalId` - and the raw `HospitalContext` value for an unpinned
+  super-admin differs by auth path: from the JWT's `hospital_id` on Keycloak,
+  from live assignments on the password path, so null for one with no
+  assignment. Services that read the raw context instead of a resolver
+  (`EncounterFhirWriteService`, `ObservationFhirWriteService`,
+  `PatientEverythingService`, `FhirBulkExportService`) behave differently for a
+  super-admin depending on how they logged in. Several fixes this wave had to
+  choose a resolver locally; unifying them is the real fix. Unowned.
+  Related, and currently latent rather than exploitable:
+  `KeycloakHospitalContextResolver` derives `HospitalContext.superAdmin` from
+  the authorities collection. That is safe today because those authorities come
+  from Keycloak's signed token and no class under `security/oidc/` touches
+  impersonation - but `isSuperAdminFromJwtClaim()`, which several fixes now
+  rely on, stops being trustworthy the moment anything writes a
+  `ROLE_SUPER_ADMIN` authority that did not come from the token.
+
+- **HL7 residuals after bounding identifiers at parse time.**
+  - `processMerge` and `EmpiServiceImpl.mergePatients` are both `REQUIRED`, so
+    a refusal from `mergePatients` marks the shared transaction rollback-only:
+    the `REJECTED_INVALID` never reaches the sender, who gets a generic
+    "Server-side handler error" from an `UnexpectedRollbackException`. The
+    unit mocks hide it. Unowned.
+  - Demographic fields (PID-5, 7, 8, 11) and OBX-5 are not bounded. An
+    over-width value fails at flush as a generic "Server-side handler error"
+    **with no dead-letter row**, so the sender retries indefinitely; on the ORU
+    path it can also leave a RECEIVED row. Needs a refuse-or-truncate decision
+    per field. Unowned.
+  - `EmpiMergeEvent.notes` stores both MRNs and the raw sender pair as
+    unconverted plain TEXT, the one place they survive the log scrub. Unowned.
+  - The skill audit: several skills still contradict the code and each other
+    on raw-context reads, resolver choice and the MLLP correlation key. Worth
+    one pass over all the skills against the code, rather than piecemeal inside
+    PRs whose job is something else. Unowned.
+
+- **Staff who are also patients, and the prescription twin.** The encounter
+  follow-up (#754) lets a staff member read her own after-visit summary from
+  another hospital. `/prescriptions/{id}` has the same refusal for a staff
+  member reading her own prescription, and the step-4 null-scope fail-open that
+  #746 closed for encounters. Unowned.
+
+- **`PatientRepositoryRegistrationScopeTest` fails non-deterministically in
+  CI, and the cause is heap exhaustion, not the test.** It failed on three PRs
+  in one night, each touching nothing near it, and every failure ends in
+  `Failed to load ApplicationContext ... OutOfMemoryError: Java heap space`.
+  Spring caches up to 32 test contexts and closes none before the JVM exits,
+  each full context holding roughly 80-130 MB; with `forkEvery=250` the second
+  fork builds about twenty contexts before this test, live heap climbs to
+  about 1.9 GB of the 2 GB limit, and whichever context is built next dies.
+  It passes on a rerun because whether it fits depends on how much
+  soft-referenced cache a full GC can still free. The test itself is innocent.
+  An earlier version of this bullet blamed H2 failing to drop the `platform`
+  schema because ShedLock depends on it; that was wrong. Those DDL errors are
+  logged and ignored once per context start, in passing runs as well as
+  failing ones. Found alongside it: every `@SpringBootTest` on the test profile
+  shared one H2 database name, so each context start dropped and rebuilt the
+  schema under the others. Both are addressed by
+  `fix/flaky-registration-scope-test` (#757): a context-cache cap and one H2
+  database per context.
+
+- **Two layers of this codebase disagree about role equivalence.**
+  `RoleExpansion` grants a physician or surgeon ROLE_DOCTOR while the
+  authorities are built, so both clear a `hasAnyRole('DOCTOR')` annotation.
+  `RoleValidator`'s per-hospital checks then match the stored ASSIGNMENT ROLE
+  CODE against `{DOCTOR, ROLE_DOCTOR}` and know no such equivalence, so a
+  surgeon passes the door and is refused by the service behind it — which is
+  why #724 had to withhold the Sign control while #725 had to grant the
+  resolve control, on endpoints that look identically annotated. Whether the
+  equivalence should exist one layer down is a product decision, and it
+  decides who may sign lab results, prescribe and co-sign. Until it is taken,
+  the rule for anyone adding a control is: read what the SERVICE does, not
+  only the annotation.
+
+- **~~The cross-tenant oracle is still open on the ADT and merge inbound
+  paths.~~ Closed by `fix/adt-merge-cross-tenant-oracle`.** Both services
+  answered AR for a patient belonging to another hospital while an unknown one
+  answered AE, so an allowlisted sender could learn that an MRN exists in a
+  hospital it cannot read. The constant that carried the distinction is
+  removed from the enum entirely, so no handler can reopen it, and the reason
+  now lives in the integration message row rather than the ACK.
+
+  Two things that branch found which were not in this bullet. The A40 merge
+  path had a **second** oracle wearing an accept: the already-merged no-op
+  answered AA *before* the tenant gate, so a sender could learn that two
+  identifiers it does not own resolve to one patient elsewhere. And the two
+  answers were still separable by **timing** — a short-circuited `||` made one
+  case cost one query and its sibling two — which is now equalised. Partial
+  ownership of an A40's two patients answers like owning neither, and the cost
+  of that is stated on the PR: a legitimate merge where one side was only ever
+  registered elsewhere now gets an unhelpful not-found.
+
+- **Role equivalence stops at the annotation, and two layers disagree about
+  it.** `RoleExpansion` maps PHYSICIAN and SURGEON onto ROLE_DOCTOR while the
+  authorities are built, so both clear a `hasAnyRole('DOCTOR')` annotation.
+  `RoleValidator`'s per-hospital checks (`isDoctor` and its siblings) then match
+  the stored ASSIGNMENT ROLE CODE against `{DOCTOR, ROLE_DOCTOR}` and know no
+  such equivalence, so a surgeon passes the door and is refused by the service
+  behind it. #724 handled the one control it touched by not offering it; the
+  general question — whether a surgeon or physician should count as a doctor for
+  per-hospital authority, everywhere, or whether the annotation expansion is the
+  thing that is wrong — is a product decision, and it decides who may sign lab
+  results, prescribe, and co-sign. Related and separate: the portal's
+  `RoleContextService.hasAnyActiveRole` applies no expansion at all, while
+  `RoleGuard` and the shell nav go through `role-equivalence.ts`, so every
+  in-component role gate is narrower than the route that hosts it.
+
+- **~~The co-sign path picks a doctor's oldest staff profile.~~ This bullet was
+  wrong, and the real defect was worse.** A doctor cannot have two staff
+  profiles: `Staff.user` is `@OneToOne(unique = true)`, the entity carries
+  `uq_staff_user` on `user_id`, and V8 created `uq_staff_user_id` and never
+  dropped it. **One staff row per user, globally.** Multi-hospital membership
+  is `UserRoleHospitalAssignment`, which `resolveAssignmentForStaff` in the
+  same file already relies on. So there was never an "older profile" to be
+  matched to.
+
+  What was actually true on the co-sign path: its own javadoc said the
+  co-signer "must hold a prescribing role at the prescription's hospital", and
+  **nothing checked it**. `findFirstByUserIdOrderByCreatedAtAsc` accepted a
+  staff row anywhere, so ROLE_DOCTOR somewhere plus a staff row somewhere was
+  the entire gate. That is an authorization gap, not an over-refusal — the
+  opposite failure from the one recorded here. Closed by
+  `fix/cosign-staff-profile-by-hospital`, which anchors on the prescription's
+  hospital and requires an active DOCTOR/PHYSICIAN/SURGEON assignment there.
+
+  Recorded this way rather than deleted because the wrong version of this
+  bullet nearly produced a wrong fix: the first round of that PR copied #717's
+  shape and would have REFUSED the legitimate cross-hospital co-signer.
+
+- **#717's `resolveDoctorAtHospital` over-refuses today, and it was copied as
+  a model.** `PrescriptionClarificationService` looks the co-signer up with
+  `findByUserIdAndHospitalId(userId, rxHospitalId)`. Since a doctor has exactly
+  one staff row, a doctor whose row is filed at hospital A is refused a
+  clarification at hospital B even holding an active doctor assignment there.
+  `EncounterServiceImpl:620` (`cosignEncounterNote`) has the identical shape.
+  Both are merged and live. The right credential is an active assignment at the
+  anchoring hospital, with the staff row used only as the FK to record — which
+  is what the co-sign fix now does, so the two paths are currently divergent
+  and should not stay that way. Unowned.
+
+- **`PrescriptionServiceImpl.resolveStaffContext` (prescription CREATE) shares
+  the first-profile query**, and `determineHospitalId` then derives the order's
+  hospital from `staff.getHospital()`, so an order can be filed at the wrong
+  hospital or die on `prescription.encounter.staff.hospital.mismatch`. A
+  different anchor question from co-signature — there is no prescription
+  hospital yet and the active scope can be null — so not the same fix. Unowned.
+
+- **`resolveAssignmentForStaff` blunts half of the role widening** that the
+  co-sign PR applied: it looks up `DOCTOR`/`ROLE_DOCTOR` only, so a surgeon
+  still cannot WRITE an order at a hospital other than their staff row's, now
+  failing with a confusing 400 rather than a clear refusal. Pre-existing, and
+  true for nurse and midwife too. Belongs with the role-equivalence decision
+  below. Unowned.
 
 ## Open clinical questions — kept open on purpose, not forgotten
 

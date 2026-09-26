@@ -22,9 +22,12 @@ load-bearing for **all** inbound HL7 work — follow it.
    Anything else → record + AR `"Unsupported message type"`.
 4. **Parse domain segments** — `Hl7v2MessageBuilder.parseOruR01` /
    `parseAdtMessage`. Unparseable → record FAILED + return AE.
-5. **Call inbound service** — `MllpInbound{Lab,Adt}Service`. Map outcome
-   to ACK: `ACCEPTED → AA`, `REJECTED_NOT_FOUND/INVALID → AE`,
-   `REJECTED_CROSS_TENANT → AR`.
+5. **Call inbound service** — `MllpInbound{Lab,Adt,Merge}Service`. Map
+   outcome to ACK: `ACCEPTED → AA`, `REJECTED_NOT_FOUND/INVALID → AE`.
+   There is no third mapping. `AR` belongs to the dispatcher's own
+   transport-level refusals (bad MSH, sender not allowlisted, unsupported
+   type) and to nothing a domain handler returns — see **Cross-tenant
+   gate**.
 
 ## Idempotency rules (MSH-10)
 
@@ -42,8 +45,11 @@ columns are NULL.
 ## The recorder is mandatory
 
 Every dispatch path **must** call `IntegrationMessageRecorder.recordMessage`
-(RECEIVED on accept, FAILED on any reject) so the DLQ / replay surface is
-populated. The recorder runs in `REQUIRES_NEW` and swallows its own
+so the DLQ / replay surface is populated. `FAILED` on any reject — every
+reject, including the ordinary ones; a refusal filed as `RECEIVED` tells
+anyone filtering a hospital's healthy inbound traffic that it was processed
+without error. `RECEIVED` on accept where the path records accepts at all
+(the ORU path does; the ADT and A40 paths record rejections only). The recorder runs in `REQUIRES_NEW` and swallows its own
 exceptions; wrap calls in a belt-and-braces try/catch anyway so a
 recorder-bean failure can never poison the ACK.
 
@@ -54,9 +60,103 @@ trimmed and truncated to **120 chars** (max length of
 ## Cross-tenant gate
 
 After EMPI resolves a patient, verify `PatientHospitalRegistration` for
-`(patient.id, receivingHospital.id)` exists. Otherwise return
-`REJECTED_CROSS_TENANT → AR`. A sender at hospital B cannot push updates
-for a patient known only to hospital A.
+`(patient.id, receivingHospital.id)` exists. A sender at hospital B cannot
+push updates for a patient known only to hospital A.
+
+**Return `REJECTED_NOT_FOUND`, exactly as for an identifier that exists
+nowhere.** There is no `REJECTED_CROSS_TENANT` constant and there must not
+be one again: it mapped to `AR` while an unknown identifier mapped to `AE`,
+and a sender that can tell those two apart can send one message per
+candidate identifier and collect the ones that are real in hospitals it
+cannot read. That is an enumeration oracle over every identifier space HL7
+reaches — closed for `ORU^R01` in #715 and for `ADT`/`ADT^A40` in #738.
+The ACK must be identical in code **and text**; `ackForOutcome` builds one
+answer for both, so do not hand-build an ack in a new handler.
+
+Two rules follow, and both were real defects:
+
+- **Gate before you answer anything else.** The A40 merge path has an
+  already-merged no-op that answers `AA`, and it used to run before the
+  gate — which told a sender that two identifiers it does not own resolve
+  to one patient somewhere else. An accept leaks as readily as a reject.
+- **Partial ownership is not partial permission.** A40 needs *both*
+  patients registered locally. Owning one of the two must answer like
+  owning neither, or a sender pairs its own legitimate MRN with any
+  candidate and reads off whether the candidate exists elsewhere.
+
+**Record the reason, never ACK it.** The refusal writes an
+`integration_message_event` row (`"cross-tenant rejection"`, status
+`FAILED`) through `MllpRecordingContext`, which the sender cannot read. Do
+not put the raw message in it on a rejection path: the ACK is `AE`, senders
+retry `AE`, and a full PID per retry turns the record into an unbounded PHI
+sink. MSH-10 in the error message is enough to correlate.
+
+**Pass a stable `correlationId`** on a rejection, via
+`MllpRecordingContext.rejectionCorrelationId(integrationId, messageType,
+reason)` and the eight-argument `recordMessage`.
+`countUnresolvedDeadLetters` counts a `FAILED` row only when no *later* row
+shares its correlation id, and the ACK for a refusal is `AE`, which senders
+retry on a timer — so a random id per row puts one unresolved dead letter on
+the operator's badge per retry, thousands a day for one misconfigured feed.
+Derive the id from the sender, the message type and the reason and from
+**nothing per-message**: an MSH-10 or an identifier in there defeats it, and
+an identifier also puts PHI in an indexed column. Note what this does and
+does not buy: a feed retrying the same broken thing stays **one** dead
+letter however long it runs, but that row does not clear by itself when the
+feed stops — it is the newest row for its correlation id, so it stays
+counted until an operator resolves it.
+
+The gate lives in the inbound services rather than in `EmpiServiceImpl`
+because there is **no security context on an MLLP worker thread**: every
+guard that resolves the caller's hospital from it reads a null active
+hospital as "unscoped, allow". Do not add anything on this path that reads
+the security context.
+
+## Field widths
+
+Every sender-controlled **identifier** (a field that is matched or keyed on)
+is held to the width of its column **once, where it is first read** — the limits live
+in `Hl7FieldBounds`. MSH-3/4/10 are checked in
+`Hl7MessageInspector.parseHeader` (an invalid MSH, so `AR` before the
+allowlist); PID-3 and MRG-1 in the ADT and A40 parsers; OBR-2 in
+`MllpInboundLabServiceImpl`, because the ORU parser is shared with paths
+where OBR-2 is not an accession; PV1-19 and PV1-3's point of care in the
+visit projection, their only reader, which skips rather than refusing the
+message - an over-width visit field must not drop a demographic update.
+Check a field where it is **read**: refusing the whole message for a field
+only an optional step reads rejects what works today.
+
+- **Refuse, never truncate.** These are identifiers: a truncated MSH-10
+  reads as a replay of any other id with the same prefix, a truncated MRN
+  or placer can match someone else. A limit is the column's width, not the
+  HL7 nominal length — senders exceed v2.5's 20-character MSH-10.
+- **Do not add per-sink wrappers** (capping or sanitising a field where it
+  is logged or recorded). That was tried and did not converge, and a setter
+  into a `VARCHAR(255)` is a sink no wrapper sees. A new field that reaches
+  a sink gets a bound in `Hl7FieldBounds`, checked where it is parsed.
+- A refusal names the field and the limit, **never the value**.
+- A new bound is a copy of an entity `@Column(length)`: add the pair to
+  `Hl7FieldBoundsColumnWidthTest`, or a migration will silently move one
+  without the other. `Hl7FieldBounds.fits` counts code points, as
+  `VARCHAR(n)` does - not `String.length()`.
+- MSH-10 in the ADT and A40 dead-letter reasons, and in the merge-service
+  and visit-projection log lines #753 touched, goes through
+  `MllpRecordingContext.withControlId` / `quotedControlId`, which quote and
+  escape it so the sender cannot write text that reads as our own finding.
+  Not yet everywhere: the A02, A03 and auto-create audit descriptions in
+  the visit projection still format MSH-10 raw - persisted audit text, so
+  quoting it is a behaviour change and an open follow-up - and so do older
+  log lines. The helpers are MSH-10 only: other sender text in a reason
+  (the OBR-2 placer, the MSH-3/MSH-4 pair) is not quoted yet, and a general
+  helper for it is also a follow-up - do not reuse `withControlId` for it.
+- **Not yet covered: demographics and OBX-5.** PID-5/7/8/11 go into
+  `Patient` columns of 100 (sex: 10) and OBX-5 into `result_value` (2048),
+  unbounded. An over-width value fails at flush: `AE Server-side handler
+  error`, no dead-letter row, and the sender retries indefinitely. OBX-3/6/7/11
+  are truncated at their sink (an older decision). Known debt: these are not
+  identifiers, so whether to refuse or truncate them is still undecided.
+- MSH-9 is **not** bounded: not an identifier, and the recorder clamps the
+  one column it reaches.
 
 ## Audit on accept
 

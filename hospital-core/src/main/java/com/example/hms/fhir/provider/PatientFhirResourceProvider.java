@@ -19,6 +19,8 @@ import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
 import ca.uhn.fhir.rest.server.exceptions.MethodNotAllowedException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
+import com.example.hms.fhir.FhirTenantBoundary;
+import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.fhir.everything.PatientEverythingParams;
 import com.example.hms.fhir.everything.PatientEverythingService;
 import com.example.hms.fhir.mapper.PatientFhirMapper;
@@ -40,8 +42,17 @@ import java.util.UUID;
 /**
  * FHIR R4 resource provider for {@code Patient}.
  *
- * <p>Read is tenant-scoped through {@link PatientRepository#findById(Object)} which
- * already applies hospital-context filters via the {@code tenantContext} bean.
+ * <p>Tenancy, stated as it is rather than as it was once described. Read and
+ * {@code _id} search go through {@link PatientRepository#findById(Object)},
+ * which {@code TenantAwareJpaRepository} filters with
+ * {@code TenantScopeSpecification}: a patient is found when registered at ANY
+ * hospital the caller is permitted at (every assignment of a multi-hospital
+ * user, every hospital of a permitted organisation), and a super-admin is not
+ * filtered at all. That is wider than the active hospital the other FHIR
+ * providers anchor on. The {@code tenantContext} bean filters only the
+ * name/identifier search query. Writes do NOT rely on either: PUT and the
+ * conditional POST are gated on a registration at the active hospital inside
+ * {@link PatientFhirWriteService}.
  *
  * <p>Search is intentionally narrow at this stage — it covers the parameters
  * downstream consumers (OpenMRS, DHIS2 Tracker, OpenHIE) require for patient
@@ -57,13 +68,16 @@ public class PatientFhirResourceProvider implements IResourceProvider {
     private final PatientFhirMapper patientMapper;
     private final PatientFhirWriteService writeService;
     private final PatientEverythingService everythingService;
+    private final FhirTenantBoundary tenantBoundary;
 
     public PatientFhirResourceProvider(
         PatientRepository patientRepository,
         PatientFhirMapper patientMapper,
         PatientFhirWriteService writeService,
-        PatientEverythingService everythingService
+        PatientEverythingService everythingService,
+        FhirTenantBoundary tenantBoundary
     ) {
+        this.tenantBoundary = tenantBoundary;
         this.patientRepository = patientRepository;
         this.patientMapper = patientMapper;
         this.writeService = writeService;
@@ -101,9 +115,17 @@ public class PatientFhirResourceProvider implements IResourceProvider {
         @OptionalParam(name = "email") TokenParam email,
         @OptionalParam(name = "active") TokenParam active
     ) {
+        UUID boundHospital = FhirTenantBoundary.boundHospital(HospitalContextHolder.getContextOrEmpty());
         if (idParam != null && idParam.getValue() != null) {
             UUID uuid = tryParseUuid(idParam.getValue());
             if (uuid == null) return Collections.emptyList();
+            // Asked BEFORE loading: the tenant boundary filters the bundle on
+            // the way out, but a patient registered elsewhere in the caller's
+            // organisation used to fail in the mapper (500) before it got
+            // there, while an unknown id answered an empty bundle.
+            if (!tenantBoundary.isVisible("Patient", uuid.toString(), boundHospital)) {
+                return Collections.emptyList();
+            }
             return patientRepository.findById(uuid)
                 .map(patientMapper::toFhir)
                 .map(List::of)
@@ -126,13 +148,17 @@ public class PatientFhirResourceProvider implements IResourceProvider {
             : null;
 
         var sort = Sort.by(Sort.Order.asc("lastName"), Sort.Order.asc("firstName"));
+        // The page is capped, so it must be a page of the hospital the request
+        // is bound to (the interceptor has already refused a request with none): capping across every permitted hospital and then letting
+        // the tenant boundary drop the others silently loses the bound
+        // hospital's own matches past the cap.
         var page = patientRepository.searchPatientsExtended(
             mrn,
             namePattern,
             normalizeDob(dob),
             phonePattern,
             emailPattern,
-            null,
+            boundHospital,
             activeFlag,
             PageRequest.of(0, DEFAULT_PAGE_SIZE, sort)
         );
@@ -151,6 +177,10 @@ public class PatientFhirResourceProvider implements IResourceProvider {
      * <p>Feature-flagged: when {@code app.fhir.write.enabled=false}
      * (default) the write service throws {@code MethodNotAllowedException}
      * → 405.
+     *
+     * <p>The tenant gate is in {@link PatientFhirWriteService#update}: a
+     * patient not registered at the caller's active hospital answers the same
+     * 404 as one that does not exist.
      */
     @Update
     public MethodOutcome update(

@@ -89,6 +89,29 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     Optional<Patient> findByUserId(UUID userId);
 
     /**
+     * Is this patient row one of the ones linked to this user account?
+     *
+     * <p>The question every "is this record the caller’s" check actually asks,
+     * answered without loading the row. Two reasons it is shaped this way
+     * rather than as {@link #findByUserId}:
+     *
+     * <ul>
+     *   <li>{@code findByUserId} is a single-result query, and
+     *       {@code V113__patients_user_id_integrity.sql} deliberately falls
+     *       back to a plain index instead of failing the deploy when a tenant
+     *       already carries duplicate {@code user_id} rows. On such a tenant
+     *       the single-result form throws
+     *       {@code IncorrectResultSizeDataAccessException} — a 500 where an
+     *       authorisation check owes a decision. This form cannot, however
+     *       many rows there are.</li>
+     *   <li>Materialising a {@code Patient} decrypts every PHI column through
+     *       {@code EncryptedStringConverter}. An authorisation check has no
+     *       business reading a name to compare two UUIDs.</li>
+     * </ul>
+     */
+    boolean existsByIdAndUserId(UUID id, UUID userId);
+
+    /**
      * Fetches a Patient by primary key WITHOUT tenant-scope filtering.
      * <p>
      * Since E9 #57 the tenant-scoped {@code findById} (via

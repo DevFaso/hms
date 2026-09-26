@@ -1,11 +1,16 @@
 package com.example.hms.hl7.mllp;
 
+import com.example.hms.utility.Hl7FieldBounds;
+
 /**
  * Light-weight MSH parser. Just enough to route the message and build
  * an ACK — the full body parsing is delegated to whatever domain handler
  * the dispatcher chooses (e.g. {@code Hl7v2MessageBuilder.parseOruR01}).
  */
 public final class Hl7MessageInspector {
+
+    /** What a refused field reads as in the header a refusal is sent on. */
+    private static final String REFUSED = "?";
 
     private Hl7MessageInspector() {}
 
@@ -28,11 +33,19 @@ public final class Hl7MessageInspector {
 
         String[] f = split(mshSegment, fieldSep);
         // f[0]="MSH", f[1]=encoding chars; routing fields start at f[2].
-        return new Hl7MessageHeader(
+        // MSH-10 first: it is what the refusal echoes in MSA-2, so an
+        // over-width MSH-10 is the one refusal that has to use the fallback
+        // envelope. Any other refused field is answered on the parsed header,
+        // with that field replaced, so the sender can match its own refusal
+        // instead of timing out and resending.
+        requireWithin(field(f, 9), Hl7FieldBounds.MESSAGE_CONTROL_ID_MAX, "MSH-10", null);
+        boolean appFits = Hl7FieldBounds.fits(field(f, 2), Hl7FieldBounds.SENDER_FIELD_MAX);
+        boolean facilityFits = Hl7FieldBounds.fits(field(f, 3), Hl7FieldBounds.SENDER_FIELD_MAX);
+        Hl7MessageHeader header = new Hl7MessageHeader(
             String.valueOf(fieldSep),
             field(f, 1),
-            field(f, 2),
-            field(f, 3),
+            appFits ? field(f, 2) : REFUSED,
+            facilityFits ? field(f, 3) : REFUSED,
             field(f, 4),
             field(f, 5),
             field(f, 6),
@@ -41,6 +54,30 @@ public final class Hl7MessageInspector {
             field(f, 10),
             field(f, 11)
         );
+        requireWithin(field(f, 2), Hl7FieldBounds.SENDER_FIELD_MAX, "MSH-3", header);
+        requireWithin(field(f, 3), Hl7FieldBounds.SENDER_FIELD_MAX, "MSH-4", header);
+        return header;
+    }
+
+    /**
+     * Refuse an over-width header field as an invalid MSH.
+     *
+     * <p>Decided before the allowlist and before any tenant data is read, so
+     * the refusal is the same for every sender and reveals nothing. The
+     * message names the field and the limit and <em>never</em> the value:
+     * MLLP echoes it into the AR and the dead-letter row, and the value is
+     * by definition the over-width thing being refused. The HTTP ORU ingest
+     * reads the header defensively, so there the same refusal is a body with
+     * no readable MSH, answered as that endpoint answers an unknown order.
+     *
+     * @param replyHeader the header to answer on, or null when the refused
+     *        field is MSH-10 and there is nothing safe to echo
+     */
+    private static void requireWithin(String value, int max, String field,
+                                      Hl7MessageHeader replyHeader) {
+        if (!Hl7FieldBounds.fits(value, max)) {
+            throw new MllpFieldWidthException(field + " exceeds " + max + " characters", replyHeader);
+        }
     }
 
     private static int indexOfSegmentTerminator(String s, int from) {

@@ -305,7 +305,49 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(routes).not.toContain('/chat');
   });
 
-  it('pharmacy verifier reaches Dispensing and Stock Routing but not Prescriptions', () => {
+  it('lab technician reaches the release worklist (B14)', () => {
+    // The queue exists for the laboratory bench: a technician reads it (and
+    // releases nothing — that gate is in the component, not the nav).
+    const { items } = createComponent({
+      activeRole: 'ROLE_LAB_TECHNICIAN',
+      roles: ['ROLE_LAB_TECHNICIAN'],
+      wildcardPermission: false,
+      permissions: ['View Lab'],
+    });
+
+    expect(items.map((i) => i.route)).toContain('/lab-release-worklist');
+  });
+
+  it('super-admin reaches the release worklist, being expanded into the laboratory', () => {
+    // RoleExpansion.SUPER_ADMIN_INHERITS grants ROLE_LAB_SCIENTIST, so the
+    // worklist endpoint serves a super-admin although its @PreAuthorize does
+    // not name the role — and SUPER_ADMIN is the one role that may always
+    // release. A nav that hid the queue hid it from them alone.
+    const { items } = createComponent({
+      activeRole: 'ROLE_SUPER_ADMIN',
+      roles: ['ROLE_SUPER_ADMIN'],
+      wildcardPermission: true,
+    });
+
+    expect(items.map((i) => i.route)).toContain('/lab-release-worklist');
+  });
+
+  it('admin sees neither Lab Results nor the release worklist (B16)', () => {
+    // ROLE_ADMIN is on no lab-result gate the backend runs — not the
+    // SecurityConfig matcher, not the @PreAuthorize. The entry was a link to
+    // a 403 page, and the route guard admitted it just as wrongly.
+    const { items } = createComponent({
+      activeRole: 'ROLE_ADMIN',
+      roles: ['ROLE_ADMIN'],
+      wildcardPermission: true,
+    });
+
+    const routes = items.map((i) => i.route);
+    expect(routes).not.toContain('/lab-results');
+    expect(routes).not.toContain('/lab-release-worklist');
+  });
+
+  it('pharmacy verifier reaches Dispensing, Stock Routing and Prescriptions', () => {
     const { items } = createComponent({
       activeRole: 'ROLE_PHARMACY_VERIFIER',
       roles: ['ROLE_PHARMACY_VERIFIER'],
@@ -316,7 +358,29 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     const routes = items.map((i) => i.route);
     expect(routes).toContain('/pharmacy/dispensing');
     expect(routes).toContain('/pharmacy/stock-routing');
-    expect(routes).not.toContain('/prescriptions');
+    // Gap G9, resolved: /prescriptions used to be withheld because GET
+    // /prescriptions and GET /prescriptions/{id} did not admit the role, so
+    // the entry opened on a "failed to load" toast. Both reads admit
+    // ROLE_PHARMACY_VERIFIER now (PrescriptionControllerTest pins them) and
+    // the route guard always did, so the page the pharmacist-verify and
+    // request-clarification ceremonies live on is finally reachable from the
+    // navigation. What this expectation now guards is the pairing: if the
+    // backend ever drops the role from those reads, this must come out with it.
+    expect(routes).toContain('/prescriptions');
+  });
+
+  it('pharmacy verifier gets exactly one Prescriptions entry when also a pharmacist', () => {
+    // The verifier's own nav block pushes Dispensing and Stock Routing. Its
+    // Prescriptions entry is deliberately NOT pushed there but added to the
+    // clinical item's roles list, so holding both roles cannot produce two.
+    const { items } = createComponent({
+      activeRole: null,
+      roles: ['ROLE_PHARMACIST', 'ROLE_PHARMACY_VERIFIER'],
+      wildcardPermission: false,
+      permissions: ['View Prescriptions'],
+    });
+
+    expect(items.filter((i) => i.route === '/prescriptions').length).toBe(1);
   });
 
   it('claims reviewer reaches Pharmacy Claims — its entire purpose', () => {
@@ -1033,6 +1097,10 @@ describe('ShellComponent — route-level hospital scope gate', () => {
         'lab-instruments',
         'lab-inventory',
         'lab-ops-dashboard',
+        // The release worklist is one laboratory's queue: getPendingRelease
+        // refuses a scopeless read outright rather than guessing a hospital,
+        // so the page must not render until one is pinned.
+        'lab-release-worklist',
         'lab-staff',
         'maternity',
         'nurse-station',

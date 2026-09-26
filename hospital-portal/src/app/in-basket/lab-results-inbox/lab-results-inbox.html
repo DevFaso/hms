@@ -1,0 +1,174 @@
+<section class="lab-results-inbox">
+  <header class="category-header">
+    <div>
+      <h2 class="category-title">
+        <span>{{ 'inBasket.labResults' | translate }}</span>
+        @if (!loading() && !loadError() && results().length > 0) {
+          <span class="badge">{{ results().length }}</span>
+        }
+      </h2>
+      <p class="category-subtitle">{{ 'inBasket.labResultsSubtitle' | translate }}</p>
+      <!--
+        ResultReviewServiceImpl.getResultReviewQueue reads
+        findByOrderingStaff_IdAndHospital_Id against the hospital the caller is
+        acting in. A released result the same physician ordered at ANOTHER
+        hospital is not here — it is in that hospital's copy of this queue, one
+        scope switch away — and this queue still has no date window and no
+        reviewed state. Said plainly, because what a worklist leaves out is the
+        one thing it must not hide.
+      -->
+      <p class="category-hint">{{ 'inBasket.labResultsScopeHint' | translate }}</p>
+    </div>
+    <div class="category-actions">
+      <!--
+        The picker sits in the header, UNCONDITIONALLY, not inside the
+        no-scope branch below. This page is not `requiresHospitalScope` — it
+        renders for every clinical role and for a super-admin in global view —
+        so the shell draws no scope bar above it; a chip that unmounted as
+        soon as a hospital was picked would be a one-way door, leaving no way
+        to switch to another hospital or back to global view from here, on a
+        pick that is session-wide. It hides itself for anyone but a
+        super-admin, by design.
+
+        `preserveScope` keeps the session's pick instead of resetting the
+        scope to global view on mount; `disableUrlSync` is the separate input
+        that governs the WRITE path, and it is on because neither this page
+        nor the in-basket route reads `?hospitalId=`.
+      -->
+      <app-hospital-scope-chip [preserveScope]="true" [disableUrlSync]="true" />
+      <!-- Nothing to refresh without a scope: the endpoint refuses the read. -->
+      @if (hasHospitalScope()) {
+        <button
+          type="button"
+          class="btn-refresh"
+          (click)="load()"
+          [disabled]="loading()"
+          [attr.aria-label]="'inBasket.labResultsRefresh' | translate"
+        >
+          ↻
+        </button>
+      }
+    </div>
+  </header>
+
+  <!--
+    No hospital in scope FIRST, ahead of every other state: the endpoint
+    answers 404, so the category never read. This must not fall through to
+    the error card ("the queue could not be loaded" sends a clinician looking
+    for an outage) nor to the empty state, which would claim there is nothing
+    to review — the one rendering this worklist exists to prevent.
+
+    After that: loading and failure only REPLACE the table when there is
+    nothing to replace. A refresh of a populated worklist must not blank the
+    rows the physician is working from, and a refresh that then fails must not
+    leave them with an error card where twelve critical results used to be —
+    the rows are still held, so they are still drawn, with the failure stated
+    above them.
+  -->
+  @if (!hasHospitalScope()) {
+    <app-hospital-scope-hint />
+  } @else if (loading() && results().length === 0) {
+    <div class="loading-spinner" aria-live="polite">
+      <span class="spinner"></span>
+      <span>{{ 'common.loading' | translate }}</span>
+    </div>
+  } @else if (loadError() && results().length === 0) {
+    <div class="error-state">
+      <p>{{ 'inBasket.labResultsError' | translate }}</p>
+      <button type="button" class="btn-secondary" (click)="load()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (results().length === 0) {
+    <p class="empty-state">{{ 'inBasket.labResultsEmpty' | translate }}</p>
+  } @else {
+    @if (loadError()) {
+      <p class="stale-banner" role="status">
+        {{ 'inBasket.labResultsError' | translate }}
+        <!--
+          Reachable while a read is in flight, unlike the one in the error
+          card: this branch renders whenever rows are held, and `loadError` is
+          no longer cleared at request start. Left ENABLED all the same — the
+          `queueRequest` latest-wins guard is what makes an overlap safe, and
+          disabling every control in this state (the ↻ already is) removed the
+          only way out of a request that never settles: there is no timeout
+          interceptor, so `loading` would stay true for ever. It gets no
+          busy affordance either — `aria-busy` on this `role="status"` would
+          tell assistive tech to WITHHOLD the region's updates, which is the
+          opposite of announcing one. A spinner on the button is the right
+          answer and is not in this PR.
+        -->
+        <button type="button" class="btn-secondary" (click)="load()">
+          {{ 'COMMON.RETRY' | translate }}
+        </button>
+      </p>
+    }
+    <div class="table-wrap">
+      <table class="result-table">
+        <caption class="sr-only">
+          {{
+            'inBasket.labResults' | translate
+          }}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'inBasket.labColTest' | translate }}</th>
+            <th scope="col">{{ 'inBasket.labColPatient' | translate }}</th>
+            <th scope="col">{{ 'inBasket.labColValue' | translate }}</th>
+            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+            <th scope="col">{{ 'inBasket.labColResultedAt' | translate }}</th>
+            <th scope="col">{{ 'inBasket.labColContext' | translate }}</th>
+          </tr>
+        </thead>
+        <!--
+          One tbody per severity, in the order the backend already sorts by
+          (CRITICAL, then ABNORMAL, then NORMAL, each newest first). The
+          heading row is what stops a critical value being one row among
+          forty; an empty group renders nothing at all.
+        -->
+        @for (group of visibleGroups(); track group.key) {
+          @if (group.items.length > 0) {
+            <tbody class="severity-group">
+              <tr class="group-row">
+                <th scope="rowgroup" colspan="6">
+                  <span [class]="group.badgeClass">{{ group.labelKey | translate }}</span>
+                  <span class="group-count">{{ group.items.length }}</span>
+                </th>
+              </tr>
+              @for (r of group.items; track r.id) {
+                <tr [class.row-critical]="r.abnormalFlag === 'CRITICAL'">
+                  <td>
+                    <strong>{{ r.testName }}</strong>
+                  </td>
+                  <td>
+                    <a [routerLink]="['/patients', r.patientId]" class="patient-link">
+                      {{ r.patientName }}
+                    </a>
+                  </td>
+                  <td>
+                    <span class="result-value">{{ r.resultValue || '—' }}</span>
+                    @if (directionKey(r); as dirKey) {
+                      <span class="result-direction">{{ dirKey | translate }}</span>
+                    }
+                  </td>
+                  <td>
+                    <span [class]="flagClass(r)">{{ flagKey(r) | translate }}</span>
+                  </td>
+                  <td>{{ formatDate(r.resultedAt) }}</td>
+                  <td>{{ r.orderingContext || '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          }
+        }
+      </table>
+    </div>
+    @if (truncated()) {
+      <p class="category-hint">
+        {{
+          'inBasket.labTruncated' | translate: { shown: visibleCount(), total: results().length }
+        }}
+      </p>
+    }
+  }
+</section>

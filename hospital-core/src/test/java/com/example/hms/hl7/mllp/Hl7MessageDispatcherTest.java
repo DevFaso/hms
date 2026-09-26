@@ -1,7 +1,6 @@
 package com.example.hms.hl7.mllp;
 
 import com.example.hms.enums.integration.IntegrationMessageDirection;
-import com.example.hms.enums.integration.IntegrationMessageStatus;
 import com.example.hms.model.Hospital;
 import com.example.hms.service.integration.MllpInboundAdtService;
 import com.example.hms.service.integration.MllpInboundLabService;
@@ -123,19 +122,45 @@ class Hl7MessageDispatcherTest {
     }
 
     @Test
-    void mapsLabRejectedCrossTenantToAr() {
-        allowSender();
-        when(inboundLab.processOruR01(any(), eq(hospital), anyString(), anyString(), any(), anyString()))
-            .thenReturn(MllpInboundOutcome.REJECTED_CROSS_TENANT);
+    void noOutcomeFromAnyInboundHandlerProducesAnAr() {
+        // AR is reserved for the dispatcher's own transport-level refusals
+        // (bad MSH, sender not allowlisted, unsupported type) — none of which
+        // depend on tenant data. Every outcome ANY of the three domain
+        // handlers can return maps to AA or AE, so none of them can reopen
+        // the enumeration oracle by picking a different constant. All three
+        // handlers, not the lab one alone: the oracle this closes lived in
+        // the other two.
+        //
+        // The enum assertion is the other half of the guard. A fourth
+        // constant would not be covered by the loop, and
+        // REJECTED_CROSS_TENANT is precisely the constant whose return this
+        // is meant to prevent.
+        assertThat(MllpInboundOutcome.values())
+            .containsExactlyInAnyOrder(
+                MllpInboundOutcome.ACCEPTED,
+                MllpInboundOutcome.REJECTED_NOT_FOUND,
+                MllpInboundOutcome.REJECTED_INVALID);
 
+        allowSender();
         String oru = "MSH|^~\\&|MINDRAY|LAB1|HMS|HOSP1|20260428||ORU^R01|MSG-8|P|2.5\r"
                    + "PID|1||p\r"
                    + "OBR|1|ACC-OTHER||GLU^Glucose|||20260428\r"
                    + "OBX|1|NM|GLU^Glucose||5.6|mmol/L|||N\r";
+        String adt = "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260428||ADT^A08|MSG-8|P|2.5\r"
+                   + "PID|1||MRN-ANY||DOE^JANE\r";
 
-        assertThat(dispatcher.dispatch(oru, "10.0.0.1:1"))
-            .contains("MSA|AR|MSG-8")
-            .contains("sender not authorised");
+        for (MllpInboundOutcome outcome : MllpInboundOutcome.values()) {
+            when(inboundLab.processOruR01(any(), eq(hospital), anyString(), anyString(),
+                any(), anyString())).thenReturn(outcome);
+            when(inboundAdt.processAdt(any(), eq(hospital), anyString(), anyString(), any()))
+                .thenReturn(outcome);
+            when(inboundMerge.processMerge(any(), eq(hospital), anyString(), anyString(), any()))
+                .thenReturn(outcome);
+
+            assertThat(dispatcher.dispatch(oru, "10.0.0.1:1")).doesNotContain("MSA|AR|");
+            assertThat(dispatcher.dispatch(adt, "10.0.0.1:1")).doesNotContain("MSA|AR|");
+            assertThat(dispatcher.dispatch(A40, "10.0.0.1:1")).doesNotContain("MSA|AR|");
+        }
     }
 
     @Test
@@ -223,13 +248,19 @@ class Hl7MessageDispatcherTest {
     void recorderInvokedOnInvalidMshReject() {
         String bad = "GARBAGE|||";
         dispatcher.dispatch(bad, "10.0.0.99:1");
-        verify(messageRecorder).recordMessage(
+        verify(messageRecorder).recordRecurringFailure(
             eq("MLLP:?/?"), isNull(),
             eq(IntegrationMessageDirection.INBOUND),
             eq("UNKNOWN"),
             eq(bad),
-            eq(IntegrationMessageStatus.FAILED),
-            contains("Invalid MSH"));
+            contains("Invalid MSH"),
+            // isNull(), not any(): a correlation id here would be shared by
+            // every sender on the platform, because there is no parsed header
+            // to distinguish them - so one row would absorb all of them, each
+            // overwriting the last one's stored body and superseding its
+            // place in the count. any() is what let an earlier revision ship
+            // exactly that.
+            isNull());
     }
 
     @Test
@@ -239,13 +270,13 @@ class Hl7MessageDispatcherTest {
                    + "PID|1||abc\rOBR|1|ACC-1||GLU|||20260428073000\r"
                    + "OBX|1|NM|GLU||5.6|mmol/L|||N\r";
         dispatcher.dispatch(oru, "10.0.0.1:1");
-        verify(messageRecorder).recordMessage(
+        verify(messageRecorder).recordRecurringFailure(
             eq("MLLP:ROGUE/UNKNOWN"), isNull(),
             eq(IntegrationMessageDirection.INBOUND),
             eq("ORU^R01"),
             eq(oru),
-            eq(IntegrationMessageStatus.FAILED),
-            contains("not allowlisted"));
+            contains("not allowlisted"),
+            any());
     }
 
     @Test
@@ -254,13 +285,108 @@ class Hl7MessageDispatcherTest {
         String malformedOru = "MSH|^~\\&|S|F|HMS|HOSP|20260428||ORU^R01|MSG-9|P|2.5\r"
                             + "PID|1||p\r";
         dispatcher.dispatch(malformedOru, "10.0.0.10:1");
-        verify(messageRecorder).recordMessage(
+        verify(messageRecorder).recordRecurringFailure(
             eq("MLLP:S/F"), any(),
             eq(IntegrationMessageDirection.INBOUND),
             eq("ORU^R01"),
             eq(malformedOru),
-            eq(IntegrationMessageStatus.FAILED),
-            contains("unparseable"));
+            contains("unparseable"),
+            any());
+    }
+
+    @Test
+    void aRetriedUnparseableMessageSupersedesItsOwnDeadLetterAndKeepsItsBody() {
+        // These paths answer AE, which senders retry on a timer, and each row
+        // keeps the full body because for a message we could not read the
+        // body IS the evidence. A random correlation id per row would
+        // therefore stack one unresolved dead letter - each holding a full
+        // copy of the message - on every retry; a stable one collapses the
+        // storm to a single row, which is what lets the body stay.
+        allowSender();
+        String malformedOru = "MSH|^~\\&|S|F|HMS|HOSP|20260428||ORU^R01|MSG-9|P|2.5\r"
+                            + "PID|1||p\r";
+        String malformedOruAgain = "MSH|^~\\&|S|F|HMS|HOSP|20260428||ORU^R01|MSG-10|P|2.5\r"
+                                 + "PID|1||p\r";
+
+        dispatcher.dispatch(malformedOru, "10.0.0.10:1");
+        dispatcher.dispatch(malformedOruAgain, "10.0.0.10:1");
+
+        ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> bodies = ArgumentCaptor.forClass(String.class);
+        verify(messageRecorder, org.mockito.Mockito.times(2)).recordRecurringFailure(
+            any(), any(), any(), any(), bodies.capture(), any(), ids.capture());
+
+        assertThat(ids.getAllValues().get(0))
+            .isNotNull()
+            .isEqualTo(ids.getAllValues().get(1));
+        // The dispatcher hands the body over both times; storing it once per
+        // problem is the recorder's job (recordRecurringFailure), pinned in
+        // IntegrationMessageRecorderTest against a real repository stub. Here
+        // what matters is that the dispatcher does not start withholding it -
+        // for a message nobody could parse it is the only evidence there is.
+        assertThat(bodies.getAllValues()).containsExactly(malformedOru, malformedOruAgain);
+    }
+
+    @Test
+    void twoDifferentMalformedAdtTriggersKeepTheirOwnEvidence() {
+        // The trigger is in the correlation key because it is one of five
+        // values checked before routing. Without it a malformed A01 and a
+        // structurally different malformed A08 from one sender share a key,
+        // so the second is recorded with no body and the operator has a dead
+        // letter and nothing to read.
+        allowSender();
+        String a01 = "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260428||ADT^A01|C-1|P|2.5\r";
+        String a08 = "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260428||ADT^A08|C-2|P|2.5\r";
+
+        dispatcher.dispatch(a01, "10.0.0.51:1");
+        dispatcher.dispatch(a08, "10.0.0.51:1");
+
+        ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> bodies = ArgumentCaptor.forClass(String.class);
+        verify(messageRecorder, org.mockito.Mockito.times(2)).recordRecurringFailure(
+            any(), any(), any(), any(), bodies.capture(), any(), ids.capture());
+        assertThat(ids.getAllValues().get(0))
+            .isNotNull()
+            .isNotEqualTo(ids.getAllValues().get(1));
+        // Distinct ids are what stop the second body displacing the first, so
+        // assert the bodies too: the name of this test is about evidence
+        // surviving, and two different ids with the same body would satisfy
+        // the id assertion while proving nothing about it.
+        assertThat(bodies.getAllValues().get(0))
+            .isNotNull()
+            .isNotEqualTo(bodies.getAllValues().get(1));
+    }
+
+    @Test
+    void aBlankClaimedSenderGetsNoSharedScope() {
+        // "?" is what a blank MSH-3/MSH-4 normalises to, and it belongs to
+        // everyone who sends one - so scoping on it would put every
+        // blank-header frame into one row that any of them can overwrite,
+        // which is the shared-scope defect in a different costume. No scope,
+        // no dedupe, one counted row each.
+        when(allowlist.resolveHospital(anyString(), anyString())).thenReturn(Optional.empty());
+        String blankSender = "MSH|^~\\&|||HMS|HOSP1|20260428||ORU^R01|MSG-B|P|2.5\r";
+
+        dispatcher.dispatch(blankSender, "10.0.0.70:1");
+
+        verify(messageRecorder).recordRecurringFailure(
+            any(), any(), any(), any(), any(), contains("not allowlisted"), isNull());
+    }
+
+    @Test
+    void differentDispatcherProblemsDoNotCollapseOntoOneDeadLetter() {
+        allowSender();
+        String malformedOru = "MSH|^~\\&|S|F|HMS|HOSP|20260428||ORU^R01|MSG-9|P|2.5\r"
+                            + "PID|1||p\r";
+        String unsupported = "MSH|^~\\&|S|F|HMS|HOSP1|20260428073000||ZZZ^Z99|C-1|P|2.5\r";
+
+        dispatcher.dispatch(malformedOru, "10.0.0.10:1");
+        dispatcher.dispatch(unsupported, "10.0.0.51:1");
+
+        ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
+        verify(messageRecorder, org.mockito.Mockito.times(2)).recordRecurringFailure(
+            any(), any(), any(), any(), any(), any(), ids.capture());
+        assertThat(ids.getAllValues().get(0)).isNotEqualTo(ids.getAllValues().get(1));
     }
 
     @Test
@@ -268,13 +394,13 @@ class Hl7MessageDispatcherTest {
         allowSender();
         String unknown = "MSH|^~\\&|X|Y|HMS|HOSP1|20260428073000||ZZZ^Z99|C-1|P|2.5\r";
         dispatcher.dispatch(unknown, "10.0.0.51:1");
-        verify(messageRecorder).recordMessage(
+        verify(messageRecorder).recordRecurringFailure(
             eq("MLLP:X/Y"), any(),
             eq(IntegrationMessageDirection.INBOUND),
             eq("ZZZ^Z99"),
             eq(unknown),
-            eq(IntegrationMessageStatus.FAILED),
-            contains("unsupported message type"));
+            contains("unsupported message type"),
+            any());
     }
 
     @Test
@@ -282,13 +408,13 @@ class Hl7MessageDispatcherTest {
         allowSender();
         String adtNoPid = "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260428||ADT^A01|CTRL-X|P|2.5\r";
         dispatcher.dispatch(adtNoPid, "10.0.0.51:1");
-        verify(messageRecorder).recordMessage(
+        verify(messageRecorder).recordRecurringFailure(
             eq("MLLP:REGISTRATION/HOSP1"), any(),
             eq(IntegrationMessageDirection.INBOUND),
             eq("ADT^A01"),
             eq(adtNoPid),
-            eq(IntegrationMessageStatus.FAILED),
-            contains("unparseable"));
+            contains("unparseable"),
+            any());
     }
 
     @Test
@@ -362,15 +488,6 @@ class Hl7MessageDispatcherTest {
     }
 
     @Test
-    void aCrossTenantMergeRejectionBecomesAr() {
-        allowSender();
-        when(inboundMerge.processMerge(any(), eq(hospital), anyString(), anyString(), any()))
-            .thenReturn(MllpInboundOutcome.REJECTED_CROSS_TENANT);
-
-        assertThat(dispatcher.dispatch(A40, "10.0.0.62:1")).contains("MSA|AR|CTRL-A40");
-    }
-
-    @Test
     void anUnknownIdentifierMergeRejectionBecomesAe() {
         allowSender();
         when(inboundMerge.processMerge(any(), eq(hospital), anyString(), anyString(), any()))
@@ -386,5 +503,80 @@ class Hl7MessageDispatcherTest {
 
         assertThat(dispatcher.dispatch(A40, "10.0.0.64:1")).contains("MSA|AR|CTRL-A40");
         verifyNoInteractions(inboundMerge);
+    }
+
+    /* ── Field widths (Hl7FieldBounds) ───────────────────────────────── */
+
+    @Test
+    void anOverWidthMsh10IsAnArBeforeTheAllowlistAndIsNeverEchoed() {
+        String overWidth = "Z".repeat(256);
+        String adt = "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260428||ADT^A08|" + overWidth + "|P|2.5\r"
+                   + "PID|1||MRN-001||DOE^JANE\r";
+
+        String ack = dispatcher.dispatch(adt, "10.0.0.70:1");
+
+        // The same answer for every sender - decided before the allowlist is
+        // consulted - and the refused value appears nowhere in it.
+        assertThat(ack)
+            .contains("MSA|AR|?")
+            .contains("Invalid MSH: MSH-10 exceeds 255 characters")
+            .doesNotContain("ZZZZ");
+        verifyNoInteractions(allowlist, inboundLab, inboundAdt, inboundMerge);
+    }
+
+    @Test
+    void anMsh10LongerThanTwentyCharactersReachesTheServiceAndTheAckWhole() {
+        allowSender();
+        when(inboundAdt.processAdt(any(), eq(hospital), anyString(), anyString(), any()))
+            .thenReturn(MllpInboundOutcome.REJECTED_NOT_FOUND);
+        String controlId = "20260428-REGISTRATION-000000000042";
+        String adt = "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260428||ADT^A08|" + controlId + "|P|2.5\r"
+                   + "PID|1||MRN-UNKNOWN||DOE^JANE\r";
+
+        assertThat(dispatcher.dispatch(adt, "10.0.0.71:1")).contains("MSA|AE|" + controlId + "|");
+        verify(inboundAdt).processAdt(any(), eq(hospital),
+            eq("REGISTRATION"), eq("HOSP1"), eq(controlId));
+    }
+
+    @Test
+    void anOverWidthPid3IsAnAeAndNeverReachesTheAdtService() {
+        allowSender();
+        String adt = "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260428||ADT^A08|CTRL-W|P|2.5\r"
+                   + "PID|1||" + "M".repeat(256) + "||DOE^JANE\r";
+
+        assertThat(dispatcher.dispatch(adt, "10.0.0.72:1"))
+            .contains("MSA|AE|CTRL-W")
+            .contains("Unparseable ADT^A08 — missing or over-width PID-3 or required segments")
+            .doesNotContain("MMMM");
+        verifyNoInteractions(inboundAdt);
+    }
+
+    @Test
+    void anOverWidthMrg1IsAnAeAndNeverReachesTheMergeService() {
+        allowSender();
+        String a40 = "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260826||ADT^A40|CTRL-W40|P|2.5\r"
+                   + "PID|1||MRN-SURVIVOR^^^HOSP1^MR||DOE^JANE\r"
+                   + "MRG|" + "R".repeat(256) + "^^^HOSP1^MR\r";
+
+        assertThat(dispatcher.dispatch(a40, "10.0.0.73:1"))
+            .contains("MSA|AE|CTRL-W40")
+            .contains("Unparseable ADT^A40 — missing or over-width PID-3 or MRG-1")
+            .doesNotContain("RRRR");
+        verifyNoInteractions(inboundMerge);
+    }
+
+    @Test
+    void anOverWidthSenderFieldIsAnArThatEchoesTheControlId() {
+        // Before the parse-time bound this frame got an AR echoing MSH-10.
+        // It still must: without MSA-2 the sender cannot match the refusal,
+        // times out and resends, and every resend is a new dead letter.
+        String adt = "MSH|^~\\&|REGISTRATION|" + "F".repeat(181) + "|HMS|HOSP1|20260428||ADT^A08|CTRL-SENDER|P|2.5\r"
+                   + "PID|1||MRN-001||DOE^JANE\r";
+
+        assertThat(dispatcher.dispatch(adt, "10.0.0.74:1"))
+            .contains("MSA|AR|CTRL-SENDER")
+            .contains("Invalid MSH: MSH-4 exceeds 180 characters")
+            .doesNotContain("FFFF");
+        verifyNoInteractions(allowlist, inboundLab, inboundAdt, inboundMerge);
     }
 }

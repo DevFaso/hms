@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.Hibernate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -34,18 +35,64 @@ public class MllpAllowedSenderServiceImpl implements MllpAllowedSenderService {
     @Override
     @Transactional(readOnly = true)
     public Optional<Hospital> resolveHospital(String sendingApplication, String sendingFacility) {
+        return lookup(sendingApplication, sendingFacility)
+            .map(MllpAllowedSender::getHospital)
+            .map(MllpAllowedSenderServiceImpl::initialiseForUseAfterThisTransaction);
+    }
+
+    /**
+     * Everything an MLLP caller reads off this hospital, read here, while
+     * there is still a session to read it in.
+     *
+     * <p>{@code MllpAllowedSender.hospital} is LAZY and so is
+     * {@code Hospital.organization}, both entities take their identifier from
+     * a field-access {@code @Id} in {@code BaseEntity}, and
+     * {@code open-in-view} is false. So {@code getId()} on either one is a
+     * proxy initialisation, and every caller of this method runs on an MLLP
+     * worker thread after this read-only transaction has closed — a different
+     * session, which does not re-attach a detached proxy.
+     * {@link #resolveHospitalId} exists because of exactly that, and the
+     * inbound services need the organization for the same reason: it is what
+     * an {@code integration_message_event} row is filed under, so without
+     * this every rejection row would land with a null organization and the
+     * per-organization DLQ view would never show one.
+     *
+     * <p>Initialising is cheap — one extra select on a lookup that is already
+     * cached per message — and it removes the trap rather than documenting it.
+     * {@code Hibernate.initialize(null)} is a no-op, so a hospital with no
+     * organization needs no special case.
+     */
+    private static Hospital initialiseForUseAfterThisTransaction(Hospital hospital) {
+        Hibernate.initialize(hospital);
+        Hibernate.initialize(hospital.getOrganization());
+        return hospital;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<UUID> resolveHospitalId(String sendingApplication, String sendingFacility) {
+        // The same lookup as resolveHospital, written out rather than
+        // delegating to it: a self-invocation does not pass through the proxy,
+        // so the annotation on the method being called would not apply and the
+        // reader has to know that this method's own annotation is what covers
+        // it. Reading the identifier INSIDE the transaction is the whole point
+        // here - Hospital maps @Id on a field, so getId() initialises the
+        // proxy, which is a LazyInitializationException once the transaction
+        // has closed.
+        return lookup(sendingApplication, sendingFacility).map(s -> s.getHospital().getId());
+    }
+
+    /** The allowlist row for a sending pair, normalised as the column stores it. */
+    private Optional<MllpAllowedSender> lookup(String sendingApplication, String sendingFacility) {
         if (!StringUtils.hasText(sendingApplication) || !StringUtils.hasText(sendingFacility)) {
             return Optional.empty();
         }
         // Stored values are normalised to upper-case canonical form
-        // (V62 CHECK constraints + MllpAllowedSenderMapper). Match
-        // that normalisation here so the case-sensitive index can be
-        // used directly.
-        return senderRepository
-            .findBySendingApplicationAndSendingFacilityAndActiveTrue(
-                sendingApplication.trim().toUpperCase(java.util.Locale.ROOT),
-                sendingFacility.trim().toUpperCase(java.util.Locale.ROOT))
-            .map(MllpAllowedSender::getHospital);
+        // (V62 CHECK constraints + MllpAllowedSenderMapper). Match that
+        // normalisation here so the case-sensitive index can be used directly.
+        return senderRepository.findBySendingApplicationAndSendingFacilityAndActiveTrue(
+            sendingApplication.trim().toUpperCase(java.util.Locale.ROOT),
+            sendingFacility.trim().toUpperCase(java.util.Locale.ROOT));
     }
 
     @Override

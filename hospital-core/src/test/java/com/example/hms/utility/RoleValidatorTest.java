@@ -23,6 +23,8 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 /**
@@ -294,5 +296,62 @@ class RoleValidatorTest {
         UserRoleHospitalAssignment a = new UserRoleHospitalAssignment();
         a.setHospital(null);
         return a;
+    }
+
+    // ── The two-layer role split: the annotation expands, these do not ──
+    // RoleExpansion (E9 #67) makes a physician and a surgeon a doctor on the
+    // AUTHORITIES, so the endpoint guards admit them; the checks in this class
+    // match the stored ASSIGNMENT code and do not know that. These four pin
+    // the two predicates whose callers the co-sign fix touches.
+
+    @Test
+    void canCreatePrescription_admitsASurgeonTheEndpointGuardAlreadyAdmits() {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            eq(userId), eq(hospitalId), anySet()))
+            .thenAnswer(i -> i.<java.util.Set<String>>getArgument(2).contains("SURGEON"));
+
+        assertThat(roleValidator.canCreatePrescription(userId, hospitalId)).isTrue();
+    }
+
+    @Test
+    void canCreatePrescription_admitsAPhysician() {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            eq(userId), eq(hospitalId), anySet()))
+            .thenAnswer(i -> i.<java.util.Set<String>>getArgument(2).contains("PHYSICIAN"));
+
+        assertThat(roleValidator.canCreatePrescription(userId, hospitalId)).isTrue();
+    }
+
+    @Test
+    void canCreatePrescription_stillRefusesARoleThatPrescribesNowhere() {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            eq(userId), eq(hospitalId), anySet()))
+            .thenAnswer(i -> i.<java.util.Set<String>>getArgument(2).contains("RECEPTIONIST"));
+
+        assertThat(roleValidator.canCreatePrescription(userId, hospitalId)).isFalse();
+    }
+
+    @Test
+    void canOrderLabTests_admitsASurgeonAndStillRefusesAMidwife() {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            eq(userId), eq(hospitalId), anySet()))
+            .thenAnswer(i -> i.<java.util.Set<String>>getArgument(2).contains("SURGEON"));
+        assertThat(roleValidator.canOrderLabTests(userId, hospitalId)).isTrue();
+
+        Mockito.reset(assignmentRepository);
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            eq(userId), eq(hospitalId), anySet()))
+            .thenAnswer(i -> i.<java.util.Set<String>>getArgument(2).contains("MIDWIFE"));
+        // Deliberate: the endpoint admits a midwife, but nothing has
+        // established that a midwife orders lab tests.
+        assertThat(roleValidator.canOrderLabTests(userId, hospitalId)).isFalse();
     }
 }

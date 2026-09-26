@@ -578,11 +578,21 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         permission: 'View Prescriptions',
         // Mirrors the /prescriptions RoleGuard (midwife added there in the
         // same change — the backend list endpoint always admitted midwives).
+        //
+        // Gap G9: ROLE_PHARMACY_VERIFIER was withheld because GET
+        // /prescriptions and GET /prescriptions/{id} did not admit it, so the
+        // entry would have opened a page that toasts "failed to load" — the
+        // role held /pharmacist-verify and /request-clarification and could
+        // read neither the order it was judging nor the prescriber's answer to
+        // its own question. Both reads admit it now
+        // (PrescriptionControllerTest pins them), the route guard always did,
+        // and the role carries the 'View Prescriptions' permission.
         roles: [
           'ROLE_DOCTOR',
           'ROLE_NURSE',
           'ROLE_MIDWIFE',
           'ROLE_PHARMACIST',
+          'ROLE_PHARMACY_VERIFIER',
           'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
@@ -740,6 +750,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/lab-results',
         permission: 'View Lab',
         // Mirrors the /lab-results RoleGuard.
+        //
+        // ROLE_ADMIN removed (B16): the entry, the guard and the backend
+        // disagreed. GET /lab-results is gated twice — the SecurityConfig
+        // matcher and the controller's @PreAuthorize — and neither list
+        // contains ADMIN, so the row rendered for a role the API answers 403
+        // to. The guard lost it in the same change, so all three agree.
         roles: [
           'ROLE_DOCTOR',
           'ROLE_NURSE',
@@ -749,7 +765,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_LAB_MANAGER',
           'ROLE_LAB_DIRECTOR',
           'ROLE_QUALITY_MANAGER',
-          'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
       },
@@ -1004,6 +1019,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // PHARMACY_VERIFIER's core workflow, previously unreachable: the block
     // above omits the role, and it must — the inventory-page guards reject
     // verifiers. Only Dispensing + Stock Routing admit them (2026-08-23 audit).
+    //
+    // Gap G9, resolved 2026-09-24: the role's /prescriptions entry is NOT
+    // pushed here — it is the clinical "Prescriptions" item above, whose
+    // roles list now names ROLE_PHARMACY_VERIFIER. Pushing a second copy
+    // would give a user holding PHARMACIST *and* PHARMACY_VERIFIER two
+    // identical entries.
     if (this.hasAnyRole(['ROLE_PHARMACY_VERIFIER'])) {
       items.push(
         {
@@ -1099,6 +1120,29 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         label: 'Lab Approval Queue',
         translationKey: 'NAV.LAB_APPROVAL_QUEUE',
         route: '/lab-approval-queue',
+      });
+    }
+    // Release worklist (B14). The @PreAuthorize on
+    // GET /lab-results/pending-release, which the route guard mirrors: the
+    // five laboratory roles, plus SUPER_ADMIN — the annotation does not name
+    // it but RoleExpansion.SUPER_ADMIN_INHERITS grants it ROLE_LAB_SCIENTIST,
+    // so the endpoint serves it, and it is the one role that may always
+    // release.
+    if (
+      this.hasAnyRole([
+        'ROLE_LAB_TECHNICIAN',
+        'ROLE_LAB_SCIENTIST',
+        'ROLE_LAB_MANAGER',
+        'ROLE_LAB_DIRECTOR',
+        'ROLE_QUALITY_MANAGER',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push({
+        icon: 'published_with_changes',
+        label: 'Release Worklist',
+        translationKey: 'NAV.LAB_RELEASE_WORKLIST',
+        route: '/lab-release-worklist',
       });
     }
     if (

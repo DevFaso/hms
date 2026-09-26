@@ -83,6 +83,7 @@ import com.bitnesttechs.hms.patient.core.models.TreatmentPlanDto
 import com.bitnesttechs.hms.patient.core.models.VitalSignDto
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
 import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
+import com.bitnesttechs.hms.patient.ui.theme.onBadge
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -236,26 +237,31 @@ private fun LabsTab(labs: List<LabResultDto>) {
         lazyItems(labs, key = { it.id }) { lab ->
             ExpandableClinicalCard(
                 icon = Icons.Default.Science,
-                sourceParts = listOfNotNull(lab.labName, lab.orderedBy?.let { stringResource(R.string.ordered_by_with_value, it) }),
+                sourceParts = listOfNotNull(lab.hospitalName, lab.orderedBy?.let { stringResource(R.string.ordered_by_with_value, it) }),
                 details = {
                     DetailGrid(
-                        DetailItem(stringResource(R.string.result), listOfNotNull(lab.result, lab.unit).joinToString(" ").takeIf { it.isNotBlank() }, Icons.Default.Science),
-                        DetailItem(stringResource(R.string.range), lab.referenceRange, Icons.Default.Info),
-                        DetailItem(stringResource(R.string.status), lab.statusDisplay, Icons.Default.Warning),
-                        DetailItem(stringResource(R.string.collected), lab.collectionDate?.take(10), Icons.Default.CalendarMonth),
-                        DetailItem(stringResource(R.string.result_date), lab.resultDate?.take(10), Icons.Default.CalendarMonth),
+                        DetailItem(stringResource(R.string.result), lab.valueWithUnit, Icons.Default.Science),
+                        DetailItem(stringResource(R.string.range), lab.displayReferenceRange, Icons.Default.Info),
+                        DetailItem(stringResource(R.string.status), stringResource(lab.statusLabelRes), Icons.Default.Warning),
+                        DetailItem(stringResource(R.string.ordered_at), lab.collectedAt?.take(10), Icons.Default.CalendarMonth),
+                        DetailItem(stringResource(R.string.result_date), lab.resultedAt?.takeUnless { lab.isPending }?.take(10), Icons.Default.CalendarMonth),
                         DetailItem(stringResource(R.string.ordered_by), lab.orderedBy, Icons.Default.Person),
-                        DetailItem(stringResource(R.string.laboratory), lab.labName, Icons.Default.LocalHospital)
+                        DetailItem(stringResource(R.string.performed_by), lab.performedBy, Icons.Default.Person),
+                        DetailItem(stringResource(R.string.laboratory), lab.hospitalName, Icons.Default.LocalHospital)
                     )
                     DetailNote(stringResource(R.string.notes), lab.notes)
                 }
             ) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(lab.testName, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    Text(lab.statusDisplay, color = if (lab.isCritical) Color(0xFFB91C1C) else BrandBlue)
+                    Text(stringResource(lab.statusLabelRes), color = lab.tone.onBadge())
                 }
-                lab.result?.let { SecondaryText("${it} ${lab.unit ?: ""}".trim()) }
-                lab.resultDate?.let { SecondaryText(it.take(10)) }
+                if (lab.isPending) {
+                    SecondaryText(stringResource(R.string.lab_result_pending))
+                } else {
+                    lab.valueWithUnit?.let { SecondaryText(it) }
+                }
+                lab.displayDate?.let { SecondaryText(it.take(10)) }
             }
         }
         item { Spacer(Modifier.height(16.dp)) }
@@ -278,7 +284,7 @@ private fun MedicationsTab(medications: List<CurrentMedicationDto>) {
                         DetailItem(stringResource(R.string.medication), med.medicationName, Icons.Default.Medication),
                         DetailItem(stringResource(R.string.dosage), med.dosage, Icons.Default.Medication),
                         DetailItem(stringResource(R.string.frequency), med.frequency, Icons.Default.Info),
-                        DetailItem(stringResource(R.string.status), med.status, Icons.Default.Warning),
+                        DetailItem(stringResource(R.string.status), stringResource(med.statusEnum.labelRes), Icons.Default.Warning),
                         DetailItem(stringResource(R.string.prescriber), med.prescribedBy, Icons.Default.Person),
                         DetailItem(stringResource(R.string.start), med.startDate?.take(10), Icons.Default.CalendarMonth),
                         DetailItem(stringResource(R.string.end), med.endDate?.take(10), Icons.Default.CalendarMonth)
@@ -287,7 +293,7 @@ private fun MedicationsTab(medications: List<CurrentMedicationDto>) {
                 }
             ) {
                 Text(med.medicationName, fontWeight = FontWeight.SemiBold)
-                FlowText(listOfNotNull(med.dosage, med.frequency, med.status))
+                FlowText(listOfNotNull(med.dosage, med.frequency, stringResource(med.statusEnum.labelRes)))
                 med.startDate?.let { SecondaryText(stringResource(R.string.start_date_with_value, it.take(10))) }
             }
         }

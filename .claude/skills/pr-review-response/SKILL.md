@@ -432,15 +432,15 @@ list is cross-cutting muscle memory.
   PR #351; the assumption that "`findById` is tenant-aware" was
   recorded incorrectly in earlier skills notes.
 - **Cross-tenant guard must DENY on null/empty active hospital
-  context, not allow.** A super-admin without an explicit
-  `X-Hospital-Id` header has `HospitalContextHolder.getActiveHospitalId()
-  == null`. A guard that only rejects when both the stored
-  hospitalId AND the current context's hospitalId are non-null lets
-  any super-admin call see any tenant's data — the inverse of the
-  "invisible cross-tenant rejection" contract. Pattern:
-  `if (activeHospitalId == null) return Optional.empty();` first,
-  then the equality check. Caught on `FhirBulkExportService.getJob`
-  in PR #351.
+  context, not allow.** *(Superseded in part: a null check on the raw
+  hospital context is not a reliable "no tenant" test for a super-admin,
+  because what that context holds differs by auth path. Follow "Resolving
+  the tenant" in the `multi-tenancy-scoping` skill.)* A guard that only
+  rejects when both the stored hospitalId AND the resolved one are
+  non-null reads "no tenant" as "unscoped, allow" — the inverse of the
+  "invisible cross-tenant rejection" contract. Refuse on "no tenant"
+  first, then compare. Caught on `FhirBulkExportService.getJob` in
+  PR #351.
 - **Aggregate queries must group by a stable key, not display
   name.** Hospital names are not unique in the schema (only `code`
   is unique); a rename also splits the same tenant across old/new

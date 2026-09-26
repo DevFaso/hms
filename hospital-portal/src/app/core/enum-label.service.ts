@@ -338,6 +338,30 @@ export class EnumLabelService implements OnDestroy {
       PARTIAL: 'Partial',
       CANCELLED: 'Cancelled',
     },
+
+    /* ── Stock-out routing — the prescriber's fill history reads both (G11) ── */
+    routingType: {
+      PARTNER: 'Partner pharmacy',
+      PRINT: 'Printed for the patient',
+      BACKORDER: 'Back order',
+    },
+    routingDecisionStatus: {
+      PENDING: 'Pending',
+      ACCEPTED: 'Accepted',
+      REJECTED: 'Rejected',
+      COMPLETED: 'Completed',
+      CANCELLED: 'Cancelled',
+    },
+
+    /* ── Community-pharmacy SMS dispatch (G7). Two String columns rather
+       than enums — scripts/i18n-enum-domains.json names what writes them. ── */
+    prescriptionDispatchChannel: {
+      SMS: 'SMS',
+    },
+    prescriptionDispatchStatus: {
+      SENT: 'Sent',
+      FAILED: 'Failed',
+    },
     imagingOrderStatus: {
       DRAFT: 'Draft',
       ORDERED: 'Ordered',

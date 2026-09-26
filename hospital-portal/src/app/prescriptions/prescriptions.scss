@@ -30,9 +30,11 @@
     background: var(--primary-tint);
     color: var(--primary-deep);
   }
-  &.completed {
-    background: #d1fae5;
-    color: #065f46;
+  /* The grey pair .status-draft uses, so the Drafts card and the Draft
+     badge are the same colour. */
+  &.draft {
+    background: #f3f4f6;
+    color: #4b5563;
   }
   &.cancelled {
     background: #fee2e2;
@@ -41,6 +43,13 @@
   &.total {
     background: #e0e7ff;
     color: #3730a3;
+  }
+  /* The same amber pair .status-pending already uses in this file —
+     deliberately not a new colour, so the contrast the axe smoke has already
+     cleared is the contrast this card renders. */
+  &.attention {
+    background: #fef3c7;
+    color: #92400e;
   }
 }
 
@@ -174,10 +183,6 @@
   &.status-cancelled {
     background: #fee2e2;
     color: #991b1b;
-  }
-  &.status-suspended {
-    background: #fef3c7;
-    color: #92400e;
   }
 }
 
@@ -503,5 +508,100 @@
   }
   .modal {
     width: 98vw;
+  }
+}
+
+/* ── Tab counts, pharmacy sub-lines and the history tables ──────────── */
+
+.tab-count {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0 0.4rem;
+  border-radius: 10px;
+  background: #f3f4f6;
+  color: #4b5563;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.tab-btn.active .tab-count {
+  background: var(--primary-tint);
+  color: var(--primary-deep);
+}
+
+/* The list is capped; this says so rather than letting a count lie. */
+.list-truncated {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+/* A second line under a table cell: where the order is, what a routing says. */
+.cell-sub {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  color: #4b5563;
+}
+
+/* Why this row is waiting on the prescriber. Amber, matching .status-pending. */
+.attention-note {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #92400e;
+  .material-symbols-outlined {
+    font-size: 1rem;
+  }
+}
+
+.history-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #991b1b;
+  p {
+    margin: 0;
+  }
+}
+
+.history-table {
+  width: 100%;
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  caption {
+    text-align: left;
+    padding: 0.25rem 0;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  th,
+  td {
+    padding: 0.4rem 0.5rem;
+    text-align: left;
+    border-bottom: 1px solid #f3f4f6;
+    vertical-align: top;
+  }
+  th {
+    color: #6b7280;
+    font-weight: 600;
+  }
+  .status-badge {
+    font-size: 0.72rem;
+    background: #f3f4f6;
+    color: #4b5563;
   }
 }

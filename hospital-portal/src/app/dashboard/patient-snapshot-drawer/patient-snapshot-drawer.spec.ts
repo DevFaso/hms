@@ -135,3 +135,81 @@ describe('PatientSnapshotDrawerComponent — server-stamped type badges', () => 
     expect(textOf('.team-name')).toEqual(['Awa Sawadogo']);
   });
 });
+
+/**
+ * The drawer with no snapshot in it.
+ *
+ * `GET /me/patients/{id}/snapshot` is hospital-scoped (PR #742) and answers
+ * 404 when no scope resolves. The host used to close the drawer on any
+ * failure, so an authorization refusal looked exactly like a dead button —
+ * and an empty drawer would be the same failure rendered as "no data", which
+ * this repo has ruled out repeatedly.
+ */
+describe('PatientSnapshotDrawerComponent — states with no snapshot', () => {
+  let fixture: ComponentFixture<PatientSnapshotDrawerComponent>;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [PatientSnapshotDrawerComponent, TranslateModule.forRoot()],
+      providers: [provideRouter([])],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(PatientSnapshotDrawerComponent);
+    fixture.componentRef.setInput('isOpen', true);
+    fixture.componentRef.setInput('snapshot', null);
+  });
+
+  it('says the read is in flight rather than opening on nothing', () => {
+    fixture.componentRef.setInput('loading', true);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="snapshot-status"]')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('common.loading');
+  });
+
+  it('asks for a hospital when the scope is what is missing', () => {
+    fixture.componentRef.setInput('loadError', 'NO_SCOPE');
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="snapshot-no-scope"]')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('DASHBOARD.SNAPSHOT_NO_HOSPITAL');
+    // A refusal is not a failure: no Retry, because trying again changes nothing.
+    expect(fixture.nativeElement.textContent).not.toContain('COMMON.RETRY');
+  });
+
+  it('says the patient is not reachable here on a scoped 404, with no retry', () => {
+    fixture.componentRef.setInput('loadError', 'NOT_HERE');
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="snapshot-not-here"]')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('DASHBOARD.SNAPSHOT_NOT_HERE');
+    // Asking again returns the same 404.
+    expect(fixture.nativeElement.textContent).not.toContain('COMMON.RETRY');
+  });
+
+  it('states a failure and offers a retry', () => {
+    fixture.componentRef.setInput('loadError', 'FAILED');
+    fixture.detectChanges();
+
+    const error = fixture.nativeElement.querySelector('[data-testid="snapshot-error"]');
+    expect(error).not.toBeNull();
+    expect(error.getAttribute('role')).toBe('alert');
+
+    let retried = 0;
+    fixture.componentInstance.retryRequested.subscribe(() => retried++);
+    const button = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((b) => (b.textContent ?? '').includes('COMMON.RETRY'));
+    button?.click();
+
+    expect(retried).toBe(1);
+  });
+
+  it('renders nothing at all when it is closed, whatever the error says', () => {
+    fixture.componentRef.setInput('isOpen', false);
+    fixture.componentRef.setInput('loadError', 'FAILED');
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.snapshot-drawer')).toBeNull();
+  });
+});

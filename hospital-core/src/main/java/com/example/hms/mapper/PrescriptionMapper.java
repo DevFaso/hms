@@ -82,6 +82,13 @@ public class PrescriptionMapper {
             .instructions(p.getInstructions())
             .notes(p.getNotes())
 
+            // Gap G13 — what was ordered, so a remainder can carry its unit.
+            .quantity(p.getQuantity())
+            .quantityUnit(p.getQuantityUnit())
+            .refillsAllowed(p.getRefillsAllowed())
+            .refillsRemaining(p.getRefillsRemaining())
+            .refillsUsed(p.getRefillsUsed())
+
             .status(p.getStatus() != null ? p.getStatus().name() : null)
             .controlledSubstance(p.isControlledSubstance())
             .requiresCosign(p.isRequiresCosign())

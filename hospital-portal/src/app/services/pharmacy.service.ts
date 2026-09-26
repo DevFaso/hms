@@ -309,6 +309,33 @@ export interface WorkQueuePrescription {
   };
   /** Absent on a first fill with no refill allowance and no request history. */
   refill?: WorkQueueRefillContext;
+  /**
+   * True when the row is not a plain fill and the pharmacist should look
+   * before dispensing; {@link attentionReason} says which. Absent (rather
+   * than false) on payloads produced before the backend added the flag.
+   */
+  needsAttention?: boolean;
+  /**
+   * PENDING_STOCK, PARTNER_REJECTED, PARTNER_ACCEPTED,
+   * BACK_ORDER_OUTSTANDING or CLARIFICATION_RESOLVED; absent when nothing
+   * needs attention. Only CLARIFICATION_RESOLVED is acted on here (gap G5) —
+   * the rest belong to the back-order and partner-routing cues.
+   */
+  attentionReason?: string;
+  /**
+   * When the prescriber answered the pharmacist's question, if the pharmacy
+   * has not acted on that answer yet; absent otherwise.
+   *
+   * <p>A SECOND fact about the row, not a competing reason:
+   * `attentionReason` reports one reason by precedence and resolving a
+   * clarification restores the status the question was asked from, so an
+   * answer on a PENDING_STOCK or PARTNER_REJECTED order is masked by that
+   * status. This is the only reliable "the prescriber answered" cue.
+   *
+   * <p>Carries no clinical text — the projection is served to roles that
+   * `GET /prescriptions/{id}` refuses. The words are fetched in the dialog.
+   */
+  clarificationResolvedAt?: string;
 }
 
 /**
@@ -368,8 +395,24 @@ export interface RoutingDecisionResponse {
   targetPharmacyName?: string;
   decidedByUserId: string;
   patientId: string;
+  /** Why the decision was taken, as it was typed — free text only. */
   reason?: string;
+  /**
+   * The decision was cancelled because the partner never delivered. A flag,
+   * not a stored sentence: the sentence used to be composed in English on the
+   * server and rendered verbatim to French and Spanish prescribers.
+   */
+  partnerNoShow?: boolean;
+  /** The pharmacist's own words about the no-show; absent when they typed none. */
+  noShowReason?: string;
   estimatedRestockDate?: string;
+  /**
+   * The quantity this routing is for — the REMAINDER on a partially filled
+   * order, the full amount otherwise (`FillAccounting.remaining`). Null when
+   * the prescription carries no quantity at all, which means "unknown": do not
+   * render a zero in its place.
+   */
+  remainingQuantity?: number;
   status: string;
   decidedAt: string;
   createdAt: string;
@@ -703,12 +746,22 @@ export class PharmacyService {
     return this.http.get<ApiResponse<DispenseResponse>>(`/pharmacy/dispense/${id}`);
   }
 
+  /**
+   * `DispenseRepository.findByPrescriptionId` is a derived query with NO
+   * ordering, and the controller's `@PageableDefault` sets none either, so
+   * page 0 is an arbitrary subset rather than the most recent fills. Pass
+   * `sort` (Spring resolves it off the request) whenever you show fewer rows
+   * than the prescription has — otherwise the table can omit the newest fill
+   * and present older ones as current.
+   */
   listDispensesByPrescription(
     prescriptionId: string,
     page = 0,
     size = 20,
+    sort?: string,
   ): Observable<ApiResponse<Page<DispenseResponse>>> {
-    const params = new HttpParams().set('page', page).set('size', size);
+    let params = new HttpParams().set('page', page).set('size', size);
+    if (sort) params = params.set('sort', sort);
     return this.http.get<ApiResponse<Page<DispenseResponse>>>(
       `/pharmacy/dispense/prescription/${prescriptionId}`,
       { params },
@@ -801,12 +854,20 @@ export class PharmacyService {
     );
   }
 
+  /**
+   * Same unordered-derived-query trap as `listDispensesByPrescription`: the
+   * repository has a `findByPrescriptionIdOrderByDecidedAtDesc`, but the
+   * paged endpoint uses the unordered one. `decidedAt,desc` is what the
+   * backend itself orders these by when it needs the latest decision.
+   */
   listRoutingDecisionsByPrescription(
     prescriptionId: string,
     page = 0,
     size = 20,
+    sort?: string,
   ): Observable<ApiResponse<Page<RoutingDecisionResponse>>> {
-    const params = new HttpParams().set('page', page).set('size', size);
+    let params = new HttpParams().set('page', page).set('size', size);
+    if (sort) params = params.set('sort', sort);
     return this.http.get<ApiResponse<Page<RoutingDecisionResponse>>>(
       `/pharmacy/routing/decisions/prescription/${prescriptionId}`,
       { params },

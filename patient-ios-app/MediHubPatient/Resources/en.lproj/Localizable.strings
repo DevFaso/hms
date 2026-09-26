@@ -495,3 +495,208 @@
 "edu_cat_ultrasound_scans" = "Ultrasound scans";
 "edu_cat_genetic_screening" = "Genetic screening";
 "edu_cat_other" = "Other";
+
+/* B4 - lab result statuses (PatientLabResultResponseDTO.status) */
+"lab_status_pending" = "Pending";
+"lab_status_normal" = "Normal";
+"lab_status_abnormal" = "Abnormal";
+"lab_status_abnormal_low" = "Abnormal — low";
+"lab_status_abnormal_high" = "Abnormal — high";
+"lab_status_critical" = "Critical";
+"lab_status_unknown" = "Status unavailable";
+"lab_result_pending" = "Result pending";
+"lab_pending_explainer" = "The laboratory has not released this result yet.";
+"lab_interpretation_normal" = "Within normal range";
+"lab_interpretation_abnormal" = "Abnormal — review with your provider";
+"lab_interpretation_critical" = "Critical value — contact your provider";
+"lab_result_details" = "Lab result";
+"test_information" = "Test information";
+"lab_results_section" = "Results";
+"lab_dates_section" = "Dates";
+"lab_value" = "Value";
+"reference_range" = "Reference range";
+"test_code" = "Test code";
+"performed_by" = "Performed by";
+"resulted" = "Resulted";
+"laboratory" = "Laboratory";
+
+/* G16 - prescription statuses (com.example.hms.enums.PrescriptionStatus) */
+"rx_status_draft" = "Draft";
+"rx_status_pending_signature" = "Awaiting signature";
+"rx_status_signed" = "Signed";
+"rx_status_transmitted" = "Sent to the pharmacy";
+"rx_status_transmission_failed" = "Could not be sent";
+"rx_status_cancelled" = "Cancelled";
+"rx_status_discontinued" = "Discontinued";
+"rx_status_pending_clarification" = "Awaiting your prescriber";
+"rx_status_dispensed" = "Dispensed";
+"rx_status_partially_filled" = "Partly dispensed";
+"rx_status_pending_stock" = "Out of stock";
+"rx_status_requires_external_fill" = "Outside pharmacy";
+"rx_status_sent_to_partner" = "Sent to a partner pharmacy";
+"rx_status_partner_accepted" = "Accepted by the pharmacy";
+"rx_status_partner_rejected" = "Refused by the pharmacy";
+"rx_status_partner_dispensed" = "Dispensed by the pharmacy";
+"rx_status_printed_for_patient" = "Printed for you";
+"rx_status_unknown" = "Status unavailable";
+"rx_pharmacy_with_value" = "Pharmacy: %@";
+"prescribed_by_with_value" = "Prescribed by %@";
+"prescription" = "Prescription";
+"medication" = "Medication";
+"duration" = "Duration";
+"route" = "Route";
+"prescribed" = "Prescribed";
+"instructions" = "Instructions";
+
+/* G16 - refill statuses (com.example.hms.enums.RefillStatus) */
+"refill_status_requested" = "Requested";
+"refill_status_paused" = "On hold";
+"refill_status_approved" = "Approved";
+"refill_status_denied" = "Denied";
+"refill_status_dispensed" = "Dispensed";
+"refill_status_cancelled" = "Cancelled";
+"refill_status_unknown" = "Status unavailable";
+"refill_sent_for_review" = "Sent to the prescribing provider for review";
+"refill_requested_with_value" = "Requested: %@";
+"refill_updated_with_value" = "Updated: %@";
+"refill_provider_with_value" = "Provider: %@";
+"refill_notes_with_value" = "Notes: %@";
+"ordered_by_with_value" = "Ordered by %@";
+"ordered_at" = "Ordered";
+"refill_already_open" = "A refill request for this medication is already with your care team";
+"reference_with_value" = "Reference: %@";
+"dates" = "Dates";
+"no_prescriptions_desc" = "No prescriptions on record.";
+"no_active_medications_desc" = "No active medications on record.";
+"no_refills_desc" = "No refill requests on record.";
+"refill" = "Refill";
+"refill_details" = "Refill details";
+"dosage_and_administration" = "Dosage & administration";
+"submit" = "Submit";
+"refill_not_refillable" = "This prescription can no longer be refilled. Please contact your care team.";
+"refill_on_hold" = "Your care team has put this refill request on hold. They will follow up with you.";
+
+/* G16 - medication statuses (PatientMedicationServiceImpl.resolveStatus) */
+"medication_status_active" = "Active";
+"medication_status_completed" = "Course finished";
+"medication_status_discontinued" = "Stopped";
+"medication_status_on_hold" = "Not yet issued";
+"medication_status_unknown" = "Status unavailable";
+"lab_status_reported" = "Reported";
+"since_with_value" = "Since %@";
+"refresh_failed" = "Could not refresh — showing what was last loaded";
+"refreshing" = "Refreshing…";
+"generic_name" = "Generic name";
+"start_date" = "Start date";
+"end_date" = "End date";
+
+/* ── Sharing & privacy: accesses and disclosures (SharingPrivacyView) ──
+   Wording mirrors the Android app's `sharing_*` strings for the same screen. */
+"disclosures_page_title" = "Who accessed my record";
+"disclosures_title" = "Accesses and disclosures";
+"disclosures_scope_note" = "This page lists who opened your record and where it was sent: views by the team treating you, emergency access, sharing with another hospital, copies released, and information sent to your insurer. Someone who returns to your record several times during one visit appears once.";
+"disclosures_loading" = "Loading access log…";
+"disclosures_failed_title" = "Couldn't load your access log";
+"disclosures_failed_desc" = "We couldn't reach the record right now. This does not mean nobody has viewed your records — please try again.";
+"disclosures_empty_title" = "No disclosures recorded";
+"disclosures_empty_desc" = "No disclosures of your record have been recorded for this period.";
+"disclosures_load_more" = "Show more";
+"disclosures_load_more_failed" = "More events could not be loaded.";
+"disclosures_summary_emergency" = "%d emergency accesses to your record";
+"disclosures_summary_external" = "%d times your record went outside your care team";
+
+/* Category labels: the key is built as disclosures_category_<lowercased enum>. */
+"disclosures_category_emergency_access" = "Emergency access";
+"disclosures_category_treatment_access" = "Viewed for your care";
+"disclosures_category_shared_with_provider" = "Shared with another hospital";
+"disclosures_category_insurance" = "Sent to your insurer";
+"disclosures_category_copy_released" = "A copy was released";
+"disclosures_category_identity_change" = "Records merged";
+"disclosures_category_unknown" = "Access recorded";
+
+/* ── Sharing opt-out ── */
+"sharing_optout_title" = "Sharing with other hospitals";
+"sharing_optout_desc" = "Your record follows you: a clinician treating you at another hospital can read it. You can close that door. Your own hospital keeps its access, and an emergency access stays possible, recorded, and shown to you here.";
+"sharing_optout_own_hospital_note" = "Your own hospital's access does not change. Every time your record is opened elsewhere, it appears in the list below.";
+"sharing_optout_loading" = "Checking your sharing setting…";
+"sharing_optout_load_failed" = "Your sharing setting could not be loaded. Try again later.";
+"sharing_optout_status_on" = "Sharing with other hospitals is off since %@";
+"sharing_optout_status_off" = "Sharing with other hospitals is on.";
+"sharing_optout_enable" = "Stop sharing with other hospitals";
+"sharing_optout_disable" = "Allow sharing again";
+"sharing_optout_reason_label" = "Reason (optional)";
+"sharing_optout_reason_placeholder" = "Tell us why, if you wish.";
+"sharing_optout_reason_count" = "%d/%d characters";
+"sharing_optout_reason_too_long" = "A reason can be at most %d characters.";
+"sharing_optout_confirm" = "Stop sharing";
+"sharing_optout_saving" = "Saving…";
+"sharing_optout_saved_on" = "Sharing with other hospitals is now off.";
+"sharing_optout_saved_off" = "Sharing with other hospitals is on again.";
+"sharing_optout_already_off" = "Sharing with other hospitals was already off.";
+"sharing_optout_already_on" = "Sharing with other hospitals was already on.";
+"sharing_optout_failed" = "Your sharing setting could not be saved.";
+
+/* ── Medical history (MedicalHistoryView) ──
+   Wording mirrors the Android app's `mh_*` and `medical_history_*` strings. */
+"history_title" = "Medical and Family History";
+"history_medical" = "Medical History";
+"history_surgical" = "Surgical History";
+"history_family" = "Family History";
+"history_social" = "Social History";
+"history_no_medical" = "No medical history on record.";
+"history_no_surgical" = "No surgical history on record.";
+"history_no_family" = "No family history on record.";
+"history_no_social" = "No social history on record.";
+"history_section_load_failed" = "This section could not be loaded";
+"history_date" = "Date";
+"history_outcome" = "Outcome";
+"history_age_at_onset" = "Age at onset";
+"history_notes_medical" = "Personal notes about medical history";
+"history_notes_surgical" = "Personal notes about surgical history";
+"history_notes_family" = "Personal notes about family history";
+"history_notes_social" = "Personal notes about social history";
+"history_notes_disclaimer" = "These notes are stored on your device only and are not shared with your care team.";
+"history_notes_add" = "Add a note";
+"history_smoking_tobacco" = "Smoking Tobacco";
+"history_smokeless_tobacco" = "Smokeless Tobacco";
+"history_tobacco_use" = "Tobacco use";
+"history_tobacco_types" = "Types";
+"history_quit_date" = "Quit date";
+"history_smokeless_use" = "Smokeless tobacco use";
+"history_alcohol" = "Alcohol";
+"history_alcohol_use" = "Alcohol use";
+"history_drinks_per_week" = "Drinks per week";
+"history_tobacco_current" = "Current";
+"history_tobacco_former" = "Former";
+"history_tobacco_never" = "Never";
+
+/* Roles on a disclosure row: the key is disclosures_role_<lowercased role,
+   ROLE_ stripped>. Taken from the Android app's shipped role_* strings;
+   an unknown role still falls back to a humanised token in roleLabel. */
+"disclosures_role_accountant" = "Accountant";
+"disclosures_role_admin" = "Admin";
+"disclosures_role_anesthesiologist" = "Anesthesiologist";
+"disclosures_role_billing_specialist" = "Billing Specialist";
+"disclosures_role_claims_reviewer" = "Claims Reviewer";
+"disclosures_role_doctor" = "Doctor";
+"disclosures_role_hospital_admin" = "Hospital Admin";
+"disclosures_role_lab_director" = "Lab Director";
+"disclosures_role_lab_manager" = "Lab Manager";
+"disclosures_role_lab_scientist" = "Lab Scientist";
+"disclosures_role_lab_technician" = "Lab Technician";
+"disclosures_role_midwife" = "Midwife";
+"disclosures_role_nurse" = "Nurse";
+"disclosures_role_patient" = "Patient";
+"disclosures_role_pharmacist" = "Pharmacist";
+"disclosures_role_pharmacy_verifier" = "Pharmacy Verifier";
+"disclosures_role_physician" = "Physician";
+"disclosures_role_physiotherapist" = "Physiotherapist";
+"disclosures_role_quality_manager" = "Quality Manager";
+"disclosures_role_radiologist" = "Radiologist";
+"disclosures_role_receptionist" = "Receptionist";
+"disclosures_role_staff" = "Staff";
+"disclosures_role_super_admin" = "Super Admin";
+"disclosures_role_surgeon" = "Surgeon";
+"disclosures_role_technician" = "Technician";
+"disclosures_role_therapist" = "Therapist";
+"disclosures_role_user" = "User";

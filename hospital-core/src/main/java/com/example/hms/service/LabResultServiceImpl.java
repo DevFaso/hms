@@ -77,6 +77,7 @@ public class LabResultServiceImpl implements LabResultService {
     private final LabTestDefinitionRepository labTestDefinitionRepository;
     private final CriticalValueNotificationService criticalValueNotificationService;
     private final com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    private final com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
 
     /** Ceiling on an accounted result page — see {@link com.example.hms.utility.PageBounds}. */
     private static final int MAX_RESULT_PAGE_SIZE = 500;
@@ -84,6 +85,13 @@ public class LabResultServiceImpl implements LabResultService {
     /** The one description every performing-laboratory result disclosure carries (Sonar S1192). */
     private static final String PERFORMED_HERE_REACH_DESCRIPTION =
         "Cross-hospital lab result read at the performing laboratory";
+    /** The description PatientLabResultServiceImpl accounts the same kind of read under. */
+    private static final String TREATMENT_REACH_DESCRIPTION =
+        "Cross-hospital lab result read on the treatment relationship";
+    /** How many of a patient's results for one test a trend shows. */
+    private static final int TREND_WINDOW = 12;
+    /** Fills the trend query's IN list in global view, where it must match nothing. */
+    private static final UUID NO_HOSPITAL = new UUID(0L, 0L);
     private final com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
 
     /**
@@ -103,63 +111,68 @@ public class LabResultServiceImpl implements LabResultService {
     @Value("${hms.lab.auto-verification.enabled:false}")
     private boolean autoVerificationEnabled;
 
-    /**
-     * Whether an HL7 ingest caller with no resolvable hospital scope may skip
-     * the tenancy and author checks. Off by default — the condition cannot
-     * tell a service account from a person, so it waits for
-     * fix/hl7-inbound-tenancy to resolve the hospital from the sending
-     * facility.
-     */
-    @Value("${hms.lab.hl7-ingest.unscoped-exemption.enabled:false}")
-    private boolean unscopedIngestExemptionEnabled;
-
     @Override
     @Transactional
     public LabResultResponseDTO createLabResult(LabResultRequestDTO request, Locale locale) {
-        return createLabResult(request, false);
+        return createLabResult(request, false, null);
     }
 
     @Override
     @Transactional
-    public LabResultResponseDTO createIngestedLabResult(LabResultRequestDTO request, Locale locale) {
+    public LabResultResponseDTO createIngestedLabResult(LabResultRequestDTO request,
+                                                        UUID senderHospitalId,
+                                                        Locale locale) {
         // The HL7 inbound adapter: the caller is an interface account posting
         // an ORU under a lab role, with no X-Hospital-Id and possibly no
         // assignment of its own. It is named explicitly rather than inferred
         // from "no scope resolves", which also fitted any ordinary staff user
-        // holding two assignments who forgot the header.
-        return createLabResult(request, true);
+        // holding two assignments who forgot the header. The hospital comes
+        // from the allowlist entry the message's sending pair resolved to.
+        return createLabResult(request, true, senderHospitalId);
     }
 
-    private LabResultResponseDTO createLabResult(LabResultRequestDTO request, boolean ingested) {
+    private LabResultResponseDTO createLabResult(LabResultRequestDTO request,
+                                                 boolean ingested,
+                                                 UUID senderHospitalId) {
         // Read first, lock later. The write lock on the order is needed only
         // for the status decision further down, and taking it here held it
         // across the permission checks and — before the side effects moved
         // after the commit — across a blocking SMS gateway call.
         LabOrder labOrder = labOrderRepository.findById(request.getLabOrderId())
                 .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
-        // An interface principal: the ingest door AND no hospital scope of its
-        // own. Both halves are needed. Exempting the ENDPOINT would let a
-        // multi-hospital lab user — or a HOSPITAL_ADMIN, who passes that
-        // endpoint's @PreAuthorize — write into another tenant's order through
-        // it; exempting "no scope resolves" alone would let any unscoped
-        // interactive caller do the same.
+        // THE tenant boundary on the ingest path. The sending pair in the
+        // message header was resolved against the MLLP allowlist before we
+        // were called, and senderHospitalId is the hospital that entry points
+        // at; the order must be one that hospital handles, on B1's
+        // ordering-or-performing predicate. Null means the sender identified
+        // itself as nobody we know, and is refused here rather than earlier so
+        // that an unknown sender and an order at another hospital are the same
+        // 404 — neither learns which it was.
         //
-        // OFF BY DEFAULT, and that is the honest posture. "No resolvable
-        // scope" is not proof of a machine: a lab-role human with no active
-        // assignment, or with two and no X-Hospital-Id, satisfies it too, and
-        // for them this waives BOTH the tenancy comparison and the author
-        // check on an endpoint they can reach. Telling a service account from
-        // a person needs the sending facility resolved to a hospital, which
-        // is fix/hl7-inbound-tenancy; until that lands the exemption sits
-        // behind hms.lab.hl7-ingest.unscoped-exemption.enabled, and with it
-        // off an unscoped ingest caller is refused exactly as before #721.
-        boolean interfacePrincipal = ingested && unscopedIngestExemptionEnabled && !hasResolvableHospitalScope();
+        // This replaces a flag. Until now the ingest path decided whether to
+        // waive the tenancy comparison from "does a hospital scope resolve for
+        // this caller", which is not proof of a machine: a lab-role human with
+        // no active assignment, or with two and no X-Hospital-Id, satisfies it
+        // too. That waiver therefore sat behind a property defaulting to off,
+        // which left the endpoint unusable by the interface accounts it exists
+        // for. An allowlist entry is a real identity, so the waiver no longer
+        // needs one.
+        if (ingested && (senderHospitalId == null || !labOrder.isHandledBy(senderHospitalId))) {
+            throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
+        }
+
+        // An ingest caller with no hospital scope of its own. There is nothing
+        // to compare the order against for them, which is why the allowlist
+        // pin above is the boundary. A caller that HAS a scope is still
+        // compared against it below, so an allowlisted sending facility never
+        // widens what is reachable - it only narrows it.
+        boolean unscopedIngest = ingested && !hasResolvableHospitalScope();
 
         // Same 404-not-403 tenancy comparison as every other single-row path
         // here (B11, on B1's ordering-or-performing predicate): a hospital on
         // neither side must not learn the order exists, let alone attach a
         // result to it.
-        if (!interfacePrincipal) {
+        if (!unscopedIngest) {
             requireOrderInActiveHospital(labOrder);
         }
 
@@ -167,7 +180,7 @@ public class LabResultServiceImpl implements LabResultService {
         // requireActiveHospitalId THROWS when nothing resolves, which is an
         // interface account's normal state; a null acting hospital then means
         // "no scope to judge against", which the helpers below already handle.
-        UUID actingHospitalId = interfacePrincipal ? null : roleValidator.requireActiveHospitalId();
+        UUID actingHospitalId = unscopedIngest ? null : roleValidator.requireActiveHospitalId();
 
         // Who may record THIS test's result. Role alone cannot answer it: a
         // nurse recording a bedside glucose is doing their job, and the same
@@ -178,21 +191,32 @@ public class LabResultServiceImpl implements LabResultService {
         labResultEntryGuard.requireMayEnterResult(labOrder.getLabTestDefinition());
 
     UUID currentUserId = authService.getCurrentUserId();
-    // Skipped for an interface account on the same narrow condition as the
-    // tenancy check: it holds no role at any hospital, which is the premise
-    // of the ingest path. HOSPITAL_ADMIN passes that endpoint's @PreAuthorize
-    // but is not in the author allow-list, and is a scoped principal, so it
-    // is still judged here.
-    if (!interfacePrincipal) {
-        validateLabResultAuthor(currentUserId, authorityHospitalId(labOrder, hospital, actingHospitalId));
-    }
+    // Never skipped, including for an unscoped ingest caller. It used to be,
+    // on the premise that an interface account holds no role anywhere - but
+    // "holds no role anywhere" also describes a lab technician whose
+    // assignments were revoked this morning and whose token has not expired
+    // yet. Roles are baked into the token at login; this check is not, it asks
+    // the database for an ACTIVE assignment. Skipping it therefore handed an
+    // offboarded technician a write, needing only a well-known analyzer pair
+    // to quote, and an allowlist entry cannot tell them apart because the
+    // sending pair is plaintext the caller types into the body.
+    //
+    // An unscoped ingest caller is judged at the hospital its allowlist entry
+    // names, since that is the only hospital anything about this request
+    // points at. A genuine interface account passes by being provisioned the
+    // way every other actor in this system is: a lab role at the hospital it
+    // sends for. It already has to name an assignment that hospital handles,
+    // so this asks for nothing it was not already carrying.
+    validateLabResultAuthor(currentUserId, unscopedIngest
+        ? senderHospitalId
+        : authorityHospitalId(labOrder, hospital, actingHospitalId));
 
         // An interface principal has no acting hospital, so the acting-hospital
         // comparison below would wave any tenant's assignment through and put
         // that staff member's name on the result and in the response. The
         // order is the anchor instead: the assignment must belong to a
         // hospital that handles it (ordering or performing, B1's predicate).
-        UserRoleHospitalAssignment assignment = interfacePrincipal
+        UserRoleHospitalAssignment assignment = unscopedIngest
             ? requireAssignmentHandlingOrder(request.getAssignmentId(), labOrder)
             : requireAssignmentAtActingHospital(request.getAssignmentId(), actingHospitalId);
 
@@ -463,7 +487,9 @@ public class LabResultServiceImpl implements LabResultService {
      * alone attach a result to it.
      */
     private void requireOrderInActiveHospital(LabOrder labOrder) {
-        if (!labOrder.isHandledBy(roleValidator.requireActiveHospitalId())) {
+        // isHandledBy(null) is true, so the null-scope rule has to be applied
+        // before it: only a verified super-admin may attach across tenants.
+        if (!labOrder.isHandledBy(actingHospitalOrVerifiedGlobalView(LAB_ORDER_NOT_FOUND))) {
             throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
         }
     }
@@ -489,10 +515,13 @@ public class LabResultServiceImpl implements LabResultService {
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
 
         requireResultInActiveHospital(labResult);
-        recordPerformedHereReach(List.of(labResult));
+
+        // The result and the trend around it are one read, accounted once.
+        List<LabResult> trend = readableTrendFor(labResult);
+        recordReadReach(List.of(labResult), trend);
 
         LabResultResponseDTO response = labResultMapper.toResponseDTO(labResult);
-        response.setTrendHistory(buildTrendHistory(labResult));
+        response.setTrendHistory(toTrendPoints(trend));
         return response;
     }
 
@@ -532,9 +561,9 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional(readOnly = true)
     public Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale) {
-        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        UUID hospitalId = listScopeOrVerifiedGlobalView();
         if (hospitalId == null) {
-            // Super-admin: return all paged
+            // Verified super-admin in global view: return all paged
             return labResultRepository.findAll(pageable)
                 .map(labResultMapper::toResponseDTO);
         }
@@ -652,13 +681,19 @@ public class LabResultServiceImpl implements LabResultService {
     }
 
     /**
-     * The shared 404-not-403 tenancy comparison used by every other
-     * single-row path in this class (get/update/delete/compare). LabResult
-     * has no hospital column of its own — scope flows through
-     * labOrder.hospital. Null active scope = super-admin, unscoped.
+     * The shared 404-not-403 tenancy comparison used by every single-row path
+     * in this class (get/update/delete/acknowledge/read-back/release/sign/
+     * compare). LabResult has no hospital column of its own — scope flows
+     * through the order.
+     *
+     * <p>A null scope is served unscoped only for a VERIFIED super-admin (see
+     * {@link #actingHospitalOrVerifiedGlobalView}); anyone else with no
+     * hospital gets the same 404 as a result that does not exist, which is
+     * also the answer a third hospital gets, so the refusal discloses nothing
+     * about the id.
      */
     private void requireResultInActiveHospital(LabResult labResult) {
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID activeHospitalId = actingHospitalOrVerifiedGlobalView(LAB_RESULT_NOT_FOUND);
         // B1: the order is handled by its ordering hospital and by the
         // laboratory performing it (LabOrder.isHandledBy); a third hospital
         // gets the same 404 as before.
@@ -666,6 +701,44 @@ public class LabResultServiceImpl implements LabResultService {
                 && !labResult.getLabOrder().isHandledBy(activeHospitalId)) {
             throw new ResourceNotFoundException(LAB_RESULT_NOT_FOUND);
         }
+    }
+
+    /**
+     * {@code requireActiveHospitalId()}, without the road that lets an
+     * unverified principal read a null scope as "unscoped".
+     *
+     * <p>{@code requireActiveHospitalId()} returns null two ways. Step 1 is a
+     * real super-admin in global view: {@code HospitalContext.isSuperAdmin()},
+     * which is what {@link RoleValidator#isSuperAdminFromJwtClaim()} reads.
+     * Step 4 is a safety net that fires when that flag is FALSE but
+     * {@code isSuperAdminFromAuth()} matches the AUTHORITIES collection, which
+     * {@code RoleValidator}'s own javadoc warns can be inflated. Every guard
+     * here used to read either null as "super-admin, unscoped, allow", so the
+     * step-4 principal could get, amend, delete, acknowledge, read back,
+     * release and sign any tenant's result. Now only the verified flag makes
+     * a null scope unscoped (the stance of the pharmacy services and #746);
+     * anyone else is refused with {@code refusalKey}, a not-found answer the
+     * caller's path already gives, so the refusal is not an oracle.
+     */
+    private UUID actingHospitalOrVerifiedGlobalView(String refusalKey) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
+            throw new ResourceNotFoundException(refusalKey);
+        }
+        return activeHospitalId;
+    }
+
+    /**
+     * The list-path form of {@link #actingHospitalOrVerifiedGlobalView}: there
+     * is no id to protect, so the refusal is the one a caller with no hospital
+     * already gets from {@code requireActiveHospitalId()}.
+     */
+    private UUID listScopeOrVerifiedGlobalView() {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
+            throw new BusinessException(RoleValidator.HOSPITAL_CONTEXT_REQUIRED);
+        }
+        return activeHospitalId;
     }
 
     /**
@@ -683,6 +756,12 @@ public class LabResultServiceImpl implements LabResultService {
         UUID assignmentHospitalId = assignment.getHospital() != null
             ? assignment.getHospital().getId() : null;
         if (assignmentHospitalId == null || !labOrder.isHandledBy(assignmentHospitalId)) {
+            throw new ResourceNotFoundException("assignment.notfound");
+        }
+        // And it must still be live. A deactivated assignment is a staff
+        // member who no longer works here; attributing a result to them names
+        // them as its author in the chart and in the response.
+        if (!Boolean.TRUE.equals(assignment.getActive())) {
             throw new ResourceNotFoundException("assignment.notfound");
         }
         return assignment;
@@ -1254,7 +1333,13 @@ public class LabResultServiceImpl implements LabResultService {
         labResultRepository.save(result);
     }
 
-    private List<LabResultTrendPointDTO> buildTrendHistory(LabResult source) {
+    /**
+     * The readable trend around a result the caller already passed
+     * {@code requireResultInActiveHospital} for, so a null scope here is a
+     * verified super-admin in global view. Not accounted: the caller accounts
+     * the result and its trend together.
+     */
+    private List<LabResult> readableTrendFor(LabResult source) {
         LabOrder labOrder = source.getLabOrder();
         if (labOrder == null
             || labOrder.getPatient() == null
@@ -1263,22 +1348,141 @@ public class LabResultServiceImpl implements LabResultService {
             || labOrder.getLabTestDefinition().getId() == null) {
             return List.of();
         }
+        return readableTrendRows(labOrder.getPatient().getId(), labOrder.getLabTestDefinition().getId(),
+            actingHospitalOrVerifiedGlobalView(LAB_RESULT_NOT_FOUND));
+    }
 
-        UUID patientId = labOrder.getPatient().getId();
-        UUID testDefinitionId = labOrder.getLabTestDefinition().getId();
-
-        List<LabResult> rawTrend = labResultRepository
-            .findTop12ByLabOrder_Patient_IdAndLabOrder_LabTestDefinition_IdOrderByResultDateDesc(patientId, testDefinitionId);
-
-        if (rawTrend.isEmpty()) {
-            return List.of();
-        }
-
-        return rawTrend.stream()
+    private List<LabResultTrendPointDTO> toTrendPoints(List<LabResult> rows) {
+        return rows.stream()
             .map(labResultMapper::toTrendPointDTO)
             .filter(Objects::nonNull)
             .sorted(Comparator.comparing(LabResultTrendPointDTO::getResultDate, Comparator.nullsLast(Comparator.naturalOrder())))
             .toList();
+    }
+
+    /**
+     * A patient's newest results for one test, limited to what the acting
+     * hospital may read.
+     *
+     * <p>Every trend read here used to call the unscoped
+     * {@code findTop12ByLabOrder_Patient_IdAndLabOrder_LabTestDefinition_Id...} (now deleted)
+     * finder: {@code GET /lab-results/patient/{patientId}/test/{id}/compare-
+     * sequential} handed any clinician at any hospital another hospital's
+     * patient's last twelve values with the patient's name, and the trend on
+     * a result the caller legitimately holds carried the same patient's values
+     * from hospitals the caller has no relationship with.
+     *
+     * <p>Readable means B1's predicate widened by the patient-read rule:
+     * {@link LabOrder#isHandledBy} (ordering hospital OR performing
+     * laboratory), or an order placed at a hospital
+     * {@code RecordAccessPolicy.readableHospitalIds} opens on the treatment
+     * relationship. The query narrows by the same rule; the predicate is
+     * applied again to what comes back so the rule has one authoritative,
+     * tested statement. A patient with nothing readable here yields the same
+     * empty list as a patient who does not exist.
+     *
+     * <p>{@code actingHospitalId == null} is reached only by a verified
+     * super-admin in global view (the callers gate it), who keeps the
+     * cross-hospital trend the result itself is shown under. It goes through
+     * the same query, with its {@code globalView} flag: there is no unscoped
+     * trend finder left to call.
+     */
+    private List<LabResult> readableTrendRows(UUID patientId, UUID testDefinitionId, UUID actingHospitalId) {
+        org.springframework.data.domain.PageRequest window =
+            org.springframework.data.domain.PageRequest.of(0, TREND_WINDOW);
+        if (actingHospitalId == null) {
+            // PostgreSQL rejects an empty IN list; the nil UUID names no hospital.
+            return labResultRepository.findTrendReadableAt(patientId, testDefinitionId,
+                Set.of(NO_HOSPITAL), null, true, window);
+        }
+        Set<UUID> readable = new java.util.HashSet<>(
+            recordAccessPolicy.readableHospitalIds(currentPrincipalUserId(), patientId, actingHospitalId));
+        readable.add(actingHospitalId);
+        return labResultRepository.findTrendReadableAt(patientId, testDefinitionId, readable, actingHospitalId,
+                false, window)
+            .stream()
+            .filter(r -> isReadableAt(r, actingHospitalId, readable))
+            .limit(TREND_WINDOW)
+            .toList();
+    }
+
+    private static boolean isReadableAt(LabResult result, UUID actingHospitalId, Set<UUID> readableHospitalIds) {
+        LabOrder order = result.getLabOrder();
+        if (order == null) {
+            return false;
+        }
+        UUID orderingHospitalId = com.example.hms.persistence.JpaProxyUtils.idOf(order.getHospital());
+        return order.isHandledBy(actingHospitalId)
+            || (orderingHospitalId != null && readableHospitalIds.contains(orderingHospitalId));
+    }
+
+    /**
+     * Accounts everything one read surfaced, once: the result(s) the read is
+     * about and the trend shown with them, deduplicated by id so the result a
+     * trend hangs off is counted exactly once. Rows this laboratory performed
+     * for another hospital go under the performing-laboratory description,
+     * rows opened by the treatment relationship under the patient-read one -
+     * one batch each, so one read is one disclosure per source and reason.
+     *
+     * <p>Never throws: accounting a read must not fail it.
+     */
+    private void recordReadReach(List<LabResult> shown, List<LabResult> trend) {
+        // Everything inside the try, scope resolution included: accounting a
+        // read that already passed its guard must never fail it.
+        try {
+            UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+            if (actingHospitalId == null) {
+                return;
+            }
+            java.util.Map<UUID, LabResult> byId = new java.util.LinkedHashMap<>();
+            java.util.stream.Stream.concat(shown.stream(), trend.stream())
+                .filter(r -> r != null && r.getId() != null)
+                .forEach(r -> byId.putIfAbsent(r.getId(), r));
+            List<LabResult> surfaced = List.copyOf(byId.values());
+            if (surfaced.isEmpty()) {
+                return;
+            }
+            recordPerformedHereReach(surfaced);
+            UUID patientId = surfaced.get(0).getLabOrder() != null && surfaced.get(0).getLabOrder().getPatient() != null
+                ? surfaced.get(0).getLabOrder().getPatient().getId() : null;
+            List<UUID> treatmentSources = surfaced.stream()
+                .map(LabResult::getLabOrder)
+                .filter(order -> order != null && !order.isHandledBy(actingHospitalId))
+                .map(order -> com.example.hms.service.recordaccess.CrossHospitalReachRecorder.hospitalIdOf(order.getHospital()))
+                .toList();
+            reachRecorder.recordReach(patientId, actingHospitalId, currentPrincipalUserId(), null,
+                com.example.hms.service.recordaccess.CrossHospitalReachRecorder.reachOf(treatmentSources, actingHospitalId),
+                TREATMENT_REACH_DESCRIPTION);
+        } catch (RuntimeException ex) {
+            LOG.warn("Cross-hospital disclosure accounting failed for a lab result read: {}", ex.getMessage());
+        }
+    }
+
+    /**
+     * The reader's user id for the trend reads, from the HospitalContext as
+     * {@code PatientLabResultServiceImpl} takes it. Not
+     * {@code authService.getCurrentUserId()}: that throws for any principal
+     * that is not a {@code CustomUserDetails} (an OIDC
+     * {@code JwtAuthenticationToken}), which would turn every trend read by a
+     * Keycloak-authenticated clinician into a 401.
+     */
+    private static UUID currentPrincipalUserId() {
+        return com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+    }
+
+    /**
+     * A patient-subject read has no single-row owner to fall back on, so it
+     * needs a hospital to be measured against, for everyone: the stance of
+     * {@code PatientLabResultServiceImpl}, which refuses an unscoped staff read
+     * rather than widen it. The refusal names no patient, so it is not an
+     * oracle.
+     */
+    private UUID requireHospitalScopeForPatientRead() {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId == null) {
+            throw new BusinessException(RoleValidator.HOSPITAL_CONTEXT_REQUIRED);
+        }
+        return activeHospitalId;
     }
 
     private String resolveDisplayName(LabResult result) {
@@ -1307,12 +1511,9 @@ public class LabResultServiceImpl implements LabResultService {
         LabResult current = labResultRepository.findById(currentResultId)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
 
-        // Hospital scope enforcement
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        if (activeHospitalId != null && current.getLabOrder() != null
-                && !current.getLabOrder().isHandledBy(activeHospitalId)) {
-            throw new ResourceNotFoundException(LAB_RESULT_NOT_FOUND);
-        }
+        // Hospital scope enforcement: the shared single-row comparison, which
+        // this used to copy inline, null-scope hole included.
+        requireResultInActiveHospital(current);
 
         LabOrder labOrder = current.getLabOrder();
         if (labOrder == null || labOrder.getPatient() == null || labOrder.getLabTestDefinition() == null) {
@@ -1322,8 +1523,11 @@ public class LabResultServiceImpl implements LabResultService {
         UUID patientId = labOrder.getPatient().getId();
         UUID testDefinitionId = labOrder.getLabTestDefinition().getId();
 
-        List<LabResult> trendResults = labResultRepository
-            .findTop12ByLabOrder_Patient_IdAndLabOrder_LabTestDefinition_IdOrderByResultDateDesc(patientId, testDefinitionId);
+        List<LabResult> trendResults = readableTrendFor(current);
+        // The compared result is returned with the patient's name, so it is
+        // accounted with its trend - it used to be passed as "already
+        // accounted" while nothing had accounted it.
+        recordReadReach(List.of(current), trendResults);
 
         LabResult previous = trendResults.stream()
             .filter(r -> r.getResultDate().isBefore(current.getResultDate()))
@@ -1357,12 +1561,21 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional(readOnly = true)
     public List<LabResultComparisonDTO> compareSequentialResults(UUID patientId, UUID testDefinitionId, Locale locale) {
-        List<LabResult> allResults = labResultRepository
-            .findTop12ByLabOrder_Patient_IdAndLabOrder_LabTestDefinition_IdOrderByResultDateDesc(patientId, testDefinitionId);
+        // This read had no tenant check at all: the unscoped finder, by the
+        // patient id in the URL, returned any hospital's patient's last twelve
+        // values with their name to any clinician anywhere.
+        UUID actingHospitalId = requireHospitalScopeForPatientRead();
+        List<LabResult> allResults = readableTrendRows(patientId, testDefinitionId, actingHospitalId);
 
+        // Nothing readable here and no such patient are the same answer.
         if (allResults.isEmpty()) {
             return List.of();
         }
+        recordReadReach(allResults, List.of());
+        // Every row shares the patient and the test, so the trend each
+        // comparison carries is this one list; it used to be re-queried once
+        // per row, unscoped.
+        List<LabResultTrendPointDTO> trendHistory = toTrendPoints(allResults);
 
         List<LabResultComparisonDTO> comparisons = new ArrayList<>();
         for (int i = 0; i < allResults.size(); i++) {
@@ -1372,7 +1585,7 @@ public class LabResultServiceImpl implements LabResultService {
             LabResultTrendPointDTO currentPoint = labResultMapper.toTrendPointDTO(current);
             LabResultTrendPointDTO previousPoint = previous != null ? labResultMapper.toTrendPointDTO(previous) : null;
 
-            LabResultComparisonDTO.ComparisonMetadata comparison = calculateComparison(current, previous, buildTrendHistory(current));
+            LabResultComparisonDTO.ComparisonMetadata comparison = calculateComparison(current, previous, trendHistory);
 
             comparisons.add(LabResultComparisonDTO.builder()
                 .testCode(current.getLabOrder().getLabTestDefinition().getTestCode())
@@ -1392,7 +1605,10 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional(readOnly = true)
     public List<LabResultResponseDTO> getCriticalResults(UUID hospitalId, LocalDateTime since, Locale locale) {
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        // Only a verified super-admin in global view may name the hospital in
+        // the request; for anyone else a null scope is refused, not filled in
+        // from the query string.
+        UUID activeHospitalId = listScopeOrVerifiedGlobalView();
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
         // B1: a critical value is the running laboratory's to see and chase —
         // it is the one that produced it. These two were the last lab-side
@@ -1405,7 +1621,10 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional(readOnly = true)
     public List<LabResultResponseDTO> getCriticalResultsRequiringAcknowledgment(UUID hospitalId, Locale locale) {
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        // Only a verified super-admin in global view may name the hospital in
+        // the request; for anyone else a null scope is refused, not filled in
+        // from the query string.
+        UUID activeHospitalId = listScopeOrVerifiedGlobalView();
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
         List<LabResult> candidates = labResultRepository.findHandledByHospitals(List.of(effectiveHospitalId));
         return surfaceCritical(candidates, r -> !r.isAcknowledged());

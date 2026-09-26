@@ -4,7 +4,10 @@ import {
   OnChanges,
   OnInit,
   SimpleChanges,
+  computed,
+  effect,
   inject,
+  untracked,
   output,
   signal,
   ChangeDetectionStrategy,
@@ -27,20 +30,33 @@ import {
   ChartUpdateRequest,
   ChartSectionType,
   PatientTimeline,
+  PatientLabResult,
   TimelineEntry,
 } from '../../services/patient.service';
 import { AuthService } from '../../auth/auth.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { CHART_ROLES } from './chart-access';
+import { LabService, LabOrderResponse } from '../../services/lab.service';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { RestrictedRowsComponent } from '../restricted-rows/restricted-rows.component';
 
-type ChartSection = 'allergies' | 'problems' | 'updates' | 'timeline';
+type ChartSection = 'allergies' | 'problems' | 'updates' | 'timeline' | 'labs';
+
+/** How many lab rows the section asks for; the backend caps `limit` at 100. */
+const LAB_PAGE_SIZE = 25;
+
+/**
+ * Cache key for "no hospital scope at all"; never a real hospital id. Nothing
+ * is read under it — `labsScoped()` refuses — but it keeps the key total, so
+ * gaining a scope always reads as a change.
+ */
+const UNSCOPED_KEY = 'UNSCOPED';
 
 @Component({
   selector: 'app-patient-chart',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, RestrictedRowsComponent],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, RestrictedRowsComponent],
   templateUrl: './patient-chart.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-chart.component.scss',
@@ -58,6 +74,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
   readonly openRestricted = output<void>();
 
   private readonly patientService = inject(PatientService);
+  private readonly labService = inject(LabService);
   private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
@@ -65,14 +82,45 @@ export class PatientChartComponent implements OnInit, OnChanges {
 
   section = signal<ChartSection>('allergies');
 
-  /* ── Role gates (single source: chart-access.ts, mirrors backend @PreAuthorize) ── */
-  readonly canViewAllergies = this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewAllergies]);
-  readonly canEditAllergies = this.roleContext.hasAnyActiveRole([...CHART_ROLES.editAllergies]);
-  readonly canViewProblems = this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewProblems]);
-  readonly canEditProblems = this.roleContext.hasAnyActiveRole([...CHART_ROLES.editProblems]);
-  readonly canViewUpdates = this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewUpdates]);
-  readonly canCreateUpdates = this.roleContext.hasAnyActiveRole([...CHART_ROLES.createUpdates]);
-  readonly canViewTimeline = this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewTimeline]);
+  /* ── Role gates (single source: chart-access.ts, mirrors backend @PreAuthorize) ──
+   *
+   * `computed`, not a field assignment: `hasAnyActiveRole` reads the service's
+   * role signals, so a gate evaluated once in the constructor freezes whatever
+   * role was active when the chart was first built and never notices a role or
+   * hospital-scope change. Several controls on this repo were wrong for
+   * exactly that reason.
+   */
+  readonly canViewAllergies = computed(() =>
+    this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewAllergies]),
+  );
+  readonly canEditAllergies = computed(() =>
+    this.roleContext.hasAnyActiveRole([...CHART_ROLES.editAllergies]),
+  );
+  readonly canViewProblems = computed(() =>
+    this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewProblems]),
+  );
+  readonly canEditProblems = computed(() =>
+    this.roleContext.hasAnyActiveRole([...CHART_ROLES.editProblems]),
+  );
+  readonly canViewUpdates = computed(() =>
+    this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewUpdates]),
+  );
+  readonly canCreateUpdates = computed(() =>
+    this.roleContext.hasAnyActiveRole([...CHART_ROLES.createUpdates]),
+  );
+  readonly canViewTimeline = computed(() =>
+    this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewTimeline]),
+  );
+  /** B6 — `GET /patients/{id}/lab-results`. */
+  readonly canViewLabResults = computed(() =>
+    this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewLabResults]),
+  );
+  /** B6 — `GET /lab-orders?patientId=`; a narrower list, see chart-access.ts. */
+  readonly canViewLabOrders = computed(() =>
+    this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewLabOrders]),
+  );
+  /** The Labs tab shows whichever of the two reads this role is allowed. */
+  readonly canViewLabs = computed(() => this.canViewLabResults() || this.canViewLabOrders());
 
   /* ── Allergies ── */
   allergies = signal<PatientAllergy[]>([]);
@@ -145,17 +193,138 @@ export class PatientChartComponent implements OnInit, OnChanges {
     'OTHER',
   ];
 
+  /* ── Labs (B6) ──
+   *
+   * Two reads, each with its own role gate, its own loading flag and its own
+   * error flag: a 403 or an outage on one of them must show as an error on
+   * that block, never as an empty other block.
+   */
+  labResults = signal<PatientLabResult[]>([]);
+  labResultsLoading = signal(false);
+  labResultsError = signal(false);
+  labOrders = signal<LabOrderResponse[]>([]);
+  labOrdersLoading = signal(false);
+  labOrdersError = signal(false);
+  /**
+   * The hospital scope the labs section was last read for, or null if never.
+   *
+   * Not a plain "have we loaded" flag: both lab reads are scoped, so a boolean
+   * left one hospital's rows on screen after the scope moved. The key is
+   * `labsScopeKey()` — the very scope both reads work in — so the section
+   * re-reads whenever what it asked for changes, and still refuses to
+   * re-fetch a patient who simply has no labs.
+   *
+   * The allergies, problems and updates reads still use `hospitalId()` (the
+   * primary assignment) and are not keyed on it at all; aligning them is a
+   * separate change, not one to make from the labs section.
+   */
+  labsLoadedFor = signal<string | null>(null);
+  /**
+   * Which read of each block is the current one.
+   *
+   * A break-glass declaration clears the cache and re-issues both reads while
+   * the first pair may still be in flight; without this, a slow 403 landing
+   * after the authorised response replaced freshly visible rows with an error
+   * card. Only the latest read of a block may write to it.
+   */
+  private labResultsRequest = 0;
+  private labOrdersRequest = 0;
+
+  /**
+   * Nothing on screen and nothing wrong — so a revisit should look again.
+   * The other three sections re-read whenever their list is empty; without
+   * this the Labs tab was the one section where "no results" stuck for the
+   * life of the page, which is the failure it exists to close.
+   *
+   * PER BLOCK, never section-wide: one flag ANDing both blocks meant a failed
+   * ORDERS read froze the results block's re-read, so a result released after
+   * that failure never appeared however often the clinician came back — even
+   * though the results read had never failed.
+   *
+   * A read in flight is not an empty block either. Without that, toggling
+   * away and back during the first read re-fired the endpoint every time —
+   * wasted traffic, and a cross-hospital reach row per results call.
+   */
+  readonly labResultsStale = computed(
+    () => this.labResults().length === 0 && !this.labResultsError() && !this.labResultsLoading(),
+  );
+  readonly labOrdersStale = computed(
+    () => this.labOrders().length === 0 && !this.labOrdersError() && !this.labOrdersLoading(),
+  );
+  /** Exposed for the "showing the latest N" hint below each lab table. */
+  readonly labPageSize = LAB_PAGE_SIZE;
+  /**
+   * A full page is the only signal either endpoint gives that it cut the list:
+   * `/patients/{id}/lab-results` returns a bare array and `LabService
+   * .listOrders` drops the page's `totalElements`. Rendering the hint on a
+   * list that happens to hold exactly N rows overstates it slightly; saying
+   * nothing on a list that WAS cut reads as a complete history, which is the
+   * failure that matters on a chart.
+   */
+  readonly labResultsTruncated = computed(() => this.labResults().length >= LAB_PAGE_SIZE);
+  readonly labOrdersTruncated = computed(() => this.labOrders().length >= LAB_PAGE_SIZE);
+
   /* ── Timeline ── */
   timeline = signal<PatientTimeline | null>(null);
   timelineLoading = signal(false);
   showTimelineReason = signal(false);
   timelineReason = '';
 
+  /**
+   * The scope chip moves with no navigation and nothing else observes it, so
+   * a clinician reading the Labs tab kept the previous hospital's rows under
+   * a hint that calls them "this hospital's". The cache is dropped on every
+   * change, and the section re-reads at once when it is the one on screen.
+   */
+  private readonly labScopeWatcher = effect(() => {
+    // The SAME key the section caches under. Deriving a second one diverged
+    // the moment `activeHospitalId` was populated: the watcher saw a change
+    // (null → h-1) that `labsScopeKey()` never made, threw away rows that had
+    // just loaded and re-issued both reads — a second cross-hospital reach
+    // row per results call, which is what the stale guards exist to avoid.
+    const key = this.labsScopeKey();
+    const previous = this.watchedLabScope;
+    this.watchedLabScope = key;
+    if (previous === undefined || previous === key) return;
+    // Only the labs section: it is the one keyed on this scope. The other
+    // three read `hospitalId()`, the primary assignment, which no chip moves.
+    //
+    // `untracked` because the work below reads signals it also writes
+    // (`labResults`, `labOrders`, and `section()` inside `loadLabs`). Without
+    // it those reads become dependencies of this effect and it re-runs on its
+    // own writes — held off only by the early return above, which is a
+    // coincidence rather than a guarantee.
+    untracked(() => {
+      this.labResults.set([]);
+      this.labOrders.set([]);
+      this.labResultsError.set(false);
+      this.labOrdersError.set(false);
+      this.labsLoadedFor.set(null);
+      if (this.section() === 'labs' && this.canViewLabs()) this.loadLabs();
+    });
+  });
+
+  /** undefined until the watcher has run once; then the last scope seen. */
+  private watchedLabScope: string | undefined = undefined;
+
   ngOnInit(): void {
-    if (!this.canViewAllergies) {
-      this.section.set(this.canViewProblems ? 'problems' : 'updates');
-    }
+    this.section.set(this.firstVisibleSection());
     this.loadCurrentSection();
+  }
+
+  /**
+   * The first tab this role actually renders. The old two-step fallback
+   * (allergies → problems → updates) could land a role on a tab it cannot
+   * see, which draws an empty chart with every tab hidden; the list below is
+   * the tab order in the template, so the default is always the leftmost tab
+   * on screen.
+   */
+  private firstVisibleSection(): ChartSection {
+    if (this.canViewAllergies()) return 'allergies';
+    if (this.canViewProblems()) return 'problems';
+    if (this.canViewUpdates()) return 'updates';
+    if (this.canViewLabs()) return 'labs';
+    return 'timeline';
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -164,8 +333,119 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.refreshAfterAccessChange();
   }
 
+  /**
+   * The scope EVERY read and write on this chart works in.
+   *
+   * The PRIMARY assignment, and deliberately NOT `labHospitalId()`.
+   *
+   * Pointing it at the effective scope was tried in #731 and backed out: an
+   * account in global view then sent no hospital at all on allergies,
+   * problems and updates, and all three of those backends refuse a null scope
+   * outright (`BusinessException("Hospital context is required")`), so three
+   * sections that used to work started answering 400. Aligning them means
+   * giving those sections their own unscoped empty states, which is a change
+   * to them, not a one-line substitution made from the labs section.
+   *
+   * It can still return `''`, for a session that holds no hospital anywhere.
+   * What each caller does with that follows its DTO, not a blanket rule:
+   *
+   *  - the READS pass `|| undefined`, so the param is simply omitted;
+   *  - the ALLERGY write does too, because `PatientAllergyRequestDTO` marks
+   *    the field nullable and defaults to the authenticated hospital;
+   *  - the DIAGNOSIS and CHART-UPDATE writes send it as-is, and must:
+   *    both DTOs mark `hospitalId` `@NotNull` behind a `@Valid` body, so
+   *    omitting it is rejected by bean validation before
+   *    `resolveHospitalScope` is ever reached. Those two forms fail for a
+   *    truly unscoped account either way, and the fix is a scope, not a
+   *    serialization trick.
+   *
+   * `isForeignRow` reads this raw, and is safe because `!!mine` rejects `''`.
+   */
   private hospitalId(): string {
     return this.roleContext.activeHospitalId ?? this.auth.getHospitalId() ?? '';
+  }
+
+  /**
+   * The scope the LAB reads work in — exactly what the auth interceptor will
+   * send as `X-Hospital-Id`, or null when it will send none.
+   *
+   * The two blocks resolve their hospital differently: the results read sends
+   * an explicit `hospitalId` query param, the orders read carries only the
+   * header. They must therefore agree on one value or they will draw two
+   * hospitals' rows under one heading. `activeHospitalId` is not that value —
+   * `effectiveHospitalIdForRequest` branches on the HELD roles while
+   * `hasAnyActiveRole` compares the ACTIVE one, so an account holding
+   * ROLE_SUPER_ADMIN alongside a clinical role, acting as the clinical role
+   * with the chip pinned elsewhere, passes the chart gate and gets the two
+   * reads on two different hospitals.
+   *
+   * NULL IS RETURNED AS NULL. Substituting a fallback in global
+   * view pinned the results read to one hospital's readable set
+   * (`ControllerAuthUtils.resolveHospitalScope` honours a requested id for a
+   * super-admin holder) while the orders read, carrying no header, stayed
+   * cross-tenant — the exact divergence this exists to stop. Unscoped, both
+   * reads are unscoped together and the backend resolves.
+   */
+  private labHospitalId(): string | null {
+    // No fallback. `AuthService.getHospitalId()` now returns
+    // `effectiveHospitalIdForRequest()` verbatim and `activeHospitalId` is
+    // what that computed returns on the non-super-admin branch, so every
+    // fallback resolves to the same null — a super-admin in global view and
+    // an account with no active assignment alike. Writing one anyway made
+    // this method look as if it could disagree with the header.
+    return this.roleContext.effectiveHospitalIdForRequest();
+  }
+
+  /**
+   * The labs section needs a hospital scope, and REFUSES to read without one.
+   *
+   * With no scope the client sends neither `hospitalId` nor `X-Hospital-Id`;
+   * `ControllerAuthUtils.resolveHospitalScope` then hands
+   * `PatientLabResultServiceImpl.getLabResults` a null, which takes its
+   * `findByLabOrder_Patient_Id` branch — every tenant's rows, bypassing
+   * `RecordAccessPolicy.readableHospitalIds` — and skips
+   * `reachRecorder.recordReach` entirely, because that is guarded on a
+   * non-null hospital. `/lab-orders` does the same: no predicate at all. So
+   * an account HOLDING ROLE_SUPER_ADMIN and acting as its inherited clinical
+   * role (the chart gate asks `hasAnyActiveRole`, which passes) could read a
+   * patient's labs across every hospital with no cross-hospital reach row,
+   * while every other read on the same chart is accounted.
+   *
+   * Rather than account for it from the client, the section declines to read
+   * and says so. It names no control: there is no hospital selector on this
+   * route — see the template comment on that branch.
+   */
+  readonly labsScoped = this.roleContext.hasHospitalScope;
+
+  /**
+   * The cache key for the labs section. A UUID can never be the sentinel, so
+   * global view and "pinned to my own hospital" are distinguishable — they
+   * are the same string under `activeHospitalId`, which is how a chip toggle
+   * between them left cross-tenant orders on screen and re-read nothing.
+   */
+  private labsScopeKey(): string {
+    return this.labHospitalId() ?? UNSCOPED_KEY;
+  }
+
+  /**
+   * E9 #61 provenance for a LAB row: compared against the scope the rows were
+   * FETCHED under, not `hospitalId()`. Using the primary assignment flagged
+   * every row of a chip-pinned hospital as foreign and rendered a genuinely
+   * foreign one as local — the marker inverted. With no scope at all (global
+   * view) nothing is foreign, because there is no acting hospital for a row
+   * to be foreign to.
+   */
+  isForeignLabRow(row: { hospitalId?: string }): boolean {
+    // `labsLoadedFor`, not a live re-derivation: the rows on screen were
+    // fetched under THAT scope, and comparing them to whatever the chip says
+    // now is only correct because the watcher happens to clear them in the
+    // same pass. Reading the stored key makes the invariant structural — a
+    // row can never be compared against a scope it was not fetched under,
+    // which is what inverted the marker before. The key is either null or a
+    // real hospital id: `loadLabs()` returns before writing it when unscoped,
+    // so the sentinel never reaches this comparison.
+    const scope = this.labsLoadedFor();
+    return !!row.hospitalId && !!scope && row.hospitalId !== scope;
   }
 
   setSection(section: ChartSection): void {
@@ -176,17 +456,20 @@ export class PatientChartComponent implements OnInit, OnChanges {
   private loadCurrentSection(): void {
     switch (this.section()) {
       case 'allergies':
-        if (this.canViewAllergies && this.allergies().length === 0) this.loadAllergies();
+        if (this.canViewAllergies() && this.allergies().length === 0) this.loadAllergies();
         break;
       case 'problems':
-        if (this.canViewProblems && this.problems().length === 0) this.loadProblems();
+        if (this.canViewProblems() && this.problems().length === 0) this.loadProblems();
         break;
       case 'updates':
-        if (this.canViewUpdates && this.updates().length === 0) this.loadUpdates();
+        if (this.canViewUpdates() && this.updates().length === 0) this.loadUpdates();
+        break;
+      case 'labs':
+        if (this.canViewLabs()) this.loadStaleLabs();
         break;
       case 'timeline':
         // Timeline requires an access reason first — prompt instead of loading.
-        if (this.canViewTimeline && !this.timeline()) this.openTimelineReason();
+        if (this.canViewTimeline() && !this.timeline()) this.openTimelineReason();
         break;
     }
   }
@@ -497,6 +780,159 @@ export class PatientChartComponent implements OnInit, OnChanges {
       });
   }
 
+  /* ── Labs (B6) ── */
+
+  /**
+   * Both lab reads, each guarded by its own role gate so a role that may read
+   * one and not the other never fires a request it is certain to be refused.
+   */
+  /**
+   * What a visit to the Labs tab reads.
+   *
+   * Two reasons to read: the scope moved — in which case everything is stale
+   * together — or a block has nothing on screen and nothing wrong. The second
+   * is what the other three sections have always done: a result released
+   * while the chart is open must not sit behind a cached "no results". It
+   * costs a re-read per visit only for a block that is genuinely empty, and a
+   * FAILED block is not re-read at all — it keeps its error card and its
+   * Retry rather than being retried silently on every visit.
+   */
+  private loadStaleLabs(): void {
+    if (!this.labsScoped()) return;
+    if (this.labsLoadedFor() !== this.labsScopeKey()) {
+      this.loadLabs();
+      return;
+    }
+    if (this.canViewLabResults() && this.labResultsStale()) this.fetchLabResults();
+    if (this.canViewLabOrders() && this.labOrdersStale()) this.fetchLabOrders();
+  }
+
+  loadLabs(): void {
+    if (!this.labsScoped()) return;
+    this.labsLoadedFor.set(this.labsScopeKey());
+    if (this.canViewLabResults()) this.fetchLabResults();
+    if (this.canViewLabOrders()) this.fetchLabOrders();
+  }
+
+  /**
+   * Each block's Retry re-reads ONLY that block — one shared retry re-fired
+   * both, so retrying a failed results read replaced the orders table the
+   * clinician was reading with a spinner and re-fetched it for nothing.
+   *
+   * Unless the scope moved while the block was in its error state. Then the
+   * two blocks would end up holding two different hospitals' rows under one
+   * heading, so the whole section re-reads instead.
+   */
+  loadLabResults(): void {
+    if (this.labsLoadedFor() !== this.labsScopeKey()) {
+      this.loadLabs();
+      return;
+    }
+    this.fetchLabResults();
+  }
+
+  /** As loadLabResults, for the orders block. */
+  loadLabOrders(): void {
+    if (this.labsLoadedFor() !== this.labsScopeKey()) {
+      this.loadLabs();
+      return;
+    }
+    this.fetchLabOrders();
+  }
+
+  private fetchLabResults(): void {
+    const request = ++this.labResultsRequest;
+    const isCurrent = (): boolean => request === this.labResultsRequest;
+    this.labResultsLoading.set(true);
+    this.labResultsError.set(false);
+    this.patientService
+      .listLabResults(this.patientId, {
+        hospitalId: this.labHospitalId() ?? undefined,
+        limit: LAB_PAGE_SIZE,
+      })
+      .subscribe({
+        next: (list) => {
+          if (!isCurrent()) return;
+          this.labResults.set(list ?? []);
+          this.labResultsLoading.set(false);
+        },
+        error: () => {
+          // An explicit error state, not an empty list: a 403 or an outage
+          // rendered as "no labs" is how a released result reaches nobody.
+          if (!isCurrent()) return;
+          this.labResultsError.set(true);
+          this.labResultsLoading.set(false);
+        },
+      });
+  }
+
+  private fetchLabOrders(): void {
+    const request = ++this.labOrdersRequest;
+    const isCurrent = (): boolean => request === this.labOrdersRequest;
+    this.labOrdersLoading.set(true);
+    this.labOrdersError.set(false);
+    this.labService.listOrders({ patientId: this.patientId, size: LAB_PAGE_SIZE }).subscribe({
+      next: (list) => {
+        if (!isCurrent()) return;
+        this.labOrders.set(list ?? []);
+        this.labOrdersLoading.set(false);
+      },
+      error: () => {
+        if (!isCurrent()) return;
+        this.labOrdersError.set(true);
+        this.labOrdersLoading.set(false);
+      },
+    });
+  }
+
+  /**
+   * A row the laboratory has not released. It is rendered as pending with no
+   * value and no normal/abnormal colouring: the staff path DOES return the
+   * preliminary value an analyzer posted, and showing it next to released
+   * rows — or worse, showing a released-looking row with a blank value — is
+   * the defect that shipped once on the patient portal.
+   */
+  isPendingResult(result: PatientLabResult): boolean {
+    return !result.released;
+  }
+
+  /** Colour class for a RELEASED row only; a pending row gets none. */
+  labStatusClass(result: PatientLabResult): string {
+    if (this.isPendingResult(result)) return 'lab-badge lab-pending';
+    switch (result.status) {
+      case 'CRITICAL':
+        return 'lab-badge lab-critical';
+      case 'ABNORMAL':
+      case 'ABNORMAL_HIGH':
+      case 'ABNORMAL_LOW':
+        return 'lab-badge lab-abnormal';
+      case 'NORMAL':
+        return 'lab-badge lab-normal';
+      default:
+        return 'lab-badge';
+    }
+  }
+
+  /**
+   * i18n key for a result status. A pending row always reads PENDING whatever
+   * grading the payload carried, so a preliminary NORMAL can never be read as
+   * a released normal result.
+   */
+  labStatusKey(result: PatientLabResult): string {
+    if (this.isPendingResult(result)) return 'CHART.LAB_STATUS_PENDING';
+    switch (result.status) {
+      case 'NORMAL':
+      case 'ABNORMAL':
+      case 'ABNORMAL_HIGH':
+      case 'ABNORMAL_LOW':
+      case 'CRITICAL':
+      case 'PENDING':
+        return 'CHART.LAB_STATUS_' + result.status;
+      default:
+        return 'CHART.LAB_STATUS_UNKNOWN';
+    }
+  }
+
   /* ── Timeline ── */
 
   openTimelineReason(): void {
@@ -543,6 +979,11 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.allergies.set([]);
     this.problems.set([]);
     this.updates.set([]);
+    this.labResults.set([]);
+    this.labOrders.set([]);
+    this.labsLoadedFor.set(null);
+    this.labResultsError.set(false);
+    this.labOrdersError.set(false);
     if (this.section() !== 'timeline') this.loadCurrentSection();
   }
 

@@ -18,6 +18,7 @@ import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.integration.MllpInboundLabService;
 import com.example.hms.service.integration.MllpInboundOutcome;
 import com.example.hms.service.integration.message.IntegrationMessageRecorder;
+import com.example.hms.utility.Hl7FieldBounds;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedObservation;
 
 import java.time.LocalDateTime;
@@ -100,6 +101,24 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                     sendingApplication, sendingFacility, hospitalId);
                 recordInboundMessage(integrationId, organizationId, rawMessageBody,
                     IntegrationMessageStatus.FAILED, "missing OBR-2 placer or OBX value");
+                return MllpInboundOutcome.REJECTED_INVALID;
+            }
+            // OBR-2 is matched, trimmed, against lab_specimens.accession_number,
+            // so one wider than that column can never match and is refused
+            // here - before the placer reaches the log lines and reason
+            // strings below - rather than cut short, which could match
+            // someone else's specimen. Checked here and not in
+            // Hl7v2MessageBuilder.parseOruR01 because that parser also serves
+            // the HTTP ingest and the instrument preview, where OBR-2 is not
+            // an accession and any width works. Decided on the message alone,
+            // so it reveals nothing about any tenant.
+            if (!Hl7FieldBounds.fits(observation.placerOrderNumber().trim(),
+                    Hl7FieldBounds.PLACER_ORDER_NUMBER_MAX)) {
+                log.warn("MLLP ORU^R01 rejected — an OBR-2 is wider than any accession (sender={}/{} hospital={})",
+                    sendingApplication, sendingFacility, hospitalId);
+                recordInboundMessage(integrationId, organizationId, rawMessageBody,
+                    IntegrationMessageStatus.FAILED,
+                    "OBR-2 placer exceeds " + Hl7FieldBounds.PLACER_ORDER_NUMBER_MAX + " characters");
                 return MllpInboundOutcome.REJECTED_INVALID;
             }
         }
@@ -477,9 +496,23 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
         }
     }
 
+    /**
+     * Upper-cased as well as trimmed, matching
+     * {@code MllpRecordingContext.integrationId} and, behind it, the
+     * case-insensitive match the allowlist itself does. An allowlisted sender
+     * may legitimately present MSH-3/MSH-4 in any casing; if this door filed
+     * its rows under one spelling and the dispatcher's under another, the
+     * super-admin search - which compares {@code integrationId} for equality -
+     * would show an operator half that feed's messages.
+     *
+     * <p>Still its own copy rather than a call to the shared helper: the
+     * migration is a separate change owned by the lab stream, and
+     * {@code MllpIntegrationIdSingleSourceTest} holds the exemption open with
+     * a witness on this method's name so it cannot be forgotten.
+     */
     private String buildIntegrationId(String app, String fac) {
-        String safeApp = StringUtils.hasText(app) ? app.trim() : "?";
-        String safeFac = StringUtils.hasText(fac) ? fac.trim() : "?";
+        String safeApp = StringUtils.hasText(app) ? app.trim().toUpperCase(Locale.ROOT) : "?";
+        String safeFac = StringUtils.hasText(fac) ? fac.trim().toUpperCase(Locale.ROOT) : "?";
         return "MLLP:" + safeApp + "/" + safeFac;
     }
 

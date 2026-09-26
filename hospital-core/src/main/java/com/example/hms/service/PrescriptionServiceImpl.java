@@ -75,6 +75,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final com.example.hms.service.pharmacy.ControlledSubstanceGuard controlledSubstanceGuard;
     private final com.example.hms.service.pharmacy.PharmacistVerificationService pharmacistVerificationService;
     private final RecordAccessPolicy recordAccessPolicy;
+    /** Resolves a user id from either principal shape; see {@link #requireOwnPrescriptionWhenPatient}. */
+    private final com.example.hms.controller.support.ControllerAuthUtils authUtils;
     /**
      * From config/TimeConfig, as {@code PrescriptionClarificationService}
      * takes it: the two halves of a clarification are stamped by the same
@@ -128,6 +130,20 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Override
     @Transactional
     public PrescriptionResponseDTO getPrescriptionById(UUID id, Locale locale) {
+        Prescription prescription = findWithinHospitalScope(id);
+        requireOwnPrescriptionWhenPatient(prescription);
+        return prescriptionMapper.toResponseDTO(prescription);
+    }
+
+    @Override
+    @Transactional
+    public PrescriptionResponseDTO getPrescriptionAfterWrite(UUID id, Locale locale) {
+        // No ownership guard: the caller has just been authorised for, and has
+        // committed, a write on this prescription. See the interface javadoc.
+        return prescriptionMapper.toResponseDTO(findWithinHospitalScope(id));
+    }
+
+    private Prescription findWithinHospitalScope(UUID id) {
         Prescription prescription = prescriptionRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
 
@@ -139,8 +155,64 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             // Return 404 (not 403) to avoid info leakage
             throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
+        return prescription;
+    }
 
-        return prescriptionMapper.toResponseDTO(prescription);
+    /**
+     * A patient may read their own prescription and no one else's.
+     *
+     * <p>The hospital scope above is not this check. It bounded the leak — a
+     * patient could only reach prescriptions at the hospital their own
+     * assignment resolves to — but within that hospital any prescription id
+     * returned somebody else's medication, dose, frequency, duration and
+     * instructions. Stripping the clarification exchange in the controller is
+     * about the pharmacist's notes, not about whose prescription it is.
+     *
+     * <p>404, not 403, and the same message as a prescription that does not
+     * exist: the answer must not tell a patient that an id is real — including
+     * when the principal itself cannot be resolved to a patient row, and
+     * without a data defect turning the refusal into a stack trace. The
+     * subject comes from the authenticated principal
+     * ({@code user id → Patient}), never from anything in the request — the
+     * rule {@code PatientPortalServiceImpl.resolvePatientId} already follows
+     * for every {@code /me/patient/*} read, through the same resolver.
+     *
+     * <p>A no-op for every role this read admits, including a clinician who is
+     * also a patient at the hospital — see {@link PrescriptionReaderRoles},
+     * which mirrors the endpoint’s own annotation and records what that costs
+     * on the OIDC path. The write endpoints that admit roles this read does not
+     * go through {@link #getPrescriptionAfterWrite} instead.
+     */
+    private void requireOwnPrescriptionWhenPatient(Prescription prescription) {
+        org.springframework.security.core.Authentication auth =
+            org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        if (!PrescriptionReaderRoles.isPatientOnly(auth)) {
+            return;
+        }
+        // authUtils, not authService.getCurrentUserId(): the latter resolves
+        // only a CustomUserDetails principal and throws 401 on a
+        // JwtAuthenticationToken, so on the OIDC path it would refuse the
+        // owner their own prescription. ControllerAuthUtils.resolveUserId
+        // reads the appUserId claim too, and is what
+        // PatientPortalServiceImpl.resolvePatientId already uses.
+        UUID subjectPatientId = prescription.getPatient() != null
+            ? prescription.getPatient().getId()
+            : null;
+        // existsByIdAndUserId, not findByUserId: the single-result finder throws
+        // IncorrectResultSizeDataAccessException on a tenant that still carries
+        // duplicate clinical.patients.user_id rows (V113 falls back to a plain
+        // index rather than failing the deploy), which would answer a 500 where
+        // this method promises a 404 or the record. The membership form cannot,
+        // it stays right however many rows the account owns, and it decides the
+        // question without materialising a Patient and decrypting its PHI.
+        boolean theirs = subjectPatientId != null
+            && authUtils.resolveUserId(auth)
+                .map(userId -> patientRepository.existsByIdAndUserId(subjectPatientId, userId))
+                .orElse(false);
+        if (!theirs) {
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
+        }
     }
 
     /**
@@ -239,6 +311,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
 
+        // Resolved BEFORE the workflow-state checks: their messages tell the
+        // caller whether an order requires a co-signature, whether it already
+        // has one and what status it is in, and someone with no prescribing
+        // assignment here has no business reading that back.
+        Staff cosigner = resolveCosignerAtHospital(prescription);
+
         if (!prescription.isRequiresCosign()) {
             throw new BusinessException(
                 "This prescription does not declare a co-signature requirement.");
@@ -255,14 +333,6 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                     + status + ".");
         }
 
-        UUID currentUserId = roleValidator.getCurrentUserId();
-        if (currentUserId == null) {
-            throw new AccessDeniedException("Unable to determine the co-signing clinician.");
-        }
-        Staff cosigner = staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUserId)
-            .orElseThrow(() -> new AccessDeniedException(
-                "Only a clinician with a staff profile can co-sign a prescription."));
-
         Staff prescriber = prescription.getStaff();
         if (prescriber != null && prescriber.getId() != null
                 && prescriber.getId().equals(cosigner.getId())) {
@@ -276,6 +346,69 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         logger.info("Prescription {} co-signed by staff {}", prescription.getId(), cosigner.getId());
         return prescriptionMapper.toResponseDTO(prescriptionRepository.save(prescription));
+    }
+
+    /**
+     * The co-signer, credentialed at the PRESCRIPTION's hospital.
+     *
+     * <p>The method's own contract says the co-signer "must hold a prescribing
+     * role at the prescription's hospital", but nothing checked it: the lookup
+     * was {@code findFirstByUserIdOrderByCreatedAtAsc}, "any staff profile this
+     * user has, anywhere". Holding {@code ROLE_DOCTOR} somewhere plus a staff
+     * row somewhere was enough to put a co-signature on an order at a hospital
+     * the caller has no active assignment at.
+     *
+     * <p>Where the credential lives matters here. {@code staff.user_id} is
+     * UNIQUE (entity {@code uq_staff_user}, and V8 de-duplicated and indexed
+     * it), so a clinician has exactly ONE staff row no matter how many
+     * hospitals they work at; multi-hospital membership is modelled by
+     * {@link UserRoleHospitalAssignment}. Anchoring the CREDENTIAL check on a
+     * staff row at the prescription's hospital would therefore refuse the
+     * legitimate cross-hospital co-signer — one staff row filed at hospital A,
+     * an active doctor assignment at hospital B — which is exactly the person
+     * this is meant to admit. So: the assignment answers "are you a prescriber
+     * here", the staff row is only the FK {@code cosignedBy} records.
+     *
+     * <p>The anchor is the prescription's own hospital, not the acting scope.
+     * The co-signature attests to an order that belongs to that hospital and
+     * will be filled there. With a scope active the check at the top of
+     * {@code cosignPrescription} has already proved the two are the same
+     * hospital; in the unscoped (global) view the prescription's hospital is
+     * the only defined anchor, so reading the scope would leave nothing to
+     * check.
+     *
+     * <p>Doctor/physician/surgeon, because {@code RoleExpansion} makes a
+     * physician and a surgeon a doctor before the controller's
+     * {@code hasAuthority('ROLE_DOCTOR')} runs, while the per-hospital
+     * {@code RoleValidator} checks match the stored assignment code and do not
+     * know that. Naming only DOCTOR here would refuse people the annotation
+     * admits.
+     *
+     * <p>AccessDenied rather than BusinessException: this is an authorization
+     * failure, so 403 rather than 400 — the clarification path's stance.
+     */
+    private Staff resolveCosignerAtHospital(Prescription prescription) {
+        UUID currentUserId = roleValidator.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new AccessDeniedException("Unable to determine the co-signing clinician.");
+        }
+        // Prescription.hospital is optional=false on a NOT NULL column, so this
+        // is never null in practice; a null would make every check below false
+        // and refuse, which is the safe direction anyway.
+        UUID rxHospitalId = prescription.getHospital() != null
+            ? prescription.getHospital().getId()
+            : null;
+        boolean prescriberHere = roleValidator.isDoctor(currentUserId, rxHospitalId)
+            || roleValidator.isPhysician(currentUserId, rxHospitalId)
+            || roleValidator.isSurgeon(currentUserId, rxHospitalId);
+        if (!prescriberHere) {
+            throw new AccessDeniedException(
+                "Only a clinician with an active prescribing assignment at the prescribing "
+                    + "hospital can co-sign a prescription.");
+        }
+        return staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUserId)
+            .orElseThrow(() -> new AccessDeniedException(
+                "Only a clinician with a staff profile can co-sign a prescription."));
     }
 
     /**
@@ -461,46 +594,102 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
     @Override
     @Transactional
-    public Page<PrescriptionResponseDTO> list(UUID patientId, UUID staffId, UUID encounterId, Pageable pageable, Locale locale) {
-        // ── Hospital scope enforcement: mandatory for non-superadmin ──
+    public Page<PrescriptionResponseDTO> list(UUID patientId, UUID staffId, UUID encounterId,
+                                              List<PrescriptionStatus> statuses,
+                                              Pageable pageable, Locale locale) {
+        // Hospital scope enforcement: mandatory for non-superadmin.
         UUID hospitalId = roleValidator.requireActiveHospitalId();
+        List<PrescriptionStatus> filter = normaliseStatusFilter(statuses);
 
+        Page<Prescription> rows;
         if (patientId != null) {
-            if (hospitalId != null) {
-                // E9 #59c — the prescription list follows the patient across
-                // the readable hospitals; every foreign row on the page is
-                // accounted. Prescriptions carry no sensitivity tag (V158).
-                UUID requesterUserId = authService.getCurrentUserId();
-                Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
-                Page<Prescription> rows = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, pageable);
-                reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
-                    CrossHospitalReachRecorder.reachOf(rows.getContent().stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospitalId),
-                    "Cross-hospital prescription read on the treatment relationship");
-                return rows.map(prescriptionMapper::toResponseDTO);
-            }
-            return prescriptionRepository.findByPatient_Id(patientId, pageable)
-                .map(prescriptionMapper::toResponseDTO);
+            rows = patientRows(patientId, hospitalId, filter, pageable);
+        } else if (staffId != null) {
+            rows = staffRows(staffId, hospitalId, filter, pageable);
+        } else if (encounterId != null) {
+            rows = encounterRows(encounterId, hospitalId, filter, pageable);
+        } else {
+            rows = tenantRows(hospitalId, filter, pageable);
         }
-        if (staffId != null) {
-            if (hospitalId != null) {
-                return prescriptionRepository.findByStaff_IdAndHospital_Id(staffId, hospitalId, pageable)
-                    .map(prescriptionMapper::toResponseDTO);
-            }
-            return prescriptionRepository.findByStaff_Id(staffId, pageable)
-                .map(prescriptionMapper::toResponseDTO);
+        return rows.map(prescriptionMapper::toResponseDTO);
+    }
+
+    /**
+     * Gap G12 - the {@code status} query parameter as the repository wants it.
+     *
+     * <p>EMPTY means "every status", not "no status can match":
+     * {@code ?status=} on a URL arrives here as a single-element list holding
+     * null, and silently returning an empty page for it would be the same class
+     * of lie the filter exists to remove. Duplicates collapse; order is
+     * irrelevant to an IN clause.
+     */
+    private List<PrescriptionStatus> normaliseStatusFilter(List<PrescriptionStatus> statuses) {
+        if (statuses == null) {
+            return List.of();
         }
-        if (encounterId != null) {
-            if (hospitalId != null) {
-                return prescriptionRepository.findByEncounter_IdAndHospital_Id(encounterId, hospitalId, pageable)
-                    .map(prescriptionMapper::toResponseDTO);
-            }
-            return prescriptionRepository.findByEncounter_Id(encounterId, pageable)
-                .map(prescriptionMapper::toResponseDTO);
+        return statuses.stream()
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .toList();
+    }
+
+    /**
+     * E9 #59c - the prescription list follows the patient across the readable
+     * hospitals, and every foreign row on the page is accounted for.
+     * Prescriptions carry no sensitivity tag (V158).
+     */
+    private Page<Prescription> patientRows(UUID patientId, UUID hospitalId,
+                                           List<PrescriptionStatus> filter, Pageable pageable) {
+        if (hospitalId == null) {
+            return filter.isEmpty()
+                ? prescriptionRepository.findByPatient_Id(patientId, pageable)
+                : prescriptionRepository.findByPatient_IdAndStatusIn(patientId, filter, pageable);
         }
-        if (hospitalId != null) {
-            return prescriptionRepository.findByHospital_Id(hospitalId, pageable).map(prescriptionMapper::toResponseDTO);
+        UUID requesterUserId = authService.getCurrentUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+        Page<Prescription> rows = filter.isEmpty()
+            ? prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, pageable)
+            : prescriptionRepository.findByPatient_IdAndHospital_IdInAndStatusIn(patientId, readable, filter, pageable);
+        reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(rows.getContent().stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospitalId),
+            "Cross-hospital prescription read on the treatment relationship");
+        return rows;
+    }
+
+    private Page<Prescription> staffRows(UUID staffId, UUID hospitalId,
+                                         List<PrescriptionStatus> filter, Pageable pageable) {
+        if (hospitalId == null) {
+            return filter.isEmpty()
+                ? prescriptionRepository.findByStaff_Id(staffId, pageable)
+                : prescriptionRepository.findByStaff_IdAndStatusIn(staffId, filter, pageable);
         }
-        return prescriptionRepository.findAll(pageable).map(prescriptionMapper::toResponseDTO);
+        return filter.isEmpty()
+            ? prescriptionRepository.findByStaff_IdAndHospital_Id(staffId, hospitalId, pageable)
+            : prescriptionRepository.findByStaff_IdAndHospital_IdAndStatusIn(staffId, hospitalId, filter, pageable);
+    }
+
+    private Page<Prescription> encounterRows(UUID encounterId, UUID hospitalId,
+                                             List<PrescriptionStatus> filter, Pageable pageable) {
+        if (hospitalId == null) {
+            return filter.isEmpty()
+                ? prescriptionRepository.findByEncounter_Id(encounterId, pageable)
+                : prescriptionRepository.findByEncounter_IdAndStatusIn(encounterId, filter, pageable);
+        }
+        return filter.isEmpty()
+            ? prescriptionRepository.findByEncounter_IdAndHospital_Id(encounterId, hospitalId, pageable)
+            : prescriptionRepository.findByEncounter_IdAndHospital_IdAndStatusIn(encounterId, hospitalId, filter, pageable);
+    }
+
+    /** No id filter: the whole tenant, or the whole platform for a super-admin in global view. */
+    private Page<Prescription> tenantRows(UUID hospitalId, List<PrescriptionStatus> filter, Pageable pageable) {
+        if (hospitalId == null) {
+            return filter.isEmpty()
+                ? prescriptionRepository.findAll(pageable)
+                : prescriptionRepository.findByStatusIn(filter, pageable);
+        }
+        return filter.isEmpty()
+            ? prescriptionRepository.findByHospital_Id(hospitalId, pageable)
+            : prescriptionRepository.findByHospital_IdAndStatusIn(hospitalId, filter, pageable);
     }
 
     @Override

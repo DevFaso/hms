@@ -362,7 +362,7 @@ class SuperAdminDashboardServiceImplTest {
         List<PrescriptionResponseDTO> result = service.getRecentPrescriptions(5, Locale.ENGLISH);
         assertThat(result).hasSize(1);
         org.mockito.Mockito.verify(prescriptionService, org.mockito.Mockito.never())
-            .list(any(), any(), any(), any(Pageable.class), any());
+            .list(any(), any(), any(), any(), any(Pageable.class), any());
     }
 
     @Test

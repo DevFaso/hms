@@ -103,11 +103,48 @@ export class LabResultsComponent implements OnInit {
   comparison = signal<LabResultComparison | null>(null);
   comparisonLoading = signal(false);
 
-  readonly canSign = this.roleContext.hasAnyActiveRole([
+  /**
+   * Who can actually sign — which is NOT who `POST /lab-results/{id}/sign`
+   * admits at its annotation.
+   *
+   * <p>PHYSICIAN and SURGEON are deliberately absent. `RoleExpansion` maps
+   * them onto ROLE_DOCTOR while the authorities are built, so they do clear
+   * the `@PreAuthorize`; but the handler then calls
+   * `LabResultServiceImpl.validateSignPermissions` →
+   * `RoleValidator.isDoctor(userId, hospitalId)`, which matches the stored
+   * ASSIGNMENT ROLE CODE against `{DOCTOR, ROLE_DOCTOR}` and knows no
+   * PHYSICIAN/SURGEON equivalence at that layer. Listing them here would show
+   * a surgeon a Sign button, let them fill in the signature modal, and answer
+   * 400 "Only attending clinicians may sign lab results." with no way to
+   * succeed. Passing the annotation is not the same as passing the endpoint.
+   *
+   * <p>Whether that equivalence SHOULD exist one layer down is a question
+   * about who may sign a lab result across the whole product, not a question
+   * this screen gets to answer; it is recorded as standing debt in
+   * tasklist.md instead.
+   */
+  private static readonly SIGN_ROLES = [
     'ROLE_DOCTOR',
     'ROLE_MIDWIFE',
     'ROLE_LAB_SCIENTIST',
-  ]);
+    // SUPER_ADMIN is different, and stays: validateSignPermissions returns
+    // early for it before any role-code lookup happens, so the button works.
+    'ROLE_SUPER_ADMIN',
+  ];
+
+  /**
+   * Whether to offer the signature control.
+   *
+   * <p>A method, not a field: `canSign` was evaluated once while the component
+   * was being constructed. The role set it read cannot in fact change under
+   * this screen — portal roles come from `/me/session-bootstrap` once and are
+   * not per-hospital — so this is not a live defect here; it is the same shape
+   * #723 fixed on the release button, kept consistent with it rather than left
+   * as the one control in this file that answers from a snapshot.
+   */
+  canSign(): boolean {
+    return this.roleContext.hasAnyActiveRole(LabResultsComponent.SIGN_ROLES);
+  }
   /** POST /lab-results/{id}/release backend role list (LabResultAuthority.RELEASE_EXPRESSION). */
   private static readonly RELEASE_ROLES = [
     'ROLE_LAB_SCIENTIST',

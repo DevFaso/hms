@@ -262,3 +262,57 @@
     </div>
   </aside>
 }
+<!--
+  Open, with no snapshot to draw. Never an empty drawer and never a drawer
+  that closes itself: the read is scoped now and refuses with a 404 when no
+  hospital resolves, and a refusal rendered as nothing at all is
+  indistinguishable from a dead button.
+-->
+@if (isOpen() && !snapshot() && (loading() || loadError())) {
+  <div
+    class="drawer-overlay"
+    role="button"
+    tabindex="0"
+    (click)="close()"
+    (keydown.enter)="close()"
+  ></div>
+  <aside class="snapshot-drawer" data-testid="snapshot-status">
+    <div class="drawer-header">
+      <div class="drawer-header-left">
+        <h2 class="drawer-patient-name">{{ 'DASHBOARD.SNAPSHOT_TITLE' | translate }}</h2>
+      </div>
+      <div class="drawer-header-actions">
+        <button
+          class="drawer-close"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          (click)="close()"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="drawer-body">
+      @if (loading()) {
+        <p class="drawer-status" role="status" aria-live="polite">
+          {{ 'common.loading' | translate }}
+        </p>
+      } @else if (loadError() === 'NO_SCOPE') {
+        <p class="drawer-status drawer-status-scope" role="status" data-testid="snapshot-no-scope">
+          {{ 'DASHBOARD.SNAPSHOT_NO_HOSPITAL' | translate }}
+        </p>
+      } @else if (loadError() === 'NOT_HERE') {
+        <p class="drawer-status drawer-status-scope" role="status" data-testid="snapshot-not-here">
+          {{ 'DASHBOARD.SNAPSHOT_NOT_HERE' | translate }}
+        </p>
+      } @else if (loadError() === 'FAILED') {
+        <p class="drawer-status drawer-status-error" role="alert" data-testid="snapshot-error">
+          {{ 'DASHBOARD.SNAPSHOT_LOAD_ERROR' | translate }}
+        </p>
+        <button type="button" class="drawer-btn drawer-btn-primary" (click)="retry()">
+          {{ 'COMMON.RETRY' | translate }}
+        </button>
+      }
+    </div>
+  </aside>
+}

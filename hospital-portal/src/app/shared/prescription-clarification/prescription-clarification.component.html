@@ -1,0 +1,220 @@
+@if (visible()) {
+  <button
+    #trigger
+    type="button"
+    class="action-link clarify-link"
+    [class.clarify-link--answered]="hasAnswer()"
+    (click)="openDialog()"
+    [title]="buttonKey() | translate"
+    [attr.aria-label]="buttonKey() | translate"
+    [attr.data-testid]="'rx-clarification-open-' + prescriptionId()"
+  >
+    <span class="material-symbols-outlined" aria-hidden="true">{{
+      hasAnswer() ? 'mark_chat_read' : 'contact_support'
+    }}</span>
+  </button>
+}
+
+@if (open()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="requestClose()"
+    (keydown.escape)="requestClose()"
+    [attr.data-testid]="'rx-clarification-modal-' + prescriptionId()"
+  >
+    <div
+      #dialog
+      class="modal clarify-modal"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-labelledby]="titleId()"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="requestClose()"
+      [attr.data-testid]="'rx-clarification-dialog-' + prescriptionId()"
+    >
+      <div class="modal-header">
+        <h2 [id]="titleId()">
+          {{
+            (isPharmacy()
+              ? 'PRESCRIPTIONS.CLARIFICATION.TITLE_REQUEST'
+              : 'PRESCRIPTIONS.CLARIFICATION.TITLE_RESOLVE'
+            ) | translate
+          }}
+        </h2>
+        <button
+          type="button"
+          class="modal-close"
+          [disabled]="submitting()"
+          (click)="requestClose()"
+          [title]="'COMMON.CLOSE' | translate"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        @if (medicationLabel()) {
+          <p class="clarify-subject">
+            <!-- The colon lives in the locale string: French wants a
+                 no-break space before it, English and Spanish do not. -->
+            {{ 'PRESCRIPTIONS.CLARIFICATION.FOR' | translate }}
+            <strong>{{ medicationLabel() }}</strong>
+          </p>
+        }
+
+        <!-- ── The exchange so far, pharmacy side ─────────────────────────
+             The work-queue projection carries the cue but never the words —
+             it is served to roles the prescription read refuses — so the
+             text is fetched from the prescription record on every open. -->
+        <!-- Stated when clarificationResolvedAt says an answer is waiting,
+             hedged on any other flagged row (the backend clears that
+             timestamp once the pharmacy acts, so an answered-then-filled row
+             carries a real exchange and no timestamp). Either way a verifier
+             — who may raise a question but is not on GET /prescriptions/{id}
+             — is told rather than shown a bare "ask a question" form. -->
+        @if (hiddenAnswerKey(); as hiddenKey) {
+          <p class="clarify-note" data-testid="rx-clarification-unreadable">
+            {{ hiddenKey | translate }}
+          </p>
+        }
+        @if (showExchange()) {
+          @if (loadingExchange()) {
+            <p class="clarify-note" role="status" data-testid="rx-clarification-loading">
+              {{ 'PRESCRIPTIONS.CLARIFICATION.LOADING_EXCHANGE' | translate }}
+            </p>
+          } @else if (exchangeError()) {
+            <div class="clarify-error" role="alert" data-testid="rx-clarification-exchange-error">
+              <p>{{ 'PRESCRIPTIONS.CLARIFICATION.EXCHANGE_FAILED' | translate }}</p>
+              <button type="button" class="btn-secondary clarify-retry" (click)="retryExchange()">
+                {{ 'COMMON.RETRY' | translate }}
+              </button>
+            </div>
+          } @else {
+            <section class="clarify-exchange" data-testid="rx-clarification-exchange">
+              <h3>{{ 'PRESCRIPTIONS.CLARIFICATION.QUESTION_LABEL' | translate }}</h3>
+              @if (fetchedQuestion()) {
+                <p class="clarify-quote">{{ fetchedQuestion() }}</p>
+              } @else {
+                <p class="clarify-note">
+                  {{ 'PRESCRIPTIONS.CLARIFICATION.NO_QUESTION' | translate }}
+                </p>
+              }
+              @if (fetchedAskedAt()) {
+                <p class="clarify-stamp">
+                  <span>{{ 'PRESCRIPTIONS.CLARIFICATION.ASKED_LABEL' | translate }}</span>
+                  <span>{{ fetchedAskedAt() | date: 'short' }}</span>
+                </p>
+              }
+              <h3>{{ 'PRESCRIPTIONS.CLARIFICATION.ANSWER_LABEL' | translate }}</h3>
+              @if (fetchedAnswer()) {
+                <p class="clarify-quote">{{ fetchedAnswer() }}</p>
+              } @else {
+                <p class="clarify-note" data-testid="rx-clarification-answer-empty">
+                  {{ 'PRESCRIPTIONS.CLARIFICATION.NO_ANSWER_TEXT' | translate }}
+                </p>
+              }
+              @if (fetchedAnsweredAt()) {
+                <p class="clarify-stamp">
+                  <span>{{ 'PRESCRIPTIONS.CLARIFICATION.ANSWERED_LABEL' | translate }}</span>
+                  <span>{{ fetchedAnsweredAt() | date: 'short' }}</span>
+                </p>
+              }
+            </section>
+          }
+        }
+
+        <!-- ── The pharmacist's question, prescriber side ───────────────── -->
+        @if (!isPharmacy()) {
+          <section class="clarify-exchange" data-testid="rx-clarification-question">
+            <h3>{{ 'PRESCRIPTIONS.CLARIFICATION.QUESTION_LABEL' | translate }}</h3>
+            @if (question()) {
+              <p class="clarify-quote">{{ question() }}</p>
+            } @else {
+              <p class="clarify-note" data-testid="rx-clarification-question-empty">
+                {{ 'PRESCRIPTIONS.CLARIFICATION.NO_QUESTION' | translate }}
+              </p>
+            }
+            @if (askedAt()) {
+              <p class="clarify-stamp">
+                <span>{{ 'PRESCRIPTIONS.CLARIFICATION.ASKED_LABEL' | translate }}</span>
+                <span>{{ askedAt() | date: 'short' }}</span>
+              </p>
+            }
+          </section>
+        }
+
+        <label class="field clarify-field">
+          <span>{{
+            (isPharmacy()
+              ? 'PRESCRIPTIONS.CLARIFICATION.REASON_LABEL'
+              : 'PRESCRIPTIONS.CLARIFICATION.ANSWER_INPUT_LABEL'
+            ) | translate
+          }}</span>
+          <textarea
+            rows="4"
+            maxlength="1000"
+            name="clarificationText"
+            [(ngModel)]="text"
+            [placeholder]="
+              (isPharmacy()
+                ? 'PRESCRIPTIONS.CLARIFICATION.REASON_PLACEHOLDER'
+                : 'PRESCRIPTIONS.CLARIFICATION.ANSWER_PLACEHOLDER'
+              ) | translate
+            "
+            [attr.data-testid]="'rx-clarification-text-' + prescriptionId()"
+          ></textarea>
+        </label>
+
+        <!-- Raising a question stops the fill. Said before the button, not
+             discovered afterwards when the row vanishes from the queue. -->
+        <p class="clarify-consequence" data-testid="rx-clarification-consequence">
+          <span class="material-symbols-outlined" aria-hidden="true">pause_circle</span>
+          {{
+            (isPharmacy()
+              ? 'PRESCRIPTIONS.CLARIFICATION.BLOCKS_DISPENSING'
+              : 'PRESCRIPTIONS.CLARIFICATION.ANSWER_HINT'
+            ) | translate
+          }}
+        </p>
+
+        @if (submitError()) {
+          <p class="clarify-error" role="alert" data-testid="rx-clarification-error">
+            {{ submitError() }}
+          </p>
+        }
+      </div>
+
+      <div class="modal-actions">
+        <button
+          type="button"
+          class="btn-secondary"
+          [disabled]="submitting()"
+          (click)="requestClose()"
+        >
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          [disabled]="submitting() || requiredTextMissing()"
+          (click)="submit()"
+          [attr.data-testid]="'rx-clarification-submit-' + prescriptionId()"
+        >
+          @if (submitting()) {
+            {{ 'PRESCRIPTIONS.CLARIFICATION.SENDING' | translate }}
+          } @else {
+            {{
+              (isPharmacy()
+                ? 'PRESCRIPTIONS.CLARIFICATION.SEND'
+                : 'PRESCRIPTIONS.CLARIFICATION.RESOLVE_SEND'
+              ) | translate
+            }}
+          }
+        </button>
+      </div>
+    </div>
+  </div>
+}

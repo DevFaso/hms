@@ -269,6 +269,38 @@
                   <span class="badge badge-info">{{
                     rx.status | enumLabel: 'prescriptionStatus'
                   }}</span>
+                  <!-- Gap G3 — the row says why it is not a plain fill. The
+                       backend had reported `needsAttention` since the queue
+                       gained it and no template read it, so a back order, a
+                       partner's refusal and an order sitting with a partner
+                       all looked like ordinary rows. -->
+                  @if (attentionKey(rx); as reasonKey) {
+                    <span class="attention-note" [attr.data-testid]="'rx-attention-' + rx.id">
+                      <span class="material-symbols-outlined" aria-hidden="true"
+                        >priority_high</span
+                      >
+                      {{ reasonKey | translate }}
+                    </span>
+                  }
+                  <!-- Gap G5 — and separately, whether the prescriber has
+                       answered. Separate because resolving a clarification
+                       restores the status the question was asked from, so on
+                       a PENDING_STOCK or PARTNER_REJECTED order the single
+                       attention reason reports that status and the answer had
+                       no cue on the row at all. Suppressed when the reason
+                       above is the clarification itself, which already says
+                       so. -->
+                  @if (showsAnswerCue(rx)) {
+                    <span
+                      class="attention-note attention-note--answered"
+                      [attr.data-testid]="'rx-answered-' + rx.id"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true"
+                        >mark_chat_read</span
+                      >
+                      {{ 'PHARMACY.ATTENTION.PRESCRIBER_ANSWERED' | translate }}
+                    </span>
+                  }
                 </td>
                 <td class="refill-cell">
                   @if (rx.refill; as refill) {
@@ -312,6 +344,18 @@
                     <span class="material-symbols-outlined">alt_route</span>
                     {{ 'PHARMACY.ROUTE' | translate }}
                   </button>
+                  <!-- Gap G5 — send the order back to its prescriber with a
+                       question, and read the answer when the row returns
+                       flagged CLARIFICATION_RESOLVED. -->
+                  <app-prescription-clarification
+                    mode="PHARMACY"
+                    [prescriptionId]="rx.id"
+                    [status]="rx.status"
+                    [medicationLabel]="rx.medicationName"
+                    [attentionReason]="rx.attentionReason ?? null"
+                    [clarificationResolvedAt]="rx.clarificationResolvedAt ?? null"
+                    (changed)="loadWorkQueue()"
+                  />
                 </td>
               </tr>
             }

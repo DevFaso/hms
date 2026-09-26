@@ -249,23 +249,32 @@ struct AppointmentRowView: View {
 
 struct LabResultRowView: View {
     let result: LabResultDTO
+
     var body: some View {
         HStack {
-            Image(systemName: result.abnormal ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                .foregroundStyle(result.abnormal ? .red : .green)
+            Image(systemName: result.symbolName)
+                .foregroundStyle(result.tone.symbolColor)
                 .font(.subheadline)
             VStack(alignment: .leading, spacing: 2) {
-                Text(result.testName ?? "Test").font(.subheadline.weight(.semibold))
-                Text(result.collectedDate ?? result.resultDate ?? result.orderedDate ?? "")
+                Text(result.testName ?? "test_name".localized).font(.subheadline.weight(.semibold))
+                // While pending, resultedAt is the analyzer's timestamp on a
+                // row the lab has not released — showing it next to "Result
+                // pending" contradicts it. resultDate is @NotNull, so it is
+                // always there to be shown by mistake.
+                Text((result.isPending ? result.collectedAt : (result.resultedAt ?? result.collectedAt))
+                    .map { String($0.prefix(10)) } ?? "")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
-                Text(result.result ?? "—").font(.subheadline)
-                if result.isCritical {
-                    Text("CRITICAL").font(.system(size: 9, weight: .bold)).foregroundStyle(.red)
-                } else if result.abnormal {
-                    Text("ABNORMAL").font(.system(size: 9, weight: .bold)).foregroundStyle(.orange)
+                if result.isPending {
+                    // The badge would read "Pending" directly under this; one
+                    // line is enough in a three-line dashboard cell.
+                    Text("lab_result_pending".localized)
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text(result.valueWithUnit ?? "—").font(.subheadline)
+                    StatusBadge(text: result.statusDisplay, color: result.tone.badgeColor)
                 }
             }
         }
@@ -273,6 +282,20 @@ struct LabResultRowView: View {
 }
 
 // MARK: - Status badge
+
+extension StatusTone {
+    /// The colour a standalone glyph takes for this tone. `StatusBadge` speaks
+    /// the same vocabulary through `badgeColor`; this is its SwiftUI form for
+    /// the callers that draw an icon rather than a pill.
+    var symbolColor: Color {
+        switch self {
+        case .positive: .green
+        case .attention: .orange
+        case .negative: .red
+        case .neutral: .secondary
+        }
+    }
+}
 
 struct StatusBadge: View {
     let text: String

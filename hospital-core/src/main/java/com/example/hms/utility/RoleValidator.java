@@ -20,6 +20,15 @@ import java.util.UUID;
 public class RoleValidator {
     private static final String HOSPITAL_ADMIN_ROLE = "HOSPITAL_ADMIN";
 
+    /**
+     * What a caller with no resolvable hospital is told. Public so a guard
+     * that refuses the same condition for its own reason — the encounter
+     * reads refuse a {@code null} scope the verified super-admin flag does not
+     * back — says it in the same words, and a rewording here reaches both.
+     */
+    public static final String HOSPITAL_CONTEXT_REQUIRED =
+        "Hospital context required. Please select an active hospital or include X-Hospital-Id header.";
+
 
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
 
@@ -205,7 +214,7 @@ public class RoleValidator {
         if (isSuperAdminFromAuth()) {
             return null; // super-admin can see cross-hospital
         }
-        throw new BusinessException("Hospital context required. Please select an active hospital or include X-Hospital-Id header.");
+        throw new BusinessException(HOSPITAL_CONTEXT_REQUIRED);
     }
 
     /** Active assignment for (currentUser, currentHospital) if uniquely determined */
@@ -231,6 +240,7 @@ public class RoleValidator {
 
     public boolean isDoctor(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "DOCTOR"); }
     public boolean isPhysician(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "PHYSICIAN"); }
+    public boolean isSurgeon(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "SURGEON"); }
     public boolean isNurse(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "NURSE"); }
     public boolean isMidwife(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "MIDWIFE"); }
     public boolean isHospitalAdmin(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE); }
@@ -261,16 +271,34 @@ public class RoleValidator {
      * Prescribing is a clinical act: a hospital admin no longer passes (E9 #67,
      * D5), and midwives, who prescribe throughout the OB module, have parity
      * with nurses (E9 #69).
+     *
+     * <p>Physician and surgeon are named because {@code RoleExpansion}'s
+     * doctor-equivalence rule — a surgeon and a physician ARE doctors — runs on
+     * the authorities, so {@code hasAnyAuthority('ROLE_DOCTOR',...)} on
+     * {@code POST /prescriptions} already admits them, while the checks in this
+     * class match the stored ASSIGNMENT code and do not know that. Without the
+     * two arms the endpoint let them in and this predicate threw them out with
+     * {@code prescription.only.doctor.admin}.
      */
     public boolean canCreatePrescription(UUID userId, UUID hospitalId) {
         return isDoctor(userId, hospitalId)
+            || isPhysician(userId, hospitalId)
+            || isSurgeon(userId, hospitalId)
             || isNurse(userId, hospitalId)
             || isMidwife(userId, hospitalId);
     }
 
+    /**
+     * Surgeon for the same reason as above: {@code POST /lab-orders} admits
+     * {@code ROLE_DOCTOR}, which a surgeon holds by expansion, and the order
+     * was then refused here. Midwife is deliberately NOT added — the endpoint
+     * admits it but nothing has established that a midwife orders lab tests,
+     * and widening that is not this change's call.
+     */
     public boolean canOrderLabTests(UUID userId, UUID hospitalId) {
         return isDoctor(userId, hospitalId)
             || isPhysician(userId, hospitalId)
+            || isSurgeon(userId, hospitalId)
             || isNurse(userId, hospitalId);
     }
 

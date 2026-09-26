@@ -194,6 +194,11 @@ subprojects {
         maxHeapSize = '2048m'
         jvmArgs '-XX:+UseG1GC'
 
+        // The Spring test context cache is capped in
+        // hospital-core/src/test/resources/spring.properties, so the IDE runner
+        // gets the cap too - without it, live heap grows with every distinct
+        // context in a fork until the ceiling above is hit (#740, #748, #750).
+
         // Restart test JVM every 250 classes to prevent metaspace/heap accumulation
         forkEvery = 250
 

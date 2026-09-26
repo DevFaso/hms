@@ -1,0 +1,163 @@
+// Modal chrome (.modal-backdrop, .modal, .modal-header, .modal-body,
+// .modal-actions, .field, .btn-primary, .btn-secondary, .action-link) comes
+// from the global `_page-common.scss`; only what is specific to the
+// clarification exchange lives here.
+
+// The host must not be a box of its own: both action cells are flex rows
+// with a gap, and a component that renders nothing would still take a slot
+// and add a phantom gap to every row it sits in.
+:host {
+  display: contents;
+}
+
+.clarify-link {
+  // The `.action-link` button reset lives in each PAGE's component-scoped
+  // stylesheet, which cannot reach a child component's DOM, and the global
+  // copy sets only colour and spacing — so without this the trigger renders
+  // with the browser's default button chrome beside flat icon buttons.
+  background: none;
+  border: none;
+  cursor: pointer;
+
+  // The answered state is the cue that brings the pharmacist back to the
+  // row, so it is a filled chip rather than the neutral icon buttons beside
+  // it. --primary-tint / --primary-deep is the 5.98:1 pairing from the
+  // token set.
+  &--answered {
+    background: var(--primary-tint);
+    color: var(--primary-deep);
+
+    &:hover {
+      background: var(--primary-tint);
+      color: var(--primary-deep);
+    }
+  }
+}
+
+.clarify-modal {
+  max-width: 560px;
+}
+
+.clarify-subject {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+
+  strong {
+    color: var(--text-primary);
+  }
+}
+
+.clarify-exchange {
+  margin: 0;
+  padding: 0.875rem 1rem;
+  border-radius: 8px;
+  background: var(--primary-soft);
+  border-left: 4px solid var(--primary);
+
+  h3 {
+    margin: 0 0 0.35rem;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--primary-deep);
+  }
+
+  h3 + * {
+    margin-top: 0;
+  }
+}
+
+.clarify-quote {
+  margin: 0 0 0.5rem;
+  color: var(--text-primary);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.clarify-note {
+  margin: 0 0 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.clarify-stamp {
+  display: flex;
+  gap: 0.35rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.clarify-field {
+  span {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.375rem;
+    display: block;
+  }
+
+  textarea {
+    width: 100%;
+    resize: vertical;
+    font-family: inherit;
+    padding: 0.625rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.875rem;
+
+    &:focus-visible {
+      border-color: var(--primary);
+    }
+  }
+}
+
+// The consequence of raising a question — the row leaves the work queue —
+// stated beside the button rather than discovered when the row disappears.
+.clarify-consequence {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.75rem 0.875rem;
+  border-radius: 8px;
+  background: var(--primary-soft);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+
+  .material-symbols-outlined {
+    font-size: 1.125rem;
+    color: var(--primary-deep);
+    flex: 0 0 auto;
+  }
+}
+
+.clarify-error {
+  margin: 0;
+  padding: 0.75rem 0.875rem;
+  border-radius: 8px;
+  // #b91c1c on #fef2f2 is 7.44:1 — the pairing the rest of the portal uses
+  // for inline form errors.
+  background: #fef2f2;
+  border-left: 4px solid #b91c1c;
+  color: #b91c1c;
+  font-size: 0.875rem;
+  line-height: 1.5;
+
+  p {
+    margin: 0 0 0.5rem;
+  }
+}
+
+.clarify-retry {
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}

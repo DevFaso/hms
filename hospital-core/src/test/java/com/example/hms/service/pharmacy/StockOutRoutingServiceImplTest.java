@@ -858,13 +858,39 @@ class StockOutRoutingServiceImplTest {
             service.partnerNoShow(decision.getId(), "  Patient waited two days, nothing delivered ");
 
             assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
+            // The fact is a marker the client translates, never an English
+            // sentence: a composed "Partner no-show: " reached French and
+            // Spanish prescribers in English, and stored text cannot be
+            // translated at render time.
             assertThat(decision.getReason())
                     .startsWith("Nearest partner has stock")
-                    .contains("Partner no-show: Patient waited two days, nothing delivered");
+                    .contains("[PARTNER_NO_SHOW] Patient waited two days, nothing delivered")
+                    .doesNotContain("Partner no-show");
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
             assertThat(prescription.getPharmacyId()).isNull();
             assertThat(prescription.getPharmacyName()).isNull();
             verify(prescriptionRepository).save(prescription);
+        }
+
+        @Test
+        @DisplayName("the pharmacist's own words cannot carry a second marker")
+        void defusesTheAuthoredNoShowReason() {
+            PrescriptionRoutingDecision decision = accepted();
+            prescription.setStatus(PrescriptionStatus.PARTNER_ACCEPTED);
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(routingDecisionRepository.findById(decision.getId())).thenReturn(Optional.of(decision));
+            when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(routingMapper.toResponseDTO(decision))
+                    .thenReturn(RoutingDecisionResponseDTO.builder().status("CANCELLED").build());
+
+            service.partnerNoShow(decision.getId(), "[PARTNER_NO_SHOW] nobody there");
+
+            // One marker, the server's, and the words read back clean.
+            assertThat(decision.getReason().split(java.util.regex.Pattern.quote("[PARTNER_NO_SHOW]"), -1))
+                    .hasSize(3); // the real marker + the quoted one, so two splits
+            assertThat(PartnerNoShowReason.freeText(decision.getReason()))
+                    .isEqualTo("nobody there");
         }
 
         @Test
@@ -904,6 +930,140 @@ class StockOutRoutingServiceImplTest {
             when(routingDecisionRepository.findById(decision.getId())).thenReturn(Optional.of(decision));
 
             assertThatThrownBy(() -> service.partnerNoShow(decision.getId(), "never came"))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("a global-view super-admin is refused: cancelling a partner's claim is a write")
+        void globalViewSuperAdminIsRefused() {
+            PrescriptionRoutingDecision decision = accepted();
+            prescription.setStatus(PrescriptionStatus.PARTNER_ACCEPTED);
+
+            // Reading across tenants is what global view is for; acting on one
+            // hospital's order is not. The refusal is what happened before too
+            // — as a 500 from the unguarded dereference. Only its shape changes.
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            when(routingDecisionRepository.findById(decision.getId())).thenReturn(Optional.of(decision));
+
+            assertThatThrownBy(() -> service.partnerNoShow(decision.getId(), "never came"))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+            assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.ACCEPTED);
+            verify(prescriptionRepository, never()).save(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("a super-admin in GLOBAL view has no hospital — the read is unscoped, not a 500")
+    class GlobalViewReads {
+
+        @Test
+        @DisplayName("listByPrescription answers instead of dereferencing a null hospital")
+        void listByPrescriptionUnscoped() {
+            org.springframework.data.domain.Pageable pageable =
+                    org.springframework.data.domain.PageRequest.of(0, 10);
+            PrescriptionRoutingDecision decision = PrescriptionRoutingDecision.builder()
+                    .prescription(prescription)
+                    .build();
+            RoutingDecisionResponseDTO dto = RoutingDecisionResponseDTO.builder().build();
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(routingDecisionRepository.findByPrescriptionId(prescriptionId, pageable))
+                    .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(decision)));
+            when(routingMapper.toResponseDTO(decision)).thenReturn(dto);
+
+            assertThat(service.listByPrescription(prescriptionId, pageable).getContent())
+                    .containsExactly(dto);
+        }
+
+        @Test
+        @DisplayName("checkStock asks the ORDER's hospital, not the caller's empty scope")
+        void checkStockUsesTheOrdersHospital() {
+            // Passing a null scope down would have answered "0 on hand, no
+            // partner pharmacies" with confidence — a wrong clinical answer
+            // the page then offers a back order on.
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(medicationCatalogItemRepository.findByHospitalIdAndCode(hospitalId, "AMOX500"))
+                    .thenReturn(Optional.of(catalogItem));
+            when(inventoryItemRepository
+                    .findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(
+                            hospitalId, catalogItem.getId()))
+                    .thenReturn(java.util.List.of());
+            when(pharmacyRepository.findByHospitalIdAndPharmacyTypeInAndActiveTrue(
+                    eq(hospitalId), any())).thenReturn(java.util.List.of(partnerPharmacy));
+
+            StockCheckResultDTO result = service.checkStock(prescriptionId);
+
+            assertThat(result.getPartnerPharmacies()).hasSize(1);
+            verify(medicationCatalogItemRepository).findByHospitalIdAndCode(hospitalId, "AMOX500");
+        }
+
+        @Test
+        @DisplayName("checkStock refuses a hospital-less order rather than reporting zeros")
+        void checkStockRefusesAHospitalLessOrder() {
+            prescription.setHospital(null);
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+            assertThatThrownBy(() -> service.checkStock(prescriptionId))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("a write is still refused without a hospital, as a 404 rather than a 500")
+        void writesStillNeedAHospital() {
+            // No claim stub: the write helper refuses on the missing hospital
+            // before anything asks whether this is a real super-admin.
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+
+            assertThatThrownBy(() -> service.printForPatient(prescriptionId))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+            assertThatThrownBy(() -> service.backOrder(prescriptionId, null))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+            verify(prescriptionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("listByPatient answers instead of dereferencing a null hospital")
+        void listByPatientUnscoped() {
+            org.springframework.data.domain.Pageable pageable =
+                    org.springframework.data.domain.PageRequest.of(0, 10);
+            PrescriptionRoutingDecision decision = PrescriptionRoutingDecision.builder()
+                    .prescription(prescription)
+                    .build();
+            RoutingDecisionResponseDTO dto = RoutingDecisionResponseDTO.builder().build();
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+            when(routingDecisionRepository.findByDecidedForPatientId(patient.getId(), pageable))
+                    .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(decision)));
+            when(routingMapper.toResponseDTO(decision)).thenReturn(dto);
+
+            assertThat(service.listByPatient(patient.getId(), pageable).getContent()).containsExactly(dto);
+        }
+
+        @Test
+        @DisplayName("a null hospital WITHOUT the JWT claim is refused, not served cross-tenant")
+        void inflatedAuthoritiesDoNotEarnAnUnscopedRead() {
+            // requireActiveHospitalId also returns null from its step-4
+            // fallback on the AUTHORITIES, and RoleValidator's own Javadoc
+            // warns those can be inflated by an impersonation context. Before
+            // this PR that principal hit the dereference and got a 500, which
+            // blocked the read by accident; serving them another tenant's
+            // routing history instead would be an escalation.
+            org.springframework.data.domain.Pageable pageable =
+                    org.springframework.data.domain.PageRequest.of(0, 10);
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+            assertThatThrownBy(() -> service.listByPrescription(prescriptionId, pageable))
                     .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
         }
     }

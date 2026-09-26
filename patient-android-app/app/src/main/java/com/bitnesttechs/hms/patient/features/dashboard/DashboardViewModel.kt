@@ -37,7 +37,7 @@ class DashboardViewModel @Inject constructor(
             try {
                 val healthDeferred = async { api.getHealthSummary() }
                 val appointmentsDeferred = async { api.getAppointments(size = 3) }
-                val labsDeferred = async { api.getLabResults(size = 5) }
+                val labsDeferred = async { api.getLabResults(limit = 5) }
                 val notificationsDeferred = async { api.getUnreadNotificationCount() }
 
                 val health = healthDeferred.await().body()?.data
