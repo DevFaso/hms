@@ -375,4 +375,143 @@ class PrescriptionServiceImplPatientOwnershipTest {
             .isInstanceOf(ResourceNotFoundException.class)
             .hasMessageContaining(NOT_FOUND_KEY);
     }
+
+    // ==================================================================
+    // Staff who are also patients, and the null-scope fail-open: the
+    // prescription twin of #754 and #746.
+    // ==================================================================
+
+    /** A prescription at ANOTHER hospital than the caller's scope, written for {@code subject}. */
+    private UUID prescriptionElsewhereFor(Patient subject) {
+        Hospital elsewhere = new Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        UUID id = UUID.randomUUID();
+        Prescription prescription = new Prescription();
+        prescription.setId(id);
+        prescription.setHospital(elsewhere);
+        prescription.setPatient(subject);
+        when(prescriptionRepository.findById(id)).thenReturn(Optional.of(prescription));
+        when(prescriptionMapper.toResponseDTO(prescription))
+            .thenReturn(PrescriptionResponseDTO.builder().id(id).build());
+        return id;
+    }
+
+    private UUID missingPrescriptionId() {
+        UUID missing = UUID.randomUUID();
+        when(prescriptionRepository.findById(missing)).thenReturn(Optional.empty());
+        return missing;
+    }
+
+    /** The refusal and the absence carry the same type, key and message. */
+    private void assertRefusedLikeAMiss(UUID refusedId) {
+        UUID missing = missingPrescriptionId();
+        Throwable refusal = org.assertj.core.api.Assertions.catchThrowable(
+            () -> service.getPrescriptionById(refusedId, Locale.ENGLISH));
+        Throwable absent = org.assertj.core.api.Assertions.catchThrowable(
+            () -> service.getPrescriptionById(missing, Locale.ENGLISH));
+
+        assertThat(refusal).isInstanceOf(ResourceNotFoundException.class);
+        assertThat(absent).isInstanceOf(ResourceNotFoundException.class);
+        assertThat(refusal.getMessage()).isEqualTo(absent.getMessage()).contains(NOT_FOUND_KEY);
+    }
+
+    @Test
+    @DisplayName("a nurse who was a patient at ANOTHER hospital reads her own prescription from it")
+    void staffWhoIsAlsoAPatientReadsTheirOwnPrescriptionAtAnotherHospital() {
+        // ROLE_NURSE makes her a clinical reader, so she is held to her own
+        // hospital, which refused her her OWN prescription from the hospital
+        // that treated her, on an endpoint that admits ROLE_PATIENT.
+        authenticateAs("ROLE_NURSE", "ROLE_PATIENT");
+        UUID mineElsewhere = prescriptionElsewhereFor(callerPatient);
+
+        assertThat(service.getPrescriptionById(mineElsewhere, Locale.ENGLISH).getId()).isEqualTo(mineElsewhere);
+    }
+
+    @Test
+    @DisplayName("and over SSO, where the user id is the appUserId claim of a Keycloak token")
+    void oidcStaffWhoIsAlsoAPatientReadsTheirOwnPrescriptionAtAnotherHospital() {
+        authenticateViaOidcAs("ROLE_NURSE", "ROLE_PATIENT");
+        UUID mineElsewhere = prescriptionElsewhereFor(callerPatient);
+
+        assertThat(service.getPrescriptionById(mineElsewhere, Locale.ENGLISH).getId()).isEqualTo(mineElsewhere);
+        org.mockito.Mockito.verify(authService, org.mockito.Mockito.never()).getCurrentUserId();
+    }
+
+    @Test
+    @DisplayName("that nurse is still refused a stranger's prescription at another hospital, like a miss")
+    void staffWhoIsAlsoAPatientIsRefusedAStrangersPrescriptionElsewhere() {
+        authenticateAs("ROLE_NURSE", "ROLE_PATIENT");
+        UUID strangersElsewhere = prescriptionElsewhereFor(otherPatient());
+
+        assertRefusedLikeAMiss(strangersElsewhere);
+    }
+
+    @Test
+    @DisplayName("a nurse linked to the patient row but WITHOUT ROLE_PATIENT is refused it elsewhere")
+    void linkedStaffWithoutPatientRoleIsRefusedTheirRowElsewhere() {
+        // The account is linked (existsByIdAndUserId is true, stubbed in
+        // setUp) but the patient grant was never given or has been revoked:
+        // the link is a fact about the account, not a grant.
+        authenticateAs("ROLE_NURSE");
+        UUID linkedElsewhere = prescriptionElsewhereFor(callerPatient);
+
+        assertRefusedLikeAMiss(linkedElsewhere);
+    }
+
+    @Test
+    @DisplayName("a patient scoped to one hospital reads their own prescription from another")
+    void patientReadsTheirOwnPrescriptionAtAnotherHospital() {
+        authenticateAs("ROLE_PATIENT");
+        UUID mineElsewhere = prescriptionElsewhereFor(callerPatient);
+
+        assertThat(service.getPrescriptionById(mineElsewhere, Locale.ENGLISH).getId()).isEqualTo(mineElsewhere);
+    }
+
+    @Test
+    @DisplayName("an expanded super-admin pinned to one hospital is still bounded by it for a stranger's")
+    void pinnedExpandedSuperAdminIsBoundedForAStrangersPrescription() {
+        // RoleExpansion gives an expanded super-admin ROLE_PATIENT, so the
+        // fallback is live for them; it opens only what their OWN account owns.
+        authenticateAs(com.example.hms.security.RoleExpansion
+            .expand(List.of("ROLE_SUPER_ADMIN")).toArray(new String[0]));
+        UUID strangersElsewhere = prescriptionElsewhereFor(otherPatient());
+
+        assertRefusedLikeAMiss(strangersElsewhere);
+    }
+
+    @Test
+    @DisplayName("an authorities-only super-admin with no hospital is refused before the lookup")
+    void authoritiesOnlySuperAdminWithNullScopeIsRefused() {
+        // requireActiveHospitalId()'s step 4: the authorities say super-admin,
+        // the verified flag does not, and the scope comes back null. That null
+        // used to read every tenant's prescriptions.
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+        authenticateAs("ROLE_SUPER_ADMIN");
+        UUID strangersElsewhere = prescriptionElsewhereFor(otherPatient());
+        UUID missing = UUID.randomUUID();
+
+        assertThatThrownBy(() -> service.getPrescriptionById(strangersElsewhere, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageContaining("Hospital context required");
+        assertThatThrownBy(() -> service.getPrescriptionById(missing, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageContaining("Hospital context required");
+        // Refused before the row is read, so the answer cannot say whether the id is real.
+        org.mockito.Mockito.verify(prescriptionRepository, org.mockito.Mockito.never())
+            .findById(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    @DisplayName("a verified super-admin in global view still reads any hospital's prescription")
+    void verifiedSuperAdminInGlobalViewStillReads() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        authenticateAs(com.example.hms.security.RoleExpansion
+            .expand(List.of("ROLE_SUPER_ADMIN")).toArray(new String[0]));
+        UUID strangersElsewhere = prescriptionElsewhereFor(otherPatient());
+
+        assertThat(service.getPrescriptionById(strangersElsewhere, Locale.ENGLISH).getId())
+            .isEqualTo(strangersElsewhere);
+    }
 }

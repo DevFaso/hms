@@ -68,8 +68,8 @@ public final class ReaderRolePredicates {
      * so an expanded super-admin "holds" it whether or not it was ever granted
      * to them, and "a link is not a grant" does not hold for that one role.
      * It is accepted, deliberately, for the encounter-read ownership
-     * fallback, because it widens nothing a super-admin could not already
-     * reach: a verified super-admin in global view already reads every
+     * fallback and its prescription twin ({@code GET /prescriptions/{id}}),
+     * because it widens nothing a super-admin could not already reach: a verified super-admin in global view already reads every
      * tenant; a super-admin pinned to one hospital gains through the fallback
      * only records their OWN account owns elsewhere, and the pin is a view
      * choice rather than a boundary; an unverified one (the step-4 road of

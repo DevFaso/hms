@@ -130,9 +130,83 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Override
     @Transactional
     public PrescriptionResponseDTO getPrescriptionById(UUID id, Locale locale) {
-        Prescription prescription = findWithinHospitalScope(id);
-        requireOwnPrescriptionWhenPatient(prescription);
+        org.springframework.security.core.Authentication auth =
+            org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        // Scope first, before the row is read: a caller refused for having no
+        // hospital must get the same answer whether or not the id is real.
+        UUID hospitalId = resolvePrescriptionReadScope();
+        Prescription prescription = prescriptionRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
+        if (isReadableFromScope(prescription, hospitalId)) {
+            requireOwnPrescriptionWhenPatient(prescription, auth);
+        } else if (!(ReaderRolePredicates.holdsPatientRole(auth) && callerOwns(prescription, auth))) {
+            // Staff who are also patients: the fallback #754 gave the
+            // encounter reads. A nurse at hospital A who was a patient at
+            // hospital B is a clinical reader here, so she is held to A, which
+            // refused her her OWN prescription from B on an endpoint that
+            // admits ROLE_PATIENT. Owning it opens it wherever she works, but
+            // only with the patient grant: a staff account linked to a patient
+            // row whose ROLE_PATIENT was never granted, or was revoked, must
+            // not read that row across hospitals through its clinical role.
+            // Ownership proven here also settles the patient-only check, so a
+            // pure patient scoped elsewhere reads their own the same way.
+            //
+            // The super-admin exception ReaderRolePredicates.holdsPatientRole
+            // documents, weighed for this caller: an expanded super-admin
+            // holds ROLE_PATIENT, and gains through this only prescriptions
+            // their OWN account owns at a hospital other than the one they
+            // pinned; an unverified one never gets here
+            // (resolvePrescriptionReadScope). resolve-clarification also reads
+            // through here and is ROLE_DOCTOR-only; for it the fallback can
+            // only turn a 404 on the read-back of the doctor's own
+            // prescription into the record.
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
+        }
         return prescriptionMapper.toResponseDTO(prescription);
+    }
+
+    /**
+     * The hospital a by-id read is bounded by, or {@code null} for a verified
+     * super-admin in global view: the rule #746 gave the encounter reads.
+     *
+     * <p>{@code requireActiveHospitalId()} returns {@code null} on two roads.
+     * Step 1 is {@code HospitalContext.isSuperAdmin()}, which is what
+     * {@code isSuperAdminFromJwtClaim()} reads. Step 4 is the safety net that
+     * fires when that flag is FALSE yet the authorities collection says
+     * super-admin, the road {@code RoleValidator}'s own javadoc warns an
+     * impersonation context could take. {@link #findWithinHospitalScope} treats
+     * any {@code null} as unscoped, so step 4 read every tenant's
+     * prescriptions. Here a {@code null} is unscoped only when the verified
+     * flag agrees; otherwise the caller is refused before the lookup, with the
+     * answer any caller who has no hospital gets.
+     *
+     * <p>{@link #getPrescriptionAfterWrite} keeps {@link #findWithinHospitalScope}
+     * unchanged: its contract is pinned by
+     * {@code PrescriptionAfterWriteCallerGuardTest}.
+     */
+    private UUID resolvePrescriptionReadScope() {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
+            throw new BusinessException(RoleValidator.HOSPITAL_CONTEXT_REQUIRED);
+        }
+        return hospitalId;
+    }
+
+    /**
+     * Inside the boundary {@link #resolvePrescriptionReadScope} worked out: any
+     * prescription for a verified super-admin in global view, otherwise one at
+     * the caller's hospital. A prescription with no hospital is outside: the
+     * one we cannot place is exactly the one not to hand out.
+     * {@code Prescription.hospital} is {@code nullable = false}, so no stored
+     * row reaches that branch.
+     */
+    private static boolean isReadableFromScope(Prescription prescription, UUID hospitalId) {
+        if (hospitalId == null) {
+            return true;
+        }
+        return prescription.getHospital() != null
+            && hospitalId.equals(prescription.getHospital().getId());
     }
 
     @Override
@@ -183,13 +257,20 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * on the OIDC path. The write endpoints that admit roles this read does not
      * go through {@link #getPrescriptionAfterWrite} instead.
      */
-    private void requireOwnPrescriptionWhenPatient(Prescription prescription) {
-        org.springframework.security.core.Authentication auth =
-            org.springframework.security.core.context.SecurityContextHolder
-                .getContext().getAuthentication();
-        if (!PrescriptionReaderRoles.isPatientOnly(auth)) {
-            return;
+    private void requireOwnPrescriptionWhenPatient(Prescription prescription,
+                                                   org.springframework.security.core.Authentication auth) {
+        if (PrescriptionReaderRoles.isPatientOnly(auth) && !callerOwns(prescription, auth)) {
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
+    }
+
+    /**
+     * Is this prescription's patient row linked to the caller's user account?
+     * Shared by the patient-only check and the staff-owner fallback so the two
+     * cannot disagree about who owns what.
+     */
+    private boolean callerOwns(Prescription prescription,
+                               org.springframework.security.core.Authentication auth) {
         // authUtils, not authService.getCurrentUserId(): the latter resolves
         // only a CustomUserDetails principal and throws 401 on a
         // JwtAuthenticationToken, so on the OIDC path it would refuse the
@@ -206,13 +287,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // this method promises a 404 or the record. The membership form cannot,
         // it stays right however many rows the account owns, and it decides the
         // question without materialising a Patient and decrypting its PHI.
-        boolean theirs = subjectPatientId != null
+        return subjectPatientId != null
             && authUtils.resolveUserId(auth)
                 .map(userId -> patientRepository.existsByIdAndUserId(subjectPatientId, userId))
                 .orElse(false);
-        if (!theirs) {
-            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
-        }
     }
 
     /**

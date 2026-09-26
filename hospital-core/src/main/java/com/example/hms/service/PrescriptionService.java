@@ -17,6 +17,13 @@ public interface PrescriptionService {
     /**
      * The guarded read: hospital scope, and a patient principal may only read
      * their own prescription. This is the one to call for a READ.
+     *
+     * <p>A {@code null} hospital scope reads across tenants only for a
+     * verified super-admin ({@code isSuperAdminFromJwtClaim()}); any other
+     * caller without a hospital is refused before the lookup. A caller who
+     * holds {@code ROLE_PATIENT} and owns the prescription reads it from any
+     * hospital, so a staff member who is also a patient elsewhere reads her
+     * own. Every other refusal answers exactly as a missing id does.
      */
     PrescriptionResponseDTO getPrescriptionById(UUID id, Locale locale);
 
