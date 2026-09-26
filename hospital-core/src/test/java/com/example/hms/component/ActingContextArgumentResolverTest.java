@@ -3,8 +3,6 @@ package com.example.hms.component;
 import com.example.hms.enums.ActingMode;
 import com.example.hms.security.ActingContext;
 import com.example.hms.security.CustomUserDetails;
-import com.example.hms.security.context.HospitalContext;
-import com.example.hms.security.context.HospitalContextHolder;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,7 +17,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.context.request.NativeWebRequest;
 
 import java.util.Collections;
-import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,13 +42,11 @@ class ActingContextArgumentResolverTest {
     void setUp() {
         resolver = new ActingContextArgumentResolver();
         SecurityContextHolder.clearContext();
-        HospitalContextHolder.clear();
     }
 
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
-        HospitalContextHolder.clear();
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -211,11 +206,11 @@ class ActingContextArgumentResolverTest {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // resolveArgument — hospital: the VALIDATED X-Hospital-Id, never the raw header
+    // resolveArgument — X-Hospital-Id header scenarios
     // ═══════════════════════════════════════════════════════════════
 
     @Nested
-    class ResolveArgument_HospitalIdTests {
+    class ResolveArgument_HospitalIdHeaderTests {
 
         @BeforeEach
         void setUpRequest() {
@@ -225,13 +220,9 @@ class ActingContextArgumentResolverTest {
         }
 
         @Test
-        void resolveArgument_headerTheFilterAccepted_isTheHospital() {
+        void resolveArgument_validHospitalId_parsesUUID() {
             UUID expectedId = UUID.randomUUID();
-            HospitalContextHolder.setContext(HospitalContext.builder()
-                .activeHospitalId(expectedId)
-                .permittedHospitalIds(Set.of(expectedId))
-                .headerOverridden(true)
-                .build());
+            when(httpRequest.getHeader("X-Hospital-Id")).thenReturn(expectedId.toString());
 
             ActingContext ctx = (ActingContext) resolver.resolveArgument(parameter, null, webRequest, null);
 
@@ -239,42 +230,8 @@ class ActingContextArgumentResolverTest {
         }
 
         @Test
-        void resolveArgument_superAdminChipScope_isTheHospital() {
-            UUID chosen = UUID.randomUUID();
-            HospitalContextHolder.setContext(HospitalContext.builder()
-                .activeHospitalId(chosen)
-                .superAdmin(true)
-                .headerOverridden(true)
-                .build());
-
-            ActingContext ctx = (ActingContext) resolver.resolveArgument(parameter, null, webRequest, null);
-
-            assertThat(ctx.hospitalId()).isEqualTo(chosen);
-        }
-
-        @Test
-        void resolveArgument_rawHeaderTheFilterRejected_isIgnored() {
-            // The filter left the token's hospital in place (out of scope, or
-            // an empty permitted set); the header is still on the request.
-            // It used to be parsed straight into ActingContext from here.
-            UUID tokenHospital = UUID.randomUUID();
-            UUID foreign = UUID.randomUUID();
-            lenient().when(httpRequest.getHeader("X-Hospital-Id")).thenReturn(foreign.toString());
-            HospitalContextHolder.setContext(HospitalContext.builder()
-                .activeHospitalId(tokenHospital)
-                .permittedHospitalIds(Set.of(tokenHospital))
-                .build());
-
-            ActingContext ctx = (ActingContext) resolver.resolveArgument(parameter, null, webRequest, null);
-
-            assertThat(ctx.hospitalId())
-                .as("a header the security filter did not accept must not reach the controller")
-                .isNull();
-        }
-
-        @Test
-        void resolveArgument_rawHeaderWithNoContext_isIgnored() {
-            lenient().when(httpRequest.getHeader("X-Hospital-Id")).thenReturn(UUID.randomUUID().toString());
+        void resolveArgument_nullHospitalId_hospitalIdIsNull() {
+            when(httpRequest.getHeader("X-Hospital-Id")).thenReturn(null);
 
             ActingContext ctx = (ActingContext) resolver.resolveArgument(parameter, null, webRequest, null);
 
@@ -282,11 +239,35 @@ class ActingContextArgumentResolverTest {
         }
 
         @Test
-        void resolveArgument_tokenHospitalWithoutHeader_isNotSurfaced() {
-            // No header: the consumers resolve their own default, as before.
-            HospitalContextHolder.setContext(HospitalContext.builder()
-                .activeHospitalId(UUID.randomUUID())
-                .build());
+        void resolveArgument_blankHospitalId_hospitalIdIsNull() {
+            when(httpRequest.getHeader("X-Hospital-Id")).thenReturn("   ");
+
+            ActingContext ctx = (ActingContext) resolver.resolveArgument(parameter, null, webRequest, null);
+
+            assertThat(ctx.hospitalId()).isNull();
+        }
+
+        @Test
+        void resolveArgument_emptyHospitalId_hospitalIdIsNull() {
+            when(httpRequest.getHeader("X-Hospital-Id")).thenReturn("");
+
+            ActingContext ctx = (ActingContext) resolver.resolveArgument(parameter, null, webRequest, null);
+
+            assertThat(ctx.hospitalId()).isNull();
+        }
+
+        @Test
+        void resolveArgument_invalidUUIDHospitalId_hospitalIdIsNull() {
+            when(httpRequest.getHeader("X-Hospital-Id")).thenReturn("not-a-uuid");
+
+            ActingContext ctx = (ActingContext) resolver.resolveArgument(parameter, null, webRequest, null);
+
+            assertThat(ctx.hospitalId()).isNull();
+        }
+
+        @Test
+        void resolveArgument_malformedUUID_hospitalIdIsNull() {
+            when(httpRequest.getHeader("X-Hospital-Id")).thenReturn("12345");
 
             ActingContext ctx = (ActingContext) resolver.resolveArgument(parameter, null, webRequest, null);
 
@@ -348,11 +329,7 @@ class ActingContextArgumentResolverTest {
                 new UsernamePasswordAuthenticationToken(cud, "pw", Collections.emptyList()));
 
             when(httpRequest.getHeader("X-Act-As")).thenReturn("PATIENT");
-            HospitalContextHolder.setContext(HospitalContext.builder()
-                .activeHospitalId(hospitalId)
-                .permittedHospitalIds(Set.of(hospitalId))
-                .headerOverridden(true)
-                .build());
+            when(httpRequest.getHeader("X-Hospital-Id")).thenReturn(hospitalId.toString());
             when(httpRequest.getHeader("X-Role-Code")).thenReturn("ROLE_NURSE");
 
             ActingContext ctx = (ActingContext) resolver.resolveArgument(parameter, null, webRequest, null);
@@ -369,7 +346,7 @@ class ActingContextArgumentResolverTest {
         @Test
         void resolveArgument_noHeadersNoAuth_returnsMinimalContext() {
             when(httpRequest.getHeader("X-Act-As")).thenReturn(null);
-            lenient().when(httpRequest.getHeader("X-Hospital-Id")).thenReturn(null);
+            when(httpRequest.getHeader("X-Hospital-Id")).thenReturn(null);
             when(httpRequest.getHeader("X-Role-Code")).thenReturn(null);
 
             ActingContext ctx = (ActingContext) resolver.resolveArgument(parameter, null, webRequest, null);
@@ -386,7 +363,7 @@ class ActingContextArgumentResolverTest {
         @Test
         void resolveArgument_staffModeWithInvalidHospitalId_hospitalIdNull() {
             when(httpRequest.getHeader("X-Act-As")).thenReturn("STAFF");
-            lenient().when(httpRequest.getHeader("X-Hospital-Id")).thenReturn("garbage-value");
+            when(httpRequest.getHeader("X-Hospital-Id")).thenReturn("garbage-value");
             when(httpRequest.getHeader("X-Role-Code")).thenReturn(null);
 
             ActingContext ctx = (ActingContext) resolver.resolveArgument(parameter, null, webRequest, null);

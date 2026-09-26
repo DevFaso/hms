@@ -48,10 +48,15 @@ public final class HospitalContextRequestOverrides {
      *       That includes a principal whose permitted set is EMPTY: an
      *       empty set means the principal holds no hospital, not that it
      *       may pick any. It is empty for a patient (ROLE_PATIENT is a
-     *       global, no-hospital assignment), for a user whose assignments
-     *       were revoked after sign-in (the set is read live), and for a
-     *       Keycloak token with no hospital claims; honouring the header
-     *       for them let each one act at any hospital it named.</li>
+     *       global, no-hospital assignment), for a Keycloak token with no
+     *       hospital claims, and, on the legacy HMS-token path only, for a
+     *       user whose assignments were revoked after sign-in: that path
+     *       reads the set live from the assignment table, while
+     *       {@code KeycloakHospitalContextResolver} builds it from the
+     *       token's {@code role_assignments} / {@code hospital_id} claims,
+     *       so a Keycloak user revoked at a hospital keeps it until the
+     *       token expires. Honouring the header for an empty set let each
+     *       of these principals act at any hospital it named.</li>
      * </ul>
      */
     public static HospitalContext applyRequestOverrides(HospitalContext context,

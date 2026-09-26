@@ -4,8 +4,6 @@ package com.example.hms.component;
 import com.example.hms.enums.ActingMode;
 import com.example.hms.security.ActingContext;
 import com.example.hms.security.CustomUserDetails;
-import com.example.hms.security.context.HospitalContext;
-import com.example.hms.security.context.HospitalContextHolder;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.core.MethodParameter;
 import org.springframework.security.core.Authentication;
@@ -43,20 +41,15 @@ public class ActingContextArgumentResolver implements HandlerMethodArgumentResol
         String actAs = Optional.ofNullable(req.getHeader("X-Act-As")).orElse("STAFF");
         ActingMode mode = "PATIENT".equalsIgnoreCase(actAs) ? ActingMode.PATIENT : ActingMode.STAFF;
 
-        // The hospital the caller chose with X-Hospital-Id, AFTER the security
-        // filters validated it — never the raw header. Reading the header here
-        // let any caller name any hospital to EncounterController and
-        // PatientInsuranceController without passing the permitted-scope check
-        // in HospitalContextRequestOverrides. Only a header the filter accepted
-        // (headerOverridden) counts, so "no header" and "a rejected header"
-        // both stay null, exactly as "no header" always did; the token's
-        // primary hospital is deliberately NOT surfaced here (that is what
-        // pinnedHospitalId() would add), because both consumers treat a null
-        // hospital as "the caller named none" and resolve their own default.
-        HospitalContext hospitalContext = HospitalContextHolder.getContextOrEmpty();
-        UUID hospitalId = hospitalContext.isHeaderOverridden()
-            ? hospitalContext.getActiveHospitalId()
-            : null;
+        UUID hospitalId = null;
+        String hid = req.getHeader("X-Hospital-Id");
+        if (hid != null && !hid.isBlank()) {
+            try {
+                hospitalId = UUID.fromString(hid);
+            } catch (IllegalArgumentException ignored) {
+                // Malformed UUID in X-Hospital-Id header — fall back to null
+            }
+        }
 
         String roleCode = req.getHeader("X-Role-Code");
 

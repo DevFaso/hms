@@ -11,7 +11,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -20,7 +19,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.UUID;
@@ -73,18 +71,11 @@ public class PharmacyDirectoryController {
         @RequestParam(required = false) UUID hospitalId,
         Authentication auth
     ) {
-        requireAuth(auth);
+        authUtils.requireAuth(auth);
         UUID resolvedHospital = resolveHospital(auth, hospitalId);
         List<PharmacyLocationResponseDTO> pharmacies = pharmacyDirectoryService
             .listPatientPharmacies(patientId, resolvedHospital);
         return ResponseEntity.ok(pharmacies);
-    }
-
-    private void requireAuth(Authentication auth) {
-        if (auth == null || !auth.isAuthenticated()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,
-                "Authentication is required for pharmacy directory access.");
-        }
     }
 
     /**
@@ -98,7 +89,9 @@ public class PharmacyDirectoryController {
      * validated it) and the assignment table. It answers {@code null} for a
      * super-admin who named no hospital parameter even when their scope chip
      * pinned one, so the validated context is consulted once more for that
-     * case.
+     * case. A super-admin does reach these handlers: {@code RoleExpansion}
+     * grants {@code ROLE_SUPER_ADMIN} holders {@code ROLE_DOCTOR} and
+     * {@code ROLE_NURSE}, which the {@code @PreAuthorize} admits.
      *
      * <p>{@code /patients/{patientId}} used to return the raw parameter, then
      * the raw {@code X-Hospital-Id} header, unchecked, so any clinician could

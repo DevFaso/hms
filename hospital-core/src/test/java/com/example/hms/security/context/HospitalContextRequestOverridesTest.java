@@ -123,7 +123,8 @@ class HospitalContextRequestOverridesTest {
     void emptyPermittedScopeIgnoresOverride() {
         // An empty permitted set means the principal holds no hospital —
         // a patient's global ROLE_PATIENT assignment, a user revoked after
-        // sign-in, a Keycloak token with no hospital claims. It used to be
+        // sign-in (legacy HMS-token path, which reads the set live), a
+        // Keycloak token with no hospital claims. It used to be
         // read as "may pick any", which let each of them act at whatever
         // hospital the header named.
         HospitalContext context = HospitalContext.builder().build();

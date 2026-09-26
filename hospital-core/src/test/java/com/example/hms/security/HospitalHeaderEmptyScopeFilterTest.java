@@ -47,9 +47,12 @@ import static org.mockito.Mockito.when;
  * <ul>
  *   <li>a patient: ROLE_PATIENT is granted as a global (no-hospital)
  *       assignment, and the permitted set is built from hospital ids only;</li>
- *   <li>a clinician whose assignments were revoked after sign-in: the set is
- *       read live from the assignment table (E9 #55), while the authorities
- *       still come from the token until it expires;</li>
+ *   <li>on the legacy HMS-token path, a clinician whose assignments were
+ *       revoked after sign-in: that path reads the set live from the
+ *       assignment table (E9 #55), while the authorities still come from the
+ *       token until it expires (the Keycloak path builds the set from the
+ *       token's claims, so a revoked Keycloak user keeps the hospital until
+ *       expiry instead);</li>
  *   <li>a Keycloak token that carries no {@code hospital_id} or
  *       {@code role_assignments} claim.</li>
  * </ul>

@@ -5,6 +5,7 @@ import com.example.hms.enums.PharmacyType;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.pharmacy.PharmacyRepository;
+import com.example.hms.security.RoleExpansion;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.PharmacyDirectoryService;
@@ -121,6 +122,13 @@ class PharmacyDirectoryControllerScopeTest {
     @Test
     @DisplayName("patients: a super-admin's scope chip (a validated header) still scopes the call")
     void patientPharmaciesFollowASuperAdminChip() throws Exception {
+        // Standalone MockMvc skips @PreAuthorize, so first show a real
+        // super-admin passes it: the JWT path expands ROLE_SUPER_ADMIN
+        // through RoleExpansion, which grants ROLE_DOCTOR and ROLE_NURSE.
+        Set<String> superAdminAuthorities = RoleExpansion.expand(List.of("ROLE_SUPER_ADMIN"));
+        assertThat(superAdminAuthorities)
+            .as("the handlers admit DOCTOR/NURSE/MIDWIFE/PHARMACIST; a super-admin holds some of them")
+            .containsAnyOf("ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_PHARMACIST");
         HospitalContextHolder.setContext(HospitalContext.builder()
             .principalUserId(USER_ID)
             .activeHospitalId(HOSPITAL_B)
@@ -130,7 +138,7 @@ class PharmacyDirectoryControllerScopeTest {
 
         mockMvc.perform(get(PATIENT_PATH, PATIENT_ID)
                 .header(HEADER, HOSPITAL_B.toString())
-                .principal(auth("ROLE_SUPER_ADMIN")))
+                .principal(auth(superAdminAuthorities)))
             .andExpect(status().isOk());
 
         verify(directoryService).listPatientPharmacies(PATIENT_ID, HOSPITAL_B);
@@ -184,10 +192,14 @@ class PharmacyDirectoryControllerScopeTest {
     }
 
     private static Authentication auth(String role) {
+        return auth(List.of(role));
+    }
+
+    private static Authentication auth(java.util.Collection<String> roles) {
         Jwt jwt = Jwt.withTokenValue("token")
             .header("alg", "none")
             .claim("uid", USER_ID.toString())
             .build();
-        return new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority(role)));
+        return new JwtAuthenticationToken(jwt, roles.stream().map(SimpleGrantedAuthority::new).toList());
     }
 }
