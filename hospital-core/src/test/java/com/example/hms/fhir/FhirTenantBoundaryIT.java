@@ -118,6 +118,7 @@ class FhirTenantBoundaryIT {
     @Autowired private IdleSessionTracker idleSessionTracker;
     @Autowired private FhirTenantBoundary boundary;
     @Autowired private FhirContext fhirContext;
+    @Autowired private FhirWriteProperties writeProperties;
     @Autowired private List<IResourceProvider> providers;
     @Autowired private OrganizationRepository organizationRepository;
     @Autowired private HospitalRepository hospitalRepository;
@@ -141,6 +142,8 @@ class FhirTenantBoundaryIT {
     private User superAdmin;
     private Patient patientP;
     private Patient patientQ;
+    private String mrnOfPAtA;
+    private String mrnOfPAtB;
     private final Rows atA = new Rows();
     private final Rows atB = new Rows();
 
@@ -150,8 +153,13 @@ class FhirTenantBoundaryIT {
     private final List<UUID> registrations = new ArrayList<>();
     private final List<UUID> patients = new ArrayList<>();
 
-    /** One row of each leaking type at one hospital, for patient P. */
+    /**
+     * One row of each leaking type at one hospital, for patient P; and the
+     * patient each hospital's Patient row stands for (P, registered at both,
+     * for A; Q, registered at B only, for B).
+     */
     private static final class Rows {
+        UUID patient;
         UUID encounter;
         UUID condition;
         UUID immunization;
@@ -159,6 +167,7 @@ class FhirTenantBoundaryIT {
 
         String idOf(String type) {
             return switch (type) {
+                case "Patient" -> patient.toString();
                 case "Encounter" -> encounter.toString();
                 case "Condition" -> condition.toString();
                 case "Immunization" -> immunization.toString();
@@ -168,7 +177,13 @@ class FhirTenantBoundaryIT {
         }
     }
 
-    private static final List<String> TYPES = List.of("Encounter", "Condition", "MedicationRequest", "Immunization");
+    private static final List<String> TYPES =
+        List.of("Patient", "Encounter", "Condition", "MedicationRequest", "Immunization");
+
+    /** A search of {@code type} by patient: {@code _id} for Patient itself, {@code patient} for the rest. */
+    private static String byPatient(String type, Object patientId) {
+        return "/fhir/" + type + ("Patient".equals(type) ? "?_id=" : "?patient=") + patientId;
+    }
 
     @BeforeEach
     void setUp() {
@@ -200,11 +215,13 @@ class FhirTenantBoundaryIT {
         superAdmin = saveUser("root");
 
         patientP = savePatient(hospitalA);
-        register(patientP, hospitalA);
-        register(patientP, hospitalB);
+        mrnOfPAtA = register(patientP, hospitalA);
+        mrnOfPAtB = register(patientP, hospitalB);
         patientQ = savePatient(hospitalB);
         register(patientQ, hospitalB);
 
+        atA.patient = patientP.getId();
+        atB.patient = patientQ.getId();
         seedRows(atA, hospitalA, staffA, assignmentA);
         seedRows(atB, hospitalB, staffB, assignmentB);
     }
@@ -246,11 +263,70 @@ class FhirTenantBoundaryIT {
             assertThat(response.getStatusCode().value()).as(type).isEqualTo(200);
             assertThat(response.getBody()).as(type).contains(atA.idOf(type));
         }
-        // Patient is gated here too, but its in-tenant read is not asserted:
-        // PatientFhirMapper touches the LAZY hospitalRegistrations with no
-        // session open (open-in-view is off and the HAPI servlet has no
-        // transaction), so GET Patient/{id} is a 500 on develop with or
-        // without this boundary — a separate defect, reported with this PR.
+    }
+
+    @Test
+    @DisplayName("an in-tenant Patient read and search answer 200 with this hospital's MRN and no other's")
+    void inTenantPatientReadAndSearchWork() {
+        // PatientFhirMapper walks the LAZY hospitalRegistrations; with
+        // open-in-view off, mapping outside a transaction was a 500 for every
+        // caller on every Patient read and search. P is registered at A and B:
+        // a reader bound to A must not learn B's MRN, nor that B holds P.
+        String token = legacyToken(doctorA, ROLE_DOCTOR);
+        String id = patientP.getId().toString();
+
+        ResponseEntity<String> read = get("/fhir/Patient/" + id, token, null);
+        assertThat(read.getStatusCode().value()).as(read.getBody()).isEqualTo(200);
+        assertOnlyTheMrnAtA(read.getBody(), "read");
+
+        for (String query : List.of("_id=" + id, "name=" + patientP.getLastName(), "identifier=" + mrnOfPAtA)) {
+            ResponseEntity<String> search = get("/fhir/Patient?" + query, token, null);
+            assertThat(entryIds(json(search))).as(query).containsExactly(id);
+            assertOnlyTheMrnAtA(search.getBody(), query);
+        }
+    }
+
+    @Test
+    @DisplayName("a Patient PUT and conditional create answer with the resource, not a 500 after the commit")
+    void patientWritesAnswerWithTheResource() {
+        // The write flag is read on every request; flipped here rather than in
+        // a context of its own, and put back whatever happens.
+        boolean wasEnabled = writeProperties.isEnabled();
+        writeProperties.setEnabled(true);
+        try {
+            String token = legacyToken(doctorA, ROLE_DOCTOR);
+            String id = patientP.getId().toString();
+            String mrnSystem = "urn:hms:hospital:" + hospitalA.getId() + ":mrn";
+
+            // Nothing to change: the patient is still an uninitialised proxy
+            // (it comes from registration.getPatient()) when the answer is mapped.
+            String unchanged = "{\"resourceType\":\"Patient\",\"id\":\"" + id + "\"}";
+            ResponseEntity<String> noOp = send(HttpMethod.PUT, "/fhir/Patient/" + id, unchanged, token, null);
+            assertThat(noOp.getStatusCode().value()).as(noOp.getBody()).isEqualTo(200);
+            assertOnlyTheMrnAtA(noOp.getBody(), "no-op PUT");
+
+            String newPhone = "+22670" + nextId().substring(6);
+            String newEmail = "Changed." + nextId() + "@Boundary.Test";
+            String changed = "{\"resourceType\":\"Patient\",\"id\":\"" + id + "\",\"telecom\":["
+                + "{\"system\":\"phone\",\"use\":\"mobile\",\"value\":\"" + newPhone + "\"},"
+                + "{\"system\":\"email\",\"value\":\"" + newEmail + "\"}]}";
+            ResponseEntity<String> update = send(HttpMethod.PUT, "/fhir/Patient/" + id, changed, token, null);
+            assertThat(update.getStatusCode().value()).as(update.getBody()).isEqualTo(200);
+            assertThat(update.getBody()).contains(newPhone);
+            // What the row holds, not what was sent: the entity lower-cases the email when it is flushed.
+            assertThat(update.getBody()).contains(newEmail.toLowerCase()).doesNotContain(newEmail);
+            assertOnlyTheMrnAtA(update.getBody(), "PUT");
+
+            String body = "{\"resourceType\":\"Patient\",\"identifier\":[{\"system\":\"" + mrnSystem
+                + "\",\"value\":\"" + mrnOfPAtA + "\"}]}";
+            ResponseEntity<String> conditional = send(HttpMethod.POST, "/fhir/Patient", body, token,
+                "identifier=" + mrnSystem + "|" + mrnOfPAtA);
+            assertThat(conditional.getStatusCode().value()).as(conditional.getBody()).isEqualTo(200);
+            assertThat(objectMapper.readTree(conditional.getBody()).get("id").asText()).isEqualTo(id);
+            assertOnlyTheMrnAtA(conditional.getBody(), "conditional create");
+        } finally {
+            writeProperties.setEnabled(wasEnabled);
+        }
     }
 
     @Test
@@ -260,7 +336,6 @@ class FhirTenantBoundaryIT {
         for (String type : TYPES) {
             assertIndistinguishable(type, atB.idOf(type), token, null);
         }
-        assertIndistinguishable("Patient", patientQ.getId().toString(), token, null);
     }
 
     // --------------------------------------------------------------- searches
@@ -270,17 +345,17 @@ class FhirTenantBoundaryIT {
     void searchIsBoundedToTheHospital() {
         String token = legacyToken(doctorA, ROLE_DOCTOR);
         for (String type : TYPES) {
-            JsonNode bundle = json(get("/fhir/" + type + "?patient=" + patientP.getId(), token, null));
+            JsonNode bundle = json(get(byPatient(type, patientP.getId()), token, null));
             assertThat(entryIds(bundle)).as(type).containsExactly(atA.idOf(type));
             assertThat(bundle.get("total").asInt()).as(type).isEqualTo(1);
 
             // _count/_offset/_summary=count cannot bring the other hospital's count back.
-            JsonNode counted = json(get("/fhir/" + type + "?patient=" + patientP.getId()
+            JsonNode counted = json(get(byPatient(type, patientP.getId())
                 + "&_count=1&_offset=0&_summary=count", token, null));
             assertThat(counted.get("total").asInt()).as("%s _summary=count", type).isEqualTo(1);
 
             // A page of one is not honoured: the whole in-tenant result comes back.
-            JsonNode paged = json(get("/fhir/" + type + "?patient=" + patientP.getId() + "&_count=1", token, null));
+            JsonNode paged = json(get(byPatient(type, patientP.getId()) + "&_count=1", token, null));
             assertThat(entryIds(paged)).as("%s _count=1", type).containsExactly(atA.idOf(type));
             assertThat(paged.get("total").asInt()).as("%s _count=1 total", type).isEqualTo(1);
         }
@@ -292,19 +367,14 @@ class FhirTenantBoundaryIT {
         String token = legacyToken(doctorA, ROLE_DOCTOR);
         String unknown = UUID.randomUUID().toString();
         for (String type : TYPES) {
-            ResponseEntity<String> foreign = get("/fhir/" + type + "?patient=" + patientQ.getId(), token, null);
-            ResponseEntity<String> nobody = get("/fhir/" + type + "?patient=" + unknown, token, null);
+            // Patient searches by _id: a patient registered elsewhere used to be a 500 there.
+            ResponseEntity<String> foreign = get(byPatient(type, patientQ.getId()), token, null);
+            ResponseEntity<String> nobody = get(byPatient(type, unknown), token, null);
+            assertThat(foreign.getStatusCode().value()).as(type).isEqualTo(200);
             assertThat(foreign.getStatusCode()).as(type).isEqualTo(nobody.getStatusCode());
             assertThat(normalisedBundle(foreign, patientQ.getId().toString()))
                 .as(type).isEqualTo(normalisedBundle(nobody, unknown));
         }
-
-        // _id search: a patient registered elsewhere answers like nobody (it used to be a 500).
-        ResponseEntity<String> foreignId = get("/fhir/Patient?_id=" + patientQ.getId(), token, null);
-        ResponseEntity<String> nobodyId = get("/fhir/Patient?_id=" + unknown, token, null);
-        assertThat(foreignId.getStatusCode().value()).isEqualTo(200);
-        assertThat(normalisedBundle(foreignId, patientQ.getId().toString()))
-            .isEqualTo(normalisedBundle(nobodyId, unknown));
     }
 
     // ------------------------------------------------------------ the rules
@@ -429,6 +499,36 @@ class FhirTenantBoundaryIT {
         // Byte-identical once the id each request itself named is factored out.
         assertThat(foreign.getBody().replace(foreignId, "{id}"))
             .as("%s body", type).isEqualTo(missing.getBody().replace(missingId, "{id}"));
+    }
+
+    private ResponseEntity<String> send(HttpMethod method, String path, String body, String bearer,
+                                        String ifNoneExist) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.ACCEPT, FHIR_JSON);
+        headers.set(HttpHeaders.CONTENT_TYPE, FHIR_JSON);
+        headers.setBearerAuth(bearer);
+        if (ifNoneExist != null) {
+            headers.set("If-None-Exist", ifNoneExist);
+        }
+        return rest.exchange(path, method, new HttpEntity<>(body, headers), String.class);
+    }
+
+    /**
+     * The Patient P in {@code body} (a resource or a search bundle) carries
+     * A's MRN, and nothing of B's registration: neither its MRN nor its
+     * hospital id (the MRN identifier system names the hospital).
+     */
+    private void assertOnlyTheMrnAtA(String body, String what) {
+        JsonNode node = objectMapper.readTree(body);
+        JsonNode patient = node.has("entry") ? node.get("entry").get(0).get("resource") : node;
+        List<String> mrns = new ArrayList<>();
+        patient.get("identifier").forEach(identifier -> {
+            if (identifier.path("system").asText().endsWith(":mrn")) {
+                mrns.add(identifier.path("system").asText() + "|" + identifier.path("value").asText());
+            }
+        });
+        assertThat(mrns).as(what).containsExactly("urn:hms:hospital:" + hospitalA.getId() + ":mrn|" + mrnOfPAtA);
+        assertThat(body).as(what).doesNotContain(mrnOfPAtB).doesNotContain(hospitalB.getId().toString());
     }
 
     private ResponseEntity<String> get(String path, String bearer, String hospitalHeader) {
@@ -603,14 +703,17 @@ class FhirTenantBoundaryIT {
         return saved;
     }
 
-    private void register(Patient patient, Hospital hospital) {
+    /** Registers the patient and answers the MRN it was given. */
+    private String register(Patient patient, Hospital hospital) {
+        String mrn = "MRN-FB-" + nextId();
         registrations.add(registrationRepository.save(PatientHospitalRegistration.builder()
             .patient(patient)
             .hospital(hospital)
-            .mrn("MRN-FB-" + nextId())
+            .mrn(mrn)
             .registrationDate(LocalDate.now())
             .active(true)
             .build()).getId());
+        return mrn;
     }
 
     private String nextId() {

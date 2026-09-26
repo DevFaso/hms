@@ -21,7 +21,9 @@ import java.util.regex.Pattern;
  * Maps the internal {@link com.example.hms.model.Patient} JPA entity to a
  * FHIR R4 {@link org.hl7.fhir.r4.model.Patient} resource.
  *
- * <p>{@link #toFhir(Patient)} is the read direction (entity → FHIR).
+ * <p>{@link #toFhir(Patient, UUID)} is the read direction (entity → FHIR)
+ * for a request bound to one hospital; {@link #toFhir(Patient)} is the
+ * unscoped form.
  * {@link #applyFhirUpdates(Patient, org.hl7.fhir.r4.model.Patient)} is the
  * write direction (FHIR → existing entity) and is intentionally narrow:
  * only contact + address fields are honored. Identity columns
@@ -39,7 +41,28 @@ public class PatientFhirMapper {
         "^urn:hms:hospital:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}):mrn$"
     );
 
+    /**
+     * Every registration's MRN, at every hospital, active or not. Only for a
+     * reader entitled to all of them (a verified super-admin in global view)
+     * and the callers that have not been scoped yet ({@code $everything},
+     * bulk export): the identifier system names the hospital, so each MRN
+     * discloses where else the patient is registered.
+     */
     public org.hl7.fhir.r4.model.Patient toFhir(Patient src) {
+        return map(src, null, true);
+    }
+
+    /**
+     * The resource as a request bound to {@code hospitalId} may see it: the
+     * MRN identifier of that hospital's registration only, never another
+     * hospital's (whose system would name it, and whose value is its record
+     * number). {@code null} emits no MRN at all — it fails closed.
+     */
+    public org.hl7.fhir.r4.model.Patient toFhir(Patient src, UUID hospitalId) {
+        return map(src, hospitalId, false);
+    }
+
+    private org.hl7.fhir.r4.model.Patient map(Patient src, UUID mrnHospitalId, boolean everyMrn) {
         if (src == null) {
             return null;
         }
@@ -53,7 +76,9 @@ public class PatientFhirMapper {
         internal.setUse(Identifier.IdentifierUse.OFFICIAL);
         out.addIdentifier(internal);
 
-        addMrnIdentifiers(out, src.getHospitalRegistrations());
+        if (everyMrn || mrnHospitalId != null) {
+            addMrnIdentifiers(out, src.getHospitalRegistrations(), everyMrn ? null : mrnHospitalId);
+        }
 
         addName(out, src);
         addTelecom(out, src);
@@ -72,11 +97,14 @@ public class PatientFhirMapper {
         return out;
     }
 
-    private void addMrnIdentifiers(org.hl7.fhir.r4.model.Patient out, Set<PatientHospitalRegistration> regs) {
+    /** The MRNs of {@code regs}; only those at {@code onlyHospitalId} unless it is null. */
+    private void addMrnIdentifiers(org.hl7.fhir.r4.model.Patient out, Set<PatientHospitalRegistration> regs,
+                                   UUID onlyHospitalId) {
         if (regs == null) return;
         regs.stream()
             .filter(r -> r != null && r.getMrn() != null && !r.getMrn().isBlank())
             .filter(r -> r.getHospital() != null && r.getHospital().getId() != null)
+            .filter(r -> onlyHospitalId == null || onlyHospitalId.equals(r.getHospital().getId()))
             .forEach(r -> {
                 Identifier mrn = new Identifier()
                     .setSystem(IDENTIFIER_SYSTEM_MRN_PREFIX + r.getHospital().getId() + ":mrn")
