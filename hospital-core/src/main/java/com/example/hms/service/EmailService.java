@@ -200,4 +200,28 @@ public interface EmailService {
      */
     void sendRecoveryContactVerificationEmail(String to, String verificationCode);
 
+    /**
+     * Sends the code that proves the account holder owns the NEW address of a
+     * self-service email change ({@code POST /auth/me/change-email}). Until the
+     * code comes back the account keeps its current address.
+     *
+     * @param to               the new address being verified
+     * @param verificationCode the 6-digit code
+     * @param locale           the requester's locale; null for the default
+     */
+    void sendEmailChangeVerificationEmail(String to, String verificationCode, Locale locale);
+
+    /**
+     * Tells the OLD address that the account's email was changed. Carries the
+     * new address only in masked form (e.g. {@code a***@example.com}), so a
+     * stranger holding the old mailbox learns the change happened, not where
+     * the account's mail now goes.
+     *
+     * @param to            the previous address of the account
+     * @param displayName   first + last name, or null for the anonymous greeting
+     * @param maskedAddress the new address, masked
+     * @param locale        the requester's locale; null for the default
+     */
+    void sendEmailChangedNoticeEmail(String to, String displayName, String maskedAddress, Locale locale);
+
 }

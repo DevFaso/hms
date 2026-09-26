@@ -33,7 +33,7 @@ class UserRepositorySearchQueryTest {
     void searchUsersQueryExplicitlyCastsParametersToString() throws NoSuchMethodException {
         Method searchUsers = UserRepository.class.getDeclaredMethod(
                 "searchUsers", String.class, String.class, String.class,
-                boolean.class, boolean.class, Pageable.class);
+                boolean.class, boolean.class, boolean.class, java.util.Collection.class, Pageable.class);
         Query query = searchUsers.getAnnotation(Query.class);
 
         assertThat(query).as("@Query annotation must be present on searchUsers").isNotNull();
@@ -56,21 +56,30 @@ class UserRepositorySearchQueryTest {
     }
 
     @Test
-    void hospitalScopedSearchCastsParametersAndScopesBothQueries() throws NoSuchMethodException {
-        Method scoped = UserRepository.class.getDeclaredMethod(
-                "searchUsersInHospitals", java.util.Collection.class, String.class, String.class,
-                String.class, Pageable.class);
-        Query query = scoped.getAnnotation(Query.class);
+    void directoryValueAndCountQueriesShareOneScopedWhereClause() throws NoSuchMethodException {
+        Method search = UserRepository.class.getDeclaredMethod(
+                "searchUsers", String.class, String.class, String.class,
+                boolean.class, boolean.class, boolean.class, java.util.Collection.class, Pageable.class);
+        Method list = UserRepository.class.getDeclaredMethod(
+                "findAllPaged", boolean.class, boolean.class, boolean.class,
+                java.util.Collection.class, Pageable.class);
 
-        assertThat(query).as("@Query annotation must be present on searchUsersInHospitals").isNotNull();
-        for (String jpql : new String[] {query.value(), query.countQuery()}) {
-            assertThat(jpql)
-                    .contains("cast(:name AS string)")
-                    .contains("cast(:email AS string)")
-                    .contains("cast(:role AS string)")
-                    // The count must carry the scope too, or the page total counts every tenant.
+        for (Query query : new Query[] {search.getAnnotation(Query.class), list.getAnnotation(Query.class)}) {
+            // The count carries exactly the value query's WHERE, so a page total
+            // can never count a row the page would not show.
+            assertThat(query.countQuery().replace("SELECT COUNT(u)", "SELECT u"))
+                    .isEqualTo(query.value());
+            assertThat(query.value())
+                    .contains(UserRepository.DIRECTORY_VISIBLE)
                     .contains("IN :hospitalIds")
                     .contains("u.isDeleted = false");
         }
+        // Scoped, a role only counts through an assignment at the caller's hospitals.
+        assertThat(UserRepository.DIRECTORY_SEARCH_FILTERS)
+                .contains("(:scoped = false OR a.hospital.id IN :hospitalIds)");
+        String globalRole = UserRepository.DIRECTORY_SEARCH_FILTERS.substring(
+                UserRepository.DIRECTORY_SEARCH_FILTERS.indexOf("OR (:scoped = false"));
+        assertThat(globalRole).as("a global UserRole counts only unscoped")
+                .contains("SELECT 1 FROM UserRole ur");
     }
 }

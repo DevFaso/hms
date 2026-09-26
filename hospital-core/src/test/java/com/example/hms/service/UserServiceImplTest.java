@@ -1657,27 +1657,27 @@ class UserServiceImplTest {
                 new org.springframework.data.domain.PageImpl<>(java.util.List.of());
 
         @Test
-        @DisplayName("a scoped caller is answered from the scoped queries, never the global ones, and never the deleted view")
-        void scopedCallerUsesTheScopedQueries() {
+        @DisplayName("a scoped caller queries with its hospitals and scoped=true, never the deleted view")
+        void scopedCallerPassesItsHospitals() {
             Set<UUID> hospitals = Set.of(UUID.randomUUID());
             when(accountAccess.requireDirectoryAccess())
                     .thenReturn(new UserAccountAccess.DirectoryScope(false, hospitals));
-            when(userRepository.findAllPagedInHospitals(any(), any())).thenReturn(onePage);
-            when(userRepository.searchUsersInHospitals(any(), any(), any(), any(), any())).thenReturn(onePage);
+            when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
+                    .thenReturn(onePage);
+            when(userRepository.searchUsers(any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(), any(),
+                    any())).thenReturn(onePage);
 
             // Even if a deleted flag reached the service, the scoped path has no deleted view.
             userService.getAllUsers(0, 10, true, true);
             userService.searchUsers("ami", "ROLE_NURSE", "x@y", 0, 10, true, true);
 
-            verify(userRepository).findAllPagedInHospitals(eq(hospitals), any());
-            verify(userRepository).searchUsersInHospitals(eq(hospitals), eq("ami"), eq("ROLE_NURSE"),
-                    eq("x@y"), any());
-            verify(userRepository, never()).findAllPaged(anyBoolean(), anyBoolean(), any());
-            verify(userRepository, never()).searchUsers(any(), any(), any(), anyBoolean(), anyBoolean(), any());
+            verify(userRepository).findAllPaged(eq(false), eq(false), eq(true), eq(hospitals), any());
+            verify(userRepository).searchUsers(eq("ami"), eq("ROLE_NURSE"), eq("x@y"), eq(false), eq(false),
+                    eq(true), eq(hospitals), any());
         }
 
         @Test
-        @DisplayName("a staff caller whose only staff assignments are global sees nobody, and no query runs")
+        @DisplayName("an empty scope is an empty page, and no query runs")
         void emptyScopeIsAnEmptyPage() {
             when(accountAccess.requireDirectoryAccess())
                     .thenReturn(new UserAccountAccess.DirectoryScope(false, Set.of()));
@@ -1688,132 +1688,22 @@ class UserServiceImplTest {
         }
 
         @Test
-        @DisplayName("the super-admin is answered from the global queries, deleted flags passed through")
-        void superAdminUsesTheGlobalQueries() {
+        @DisplayName("the super-admin queries unscoped, with the sentinel set and the deleted flags passed through")
+        void superAdminQueriesUnscoped() {
             when(accountAccess.requireDirectoryAccess())
                     .thenReturn(new UserAccountAccess.DirectoryScope(true, Set.of()));
-            when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), any())).thenReturn(onePage);
-            when(userRepository.searchUsers(any(), any(), any(), anyBoolean(), anyBoolean(), any()))
+            when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
                     .thenReturn(onePage);
+            when(userRepository.searchUsers(any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(), any(),
+                    any())).thenReturn(onePage);
 
             userService.getAllUsers(0, 10, true, false);
             userService.searchUsers("a", null, null, 0, 10, false, true);
 
-            verify(userRepository).findAllPaged(eq(true), eq(false), any());
-            verify(userRepository).searchUsers(eq("a"), any(), any(), eq(false), eq(true), any());
-            verify(userRepository, never()).findAllPagedInHospitals(any(), any());
-            verify(userRepository, never()).searchUsersInHospitals(any(), any(), any(), any(), any());
-        }
-    }
-
-    @Nested
-    @DisplayName("changing one's own email: POST /auth/me/change-email")
-    class ChangeOwnEmail {
-
-        private static final String HASH = "$2a$10$ownHash";
-
-        @BeforeEach
-        void account() {
-            user.setPasswordHash(HASH);
-            lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        }
-
-        private com.example.hms.payload.dto.AuditEventRequestDTO onlyAuditRow() {
-            ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> row =
-                    ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
-            verify(auditEventLogService).logEvent(row.capture());
-            return row.getValue();
-        }
-
-        @Test
-        @DisplayName("a wrong current password: refused, counted against the login throttle, one FAILURE row with ids only, nothing saved")
-        void wrongPasswordIsRefused() {
-            when(passwordEncoder.matches("guess", HASH)).thenReturn(false);
-
-            assertThatThrownBy(() -> userService.changeOwnEmail(userId, "guess", "thief@evil.test"))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("user.email.change.password"));
-
-            assertThat(user.getEmail()).isEqualTo("test@example.com");
-            verify(userRepository, never()).save(any());
-            verify(loginAttemptService).recordFailure("testuser");
-            var row = onlyAuditRow();
-            assertThat(row.getStatus()).isEqualTo(com.example.hms.enums.AuditStatus.FAILURE);
-            assertThat(row.getUserId()).isEqualTo(userId);
-            assertThat(row.getResourceId()).isEqualTo(userId.toString());
-            assertThat(row.getDetails()).isNull();
-            assertThat(row.getUserName()).isNull();
-            assertThat(row.getResourceName()).isNull();
-            assertThat(row.getEventDescription())
-                    .doesNotContain("thief").doesNotContain("test@example.com").doesNotContain("guess");
-        }
-
-        @Test
-        @DisplayName("a blank current password is refused without asking the encoder")
-        void blankPasswordIsRefused() {
-            assertThatThrownBy(() -> userService.changeOwnEmail(userId, " ", "new@example.com"))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("user.email.change.password"));
-            verifyNoInteractions(passwordEncoder);
-            verify(userRepository, never()).save(any());
-        }
-
-        @Test
-        @DisplayName("while the login throttle holds the account: refused before the password is checked")
-        void lockedAccountIsRefusedFirst() {
-            when(loginAttemptService.isLocked("testuser")).thenReturn(true);
-
-            assertThatThrownBy(() -> userService.changeOwnEmail(userId, "Right-Pass-1", "new@example.com"))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("user.email.change.locked"));
-            verifyNoInteractions(passwordEncoder);
-            verify(userRepository, never()).save(any());
-        }
-
-        @Test
-        @DisplayName("the right current password: saved, one SUCCESS row that names neither address")
-        void rightPasswordChangesTheEmail() {
-            when(passwordEncoder.matches("Right-Pass-1", HASH)).thenReturn(true);
-            when(userRepository.existsEmailOnOtherAccount("new@example.com", userId)).thenReturn(false);
-
-            userService.changeOwnEmail(userId, "Right-Pass-1", "  new@example.com ");
-
-            assertThat(user.getEmail()).isEqualTo("new@example.com");
-            verify(userRepository).save(user);
-            verify(loginAttemptService, never()).recordFailure(any());
-            var row = onlyAuditRow();
-            assertThat(row.getStatus()).isEqualTo(com.example.hms.enums.AuditStatus.SUCCESS);
-            assertThat(row.getUserId()).isEqualTo(userId);
-            assertThat(row.getDetails()).isNull();
-            assertThat(row.getEventDescription())
-                    .doesNotContain("new@example.com").doesNotContain("test@example.com");
-        }
-
-        @Test
-        @DisplayName("an address another account holds in any letter case: refused without naming it")
-        void takenAddressIsRefused() {
-            when(passwordEncoder.matches("Right-Pass-1", HASH)).thenReturn(true);
-            when(userRepository.existsEmailOnOtherAccount("SuperAdmin@Example.com", userId)).thenReturn(true);
-
-            assertThatThrownBy(() -> userService.changeOwnEmail(userId, "Right-Pass-1", "SuperAdmin@Example.com"))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("user.update.email.taken"));
-            assertThat(user.getEmail()).isEqualTo("test@example.com");
-            verify(userRepository, never()).save(any());
-        }
-
-        @Test
-        @DisplayName("the unchanged address, or a blank one, is refused")
-        void sameOrBlankAddressIsRefused() {
-            when(passwordEncoder.matches("Right-Pass-1", HASH)).thenReturn(true);
-
-            assertThatThrownBy(() -> userService.changeOwnEmail(userId, "Right-Pass-1", "test@example.com"))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("user.email.change.same"));
-            assertThatThrownBy(() -> userService.changeOwnEmail(userId, "Right-Pass-1", "  "))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("user.update.email.invalid"));
-            verify(userRepository, never()).save(any());
+            verify(userRepository).findAllPaged(eq(true), eq(false), eq(false),
+                    eq(UserRepository.DIRECTORY_UNSCOPED), any());
+            verify(userRepository).searchUsers(eq("a"), any(), any(), eq(false), eq(true), eq(false),
+                    eq(UserRepository.DIRECTORY_UNSCOPED), any());
         }
     }
 }

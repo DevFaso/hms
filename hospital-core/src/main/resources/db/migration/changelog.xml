@@ -2460,4 +2460,20 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V165 — a pending change of a user's own email address.
+         POST /auth/me/change-email no longer replaces users.email at once:
+         a code goes to the NEW address and the confirm step applies it,
+         so a typo or someone else's address never becomes the recovery
+         address. One row per user also holds this endpoint's own
+         wrong-password counter, kept apart from the login throttle.
+         Additive: one new table, IF NOT EXISTS.
+         ================================================================= -->
+    <changeSet id="V165-email-change-requests" author="hms-team" runOnChange="false">
+        <sqlFile path="V165__email_change_requests.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

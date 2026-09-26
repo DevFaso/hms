@@ -192,7 +192,7 @@ public class UserController {
         description = "Your own account: names and phone only; the password, username, email and "
             + "active flag have their own rules (POST /auth/me/change-password, "
             + "/auth/me/change-username, /auth/me/change-email, which needs the current "
-            + "password). Another account: super-admin, or a hospital admin when "
+            + "password and a code sent to the new address). Another account: super-admin, or a hospital admin when "
             + "every one of its assignments is at a hospital they administer and it is not a "
             + "super-admin. Anything else answers 404.")
     @PutMapping("/{id}")

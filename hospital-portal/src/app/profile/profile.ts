@@ -8,11 +8,11 @@ import {
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
-import { Observable, of, switchMap, tap } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
 
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { MfaService, MfaEnrollmentResponse } from '../auth/mfa.service';
+import { OidcAuthService } from '../auth/oidc-auth.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
@@ -46,6 +46,7 @@ export class ProfileComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly translate = inject(TranslateService);
+  private readonly oidcAuth = inject(OidcAuthService);
 
   private static readonly VALID_TABS: readonly ProfileTab[] = [
     'overview',
@@ -72,11 +73,27 @@ export class ProfileComponent implements OnInit {
   /** The current password, asked for only when the email is being changed. */
   emailChangePassword = signal('');
 
-  /** True when the form's email differs from the one on the account. */
+  /**
+   * A single sign-on session: Keycloak owns the email on that path and the
+   * server refuses to change it, so the page does not offer to.
+   */
+  ssoSession = computed(() => this.oidcAuth.authenticated());
+
+  /**
+   * True when the form asks for a different email. A blank field is "no
+   * change", never a change to ''; letter case alone is no change either,
+   * since the server stores addresses in lower case.
+   */
   emailChanged = computed(() => {
     const u = this.user();
-    return !!u && (this.editForm().email ?? '').trim() !== (u.email ?? '');
+    const typed = (this.editForm().email ?? '').trim().toLowerCase();
+    return !!u && !this.ssoSession() && typed !== '' && typed !== (u.email ?? '').toLowerCase();
   });
+
+  /** The address waiting for its code, once the server has sent one. */
+  pendingEmail = signal<string | null>(null);
+  emailCode = signal('');
+  confirmingEmail = signal(false);
 
   /* ── Computed ── */
   userInitials = computed(() => {
@@ -578,60 +595,41 @@ export class ProfileComponent implements OnInit {
   }
 
   /**
-   * Saves the profile. A changed email goes first, through its own endpoint
-   * with the current password (the profile PUT refuses an email change); the
-   * PUT then carries the names and phone with the email the account now has.
-   * A wrong password therefore saves nothing, and once the email step has
-   * succeeded the page already shows the new address, so a retry after a
-   * failed PUT does not repeat it.
+   * Saves the profile. Names and phone go through the profile PUT, with the
+   * email the account has now (the PUT refuses an email change). A changed
+   * email is then REQUESTED through its own endpoint, with the current
+   * password: the server sends a code to the new address, and the email only
+   * changes when {@link confirmEmailChange} sends that code back.
+   *
+   * Each step reports its own outcome: a saved name is not reported as a
+   * failure because the email step was refused, and a sent code is not
+   * reported as a changed email.
    */
   saveProfile(): void {
     const u = this.user();
     if (!u || this.saving()) return;
 
     const data = this.editForm();
-    const newEmail = (data.email ?? '').trim();
     const emailChanged = this.emailChanged();
     if (emailChanged && !this.emailChangePassword()) {
       this.toast.error(this.translate.instant('PROFILE.EMAIL_CHANGE_PASSWORD_REQUIRED'));
       return;
     }
+    const detailsChanged =
+      (data.firstName ?? '') !== (u.firstName ?? '') ||
+      (data.lastName ?? '') !== (u.lastName ?? '') ||
+      (data.phoneNumber ?? '') !== (u.phoneNumber ?? '');
 
     this.saving.set(true);
-    const emailStep: Observable<unknown> = emailChanged
-      ? this.profileService.changeOwnEmail(this.emailChangePassword(), newEmail).pipe(
-          tap(() => {
-            this.emailChangePassword.set('');
-            this.user.set({ ...u, email: newEmail });
-          }),
-        )
-      : of(null);
-
-    emailStep
-      .pipe(
-        switchMap(() =>
-          this.profileService.updateProfile(u.id, {
-            ...data,
-            email: emailChanged ? newEmail : u.email,
-          }),
-        ),
-      )
-      .subscribe({
+    if (detailsChanged) {
+      this.profileService.updateProfile(u.id, { ...data, email: u.email }).subscribe({
         next: (updated) => {
-          this.user.set(updated);
-          this.resetEditForm(updated);
-          this.saving.set(false);
+          this.applySavedProfile(updated);
           this.toast.success(this.translate.instant('PROFILE.UPDATED'));
-
-          // Update stored login profile
-          const stored = this.auth.getUserProfile();
-          if (stored) {
-            stored.firstName = updated.firstName;
-            stored.lastName = updated.lastName;
-            stored.email = updated.email;
-            stored.phoneNumber = updated.phoneNumber;
-            stored.profileImageUrl = updated.profileImageUrl;
-            this.auth.setUserProfile(stored);
+          if (emailChanged) {
+            this.requestEmailChange((data.email ?? '').trim());
+          } else {
+            this.saving.set(false);
           }
         },
         error: (err) => {
@@ -639,6 +637,82 @@ export class ProfileComponent implements OnInit {
           this.toast.error(err?.error?.message ?? this.translate.instant('PROFILE.UPDATE_FAILED'));
         },
       });
+    } else if (emailChanged) {
+      this.requestEmailChange((data.email ?? '').trim());
+    } else {
+      this.saving.set(false);
+    }
+  }
+
+  /** Step 1 of an email change: the server sends a code to the new address. */
+  private requestEmailChange(newEmail: string): void {
+    this.profileService.changeOwnEmail(this.emailChangePassword(), newEmail).subscribe({
+      next: (res) => {
+        this.saving.set(false);
+        this.emailChangePassword.set('');
+        this.emailCode.set('');
+        this.pendingEmail.set(newEmail);
+        const sent = (res?.delivery ?? []).some((d) => d.outcome === 'SENT');
+        if (sent) {
+          this.toast.info(this.translate.instant('PROFILE.EMAIL_CODE_SENT', { email: newEmail }));
+        } else {
+          this.toast.warning(this.translate.instant('PROFILE.VERIFICATION_SEND_FAILED'));
+        }
+      },
+      error: (err) => {
+        this.saving.set(false);
+        this.toast.error(err?.error?.message ?? this.translate.instant('PROFILE.UPDATE_FAILED'));
+      },
+    });
+  }
+
+  /** Step 2: the code from the new address. Only now does the email change. */
+  confirmEmailChange(): void {
+    const u = this.user();
+    const newEmail = this.pendingEmail();
+    const code = this.emailCode().trim();
+    if (!u || !newEmail || !code || this.confirmingEmail()) return;
+
+    this.confirmingEmail.set(true);
+    this.profileService.confirmOwnEmailChange(code).subscribe({
+      next: () => {
+        this.confirmingEmail.set(false);
+        this.pendingEmail.set(null);
+        this.emailCode.set('');
+        const applied = newEmail.toLowerCase();
+        this.applySavedProfile({ ...u, email: applied });
+        this.toast.success(this.translate.instant('PROFILE.EMAIL_CHANGED'));
+      },
+      error: (err) => {
+        this.confirmingEmail.set(false);
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('PROFILE.VERIFICATION_FAILED'),
+        );
+      },
+    });
+  }
+
+  /** Drop the pending change on this page; the server's code expires on its own. */
+  cancelEmailChange(): void {
+    this.pendingEmail.set(null);
+    this.emailCode.set('');
+    const u = this.user();
+    if (u) this.resetEditForm(u);
+  }
+
+  /** Show a profile the server now holds, and keep the stored login profile in step. */
+  private applySavedProfile(updated: UserProfile): void {
+    this.user.set(updated);
+    this.resetEditForm(updated);
+    const stored = this.auth.getUserProfile();
+    if (stored) {
+      stored.firstName = updated.firstName;
+      stored.lastName = updated.lastName;
+      stored.email = updated.email;
+      stored.phoneNumber = updated.phoneNumber;
+      stored.profileImageUrl = updated.profileImageUrl;
+      this.auth.setUserProfile(stored);
+    }
   }
 
   /* ── Avatar ── */

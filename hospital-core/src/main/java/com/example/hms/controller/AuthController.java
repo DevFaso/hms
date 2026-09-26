@@ -13,7 +13,6 @@ import com.example.hms.payload.dto.EmailVerificationResponseDTO;
 import com.example.hms.payload.dto.JwtResponse;
 import com.example.hms.payload.dto.LoginRequest;
 import com.example.hms.payload.dto.MessageResponse;
-import com.example.hms.utility.MessageUtil;
 import com.example.hms.payload.dto.PasswordResetConfirmDTO;
 import com.example.hms.payload.dto.credential.UserCredentialHealthDTO;
 import com.example.hms.payload.dto.credential.UserMfaEnrollmentDTO;
@@ -25,7 +24,6 @@ import com.example.hms.controller.support.AuthControllerProperties;
 import com.example.hms.controller.support.AuthNotificationFacade;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
-import com.example.hms.security.CustomUserDetails;
 import com.example.hms.security.JwtTokenProvider;
 import com.example.hms.security.LoginAttemptService;
 import com.example.hms.service.PasswordHistoryService;
@@ -60,7 +58,6 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -936,51 +933,6 @@ public class AuthController {
 
     /** Request body for {@code POST /auth/me/change-username}. */
     public record ChangeUsernameRequest(@NotBlank String newUsername) {}
-
-    /**
-     * Change the authenticated user's own email address. The current password
-     * is required: the email is where a password reset is sent, so a stolen
-     * session that could rebind it would own the account for good.
-     * {@code PUT /users/{own id}} refuses an email change and points here.
-     *
-     * <p>A Keycloak (OIDC) session is refused: on that path Keycloak holds the
-     * email of record and runs its own password reset, and HMS cannot check
-     * the Keycloak password, so changing only the HMS copy would both skip
-     * the re-authentication and split the two records.
-     *
-     * <p>The answer never contains either address.
-     */
-    @PostMapping("/me/change-email")
-    @WriteAudited(skip = true, reason = "the service emits USER_UPDATE, success and refusal, with ids only")
-    @Operation(summary = "Change own email address",
-        description = "Requires the current password. A wrong password counts against the login "
-            + "throttle. Not available to a Keycloak (single sign-on) session, whose email is "
-            + "managed by Keycloak.")
-    @ApiResponse(responseCode = "200", description = "Email address changed")
-    @ApiResponse(responseCode = "400", description = "Current password incorrect, address invalid, "
-        + "unchanged or already in use, account temporarily locked, or a single sign-on session")
-    public ResponseEntity<Object> changeOwnEmail(@Valid @RequestBody ChangeEmailRequest request) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication instanceof JwtAuthenticationToken) {
-            return ResponseEntity.badRequest()
-                    .body(new MessageResponse(MessageUtil.resolve("user.email.change.external")));
-        }
-        UUID userId = authentication != null && authentication.isAuthenticated()
-                && authentication.getPrincipal() instanceof CustomUserDetails details
-                ? details.getUserId()
-                : null;
-        if (userId == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("Not authenticated."));
-        }
-        userService.changeOwnEmail(userId, request.currentPassword(), request.newEmail());
-        return ResponseEntity.ok(new MessageResponse(MessageUtil.resolve("user.email.change.done")));
-    }
-
-    /** Request body for {@code POST /auth/me/change-email}. */
-    public record ChangeEmailRequest(
-            @NotBlank String currentPassword,
-            @NotBlank @Email String newEmail) {}
 
     @PostMapping("/request-reset")
     public ResponseEntity<Void> legacyRequestPasswordReset(
