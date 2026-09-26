@@ -3551,38 +3551,48 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   checked in `SecurityConfig`) and #755 (`FhirTenantBoundaryInterceptor`: every
   request bound to a hospital the principal holds, the role checked AT that
   hospital, named ids gated before the provider, search bundles filtered).**
-  What the two left, none of it a cross-hospital read:
+  What the two left. Most is hardening, but the items marked
+  **(cross-hospital)** still expose something about another hospital:
   - **FHIR `Patient` read and search return 500 for every caller** - on prod
     too, before and after these PRs. `PatientFhirMapper` loads
     `hospitalRegistrations` lazily with no session open. The same shape makes
     a conditional create, or a PUT that changes nothing, answer 500 after the
     write has committed. A mapper/transaction fix. Unowned.
-  - **`X-Hospital-Id` is honoured for ANY hospital when the principal holds
-    none** (`HospitalContextRequestOverrides`): a Keycloak token without
-    hospital claims, or an HMS token whose assignments were revoked after
-    sign-in. #755 stopped trusting `getActiveHospitalId()` on FHIR paths
-    only; **every other endpoint that reads the active hospital still trusts
-    it.** Platform-wide, and the most important item here. Unowned.
+  - `X-Hospital-Id` for a principal with no hospital: see the bullet after
+    this one - it is platform-wide, not a FHIR residual.
   - **No lab or reception role passes either layer**, so `Slot`,
     `Appointment`, `ServiceRequest`, `DiagnosticReport` and `Observation` are
     refused to their natural consumers. Nothing in the portal or the apps
     calls `/api/fhir`; whether any external integration does on prod is a
     question for the product owner. Per-resource matchers if it does.
-  - **`KeycloakJwtAuthenticationConverter` does not run `RoleExpansion`**, so
-    both layers name PHYSICIAN and SURGEON explicitly, and every other
-    `ROLE_DOCTOR` guard misses them over Keycloak.
+  - **`KeycloakJwtAuthenticationConverter` flattens every realm client's
+    roles** (`resource_access.<client>.roles`, the loop at line 78) into
+    `ROLE_*`, so a role an unrelated Keycloak client defines - `doctor`,
+    `super_admin` - becomes a platform authority. That is why
+    `ROLE_FHIR_CLIENT` cannot be granted safely and #752 admits no machine
+    role. Read one client's roles, not all. Unowned. (That the same converter
+    skips `RoleExpansion` is the role-equivalence bullets below.)
   - A Keycloak token is bound through `hospital_id` but its role is read only
     from `role_assignments`, so a user provisioned without that attribute is
     refused. Fails closed; would lock such users out.
-  - `FhirTenancy.requireHospitalScope` and the write, `$everything` and bulk
-    services still read `getActiveHospitalId()`. They agree with the bound
-    hospital only because the interceptor runs first; they should delegate to
-    `FhirTenantBoundary.boundHospital`.
+  - The FHIR services that still read the raw context agree with the bound
+    hospital only because the interceptor runs first: see "Two tenant
+    resolvers disagree" (add `FhirTenancy.requireHospitalScope` to its list;
+    the fix there is to delegate to `FhirTenantBoundary.boundHospital`).
   - `/fhir-bulk-status` (status, cancel, download) is outside the HAPI
-    servlet, so the boundary does not cover it: union of roles plus the
-    unvalidated active hospital. Behind the export flag, off by default.
-  - `PatientFhirMapper` emits one MRN per registered hospital, so a read
-    reveals the patient's other hospitals. FHIR conditional create looks an
+    servlet, so the boundary does not cover it: it checks the union of the
+    caller's roles, not the role held at the hospital. Its hospital comes
+    through the header override, which is validated except in the empty
+    permitted-set case above. Behind the export flag, off by default.
+  - The boundary's `PATIENTS` and `UPLOADED_DOCUMENTS` queries count ANY
+    registration, active or not, while `Patient.isRegisteredInHospital` and
+    #750's PUT gate count only active ones. So a hospital a patient has left
+    still reads their `Patient`, `$everything` and uploads over FHIR. Maybe
+    right (the former hospital holds that history), maybe not; the two rules
+    should agree either way. Unowned.
+  - **(cross-hospital)** `PatientFhirMapper` emits one MRN per registered hospital, so a read
+    reveals the patient's other hospitals. **(cross-hospital)** FHIR
+    conditional create looks an
     MRN up at whatever hospital the identifier names, so 404 against 412
     tells a caller whether it exists there, and the audit description carries
     the MRN (write flag, off by default).
@@ -3607,21 +3617,41 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
     `FhirTenantBoundary.isVisible` is a false positive: the caller is itself
     `@Transactional`.)
 
+- **OPEN, platform-wide: `X-Hospital-Id` is honoured for ANY hospital when
+  the principal holds none.** The cause is one clause,
+  `|| effective.getPermittedHospitalIds().isEmpty()` in
+  `HospitalContextRequestOverrides.applyRequestOverrides` line 70: a principal
+  with an empty permitted set may pin whatever hospital the header names. That
+  is a Keycloak token without hospital claims, or an HMS token whose
+  assignments were revoked after sign-in. Every endpoint that resolves the
+  active hospital (through `RoleValidator` or the raw context) then acts AT
+  that hospital. #755 stopped trusting the value on FHIR paths only. Fix the
+  clause, not each reader: refuse the header for a non-super-admin with no
+  permitted hospital. **The most important item from this wave.** Unowned.
+
 - **~~Cross-tenant defects on the FHIR write and EMPI paths.~~ Closed by
   #750:** `PUT /Patient/{id}` counts only an ACTIVE registration at the
   caller's hospital, and another tenant's lab result or identity answers
   exactly like a missing one. Still open:
-  - EMPI `mergeIdentities` treats a missing scope as global view without the
-    verified-super-admin check #751 added for lab results. No production path
-    found; a one-line fix. Unowned.
+  - EMPI treats a missing scope as global view without the verified
+    super-admin check #751 added for lab results: `EmpiServiceImpl.isVisibleTo`
+    allows `activeHospitalId == null`, and it gates `mergeIdentities`,
+    `findIdentityByPatientId` (`GET /empi/identities/by-patient`) and
+    `requirePatientInTenant` (`mergePatients`). Fix the predicate, not one
+    caller. The null comes from step 4 - see "`RoleValidator
+    .requireActiveHospitalId()` step 4 is authorities-based". No production
+    path found. Unowned.
   - `/merge-by-patient` checks the patient with `existsByPatientIdAndHospitalId`,
     which ignores `active`, so a patient who left still counts. Unowned.
-  - `mergePatients` publishes `IDENTITY_LINKED` to Kafka before it can refuse;
-    the transaction rolls back but the event has gone. Publish after commit.
+  - `EmpiServiceImpl.publishEvent` sends to Kafka synchronously inside the
+    transaction, for all its callers: `linkIdentity`, `addAlias`,
+    `mergeIdentities` and `mergePatients` (which publishes `IDENTITY_LINKED`
+    before it can refuse). A rollback - including the HL7 A40 rollback-only
+    trap under "HL7 residuals" - leaves consumers holding an event for a
+    change that never happened. Publish after commit, in one place.
   - A verified super-admin in global view may write `Patient` unscoped, which
     contradicts `FhirTenancy`'s must-pin rule. Belongs with the resolver
     unification below.
-  - `ObservationFhirWriteService` still reads the raw context.
   - `mergePatients` answers a misleading not-found for a legitimate merge
     whose identity is stamped with the patient's first hospital - which
     hospital owns an identity is an open design question. Unowned.
@@ -3677,10 +3707,15 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
     unconverted plain TEXT, the one place they survive the log scrub. Unowned.
   - Deferred by #753 (sender fields bounded at parse, refuse never truncate):
     - MSH-10 is quoted (`quotedControlId`) only in the ADT/A40 dead-letter
-      reasons and the log lines #753 touched. The A02, A03 and auto-create
-      audit descriptions and the older log lines format it raw, so a sender
-      can put ANSI escapes or line separators in persisted audit text.
-      Changing them changes stored text; its own PR.
+      reasons and the log lines #753 touched. It is formatted raw in the A02,
+      A03 and auto-create audit descriptions, the ORU `LAB_RESULT_UPDATED`
+      and `LAB_RESULT_RELEASED` audit descriptions
+      (`MllpInboundLabServiceImpl`, `msgCtrlId=`), the persisted
+      `EmpiMergeEvent.notes` (`MllpInboundMergeServiceImpl.buildNotes`) and
+      the older log lines, so a sender can put ANSI escapes or line
+      separators in persisted text. Changing them changes stored text; its
+      own PR, and it should grep for every `controlId` concatenation rather
+      than work from this list.
     - Three A40 refusals (same identifier, missing PID-3/MRG-1, no hospital)
       write no `integration_message_event` row and log no MSH-10.
     - A refused MSH-3/MSH-4 row records no MSH-10, although the AR now echoes it.
