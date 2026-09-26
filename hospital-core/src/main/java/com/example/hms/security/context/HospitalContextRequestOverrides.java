@@ -70,7 +70,11 @@ public final class HospitalContextRequestOverrides {
         try {
             requestedHospital = UUID.fromString(headerValue.trim());
         } catch (IllegalArgumentException ex) {
-            log.warn("[AUTH] Invalid {} header value: {}", HEADER_HOSPITAL_ID, headerValue);
+            // The value itself is not logged: it is caller-controlled, and a
+            // CR/LF in it would forge log lines. Its length is enough to tell
+            // a truncated id from garbage when supporting a client.
+            log.warn("[AUTH] Ignoring malformed {} header (length {})",
+                HEADER_HOSPITAL_ID, headerValue.length());
             return effective;
         }
 

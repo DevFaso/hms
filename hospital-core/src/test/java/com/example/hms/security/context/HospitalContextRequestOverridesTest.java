@@ -2,6 +2,9 @@ package com.example.hms.security.context;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.mock.web.MockHttpServletRequest;
 
 import java.util.Set;
@@ -178,6 +181,27 @@ class HospitalContextRequestOverridesTest {
             .applyRequestOverrides(context, requestWithHeader("not-a-uuid"));
 
         assertThat(result.getActiveHospitalId()).isEqualTo(hospitalA);
+    }
+
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void malformedHeaderValueIsNotLogged(CapturedOutput output) {
+        // Caller-controlled: a CR/LF in it would forge a log line.
+        String forged = "x\r\n2026-01-01 INFO [AUTH] FORGED-LINE-MARKER";
+        HospitalContext context = HospitalContext.builder()
+            .activeHospitalId(hospitalA)
+            .permittedHospitalIds(Set.of(hospitalA))
+            .build();
+
+        HospitalContext result = HospitalContextRequestOverrides
+            .applyRequestOverrides(context, requestWithHeader(forged));
+
+        assertThat(result.getActiveHospitalId()).isEqualTo(hospitalA);
+        assertThat(output.getAll())
+            .as("the WARN is written")
+            .contains("Ignoring malformed X-Hospital-Id header")
+            .as("but never the caller's value")
+            .doesNotContain("FORGED-LINE-MARKER");
     }
 
     @Test
