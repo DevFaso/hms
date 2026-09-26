@@ -1,6 +1,6 @@
 ---
 name: pr-review-response
-description: "Use before and after pushing ANY PR branch (the self-review gate: local CI gate, push as a draft, /code-review after every push, ready only when a round is clean and CI is green, and never by an agent a coordinator delegated to), when preparing a feature PR commit message, responding to review comments, addressing Sonar findings, or naming a feature branch. Captures HMS foundation-pass commit style, branch-naming convention, started-vs-completed status discipline, and the lessons from recent reviews."
+description: "Use before and after pushing ANY PR branch (the self-review gate: local CI gate, push as a draft, /code-review after every push, ready only when a round is clean and CI is green, and only by the session working directly with the user), when preparing a feature PR commit message, responding to review comments, addressing Sonar findings, or naming a feature branch. Captures HMS foundation-pass commit style, branch-naming convention, started-vs-completed status discipline, and the lessons from recent reviews."
 ---
 
 # PR + review-response patterns
@@ -15,14 +15,13 @@ A PR gets one structured review before the user sees it as mergeable, and
 it is this one. Copilot's review quota has been exhausted since 2026-09-05
 and may or may not come back; when it does, its comments are findings for
 step 3, not a substitute. The user merges PRs without warning, so the PR is
-opened as a **draft** and made ready only at step 6, and only by whoever is
-accountable for it end to end: an agent working for a coordinator hands back
-and leaves it a draft ([Coordinator mode](#coordinator-mode--a-delegated-agent-never-readies)).
-Draft is a signal, not
-a lock (#509 was flipped to ready and merged), so every push must be a state
-you would let merge, its tasklist bullet included. Not "CI is green and
-there are no comments, so it is ready". What the gate has caught that CI,
-Sonar and the unit suite did not is under
+opened as a **draft** and made ready only at step 6, and only by the session
+working directly with the user; a delegated agent hands back a draft
+([Coordinator mode](#coordinator-mode--only-the-session-working-with-the-user-readies)).
+Draft is a signal, not a lock (#509 was flipped to ready and merged), so
+every push must be a state you would let merge, its tasklist bullet
+included. Not "CI is green and there are no comments, so it is ready". What
+the gate has caught that CI, Sonar and the unit suite did not is under
 [Anti-patterns surfaced by self-review](#anti-patterns-surfaced-by-self-review).
 
 1. **Before every push** run the
@@ -30,11 +29,10 @@ Sonar and the unit suite did not is under
    for each side the diff touches. Push. First push:
    `gh pr create --draft --base develop --title "<subject>" --body-file <file>`
    (the tool is non-interactive; without the flags the command fails, and the
-   default base is `main`, which is prod). A push to your own PR already
-   marked ready: `gh pr ready --undo <PR#>` first — never on another agent's
-   PR. CI runs on the
-   pull-request event, so the runs appear seconds after that event, not the
-   push: once `gh pr checks <PR#>` lists them, start
+   default base is `main`, which is prod). Whoever pushes to a PR marked
+   ready runs `gh pr ready --undo <PR#>` first, whoever's PR it is. CI runs
+   on the pull-request event, so the runs appear seconds after that event,
+   not the push: once `gh pr checks <PR#>` lists them, start
    `gh pr checks <PR#> --watch` in the background (~11 min, longer than a
    foreground tool call; started earlier it exits with "no checks
    reported").
@@ -76,40 +74,68 @@ Sonar and the unit suite did not is under
    and the i18n files by hand, because a resolved conflict in either has
    dropped a migration before; a clean merge or a retry of a flaky check
    runs step 1 and skips the review round; `gh pr diff <PR#> --name-only`
-   matches the description;
+   matches the description; and, right before handing back or readying,
    `gh pr view <PR#> --json headRefOid --jq .headRefOid` equals
-   `git rev-parse HEAD`. Then:
-   - **Delegated by a coordinator:** stop here. The PR stays a draft; hand
-     back the PR number, the head SHA, suite count, CI status, rounds and
-     tasklist bullets ([Coordinator mode](#coordinator-mode--a-delegated-agent-never-readies)).
-   - **Working directly for the user**, accountable for the PR end to end:
-     never ready over a finding someone sent (the user, a PR comment, Sonar)
-     that is not yet taken, dropped with a reason or deferred to the
-     tasklist. Re-read `headRefOid` right before the command — the user
-     merges at whatever SHA GitHub shows — then `gh pr ready <PR#>` and
-     report: suite count, CI status, rounds, tasklist bullets.
+   `git rev-parse HEAD`, because the user merges at whatever SHA GitHub
+   shows. Then:
+   - **Delegated** ([Coordinator mode](#coordinator-mode--only-the-session-working-with-the-user-readies)):
+     the PR stays a draft; hand back the PR number, the head SHA, suite
+     count, CI status, rounds and tasklist bullets.
+   - **The session working directly with the user:** never ready while a
+     finding is pending from any source — the user, a PR comment, Sonar, your
+     own review of a delegated agent's PR, or a handback's deferred or
+     unconfirmed items (#750's must-fix findings came from the coordinator's
+     review). Each is taken, dropped with a reason, or deferred as in step 3.
+     Then `gh pr ready <PR#>` and report: suite count, CI status, rounds,
+     tasklist bullets.
 
-### Coordinator mode — a delegated agent never readies
+### Coordinator mode — only the session working with the user readies
 
-The agent is under a coordinator when it was given a brief by another agent,
-runs as a subagent, or is told so. The coordinator, not the agent, is
-accountable for the PR end to end, and findings it sends can arrive while
-the agent's own round is still running — they are invisible from inside it.
+The readier is the session working directly with the user. If you did not
+receive the task from the user directly, you are delegated: you do not
+ready, and neither do the agents you hand work to. A coordinator that is
+itself a subagent hands up like any other delegated agent.
 
-- Push, check `headRefOid` == `git rev-parse HEAD`, hand back, and leave
-  the PR a **draft**. Never `gh pr ready`, even after a clean round.
-- Never `gh pr ready --undo` on another agent's PR.
-- A finding the coordinator sends is a step-2 finding: confirm it against
-  the real tree before applying it, like any other.
+A delegated agent still does everything its brief asks: at minimum step 1's
+gate for each side the diff touches, plus falsification and the CI watch
+when the brief asks for them. The review rounds (steps 2–5) and Sonar are
+the coordinator's unless the brief delegates them.
 
-The coordinator reviews at the head the agent reported, re-checks
-`headRefOid` right before the command, and readies.
+- It never runs `gh pr ready`, even after a clean round. The PR stays a
+  **draft**; step 6's head check, then hand back.
+- A finding the coordinator sends enters at step 3 — confirm it in the
+  tree, apply what holds — like Sonar and review comments. Findings can
+  arrive while the agent's own round is still running, and they are
+  invisible from inside it.
+
+The coordinator reviews at the head the agent reported; if it is the
+session working with the user it readies through step 6, otherwise it
+hands up.
 
 **Cost:** in one session six PRs were readied by their own agents over
 findings the coordinator had sent minutes earlier; #750 was readied on the
 exact commit carrying three unaddressed must-fix findings, and #738 was
-merged in that state. See also
-[The review loop under a coordinator](#process--the-review-loop-under-a-coordinator).
+merged in that state.
+
+## Process lessons — delegated work
+
+2026-09-26 wave — PRs #738 / #749 / #750 / #770.
+
+- **A PR merged one round early gets its fixes on a new branch off develop,
+  never on the merged branch** — nothing reviews or merges commits pushed
+  there. The user merged #749 with its round still open; the rest of the
+  round shipped as #758 off develop.
+- **A coordinator instruction that turns a refusal into a silent fallback is
+  reverted, not patched.** #770 round 1 applied one:
+  `ActingContextArgumentResolver` answered an `X-Hospital-Id` the filter had
+  rejected with the caller's primary hospital instead of refusing it. Round 2
+  reverted the resolver and its tests to develop, because both consumers
+  already refuse the value themselves.
+- **A round's scope is bounded before it starts: "fix N, defer M, then hand
+  back, or ready if you are the one accountable".** The deferred findings go
+  where step 3 sends them. Without the bound the PR does not converge: #738
+  grew to +2,302 lines across its rounds and was merged with must-fix
+  findings still open.
 
 ## Branch naming
 
@@ -1316,25 +1342,6 @@ code is. Spring Data derived finders keep their declared types.
 **Caught:** the user, reading #603–#605. The `reachOf` refactor is a
 Standing platform debt bullet in `tasklist.md`; new code follows the rule
 from now.
-
-### Process — the review loop under a coordinator
-
-2026-09-26 wave — PRs #738 / #749 / #750 / #770.
-
-- **A PR merged one round early gets its fixes on a new branch off develop,
-  never on the merged branch** — nothing reviews or merges commits pushed
-  there. The user merged #749 with its round still open; the rest of the
-  round shipped as #758 off develop.
-- **A coordinator instruction that turns a refusal into a silent fallback is
-  reverted, not patched.** #770 round 1 applied one:
-  `ActingContextArgumentResolver` answered an `X-Hospital-Id` the filter had
-  rejected with the caller's primary hospital instead of refusing it. Round 2
-  reverted the resolver and its tests to develop, because both consumers
-  already refuse the value themselves.
-- **A round's scope is bounded before it starts: "fix N, defer M, then
-  ready".** The rest become tasklist bullets (step 3). Without the bound the
-  PR does not converge: #738 grew to +2,302 lines across its rounds and was
-  merged with must-fix findings still open.
 
 ## Co-author tag
 
