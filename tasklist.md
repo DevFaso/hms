@@ -3551,8 +3551,8 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   checked in `SecurityConfig`) and #755 (`FhirTenantBoundaryInterceptor`: every
   request bound to a hospital the principal holds, the role checked AT that
   hospital, named ids gated before the provider, search bundles filtered).**
-  What the two left. Most is hardening, but the items marked
-  **(cross-hospital)** still expose something about another hospital:
+  What the two left. Most is hardening; the one item marked
+  **(cross-hospital)** still exposes something about another hospital:
   - **FHIR `Patient` read and search return 500 for every caller** - on prod
     too, before and after these PRs. `PatientFhirMapper` loads
     `hospitalRegistrations` lazily with no session open. The same shape makes
@@ -3577,8 +3577,10 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
     refused. Fails closed; would lock such users out.
   - The FHIR services that still read the raw context agree with the bound
     hospital only because the interceptor runs first: see "Two tenant
-    resolvers disagree" (add `FhirTenancy.requireHospitalScope` to its list;
-    the fix there is to delegate to `FhirTenantBoundary.boundHospital`).
+    resolvers disagree", whose list is short: grep `fhir/**` for
+    `getContextOrEmpty().getActiveHospitalId()` - seven hits, including
+    `FhirTenancy.requireHospitalScope` and `ObservationFhirResourceProvider`.
+    The fix there is to delegate to `FhirTenantBoundary.boundHospital`.
   - `/fhir-bulk-status` (status, cancel, download) is outside the HAPI
     servlet, so the boundary does not cover it: it checks the union of the
     caller's roles, not the role held at the hospital. Its hospital comes
@@ -3591,11 +3593,10 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
     right (the former hospital holds that history), maybe not; the two rules
     should agree either way. Unowned.
   - **(cross-hospital)** `PatientFhirMapper` emits one MRN per registered hospital, so a read
-    reveals the patient's other hospitals. **(cross-hospital)** FHIR
-    conditional create looks an
-    MRN up at whatever hospital the identifier names, so 404 against 412
-    tells a caller whether it exists there, and the audit description carries
-    the MRN (write flag, off by default).
+    reveals the patient's other hospitals. (FHIR
+    conditional create, which used to look an
+    MRN up at whatever hospital the identifier names, is fixed: #750 searches
+    only the caller's own hospital and audits ids only.)
   - The four previously unscoped providers cap their queries before the
     boundary filters (MedicationRequest at 200) and load foreign rows first.
     `Bundle.total` is reduced by every withheld entry, `_include` ones too -
@@ -3607,9 +3608,13 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   - `POST Patient/{id}/$everything` and `HEAD` fall to the writer matcher, so
     a consulting clinician is refused the POST form of a read they may GET.
   - SMART discovery still advertises `patient/*.read`, which the gate refuses.
-  - The reader role set is defined twice (`SecurityConfig` and
-    `FhirTenantBoundary.READ_ROLE_CODES`), and `holdsRoleAt` re-parses roles
-    beside `RoleValidator.expandCodes`. One constant, one parser.
+  - The FHIR reader set exists three times (`SecurityConfig.FHIR_READER_AUTHORITIES`,
+    `FhirTenantBoundary.READ_ROLE_CODES`, `EncounterController.ENCOUNTER_LIST_ROLES`)
+    and the writer set twice (`SecurityConfig.FHIR_WRITER_AUTHORITIES`,
+    `FhirTenantBoundary.WRITE_ROLE_CODES`); if the writer pair drifts, the
+    path gate and the boundary admit different writers. `holdsRoleAt` also
+    re-parses roles beside `RoleValidator.expandCodes`. One constant per set,
+    one parser.
   - Sonar on #752/#755, all minor: the `"/fhir/**"` and `"Patient"` literals,
     two swapped `assertEquals` arguments, `PatientFhirResourceProvider.search`
     one point over the complexity limit, a hidden field in
@@ -3621,30 +3626,40 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   the principal holds none.** The cause is one clause,
   `|| effective.getPermittedHospitalIds().isEmpty()` in
   `HospitalContextRequestOverrides.applyRequestOverrides` line 70: a principal
-  with an empty permitted set may pin whatever hospital the header names. That
-  is a Keycloak token without hospital claims, or an HMS token whose
-  assignments were revoked after sign-in. Every endpoint that resolves the
-  active hospital (through `RoleValidator` or the raw context) then acts AT
-  that hospital. #755 stopped trusting the value on FHIR paths only. Fix the
-  clause, not each reader: refuse the header for a non-super-admin with no
-  permitted hospital. **The most important item from this wave.** Unowned.
+  with an empty permitted set may pin whatever hospital the header names.
+  **Nearly every PATIENT is in that set:** patients hold a global
+  (no-hospital) `ROLE_PATIENT` assignment ("patients can exist system-wide",
+  `UserRoleHospitalAssignmentServiceImpl` ~line 1029), and
+  `JwtTokenProvider.buildHospitalContext` builds the permitted set from
+  non-null hospital ids only. So is a Keycloak token without hospital claims,
+  and an HMS token whose assignments were revoked after sign-in. Every
+  endpoint that resolves the active hospital (through `RoleValidator` or the
+  raw context) then acts AT the hospital the header names. #755 stopped
+  trusting the value on FHIR paths only. The premise several fixes this wave
+  leaned on - "a patient principal always resolves one hospital" - does not
+  hold under a header. Fix the clause, not each reader: refuse the header for
+  a non-super-admin with no permitted hospital. **Check the patient flows
+  before shipping that**, since it changes what every patient's active
+  hospital is. **The most important item from this wave.** Unowned.
 
 - **~~Cross-tenant defects on the FHIR write and EMPI paths.~~ Closed by
   #750:** `PUT /Patient/{id}` counts only an ACTIVE registration at the
   caller's hospital, and another tenant's lab result or identity answers
   exactly like a missing one. Still open:
   - EMPI treats a missing scope as global view without the verified
-    super-admin check #751 added for lab results: `EmpiServiceImpl.isVisibleTo`
-    allows `activeHospitalId == null`, and it gates `mergeIdentities`,
-    `findIdentityByPatientId` (`GET /empi/identities/by-patient`) and
-    `requirePatientInTenant` (`mergePatients`). Fix the predicate, not one
-    caller. The null comes from step 4 - see "`RoleValidator
+    super-admin check #751 added for lab results, in TWO places:
+    `EmpiServiceImpl.isVisibleTo` allows `activeHospitalId == null` and gates
+    `mergeIdentities` and `findIdentityByPatientId`
+    (`GET /empi/identities/by-patient`); `requirePatientInTenant`
+    (`mergePatients`) has its own `if (activeHospitalId == null) return;`
+    and provisions an identity - publishing `IDENTITY_LINKED` - before
+    `mergeIdentities` can refuse. Fix both. The null comes from step 4 - see "`RoleValidator
     .requireActiveHospitalId()` step 4 is authorities-based". No production
     path found. Unowned.
   - `/merge-by-patient` checks the patient with `existsByPatientIdAndHospitalId`,
     which ignores `active`, so a patient who left still counts. Unowned.
-  - `EmpiServiceImpl.publishEvent` sends to Kafka synchronously inside the
-    transaction, for all its callers: `linkIdentity`, `addAlias`,
+  - `EmpiServiceImpl.publishEvent` sends to Kafka inside the transaction -
+    before commit, not after it - for all its callers: `linkIdentity`, `addAlias`,
     `mergeIdentities` and `mergePatients` (which publishes `IDENTITY_LINKED`
     before it can refuse). A rollback - including the HL7 A40 rollback-only
     trap under "HL7 residuals" - leaves consumers holding an event for a
@@ -3756,8 +3771,9 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
     refusal tests call `x.getId()` inside `captureNotFound`'s lambda (Sonar
     S5778).
 
-- **`PatientRepositoryRegistrationScopeTest` fails non-deterministically in
-  CI, and the cause is heap exhaustion, not the test.** It failed on three PRs
+- **~~`PatientRepositoryRegistrationScopeTest` failed non-deterministically in
+  CI; the cause was heap exhaustion, not the test.~~** (Closed by #757; the
+  known risk below stays open.) It failed on three PRs
   in one night, each touching nothing near it, and every failure ends in
   `Failed to load ApplicationContext ... OutOfMemoryError: Java heap space`.
   Spring caches up to 32 test contexts and closes none before the JVM exits,
