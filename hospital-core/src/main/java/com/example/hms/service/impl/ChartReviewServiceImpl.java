@@ -66,6 +66,9 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     /** Length used for note / imaging-impression preview snippets. */
     static final int PREVIEW_LENGTH = 280;
 
+    /** The nil UUID: names no hospital, for an IN list that must not be empty. */
+    private static final UUID NO_HOSPITAL = new UUID(0L, 0L);
+
     private final PatientChartAccess patientChartAccess;
     private final EncounterRepository encounterRepository;
     private final EncounterNoteRepository encounterNoteRepository;
@@ -190,9 +193,14 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     private List<ResultEntryDTO> loadResults(UUID patientId, UUID hospitalId, Set<UUID> readable,
                                              int limit, Map<String, Long> reach) {
         Pageable page = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "resultDate"));
+        // Global view (no acting hospital) is a verified super-admin only —
+        // PatientChartAccess.require refuses a null scope for anyone else — and
+        // reads every hospital through the readable query's globalView flag:
+        // there is no patient-only finder left. The nil UUID names no hospital
+        // (PostgreSQL rejects an empty IN list).
         List<LabResult> source = readable != null
             ? labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(patientId, readable, page)
-            : labResultRepository.findByLabOrder_Patient_Id(patientId, page).getContent();
+            : labResultRepository.findPatientResultsReadableAt(patientId, Set.of(NO_HOSPITAL), null, true, page);
         account(reach, hospitalId, source.stream()
             .map(r -> r.getLabOrder() == null ? null : CrossHospitalReachRecorder.hospitalIdOf(r.getLabOrder().getHospital()))
             .toList());

@@ -24,6 +24,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -33,6 +34,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -592,7 +594,8 @@ class PatientLabResultServiceImplTest {
         LabResult foreign = buildLabResult("6.2", "mmol/L", true, false); foreign.setLabOrder(foreignOrder);
         when(patientChartAccess.require(eq(patientId), isNull())).thenReturn(patient);
         // Stubbed so the test would SEE the leak if the fallback ever ran again.
-        lenient().when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(List.of(foreign));
+        lenient().when(labResultRepository.findPatientResultsReadableAt(any(), any(), any(), anyBoolean(), any()))
+            .thenReturn(List.of(foreign));
 
         // The key matters as much as the type. ResourceNotFoundException is
         // @ResponseStatus(NOT_FOUND), so the type pins 404-not-403; the key
@@ -604,7 +607,7 @@ class PatientLabResultServiceImplTest {
             .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
             .isEqualTo("patient.notFound");
 
-        verify(labResultRepository, never()).findByLabOrder_Patient_Id(any());
+        verify(labResultRepository, never()).findPatientResultsReadableAt(any(), any(), any(), anyBoolean(), any());
         verifyNoInteractions(reachRecorder);
     }
 
@@ -627,12 +630,20 @@ class PatientLabResultServiceImplTest {
         LabOrder order = new LabOrder(); order.setHospital(other);
         LabResult own = buildLabResult("5.1", "mmol/L", true, false); own.setLabOrder(order);
         when(patientChartAccess.require(eq(patientId), isNull())).thenReturn(patient);
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(List.of(own));
+        ArgumentCaptor<Pageable> page = ArgumentCaptor.forClass(Pageable.class);
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(Set.of(new UUID(0L, 0L))),
+            isNull(), eq(true), page.capture())).thenReturn(List.of(own));
 
         List<PatientLabResultResponseDTO> results =
             service.getLabResultsForPatientPortal(patientId, null, 10);
 
         assertThat(results).extracting(PatientLabResultResponseDTO::getValue).containsExactly("5.1");
+        // Newest ten at the database — this used to load the patient's whole
+        // result history, fully hydrated, to sort and cut it in memory.
+        assertThat(page.getValue().getPageSize()).isEqualTo(10);
+        assertThat(page.getValue().getSort().getOrderFor("resultDate"))
+            .isNotNull()
+            .returns(Sort.Direction.DESC, Sort.Order::getDirection);
         assertThat(results).extracting(PatientLabResultResponseDTO::getHospitalId)
             .containsExactly(otherHospitalId);
         // Nothing to disclose against: there is no acting hospital.

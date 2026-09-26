@@ -111,11 +111,34 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
     List<LabResult> findByLabOrder_IdIn(Collection<UUID> labOrderIds);
 
     /**
-     * The doctor timeline's lab rows.
+     * A patient's results that a hospital may read, sorted and limited by
+     * {@code pageable} (pass {@link Pageable#unpaged()} for all of them).
+     *
+     * <p>Readable is B1's predicate widened by the patient-read rule, exactly
+     * {@link #findTrendReadableAt}'s: an order placed at any of
+     * {@code readableHospitalIds} (the acting hospital plus the
+     * treatment-relationship set from {@code RecordAccessPolicy}), or an order
+     * the acting hospital's laboratory performed for somebody else
+     * ({@code LabOrder.isHandledBy}). {@code performingHospital} is null on
+     * most orders, so the clause compares its id and never joins it: an inner
+     * join would drop every order run where it was placed.
+     *
+     * <p>This replaced the unscoped {@code findByLabOrder_Patient_Id} pair,
+     * which loaded every hospital's rows for the patient, fully hydrated, for
+     * the callers to throw most of them away in memory. There is no
+     * patient-only finder left to call by name. {@code globalView} is the one
+     * way to read across every hospital, and it has exactly two setters: a
+     * verified super-admin in global view ({@code ChartReviewServiceImpl},
+     * behind {@code PatientChartAccess}), and the patient portal, where the
+     * caller is the patient and owns every row
+     * ({@code PatientLabResultServiceImpl}).
+     *
+     * <p>{@code readableHospitalIds} must never be empty (PostgreSQL rejects
+     * {@code IN ()}); pass the nil UUID when there is no set to name.
      *
      * <p>{@code labOrder.encounter} and its department are fetched because the
-     * E8 #51 filter runs {@code effectiveCategory(labOrder.getEncounter())} on
-     * every row before any of them is rendered, and that falls back to the
+     * timeline's E8 #51 filter runs {@code effectiveCategory(labOrder.getEncounter())}
+     * on every row before any of them is rendered, and that falls back to the
      * department's default when the encounter carries no explicit tag. Both are
      * LAZY, so without them the sensitivity check alone costs two selects per
      * lab order — on what is usually a chart's highest-count category.
@@ -132,7 +155,18 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         "assignment",
         "assignment.user"
     })
-    List<LabResult> findByLabOrder_Patient_Id(UUID patientId);
+    @Query("""
+        SELECT r FROM LabResult r
+        WHERE r.labOrder.patient.id = :patientId
+          AND (:globalView = true
+               OR r.labOrder.hospital.id IN :readableHospitalIds
+               OR r.labOrder.performingHospital.id = :actingHospitalId)
+    """)
+    List<LabResult> findPatientResultsReadableAt(@Param("patientId") UUID patientId,
+                                                 @Param("readableHospitalIds") Collection<UUID> readableHospitalIds,
+                                                 @Param("actingHospitalId") UUID actingHospitalId,
+                                                 @Param("globalView") boolean globalView,
+                                                 Pageable pageable);
 
     @EntityGraph(attributePaths = {
         "labOrder",
@@ -356,24 +390,6 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         String sourceSendingApplication,
         String sourceSendingFacility,
         String sourceMessageControlId);
-
-    /**
-     * Paged unscoped variant used by the chart-review aggregator when no
-     * hospital scope is supplied. Sort + limit are applied at the DB level
-     * via the {@link Pageable} argument so we avoid loading the entire
-     * lab-result history into memory.
-     */
-    @EntityGraph(attributePaths = {
-        "labOrder",
-        "labOrder.patient",
-        "labOrder.hospital",
-        "labOrder.labTestDefinition",
-        "labOrder.orderingStaff",
-        "labOrder.orderingStaff.user",
-        "assignment",
-        "assignment.user"
-    })
-    Page<LabResult> findByLabOrder_Patient_Id(UUID patientId, Pageable pageable);
 
     /**
      * The doctor's critical strip (B15): critical results of this provider's

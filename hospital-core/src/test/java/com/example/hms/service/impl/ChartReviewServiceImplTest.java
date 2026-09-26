@@ -55,6 +55,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -129,8 +130,9 @@ class ChartReviewServiceImplTest {
         when(labResultRepo.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(
             any(UUID.class), any(), any(Pageable.class)))
             .thenReturn(List.of());
-        when(labResultRepo.findByLabOrder_Patient_Id(any(UUID.class), any(Pageable.class)))
-            .thenReturn(new PageImpl<>(List.of()));
+        when(labResultRepo.findPatientResultsReadableAt(any(UUID.class), any(), any(), anyBoolean(),
+            any(Pageable.class)))
+            .thenReturn(List.of());
         when(prescriptionRepo.findByPatient_IdAndHospital_IdIn(
             any(UUID.class), any(), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
@@ -531,6 +533,38 @@ class ChartReviewServiceImplTest {
         assertThat(dto.getEncounters()).hasSize(2);
         verify(reachRecorder).recordReach(eq(PATIENT_ID), eq(HOSPITAL_ID), any(), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    @Test
+    void globalViewReadsResultsThroughTheFlaggedQueryPagedAtTheDatabase() {
+        // A verified super-admin in global view (PatientChartAccess refuses a
+        // null scope to anyone else) reads every hospital's results — through
+        // the readable query's globalView flag, one page at the database. There
+        // is no patient-only finder to fall back to.
+        LabResult labResult = labResult(LocalDateTime.now().minusDays(1), AbnormalFlag.NORMAL, "Glucose", "2345-7");
+        org.mockito.ArgumentCaptor<Pageable> page = org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        when(labResultRepo.findPatientResultsReadableAt(eq(PATIENT_ID), eq(Set.of(new UUID(0L, 0L))), isNull(),
+            eq(true), page.capture()))
+            .thenReturn(List.of(labResult));
+
+        ChartReviewDTO dto = service.getChartReview(PATIENT_ID, null, 7);
+
+        assertThat(dto.getResults()).hasSize(1);
+        assertThat(page.getValue().getPageSize()).isEqualTo(7);
+        assertThat(page.getValue().getSort().getOrderFor("resultDate"))
+            .isNotNull()
+            .returns(org.springframework.data.domain.Sort.Direction.DESC,
+                org.springframework.data.domain.Sort.Order::getDirection);
+        verify(labResultRepo, never()).findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(any(), any(), any());
+    }
+
+    @Test
+    void anActingHospitalNeverTakesTheGlobalViewQuery() {
+        service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+
+        verify(labResultRepo).findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(PATIENT_ID),
+            eq(Set.of(HOSPITAL_ID)), any(Pageable.class));
+        verify(labResultRepo, never()).findPatientResultsReadableAt(any(), any(), any(), anyBoolean(), any());
     }
 
     @Test
