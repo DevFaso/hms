@@ -28,7 +28,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
     "spring.liquibase.enabled=false",
     "spring.jpa.hibernate.ddl-auto=create-drop",
     "spring.jpa.properties.hibernate.hbm2ddl.create_namespaces=true",
-    "spring.datasource.url=jdbc:h2:mem:hms_test;DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
     "spring.datasource.driver-class-name=org.h2.Driver",
     "app.seed.enabled=false",
     "app.kafka.enabled=false",

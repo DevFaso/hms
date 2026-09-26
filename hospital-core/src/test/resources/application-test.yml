@@ -27,12 +27,16 @@ spring:
   # drop against the tables every other cached context was still using, and
   # every context that started dropped and rebuilt them underneath the others.
   # The test JVM caps its context cache (spring.test.context.cache.maxSize in
-  # build.gradle), so contexts DO close mid-run. Measured with the cap and the
+  # spring.properties), so contexts DO close mid-run. Measured with the cap and the
   # old shared name: an eviction dropped the hospital and security schemas
   # under a live context and PrescriptionClarificationIT failed 7/7 on
   # 'Schema "hospital" not found'.
+  # No DB_CLOSE_DELAY=-1: with unique names it only kept every closed context's
+  # database registered until the fork exited (measured: 17 live H2 databases
+  # for 8 live contexts). The context's Hikari pool keeps its database open
+  # while the context lives; H2 frees it when the pool closes.
   datasource:
-    url: jdbc:h2:mem:hms_test_${random.uuid};DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    url: jdbc:h2:mem:hms_test_${random.uuid};DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
     driver-class-name: org.h2.Driver
     username: sa
     password:
