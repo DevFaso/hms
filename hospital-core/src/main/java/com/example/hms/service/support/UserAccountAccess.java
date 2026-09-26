@@ -68,7 +68,9 @@ import java.util.stream.Collectors;
  *       Decided from the assignment table, not from token authorities: a
  *       Keycloak token also carries realm noise such as
  *       {@code ROLE_OFFLINE_ACCESS}, so "any role but PATIENT" read from the
- *       token would admit every patient.</li>
+ *       token would admit every patient. A super-admin sees every account;
+ *       anyone else only the accounts assigned at a hospital where they hold
+ *       that staff assignment (see {@link #requireDirectoryAccess}).</li>
  * </ul>
  *
  * <p>Role codes are compared after {@link RoleExpansion}, on the token's
@@ -284,16 +286,65 @@ public class UserAccountAccess {
     }
 
     /**
-     * The user directory (list and search) is for staff. Throws
-     * {@link AccessDeniedException} for everyone else, patients included.
+     * The user directory (list and search) is for staff, and a staff member's
+     * directory is their own hospitals. Throws {@link AccessDeniedException}
+     * for everyone else, patients included.
+     *
+     * <ul>
+     *   <li>A super-admin (the verified context flag) sees every account.</li>
+     *   <li>Anyone else holding an ACTIVE assignment in a role other than
+     *       PATIENT sees the accounts that hold an assignment, in any role and
+     *       active or not, at a hospital where the caller holds such an
+     *       assignment. The caller's own PATIENT assignments do not widen it:
+     *       a nurse at A who is a patient at B does not see B's staff.</li>
+     * </ul>
+     *
+     * <p>The target's assignment counts whether active or not because every
+     * admin-registered account starts with INACTIVE assignments until its
+     * holder verifies the emailed code (option A, 2026-09-02): the staff
+     * page's account picker must still offer the nurse the hospital admin
+     * registered five minutes ago. A former employee whose assignment was
+     * switched off stays visible to the hospital that employed them, which
+     * already holds that account; what is closed is the cross-tenant view.
+     * A global assignment (no hospital) matches no hospital, so platform
+     * accounts are the super-admin's to see.
+     *
+     * @return the scope the directory query must apply
      */
-    public void requireDirectoryAccess() {
+    public DirectoryScope requireDirectoryAccess() {
         Caller caller = caller();
-        boolean staff = caller.superAdmin() || caller.activeAssignments().stream()
-            .map(a -> roleCode(a.getRole()))
-            .anyMatch(code -> !code.isEmpty() && !PATIENT.equals(code));
-        if (!staff) {
+        if (caller.superAdmin()) {
+            return DirectoryScope.EVERYONE;
+        }
+        List<UserRoleHospitalAssignment> staffAssignments = caller.activeAssignments().stream()
+            .filter(a -> {
+                String code = roleCode(a.getRole());
+                return !code.isEmpty() && !PATIENT.equals(code);
+            })
+            .toList();
+        if (staffAssignments.isEmpty()) {
             throw new AccessDeniedException("Access denied");
+        }
+        return new DirectoryScope(false, staffAssignments.stream()
+            .map(UserAccountAccess::hospitalIdOf)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toUnmodifiableSet()));
+    }
+
+    /**
+     * Which accounts a directory read may return.
+     *
+     * @param everyone    the super-admin's view: every account, the deleted
+     *                    view included when the caller asks for it
+     * @param hospitalIds otherwise, only live accounts holding an assignment
+     *                    at one of these hospitals; empty means none at all
+     */
+    public record DirectoryScope(boolean everyone, Set<UUID> hospitalIds) {
+
+        static final DirectoryScope EVERYONE = new DirectoryScope(true, Set.of());
+
+        public DirectoryScope {
+            hospitalIds = Set.copyOf(hospitalIds);
         }
     }
 

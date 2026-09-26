@@ -158,11 +158,11 @@ public class UserController {
 
     @Operation(summary = "Get all users with pagination (summary view)",
         description = "Staff only: a caller with no active non-patient assignment gets 403. "
-            + "includeDeleted=true also returns soft-deleted accounts; onlyDeleted=true "
-            + "returns only them (the restore worklist). Both are honoured only for SUPER_ADMIN "
-            + "- the user directory is global, so surfacing deleted identities to a "
-            + "hospital-scoped admin would let one tenant enumerate another tenant's account "
-            + "history. Everyone else silently gets the live-only view.")
+            + "A super-admin sees every account; anyone else sees the live accounts holding an "
+            + "assignment (any role, active or not) at a hospital where the caller holds an "
+            + "active non-patient assignment. includeDeleted=true also returns soft-deleted "
+            + "accounts; onlyDeleted=true returns only them (the restore worklist). Both are "
+            + "honoured only for SUPER_ADMIN; everyone else silently gets the live-only view.")
     @GetMapping
     public ResponseEntity<Page<UserSummaryDTO>> getAllUsers(
             @RequestParam(defaultValue = "0") int page,
@@ -175,11 +175,11 @@ public class UserController {
     }
 
     /**
-     * Deleted-account visibility is SUPER_ADMIN-only. The user directory is
-     * global (not hospital-scoped), so honouring this for HOSPITAL_ADMIN
-     * would let one tenant's admin enumerate another tenant's deleted
-     * identities; scoping the directory itself is the larger pre-existing
-     * question, and the deleted view must not widen it.
+     * Deleted-account visibility is SUPER_ADMIN-only. A soft delete removes
+     * the account's assignments, so a deleted account belongs to no hospital
+     * and the hospital-scoped directory has nothing to match it on: honouring
+     * this for a HOSPITAL_ADMIN would hand them every tenant's deleted
+     * identities. The scoped service query has no deleted view at all.
      */
     private boolean canSeeDeleted() {
         // The same super-admin signal the rest of the /users rules use
@@ -189,9 +189,10 @@ public class UserController {
 
     @WriteAudited(skip = true, reason = "service emits USER_CREATE / USER_UPDATE / USER_DELETE")
     @Operation(summary = "Update user by ID (partial update — only send fields you want to change)",
-        description = "Your own account: names, email and phone only; the password, username and "
+        description = "Your own account: names and phone only; the password, username, email and "
             + "active flag have their own rules (POST /auth/me/change-password, "
-            + "/auth/me/change-username). Another account: super-admin, or a hospital admin when "
+            + "/auth/me/change-username, /auth/me/change-email, which needs the current "
+            + "password and a code sent to the new address). Another account: super-admin, or a hospital admin when "
             + "every one of its assignments is at a hospital they administer and it is not a "
             + "super-admin. Anything else answers 404.")
     @PutMapping("/{id}")
@@ -221,7 +222,8 @@ public class UserController {
     }
 
     @Operation(summary = "Search users by name, role, or email with pagination (summary view)",
-        description = "Staff only: a caller with no active non-patient assignment gets 403.")
+        description = "Staff only: a caller with no active non-patient assignment gets 403. "
+            + "Scoped to the caller's hospitals exactly as GET /users is.")
     @GetMapping("/search")
     public ResponseEntity<Page<UserSummaryDTO>> searchUsers(
             @RequestParam(required = false) String name,

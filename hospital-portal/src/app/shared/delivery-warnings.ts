@@ -5,7 +5,7 @@
  */
 export interface NotificationDeliveryStatus {
   channel: 'EMAIL' | 'SMS';
-  purpose?: 'ACTIVATION' | 'CREDENTIALS' | 'WELCOME';
+  purpose?: 'ACTIVATION' | 'CREDENTIALS' | 'WELCOME' | 'EMAIL_CHANGE_CODE' | 'EMAIL_CHANGE_NOTICE';
   outcome: 'SENT' | 'FAILED' | 'NOT_CONFIGURED' | 'MOCKED' | 'NO_CONTACT';
   target?: string;
   detail?: string;

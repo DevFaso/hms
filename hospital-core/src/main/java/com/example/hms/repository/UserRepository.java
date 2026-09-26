@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -105,10 +106,39 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * H2 (used by tests) handles untyped binds without complaint, so this
      * 500 surfaces only in the dev/UAT/prod profiles.
      */
-    @Query(value = """
-        SELECT u FROM User u
+    /*
+     * The directory (GET /users, /users/search), one WHERE clause shared by
+     * each value query and its count, so a filter is fixed once and a page's
+     * total can never count rows its content would not show.
+     *
+     * Scope (UserAccountAccess.requireDirectoryAccess): with :scoped = false
+     * (the super-admin) every account, the deleted view included on request.
+     * With :scoped = true only LIVE accounts holding an assignment, any role,
+     * active or not, at one of :hospitalIds; EXISTS, not a join, so an
+     * account assigned at two of those hospitals is one row. The scope is in
+     * the query: filtering a global page in memory would load other tenants'
+     * rows and break the paging. An unscoped call passes DIRECTORY_UNSCOPED,
+     * a sentinel no hospital has, because an empty IN list is not portable.
+     */
+    String DIRECTORY_VISIBLE = """
         WHERE ((:onlyDeleted = true AND u.isDeleted = true)
            OR (:onlyDeleted = false AND (:includeDeleted = true OR u.isDeleted = false)))
+          AND (:scoped = false
+               OR (u.isDeleted = false
+                   AND EXISTS (
+                       SELECT 1 FROM UserRoleHospitalAssignment ha
+                       WHERE ha.user = u
+                         AND ha.hospital.id IN :hospitalIds)))
+        """;
+
+    /*
+     * The search filters. When scoped, the role must be held through an
+     * ACTIVE assignment at one of the caller's hospitals, and a global
+     * UserRole does not count: otherwise a nurse at A searching
+     * role=HOSPITAL_ADMIN would find A's receptionist because that account
+     * administers hospital B, which is another tenant's fact.
+     */
+    String DIRECTORY_SEARCH_FILTERS = """
           AND ( :name IS NULL
                 OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
                 OR LOWER(COALESCE(u.lastName,  '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
@@ -123,51 +153,32 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                     JOIN a.role r
                     WHERE a.user = u
                       AND a.active = true
+                      AND (:scoped = false OR a.hospital.id IN :hospitalIds)
                       AND (LOWER(r.code) = LOWER(cast(:role AS string)) OR LOWER(r.name) = LOWER(cast(:role AS string)))
                 )
-                OR EXISTS (
-                    SELECT 1 FROM UserRole ur
-                    JOIN ur.role r2
-                    WHERE ur.id.userId = u.id
-                      AND (LOWER(r2.code) = LOWER(cast(:role AS string)) OR LOWER(r2.name) = LOWER(cast(:role AS string)))
-                )
+                OR (:scoped = false
+                    AND EXISTS (
+                        SELECT 1 FROM UserRole ur
+                        JOIN ur.role r2
+                        WHERE ur.id.userId = u.id
+                          AND (LOWER(r2.code) = LOWER(cast(:role AS string)) OR LOWER(r2.name) = LOWER(cast(:role AS string)))
+                    ))
               )
-        """,
-        countQuery = """
-        SELECT COUNT(u) FROM User u
-        WHERE ((:onlyDeleted = true AND u.isDeleted = true)
-           OR (:onlyDeleted = false AND (:includeDeleted = true OR u.isDeleted = false)))
-          AND ( :name IS NULL
-                OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
-                OR LOWER(COALESCE(u.lastName,  '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
-                OR LOWER(u.username)               LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
-              )
-          AND ( :email IS NULL
-                OR LOWER(u.email) LIKE LOWER(CONCAT('%', cast(:email AS string), '%'))
-              )
-          AND ( :role IS NULL
-                OR EXISTS (
-                    SELECT 1 FROM UserRoleHospitalAssignment a
-                    JOIN a.role r
-                    WHERE a.user = u
-                      AND a.active = true
-                      AND (LOWER(r.code) = LOWER(cast(:role AS string)) OR LOWER(r.name) = LOWER(cast(:role AS string)))
-                )
-                OR EXISTS (
-                    SELECT 1 FROM UserRole ur
-                    JOIN ur.role r2
-                    WHERE ur.id.userId = u.id
-                      AND (LOWER(r2.code) = LOWER(cast(:role AS string)) OR LOWER(r2.name) = LOWER(cast(:role AS string)))
-                )
-              )
-        """)
+        """;
+
+    /** The hospital set an unscoped directory call passes: a sentinel no hospital has. */
+    java.util.Set<UUID> DIRECTORY_UNSCOPED = java.util.Set.of(new UUID(0L, 0L));
+
+    @Query(value = "SELECT u FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_SEARCH_FILTERS,
+        countQuery = "SELECT COUNT(u) FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_SEARCH_FILTERS)
     Page<User> searchUsers(@Param("name") String name,
                            @Param("role") String role,
                            @Param("email") String email,
                            @Param("includeDeleted") boolean includeDeleted,
                            @Param("onlyDeleted") boolean onlyDeleted,
+                           @Param("scoped") boolean scoped,
+                           @Param("hospitalIds") Collection<UUID> hospitalIds,
                            Pageable pageable);
-
 
     /**
      * The admin list. {@code includeDeleted=true} surfaces soft-deleted rows
@@ -175,15 +186,16 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * users screen shipped, and both were unreachable because this query
      * always filtered them out: a deleted user still holds their unique
      * email (uq_user_email has no isDeleted carve-out), so "already
-     * registered" pointed at a row nobody could see or restore.
+     * registered" pointed at a row nobody could see or restore. Scoped as
+     * {@link #DIRECTORY_VISIBLE} says; a scoped caller never sees the
+     * deleted view.
      */
-    @Query("""
-        select u from User u
-        where (:onlyDeleted = true and u.isDeleted = true)
-           or (:onlyDeleted = false and (:includeDeleted = true or u.isDeleted = false))
-    """)
+    @Query(value = "SELECT u FROM User u " + DIRECTORY_VISIBLE,
+        countQuery = "SELECT COUNT(u) FROM User u " + DIRECTORY_VISIBLE)
     Page<User> findAllPaged(@Param("includeDeleted") boolean includeDeleted,
                             @Param("onlyDeleted") boolean onlyDeleted,
+                            @Param("scoped") boolean scoped,
+                            @Param("hospitalIds") Collection<UUID> hospitalIds,
                             Pageable pageable);
 
   List<User> findByIsDeletedFalse();

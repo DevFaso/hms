@@ -28,6 +28,10 @@ public class NotificationDeliveryStatusDTO {
     public static final String PURPOSE_ACTIVATION = "ACTIVATION";
     public static final String PURPOSE_CREDENTIALS = "CREDENTIALS";
     public static final String PURPOSE_WELCOME = "WELCOME";
+    /** The code proving ownership of the new address of a self-service email change. */
+    public static final String PURPOSE_EMAIL_CHANGE_CODE = "EMAIL_CHANGE_CODE";
+    /** The notice to the previous address that the account's email changed. */
+    public static final String PURPOSE_EMAIL_CHANGE_NOTICE = "EMAIL_CHANGE_NOTICE";
 
     public static final String OUTCOME_SENT = "SENT";
     public static final String OUTCOME_FAILED = "FAILED";
@@ -41,7 +45,7 @@ public class NotificationDeliveryStatusDTO {
     /** {@link #CHANNEL_EMAIL} or {@link #CHANNEL_SMS}. */
     private String channel;
 
-    /** What the message carried: ACTIVATION code, one-time CREDENTIALS, or WELCOME mail. */
+    /** What the message carried: ACTIVATION code, one-time CREDENTIALS, WELCOME mail, or an EMAIL_CHANGE_* message. */
     private String purpose;
 
     /** One of the OUTCOME_* constants. */

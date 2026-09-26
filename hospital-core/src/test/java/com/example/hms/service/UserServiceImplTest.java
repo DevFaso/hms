@@ -21,6 +21,7 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.service.support.UserAccountAccess;
 import com.example.hms.utility.UserDisplayUtil;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,6 +46,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -1487,7 +1490,41 @@ class UserServiceImplTest {
         }
 
         @Test
-        @DisplayName("the profile form's self-edit — names, email, phone, the unchanged username and active flag — saves")
+        @DisplayName("a self-edit may not change the email: it goes through /auth/me/change-email, which needs the password")
+        void selfEditCannotChangeEmail() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.isSelf(user)).thenReturn(true);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setFirstName("Awa");
+            dto.setEmail("stolen-session@evil.test");
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("user.update.self.email"));
+            assertThat(user.getEmail()).isEqualTo("test@example.com");
+            assertThat(user.getFirstName()).isEqualTo("Test");
+            verify(userRepository, never()).save(any());
+            verify(userRepository, never()).existsEmailOnOtherAccount(any(), any());
+        }
+
+        @Test
+        @DisplayName("an administrator (not self) may still change an account's email on PUT")
+        void administratorMayStillChangeEmail() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.isSelf(user)).thenReturn(false);
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(assignmentRepository.findByUser(any())).thenReturn(Set.of());
+            when(userMapper.toResponseDTO(any(), any())).thenReturn(new UserResponseDTO());
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setEmail("new-address@example.com");
+
+            userService.updateUser(userId, dto);
+
+            assertThat(user.getEmail()).isEqualTo("new-address@example.com");
+        }
+
+        @Test
+        @DisplayName("the profile form's self-edit — names, the unchanged email and username, phone, active flag — saves")
         void profileSelfEditSaves() {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(accountAccess.isSelf(user)).thenReturn(true);
@@ -1497,7 +1534,7 @@ class UserServiceImplTest {
             UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
             dto.setFirstName("Awa");
             dto.setLastName("Traore");
-            dto.setEmail("awa@example.com");
+            dto.setEmail("test@example.com");
             dto.setPhoneNumber("+22670111111");
             dto.setUsername("testuser");
             dto.setActive(true);
@@ -1505,7 +1542,7 @@ class UserServiceImplTest {
             userService.updateUser(userId, dto);
 
             assertThat(user.getFirstName()).isEqualTo("Awa");
-            assertThat(user.getEmail()).isEqualTo("awa@example.com");
+            assertThat(user.getEmail()).isEqualTo("test@example.com");
             assertThat(user.getPasswordHash()).isEqualTo(EXISTING_HASH);
             verify(userRepository).save(user);
             // The self path never consults the administrator rule.
@@ -1609,6 +1646,64 @@ class UserServiceImplTest {
             assertThatThrownBy(() -> userService.searchUsers("a", null, null, 0, 10, false, false))
                     .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
             verifyNoInteractions(userRepository);
+        }
+    }
+
+    @Nested
+    @DisplayName("the directory's hospital scope")
+    class DirectoryScoping {
+
+        private final org.springframework.data.domain.Page<User> onePage =
+                new org.springframework.data.domain.PageImpl<>(java.util.List.of());
+
+        @Test
+        @DisplayName("a scoped caller queries with its hospitals and scoped=true, never the deleted view")
+        void scopedCallerPassesItsHospitals() {
+            Set<UUID> hospitals = Set.of(UUID.randomUUID());
+            when(accountAccess.requireDirectoryAccess())
+                    .thenReturn(new UserAccountAccess.DirectoryScope(false, hospitals));
+            when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
+                    .thenReturn(onePage);
+            when(userRepository.searchUsers(any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(), any(),
+                    any())).thenReturn(onePage);
+
+            // Even if a deleted flag reached the service, the scoped path has no deleted view.
+            userService.getAllUsers(0, 10, true, true);
+            userService.searchUsers("ami", "ROLE_NURSE", "x@y", 0, 10, true, true);
+
+            verify(userRepository).findAllPaged(eq(false), eq(false), eq(true), eq(hospitals), any());
+            verify(userRepository).searchUsers(eq("ami"), eq("ROLE_NURSE"), eq("x@y"), eq(false), eq(false),
+                    eq(true), eq(hospitals), any());
+        }
+
+        @Test
+        @DisplayName("an empty scope is an empty page, and no query runs")
+        void emptyScopeIsAnEmptyPage() {
+            when(accountAccess.requireDirectoryAccess())
+                    .thenReturn(new UserAccountAccess.DirectoryScope(false, Set.of()));
+
+            assertThat(userService.getAllUsers(0, 10, false, false).getTotalElements()).isZero();
+            assertThat(userService.searchUsers("a", null, null, 0, 10, false, false).getTotalElements()).isZero();
+            verifyNoInteractions(userRepository);
+        }
+
+        @Test
+        @DisplayName("the super-admin queries unscoped, with the sentinel set and the deleted flags passed through")
+        void superAdminQueriesUnscoped() {
+            when(accountAccess.requireDirectoryAccess())
+                    .thenReturn(new UserAccountAccess.DirectoryScope(true, Set.of()));
+            when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
+                    .thenReturn(onePage);
+            when(userRepository.searchUsers(any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(), any(),
+                    any())).thenReturn(onePage);
+
+            userService.getAllUsers(0, 10, true, false);
+            userService.searchUsers("a", null, null, 0, 10, false, true);
+
+            verify(userRepository).findAllPaged(eq(true), eq(false), eq(false),
+                    eq(UserRepository.DIRECTORY_UNSCOPED), any());
+            verify(userRepository).searchUsers(eq("a"), any(), any(), eq(false), eq(true), eq(false),
+                    eq(UserRepository.DIRECTORY_UNSCOPED), any());
         }
     }
 }

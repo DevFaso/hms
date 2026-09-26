@@ -40,6 +40,7 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.support.UserAccountAccess;
+import com.example.hms.service.support.UserAccountAccess.DirectoryScope;
 import com.example.hms.utility.MessageUtil;
 import org.springframework.security.access.AccessDeniedException;
 import lombok.RequiredArgsConstructor;
@@ -999,9 +1000,15 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public Page<UserSummaryDTO> getAllUsers(int page, int size, boolean includeDeleted,
                                             boolean onlyDeleted) {
-        accountAccess.requireDirectoryAccess();
+        DirectoryScope scope = accountAccess.requireDirectoryAccess();
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<User> users = userRepository.findAllPaged(includeDeleted, onlyDeleted, pageable);
+        if (!scope.everyone() && scope.hospitalIds().isEmpty()) {
+            return Page.empty(pageable);
+        }
+        // The deleted view is the super-admin's: a scoped call never asks for it.
+        boolean scoped = !scope.everyone();
+        Page<User> users = userRepository.findAllPaged(
+            !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable);
         return users.map(userMapper::toSummaryDTO);
     }
 
@@ -1009,11 +1016,20 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public Page<UserSummaryDTO> searchUsers(String name, String role, String email, int page, int size,
                                             boolean includeDeleted, boolean onlyDeleted) {
-        accountAccess.requireDirectoryAccess();
+        DirectoryScope scope = accountAccess.requireDirectoryAccess();
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<User> users = userRepository.searchUsers(
-            name, role, email, includeDeleted, onlyDeleted, pageable);
+        if (!scope.everyone() && scope.hospitalIds().isEmpty()) {
+            return Page.empty(pageable);
+        }
+        boolean scoped = !scope.everyone();
+        Page<User> users = userRepository.searchUsers(name, role, email,
+            !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable);
         return users.map(userMapper::toSummaryDTO);
+    }
+
+    /** The caller's hospitals, or the repository's sentinel when the directory is unscoped. */
+    private static java.util.Collection<UUID> directoryHospitals(DirectoryScope scope) {
+        return scope.everyone() ? UserRepository.DIRECTORY_UNSCOPED : scope.hospitalIds();
     }
 
     /*
@@ -1237,13 +1253,17 @@ public class UserServiceImpl implements UserService {
 
     /**
      * The fields an account holder may change on their own account through
-     * {@code PUT /users/{id}}: names, email and phone. The rest have their own
+     * {@code PUT /users/{id}}: names and phone. The rest have their own
      * endpoints, which apply rules this one does not: the password needs the
      * current one and the history check ({@code POST /auth/me/change-password}),
      * the username the character and uniqueness rules
-     * ({@code POST /auth/me/change-username}), and nobody switches their own
-     * account on or off. Sending the current value back unchanged is not a
-     * change, so the profile form, which always sends the username, still works.
+     * ({@code POST /auth/me/change-username}), the email the current password
+     * ({@code POST /auth/me/change-email}: it is where a password reset is
+     * sent, so it needs the current password and a code sent to the new
+     * address; rebinding it from a stolen session would otherwise turn a
+     * short-lived token into a permanent takeover), and nobody switches their own account
+     * on or off. Sending the current value back unchanged is not a change, so
+     * the profile form, which always sends the username and email, still works.
      */
     private static void requireSelfServiceChangesOnly(User user, UpdateUserRequestDTO dto) {
         if (dto.getActive() != null && !dto.getActive().equals(user.isActive())) {
@@ -1254,6 +1274,9 @@ public class UserServiceImpl implements UserService {
         }
         if (hasText(dto.getUsername()) && !dto.getUsername().equals(user.getUsername())) {
             throw new BusinessException(MessageUtil.resolve("user.update.self.username"));
+        }
+        if (hasText(dto.getEmail()) && !dto.getEmail().equals(user.getEmail())) {
+            throw new BusinessException(MessageUtil.resolve("user.update.self.email"));
         }
     }
 

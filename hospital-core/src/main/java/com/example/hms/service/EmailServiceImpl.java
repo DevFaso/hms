@@ -526,6 +526,63 @@ public class EmailServiceImpl implements EmailService {
     }
 
     @Override
+    public void sendEmailChangeVerificationEmail(String to, String verificationCode, Locale locale) {
+        if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
+        validateAddresses(List.of(to));
+        Locale l = recipientLocale(locale);
+        String escapedCode = escapeHtml(verificationCode);
+
+        String header = brandHeader(l, GRADIENT_BLUE, COLOR_BRAND_TINT,
+            "&#128274; " + text(l, "email.change.code.heading"));
+
+        String bodyContent = BODY_OPEN
+            + BODY_PARAGRAPH_OPEN + text(l, "email.change.code.body.intro") + CLOSE_PARAGRAPH
+            + HTML_CENTER_BLOCK
+            + "<div style=\"display:inline-block;background:#f1f5f9;border:2px dashed #94a3b8;"
+            + "border-radius:12px;padding:20px 40px;\">"
+            + "<span style=\"font-size:32px;font-weight:700;letter-spacing:8px;color:#1e293b;font-family:monospace;\">"
+            + escapedCode
+            + "</span>"
+            + CLOSE_DIV
+            + CLOSE_DIV
+            + "<p style=\"font-size:14px;color:#64748b;text-align:center;margin:0 0 24px;\">"
+            + text(l, "email.change.code.body.expiry")
+            + CLOSE_PARAGRAPH
+            + HR
+            + alertBox(text(l, KEY_UNEXPECTED_TITLE), text(l, "email.change.code.body.unexpected"))
+            + CLOSE_DIV;
+
+        String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
+        sendHtml(List.of(to), List.of(), List.of(), text(l, "email.change.code.subject"), body);
+        log.info("✅ Email-change verification code sent");
+    }
+
+    @Override
+    public void sendEmailChangedNoticeEmail(String to, String displayName, String maskedAddress, Locale locale) {
+        if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
+        validateAddresses(List.of(to));
+        Locale l = recipientLocale(locale);
+        LocalDateTime changedAt = LocalDateTime.now(ZoneOffset.UTC);
+
+        String header = brandHeader(l, GRADIENT_BLUE, COLOR_BRAND_TINT,
+            "&#128274; " + text(l, "email.change.notice.heading"));
+
+        String bodyContent = BODY_OPEN
+            + GREETING_PARAGRAPH_OPEN + greetingHi(l, displayName) + CLOSE_PARAGRAPH
+            + BODY_PARAGRAPH_OPEN
+            + text(l, "email.change.notice.body.intro", escapeHtml(maskedAddress),
+                humanDate(changedAt.toLocalDate(), l), CLOCK_TIME.format(changedAt))
+            + CLOSE_PARAGRAPH
+            + HR
+            + alertBox(text(l, KEY_UNEXPECTED_TITLE), text(l, "email.change.notice.body.unexpected"))
+            + CLOSE_DIV;
+
+        String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
+        sendHtml(List.of(to), List.of(), List.of(), text(l, "email.change.notice.subject"), body);
+        log.info("✅ Email-changed notice sent to the previous address");
+    }
+
+    @Override
     public void sendUsernameReminderEmail(String toEmail, String username, Locale locale) {
         Locale l = recipientLocale(locale);
         var subject = text(l, "email.username.reminder.subject");
