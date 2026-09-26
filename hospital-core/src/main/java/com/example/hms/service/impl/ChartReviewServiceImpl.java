@@ -189,10 +189,15 @@ public class ChartReviewServiceImpl implements ChartReviewService {
 
     private List<ResultEntryDTO> loadResults(UUID patientId, UUID hospitalId, Set<UUID> readable,
                                              int limit, Map<String, Long> reach) {
-        Pageable page = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "resultDate"));
+        // id breaks resultDate ties, so a page boundary is the same on every read.
+        Pageable page = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "resultDate", "id"));
+        // Global view (no acting hospital) is a verified super-admin only —
+        // PatientChartAccess.require refuses a null scope for anyone else — and
+        // reads every hospital through findAllPatientResults: there is no
+        // patient-only finder left.
         List<LabResult> source = readable != null
             ? labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(patientId, readable, page)
-            : labResultRepository.findByLabOrder_Patient_Id(patientId, page).getContent();
+            : labResultRepository.findAllPatientResults(patientId, page);
         account(reach, hospitalId, source.stream()
             .map(r -> r.getLabOrder() == null ? null : CrossHospitalReachRecorder.hospitalIdOf(r.getLabOrder().getHospital()))
             .toList());

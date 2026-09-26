@@ -117,8 +117,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         List<LabResult> visible = resolvePairs(results, portalView, effectiveLimit);
         // Only worth reading again if there are rows we have not seen AND the
         // wider read would actually be wider — at the cap it would repeat the
-        // identical query, and on the unscoped path that means loading the
-        // patient's whole result set a second time for nothing.
+        // identical query for nothing.
         if (visible.size() < effectiveLimit
             && results.size() >= effectiveLimit
             && effectiveLimit < MAX_LIMIT) {
@@ -151,7 +150,9 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
      * resolve, which is refused.
      */
     private List<LabResult> fetchRows(Patient patient, UUID hospitalId, int window, boolean portalView) {
-        Pageable pageable = PageRequest.of(0, window, Sort.by(Sort.Direction.DESC, "resultDate"));
+        // id breaks resultDate ties: the second, wider read must put the same
+        // rows first, or a tie at the boundary could swap between the two.
+        Pageable pageable = PageRequest.of(0, window, Sort.by(Sort.Direction.DESC, "resultDate", "id"));
         List<LabResult> results;
         if (hospitalId != null) {
             Hospital hospital = hospitalRepository.findById(hospitalId)
@@ -206,16 +207,12 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         } else {
             // Patient portal only: the caller IS the patient (or a proxy the
             // portal already authorized), the portal has no hospital scope to
-            // offer, and every row belongs to them. Patient-only query.
-            results = labResultRepository.findByLabOrder_Patient_Id(patient.getId()).stream()
-                .sorted((a, b) -> {
-                    if (a.getResultDate() == null && b.getResultDate() == null) return 0;
-                    if (a.getResultDate() == null) return 1;
-                    if (b.getResultDate() == null) return -1;
-                    return b.getResultDate().compareTo(a.getResultDate());
-                })
-                .limit(window)
-                .toList();
+            // offer, and every row belongs to them. Every hospital's rows,
+            // newest first and limited at the database: this used to load the
+            // patient's whole result history, fully hydrated, to sort it and
+            // keep the window. resultDate is NOT NULL, so the in-memory
+            // nulls-last ordering this replaced has nothing to reorder.
+            results = labResultRepository.findAllPatientResults(patient.getId(), pageable);
         }
         return results;
     }

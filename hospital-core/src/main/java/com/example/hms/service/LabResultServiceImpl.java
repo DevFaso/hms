@@ -1038,14 +1038,6 @@ public class LabResultServiceImpl implements LabResultService {
         .toList();
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public List<LabResultResponseDTO> getLabResultsByPatientId(UUID patientId, Locale locale) {
-    return labResultRepository.findByLabOrder_Patient_Id(patientId).stream()
-        .map(labResultMapper::toResponseDTO)
-        .toList();
-    }
-
     private Hospital extractHospitalFromLabOrder(LabOrder labOrder) {
         if (labOrder.getHospital() != null) {
             return labOrder.getHospital();

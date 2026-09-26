@@ -103,6 +103,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -757,7 +758,8 @@ class PatientServiceImplTest {
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(encounter));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(prescription));
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(List.of(labResult));
+        when(labResultRepository.findPatientResultsReadableAt(patientId, Set.of(hospitalId), null, false,
+            Pageable.unpaged())).thenReturn(List.of(labResult));
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(allergy));
         when(auditEventLogService.logEvent(any())).thenReturn(null);
 
@@ -855,6 +857,103 @@ class PatientServiceImplTest {
             assertThat(r.getDepartmentName()).isEqualTo("Psychiatrie");
             assertThat(r.getCount()).isEqualTo(1L);
         });
+    }
+
+    @Test
+    void getDoctorTimelineReadsOnlyTheReadableSetsOrdersAtTheDatabase() {
+        // The timeline shows results ORDERED in the readable set (acting
+        // hospital + treatment relationship), and that is now the whole of the
+        // read: the readable set, and no acting hospital, so the query's
+        // performed-here clause is off. A result this hospital's laboratory
+        // only performed for another hospital is not loaded at all
+        // (LabResultPatientReadableQueryTest pins what this call returns), and
+        // nothing is filtered on hospital after the read: a row the query
+        // returns is a row the timeline shows.
+        UUID doctorId = UUID.randomUUID();
+        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
+        assignment.setId(UUID.randomUUID());
+        assignment.setHospital(hospital);
+        Hospital treating = new Hospital();
+        treating.setId(UUID.randomUUID());
+        treating.setName("CHU Yalgado");
+
+        LabResult orderedHere = timelineLabResult(hospital, null, "4.9");
+        LabResult orderedAtTreating = timelineLabResult(treating, null, "5.4");
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(recordAccessPolicy.readableHospitalIds(doctorId, patientId, hospitalId))
+            .thenReturn(Set.of(hospitalId, treating.getId()));
+        when(labResultRepository.findPatientResultsReadableAt(patientId, Set.of(hospitalId, treating.getId()),
+            null, false, Pageable.unpaged()))
+            .thenReturn(List.of(orderedHere, orderedAtTreating));
+        when(auditEventLogService.logEvent(any())).thenReturn(null);
+
+        PatientTimelineResponseDTO response = patientService.getDoctorTimeline(
+            patientId, hospitalId, doctorId, assignment,
+            PatientTimelineAccessRequestDTO.builder().accessReason("Suivi clinique").includeSensitiveData(true).build());
+
+        assertThat(response.getEntries())
+            .filteredOn(entry -> "LAB_RESULT".equals(entry.getCategory()))
+            .extracting(PatientTimelineEntryDTO::getEntryId)
+            .containsExactlyInAnyOrder(orderedHere.getId().toString(), orderedAtTreating.getId().toString());
+        verify(labResultRepository).findPatientResultsReadableAt(patientId, Set.of(hospitalId, treating.getId()),
+            null, false, Pageable.unpaged());
+        verifyNoMoreInteractions(labResultRepository);
+    }
+
+    @Test
+    void getDoctorRecordReadsTheActingHospitalsOrdersAtTheDatabase() {
+        // The doctor record's lab section has always been acting-hospital only
+        // (unlike its medications and imaging, which read the readable set).
+        // It is read for the acting hospital's orders at the database, with no
+        // performer, so nothing this hospital's laboratory ran for another
+        // hospital is loaded, and nothing is filtered on hospital afterwards.
+        UUID doctorId = UUID.randomUUID();
+        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
+        assignment.setId(UUID.randomUUID());
+        assignment.setHospital(hospital);
+        LabResult orderedHere = timelineLabResult(hospital, null, "5.4");
+        LabResultResponseDTO orderedHereResponse = new LabResultResponseDTO();
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(labResultRepository.findPatientResultsReadableAt(patientId, Set.of(hospitalId), null, false,
+            Pageable.unpaged())).thenReturn(List.of(orderedHere));
+        when(labResultMapper.toResponseDTO(orderedHere)).thenReturn(orderedHereResponse);
+        when(auditEventLogService.logEvent(any())).thenReturn(null);
+
+        DoctorPatientRecordDTO response = patientService.getDoctorRecord(patientId, hospitalId, doctorId, assignment,
+            DoctorPatientRecordRequestDTO.builder().hospitalId(hospitalId).accessReason("Pre-op review")
+                .includeSensitiveData(true).build());
+
+        assertThat(response.getLabResults()).containsExactly(orderedHereResponse);
+        verify(labResultRepository).findPatientResultsReadableAt(patientId, Set.of(hospitalId), null, false,
+            Pageable.unpaged());
+        verifyNoMoreInteractions(labResultRepository);
+    }
+
+    private LabResult timelineLabResult(Hospital orderedAt, Hospital performedAt, String value) {
+        User orderingUser = new User();
+        orderingUser.setId(UUID.randomUUID());
+        orderingUser.setFirstName("Awa");
+        orderingUser.setLastName("Kaboré");
+        LabOrder order = LabOrder.builder()
+            .patient(patient)
+            .hospital(orderedAt)
+            .performingHospital(performedAt)
+            .orderingStaff(Staff.builder().user(orderingUser).hospital(orderedAt).build())
+            .clinicalIndication("Suivi")
+            .build();
+        order.setId(UUID.randomUUID());
+        LabResult result = LabResult.builder()
+            .labOrder(order)
+            .resultValue(value)
+            .resultUnit("mmol/L")
+            .resultDate(LocalDateTime.now().minusDays(1))
+            .build();
+        result.setId(UUID.randomUUID());
+        return result;
     }
 
     @Test
@@ -1032,7 +1131,8 @@ class PatientServiceImplTest {
         when(patientAllergyMapper.toResponseDto(allergy)).thenReturn(allergyResponse);
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(prescription));
         when(prescriptionMapper.toResponseDTO(prescription)).thenReturn(prescriptionResponse);
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(List.of(labResult));
+        when(labResultRepository.findPatientResultsReadableAt(patientId, Set.of(hospitalId), null, false,
+            Pageable.unpaged())).thenReturn(List.of(labResult));
         when(labResultMapper.toResponseDTO(labResult)).thenReturn(labResultResponse);
         when(ultrasoundOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedDateDesc(patientId, Set.of(hospitalId))).thenReturn(List.of(ultrasoundOrder));
         when(ultrasoundMapper.toOrderResponseDTO(ultrasoundOrder)).thenReturn(orderResponse);
