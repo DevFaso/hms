@@ -32,7 +32,6 @@ public final class Hl7MessageInspector {
         // f[0]="MSH", f[1]=encoding chars; routing fields start at f[2].
         requireWithin(field(f, 2), Hl7FieldBounds.SENDER_FIELD_MAX, "MSH-3");
         requireWithin(field(f, 3), Hl7FieldBounds.SENDER_FIELD_MAX, "MSH-4");
-        requireWithin(field(f, 8), Hl7FieldBounds.MESSAGE_TYPE_MAX, "MSH-9");
         requireWithin(field(f, 9), Hl7FieldBounds.MESSAGE_CONTROL_ID_MAX, "MSH-10");
         return new Hl7MessageHeader(
             String.valueOf(fieldSep),
@@ -62,7 +61,7 @@ public final class Hl7MessageInspector {
      */
     private static void requireWithin(String value, int max, String field) {
         if (!Hl7FieldBounds.fits(value, max)) {
-            throw new MllpProtocolException(field + " exceeds " + max + " characters");
+            throw new MllpFieldWidthException(field + " exceeds " + max + " characters");
         }
     }
 

@@ -23,7 +23,7 @@ package com.example.hms.utility;
  * (padding aside - see below); refusing it turns a flush error or a silent
  * non-match into an explicit rejection.
  *
- * <p><b>Where each is checked.</b> The MSH fields in
+ * <p><b>Where each is checked.</b> MSH-3, MSH-4 and MSH-10 in
  * {@code Hl7MessageInspector.parseHeader}, as an invalid MSH, for every
  * transport. PID-3 and MRG-1 in the ADT and A40 parsers of
  * {@link Hl7v2MessageBuilder}, which only MLLP uses. OBR-2 in
@@ -32,12 +32,16 @@ package com.example.hms.utility;
  * PV1-3 in {@code MllpInboundAdtVisitProjectionServiceImpl}, their only
  * reader, which skips the projection and keeps the demographic update.
  *
- * <p><b>Not covered: demographics.</b> PID-5, PID-7, PID-8 and PID-11 are
- * written by {@code MllpInboundAdtServiceImpl.applyDemographics} into
- * {@code Patient} columns of 100 characters (sex: 10) and are not bounded
- * here. They are not identifiers, so refuse-versus-truncate is a separate
- * decision; until it is made, an over-width value fails at commit with a
- * generic AE and no dead-letter row. Known debt, not an oversight.
+ * <p><b>Not covered: demographics and OBX-5.</b> PID-5, PID-7, PID-8 and
+ * PID-11 are written by {@code MllpInboundAdtServiceImpl.applyDemographics}
+ * into {@code Patient} columns of 100 characters (sex: 10); OBX-5 is written
+ * by {@code MllpInboundLabServiceImpl} into {@code lab_results.result_value}
+ * (2048). None is bounded here. They are not identifiers, so refuse versus
+ * truncate is a separate decision; until it is made, an over-width value
+ * fails at flush, the sender gets {@code AE Server-side handler error} with
+ * no dead-letter row, and it retries indefinitely. OBX-3, OBX-6, OBX-7 and
+ * OBX-11 are truncated to their columns where they are written - an older,
+ * different decision, also outside this class. Known debt, not an oversight.
  *
  * <p>The limits are column widths, not HL7's nominal field lengths: real
  * senders exceed v2.5's 20-character MSH-10, and a tighter bound would refuse
@@ -45,6 +49,12 @@ package com.example.hms.utility;
  * {@code @Column(length)}, and {@code Hl7FieldBoundsColumnWidthTest} fails
  * the build when a migration moves one without the other. Widths are counted
  * in characters (code points), as {@code VARCHAR(n)} counts them.
+ *
+ * <p><b>MSH-9 is not bounded.</b> It is a routing code, not an identifier;
+ * the HTTP ORU ingest never reads it; and the one column it reaches,
+ * {@code integration_message_event.message_type}, is already clamped by
+ * {@code IntegrationMessageRecorder}. Bounding it in the shared inspector
+ * refused messages over a field nothing on that path reads.
  *
  * <p><b>Whitespace.</b> The MSH fields are bounded untrimmed, because they
  * reach sinks untrimmed - MSA-2 echoes MSH-10 as sent, and the dispatcher
@@ -59,9 +69,6 @@ public final class Hl7FieldBounds {
 
     /** MSH-3 and MSH-4: {@code mllp_allowed_senders.sending_application/_facility}. */
     public static final int SENDER_FIELD_MAX = 180;
-
-    /** MSH-9: {@code integration_message_event.message_type}. */
-    public static final int MESSAGE_TYPE_MAX = 64;
 
     /**
      * MSH-10: {@code lab_results.source_message_control_id} and the

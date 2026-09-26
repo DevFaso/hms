@@ -188,8 +188,10 @@ public final class MllpRecordingContext {
      * an operator reads as ours. Unquoted, an MSH-10 of
      * {@code x) identifier not found; cross-tenant rejection (MSH-10 y}
      * renders as several findings the sender wrote. In quotes, with {@code "}
-     * and backslash escaped, the value cannot end early, and a control
-     * character is shown as a backslash-u hex escape rather than rendered.
+     * and backslash escaped, the value cannot end early, and any character
+     * that could reorder or hide the text around it (control, bidi, zero-width,
+     * separator, surrogate, private-use) is shown as a backslash-u hex escape
+     * rather than rendered.
      */
     public static String withControlId(String reason, String messageControlId) {
         return StringUtils.hasText(messageControlId)
@@ -197,14 +199,35 @@ public final class MllpRecordingContext {
             : reason;
     }
 
-    /** {@code value} in double quotes, with quotes, backslashes and control characters escaped. */
+    /**
+     * Whether {@code c} could make quoted text render as something other than
+     * what it is: a control character; a format character (the bidi embeddings,
+     * overrides and isolates U+202A-U+202E and U+2066-U+2069, the zero-width
+     * characters, the byte-order mark); a line or paragraph separator; a
+     * surrogate or private-use code unit. A right-to-left override inside the
+     * quotes can make the sender's text appear to sit outside them, so each of
+     * these is shown as its escape instead of being rendered.
+     */
+    private static boolean needsEscape(char c) {
+        if (Character.isISOControl(c)) {
+            return true;
+        }
+        int type = Character.getType(c);
+        return type == Character.FORMAT
+            || type == Character.LINE_SEPARATOR
+            || type == Character.PARAGRAPH_SEPARATOR
+            || type == Character.SURROGATE
+            || type == Character.PRIVATE_USE;
+    }
+
+    /** {@code value} in double quotes, with quotes, backslashes and {@link #needsEscape} characters escaped. */
     private static String quoted(String value) {
         StringBuilder out = new StringBuilder(value.length() + 2).append('"');
         for (int i = 0; i < value.length(); i++) {
             char c = value.charAt(i);
             if (c == '"' || c == '\\') {
                 out.append('\\').append(c);
-            } else if (Character.isISOControl(c)) {
+            } else if (needsEscape(c)) {
                 out.append(String.format("\\u%04x", (int) c));
             } else {
                 out.append(c);

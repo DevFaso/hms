@@ -73,7 +73,7 @@ class Hl7MessageInspectorTest {
     }
 
     @ParameterizedTest(name = "{0} at exactly {1} characters is read verbatim")
-    @CsvSource({"MSH-3, 180", "MSH-4, 180", "MSH-9, 64", "MSH-10, 255"})
+    @CsvSource({"MSH-3, 180", "MSH-4, 180", "MSH-10, 255"})
     void aHeaderFieldAtItsColumnWidthIsReadVerbatim(String field, int max) {
         String value = "Q".repeat(max);
 
@@ -84,7 +84,7 @@ class Hl7MessageInspectorTest {
     }
 
     @ParameterizedTest(name = "{0} one character over {1} is an invalid MSH")
-    @CsvSource({"MSH-3, 180", "MSH-4, 180", "MSH-9, 64", "MSH-10, 255"})
+    @CsvSource({"MSH-3, 180", "MSH-4, 180", "MSH-10, 255"})
     void aHeaderFieldOverItsColumnWidthIsAnInvalidMsh(String field, int max) {
         String body = withHeaderField(field, "Q".repeat(max + 1));
 
@@ -92,7 +92,7 @@ class Hl7MessageInspectorTest {
         // the limit and nothing else. It is echoed into the AR and the
         // dead-letter row, and the value is the over-width thing refused.
         assertThatThrownBy(() -> Hl7MessageInspector.parseHeader(body))
-            .isInstanceOf(MllpProtocolException.class)
+            .isInstanceOf(MllpFieldWidthException.class)
             .hasMessage(field + " exceeds " + max + " characters");
     }
 
@@ -121,5 +121,25 @@ class Hl7MessageInspectorTest {
             .isEqualTo(first)
             .isNotEqualTo(Hl7MessageInspector.parseHeader(withHeaderField("MSH-10", second))
                 .messageControlId());
+    }
+
+    @Test
+    void msh9IsNotBoundedItIsNotAnIdentifier() {
+        // A long message-structure component must not refuse the HTTP ORU
+        // ingest, which never reads MSH-9. The recorder clamps the one column
+        // it reaches.
+        String type = "ORU^R01^" + "S".repeat(100);
+
+        assertThat(Hl7MessageInspector.parseHeader(withHeaderField("MSH-9", type)).messageType())
+            .isEqualTo(type);
+    }
+
+    @Test
+    void anUnreadableBodyIsNotAWidthRefusal() {
+        // The HTTP ingest logs only a width refusal at WARN; an empty or
+        // non-MSH body must stay a plain protocol exception.
+        assertThatThrownBy(() -> Hl7MessageInspector.parseHeader("PID|1"))
+            .isInstanceOf(MllpProtocolException.class)
+            .isNotInstanceOf(MllpFieldWidthException.class);
     }
 }

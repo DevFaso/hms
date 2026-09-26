@@ -129,14 +129,52 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
     }
 
     @Test
-    @DisplayName("SKIPPED when PV1-3's point of care is over width; the rest of PV1-3 is not bounded")
-    void skippedWhenPointOfCareIsOverWidth() {
+    @DisplayName("An over-width PV1-3 does not stop an A03 discharge - only A02 reads PV1-3")
+    void anOverWidthLocationDoesNotSkipADischarge() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+
         VisitProjectionResult result = service.projectVisit(
-            adt("A02", "V-1", "W".repeat(Hl7FieldBounds.ASSIGNED_LOCATION_MAX + 1), null, null),
+            adt("A03", "V-1", "W".repeat(Hl7FieldBounds.ASSIGNED_LOCATION_MAX + 1), null,
+                LocalDateTime.of(2026, 5, 19, 10, 0)),
             patient, hospital, "REG", "HOSP1", "MSG-1");
 
-        assertThat(result).isEqualTo(VisitProjectionResult.SKIPPED);
-        verifyNoInteractions(admissionRepository, encounterRepository, auditEventLogService);
+        assertThat(result).isEqualTo(VisitProjectionResult.ADMISSION_DISCHARGED);
+    }
+
+    @Test
+    @DisplayName("A02 with an over-width point of care is an unresolvable destination: reconciled, audited without the value")
+    void anOverWidthTransferDestinationIsAuditedAsOverWidth() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        Department existing = department(UUID.randomUUID(), hospital);
+        row.setDepartment(existing);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A02", "V-1", "W".repeat(Hl7FieldBounds.ASSIGNED_LOCATION_MAX + 1) + "^ROOM-1", null, null),
+            patient, hospital, "REG", "HOSP1", "MSG-1");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.ADMISSION_TRANSFERRED);
+        verifyNoInteractions(departmentRepository);
+        ArgumentCaptor<Admission> saved = ArgumentCaptor.forClass(Admission.class);
+        verify(admissionRepository).save(saved.capture());
+        assertThat(saved.getValue().getDepartment()).isSameAs(existing);
+        ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventDescription())
+            .contains("destination=(over " + Hl7FieldBounds.ASSIGNED_LOCATION_MAX + " characters)")
+            .doesNotContain("WWWW");
     }
 
     @Test

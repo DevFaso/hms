@@ -130,18 +130,16 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             // place to surface that — degrade quietly.
             return VisitProjectionResult.SKIPPED;
         }
-        // PV1-19 and PV1-3's point of care are held to their columns here,
-        // where they are read, and not in the ADT parser: this projection is
-        // their only reader, and refusing the message for them would drop the
-        // demographic update it also carries. Skipped rather than truncated -
-        // a cut visit number could reconcile against somebody else's visit.
-        // Bounded as read (trimmed, first component) so padding that the
-        // match ignores does not count. The log names neither value.
-        if (!Hl7FieldBounds.fits(parsed.visitNumber().trim(), Hl7FieldBounds.VISIT_NUMBER_MAX)
-                || !Hl7FieldBounds.fits(firstComponent(parsed.assignedLocation()),
-                    Hl7FieldBounds.ASSIGNED_LOCATION_MAX)) {
+        // PV1-19 is held to its column here, where it is read, and not in the
+        // ADT parser: this projection is its only reader, and refusing the
+        // message for it would drop the demographic update it also carries.
+        // Skipped rather than truncated - a cut visit number could reconcile
+        // against somebody else's visit. Bounded as matched (trimmed). The log
+        // does not name the value. PV1-3 is bounded in applyTransfer, the only
+        // step that reads it, so a long location cannot skip a discharge.
+        if (!Hl7FieldBounds.fits(parsed.visitNumber().trim(), Hl7FieldBounds.VISIT_NUMBER_MAX)) {
             UUID hospitalId = receivingHospital.getId();
-            log.warn("ADT visit-sync skipped — PV1-19 or PV1-3 is wider than its column "
+            log.warn("ADT visit-sync skipped — PV1-19 is wider than its column "
                     + "(sender={}/{} hospital={} msgCtrlId={})",
                 sendingApplication, sendingFacility, hospitalId, messageControlId);
             return VisitProjectionResult.SKIPPED;
@@ -260,8 +258,21 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         String rawLocation = ctx.parsed.assignedLocation();
         String destination = firstComponent(rawLocation);
 
+        // PV1-3's point of care is bounded here, the only place it is read.
+        // Wider than any department code or name, it can match nothing, so it
+        // is handled as an unresolvable destination - the transfer is still
+        // reconciled and audited - and the audit records that it was over
+        // width instead of quoting it: never truncated, never stored whole.
+        boolean destinationOverWidth =
+            !Hl7FieldBounds.fits(destination, Hl7FieldBounds.ASSIGNED_LOCATION_MAX);
+        String auditedDestination = destinationOverWidth
+            ? "(over " + Hl7FieldBounds.ASSIGNED_LOCATION_MAX + " characters)"
+            : destination;
+
         Department previous = row.getDepartment();
-        Department resolved = resolveTransferDepartment(destination, ctx.hospitalId);
+        Department resolved = destinationOverWidth
+            ? null
+            : resolveTransferDepartment(destination, ctx.hospitalId);
         if (resolved != null) {
             row.setDepartment(resolved);
         }
@@ -272,7 +283,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
                 "ADT^A02 transfer — visit=%s sender=%s/%s hospital=%s patient=%s destination=%s resolved=%s previous=%s msgCtrlId=%s",
                 ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
                 ctx.patient.getId(),
-                destination == null ? "" : destination,
+                auditedDestination == null ? "" : auditedDestination,
                 resolved != null ? resolved.getId() : NULL_HOSPITAL_PLACEHOLDER,
                 previous != null ? previous.getId() : NULL_HOSPITAL_PLACEHOLDER,
                 ctx.controlId));

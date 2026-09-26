@@ -116,7 +116,7 @@ the security context.
 
 Every sender-controlled **identifier** (a field that is matched or keyed on)
 is held to the width of its column **once, where it is first read** — the limits live
-in `Hl7FieldBounds`. MSH-3/4/9/10 are checked in
+in `Hl7FieldBounds`. MSH-3/4/10 are checked in
 `Hl7MessageInspector.parseHeader` (an invalid MSH, so `AR` before the
 allowlist); PID-3 and MRG-1 in the ADT and A40 parsers; OBR-2 in
 `MllpInboundLabServiceImpl`, because the ORU parser is shared with paths
@@ -142,10 +142,14 @@ only an optional step reads rejects what works today.
 - Sender text quoted into a reason an operator reads goes through
   `MllpRecordingContext.withControlId`, which quotes and escapes it, so the
   sender cannot write text that reads as our own finding.
-- **Not yet covered: demographics.** PID-5/7/8/11 go into `Patient`
-  columns of 100 (sex: 10) unbounded, and an over-width value fails at
-  commit with a generic AE and no dead-letter row. Known debt: they are not
+- **Not yet covered: demographics and OBX-5.** PID-5/7/8/11 go into
+  `Patient` columns of 100 (sex: 10) and OBX-5 into `result_value` (2048),
+  unbounded. An over-width value fails at flush: `AE Server-side handler
+  error`, no dead-letter row, and the sender retries indefinitely. OBX-3/6/7/11
+  are truncated at their sink (an older decision). Known debt: these are not
   identifiers, so whether to refuse or truncate them is still undecided.
+- MSH-9 is **not** bounded: not an identifier, and the recorder clamps the
+  one column it reaches.
 
 ## Audit on accept
 

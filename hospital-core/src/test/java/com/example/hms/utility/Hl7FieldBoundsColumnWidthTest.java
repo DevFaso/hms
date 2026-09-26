@@ -6,7 +6,6 @@ import com.example.hms.model.Encounter;
 import com.example.hms.model.LabResult;
 import com.example.hms.model.LabSpecimen;
 import com.example.hms.model.empi.EmpiIdentityAlias;
-import com.example.hms.model.integration.IntegrationMessageEvent;
 import com.example.hms.model.platform.MllpAllowedSender;
 import jakarta.persistence.Column;
 import org.junit.jupiter.api.DisplayName;
@@ -47,7 +46,6 @@ class Hl7FieldBoundsColumnWidthTest {
         return Stream.of(
             Arguments.of("MSH-3", Hl7FieldBounds.SENDER_FIELD_MAX, MllpAllowedSender.class, "sendingApplication"),
             Arguments.of("MSH-4", Hl7FieldBounds.SENDER_FIELD_MAX, MllpAllowedSender.class, "sendingFacility"),
-            Arguments.of("MSH-9", Hl7FieldBounds.MESSAGE_TYPE_MAX, IntegrationMessageEvent.class, "messageType"),
             Arguments.of("MSH-10", Hl7FieldBounds.MESSAGE_CONTROL_ID_MAX, LabResult.class, "sourceMessageControlId"),
             Arguments.of("MSH-10", Hl7FieldBounds.MESSAGE_CONTROL_ID_MAX, Admission.class, "externalMessageControlId"),
             Arguments.of("MSH-10", Hl7FieldBounds.MESSAGE_CONTROL_ID_MAX, Encounter.class, "externalMessageControlId"),

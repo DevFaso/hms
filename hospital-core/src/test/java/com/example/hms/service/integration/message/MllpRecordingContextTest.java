@@ -172,4 +172,15 @@ class MllpRecordingContextTest {
         assertThat(MllpRecordingContext.withControlId("r", "   ")).isEqualTo("r");
         assertThat(MllpRecordingContext.withControlId("r", null)).isEqualTo("r");
     }
+
+    @Test
+    @DisplayName("Bidi, zero-width and separator characters are escaped, so nothing can appear outside the quotes")
+    void aRightToLeftOverrideCannotEscapeTheQuotes() {
+        // U+202E would render the rest reversed, so the sender's text could
+        // appear to sit after the closing quote. Escaped, it is inert.
+        String rlo = "x" + (char) 0x202E + "y" + (char) 0x200B + (char) 0x2028 + (char) 0x2066;
+
+        assertThat(MllpRecordingContext.withControlId("r", rlo))
+            .isEqualTo("r (MSH-10 \"x\\u202ey\\u200b\\u2028\\u2066\")");
+    }
 }
