@@ -114,14 +114,17 @@ the security context.
 
 ## Field widths
 
-Every sender-controlled field that is matched, keyed or stored is held to
-the width of its column **once, where it is first read** — the limits live
+Every sender-controlled **identifier** (a field that is matched or keyed on)
+is held to the width of its column **once, where it is first read** — the limits live
 in `Hl7FieldBounds`. MSH-3/4/9/10 are checked in
 `Hl7MessageInspector.parseHeader` (an invalid MSH, so `AR` before the
-allowlist); PID-3, MRG-1, PV1-19 and PV1-3's first component (the only
-part read) in the ADT and A40 parsers;
-OBR-2 in `MllpInboundLabServiceImpl`, because the ORU parser is shared with
-paths where OBR-2 is not an accession.
+allowlist); PID-3 and MRG-1 in the ADT and A40 parsers; OBR-2 in
+`MllpInboundLabServiceImpl`, because the ORU parser is shared with paths
+where OBR-2 is not an accession; PV1-19 and PV1-3's point of care in the
+visit projection, their only reader, which skips rather than refusing the
+message - an over-width visit field must not drop a demographic update.
+Check a field where it is **read**: refusing the whole message for a field
+only an optional step reads rejects what works today.
 
 - **Refuse, never truncate.** These are identifiers: a truncated MSH-10
   reads as a replay of any other id with the same prefix, a truncated MRN
@@ -132,6 +135,10 @@ paths where OBR-2 is not an accession.
   into a `VARCHAR(255)` is a sink no wrapper sees. A new field that reaches
   a sink gets a bound in `Hl7FieldBounds`, checked where it is parsed.
 - A refusal names the field and the limit, **never the value**.
+- **Not yet covered: demographics.** PID-5/7/8/11 go into `Patient`
+  columns of 100 (sex: 10) unbounded, and an over-width value fails at
+  commit with a generic AE and no dead-letter row. Known debt: they are not
+  identifiers, so whether to refuse or truncate them is still undecided.
 
 ## Audit on accept
 

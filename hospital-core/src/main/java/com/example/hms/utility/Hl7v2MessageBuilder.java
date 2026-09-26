@@ -271,8 +271,9 @@ public class Hl7v2MessageBuilder {
             // Held to the EMPI alias width here, so nothing downstream has to
             // make either identifier safe. Rejected, not truncated: a cut MRN
             // could resolve to a different patient. See Hl7FieldBounds.
-            if (!Hl7FieldBounds.fits(surviving[0], Hl7FieldBounds.MRN_MAX)
-                    || !Hl7FieldBounds.fits(prior[0], Hl7FieldBounds.MRN_MAX)) {
+            // Trimmed, as the merge service trims them before resolving.
+            if (!Hl7FieldBounds.fits(surviving[0].trim(), Hl7FieldBounds.MRN_MAX)
+                    || !Hl7FieldBounds.fits(prior[0].trim(), Hl7FieldBounds.MRN_MAX)) {
                 return null;
             }
 
@@ -317,18 +318,13 @@ public class Hl7v2MessageBuilder {
             LocalDateTime admit = parseHl7DateTimeOrNull(field(pv1, 44));
             LocalDateTime discharge = parseHl7DateTimeOrNull(field(pv1, 45));
 
-            // The identifiers this message is matched and reconciled on, held
-            // to the width of the columns they meet. Rejected, not truncated:
-            // a cut MRN or visit number could match a different patient or
-            // visit, and an over-width visit number would otherwise fail its
-            // VARCHAR(255) write when the transaction flushes. For PV1-3 only
-            // the first component is bounded, because it is the only part
-            // anything reads: a long room, bed or description later in the
-            // field is a legitimate location. See Hl7FieldBounds.
-            if (!Hl7FieldBounds.fits(mrnParts[0], Hl7FieldBounds.MRN_MAX)
-                    || !Hl7FieldBounds.fits(visitNumber, Hl7FieldBounds.VISIT_NUMBER_MAX)
-                    || !Hl7FieldBounds.fits(firstComponent(assignedLocation),
-                        Hl7FieldBounds.ASSIGNED_LOCATION_MAX)) {
+            // PID-3 is what the whole message is resolved on, held to the EMPI
+            // alias width. Rejected, not truncated: a cut MRN could resolve to
+            // a different patient. PV1-19 and PV1-3 are NOT bounded here: only
+            // the visit projection reads them, it is off by default, and
+            // refusing the message for them would drop the demographic update
+            // it also carries. The projection bounds them. See Hl7FieldBounds.
+            if (!Hl7FieldBounds.fits(mrnParts[0].trim(), Hl7FieldBounds.MRN_MAX)) {
                 return null;
             }
 

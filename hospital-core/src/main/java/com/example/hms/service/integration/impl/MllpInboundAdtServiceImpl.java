@@ -223,7 +223,7 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
                 messageType,
                 null,
                 IntegrationMessageStatus.FAILED,
-                withControlId(reason, messageControlId),
+                MllpRecordingContext.withControlId(reason, messageControlId),
                 // CORRELATION_TYPE, not messageType: the trigger event comes
                 // off the message. The dispatcher only routes five of them so
                 // the blast radius was a 5x multiplier rather than an
@@ -244,19 +244,6 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
             log.warn("MLLP ADT message recorder threw for sender={}/{} reason={}",
                 sendingApplication, sendingFacility, reason, ex);
         }
-    }
-
-    /**
-     * The reason with MSH-10 appended, as parsed. Not capped here:
-     * {@code Hl7MessageInspector} refuses an MSH-10 wider than the 255 of
-     * the columns it is stored in, and a shorter cap would make two control
-     * ids that share a prefix indistinguishable in the dead-letter row that
-     * exists to tell them apart.
-     */
-    private static String withControlId(String reason, String messageControlId) {
-        return StringUtils.hasText(messageControlId)
-            ? reason + " (MSH-10 " + messageControlId.trim() + ")"
-            : reason;
     }
 
     /**

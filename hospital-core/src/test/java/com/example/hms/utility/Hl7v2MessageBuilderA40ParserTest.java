@@ -117,6 +117,15 @@ class Hl7v2MessageBuilderA40ParserTest {
     }
 
     @Test
+    void identifiersAreBoundedAsTheyAreMatchedTrimmed() {
+        // The merge service trims both before resolving, so padding that the
+        // match ignores must not turn a resolvable merge into a refused one.
+        String surviving = "S".repeat(Hl7FieldBounds.MRN_MAX);
+
+        assertThat(builder.parseAdtA40(a40With(surviving + "   ", "MRN-RETIRED"))).isNotNull();
+    }
+
+    @Test
     void anOverWidthIdentifierOnEitherSideIsRefusedNotTruncated() {
         // Truncated, either side could resolve to a different patient - and
         // on an A40 that is a merge nobody can undo.

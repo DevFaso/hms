@@ -1,9 +1,8 @@
 package com.example.hms.utility;
 
 /**
- * The widths inbound HL7 v2 fields are held to, checked once where each is
- * first read, so no sink downstream ever has to make a sender-controlled
- * value safe.
+ * The widths inbound HL7 v2 identifiers are held to, checked once where each
+ * is read, so no sink downstream has to make one of them safe.
  *
  * <p><b>Why once, and not at each sink.</b> These fields come off the wire
  * with no length limit and reach log lines, audit descriptions, dead-letter
@@ -16,24 +15,42 @@ package com.example.hms.utility;
  * <p><b>Over-width is refused, never truncated.</b> Each of these fields is
  * matched or keyed on: MSH-10 is the idempotency key, MSH-3/MSH-4 match the
  * allowlist, OBR-2 an accession, PID-3/MRG-1 an EMPI alias, PV1-19 a visit,
- * the first component of PV1-3 a department. A truncated value can collide with another one - two
- * control ids sharing a prefix would read as a replay of each other - so
- * cutting one short changes what a legitimate message means. Each limit is
- * the width of the column the field is matched against or written to, so a
- * wider value could never have matched or been stored; refusing it turns a
- * flush error or a silent non-match into an explicit rejection.
+ * the first component of PV1-3 a department. A truncated value can collide
+ * with another one - two control ids sharing a prefix would read as a replay
+ * of each other - so cutting one short changes what a legitimate message
+ * means. Each limit is the width of the column the field is matched against
+ * or written to, so a wider value could never have matched or been stored
+ * (padding aside - see below); refusing it turns a flush error or a silent
+ * non-match into an explicit rejection.
  *
  * <p><b>Where each is checked.</b> The MSH fields in
  * {@code Hl7MessageInspector.parseHeader}, as an invalid MSH, for every
- * transport. PID-3, MRG-1, PV1-3 and PV1-19 in the ADT and A40 parsers of
+ * transport. PID-3 and MRG-1 in the ADT and A40 parsers of
  * {@link Hl7v2MessageBuilder}, which only MLLP uses. OBR-2 in
  * {@code MllpInboundLabServiceImpl}, because the ORU parser is shared with
- * paths where OBR-2 is not an accession and any width works.
+ * paths where OBR-2 is not an accession and any width works. PV1-19 and
+ * PV1-3 in {@code MllpInboundAdtVisitProjectionServiceImpl}, their only
+ * reader, which skips the projection and keeps the demographic update.
+ *
+ * <p><b>Not covered: demographics.</b> PID-5, PID-7, PID-8 and PID-11 are
+ * written by {@code MllpInboundAdtServiceImpl.applyDemographics} into
+ * {@code Patient} columns of 100 characters (sex: 10) and are not bounded
+ * here. They are not identifiers, so refuse-versus-truncate is a separate
+ * decision; until it is made, an over-width value fails at commit with a
+ * generic AE and no dead-letter row. Known debt, not an oversight.
  *
  * <p>The limits are column widths, not HL7's nominal field lengths: real
  * senders exceed v2.5's 20-character MSH-10, and a tighter bound would refuse
- * messages that store and match correctly. Whitespace counts, except for
- * OBR-2, which is matched trimmed.
+ * messages that store and match correctly.
+ *
+ * <p><b>Whitespace.</b> The MSH fields are bounded untrimmed, because they
+ * reach sinks untrimmed - MSA-2 echoes MSH-10 as sent, and the dispatcher
+ * logs the sender pair as sent - so bounding them trimmed would let a sender
+ * pad them without limit. The cost: an MSH field that fits only once its
+ * padding is stripped is refused, although the allowlist match (which trims)
+ * would have found it. PID-3, MRG-1, OBR-2, PV1-19 and PV1-3 are bounded
+ * trimmed, exactly as they are matched, because every reader trims them
+ * first.
  */
 public final class Hl7FieldBounds {
 

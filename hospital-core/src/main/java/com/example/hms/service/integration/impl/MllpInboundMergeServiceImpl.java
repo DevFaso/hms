@@ -234,7 +234,7 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
                 MESSAGE_TYPE,
                 null,
                 IntegrationMessageStatus.FAILED,
-                withControlId(reason, messageControlId),
+                MllpRecordingContext.withControlId(reason, messageControlId),
                 // senderScope, not integrationId - see the same call on
                 // MllpInboundAdtServiceImpl: the id is column-clamped, and a
                 // shared correlation id lets one sender's refusal supersede
@@ -246,19 +246,6 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             log.warn("MLLP A40 message recorder threw for sender={}/{} reason={}",
                 sendingApplication, sendingFacility, reason, ex);
         }
-    }
-
-    /**
-     * The reason with MSH-10 appended, as parsed. Not capped here:
-     * {@code Hl7MessageInspector} refuses an MSH-10 wider than the 255 of
-     * the columns it is stored in, and a shorter cap would make two control
-     * ids that share a prefix indistinguishable in the dead-letter row that
-     * exists to tell them apart.
-     */
-    private static String withControlId(String reason, String messageControlId) {
-        return StringUtils.hasText(messageControlId)
-            ? reason + " (MSH-10 " + messageControlId.trim() + ")"
-            : reason;
     }
 
     /** Resolve an MRN to its patient through EMPI, or empty if unknown. */

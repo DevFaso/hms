@@ -163,4 +163,21 @@ class Hl7InboundControllerTenancyTest {
         verify(mllpAllowedSenderService, never()).resolveHospitalId(any(), any());
         verify(labResultService, never()).createIngestedLabResult(any(), any(), any());
     }
+
+    @Test
+    @DisplayName("an MSH-10 wider than its column is refused like an unreadable MSH, never truncated and stored")
+    void anOverWidthMsh10IsRefusedNotTruncated() {
+        // Before the parse-time bound this endpoint cut MSH-10 to 255 and
+        // stored it, so two control ids sharing 255 characters became one
+        // replay key. Now the MSH is refused, and the body is answered as one
+        // that identifies no sender.
+        stubParse();
+        String overWidth = ORU.replace("|MSG-1|", "|" + "C".repeat(256) + "|");
+
+        assertThatThrownBy(() -> controller.inbound(overWidth, labOrderId, assignmentId, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(mllpAllowedSenderService, never()).resolveHospitalId(any(), any());
+        verify(labResultService, never()).createIngestedLabResult(any(), any(), any());
+    }
 }

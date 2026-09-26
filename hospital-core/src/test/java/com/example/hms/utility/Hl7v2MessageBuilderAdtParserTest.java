@@ -271,13 +271,6 @@ class Hl7v2MessageBuilderAdtParserTest {
                 .isNull();
         }
 
-        @Test
-        @DisplayName("One character over on PV1-3 is refused, not truncated")
-        void anOverWidthLocationIsRefused() {
-            assertThat(builder.parseAdtMessage(
-                adtWith("MRN-1", "L".repeat(Hl7FieldBounds.ASSIGNED_LOCATION_MAX + 1), "VISIT-1"), "A01"))
-                .isNull();
-        }
 
         @Test
         @DisplayName("A long PV1-3 is fine when its point of care fits - only that component is read")
@@ -292,11 +285,18 @@ class Hl7v2MessageBuilderAdtParserTest {
         }
 
         @Test
-        @DisplayName("One character over on PV1-19 is refused, not truncated")
-        void anOverWidthVisitNumberIsRefused() {
-            assertThat(builder.parseAdtMessage(
-                adtWith("MRN-1", "WARD-A", "V".repeat(Hl7FieldBounds.VISIT_NUMBER_MAX + 1)), "A01"))
-                .isNull();
+        @DisplayName("Over-width PV1-3 and PV1-19 still parse: the demographics are not refused for them")
+        void overWidthVisitFieldsStillParse() {
+            // Only the visit projection reads these, and it bounds them. A
+            // parser refusal here would drop the A08's demographic update too.
+            String location = "L".repeat(Hl7FieldBounds.ASSIGNED_LOCATION_MAX + 1);
+            String visit = "V".repeat(Hl7FieldBounds.VISIT_NUMBER_MAX + 1);
+
+            ParsedAdtMessage parsed = builder.parseAdtMessage(adtWith("MRN-1", location, visit), "A01");
+
+            assertThat(parsed).isNotNull();
+            assertThat(parsed.lastName()).isEqualTo("DOE");
+            assertThat(parsed.visitNumber()).isEqualTo(visit);
         }
     }
 }

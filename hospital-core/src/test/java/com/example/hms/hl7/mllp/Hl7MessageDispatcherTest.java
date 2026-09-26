@@ -546,7 +546,7 @@ class Hl7MessageDispatcherTest {
 
         assertThat(dispatcher.dispatch(adt, "10.0.0.72:1"))
             .contains("MSA|AE|CTRL-W")
-            .contains("Unparseable ADT^A08 — missing or over-width PID-3, PV1-3 or PV1-19")
+            .contains("Unparseable ADT^A08 — missing or over-width PID-3 or required segments")
             .doesNotContain("MMMM");
         verifyNoInteractions(inboundAdt);
     }

@@ -1,5 +1,6 @@
 package com.example.hms.service.integration;
 
+import com.example.hms.utility.Hl7FieldBounds;
 import com.example.hms.enums.AcuityLevel;
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.AdmissionType;
@@ -114,6 +115,42 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         verify(encounterRepository, never())
             .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospital_Id(
                 any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("SKIPPED, not truncated, when PV1-19 is wider than external_visit_number")
+    void skippedWhenVisitNumberIsOverWidth() {
+        VisitProjectionResult result = service.projectVisit(
+            adt("A01", "V".repeat(Hl7FieldBounds.VISIT_NUMBER_MAX + 1)),
+            patient, hospital, "REG", "HOSP1", "MSG-1");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.SKIPPED);
+        verifyNoInteractions(admissionRepository, encounterRepository, auditEventLogService);
+    }
+
+    @Test
+    @DisplayName("SKIPPED when PV1-3's point of care is over width; the rest of PV1-3 is not bounded")
+    void skippedWhenPointOfCareIsOverWidth() {
+        VisitProjectionResult result = service.projectVisit(
+            adt("A02", "V-1", "W".repeat(Hl7FieldBounds.ASSIGNED_LOCATION_MAX + 1), null, null),
+            patient, hospital, "REG", "HOSP1", "MSG-1");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.SKIPPED);
+        verifyNoInteractions(admissionRepository, encounterRepository, auditEventLogService);
+    }
+
+    @Test
+    @DisplayName("A visit number at the column width, padded, is still reconciled - bounded as matched")
+    void aVisitNumberAtTheWidthIsReconciledTrimmed() {
+        String visit = "V".repeat(Hl7FieldBounds.VISIT_NUMBER_MAX);
+        String longLocation = "WARD-A^ROOM-12^BED-3^" + "D".repeat(300);
+
+        service.projectVisit(adt("A08", visit + "   ", longLocation, null, null),
+            patient, hospital, "REG", "HOSP1", "MSG-1");
+
+        verify(admissionRepository)
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                eq("REG"), eq("HOSP1"), eq(visit), eq(hospital.getId()));
     }
 
     @Test

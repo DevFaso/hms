@@ -176,6 +176,21 @@ public final class MllpRecordingContext {
     }
 
     /**
+     * A dead-letter reason with MSH-10 appended, as parsed - the one
+     * definition the ADT and A40 paths share.
+     *
+     * <p>Not capped: {@code Hl7MessageInspector} refuses an MSH-10 wider than
+     * the 255 of the columns it is stored in, and a shorter cap would make
+     * two control ids that share a prefix indistinguishable in the row that
+     * exists to tell them apart.
+     */
+    public static String withControlId(String reason, String messageControlId) {
+        return StringUtils.hasText(messageControlId)
+            ? reason + " (MSH-10 " + messageControlId.trim() + ")"
+            : reason;
+    }
+
+    /**
      * Exactly what {@code MllpAllowedSenderServiceImpl.lookup} does: trim and
      * upper-case. The allowlist matches that way against values V62 stores
      * canonically, so one sender may present its MSH-3/MSH-4 in any casing

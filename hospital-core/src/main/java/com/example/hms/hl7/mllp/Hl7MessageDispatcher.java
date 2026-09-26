@@ -232,13 +232,13 @@ public class Hl7MessageDispatcher {
                              String remoteAddress, Hospital hospital) {
         ParsedAdtMessage parsed = messageBuilder.parseAdtMessage(hl7Body, header.triggerEvent());
         if (parsed == null) {
-            log.warn("[MLLP {}] {} from {}/{} unparseable (missing or over-width PID-3, PV1-3 or PV1-19)",
+            log.warn("[MLLP {}] {} from {}/{} unparseable (missing or over-width PID-3, or missing segments)",
                 remoteAddress, header.messageType(),
                 header.sendingApplication(), header.sendingFacility());
             recordReject(integrationIdFor(header), organizationIdOf(hospital),
                 header.messageType(), hl7Body,
                 "unparseable " + header.messageType()
-                    + " — missing or over-width PID-3, PV1-3 or PV1-19",
+                    + " — missing or over-width PID-3 or required segments",
                 // The trigger belongs in the key: it is one of the five in
                 // ACCEPTED_ADT_EVENTS, checked before we got here, so it
                 // cannot be used to mint entries - and without it a malformed
@@ -249,7 +249,7 @@ public class Hl7MessageDispatcher {
                 "unparseable ADT^" + header.triggerEvent(), senderScopeFor(header));
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
                 "Unparseable " + header.messageType()
-                    + " — missing or over-width PID-3, PV1-3 or PV1-19");
+                    + " — missing or over-width PID-3 or required segments");
         }
         MllpInboundOutcome outcome = inboundAdt.processAdt(
             parsed, hospital, header.sendingApplication(), header.sendingFacility(),

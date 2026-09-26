@@ -173,6 +173,13 @@ public class Hl7InboundController {
     private com.example.hms.hl7.mllp.Hl7MessageHeader readHeaderOrNull(String hl7Message) {
         try {
             return com.example.hms.hl7.mllp.Hl7MessageInspector.parseHeader(hl7Message);
+        } catch (com.example.hms.hl7.mllp.MllpProtocolException refused) {
+            // A refused MSH, not an unreadable one - an over-width field, say.
+            // WARN, because the caller's 404 cannot say why and DEBUG is off in
+            // production. Safe to log: the inspector's messages are fixed text
+            // naming a field and a limit, never a value from the message.
+            log.warn("Inbound HL7v2 ORU^R01 MSH refused: {}", refused.getMessage());
+            return null;
         } catch (RuntimeException notReadable) {
             log.debug("Inbound HL7v2 body carries no readable MSH; no replay identity: {}",
                 notReadable.getMessage());

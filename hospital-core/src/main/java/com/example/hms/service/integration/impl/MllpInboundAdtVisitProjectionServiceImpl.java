@@ -22,6 +22,7 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.platform.AdtIntakeProviderConfigRepository;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.integration.MllpInboundAdtVisitProjectionService;
+import com.example.hms.utility.Hl7FieldBounds;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedAdtMessage;
 
 import java.time.LocalDateTime;
@@ -127,6 +128,22 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             // Caller's contract: both must already be resolved by the
             // demographic step. If they aren't, projection is not the
             // place to surface that — degrade quietly.
+            return VisitProjectionResult.SKIPPED;
+        }
+        // PV1-19 and PV1-3's point of care are held to their columns here,
+        // where they are read, and not in the ADT parser: this projection is
+        // their only reader, and refusing the message for them would drop the
+        // demographic update it also carries. Skipped rather than truncated -
+        // a cut visit number could reconcile against somebody else's visit.
+        // Bounded as read (trimmed, first component) so padding that the
+        // match ignores does not count. The log names neither value.
+        if (!Hl7FieldBounds.fits(parsed.visitNumber().trim(), Hl7FieldBounds.VISIT_NUMBER_MAX)
+                || !Hl7FieldBounds.fits(firstComponent(parsed.assignedLocation()),
+                    Hl7FieldBounds.ASSIGNED_LOCATION_MAX)) {
+            UUID hospitalId = receivingHospital.getId();
+            log.warn("ADT visit-sync skipped — PV1-19 or PV1-3 is wider than its column "
+                    + "(sender={}/{} hospital={} msgCtrlId={})",
+                sendingApplication, sendingFacility, hospitalId, messageControlId);
             return VisitProjectionResult.SKIPPED;
         }
 
