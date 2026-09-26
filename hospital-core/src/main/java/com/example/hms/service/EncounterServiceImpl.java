@@ -548,7 +548,7 @@ public class EncounterServiceImpl implements EncounterService {
         // added to the annotation, the ownership test comes with it instead of
         // every patient reading every note trail at their hospital.
         EncounterReadScope scope =
-            resolveEncounterReadScope(EncounterReaderRoles.NOTE_HISTORY_NON_SUBJECT_ROLES, false);
+            resolveEncounterReadScope(EncounterReaderRoles.NOTE_HISTORY);
         Encounter encounter = encounterRepository.findById(encounterId)
             .orElseThrow(() -> encounterNotFound(encounterId));
         requireEncounterReadable(encounter, scope);
@@ -1304,7 +1304,7 @@ public class EncounterServiceImpl implements EncounterService {
     @Override
     @Transactional
     public EncounterResponseDTO getEncounterById(UUID id, Locale locale) {
-        EncounterReadScope scope = resolveEncounterReadScope(EncounterReaderRoles.DETAIL_NON_SUBJECT_ROLES, true);
+        EncounterReadScope scope = resolveEncounterReadScope(EncounterReaderRoles.DETAIL);
         Encounter e = encounterRepository.findById(id)
             .orElseThrow(() -> encounterNotFound(id));
 
@@ -1326,12 +1326,13 @@ public class EncounterServiceImpl implements EncounterService {
      *                       view. An explicit decision, never inferred from a
      *                       {@code null} hospital: a null that meant "open"
      *                       is how the earlier draft failed open.
-     * @param endpointAdmitsPatient whether the endpoint's annotation admits
-     *                       {@code ROLE_PATIENT}, i.e. whether owning the
-     *                       encounter is by itself a reason to read it
+     * @param ownerFallback  whether owning the encounter is by itself a
+     *                       reason for a non-subject caller to read it: only
+     *                       when the endpoint admits {@code ROLE_PATIENT} AND
+     *                       the caller holds it
      */
     private record EncounterReadScope(boolean subject, UUID callerUserId, UUID hospitalId,
-                                      boolean crossTenant, boolean endpointAdmitsPatient) {}
+                                      boolean crossTenant, boolean ownerFallback) {}
 
     /**
      * Resolve the boundary for an encounter READ. Who the caller is decides
@@ -1383,17 +1384,15 @@ public class EncounterServiceImpl implements EncounterService {
      * <p>Which roles count as "not the subject" differs per endpoint — see
      * {@link EncounterReaderRoles}, and never pass a union of its sets.
      *
-     * @param nonSubjectRoles the set belonging to the endpoint being served
-     * @param endpointAdmitsPatient whether that endpoint's annotation admits
-     *        {@code ROLE_PATIENT}; {@code EncounterReaderRolesMirrorTest} pins
-     *        the value against each annotation
+     * @param endpoint the endpoint being served: its non-subject roles and
+     *        whether it admits {@code ROLE_PATIENT}, both pinned against its
+     *        compiled annotation by {@code EncounterReaderRolesMirrorTest}
      * @throws BusinessException when a non-subject caller has no resolvable
      *         hospital and is not a verified super-admin — an actionable
      *         "select an active hospital", raised before any row is read so
      *         it cannot serve as an existence oracle
      */
-    private EncounterReadScope resolveEncounterReadScope(Set<String> nonSubjectRoles,
-                                                         boolean endpointAdmitsPatient) {
+    private EncounterReadScope resolveEncounterReadScope(EncounterReaderRoles.ReadEndpoint endpoint) {
         org.springframework.security.core.Authentication auth =
             org.springframework.security.core.context.SecurityContextHolder
                 .getContext().getAuthentication();
@@ -1405,15 +1404,21 @@ public class EncounterServiceImpl implements EncounterService {
         // PatientPortalServiceImpl.resolvePatientId uses. Resolved for staff
         // as well: a nurse who is also a patient elsewhere owns her own visits.
         UUID callerUserId = authUtils.resolveUserId(auth).orElse(null);
-        if (EncounterReaderRoles.isPatientOnly(auth, nonSubjectRoles)) {
-            return new EncounterReadScope(true, callerUserId, null, false, endpointAdmitsPatient);
+        // Both halves, or no fallback: the endpoint must admit patients, and
+        // the caller must hold the patient grant. A link to a patient row is
+        // a fact about the account, not a grant — a nurse linked to a row
+        // whose ROLE_PATIENT was never granted, or was revoked, must not read
+        // it across hospitals through ROLE_NURSE.
+        boolean ownerFallback = endpoint.admitsPatient() && ReaderRolePredicates.holdsPatientRole(auth);
+        if (EncounterReaderRoles.isPatientOnly(auth, endpoint.nonSubjectRoles())) {
+            return new EncounterReadScope(true, callerUserId, null, false, ownerFallback);
         }
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null) {
-            return new EncounterReadScope(false, callerUserId, hospitalId, false, endpointAdmitsPatient);
+            return new EncounterReadScope(false, callerUserId, hospitalId, false, ownerFallback);
         }
         if (roleValidator.isSuperAdminFromJwtClaim()) {
-            return new EncounterReadScope(false, callerUserId, null, true, endpointAdmitsPatient);
+            return new EncounterReadScope(false, callerUserId, null, true, ownerFallback);
         }
         // requireActiveHospitalId()'s step-4 null: the authorities say
         // super-admin and the verified flag does not. Refused, before the
@@ -1460,8 +1465,9 @@ public class EncounterServiceImpl implements EncounterService {
         // an endpoint that promises patients may read their own. Owning the
         // encounter is a reason to read it wherever the caller works, but only
         // on an endpoint whose annotation admits ROLE_PATIENT: note history
-        // does not, and ownership must not widen it.
-        if (scope.endpointAdmitsPatient() && callerOwns(encounter, scope.callerUserId())) {
+        // does not, and ownership must not widen it. And only for a caller who
+        // holds ROLE_PATIENT: the link alone is not the grant.
+        if (scope.ownerFallback() && callerOwns(encounter, scope.callerUserId())) {
             return;
         }
         throw encounterNotFound(encounter.getId());
@@ -2203,7 +2209,7 @@ public class EncounterServiceImpl implements EncounterService {
     @Override
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO getAfterVisitSummary(UUID encounterId) {
-        EncounterReadScope scope = resolveEncounterReadScope(EncounterReaderRoles.AVS_NON_SUBJECT_ROLES, true);
+        EncounterReadScope scope = resolveEncounterReadScope(EncounterReaderRoles.AVS);
         Encounter encounter = encounterRepository.findById(encounterId)
             .orElseThrow(() -> encounterNotFound(encounterId));
 

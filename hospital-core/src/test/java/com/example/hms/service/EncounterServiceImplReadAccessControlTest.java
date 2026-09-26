@@ -424,6 +424,25 @@ class EncounterServiceImplReadAccessControlTest {
         }
 
         @Test
+        @DisplayName("a nurse linked to the patient row but WITHOUT ROLE_PATIENT is refused it elsewhere")
+        void linkedStaffWithoutPatientRoleIsRefusedTheSummaryElsewhere() {
+            // The account is linked to the patient row (existsByIdAndUserId is
+            // true, stubbed in setUp), but the patient grant was never given or
+            // has been revoked. Ownership must not open another hospital's
+            // record through ROLE_NURSE alone — and the refusal must look like
+            // a missing id.
+            authenticateAs("ROLE_NURSE");
+            Encounter linkedElsewhere = encounterAt(otherHospital, callerPatient, true);
+            UUID missing = missingEncounterId();
+
+            ResourceNotFoundException refusal =
+                captureNotFound(() -> service.getAfterVisitSummary(linkedElsewhere.getId()));
+            ResourceNotFoundException absent = captureNotFound(() -> service.getAfterVisitSummary(missing));
+
+            assertIndistinguishable(refusal, linkedElsewhere.getId(), absent, missing);
+        }
+
+        @Test
         @DisplayName("that nurse is still refused a stranger's AVS at another hospital, indistinguishably")
         void staffWhoIsAlsoAPatientIsStillRefusedAStrangersSummaryElsewhere() {
             authenticateAs("ROLE_NURSE", "ROLE_PATIENT");
@@ -626,6 +645,20 @@ class EncounterServiceImplReadAccessControlTest {
             Encounter mineElsewhere = encounterAt(otherHospital, callerPatient, false);
 
             assertThat(service.getEncounterById(mineElsewhere.getId(), locale)).isNotNull();
+        }
+
+        @Test
+        @DisplayName("a nurse linked to the patient row but WITHOUT ROLE_PATIENT is refused the encounter elsewhere")
+        void linkedStaffWithoutPatientRoleIsRefusedTheEncounterElsewhere() {
+            authenticateAs("ROLE_NURSE");
+            Encounter linkedElsewhere = encounterAt(otherHospital, callerPatient, false);
+            UUID missing = missingEncounterId();
+
+            ResourceNotFoundException refusal =
+                captureNotFound(() -> service.getEncounterById(linkedElsewhere.getId(), locale));
+            ResourceNotFoundException absent = captureNotFound(() -> service.getEncounterById(missing, locale));
+
+            assertIndistinguishable(refusal, linkedElsewhere.getId(), absent, missing);
         }
 
         @Test

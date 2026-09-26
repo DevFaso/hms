@@ -52,4 +52,26 @@ public final class ReaderRolePredicates {
         }
         return patient;
     }
+
+    /**
+     * True when {@code auth} holds {@code ROLE_PATIENT}, whatever else it
+     * holds — matched exactly as {@link #isPatientOnly} matches it.
+     *
+     * <p>Owning a patient row is a fact about the account; holding
+     * {@code ROLE_PATIENT} is the grant to act on it. A staff account can be
+     * linked to a patient row whose portal role was never granted or has been
+     * revoked, and such an account must not read that record through its
+     * clinical role.
+     */
+    public static boolean holdsPatientRole(Authentication auth) {
+        if (auth == null) {
+            return false;
+        }
+        for (GrantedAuthority authority : auth.getAuthorities()) {
+            if (SecurityConstants.ROLE_PATIENT.equals(authority.getAuthority())) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

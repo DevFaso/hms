@@ -63,6 +63,28 @@ import java.util.Set;
 public final class EncounterReaderRoles {
 
     /**
+     * One encounter read endpoint, described once: the roles that read it as
+     * somebody other than its subject, and whether its annotation admits
+     * {@code ROLE_PATIENT} at all.
+     *
+     * <p>The two travel together because they qualify each other. Whether
+     * owning an encounter is by itself a reason to read it depends on the
+     * endpoint admitting patients; an earlier cut passed that as a bare
+     * {@code true}/{@code false} literal at each service call site, where
+     * {@code EncounterReaderRolesMirrorTest} could not see it. Flipping note
+     * history's literal would have widened that endpoint across hospitals with
+     * the suite green. Held here, the mirror test pins both halves against
+     * the compiled annotation — the value the service actually uses.
+     *
+     * @param nonSubjectRoles exactly the endpoint's {@code @PreAuthorize}
+     *                        roles minus {@code ROLE_PATIENT}
+     * @param admitsPatient   whether that annotation admits
+     *                        {@code ROLE_PATIENT}
+     */
+    public record ReadEndpoint(Set<String> nonSubjectRoles, boolean admitsPatient) {
+    }
+
+    /**
      * The roles that read {@code GET /encounters/&#123;id&#125;} as a
      * clinician rather than as its subject — exactly
      * {@code EncounterController.ENCOUNTER_DETAIL_ROLES} minus
@@ -71,14 +93,14 @@ public final class EncounterReaderRoles {
      * <p>{@code ROLE_RECEPTIONIST} is deliberately absent: the detail read
      * does not admit it.
      */
-    public static final Set<String> DETAIL_NON_SUBJECT_ROLES = Set.of(
+    public static final ReadEndpoint DETAIL = new ReadEndpoint(Set.of(
         SecurityConstants.ROLE_DOCTOR,
         SecurityConstants.ROLE_NURSE,
         SecurityConstants.ROLE_MIDWIFE,
         SecurityConstants.ROLE_RADIOLOGIST,
         SecurityConstants.ROLE_ANESTHESIOLOGIST,
         SecurityConstants.ROLE_PHYSIOTHERAPIST,
-        SecurityConstants.ROLE_SUPER_ADMIN);
+        SecurityConstants.ROLE_SUPER_ADMIN), true);
 
     /**
      * The roles that read {@code GET /encounters/&#123;id&#125;/avs} as
@@ -93,12 +115,12 @@ public final class EncounterReaderRoles {
      * summary is theirs to read. The three consulting clinicians are absent:
      * the AVS read does not admit them.
      */
-    public static final Set<String> AVS_NON_SUBJECT_ROLES = Set.of(
+    public static final ReadEndpoint AVS = new ReadEndpoint(Set.of(
         SecurityConstants.ROLE_SUPER_ADMIN,
         SecurityConstants.ROLE_DOCTOR,
         SecurityConstants.ROLE_NURSE,
         SecurityConstants.ROLE_MIDWIFE,
-        SecurityConstants.ROLE_RECEPTIONIST);
+        SecurityConstants.ROLE_RECEPTIONIST), true);
 
     /**
      * The roles that read
@@ -114,11 +136,11 @@ public final class EncounterReaderRoles {
      * trail — chief complaint, assessment, plan, author, timestamps — of
      * every encounter at their hospital.
      */
-    public static final Set<String> NOTE_HISTORY_NON_SUBJECT_ROLES = Set.of(
+    public static final ReadEndpoint NOTE_HISTORY = new ReadEndpoint(Set.of(
         SecurityConstants.ROLE_DOCTOR,
         SecurityConstants.ROLE_NURSE,
         SecurityConstants.ROLE_MIDWIFE,
-        SecurityConstants.ROLE_SUPER_ADMIN);
+        SecurityConstants.ROLE_SUPER_ADMIN), false);
 
     private EncounterReaderRoles() {
     }
@@ -133,10 +155,10 @@ public final class EncounterReaderRoles {
      * must not change.
      *
      * @param auth            the current authentication, may be {@code null}
-     * @param nonSubjectRoles {@link #DETAIL_NON_SUBJECT_ROLES},
-     *                        {@link #AVS_NON_SUBJECT_ROLES} or
-     *                        {@link #NOTE_HISTORY_NON_SUBJECT_ROLES} — the set
-     *                        for the endpoint being served, never a union
+     * @param nonSubjectRoles the {@link ReadEndpoint#nonSubjectRoles()} of
+     *                        {@link #DETAIL}, {@link #AVS} or
+     *                        {@link #NOTE_HISTORY} — the set for the endpoint
+     *                        being served, never a union
      */
     public static boolean isPatientOnly(Authentication auth, Set<String> nonSubjectRoles) {
         // One implementation, shared with the prescription read.

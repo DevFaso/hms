@@ -50,17 +50,16 @@ class EncounterReaderRolesMirrorTest {
 
     static Stream<Arguments> readers() {
         return Stream.of(
-            Arguments.of("getById", "/{id}", EncounterReaderRoles.DETAIL_NON_SUBJECT_ROLES, true),
-            Arguments.of("getAfterVisitSummary", "/{encounterId}/avs",
-                EncounterReaderRoles.AVS_NON_SUBJECT_ROLES, true),
+            Arguments.of("getById", "/{id}", EncounterReaderRoles.DETAIL),
+            Arguments.of("getAfterVisitSummary", "/{encounterId}/avs", EncounterReaderRoles.AVS),
             Arguments.of("getEncounterNoteHistory", "/{encounterId}/notes/history",
-                EncounterReaderRoles.NOTE_HISTORY_NON_SUBJECT_ROLES, false));
+                EncounterReaderRoles.NOTE_HISTORY));
     }
 
     @ParameterizedTest(name = "{0} ({1})")
     @MethodSource("readers")
-    void theRoleSetMirrorsTheAnnotation(String handler, String path, Set<String> nonSubjectRoles,
-                                        boolean admitsPatient) {
+    void theRoleSetMirrorsTheAnnotation(String handler, String path,
+                                        EncounterReaderRoles.ReadEndpoint endpoint) {
         Method method = handler(handler);
 
         // Pin the handler to its route as well as its name, so a rename that
@@ -79,15 +78,17 @@ class EncounterReaderRolesMirrorTest {
         }
         assertThat(admitted).as("%s must still admit someone", handler).isNotEmpty();
 
-        // Whether the endpoint admits the patient is pinned too: adding
-        // ROLE_PATIENT to the note-history annotation is exactly the change
-        // that set exists to make safe, and it should be a deliberate edit to
-        // this table, not a silent one.
-        assertThat(admitted.contains("ROLE_PATIENT"))
-            .as("%s admitting ROLE_PATIENT", handler).isEqualTo(admitsPatient);
+        // The admits-patient half is asserted against the SAME value the
+        // service reads, not a copy in this table: it decides whether owning
+        // an encounter opens it across hospitals, and a flipped flag would
+        // widen an endpoint with every other test green.
+        assertThat(endpoint.admitsPatient())
+            .as("%s: ReadEndpoint.admitsPatient must match whether the annotation admits ROLE_PATIENT",
+                handler)
+            .isEqualTo(admitted.contains("ROLE_PATIENT"));
         admitted.remove("ROLE_PATIENT");
 
-        assertThat(new TreeSet<>(nonSubjectRoles))
+        assertThat(new TreeSet<>(endpoint.nonSubjectRoles()))
             .as("a role the annotation admits but the set omits is refused its colleagues' "
                 + "records; a role the set names but the annotation does not admit enters "
                 + "only through ROLE_PATIENT and would be reclassified as a clinician")
