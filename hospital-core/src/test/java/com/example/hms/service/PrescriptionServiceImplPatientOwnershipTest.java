@@ -146,7 +146,7 @@ class PrescriptionServiceImplPatientOwnershipTest {
         prescription.setPatient(subject);
         when(prescriptionRepository.findById(id)).thenReturn(Optional.of(prescription));
         when(prescriptionMapper.toResponseDTO(prescription))
-            .thenReturn(PrescriptionResponseDTO.builder().id(id).build());
+            .thenReturn(withExchange(id));
         return id;
     }
 
@@ -385,14 +385,19 @@ class PrescriptionServiceImplPatientOwnershipTest {
     private UUID prescriptionElsewhereFor(Patient subject) {
         Hospital elsewhere = new Hospital();
         elsewhere.setId(UUID.randomUUID());
+        return prescriptionAt(elsewhere, subject);
+    }
+
+    /** A prescription at {@code where}, which may be {@code null}, written for {@code subject}. */
+    private UUID prescriptionAt(Hospital where, Patient subject) {
         UUID id = UUID.randomUUID();
         Prescription prescription = new Prescription();
         prescription.setId(id);
-        prescription.setHospital(elsewhere);
+        prescription.setHospital(where);
         prescription.setPatient(subject);
         when(prescriptionRepository.findById(id)).thenReturn(Optional.of(prescription));
         when(prescriptionMapper.toResponseDTO(prescription))
-            .thenReturn(PrescriptionResponseDTO.builder().id(id).build());
+            .thenReturn(withExchange(id));
         return id;
     }
 
@@ -513,5 +518,91 @@ class PrescriptionServiceImplPatientOwnershipTest {
 
         assertThat(service.getPrescriptionById(strangersElsewhere, Locale.ENGLISH).getId())
             .isEqualTo(strangersElsewhere);
+    }
+
+    /** The clinical copy: a mapped DTO carrying hospital B's pharmacist-to-prescriber exchange. */
+    private static PrescriptionResponseDTO withExchange(UUID id) {
+        return PrescriptionResponseDTO.builder()
+            .id(id)
+            .clarificationReason("Dose exceeds the renal maximum?")
+            .clarificationRequestedAt(java.time.LocalDateTime.of(2026, 9, 24, 8, 0))
+            .clarificationResponse("Reduced to 250 mg.")
+            .clarificationResolvedAt(java.time.LocalDateTime.of(2026, 9, 24, 9, 0))
+            .build();
+    }
+
+    private static void assertPatientCopy(PrescriptionResponseDTO dto) {
+        assertThat(dto.getClarificationReason()).isNull();
+        assertThat(dto.getClarificationRequestedAt()).isNull();
+        assertThat(dto.getClarificationResponse()).isNull();
+        assertThat(dto.getClarificationResolvedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("the nurse reading her own prescription elsewhere gets the PATIENT copy, without B's exchange")
+    void staffOwnerFallbackReturnsThePatientCopy() {
+        // She is at hospital B only as its patient. The controller strips the
+        // exchange for patient-only callers, which she is not, so the service
+        // must hand her the patient copy itself.
+        authenticateAs("ROLE_NURSE", "ROLE_PATIENT");
+        UUID mineElsewhere = prescriptionElsewhereFor(callerPatient);
+
+        assertPatientCopy(service.getPrescriptionById(mineElsewhere, Locale.ENGLISH));
+    }
+
+    @Test
+    @DisplayName("and the same nurse at her own hospital, as staff, still gets the clinical copy")
+    void staffAtTheirOwnHospitalKeepTheExchange() {
+        authenticateAs("ROLE_NURSE", "ROLE_PATIENT");
+        UUID here = prescriptionFor(otherPatient());
+        UUID mineHere = prescriptionFor(callerPatient);
+
+        assertThat(service.getPrescriptionById(here, Locale.ENGLISH).getClarificationResponse())
+            .isEqualTo("Reduced to 250 mg.");
+        assertThat(service.getPrescriptionById(mineHere, Locale.ENGLISH).getClarificationReason())
+            .isEqualTo("Dose exceeds the renal maximum?");
+    }
+
+    @Test
+    @DisplayName("a patient with no resolvable hospital still reads their own, bounded by ownership")
+    void patientOnlyWithNoHospitalReadsTheirOwn() {
+        // No X-Hospital-Id, no context, not exactly one active assignment:
+        // requireActiveHospitalId() has nothing to give. A patient-only caller
+        // is bounded by ownership, as on the encounter reads, so the scope is
+        // never asked for.
+        when(roleValidator.requireActiveHospitalId())
+            .thenThrow(new com.example.hms.exception.BusinessException(RoleValidator.HOSPITAL_CONTEXT_REQUIRED));
+        authenticateAs("ROLE_PATIENT");
+        UUID mineElsewhere = prescriptionElsewhereFor(callerPatient);
+
+        PrescriptionResponseDTO dto = service.getPrescriptionById(mineElsewhere, Locale.ENGLISH);
+        assertThat(dto.getId()).isEqualTo(mineElsewhere);
+        assertPatientCopy(dto);
+        org.mockito.Mockito.verify(roleValidator, org.mockito.Mockito.never()).requireActiveHospitalId();
+    }
+
+    @Test
+    @DisplayName("and is refused a stranger's exactly like a miss")
+    void patientOnlyWithNoHospitalIsRefusedAStrangers() {
+        when(roleValidator.requireActiveHospitalId())
+            .thenThrow(new com.example.hms.exception.BusinessException(RoleValidator.HOSPITAL_CONTEXT_REQUIRED));
+        authenticateAs("ROLE_PATIENT");
+        UUID strangersElsewhere = prescriptionElsewhereFor(otherPatient());
+
+        assertRefusedLikeAMiss(strangersElsewhere);
+    }
+
+    @Test
+    @DisplayName("a prescription with no hospital is not read as its patient, on either patient road")
+    void unplacedPrescriptionIsReadAsItsPatientByNoOne() {
+        // Prescription.hospital is nullable = false, so no stored row gets
+        // here; the rule is that a row we cannot place is not handed out by
+        // ownership alone, on the staff-owner fallback as on the patient road.
+        authenticateAs("ROLE_NURSE", "ROLE_PATIENT");
+        assertRefusedLikeAMiss(prescriptionAt(null, callerPatient));
+
+        SecurityContextHolder.clearContext();
+        authenticateAs("ROLE_PATIENT");
+        assertRefusedLikeAMiss(prescriptionAt(null, callerPatient));
     }
 }

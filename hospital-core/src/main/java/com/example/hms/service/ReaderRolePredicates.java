@@ -69,19 +69,24 @@ public final class ReaderRolePredicates {
      * to them, and "a link is not a grant" does not hold for that one role.
      * It is accepted, deliberately, for the encounter-read ownership
      * fallback and its prescription twin ({@code GET /prescriptions/{id}}),
-     * because it widens nothing a super-admin could not already reach: a verified super-admin in global view already reads every
-     * tenant; a super-admin pinned to one hospital gains through the fallback
-     * only records their OWN account owns elsewhere, and the pin is a view
-     * choice rather than a boundary; an unverified one (the step-4 road of
+     * because it widens nothing a super-admin could not already reach: a
+     * verified super-admin in global view already reads every tenant; a
+     * super-admin pinned to one hospital gains through the fallback only
+     * records their OWN account owns elsewhere, and the pin is a view choice
+     * rather than a boundary; an unverified one (the step-4 road of
      * {@code requireActiveHospitalId()}) is refused before any lookup, so it
      * never reaches the fallback. A NEW caller of this method must weigh that
      * exception for itself — it is not a general-purpose "is really a
      * patient" test.
      *
-     * <p>The tests do not exercise this. {@code authenticateAs("ROLE_SUPER_ADMIN")}
-     * in the encounter read-access suite builds the authorities directly and
-     * bypasses {@code RoleExpansion}, so its super-admin principal never holds
-     * {@code ROLE_PATIENT}. A green suite says nothing about an expanded one.
+     * <p>Only the prescription suite exercises an expanded super-admin:
+     * {@code PrescriptionServiceImplPatientOwnershipTest} builds its
+     * principal through {@code RoleExpansion.expand}, so the fallback is live
+     * for it and is shown to open nothing the account does not own. The
+     * encounter read-access suite's {@code authenticateAs("ROLE_SUPER_ADMIN")}
+     * builds the authorities directly and bypasses {@code RoleExpansion}, so
+     * its super-admin never holds {@code ROLE_PATIENT} and says nothing about
+     * an expanded one.
      */
     public static boolean holdsPatientRole(Authentication auth) {
         if (auth == null) {
