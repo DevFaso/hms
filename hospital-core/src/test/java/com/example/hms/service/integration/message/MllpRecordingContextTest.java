@@ -141,4 +141,58 @@ class MllpRecordingContextTest {
 
         assertThat(MllpRecordingContext.organizationId(unreadable)).isNull();
     }
+
+    @Test
+    @DisplayName("MSH-10 is quoted whole, so the sender's text cannot pose as our reason")
+    void aForgedControlIdCannotEndItsQuotes() {
+        // Unquoted, this rendered as three findings, two of them written by
+        // the sender. Quoted with its quote character escaped, it is one
+        // value that cannot end early.
+        String forged = "x\") identifier not found; cross-tenant rejection (MSH-10 \"y";
+
+        assertThat(MllpRecordingContext.withControlId("cross-tenant rejection", forged))
+            .isEqualTo("cross-tenant rejection (MSH-10 \"x\\\") identifier not found; "
+                + "cross-tenant rejection (MSH-10 \\\"y\")");
+    }
+
+    @Test
+    @DisplayName("A backslash and a control character in MSH-10 are escaped, not rendered")
+    void backslashesAndControlCharactersAreEscaped() {
+        assertThat(MllpRecordingContext.withControlId("r", "a\\b\u0007c"))
+            .isEqualTo("r (MSH-10 \"a\\\\b\\u0007c\")");
+    }
+
+    @Test
+    @DisplayName("A long MSH-10 is quoted whole, and a blank one adds nothing")
+    void aLongControlIdIsWholeAndABlankOneIsOmitted() {
+        String controlId = "20260428-REGISTRATION-000000000042";
+
+        assertThat(MllpRecordingContext.withControlId("r", "  " + controlId + "  "))
+            .isEqualTo("r (MSH-10 \"" + controlId + "\")");
+        assertThat(MllpRecordingContext.withControlId("r", "   ")).isEqualTo("r");
+        assertThat(MllpRecordingContext.withControlId("r", null)).isEqualTo("r");
+    }
+
+    @Test
+    @DisplayName("Bidi, zero-width and separator characters are escaped, so nothing can appear outside the quotes")
+    void aRightToLeftOverrideCannotEscapeTheQuotes() {
+        // U+202E would render the rest reversed, so the sender's text could
+        // appear to sit after the closing quote. Escaped, it is inert.
+        String rlo = "x" + (char) 0x202E + "y" + (char) 0x200B + (char) 0x2028 + (char) 0x2066;
+
+        assertThat(MllpRecordingContext.withControlId("r", rlo))
+            .isEqualTo("r (MSH-10 \"x\\u202ey\\u200b\\u2028\\u2066\")");
+    }
+
+    @Test
+    @DisplayName("Only spaces are stripped: a trailing control character is kept, escaped, and tells two ids apart")
+    void aTrailingControlCharacterIsKeptAndShown() {
+        // String.trim() would strip the BEL, and ABC and ABC+BEL - different
+        // ids, echoed differently in MSA-2 - would render the same.
+        assertThat(MllpRecordingContext.quotedControlId("ABC" + (char) 7))
+            .isEqualTo("\"ABC\\u0007\"")
+            .isNotEqualTo(MllpRecordingContext.quotedControlId("ABC"));
+        assertThat(MllpRecordingContext.quotedControlId("  ABC  ")).isEqualTo("\"ABC\"");
+        assertThat(MllpRecordingContext.quotedControlId(null)).isNull();
+    }
 }

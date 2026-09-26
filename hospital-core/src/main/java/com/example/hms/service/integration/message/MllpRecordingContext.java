@@ -33,10 +33,6 @@ public final class MllpRecordingContext {
     /** The width of {@code integration_message_event.integration_id}. */
     private static final int INTEGRATION_ID_MAX = 120;
 
-    /** MSH-10 is 20 characters in HL7 v2.5, and unvalidated on the wire. */
-    private static final int CONTROL_ID_MAX = 20;
-
-
     private MllpRecordingContext() {}
 
     /**
@@ -162,25 +158,6 @@ public final class MllpRecordingContext {
     }
 
     /**
-     * MSH-10 as it is safe to quote back, capped at the 20 characters HL7 v2
-     * allows it.
-     *
-     * <p>It is unvalidated sender text and it lands in
-     * {@code error_message}, which an operator reads. Uncapped, a sender
-     * padding MSH-10 writes two kilobytes of its own prose per probe into a
-     * table with no retention, and can shape it to imitate the fixed reason
-     * prefixes next to it — "cross-tenant rejection (MSH-10 x) identifier not
-     * found" reads like two findings and is one attacker's string.
-     */
-    public static String messageControlId(String messageControlId) {
-        if (!StringUtils.hasText(messageControlId)) {
-            return null;
-        }
-        String trimmed = messageControlId.trim();
-        return trimmed.length() > CONTROL_ID_MAX ? trimmed.substring(0, CONTROL_ID_MAX) : trimmed;
-    }
-
-    /**
      * The correlation scope for a sender pair: normalised like the
      * {@link #integrationId} but <b>not truncated</b>.
      *
@@ -196,6 +173,96 @@ public final class MllpRecordingContext {
     public static String senderScope(String sendingApplication, String sendingFacility) {
         return "MLLP-SCOPE:" + normalised(sendingApplication)
             + "/" + normalised(sendingFacility);
+    }
+
+    /**
+     * A dead-letter reason with MSH-10 appended - the one definition the ADT
+     * and A40 paths share.
+     *
+     * <p>Whole, not capped: {@code Hl7MessageInspector} refuses an MSH-10
+     * wider than the 255 of the columns it is stored in, and a shorter cap
+     * would make two control ids that share a prefix indistinguishable in the
+     * row that exists to tell them apart.
+     *
+     * <p>Quoted and escaped, because it is the sender's text inside a reason
+     * an operator reads as ours. Unquoted, an MSH-10 of
+     * {@code x) identifier not found; cross-tenant rejection (MSH-10 y}
+     * renders as several findings the sender wrote. In quotes, with {@code "}
+     * and backslash escaped, the value cannot end early, and any character
+     * that could reorder or hide the text around it (control, bidi, zero-width,
+     * separator, surrogate, private-use) is shown as a backslash-u hex escape
+     * rather than rendered.
+     */
+    public static String withControlId(String reason, String messageControlId) {
+        String quoted = quotedControlId(messageControlId);
+        return quoted != null ? reason + " (MSH-10 " + quoted + ")" : reason;
+    }
+
+    /**
+     * MSH-10 as it may be shown to an operator - in a dead-letter reason or a
+     * log line - or null when there is none. One rule for both: quoted, with
+     * quotes, backslashes and every character that could reorder or hide text
+     * escaped, so a sender cannot forge or rearrange what an operator reads.
+     *
+     * <p>Only spaces are stripped from the ends, not {@code String.trim()}'s
+     * whole control range: {@code ABC} and {@code ABC} followed by a BEL are
+     * different ids, MSA-2 echoes them differently, and they must not render
+     * the same here.
+     */
+    public static String quotedControlId(String messageControlId) {
+        if (!StringUtils.hasText(messageControlId)) {
+            return null;
+        }
+        return quoted(stripSpaces(messageControlId));
+    }
+
+    private static String stripSpaces(String value) {
+        int start = 0;
+        int end = value.length();
+        while (start < end && value.charAt(start) == ' ') {
+            start++;
+        }
+        while (end > start && value.charAt(end - 1) == ' ') {
+            end--;
+        }
+        return value.substring(start, end);
+    }
+
+    /**
+     * Whether {@code c} could make quoted text render as something other than
+     * what it is: a control character; a format character (the bidi embeddings,
+     * overrides and isolates U+202A-U+202E and U+2066-U+2069, the zero-width
+     * characters, the byte-order mark); a line or paragraph separator; a
+     * surrogate or private-use code unit. A right-to-left override inside the
+     * quotes can make the sender's text appear to sit outside them, so each of
+     * these is shown as its escape instead of being rendered.
+     */
+    private static boolean needsEscape(char c) {
+        if (Character.isISOControl(c)) {
+            return true;
+        }
+        int type = Character.getType(c);
+        return type == Character.FORMAT
+            || type == Character.LINE_SEPARATOR
+            || type == Character.PARAGRAPH_SEPARATOR
+            || type == Character.SURROGATE
+            || type == Character.PRIVATE_USE;
+    }
+
+    /** {@code value} in double quotes, with quotes, backslashes and {@link #needsEscape} characters escaped. */
+    private static String quoted(String value) {
+        StringBuilder out = new StringBuilder(value.length() + 2).append('"');
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c == '"' || c == '\\') {
+                out.append('\\').append(c);
+            } else if (needsEscape(c)) {
+                out.append(String.format("\\u%04x", (int) c));
+            } else {
+                out.append(c);
+            }
+        }
+        return out.append('"').toString();
     }
 
     /**

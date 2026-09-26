@@ -65,6 +65,10 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
 
         String survivingMrn = parsed.survivingMrn().trim();
         String priorMrn = parsed.priorMrn().trim();
+        // MSH-10 as every log line below shows it: the same quoting and
+        // escaping as the dead-letter reason, so a sender cannot forge or
+        // reorder a log line with ANSI, separator or bidi characters.
+        String loggedControlId = MllpRecordingContext.quotedControlId(messageControlId);
 
         if (survivingMrn.equalsIgnoreCase(priorMrn)) {
             // Not an error worth alarming about, but not a merge either.
@@ -84,10 +88,17 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // Deliberately NOT auto-provisioned. An unrecognised identifier in
             // a merge message means the two systems disagree about who exists,
             // and inventing the missing side would bake that disagreement in.
-            // Which side was unknown stays out of the log line, and the
-            // identifiers stay out of it altogether: an MRN is PHI.
-            log.warn("MLLP A40 rejected — unknown identifier(s) (sender={}/{} hospital={})",
-                sendingApplication, sendingFacility, hospitalId);
+            // The MRNs stay out of the log - PID-3 is PHI wherever a log
+            // ends up - but which side was unknown, and MSH-10, do not. The
+            // log is not sender-readable, so withholding them protects no
+            // one, and without them an operator told "our merge was
+            // rejected" cannot tell which message or which side.
+            boolean survivorKnown = survivor.isPresent();
+            boolean retireeKnown = retiree.isPresent();
+            log.warn("MLLP A40 rejected — unknown identifier(s): surviving known={} "
+                    + "prior known={} (sender={}/{} hospital={} msgCtrlId={})",
+                survivorKnown, retireeKnown,
+                sendingApplication, sendingFacility, hospitalId, loggedControlId);
             recordReject(receivingHospital, sendingApplication, sendingFacility,
                 messageControlId, "identifier not found");
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
@@ -143,9 +154,12 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // /super-admin/integration-messages (SUPER_ADMIN), so diagnosing a
             // misconfigured sender means escalating. Widening that surface is
             // a separate change.
-            log.warn("MLLP A40 cross-tenant reject — the two patients are not both "
-                + "registered at hospital={} (sender={}/{})",
-                hospitalId, sendingApplication, sendingFacility);
+            // Patient ids, not MRNs: an id is not PHI by itself, and it is
+            // what tells an operator which merge was refused.
+            log.warn("MLLP A40 cross-tenant reject — surviving={} registered={} "
+                    + "prior={} registered={} at hospital={} (sender={}/{} msgCtrlId={})",
+                survivingPatientId, survivorIsOurs, retiringPatientId, retireeIsOurs,
+                hospitalId, sendingApplication, sendingFacility, loggedControlId);
             recordReject(receivingHospital, sendingApplication, sendingFacility,
                 messageControlId, "cross-tenant rejection");
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
@@ -159,7 +173,7 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             log.info("MLLP A40 no-op — both identifiers already resolve to patient {} "
                 + "(sender={}/{} hospital={} msgCtrlId={})",
                 survivingPatientId, sendingApplication, sendingFacility,
-                hospitalId, messageControlId);
+                hospitalId, loggedControlId);
             return MllpInboundOutcome.ACCEPTED;
         }
 
@@ -175,15 +189,22 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // Already merged, or a domain rule the merge service owns. AE
             // rather than AA: the sender's request was not applied and their
             // queue should say so.
-            log.warn("MLLP A40 refused by the merge service — sender={}/{} hospital={}: {}",
-                sendingApplication, sendingFacility, hospitalId, ex.getMessage());
+            // This refusal writes no integration_message_event row, so MSH-10
+            // in the log is the only way to correlate it with the sender's
+            // queue. It is not the only one: the missing PID-3/MRG-1,
+            // no-hospital and same-identifier refusals above write no row
+            // either, and their log lines do not carry MSH-10 yet.
+            log.warn("MLLP A40 refused by the merge service — sender={}/{} hospital={} "
+                    + "msgCtrlId={}: {}",
+                sendingApplication, sendingFacility, hospitalId, loggedControlId,
+                ex.getMessage());
             return MllpInboundOutcome.REJECTED_INVALID;
         }
 
         log.info("MLLP A40 applied — patients {} <- {} "
             + "sender={}/{} hospital={} msgCtrlId={}",
             survivingPatientId, retiringPatientId,
-            sendingApplication, sendingFacility, hospitalId, messageControlId);
+            sendingApplication, sendingFacility, hospitalId, loggedControlId);
         return MllpInboundOutcome.ACCEPTED;
     }
 
@@ -219,7 +240,7 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
                 MESSAGE_TYPE,
                 null,
                 IntegrationMessageStatus.FAILED,
-                withControlId(reason, messageControlId),
+                MllpRecordingContext.withControlId(reason, messageControlId),
                 // senderScope, not integrationId - see the same call on
                 // MllpInboundAdtServiceImpl: the id is column-clamped, and a
                 // shared correlation id lets one sender's refusal supersede
@@ -233,12 +254,6 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
         }
     }
 
-    /** MSH-10 quoted back through the cap — see {@code MllpRecordingContext}. */
-    private static String withControlId(String reason, String messageControlId) {
-        String safeControlId = MllpRecordingContext.messageControlId(messageControlId);
-        return safeControlId != null ? reason + " (MSH-10 " + safeControlId + ")" : reason;
-    }
-
     /** Resolve an MRN to its patient through EMPI, or empty if unknown. */
     private Optional<UUID> resolvePatient(String mrn) {
         return empiService.findIdentityByAlias(EmpiAliasType.MRN, mrn)
@@ -250,6 +265,12 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
         // Registration, not Patient.hospitalId: a patient may legitimately be
         // registered at several hospitals, and each of those may reconcile
         // them. Same reasoning EmpiServiceImpl.requirePatientInTenant gives.
+        //
+        // OPEN QUESTION, not a decision - and the same one is noted on
+        // MllpInboundAdtServiceImpl's gate, so neither reads as checked:
+        // this ignores `active`, so a registration that was closed (patient
+        // transferred out, episode ended) still lets that hospital's sender
+        // merge the patient. It has never been decided either way.
         return registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId);
     }
 
@@ -258,6 +279,14 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
      * with no principal — there is no user on an MLLP thread — so
      * {@code mergedBy} is null and this note is the only provenance the row
      * carries. Worth being specific in.
+     *
+     * <p>The MRNs stay here, and this is the one place on this path they do.
+     * They are kept out of every log line because a log is copied and
+     * retained where PHI should not go; a merge event without the two
+     * identifiers is unauditable. Recorded as debt: it lands in
+     * {@code EmpiMergeEvent.notes}, plain {@code TEXT} with no
+     * {@code EncryptedStringConverter}, and encrypting that column would
+     * have to cover every existing row.
      */
     private String buildNotes(String survivingMrn, String priorMrn,
                               String sendingApplication, String sendingFacility,

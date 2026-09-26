@@ -1,5 +1,6 @@
 package com.example.hms.service.integration;
 
+import com.example.hms.utility.Hl7FieldBounds;
 import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.enums.ActorType;
 import com.example.hms.enums.LabOrderStatus;
@@ -613,5 +614,41 @@ class MllpInboundLabServiceImplTest {
         assertThat(service.processOruR01(List.of(), hospital, "APP", "FAC", "MSG-EMPTY", "MSH|...\r"))
             .isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
         verify(labResultRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("An OBR-2 wider than any accession is refused before it is looked up, logged or recorded")
+    void anOverWidthPlacerIsRefusedBeforeItIsLookedUp() {
+        String placer = "P".repeat(Hl7FieldBounds.PLACER_ORDER_NUMBER_MAX + 1);
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            List.of(observation(placer, "5.4")), hospital, "ROCHE_COBAS", "LAB_A",
+            "MSG-CTRL-1", "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+        verify(specimenRepository, never()).findByAccessionNumber(any());
+        verify(labResultRepository, never()).save(any());
+        // The reason names the limit, never the placer.
+        verify(messageRecorder).recordMessage(
+            eq("MLLP:ROCHE_COBAS/LAB_A"), isNull(),
+            eq(IntegrationMessageDirection.INBOUND), eq("ORU^R01"),
+            eq("MSH|...\r"), eq(IntegrationMessageStatus.FAILED),
+            eq("OBR-2 placer exceeds " + Hl7FieldBounds.PLACER_ORDER_NUMBER_MAX + " characters"));
+    }
+
+    @Test
+    @DisplayName("An OBR-2 exactly as wide as the accession column is looked up, and padding does not count")
+    void aPlacerAtTheColumnWidthIsLookedUpTrimmed() {
+        // Matched trimmed, so bounded trimmed: trailing spaces on a placer
+        // that fits must not turn a matchable message into a refused one.
+        String placer = "P".repeat(Hl7FieldBounds.PLACER_ORDER_NUMBER_MAX);
+        when(specimenRepository.findByAccessionNumber(placer)).thenReturn(Optional.empty());
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            List.of(observation(placer + "    ", "5.4")), hospital, "ROCHE_COBAS", "LAB_A",
+            "MSG-CTRL-1", "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
+        verify(specimenRepository).findByAccessionNumber(placer);
     }
 }

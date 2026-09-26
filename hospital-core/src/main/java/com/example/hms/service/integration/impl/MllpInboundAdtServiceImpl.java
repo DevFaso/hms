@@ -108,6 +108,15 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
         // primitive: an allowlisted sender could send one A08 per
         // candidate MRN and collect the MRNs that exist in hospitals it
         // cannot see. Same fix the ORU^R01 path took in #715.
+        // OPEN QUESTION, not a decision (the same one is noted on
+        // MllpInboundMergeServiceImpl.isRegisteredHere): this accepts an
+        // INACTIVE registration - findByPatientIdAndHospitalId, not the
+        // ...AndActiveTrue variant - so a patient whose registration here was
+        // closed is still writable by this hospital's sender. There is an
+        // argument for it (corrections arrive after a transfer, and this only
+        // updates demographics on a record the hospital already holds) and
+        // one against (a closed registration is how a tenant says "not ours
+        // any more"). Never decided; surfaced rather than changed here.
         boolean registered = registrationRepository
             .findByPatientIdAndHospitalId(patient.getId(), receivingHospital.getId())
             .isPresent();
@@ -214,7 +223,7 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
                 messageType,
                 null,
                 IntegrationMessageStatus.FAILED,
-                withControlId(reason, messageControlId),
+                MllpRecordingContext.withControlId(reason, messageControlId),
                 // CORRELATION_TYPE, not messageType: the trigger event comes
                 // off the message. The dispatcher only routes five of them so
                 // the blast radius was a 5x multiplier rather than an
@@ -235,11 +244,6 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
             log.warn("MLLP ADT message recorder threw for sender={}/{} reason={}",
                 sendingApplication, sendingFacility, reason, ex);
         }
-    }
-
-    private static String withControlId(String reason, String messageControlId) {
-        String safeControlId = MllpRecordingContext.messageControlId(messageControlId);
-        return safeControlId != null ? reason + " (MSH-10 " + safeControlId + ")" : reason;
     }
 
     /**

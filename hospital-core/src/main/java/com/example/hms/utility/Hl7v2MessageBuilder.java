@@ -268,6 +268,15 @@ public class Hl7v2MessageBuilder {
             String[] prior = parseIdentifierList(field(mrg, 1));
             if (prior[0] == null || prior[0].isBlank()) return null;
 
+            // Held to the EMPI alias width here, so nothing downstream has to
+            // make either identifier safe. Rejected, not truncated: a cut MRN
+            // could resolve to a different patient. See Hl7FieldBounds.
+            // Trimmed, as the merge service trims them before resolving.
+            if (!Hl7FieldBounds.fits(surviving[0].trim(), Hl7FieldBounds.MRN_MAX)
+                    || !Hl7FieldBounds.fits(prior[0].trim(), Hl7FieldBounds.MRN_MAX)) {
+                return null;
+            }
+
             return new ParsedMergeMessage(
                 surviving[0], surviving[1],
                 prior[0], prior[1]);
@@ -308,6 +317,16 @@ public class Hl7v2MessageBuilder {
             String visitNumber = firstComponent(field(pv1, 19));
             LocalDateTime admit = parseHl7DateTimeOrNull(field(pv1, 44));
             LocalDateTime discharge = parseHl7DateTimeOrNull(field(pv1, 45));
+
+            // PID-3 is what the whole message is resolved on, held to the EMPI
+            // alias width. Rejected, not truncated: a cut MRN could resolve to
+            // a different patient. PV1-19 and PV1-3 are NOT bounded here: only
+            // the visit projection reads them, it is off by default, and
+            // refusing the message for them would drop the demographic update
+            // it also carries. The projection bounds them. See Hl7FieldBounds.
+            if (!Hl7FieldBounds.fits(mrnParts[0].trim(), Hl7FieldBounds.MRN_MAX)) {
+                return null;
+            }
 
             return new ParsedAdtMessage(
                 triggerEvent,

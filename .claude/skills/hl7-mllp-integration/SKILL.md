@@ -112,6 +112,52 @@ guard that resolves the caller's hospital from it reads a null active
 hospital as "unscoped, allow". Do not add anything on this path that reads
 the security context.
 
+## Field widths
+
+Every sender-controlled **identifier** (a field that is matched or keyed on)
+is held to the width of its column **once, where it is first read** — the limits live
+in `Hl7FieldBounds`. MSH-3/4/10 are checked in
+`Hl7MessageInspector.parseHeader` (an invalid MSH, so `AR` before the
+allowlist); PID-3 and MRG-1 in the ADT and A40 parsers; OBR-2 in
+`MllpInboundLabServiceImpl`, because the ORU parser is shared with paths
+where OBR-2 is not an accession; PV1-19 and PV1-3's point of care in the
+visit projection, their only reader, which skips rather than refusing the
+message - an over-width visit field must not drop a demographic update.
+Check a field where it is **read**: refusing the whole message for a field
+only an optional step reads rejects what works today.
+
+- **Refuse, never truncate.** These are identifiers: a truncated MSH-10
+  reads as a replay of any other id with the same prefix, a truncated MRN
+  or placer can match someone else. A limit is the column's width, not the
+  HL7 nominal length — senders exceed v2.5's 20-character MSH-10.
+- **Do not add per-sink wrappers** (capping or sanitising a field where it
+  is logged or recorded). That was tried and did not converge, and a setter
+  into a `VARCHAR(255)` is a sink no wrapper sees. A new field that reaches
+  a sink gets a bound in `Hl7FieldBounds`, checked where it is parsed.
+- A refusal names the field and the limit, **never the value**.
+- A new bound is a copy of an entity `@Column(length)`: add the pair to
+  `Hl7FieldBoundsColumnWidthTest`, or a migration will silently move one
+  without the other. `Hl7FieldBounds.fits` counts code points, as
+  `VARCHAR(n)` does - not `String.length()`.
+- MSH-10 in the ADT and A40 dead-letter reasons, and in the merge-service
+  and visit-projection log lines #753 touched, goes through
+  `MllpRecordingContext.withControlId` / `quotedControlId`, which quote and
+  escape it so the sender cannot write text that reads as our own finding.
+  Not yet everywhere: the A02, A03 and auto-create audit descriptions in
+  the visit projection still format MSH-10 raw - persisted audit text, so
+  quoting it is a behaviour change and an open follow-up - and so do older
+  log lines. The helpers are MSH-10 only: other sender text in a reason
+  (the OBR-2 placer, the MSH-3/MSH-4 pair) is not quoted yet, and a general
+  helper for it is also a follow-up - do not reuse `withControlId` for it.
+- **Not yet covered: demographics and OBX-5.** PID-5/7/8/11 go into
+  `Patient` columns of 100 (sex: 10) and OBX-5 into `result_value` (2048),
+  unbounded. An over-width value fails at flush: `AE Server-side handler
+  error`, no dead-letter row, and the sender retries indefinitely. OBX-3/6/7/11
+  are truncated at their sink (an older decision). Known debt: these are not
+  identifiers, so whether to refuse or truncate them is still undecided.
+- MSH-9 is **not** bounded: not an identifier, and the recorder clamps the
+  one column it reaches.
+
 ## Audit on accept
 
 On successful ingest emit an `AuditEventLog` via `AuditEventLogService`.

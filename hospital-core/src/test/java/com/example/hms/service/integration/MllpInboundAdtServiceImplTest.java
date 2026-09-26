@@ -187,7 +187,7 @@ class MllpInboundAdtServiceImplTest {
             eq(IntegrationMessageDirection.INBOUND),
             eq("ADT^A08"), isNull(),
             eq(IntegrationMessageStatus.FAILED),
-            eq("cross-tenant rejection (MSH-10 MSG-1)"),
+            eq("cross-tenant rejection (MSH-10 \"MSG-1\")"),
             any());
     }
 
@@ -208,7 +208,7 @@ class MllpInboundAdtServiceImplTest {
             // message; the badge is kept honest by the correlation id, not by
             // filing this as healthy inbound traffic.
             eq(IntegrationMessageStatus.FAILED),
-            eq("PID-3 not found (MSH-10 MSG-1)"),
+            eq("PID-3 not found (MSH-10 \"MSG-1\")"),
             any());
     }
 
@@ -361,5 +361,30 @@ class MllpInboundAdtServiceImplTest {
         assertThat(patient.getLastName()).isEqualTo("Doe");
         assertThat(patient.getCity()).isEqualTo("Bobo-Dioulasso");
         verify(patientRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Two control ids that share twenty characters stay distinct in the recorded reason")
+    void theRecordedReasonQuotesTheWholeControlId() {
+        // The dead-letter reason exists so an operator can find the message
+        // in the sender's queue. A 20-character cap made these two the same
+        // row text; MSH-10 is bounded at parse to its 255-character column,
+        // and quoted whole here.
+        when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-X"))
+            .thenReturn(Optional.empty());
+        String first = "20260428-REGISTRATION-000001";
+        String second = "20260428-REGISTRATION-000002";
+
+        service.processAdt(adt("MRN-X", "Doe", "Jane", null), hospital, "REG", "HOSP1", first);
+        service.processAdt(adt("MRN-X", "Doe", "Jane", null), hospital, "REG", "HOSP1", second);
+
+        verify(messageRecorder).recordMessage(
+            eq("MLLP:REG/HOSP1"), any(), eq(IntegrationMessageDirection.INBOUND),
+            eq("ADT^A08"), isNull(), eq(IntegrationMessageStatus.FAILED),
+            eq("PID-3 not found (MSH-10 \"" + first + "\")"), any());
+        verify(messageRecorder).recordMessage(
+            eq("MLLP:REG/HOSP1"), any(), eq(IntegrationMessageDirection.INBOUND),
+            eq("ADT^A08"), isNull(), eq(IntegrationMessageStatus.FAILED),
+            eq("PID-3 not found (MSH-10 \"" + second + "\")"), any());
     }
 }

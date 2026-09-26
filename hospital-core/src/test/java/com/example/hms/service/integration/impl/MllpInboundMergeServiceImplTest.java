@@ -201,7 +201,7 @@ class MllpInboundMergeServiceImplTest {
             eq(IntegrationMessageDirection.INBOUND),
             eq("ADT^A40"), isNull(),
             eq(IntegrationMessageStatus.FAILED),
-            eq("cross-tenant rejection (MSH-10 MSG-A40-1)"),
+            eq("cross-tenant rejection (MSH-10 \"MSG-A40-1\")"),
             any());
     }
 
@@ -220,7 +220,7 @@ class MllpInboundMergeServiceImplTest {
             // retrying sender flooding the badge is the correlation id, not
             // the status.
             eq(IntegrationMessageStatus.FAILED),
-            eq("identifier not found (MSH-10 MSG-A40-1)"),
+            eq("identifier not found (MSH-10 \"MSG-A40-1\")"),
             any());
     }
 
@@ -351,5 +351,25 @@ class MllpInboundMergeServiceImplTest {
         assertThat(service.processMerge(message(), null, "LIS", "HOSP1", "M1"))
             .isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
         verifyNoInteractions(empiService);
+    }
+
+    @Test
+    void theRecordedReasonQuotesTheWholeControlId() {
+        // Longer than HL7's nominal 20, as real senders' ids are. Quoted
+        // whole: MSH-10 is bounded at parse to its column, and a shorter cap
+        // here would make two ids that share a prefix one row text.
+        empiKnows(SURVIVING_MRN, survivingPatientId);
+        empiDoesNotKnow(PRIOR_MRN);
+        String controlId = "20260826-LIS-MERGE-000000000042";
+
+        service.processMerge(message(), hospital, "LIS", "HOSP1", controlId);
+
+        verify(messageRecorder).recordMessage(
+            eq("MLLP:LIS/HOSP1"), any(),
+            eq(IntegrationMessageDirection.INBOUND),
+            eq("ADT^A40"), isNull(),
+            eq(IntegrationMessageStatus.FAILED),
+            eq("identifier not found (MSH-10 \"" + controlId + "\")"),
+            any());
     }
 }

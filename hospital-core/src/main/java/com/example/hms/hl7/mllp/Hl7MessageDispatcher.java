@@ -133,10 +133,16 @@ public class Hl7MessageDispatcher {
                 // not-allowlisted path was fixed for. There is no sender to
                 // bound by when the header is the thing that would not parse.
                 null);
-            Hl7MessageHeader fallback = new Hl7MessageHeader(
-                "|", "^~\\&", "?", "?", "HMS", "HMS", "", "ACK", "?", "P", "2.5"
-            );
-            return Hl7AckBuilder.buildAck(fallback, Hl7AckBuilder.AckCode.AR, "Invalid MSH: " + ex.getMessage());
+            // A refused sender field still leaves a readable MSH-10: answer on
+            // that header, so MSA-2 echoes it and the sender can match its
+            // own refusal instead of resending. Only an unreadable MSH, or an
+            // over-width MSH-10 itself, falls back to the anonymous envelope.
+            Hl7MessageHeader envelope = ex instanceof MllpFieldWidthException widthRefusal
+                    && widthRefusal.replyHeader() != null
+                ? widthRefusal.replyHeader()
+                : new Hl7MessageHeader(
+                    "|", "^~\\&", "?", "?", "HMS", "HMS", "", "ACK", "?", "P", "2.5");
+            return Hl7AckBuilder.buildAck(envelope, Hl7AckBuilder.AckCode.AR, "Invalid MSH: " + ex.getMessage());
         }
 
         // Allowlist gate — runs before any domain work so unknown
@@ -232,12 +238,13 @@ public class Hl7MessageDispatcher {
                              String remoteAddress, Hospital hospital) {
         ParsedAdtMessage parsed = messageBuilder.parseAdtMessage(hl7Body, header.triggerEvent());
         if (parsed == null) {
-            log.warn("[MLLP {}] {} from {}/{} unparseable (missing PID-3 / segments)",
+            log.warn("[MLLP {}] {} from {}/{} unparseable (missing or over-width PID-3, or missing segments)",
                 remoteAddress, header.messageType(),
                 header.sendingApplication(), header.sendingFacility());
             recordReject(integrationIdFor(header), organizationIdOf(hospital),
                 header.messageType(), hl7Body,
-                "unparseable " + header.messageType() + " — missing PID-3 or required segments",
+                "unparseable " + header.messageType()
+                    + " — missing or over-width PID-3 or required segments",
                 // The trigger belongs in the key: it is one of the five in
                 // ACCEPTED_ADT_EVENTS, checked before we got here, so it
                 // cannot be used to mint entries - and without it a malformed
@@ -247,7 +254,8 @@ public class Hl7MessageDispatcher {
                 // see whichever arrived last.
                 "unparseable ADT^" + header.triggerEvent(), senderScopeFor(header));
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
-                "Unparseable " + header.messageType() + " — missing PID-3 or required segments");
+                "Unparseable " + header.messageType()
+                    + " — missing or over-width PID-3 or required segments");
         }
         MllpInboundOutcome outcome = inboundAdt.processAdt(
             parsed, hospital, header.sendingApplication(), header.sendingFacility(),
@@ -269,14 +277,14 @@ public class Hl7MessageDispatcher {
                                String remoteAddress, Hospital hospital) {
         Hl7v2MessageBuilder.ParsedMergeMessage parsed = messageBuilder.parseAdtA40(hl7Body);
         if (parsed == null) {
-            log.warn("[MLLP {}] ADT^A40 from {}/{} unparseable (missing PID-3 or MRG-1)",
+            log.warn("[MLLP {}] ADT^A40 from {}/{} unparseable (missing or over-width PID-3 or MRG-1)",
                 remoteAddress, header.sendingApplication(), header.sendingFacility());
             recordReject(integrationIdFor(header), organizationIdOf(hospital),
                 "ADT^A40", hl7Body,
-                "unparseable ADT^A40 — missing PID-3 or MRG-1",
+                "unparseable ADT^A40 — missing or over-width PID-3 or MRG-1",
                 "unparseable ADT^A40", senderScopeFor(header));
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
-                "Unparseable ADT^A40 — missing PID-3 or MRG-1");
+                "Unparseable ADT^A40 — missing or over-width PID-3 or MRG-1");
         }
         MllpInboundOutcome outcome = inboundMerge.processMerge(
             parsed, hospital, header.sendingApplication(), header.sendingFacility(),
