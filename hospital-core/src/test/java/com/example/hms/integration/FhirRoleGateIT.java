@@ -1,15 +1,11 @@
-package com.example.hms.fhir;
+package com.example.hms.integration;
 
 import com.example.hms.BaseIT;
 import com.example.hms.model.User;
 import com.example.hms.repository.UserRepository;
-import com.example.hms.security.IdleSessionGate;
 import com.example.hms.security.IdleSessionTracker;
 import com.example.hms.security.JwtTokenProvider;
 import com.example.hms.security.TokenUserDescriptor;
-import com.example.hms.security.oidc.IssuerAwareBearerTokenResolver;
-import com.example.hms.security.oidc.KeycloakHospitalContextFilter;
-import com.example.hms.security.oidc.KeycloakHospitalContextResolver;
 import com.example.hms.security.oidc.KeycloakJwtFixture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,17 +14,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtValidators;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
-import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
@@ -54,15 +42,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * refused; anything else means the request got past it (MockMvc has no HAPI
  * servlet, so an admitted call ends in the dispatcher's 404).
  */
+// Exactly OidcResourceServerIntegrationTest's configuration, so the two share
+// one cached context: a context of its own pushed CI's 2 GB test fork into
+// OutOfMemoryError in a later class.
 @AutoConfigureMockMvc
-@Import(FhirRoleGateIT.OidcTestConfig.class)
-// Its own context (the OIDC stand-ins): closed after the class so the cached
-// contexts do not exhaust the 2 GB test fork (OutOfMemoryError in a later
-// class of the same fork otherwise).
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@Import(OidcResourceServerIntegrationTest.OidcTestConfig.class)
 class FhirRoleGateIT extends BaseIT {
 
-    static final String TEST_ISSUER = "https://fhir-role-gate-it.local/realms/hms";
+    static final String TEST_ISSUER = OidcResourceServerIntegrationTest.TEST_ISSUER;
     private static final String ENCOUNTER = "/fhir/Encounter/" + UUID.randomUUID();
     private static final String ENCOUNTER_SEARCH = "/fhir/Encounter";
     private static final AtomicInteger SEQUENCE = new AtomicInteger();
@@ -106,7 +93,7 @@ class FhirRoleGateIT extends BaseIT {
     /** A Keycloak token carrying the role as a realm role, as the realm export defines them. */
     private String keycloak(String role) {
         return keycloak.mintToken(KeycloakJwtFixture.TokenSpec
-            .defaults(TEST_ISSUER, OidcTestConfig.AUDIENCE)
+            .defaults(TEST_ISSUER, OidcResourceServerIntegrationTest.TEST_AUDIENCE)
             .withRealmRoles(List.of(role)));
     }
 
@@ -188,43 +175,5 @@ class FhirRoleGateIT extends BaseIT {
         assertThat(status(get("/fhir/metadata"), null)).isNotIn(401, 403);
         assertThat(status(get("/fhir/.well-known/smart-configuration"), null)).isNotIn(401, 403);
         assertThat(status(get(ENCOUNTER), null)).isEqualTo(401);
-    }
-
-    /**
-     * Stands in for {@code OidcResourceServerConfig}, which discovers its
-     * decoder over HTTP: a decoder for the fixture's key, the issuer-aware
-     * resolver (so HMS tokens still reach {@code JwtAuthenticationFilter}),
-     * and the context filter production registers under the same property.
-     */
-    @TestConfiguration
-    static class OidcTestConfig {
-
-        static final String AUDIENCE = "hms-backend";
-
-        @Bean
-        KeycloakJwtFixture keycloakJwtFixture() {
-            return new KeycloakJwtFixture();
-        }
-
-        @Bean
-        @Primary
-        JwtDecoder oidcJwtDecoder(KeycloakJwtFixture fixture) {
-            NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(fixture.publicKey()).build();
-            decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(TEST_ISSUER));
-            return decoder;
-        }
-
-        @Bean
-        @Primary
-        BearerTokenResolver issuerAwareBearerTokenResolver() {
-            return new IssuerAwareBearerTokenResolver(TEST_ISSUER);
-        }
-
-        @Bean
-        KeycloakHospitalContextFilter keycloakHospitalContextFilter(KeycloakHospitalContextResolver resolver,
-                                                                    IdleSessionGate idleSessionGate,
-                                                                    UserRepository userRepository) {
-            return new KeycloakHospitalContextFilter(resolver, idleSessionGate, userRepository);
-        }
     }
 }
