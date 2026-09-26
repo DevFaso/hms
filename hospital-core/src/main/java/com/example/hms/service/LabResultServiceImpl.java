@@ -1396,7 +1396,7 @@ public class LabResultServiceImpl implements LabResultService {
                 Set.of(NO_HOSPITAL), null, true, window);
         }
         Set<UUID> readable = new java.util.HashSet<>(
-            recordAccessPolicy.readableHospitalIds(authService.getCurrentUserId(), patientId, actingHospitalId));
+            recordAccessPolicy.readableHospitalIds(currentPrincipalUserId(), patientId, actingHospitalId));
         readable.add(actingHospitalId);
         return labResultRepository.findTrendReadableAt(patientId, testDefinitionId, readable, actingHospitalId,
                 false, window)
@@ -1427,34 +1427,47 @@ public class LabResultServiceImpl implements LabResultService {
      * <p>Never throws: accounting a read must not fail it.
      */
     private void recordReadReach(List<LabResult> shown, List<LabResult> trend) {
-        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
-        if (actingHospitalId == null) {
-            return;
-        }
-        java.util.Map<UUID, LabResult> byId = new java.util.LinkedHashMap<>();
-        java.util.stream.Stream.concat(shown.stream(), trend.stream())
-            .filter(r -> r != null && r.getId() != null)
-            .forEach(r -> byId.putIfAbsent(r.getId(), r));
-        List<LabResult> surfaced = List.copyOf(byId.values());
-        if (surfaced.isEmpty()) {
-            return;
-        }
-        recordPerformedHereReach(surfaced);
-        UUID patientId = surfaced.get(0).getLabOrder() != null && surfaced.get(0).getLabOrder().getPatient() != null
-            ? surfaced.get(0).getLabOrder().getPatient().getId() : null;
+        // Everything inside the try, scope resolution included: accounting a
+        // read that already passed its guard must never fail it.
         try {
+            UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+            if (actingHospitalId == null) {
+                return;
+            }
+            java.util.Map<UUID, LabResult> byId = new java.util.LinkedHashMap<>();
+            java.util.stream.Stream.concat(shown.stream(), trend.stream())
+                .filter(r -> r != null && r.getId() != null)
+                .forEach(r -> byId.putIfAbsent(r.getId(), r));
+            List<LabResult> surfaced = List.copyOf(byId.values());
+            if (surfaced.isEmpty()) {
+                return;
+            }
+            recordPerformedHereReach(surfaced);
+            UUID patientId = surfaced.get(0).getLabOrder() != null && surfaced.get(0).getLabOrder().getPatient() != null
+                ? surfaced.get(0).getLabOrder().getPatient().getId() : null;
             List<UUID> treatmentSources = surfaced.stream()
                 .map(LabResult::getLabOrder)
                 .filter(order -> order != null && !order.isHandledBy(actingHospitalId))
                 .map(order -> com.example.hms.service.recordaccess.CrossHospitalReachRecorder.hospitalIdOf(order.getHospital()))
                 .toList();
-            reachRecorder.recordReach(patientId, actingHospitalId, authService.getCurrentUserId(), null,
+            reachRecorder.recordReach(patientId, actingHospitalId, currentPrincipalUserId(), null,
                 com.example.hms.service.recordaccess.CrossHospitalReachRecorder.reachOf(treatmentSources, actingHospitalId),
                 TREATMENT_REACH_DESCRIPTION);
         } catch (RuntimeException ex) {
-            LOG.warn("Cross-hospital disclosure accounting failed for a lab trend read at {}: {}",
-                actingHospitalId, ex.getMessage());
+            LOG.warn("Cross-hospital disclosure accounting failed for a lab result read: {}", ex.getMessage());
         }
+    }
+
+    /**
+     * The reader's user id for the trend reads, from the HospitalContext as
+     * {@code PatientLabResultServiceImpl} takes it. Not
+     * {@code authService.getCurrentUserId()}: that throws for any principal
+     * that is not a {@code CustomUserDetails} (an OIDC
+     * {@code JwtAuthenticationToken}), which would turn every trend read by a
+     * Keycloak-authenticated clinician into a 401.
+     */
+    private static UUID currentPrincipalUserId() {
+        return com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
     }
 
     /**

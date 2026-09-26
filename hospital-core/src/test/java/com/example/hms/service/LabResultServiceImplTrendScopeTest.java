@@ -105,6 +105,10 @@ class LabResultServiceImplTrendScopeTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalB.getId());
         when(authService.getCurrentUserId()).thenReturn(actorId);
+        // The trend reads take the reader from the HospitalContext, like the
+        // patient lab read, not from AuthService (which rejects OIDC principals).
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().principalUserId(actorId).build());
         when(recordAccessPolicy.readableHospitalIds(any(), any(), any())).thenReturn(Set.of(hospitalB.getId()));
         when(labResultMapper.toTrendPointDTO(any(LabResult.class))).thenAnswer(inv -> {
             LabResult row = inv.getArgument(0);
@@ -114,6 +118,47 @@ class LabResultServiceImplTrendScopeTest {
                 .resultValue(row.getResultValue())
                 .build();
         });
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearContext() {
+        com.example.hms.security.context.HospitalContextHolder.clear();
+    }
+
+    @Test
+    void anOidcAuthenticatedClinicianStillReadsTheResultAndItsTrend() {
+        // AuthService.getCurrentUserId() throws for a principal that is not a
+        // CustomUserDetails (a Keycloak JwtAuthenticationToken). The trend read
+        // must not depend on it, or every such read becomes a 401.
+        when(authService.getCurrentUserId())
+            .thenThrow(new com.example.hms.exception.UnauthorizedException("Invalid authentication principal type"));
+        LabResult mine = row(hospitalB, null, 1);
+        when(labResultRepository.findById(mine.getId())).thenReturn(Optional.of(mine));
+        when(labResultMapper.toResponseDTO(mine)).thenReturn(LabResultResponseDTO.builder().id("mine").build());
+        when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
+            .thenReturn(List.of(mine));
+
+        LabResultResponseDTO response = service.getLabResultById(mine.getId(), Locale.ENGLISH);
+
+        assertThat(response.getTrendHistory()).hasSize(1);
+        verify(recordAccessPolicy).readableHospitalIds(actorId, patient.getId(), hospitalB.getId());
+    }
+
+    @Test
+    void accountingThatFailsToResolveTheScopeDoesNotFailTheRead() {
+        // Scope resolves for the guard and the trend, then fails on the
+        // accounting call: the read has already passed its guard and stands.
+        when(roleValidator.requireActiveHospitalId())
+            .thenReturn(hospitalB.getId())
+            .thenReturn(hospitalB.getId())
+            .thenThrow(new BusinessException("Hospital context required."));
+        LabResult mine = row(hospitalB, null, 1);
+        when(labResultRepository.findById(mine.getId())).thenReturn(Optional.of(mine));
+        when(labResultMapper.toResponseDTO(mine)).thenReturn(LabResultResponseDTO.builder().id("mine").build());
+        when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
+            .thenReturn(List.of(mine));
+
+        assertThat(service.getLabResultById(mine.getId(), Locale.ENGLISH).getId()).isEqualTo("mine");
     }
 
     @Test
