@@ -5934,6 +5934,8 @@
     "UP_TO_DATE": "À jour",
     "USERNAME": "Nom d'utilisateur",
     "USERNAME_HINT": "Votre nom d'utilisateur ne peut pas être modifié",
+    "EMAIL_CHANGE_PASSWORD_HINT": "La modification de votre adresse e-mail nécessite votre mot de passe actuel.",
+    "EMAIL_CHANGE_PASSWORD_REQUIRED": "Saisissez votre mot de passe actuel pour modifier votre adresse e-mail.",
     "USER_ID": "ID utilisateur",
     "VERIFICATION_CODE": "Code de vérification",
     "VERIFICATION_CODE_SENT": "Code de vérification envoyé à {{contact}}",

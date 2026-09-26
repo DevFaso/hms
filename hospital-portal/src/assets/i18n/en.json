@@ -5934,6 +5934,8 @@
     "UP_TO_DATE": "Up to date",
     "USERNAME": "Username",
     "USERNAME_HINT": "Your username cannot be changed",
+    "EMAIL_CHANGE_PASSWORD_HINT": "Changing your email address requires your current password.",
+    "EMAIL_CHANGE_PASSWORD_REQUIRED": "Enter your current password to change your email address.",
     "USER_ID": "User ID",
     "VERIFICATION_CODE": "Verification Code",
     "VERIFICATION_CODE_SENT": "Verification code sent to {{contact}}",

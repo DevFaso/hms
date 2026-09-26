@@ -425,6 +425,29 @@
                   </div>
                 </div>
 
+                @if (emailChanged()) {
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="editEmailPassword">{{
+                        'PROFILE.CURRENT_PASSWORD' | translate
+                      }}</label>
+                      <input
+                        type="password"
+                        id="editEmailPassword"
+                        autocomplete="current-password"
+                        [ngModel]="emailChangePassword()"
+                        (ngModelChange)="emailChangePassword.set($event)"
+                        name="emailChangePassword"
+                        aria-describedby="editEmailPasswordHint"
+                        required
+                      />
+                      <span class="form-hint" id="editEmailPasswordHint">{{
+                        'PROFILE.EMAIL_CHANGE_PASSWORD_HINT' | translate
+                      }}</span>
+                    </div>
+                  </div>
+                }
+
                 <div class="form-row">
                   <div class="form-group">
                     <label for="editUsername">{{ 'PROFILE.USERNAME' | translate }}</label>

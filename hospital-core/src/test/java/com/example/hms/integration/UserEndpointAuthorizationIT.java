@@ -66,8 +66,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  *       account picker; {@code GET /users/search}: user-list and the
  *       super-admin emergency MFA-reset picker;</li>
  *   <li>{@code GET/PUT /users/{own id}}: the profile page, for every signed-in
- *       user including patients (names, email, phone; the username is sent
- *       back unchanged);</li>
+ *       user including patients (names and phone; the username and email are
+ *       sent back unchanged, and a changed email goes to
+ *       {@code POST /auth/me/change-email} with the current password);</li>
  *   <li>{@code GET/PUT/DELETE /users/{id}}, {@code PATCH .../restore}: the
  *       user-list admin page (super-admin);</li>
  *   <li>{@code DELETE /users/{id}}: patient-form's compensation when the
@@ -319,7 +320,7 @@ class UserEndpointAuthorizationIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("chat and staff-list: any staff member lists the directory")
+    @DisplayName("chat and staff-list: any staff member lists the directory (scoped: see directoryIsScopedToTheCallersHospitals)")
     void staffListTheDirectory() throws Exception {
         assertThat(status(get("/users").param("size", "100"), hms(doctorB, "ROLE_DOCTOR"), null)).isEqualTo(200);
         assertThat(status(get("/users").param("size", "500"), hms(receptionistA, "ROLE_RECEPTIONIST"), null))
@@ -333,8 +334,9 @@ class UserEndpointAuthorizationIT extends BaseIT {
         String hashBefore = hashOf(patientA);
 
         assertThat(status(get("/users/" + patientA.getId()), patient, null)).isEqualTo(200);
+        // The form sends the email and username back unchanged; changing either has its own endpoint.
         assertThat(status(put("/users/" + patientA.getId()), patient, Map.of(
-            "firstName", "Awa", "lastName", "Traore", "email", "awa" + next() + "@self.test",
+            "firstName", "Awa", "lastName", "Traore", "email", patientA.getEmail(),
             "phoneNumber", "+22671" + next(), "username", patientA.getUsername()))).isEqualTo(200);
         assertThat(userRepository.findById(patientA.getId()).orElseThrow().getFirstName()).isEqualTo("Awa");
 
@@ -479,6 +481,174 @@ class UserEndpointAuthorizationIT extends BaseIT {
 
         assertThat(status(delete("/users/" + orphanId), token, null)).isEqualTo(200);
         assertThat(userRepository.findById(orphanId).orElseThrow().isDeleted()).isTrue();
+    }
+
+    // ------------------------------------------------- the directory's scope
+
+    @Test
+    @DisplayName("a staff member at A lists and searches only accounts assigned at A, with correct paging totals")
+    void directoryIsScopedToTheCallersHospitals() throws Exception {
+        // Assigned at A but not yet verified (inactive, as every admin-registered
+        // account starts): staff-list's picker must still offer it.
+        User pendingA = account("pendA", "ROLE_NURSE", hospitalA);
+        deactivateAssignments(pendingA);
+        // Assigned at A and at B: one row, not two.
+        User dualAB = account("dual", "ROLE_DOCTOR", hospitalA);
+        assignAlso(dualAB, "ROLE_DOCTOR", hospitalB);
+        List<UUID> atA = List.of(adminA.getId(), receptionistA.getId(), nurseA.getId(), patientA.getId(),
+            pendingA.getId(), dualAB.getId());
+
+        String nurse = hms(nurseA, "ROLE_NURSE");
+        var all = page(get("/users").param("size", "100"), nurse);
+        assertThat(ids(all)).containsExactlyInAnyOrderElementsOf(atA);
+        assertThat(total(all)).isEqualTo(atA.size());
+
+        // Paging: one row per page, the total still counts the whole scope.
+        var first = page(get("/users").param("size", "1").param("page", "0"), nurse);
+        assertThat(ids(first)).hasSize(1);
+        assertThat(total(first)).isEqualTo(atA.size());
+        var last = page(get("/users").param("size", "4").param("page", "1"), nurse);
+        assertThat(ids(last)).hasSize(atA.size() - 4);
+
+        // Search: B's doctor is not found by name, email or role; A's accounts are.
+        assertThat(total(page(get("/users/search").param("name", doctorB.getUsername()), nurse))).isZero();
+        assertThat(total(page(get("/users/search").param("email", doctorB.getEmail()), nurse))).isZero();
+        assertThat(total(page(get("/users/search").param("name", "sa"), nurse))).isZero();
+        var doctors = page(get("/users/search").param("role", "ROLE_DOCTOR").param("size", "1"), nurse);
+        assertThat(total(doctors)).isEqualTo(1);
+        assertThat(ids(doctors)).containsExactly(dualAB.getId());
+        var byDomain = page(get("/users/search").param("email", "users-gate.test").param("size", "2"), nurse);
+        assertThat(total(byDomain)).isEqualTo(atA.size());
+        assertThat(ids(byDomain)).hasSize(2);
+
+        // And B's doctor sees B only: itself and the account assigned at both.
+        var fromB = page(get("/users").param("size", "100"), hms(doctorB, "ROLE_DOCTOR"));
+        assertThat(ids(fromB)).containsExactlyInAnyOrder(doctorB.getId(), dualAB.getId());
+        assertThat(total(fromB)).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("a hospital admin asking for the deleted view gets their live, scoped view")
+    void deletedViewStaysSuperAdminOnly() throws Exception {
+        String admin = hms(adminA, "ROLE_HOSPITAL_ADMIN");
+        var deleted = page(get("/users").param("onlyDeleted", "true").param("size", "100"), admin);
+        assertThat(ids(deleted)).contains(nurseA.getId()).doesNotContain(doctorB.getId(), superAdmin.getId());
+    }
+
+    @Test
+    @DisplayName("the super-admin's directory is every account, on list and search")
+    void superAdminSeesEveryAccount() throws Exception {
+        String sa = hms(superAdmin, "ROLE_SUPER_ADMIN");
+        var byDomain = page(get("/users/search").param("email", "users-gate.test").param("size", "100"), sa);
+        assertThat(ids(byDomain)).contains(superAdmin.getId(), adminA.getId(), receptionistA.getId(),
+            nurseA.getId(), doctorB.getId(), patientA.getId());
+        assertThat(ids(page(get("/users/search").param("name", doctorB.getUsername()), sa)))
+            .containsExactly(doctorB.getId());
+    }
+
+    // ------------------------------------------------- self email change
+
+    @Test
+    @DisplayName("changing one's own email needs the current password: refused on PUT and without it, done with it, no address echoed")
+    void selfEmailChangeNeedsTheCurrentPassword() throws Exception {
+        String patient = hms(patientA, "ROLE_PATIENT");
+        String original = patientA.getEmail();
+        String wanted = "awa" + next() + "@self.test";
+
+        // The profile PUT no longer carries an email change.
+        MvcResult viaPut = perform(put("/users/" + patientA.getId()), patient, Map.of("email", wanted));
+        assertThat(viaPut.getResponse().getStatus()).isEqualTo(400);
+        assertThat(emailOf(patientA)).isEqualTo(original);
+
+        // A stolen session without the password: refused, one FAILURE row with ids only.
+        MvcResult wrong = perform(post("/auth/me/change-email"), patient,
+            Map.of("currentPassword", "Not-The-Password-1", "newEmail", wanted));
+        assertThat(wrong.getResponse().getStatus()).isEqualTo(400);
+        assertThat(wrong.getResponse().getContentAsString()).doesNotContain(original).doesNotContain(wanted);
+        assertThat(emailOf(patientA)).isEqualTo(original);
+        List<AuditEventLog> refusals = auditEventLogRepository.findAll().stream()
+            .filter(row -> patientA.getId().toString().equals(row.getResourceId()))
+            .filter(row -> row.getStatus() == AuditStatus.FAILURE)
+            .toList();
+        assertThat(refusals).hasSize(1);
+        assertThat(refusals.get(0).getResourceId()).isEqualTo(patientA.getId().toString());
+        assertThat(String.valueOf(refusals.get(0).getEventDescription()) + refusals.get(0).getDetails())
+            .doesNotContain(original).doesNotContain(wanted).doesNotContain("Not-The-Password");
+
+        // The holder, with the password: changed, and the answer names neither address.
+        MvcResult right = perform(post("/auth/me/change-email"), patient,
+            Map.of("currentPassword", ORIGINAL_HASH_PASSWORD, "newEmail", wanted));
+        assertThat(right.getResponse().getStatus()).isEqualTo(200);
+        assertThat(right.getResponse().getContentAsString()).doesNotContain(original).doesNotContain(wanted);
+        assertThat(emailOf(patientA)).isEqualTo(wanted);
+    }
+
+    @Test
+    @DisplayName("a self email change to a case variant of another account's email is refused without naming it")
+    void selfEmailChangeKeepsTheCaseInsensitiveUniqueness() throws Exception {
+        String nurse = hms(nurseA, "ROLE_NURSE");
+        String variant = superAdmin.getEmail().toUpperCase(java.util.Locale.ROOT);
+
+        MvcResult taken = perform(post("/auth/me/change-email"), nurse,
+            Map.of("currentPassword", ORIGINAL_HASH_PASSWORD, "newEmail", variant));
+
+        assertThat(taken.getResponse().getStatus()).isEqualTo(400);
+        assertThat(taken.getResponse().getContentAsString())
+            .doesNotContainIgnoringCase(superAdmin.getEmail()).doesNotContain(superAdmin.getUsername());
+        assertThat(emailOf(nurseA)).isEqualTo(nurseA.getEmail());
+    }
+
+    @Test
+    @DisplayName("a Keycloak session cannot change the email here: Keycloak owns it on that path")
+    void keycloakSessionCannotChangeTheEmail() throws Exception {
+        MvcResult refused = perform(post("/auth/me/change-email"), keycloakPatient(),
+            Map.of("currentPassword", ORIGINAL_HASH_PASSWORD, "newEmail", "kc" + next() + "@self.test"));
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(400);
+    }
+
+    private void deactivateAssignments(User user) {
+        List<UserRoleHospitalAssignment> rows = assignmentRepository.findByUserId(user.getId());
+        rows.forEach(a -> a.setActive(false));
+        assignmentRepository.saveAll(rows);
+    }
+
+    private void assignAlso(User user, String roleCode, Hospital hospital) {
+        assignmentRepository.save(UserRoleHospitalAssignment.builder()
+            .assignmentCode("UG-" + next())
+            .description(roleCode)
+            .user(user)
+            .hospital(hospital)
+            .role(ensureRole(roleCode))
+            .startDate(LocalDate.now())
+            .assignedAt(LocalDateTime.now())
+            .active(true)
+            .build());
+    }
+
+    private String emailOf(User user) {
+        return userRepository.findById(user.getId()).orElseThrow().getEmail();
+    }
+
+    /** A directory page; 200 is asserted here, so every caller of it is admitted. */
+    private tools.jackson.databind.JsonNode page(MockHttpServletRequestBuilder request, String bearer)
+            throws Exception {
+        MvcResult result = perform(request, bearer, null);
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        return objectMapper.readTree(result.getResponse().getContentAsString());
+    }
+
+    private static List<UUID> ids(tools.jackson.databind.JsonNode page) {
+        List<UUID> ids = new ArrayList<>();
+        page.get("content").forEach(row -> ids.add(UUID.fromString(row.get("id").asText())));
+        return ids;
+    }
+
+    /** The total, whichever of Spring Data's two page shapes the app serializes. */
+    private static long total(tools.jackson.databind.JsonNode page) {
+        return page.has("totalElements")
+            ? page.get("totalElements").asLong()
+            : page.get("page").get("totalElements").asLong();
     }
 
     // -------------------------------------------------------------- helpers

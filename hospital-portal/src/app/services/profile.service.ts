@@ -114,9 +114,20 @@ export class ProfileService {
     return this.http.get<UserProfile>(`/users/${userId}`);
   }
 
-  /** PUT /users/:id  — update user profile */
+  /** PUT /users/:id  — update user profile (names and phone; the email has its own endpoint) */
   updateProfile(userId: string, data: ProfileUpdateRequest): Observable<UserProfile> {
     return this.http.put<UserProfile>(`/users/${userId}`, data);
+  }
+
+  /**
+   * POST /auth/me/change-email — the signed-in user's own email. The email is
+   * where a password reset goes, so the server requires the current password.
+   */
+  changeOwnEmail(currentPassword: string, newEmail: string): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>('/auth/me/change-email', {
+      currentPassword,
+      newEmail,
+    });
   }
 
   /** GET /auth/credentials/me — credential health (MFA, recovery, password status) */

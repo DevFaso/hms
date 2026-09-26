@@ -40,6 +40,7 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.support.UserAccountAccess;
+import com.example.hms.service.support.UserAccountAccess.DirectoryScope;
 import com.example.hms.utility.MessageUtil;
 import org.springframework.security.access.AccessDeniedException;
 import lombok.RequiredArgsConstructor;
@@ -999,9 +1000,17 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public Page<UserSummaryDTO> getAllUsers(int page, int size, boolean includeDeleted,
                                             boolean onlyDeleted) {
-        accountAccess.requireDirectoryAccess();
+        DirectoryScope scope = accountAccess.requireDirectoryAccess();
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<User> users = userRepository.findAllPaged(includeDeleted, onlyDeleted, pageable);
+        Page<User> users;
+        if (scope.everyone()) {
+            users = userRepository.findAllPaged(includeDeleted, onlyDeleted, pageable);
+        } else if (scope.hospitalIds().isEmpty()) {
+            users = Page.empty(pageable);
+        } else {
+            // The deleted view is the super-admin's: the scoped query has none.
+            users = userRepository.findAllPagedInHospitals(scope.hospitalIds(), pageable);
+        }
         return users.map(userMapper::toSummaryDTO);
     }
 
@@ -1009,10 +1018,16 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public Page<UserSummaryDTO> searchUsers(String name, String role, String email, int page, int size,
                                             boolean includeDeleted, boolean onlyDeleted) {
-        accountAccess.requireDirectoryAccess();
+        DirectoryScope scope = accountAccess.requireDirectoryAccess();
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<User> users = userRepository.searchUsers(
-            name, role, email, includeDeleted, onlyDeleted, pageable);
+        Page<User> users;
+        if (scope.everyone()) {
+            users = userRepository.searchUsers(name, role, email, includeDeleted, onlyDeleted, pageable);
+        } else if (scope.hospitalIds().isEmpty()) {
+            users = Page.empty(pageable);
+        } else {
+            users = userRepository.searchUsersInHospitals(scope.hospitalIds(), name, role, email, pageable);
+        }
         return users.map(userMapper::toSummaryDTO);
     }
 
@@ -1237,13 +1252,16 @@ public class UserServiceImpl implements UserService {
 
     /**
      * The fields an account holder may change on their own account through
-     * {@code PUT /users/{id}}: names, email and phone. The rest have their own
+     * {@code PUT /users/{id}}: names and phone. The rest have their own
      * endpoints, which apply rules this one does not: the password needs the
      * current one and the history check ({@code POST /auth/me/change-password}),
      * the username the character and uniqueness rules
-     * ({@code POST /auth/me/change-username}), and nobody switches their own
-     * account on or off. Sending the current value back unchanged is not a
-     * change, so the profile form, which always sends the username, still works.
+     * ({@code POST /auth/me/change-username}), the email the current password
+     * ({@code POST /auth/me/change-email}: it is where a password reset is
+     * sent, so rebinding it from a stolen session would turn a short-lived
+     * token into a permanent takeover), and nobody switches their own account
+     * on or off. Sending the current value back unchanged is not a change, so
+     * the profile form, which always sends the username and email, still works.
      */
     private static void requireSelfServiceChangesOnly(User user, UpdateUserRequestDTO dto) {
         if (dto.getActive() != null && !dto.getActive().equals(user.isActive())) {
@@ -1254,6 +1272,9 @@ public class UserServiceImpl implements UserService {
         }
         if (hasText(dto.getUsername()) && !dto.getUsername().equals(user.getUsername())) {
             throw new BusinessException(MessageUtil.resolve("user.update.self.username"));
+        }
+        if (hasText(dto.getEmail()) && !dto.getEmail().equals(user.getEmail())) {
+            throw new BusinessException(MessageUtil.resolve("user.update.self.email"));
         }
     }
 
@@ -1483,6 +1504,66 @@ public class UserServiceImpl implements UserService {
         user.setForceUsernameChange(false);
         userRepository.save(user);
         log.info("🔑 [CHANGE-USR] Username updated and forceUsernameChange cleared for user={}", userId);
+    }
+
+    /**
+     * {@code POST /auth/me/change-email}. The email is where a password reset
+     * is sent, so changing it needs the current password: a stolen session
+     * alone must not be able to rebind the recovery address.
+     *
+     * <p>A wrong password counts against the same throttle as a failed login
+     * ({@link com.example.hms.security.LoginAttemptService}), so this endpoint
+     * is not an unlimited password oracle; while that throttle holds the
+     * account, the change is refused before the password is checked. A
+     * refusal writes one FAILURE row (the account id only), and neither the
+     * old nor the new address is logged, audited or returned.
+     *
+     * <p>The new address must be free in any letter case on every other
+     * account, deleted ones included, as for {@code PUT /users/{id}}.
+     */
+    @Override
+    @Transactional
+    public void changeOwnEmail(UUID userId, String currentPassword, String newEmail) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> userNotFound(userId));
+        String username = user.getUsername();
+        if (loginAttemptService.isLocked(username)) {
+            throw new BusinessException(MessageUtil.resolve("user.email.change.locked"));
+        }
+        if (!hasText(currentPassword) || user.getPasswordHash() == null
+                || !passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            loginAttemptService.recordFailure(username);
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .userId(userId)
+                    .eventType(AuditEventType.USER_UPDATE)
+                    .eventDescription("Own email change refused: the current password did not match")
+                    .resourceId(userId.toString())
+                    .entityType("USER")
+                    .status(AuditStatus.FAILURE)
+                    .build());
+            throw new BusinessException(MessageUtil.resolve("user.email.change.password"));
+        }
+        String email = newEmail == null ? "" : newEmail.trim();
+        if (email.isEmpty()) {
+            throw new BusinessException(MessageUtil.resolve("user.update.email.invalid"));
+        }
+        if (email.equals(user.getEmail())) {
+            throw new BusinessException(MessageUtil.resolve("user.email.change.same"));
+        }
+        if (userRepository.existsEmailOnOtherAccount(email, userId)) {
+            throw new BusinessException(MessageUtil.resolve("user.update.email.taken"));
+        }
+        user.setEmail(email);
+        userRepository.save(user);
+        auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .userId(userId)
+                .eventType(AuditEventType.USER_UPDATE)
+                .eventDescription("Own email address changed")
+                .resourceId(userId.toString())
+                .entityType("USER")
+                .status(AuditStatus.SUCCESS)
+                .build());
+        log.info("🔑 [CHANGE-EMAIL] Email address changed for user={}", userId);
     }
 
     @Override

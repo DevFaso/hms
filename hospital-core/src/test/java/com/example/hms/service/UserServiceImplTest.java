@@ -21,6 +21,7 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.service.support.UserAccountAccess;
 import com.example.hms.utility.UserDisplayUtil;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,6 +46,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -1487,7 +1490,41 @@ class UserServiceImplTest {
         }
 
         @Test
-        @DisplayName("the profile form's self-edit — names, email, phone, the unchanged username and active flag — saves")
+        @DisplayName("a self-edit may not change the email: it goes through /auth/me/change-email, which needs the password")
+        void selfEditCannotChangeEmail() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.isSelf(user)).thenReturn(true);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setFirstName("Awa");
+            dto.setEmail("stolen-session@evil.test");
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("user.update.self.email"));
+            assertThat(user.getEmail()).isEqualTo("test@example.com");
+            assertThat(user.getFirstName()).isEqualTo("Test");
+            verify(userRepository, never()).save(any());
+            verify(userRepository, never()).existsEmailOnOtherAccount(any(), any());
+        }
+
+        @Test
+        @DisplayName("an administrator (not self) may still change an account's email on PUT")
+        void administratorMayStillChangeEmail() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.isSelf(user)).thenReturn(false);
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(assignmentRepository.findByUser(any())).thenReturn(Set.of());
+            when(userMapper.toResponseDTO(any(), any())).thenReturn(new UserResponseDTO());
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setEmail("new-address@example.com");
+
+            userService.updateUser(userId, dto);
+
+            assertThat(user.getEmail()).isEqualTo("new-address@example.com");
+        }
+
+        @Test
+        @DisplayName("the profile form's self-edit — names, the unchanged email and username, phone, active flag — saves")
         void profileSelfEditSaves() {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(accountAccess.isSelf(user)).thenReturn(true);
@@ -1497,7 +1534,7 @@ class UserServiceImplTest {
             UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
             dto.setFirstName("Awa");
             dto.setLastName("Traore");
-            dto.setEmail("awa@example.com");
+            dto.setEmail("test@example.com");
             dto.setPhoneNumber("+22670111111");
             dto.setUsername("testuser");
             dto.setActive(true);
@@ -1505,7 +1542,7 @@ class UserServiceImplTest {
             userService.updateUser(userId, dto);
 
             assertThat(user.getFirstName()).isEqualTo("Awa");
-            assertThat(user.getEmail()).isEqualTo("awa@example.com");
+            assertThat(user.getEmail()).isEqualTo("test@example.com");
             assertThat(user.getPasswordHash()).isEqualTo(EXISTING_HASH);
             verify(userRepository).save(user);
             // The self path never consults the administrator rule.
@@ -1609,6 +1646,174 @@ class UserServiceImplTest {
             assertThatThrownBy(() -> userService.searchUsers("a", null, null, 0, 10, false, false))
                     .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
             verifyNoInteractions(userRepository);
+        }
+    }
+
+    @Nested
+    @DisplayName("the directory's hospital scope")
+    class DirectoryScoping {
+
+        private final org.springframework.data.domain.Page<User> onePage =
+                new org.springframework.data.domain.PageImpl<>(java.util.List.of());
+
+        @Test
+        @DisplayName("a scoped caller is answered from the scoped queries, never the global ones, and never the deleted view")
+        void scopedCallerUsesTheScopedQueries() {
+            Set<UUID> hospitals = Set.of(UUID.randomUUID());
+            when(accountAccess.requireDirectoryAccess())
+                    .thenReturn(new UserAccountAccess.DirectoryScope(false, hospitals));
+            when(userRepository.findAllPagedInHospitals(any(), any())).thenReturn(onePage);
+            when(userRepository.searchUsersInHospitals(any(), any(), any(), any(), any())).thenReturn(onePage);
+
+            // Even if a deleted flag reached the service, the scoped path has no deleted view.
+            userService.getAllUsers(0, 10, true, true);
+            userService.searchUsers("ami", "ROLE_NURSE", "x@y", 0, 10, true, true);
+
+            verify(userRepository).findAllPagedInHospitals(eq(hospitals), any());
+            verify(userRepository).searchUsersInHospitals(eq(hospitals), eq("ami"), eq("ROLE_NURSE"),
+                    eq("x@y"), any());
+            verify(userRepository, never()).findAllPaged(anyBoolean(), anyBoolean(), any());
+            verify(userRepository, never()).searchUsers(any(), any(), any(), anyBoolean(), anyBoolean(), any());
+        }
+
+        @Test
+        @DisplayName("a staff caller whose only staff assignments are global sees nobody, and no query runs")
+        void emptyScopeIsAnEmptyPage() {
+            when(accountAccess.requireDirectoryAccess())
+                    .thenReturn(new UserAccountAccess.DirectoryScope(false, Set.of()));
+
+            assertThat(userService.getAllUsers(0, 10, false, false).getTotalElements()).isZero();
+            assertThat(userService.searchUsers("a", null, null, 0, 10, false, false).getTotalElements()).isZero();
+            verifyNoInteractions(userRepository);
+        }
+
+        @Test
+        @DisplayName("the super-admin is answered from the global queries, deleted flags passed through")
+        void superAdminUsesTheGlobalQueries() {
+            when(accountAccess.requireDirectoryAccess())
+                    .thenReturn(new UserAccountAccess.DirectoryScope(true, Set.of()));
+            when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), any())).thenReturn(onePage);
+            when(userRepository.searchUsers(any(), any(), any(), anyBoolean(), anyBoolean(), any()))
+                    .thenReturn(onePage);
+
+            userService.getAllUsers(0, 10, true, false);
+            userService.searchUsers("a", null, null, 0, 10, false, true);
+
+            verify(userRepository).findAllPaged(eq(true), eq(false), any());
+            verify(userRepository).searchUsers(eq("a"), any(), any(), eq(false), eq(true), any());
+            verify(userRepository, never()).findAllPagedInHospitals(any(), any());
+            verify(userRepository, never()).searchUsersInHospitals(any(), any(), any(), any(), any());
+        }
+    }
+
+    @Nested
+    @DisplayName("changing one's own email: POST /auth/me/change-email")
+    class ChangeOwnEmail {
+
+        private static final String HASH = "$2a$10$ownHash";
+
+        @BeforeEach
+        void account() {
+            user.setPasswordHash(HASH);
+            lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        }
+
+        private com.example.hms.payload.dto.AuditEventRequestDTO onlyAuditRow() {
+            ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> row =
+                    ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+            verify(auditEventLogService).logEvent(row.capture());
+            return row.getValue();
+        }
+
+        @Test
+        @DisplayName("a wrong current password: refused, counted against the login throttle, one FAILURE row with ids only, nothing saved")
+        void wrongPasswordIsRefused() {
+            when(passwordEncoder.matches("guess", HASH)).thenReturn(false);
+
+            assertThatThrownBy(() -> userService.changeOwnEmail(userId, "guess", "thief@evil.test"))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("user.email.change.password"));
+
+            assertThat(user.getEmail()).isEqualTo("test@example.com");
+            verify(userRepository, never()).save(any());
+            verify(loginAttemptService).recordFailure("testuser");
+            var row = onlyAuditRow();
+            assertThat(row.getStatus()).isEqualTo(com.example.hms.enums.AuditStatus.FAILURE);
+            assertThat(row.getUserId()).isEqualTo(userId);
+            assertThat(row.getResourceId()).isEqualTo(userId.toString());
+            assertThat(row.getDetails()).isNull();
+            assertThat(row.getUserName()).isNull();
+            assertThat(row.getResourceName()).isNull();
+            assertThat(row.getEventDescription())
+                    .doesNotContain("thief").doesNotContain("test@example.com").doesNotContain("guess");
+        }
+
+        @Test
+        @DisplayName("a blank current password is refused without asking the encoder")
+        void blankPasswordIsRefused() {
+            assertThatThrownBy(() -> userService.changeOwnEmail(userId, " ", "new@example.com"))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("user.email.change.password"));
+            verifyNoInteractions(passwordEncoder);
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("while the login throttle holds the account: refused before the password is checked")
+        void lockedAccountIsRefusedFirst() {
+            when(loginAttemptService.isLocked("testuser")).thenReturn(true);
+
+            assertThatThrownBy(() -> userService.changeOwnEmail(userId, "Right-Pass-1", "new@example.com"))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("user.email.change.locked"));
+            verifyNoInteractions(passwordEncoder);
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("the right current password: saved, one SUCCESS row that names neither address")
+        void rightPasswordChangesTheEmail() {
+            when(passwordEncoder.matches("Right-Pass-1", HASH)).thenReturn(true);
+            when(userRepository.existsEmailOnOtherAccount("new@example.com", userId)).thenReturn(false);
+
+            userService.changeOwnEmail(userId, "Right-Pass-1", "  new@example.com ");
+
+            assertThat(user.getEmail()).isEqualTo("new@example.com");
+            verify(userRepository).save(user);
+            verify(loginAttemptService, never()).recordFailure(any());
+            var row = onlyAuditRow();
+            assertThat(row.getStatus()).isEqualTo(com.example.hms.enums.AuditStatus.SUCCESS);
+            assertThat(row.getUserId()).isEqualTo(userId);
+            assertThat(row.getDetails()).isNull();
+            assertThat(row.getEventDescription())
+                    .doesNotContain("new@example.com").doesNotContain("test@example.com");
+        }
+
+        @Test
+        @DisplayName("an address another account holds in any letter case: refused without naming it")
+        void takenAddressIsRefused() {
+            when(passwordEncoder.matches("Right-Pass-1", HASH)).thenReturn(true);
+            when(userRepository.existsEmailOnOtherAccount("SuperAdmin@Example.com", userId)).thenReturn(true);
+
+            assertThatThrownBy(() -> userService.changeOwnEmail(userId, "Right-Pass-1", "SuperAdmin@Example.com"))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("user.update.email.taken"));
+            assertThat(user.getEmail()).isEqualTo("test@example.com");
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("the unchanged address, or a blank one, is refused")
+        void sameOrBlankAddressIsRefused() {
+            when(passwordEncoder.matches("Right-Pass-1", HASH)).thenReturn(true);
+
+            assertThatThrownBy(() -> userService.changeOwnEmail(userId, "Right-Pass-1", "test@example.com"))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("user.email.change.same"));
+            assertThatThrownBy(() -> userService.changeOwnEmail(userId, "Right-Pass-1", "  "))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("user.update.email.invalid"));
+            verify(userRepository, never()).save(any());
         }
     }
 }

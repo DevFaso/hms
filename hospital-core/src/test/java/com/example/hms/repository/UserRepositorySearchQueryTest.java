@@ -54,4 +54,23 @@ class UserRepositorySearchQueryTest {
                 .as("searchUsers count query must cast :role to string")
                 .contains("cast(:role AS string)");
     }
+
+    @Test
+    void hospitalScopedSearchCastsParametersAndScopesBothQueries() throws NoSuchMethodException {
+        Method scoped = UserRepository.class.getDeclaredMethod(
+                "searchUsersInHospitals", java.util.Collection.class, String.class, String.class,
+                String.class, Pageable.class);
+        Query query = scoped.getAnnotation(Query.class);
+
+        assertThat(query).as("@Query annotation must be present on searchUsersInHospitals").isNotNull();
+        for (String jpql : new String[] {query.value(), query.countQuery()}) {
+            assertThat(jpql)
+                    .contains("cast(:name AS string)")
+                    .contains("cast(:email AS string)")
+                    .contains("cast(:role AS string)")
+                    // The count must carry the scope too, or the page total counts every tenant.
+                    .contains("IN :hospitalIds")
+                    .contains("u.isDeleted = false");
+        }
+    }
 }

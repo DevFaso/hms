@@ -8,6 +8,7 @@ import {
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
+import { Observable, of, switchMap, tap } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
 
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
@@ -68,6 +69,14 @@ export class ProfileComponent implements OnInit {
   /* ── Edit form model ── */
   editForm = signal<ProfileUpdateRequest>({});
   formDirty = signal(false);
+  /** The current password, asked for only when the email is being changed. */
+  emailChangePassword = signal('');
+
+  /** True when the form's email differs from the one on the account. */
+  emailChanged = computed(() => {
+    const u = this.user();
+    return !!u && (this.editForm().email ?? '').trim() !== (u.email ?? '');
+  });
 
   /* ── Computed ── */
   userInitials = computed(() => {
@@ -549,6 +558,7 @@ export class ProfileComponent implements OnInit {
       phoneNumber: profile.phoneNumber ?? '',
       username: profile.username ?? '',
     });
+    this.emailChangePassword.set('');
     this.formDirty.set(false);
   }
 
@@ -567,36 +577,68 @@ export class ProfileComponent implements OnInit {
     this.activeTab.set('overview');
   }
 
+  /**
+   * Saves the profile. A changed email goes first, through its own endpoint
+   * with the current password (the profile PUT refuses an email change); the
+   * PUT then carries the names and phone with the email the account now has.
+   * A wrong password therefore saves nothing, and once the email step has
+   * succeeded the page already shows the new address, so a retry after a
+   * failed PUT does not repeat it.
+   */
   saveProfile(): void {
     const u = this.user();
     if (!u || this.saving()) return;
 
-    this.saving.set(true);
     const data = this.editForm();
+    const newEmail = (data.email ?? '').trim();
+    const emailChanged = this.emailChanged();
+    if (emailChanged && !this.emailChangePassword()) {
+      this.toast.error(this.translate.instant('PROFILE.EMAIL_CHANGE_PASSWORD_REQUIRED'));
+      return;
+    }
 
-    this.profileService.updateProfile(u.id, data).subscribe({
-      next: (updated) => {
-        this.user.set(updated);
-        this.resetEditForm(updated);
-        this.saving.set(false);
-        this.toast.success(this.translate.instant('PROFILE.UPDATED'));
+    this.saving.set(true);
+    const emailStep: Observable<unknown> = emailChanged
+      ? this.profileService.changeOwnEmail(this.emailChangePassword(), newEmail).pipe(
+          tap(() => {
+            this.emailChangePassword.set('');
+            this.user.set({ ...u, email: newEmail });
+          }),
+        )
+      : of(null);
 
-        // Update stored login profile
-        const stored = this.auth.getUserProfile();
-        if (stored) {
-          stored.firstName = updated.firstName;
-          stored.lastName = updated.lastName;
-          stored.email = updated.email;
-          stored.phoneNumber = updated.phoneNumber;
-          stored.profileImageUrl = updated.profileImageUrl;
-          this.auth.setUserProfile(stored);
-        }
-      },
-      error: (err) => {
-        this.saving.set(false);
-        this.toast.error(err?.error?.message ?? this.translate.instant('PROFILE.UPDATE_FAILED'));
-      },
-    });
+    emailStep
+      .pipe(
+        switchMap(() =>
+          this.profileService.updateProfile(u.id, {
+            ...data,
+            email: emailChanged ? newEmail : u.email,
+          }),
+        ),
+      )
+      .subscribe({
+        next: (updated) => {
+          this.user.set(updated);
+          this.resetEditForm(updated);
+          this.saving.set(false);
+          this.toast.success(this.translate.instant('PROFILE.UPDATED'));
+
+          // Update stored login profile
+          const stored = this.auth.getUserProfile();
+          if (stored) {
+            stored.firstName = updated.firstName;
+            stored.lastName = updated.lastName;
+            stored.email = updated.email;
+            stored.phoneNumber = updated.phoneNumber;
+            stored.profileImageUrl = updated.profileImageUrl;
+            this.auth.setUserProfile(stored);
+          }
+        },
+        error: (err) => {
+          this.saving.set(false);
+          this.toast.error(err?.error?.message ?? this.translate.instant('PROFILE.UPDATE_FAILED'));
+        },
+      });
   }
 
   /* ── Avatar ── */

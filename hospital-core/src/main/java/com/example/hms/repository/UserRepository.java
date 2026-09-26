@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -187,6 +188,111 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                             Pageable pageable);
 
   List<User> findByIsDeletedFalse();
+
+    /* ---------- The directory, scoped to the caller's hospitals ---------- */
+
+    /*
+     * The non-super-admin directory (UserAccountAccess.requireDirectoryAccess):
+     * live accounts holding an assignment, in any role and active or not, at
+     * one of the caller's hospitals. The scope is IN the query, so the page
+     * and its total count only ever see those rows; filtering a global page
+     * in memory would load other tenants' accounts and break the paging.
+     * EXISTS, not a join, so an account assigned twice at the caller's
+     * hospitals is one row. Callers never pass an empty set (an empty scope
+     * answers an empty page without querying). The deleted view is the
+     * super-admin's only, so these queries have no deleted flags at all.
+     */
+    @Query(value = """
+        SELECT u FROM User u
+        WHERE u.isDeleted = false
+          AND EXISTS (
+              SELECT 1 FROM UserRoleHospitalAssignment ha
+              WHERE ha.user = u
+                AND ha.hospital.id IN :hospitalIds
+          )
+        """,
+        countQuery = """
+        SELECT COUNT(u) FROM User u
+        WHERE u.isDeleted = false
+          AND EXISTS (
+              SELECT 1 FROM UserRoleHospitalAssignment ha
+              WHERE ha.user = u
+                AND ha.hospital.id IN :hospitalIds
+          )
+        """)
+    Page<User> findAllPagedInHospitals(@Param("hospitalIds") Collection<UUID> hospitalIds,
+                                       Pageable pageable);
+
+    /** {@link #searchUsers}'s filters, over {@link #findAllPagedInHospitals}'s scope. */
+    @Query(value = """
+        SELECT u FROM User u
+        WHERE u.isDeleted = false
+          AND EXISTS (
+              SELECT 1 FROM UserRoleHospitalAssignment ha
+              WHERE ha.user = u
+                AND ha.hospital.id IN :hospitalIds
+          )
+          AND ( :name IS NULL
+                OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
+                OR LOWER(COALESCE(u.lastName,  '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
+                OR LOWER(u.username)               LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
+              )
+          AND ( :email IS NULL
+                OR LOWER(u.email) LIKE LOWER(CONCAT('%', cast(:email AS string), '%'))
+              )
+          AND ( :role IS NULL
+                OR EXISTS (
+                    SELECT 1 FROM UserRoleHospitalAssignment a
+                    JOIN a.role r
+                    WHERE a.user = u
+                      AND a.active = true
+                      AND (LOWER(r.code) = LOWER(cast(:role AS string)) OR LOWER(r.name) = LOWER(cast(:role AS string)))
+                )
+                OR EXISTS (
+                    SELECT 1 FROM UserRole ur
+                    JOIN ur.role r2
+                    WHERE ur.id.userId = u.id
+                      AND (LOWER(r2.code) = LOWER(cast(:role AS string)) OR LOWER(r2.name) = LOWER(cast(:role AS string)))
+                )
+              )
+        """,
+        countQuery = """
+        SELECT COUNT(u) FROM User u
+        WHERE u.isDeleted = false
+          AND EXISTS (
+              SELECT 1 FROM UserRoleHospitalAssignment ha
+              WHERE ha.user = u
+                AND ha.hospital.id IN :hospitalIds
+          )
+          AND ( :name IS NULL
+                OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
+                OR LOWER(COALESCE(u.lastName,  '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
+                OR LOWER(u.username)               LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
+              )
+          AND ( :email IS NULL
+                OR LOWER(u.email) LIKE LOWER(CONCAT('%', cast(:email AS string), '%'))
+              )
+          AND ( :role IS NULL
+                OR EXISTS (
+                    SELECT 1 FROM UserRoleHospitalAssignment a
+                    JOIN a.role r
+                    WHERE a.user = u
+                      AND a.active = true
+                      AND (LOWER(r.code) = LOWER(cast(:role AS string)) OR LOWER(r.name) = LOWER(cast(:role AS string)))
+                )
+                OR EXISTS (
+                    SELECT 1 FROM UserRole ur
+                    JOIN ur.role r2
+                    WHERE ur.id.userId = u.id
+                      AND (LOWER(r2.code) = LOWER(cast(:role AS string)) OR LOWER(r2.name) = LOWER(cast(:role AS string)))
+                )
+              )
+        """)
+    Page<User> searchUsersInHospitals(@Param("hospitalIds") Collection<UUID> hospitalIds,
+                                      @Param("name") String name,
+                                      @Param("role") String role,
+                                      @Param("email") String email,
+                                      Pageable pageable);
 
     /* ---------- Data-quality helpers ---------- */
 

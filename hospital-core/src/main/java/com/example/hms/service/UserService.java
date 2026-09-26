@@ -66,4 +66,15 @@ public interface UserService {
      * @param newUsername  the desired new username (must be unique, already validated by caller)
      */
     void changeOwnUsername(UUID userId, String newUsername);
+
+    /**
+     * Change a user's own email address (self-service). Requires the current
+     * password, since the email is where a password reset is sent.
+     *
+     * @param userId          the account holder
+     * @param currentPassword the account's current password
+     * @param newEmail        the new address; must differ from the current one
+     *                        and be free on every other account in any letter case
+     */
+    void changeOwnEmail(UUID userId, String currentPassword, String newEmail);
 }
