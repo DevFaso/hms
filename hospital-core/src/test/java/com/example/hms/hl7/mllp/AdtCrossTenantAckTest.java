@@ -285,6 +285,7 @@ class AdtCrossTenantAckTest {
         String ack = dispatcher.dispatch(a40(LOCAL_MRN, LOCAL_MRN + "-2"), "10.0.0.1:1");
 
         assertThat(msa(ack)).isEqualTo("MSA|AA|CTRL-SAME");
-        verify(empiService).mergePatients(eq(localPatientId), eq(secondLocalId), any(), any());
+        verify(empiService).mergePatientsAtAuthorisedHospital(
+            eq(hospital.getId()), eq(localPatientId), eq(secondLocalId), any(), any());
     }
 }

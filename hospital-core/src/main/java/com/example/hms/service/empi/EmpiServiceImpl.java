@@ -279,9 +279,20 @@ public class EmpiServiceImpl implements EmpiService {
         // partial permission; the HL7 A40 rule, #738). Both lookups run before
         // either is judged, so owning one side costs what owning neither does.
         // An unverified null scope sees nothing, so it lands here too. ──
-        Optional<EmpiMasterIdentity> primaryLookup = findVisibleIdentity(primaryIdentityId, scope);
-        Optional<EmpiMasterIdentity> secondaryLookup =
-            findVisibleIdentity(request.getSecondaryIdentityId(), scope);
+        return mergeVisibleIdentities(
+            findVisibleIdentity(primaryIdentityId, scope),
+            findVisibleIdentity(request.getSecondaryIdentityId(), scope),
+            request);
+    }
+
+    /**
+     * The merge proper, given both sides already filtered through the caller's
+     * {@link CallerScope}: an empty side is one the caller may not see, or one
+     * that does not exist, and the two answer identically.
+     */
+    private EmpiMergeEventResponseDTO mergeVisibleIdentities(Optional<EmpiMasterIdentity> primaryLookup,
+                                                             Optional<EmpiMasterIdentity> secondaryLookup,
+                                                             EmpiMergeRequestDTO request) {
         if (primaryLookup.isEmpty() || secondaryLookup.isEmpty()) {
             throw new ResourceNotFoundException(MSG_MERGE_IDENTITY_NOT_FOUND);
         }
@@ -329,17 +340,52 @@ public class EmpiServiceImpl implements EmpiService {
     @Transactional
     public EmpiMergeEventResponseDTO mergePatients(UUID primaryPatientId, UUID secondaryPatientId,
                                                    com.example.hms.enums.empi.EmpiMergeType mergeType, String notes) {
+        requireTwoDistinctPatients(primaryPatientId, secondaryPatientId);
+        return mergePatientsInScope(primaryPatientId, secondaryPatientId, mergeType, notes, callerScope());
+    }
+
+    /**
+     * See {@link EmpiService#mergePatientsAtAuthorisedHospital}: the inbound
+     * HL7 A40 path, which has no request context to resolve a scope from and
+     * has already settled which hospital it acts at.
+     *
+     * <p>The scope built here is the one a caller PINNED to that hospital gets
+     * — never {@code verifiedGlobalView} — so every rule below still applies:
+     * both patients registered there, both identities stamped with it.
+     */
+    @Override
+    @Transactional
+    public EmpiMergeEventResponseDTO mergePatientsAtAuthorisedHospital(UUID actingHospitalId,
+                                                                       UUID primaryPatientId, UUID secondaryPatientId,
+                                                                       com.example.hms.enums.empi.EmpiMergeType mergeType,
+                                                                       String notes) {
+        if (actingHospitalId == null) {
+            // A programming error, not a refusal: a null here would otherwise
+            // read as "no scope", which sees nothing, and fail as a not-found
+            // that hides the bug.
+            throw new IllegalArgumentException("actingHospitalId is required");
+        }
+        requireTwoDistinctPatients(primaryPatientId, secondaryPatientId);
+        return mergePatientsInScope(primaryPatientId, secondaryPatientId, mergeType, notes,
+            new CallerScope(actingHospitalId, false));
+    }
+
+    private static void requireTwoDistinctPatients(UUID primaryPatientId, UUID secondaryPatientId) {
         if (primaryPatientId == null || secondaryPatientId == null) {
             throw new BusinessException(MessageUtil.resolve(MSG_LINK_MISSING_PATIENT));
         }
         if (primaryPatientId.equals(secondaryPatientId)) {
             throw new BusinessException(MessageUtil.resolve(MSG_MERGE_SAME_PATIENT));
         }
+    }
+
+    private EmpiMergeEventResponseDTO mergePatientsInScope(UUID primaryPatientId, UUID secondaryPatientId,
+                                                           com.example.hms.enums.empi.EmpiMergeType mergeType,
+                                                           String notes, CallerScope scope) {
         // ── Tenant isolation BEFORE provisioning: ensureIdentityForPatient
         // creates a master identity (and emits IDENTITY_LINKED) for any patient
         // that lacks one. Deferring the check to mergeIdentities would leave that
         // write already done against another tenant's patient. ──
-        CallerScope scope = callerScope();
         requirePatientInTenant(primaryPatientId, scope);
         requirePatientInTenant(secondaryPatientId, scope);
 
@@ -350,7 +396,18 @@ public class EmpiServiceImpl implements EmpiService {
         request.setSecondaryIdentityId(secondary.getId());
         request.setMergeType(mergeType != null ? mergeType : com.example.hms.enums.empi.EmpiMergeType.MANUAL);
         request.setNotes(notes);
-        return mergeIdentities(primary.getId(), request, scope);
+        // The identities just loaded by patient id, judged by the same scope,
+        // rather than read again by identity id. A re-read goes through
+        // TenantAwareJpaRepository.findById, whose TenantScopeSpecification
+        // answers empty on a thread with no HospitalContext — so on the MLLP
+        // worker every merge would fail as identity-not-found. The rule this
+        // merge is held to is CallerScope.sees (stamped with THE one hospital
+        // the scope names, or a verified global view), which is narrower than
+        // the specification's any-permitted-hospital-or-organisation filter.
+        return mergeVisibleIdentities(
+            Optional.of(primary).filter(scope::sees),
+            Optional.of(secondary).filter(scope::sees),
+            request);
     }
 
     /**

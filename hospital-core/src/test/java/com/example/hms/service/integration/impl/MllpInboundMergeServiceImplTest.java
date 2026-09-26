@@ -38,12 +38,17 @@ import static org.mockito.Mockito.when;
 /**
  * Inbound {@code ADT^A40} patient merge (Tier 2 item 41).
  *
- * <p><b>The cross-tenant tests are the point of this class.</b> Every tenant
- * guard inside {@code EmpiServiceImpl} resolves the caller's hospital from the
- * security context, and {@code isVisibleToCaller} reads a null active hospital
- * as "unscoped, allow". There is no security context on an MLLP worker thread,
- * so those guards pass unconditionally on this path — the gate has to live
- * here, and these pin that it does.
+ * <p><b>The cross-tenant tests are the point of this class.</b> EMPI's
+ * request-scoped merge resolves the caller's hospital from the security
+ * context, and there is none on an MLLP worker thread, so nothing EMPI could
+ * read there says which patients a sender may merge. The gate lives here;
+ * these pin that it does, and that the merge it lets through is handed the
+ * receiving hospital explicitly ({@code mergePatientsAtAuthorisedHospital})
+ * rather than sent to the request-scoped {@code mergePatients}.
+ *
+ * <p>EMPI is mocked here, so none of this proves the merge actually applies
+ * on a context-free thread; {@code AdtA40MergeEndToEndIT} runs the real chain
+ * for that.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -114,8 +119,11 @@ class MllpInboundMergeServiceImplTest {
         assertThat(process()).isEqualTo(MllpInboundOutcome.ACCEPTED);
 
         // Argument ORDER is the whole risk: primary (survivor) first.
-        verify(empiService).mergePatients(
-            eq(survivingPatientId), eq(retiringPatientId), any(), anyString());
+        verify(empiService).mergePatientsAtAuthorisedHospital(
+            eq(hospitalId), eq(survivingPatientId), eq(retiringPatientId), any(), anyString());
+        // Never the request-scoped entry point: it has no scope to resolve on
+        // this thread and refuses every merge.
+        verify(empiService, never()).mergePatients(any(), any(), any(), any());
     }
 
     @Test
@@ -128,7 +136,7 @@ class MllpInboundMergeServiceImplTest {
         process();
 
         ArgumentCaptor<EmpiMergeType> type = ArgumentCaptor.forClass(EmpiMergeType.class);
-        verify(empiService).mergePatients(any(), any(), type.capture(), anyString());
+        verify(empiService).mergePatientsAtAuthorisedHospital(any(), any(), any(), type.capture(), anyString());
         // No human made this call and the merge event must not read as
         // though one did — mergedBy is null on this path.
         assertThat(type.getValue()).isEqualTo(EmpiMergeType.AUTOMATED);
@@ -144,7 +152,7 @@ class MllpInboundMergeServiceImplTest {
         process();
 
         ArgumentCaptor<String> notes = ArgumentCaptor.forClass(String.class);
-        verify(empiService).mergePatients(any(), any(), any(), notes.capture());
+        verify(empiService).mergePatientsAtAuthorisedHospital(any(), any(), any(), any(), notes.capture());
         // mergedBy is null on an MLLP thread, so this note is the merge row's
         // only provenance.
         assertThat(notes.getValue())
@@ -168,7 +176,7 @@ class MllpInboundMergeServiceImplTest {
         // sender could otherwise pair its own local MRN with any candidate
         // identifier and read off whether that candidate exists elsewhere.
         assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
-        verify(empiService, never()).mergePatients(any(), any(), any(), anyString());
+        verify(empiService, never()).mergePatientsAtAuthorisedHospital(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -181,7 +189,7 @@ class MllpInboundMergeServiceImplTest {
         registeredHere(retiringPatientId, false);
 
         assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
-        verify(empiService, never()).mergePatients(any(), any(), any(), anyString());
+        verify(empiService, never()).mergePatientsAtAuthorisedHospital(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -244,7 +252,7 @@ class MllpInboundMergeServiceImplTest {
         empiDoesNotKnow(PRIOR_MRN);
 
         assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
-        verify(empiService, never()).mergePatients(any(), any(), any(), anyString());
+        verify(empiService, never()).mergePatientsAtAuthorisedHospital(any(), any(), any(), any(), any());
         // Not even the tenant check ran — nothing to check.
         verifyNoInteractions(registrationRepository);
     }
@@ -255,7 +263,7 @@ class MllpInboundMergeServiceImplTest {
         empiKnows(PRIOR_MRN, retiringPatientId);
 
         assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
-        verify(empiService, never()).mergePatients(any(), any(), any(), anyString());
+        verify(empiService, never()).mergePatientsAtAuthorisedHospital(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -295,7 +303,7 @@ class MllpInboundMergeServiceImplTest {
         registeredHere(survivingPatientId, true);
 
         assertThat(process()).isEqualTo(MllpInboundOutcome.ACCEPTED);
-        verify(empiService, never()).mergePatients(any(), any(), any(), anyString());
+        verify(empiService, never()).mergePatientsAtAuthorisedHospital(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -310,7 +318,7 @@ class MllpInboundMergeServiceImplTest {
         registeredHere(survivingPatientId, false);
 
         assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
-        verify(empiService, never()).mergePatients(any(), any(), any(), anyString());
+        verify(empiService, never()).mergePatientsAtAuthorisedHospital(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -319,7 +327,7 @@ class MllpInboundMergeServiceImplTest {
         empiKnows(PRIOR_MRN, retiringPatientId);
         registeredHere(survivingPatientId, true);
         registeredHere(retiringPatientId, true);
-        when(empiService.mergePatients(any(), any(), any(), anyString()))
+        when(empiService.mergePatientsAtAuthorisedHospital(any(), any(), any(), any(), anyString()))
             .thenThrow(new BusinessException("already merged"));
 
         // The sender's request was not applied; their queue should say so.

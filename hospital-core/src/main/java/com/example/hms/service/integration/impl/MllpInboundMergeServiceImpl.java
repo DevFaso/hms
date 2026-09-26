@@ -19,15 +19,18 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.NoTransactionException;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.util.StringUtils;
 
 /**
  * Inbound {@code ADT^A40} patient merge (Tier 2 item 41).
  *
  * <p>See {@link MllpInboundMergeService} for why this enforces the tenant
- * boundary itself instead of trusting {@code EmpiServiceImpl}'s guards, which
- * are no-ops on a thread with no security context.
+ * boundary itself and then hands EMPI the receiving hospital explicitly,
+ * instead of relying on {@code EmpiServiceImpl}'s request-scoped guards, which
+ * have no security context to read on an MLLP worker thread.
  */
 @Slf4j
 @Service
@@ -110,11 +113,12 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
         // THE GATE — and it runs BEFORE any other answer that depends on what
         // these two identifiers are to each other.
         //
-        // EmpiServiceImpl's own tenant checks resolve the caller's hospital
-        // from the security context, and there is none on this thread, so they
-        // cannot be what decides which patients a sender may merge.
-        // Without this, an allowlisted sender could merge any two patients in
-        // the system. BOTH sides, not just one: merging a stranger's record
+        // EmpiServiceImpl's request-scoped checks resolve the caller's hospital
+        // from the security context, and there is none on this thread. The
+        // merge below is handed this hospital explicitly and EMPI re-applies
+        // its own rules at it, but it is THIS gate that decides which answer a
+        // sender may see, and it has to run before anything else answers.
+        // BOTH sides, not just one: merging a stranger's record
         // INTO a local patient is as damaging as the reverse, and only
         // checking the survivor would permit it.
         //
@@ -178,7 +182,12 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
         }
 
         try {
-            empiService.mergePatients(
+            // The receiving hospital, handed over explicitly: this thread has no
+            // request context for EMPI to resolve one from, and mergePatients
+            // refuses every merge without one. The allowlist established this
+            // hospital and the gate above authorised both patients at it.
+            empiService.mergePatientsAtAuthorisedHospital(
+                hospitalId,
                 survivingPatientId, retiringPatientId,
                 // AUTOMATED, not MANUAL: no human made this call, and the
                 // merge event should not read as though one did.
@@ -189,6 +198,13 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // Already merged, or a domain rule the merge service owns. AE
             // rather than AA: the sender's request was not applied and their
             // queue should say so.
+            //
+            // The merge joined this transaction, so its exception has already
+            // marked it rollback-only; left alone, the commit on the way out
+            // would throw UnexpectedRollbackException and the sender would get
+            // the server-error AE instead of this one. Rolling back on purpose
+            // turns that into a silent rollback of everything this message did.
+            rollBackThisMessage();
             // This refusal writes no integration_message_event row, so MSH-10
             // in the log is the only way to correlate it with the sender's
             // queue. It is not the only one: the missing PID-3/MRG-1,
@@ -251,6 +267,22 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
         } catch (RuntimeException ex) {
             log.warn("MLLP A40 message recorder threw for sender={}/{} reason={}",
                 sendingApplication, sendingFacility, reason, ex);
+        }
+    }
+
+    /**
+     * Mark this message's transaction for rollback, as this method's own
+     * decision rather than a participant's failure: Spring then rolls it back
+     * quietly at the end of {@code processMerge} instead of throwing on the
+     * commit, so the refusal's ACK is the one the sender receives.
+     */
+    private static void rollBackThisMessage() {
+        try {
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+        } catch (NoTransactionException notInOne) {
+            // Called without processMerge's transactional proxy (a unit test
+            // constructing this class directly): there is nothing to roll back.
+            log.debug("MLLP A40 refusal outside a transaction — nothing to roll back");
         }
     }
 

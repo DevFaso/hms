@@ -1074,6 +1074,110 @@ class EmpiServiceImplTest {
             .containsExactly("IDENTITY_LINKED", "IDENTITIES_MERGED");
     }
 
+    /* ── mergePatientsAtAuthorisedHospital: the MLLP A40 entry point ───────
+       No request context on the thread, the hospital handed over explicitly,
+       and every other rule exactly as for a caller pinned to that hospital. */
+
+    @Test
+    void mergePatientsAtAuthorisedHospital_mergesOnAThreadWithNoContextAndSendsOnlyAfterCommit() {
+        UUID actingHospital = UUID.randomUUID();
+        UUID[] patients = kafkaMergeFixture(actingHospital, actingHospital);
+        // The MLLP worker: no HospitalContext, and nothing for RoleValidator to find.
+        HospitalContextHolder.clear();
+
+        EmpiMergeEventResponseDTO[] merged = new EmpiMergeEventResponseDTO[1];
+        transaction.executeWithoutResult(status -> {
+            merged[0] = empiService.mergePatientsAtAuthorisedHospital(
+                actingHospital, patients[0], patients[1], EmpiMergeType.AUTOMATED, "HL7 ADT^A40");
+            Mockito.verify(kafkaTemplate, Mockito.never())
+                .send(anyString(), anyString(), any(EmpiEventPayload.class));
+        });
+
+        assertThat(merged[0]).isNotNull();
+        ArgumentCaptor<EmpiMergeEvent> event = ArgumentCaptor.forClass(EmpiMergeEvent.class);
+        Mockito.verify(mergeEventRepository).save(event.capture());
+        assertThat(event.getValue().getHospitalId()).isEqualTo(actingHospital);
+        assertThat(event.getValue().getMergeType()).isEqualTo(EmpiMergeType.AUTOMATED);
+        assertThat(event.getValue().getMergedBy()).isNull();
+        ArgumentCaptor<EmpiEventPayload> sent = ArgumentCaptor.forClass(EmpiEventPayload.class);
+        Mockito.verify(kafkaTemplate, Mockito.times(2)).send(eq(EMPI_TOPIC), anyString(), sent.capture());
+        assertThat(sent.getAllValues()).extracting(EmpiEventPayload::getEventType)
+            .containsExactly("IDENTITY_LINKED", "IDENTITIES_MERGED");
+        // The scope is the one handed over, never one resolved from a request.
+        Mockito.verify(roleValidator, Mockito.never()).requireActiveHospitalId();
+        Mockito.verify(roleValidator, Mockito.never()).isSuperAdminFromJwtClaim();
+        // Judged on the identities it loaded by patient id: the tenant-aware
+        // findById answers empty on a thread with no HospitalContext.
+        Mockito.verify(masterIdentityRepository, Mockito.never()).findById(any());
+    }
+
+    @Test
+    void mergePatientsAtAuthorisedHospital_refusesAPatientNotRegisteredThereBeforeProvisioning() {
+        UUID registeredAt = UUID.randomUUID();
+        UUID[] patients = kafkaMergeFixture(registeredAt, registeredAt);
+        HospitalContextHolder.clear();
+        UUID actingHospital = UUID.randomUUID();
+
+        Throwable refused = catchThrowable(() -> empiService.mergePatientsAtAuthorisedHospital(
+            actingHospital, patients[0], patients[1], EmpiMergeType.AUTOMATED, null));
+
+        assertThat(refused).isExactlyInstanceOf(AccessDeniedException.class);
+        Mockito.verify(patientRepository, Mockito.never()).findByIdUnscoped(any());
+        Mockito.verify(mergeEventRepository, Mockito.never()).save(any());
+    }
+
+    @Test
+    void mergePatientsAtAuthorisedHospital_refusesAnIdentityStampedElsewhereAndSendsNothing() {
+        // Registered at the acting hospital, but the primary's identity belongs
+        // to another: the pinned caller's rule, not a global view.
+        UUID actingHospital = UUID.randomUUID();
+        UUID[] patients = kafkaMergeFixture(actingHospital, UUID.randomUUID());
+        HospitalContextHolder.clear();
+
+        Throwable refused = catchThrowable(() -> transaction.executeWithoutResult(status ->
+            empiService.mergePatientsAtAuthorisedHospital(
+                actingHospital, patients[0], patients[1], EmpiMergeType.AUTOMATED, null)));
+
+        assertThat(refused).isExactlyInstanceOf(ResourceNotFoundException.class);
+        Mockito.verify(mergeEventRepository, Mockito.never()).save(any());
+        Mockito.verify(kafkaTemplate, Mockito.never()).send(anyString(), anyString(), any(EmpiEventPayload.class));
+    }
+
+    @Test
+    void mergePatientsAtAuthorisedHospital_requiresTheHospital() {
+        UUID primary = UUID.randomUUID();
+        UUID secondary = UUID.randomUUID();
+
+        assertThatThrownBy(() -> empiService.mergePatientsAtAuthorisedHospital(
+            null, primary, secondary, EmpiMergeType.AUTOMATED, null))
+            .isExactlyInstanceOf(IllegalArgumentException.class);
+        Mockito.verifyNoInteractions(registrationRepository, masterIdentityRepository, mergeEventRepository);
+    }
+
+    @Test
+    void mergePatientsAtAuthorisedHospital_isCalledOnlyByTheInboundA40Path() throws java.io.IOException {
+        // It trusts its caller's claim to act at a hospital. A REST controller
+        // passing a request-supplied id here would bypass the verified scope
+        // mergePatients resolves, so any new caller has to be a decision.
+        java.nio.file.Path main = java.nio.file.Paths.get("src/main/java");
+        List<String> callers;
+        try (java.util.stream.Stream<java.nio.file.Path> files = java.nio.file.Files.walk(main)) {
+            callers = files
+                .filter(file -> file.toString().endsWith(".java"))
+                .filter(file -> {
+                    try {
+                        return java.nio.file.Files.readString(file)
+                            .contains(".mergePatientsAtAuthorisedHospital(");
+                    } catch (java.io.IOException ex) {
+                        throw new java.io.UncheckedIOException(ex);
+                    }
+                })
+                .map(file -> file.getFileName().toString())
+                .toList();
+        }
+        assertThat(callers).containsExactly("MllpInboundMergeServiceImpl.java");
+    }
+
     /**
      * The shared stub answers every message with its bare key and drops the
      * arguments, which would make a refusal that names the failing id look

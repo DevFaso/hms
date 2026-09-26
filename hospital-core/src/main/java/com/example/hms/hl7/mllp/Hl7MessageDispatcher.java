@@ -47,10 +47,11 @@ import java.util.UUID;
  *   <li>{@code ADT^A40} — patient merge (Tier 2 item 41). Parsed via
  *       {@link Hl7v2MessageBuilder#parseAdtA40} (PID-3 survives, MRG-1 is
  *       retired) and applied through {@link MllpInboundMergeService}, which
- *       enforces its own cross-tenant gate because the EMPI merge service's
- *       guards read the caller's hospital from a security context this
- *       thread does not have. Never auto-creates: both identifiers must
- *       already be known to EMPI.</li>
+ *       enforces its own cross-tenant gate and then hands EMPI the receiving
+ *       hospital explicitly, because the EMPI merge service otherwise reads
+ *       the caller's hospital from a security context this thread does not
+ *       have. Never auto-creates: both identifiers must already be known to
+ *       EMPI.</li>
  *   <li>Anything else — AR (Application Reject).</li>
  * </ul>
  *
