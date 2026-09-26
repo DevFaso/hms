@@ -576,8 +576,10 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST)
 
                 // Allow all clinical staff to register users via admin-register
+                // The same list as UserController's two @PreAuthorize annotations;
+                // what each registrar may GRANT is UserAccountAccess.requireMayGrant.
                 .requestMatchers(HttpMethod.POST, "/users/admin-register")
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+                .hasAnyAuthority(SecurityConstants.authorities(SecurityConstants.USER_REGISTRAR_AUTHORITIES))
 
                 // -------------------- Hospitals (tenant-safe) --------------------
                 // /me/hospital and /me/hospitals return only the caller's assigned hospital(s).

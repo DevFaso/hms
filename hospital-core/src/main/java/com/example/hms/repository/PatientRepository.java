@@ -112,6 +112,14 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     boolean existsByIdAndUserId(UUID id, UUID userId);
 
     /**
+     * Does any patient row point at this user account? Same shape, and same
+     * reasons, as {@link #existsByIdAndUserId}: an authorisation check must not
+     * throw on duplicate rows nor decrypt a name to answer yes or no.
+     */
+    @Query("SELECT (COUNT(p) > 0) FROM Patient p WHERE p.user.id = :userId")
+    boolean existsByUserId(@Param("userId") UUID userId);
+
+    /**
      * Fetches a Patient by primary key WITHOUT tenant-scope filtering.
      * <p>
      * Since E9 #57 the tenant-scoped {@code findById} (via

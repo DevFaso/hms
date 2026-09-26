@@ -39,6 +39,9 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.service.support.UserAccountAccess;
+import com.example.hms.utility.MessageUtil;
+import org.springframework.security.access.AccessDeniedException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -99,6 +102,7 @@ public class UserServiceImpl implements UserService {
     private final StaffRepository staffRepository;
     private final PatientRepository patientRepository;
     private final PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
+    private final UserAccountAccess accountAccess;
 
     @Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -276,6 +280,16 @@ public class UserServiceImpl implements UserService {
                 .map(r -> r == null ? "" : r.trim().toUpperCase(Locale.ROOT))
                 .anyMatch(r -> r.equals("PATIENT") || r.equals(ROLE_PATIENT));
 
+        // ---- 0) Who may grant these roles, before anything about the request
+        // is looked up, so a refused caller learns nothing from a duplicate
+        // check either. The hospital half of the check is at step 1.
+        final UserAccountAccess.Grant grant;
+        try {
+            grant = accountAccess.requireMayGrant(roleNames);
+        } catch (AccessDeniedException denied) {
+            throw refusedGrant(roleNames, denied);
+        }
+
         // ---- 0a) Duplicate checks ----
         if (isPatient) {
             // Epic-style: patients can span multiple hospitals.
@@ -311,8 +325,13 @@ public class UserServiceImpl implements UserService {
             }
         }
 
-        // ---- 1) Resolve hospital for this registration ----
-        UUID staffContextHospitalId = resolveHospitalForRegistration(request, roleNames, isPatient);
+        // ---- 1) Resolve hospital for this registration, and hold the grant to it ----
+        final UUID staffContextHospitalId;
+        try {
+            staffContextHospitalId = grant.requireAt(resolveHospitalForRegistration(request, roleNames, isPatient));
+        } catch (AccessDeniedException denied) {
+            throw refusedGrant(roleNames, denied);
+        }
 
         // ---- 2) Resolve Roles ----
         final Set<Role> roles = roleNames.stream()
@@ -968,8 +987,10 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public UserResponseDTO getUserById(UUID id) {
+        // Refused exactly like a missing id: no existence oracle.
         User user = userRepository.findByIdWithRolesAndProfiles(id)
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + id));
+                .filter(accountAccess::canView)
+                .orElseThrow(() -> userNotFound(id));
         Set<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUser(user);
         return userMapper.toResponseDTO(user, assignments);
     }
@@ -978,6 +999,7 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public Page<UserSummaryDTO> getAllUsers(int page, int size, boolean includeDeleted,
                                             boolean onlyDeleted) {
+        accountAccess.requireDirectoryAccess();
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<User> users = userRepository.findAllPaged(includeDeleted, onlyDeleted, pageable);
         return users.map(userMapper::toSummaryDTO);
@@ -987,6 +1009,7 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public Page<UserSummaryDTO> searchUsers(String name, String role, String email, int page, int size,
                                             boolean includeDeleted, boolean onlyDeleted) {
+        accountAccess.requireDirectoryAccess();
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<User> users = userRepository.searchUsers(
             name, role, email, includeDeleted, onlyDeleted, pageable);
@@ -1001,8 +1024,15 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public void deleteUser(UUID id) {
+        // An administrator of the account, or a registrar discarding the
+        // unclaimed patient account its own failed registration just created
+        // (patient-form's compensation). Anyone else: the missing-user answer,
+        // and a FAILURE row.
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> userNotFound(id));
+        if (!accountAccess.canDelete(user)) {
+            throw refused(AuditEventType.USER_DELETE, "delete", id);
+        }
 
         user.setDeleted(true);
         user.setActive(false);
@@ -1026,8 +1056,15 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public void restoreUser(UUID id) {
+        // The same tenant rule as editing: a hospital admin restores only an
+        // account whose assignments are all at hospitals they administer. A
+        // soft delete hard-deletes the assignments, so in practice a restore
+        // is a super-admin action (the deleted view is super-admin-only too).
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> userNotFound(id));
+        if (!accountAccess.canAdminister(user)) {
+            throw refused(AuditEventType.USER_ENABLE, "restore", id);
+        }
 
         user.setDeleted(false);
         user.setActive(true);
@@ -1087,7 +1124,18 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponseDTO updateUser(UUID id, UpdateUserRequestDTO dto) {
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> userNotFound(id));
+
+        // Editing your own account is the profile page: contact fields only,
+        // whoever you are. Anyone else's account needs an administrator of it
+        // (UserAccountAccess.canAdminister) and is otherwise refused exactly
+        // like a missing id, with a FAILURE row.
+        if (accountAccess.isSelf(user)) {
+            requireSelfServiceChangesOnly(user, dto);
+        } else if (!accountAccess.canAdminister(user)) {
+            throw refused(AuditEventType.USER_UPDATE, "update", id);
+        }
+        requireIdentifiersFree(user, dto);
 
         // ── Merge-preserve: only overwrite fields that are explicitly provided ──
 
@@ -1127,22 +1175,15 @@ public class UserServiceImpl implements UserService {
         // since the throttle map lowercases while uq_user_username does not.
         // The stranded record is covered by the rename entry in tasklist.md.
         //
-        // Not claimed to be collision-proof. uq_user_username is case
-        // sensitive while the throttle map lowercases, and updateUser applies
-        // no uniqueness check at all, so a rename to a case variant of a live
-        // account is possible on an endpoint with no @PreAuthorize — and that
-        // clears the other account's counter. It also leaves two rows the
-        // case-insensitive findByUsername cannot resolve, which breaks login
-        // for both: the throttle is the smaller half of that bug. The
-        // uniqueness check and the missing guard are the fix; both are in
-        // tasklist.md.
+        // A rename cannot land on a case variant of another account:
+        // requireIdentifiersFree, above, refuses any username or email another
+        // account holds in any letter case, so the lowercased throttle key
+        // belongs to this account alone.
         //
         // The transition guard is about not clearing on an ordinary edit; it
-        // is NOT an authorization control. PUT /users/{id} has no
-        // @PreAuthorize, so a caller who wants to clear someone's throttle can
-        // send {active:false} then {active:true} — and that endpoint already
-        // lets them set the password outright. The gap is the missing guard,
-        // and the rename leak it leaves behind; both are in tasklist.md.
+        // is NOT an authorization control. Authorization is the caller check
+        // at the top of this method: only an administrator of the account
+        // reaches here with a status change, since a self-edit cannot make one.
         final String usernameAfterUpdate = user.getUsername();
         if (reactivated) {
             TransactionCallbacks.afterCommit(
@@ -1192,6 +1233,95 @@ public class UserServiceImpl implements UserService {
 
         Set<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUser(updated);
         return userMapper.toResponseDTO(updated, assignments);
+    }
+
+    /**
+     * The fields an account holder may change on their own account through
+     * {@code PUT /users/{id}}: names, email and phone. The rest have their own
+     * endpoints, which apply rules this one does not: the password needs the
+     * current one and the history check ({@code POST /auth/me/change-password}),
+     * the username the character and uniqueness rules
+     * ({@code POST /auth/me/change-username}), and nobody switches their own
+     * account on or off. Sending the current value back unchanged is not a
+     * change, so the profile form, which always sends the username, still works.
+     */
+    private static void requireSelfServiceChangesOnly(User user, UpdateUserRequestDTO dto) {
+        if (dto.getActive() != null && !dto.getActive().equals(user.isActive())) {
+            throw new BusinessException(MessageUtil.resolve("user.update.self.active"));
+        }
+        if (hasText(dto.getPassword())) {
+            throw new BusinessException(MessageUtil.resolve("user.update.self.password"));
+        }
+        if (hasText(dto.getUsername()) && !dto.getUsername().equals(user.getUsername())) {
+            throw new BusinessException(MessageUtil.resolve("user.update.self.username"));
+        }
+    }
+
+    /**
+     * A changed username or email must not be held by ANOTHER account in any
+     * letter case, deleted accounts included. uq_user_username is case
+     * sensitive but login resolves usernames case-insensitively, so renaming
+     * a nurse to a case variant of the super-admin's username would leave the
+     * super-admin's login unresolvable: a tenant admin locking out the
+     * platform admin. The same query shape as {@code changeOwnUsername}'s
+     * check, excluding the account itself; the message never names the other
+     * account.
+     */
+    private void requireIdentifiersFree(User user, UpdateUserRequestDTO dto) {
+        if (hasText(dto.getUsername()) && !dto.getUsername().equals(user.getUsername())
+                && userRepository.existsUsernameOnOtherAccount(dto.getUsername(), user.getId())) {
+            throw new BusinessException(MessageUtil.resolve("user.update.username.taken"));
+        }
+        if (hasText(dto.getEmail()) && !dto.getEmail().equals(user.getEmail())
+                && userRepository.existsEmailOnOtherAccount(dto.getEmail(), user.getId())) {
+            throw new BusinessException(MessageUtil.resolve("user.update.email.taken"));
+        }
+    }
+
+    /**
+     * A refused cross-account write: recorded as a FAILURE (actor id and
+     * target id only: no names, never the submitted values), then answered
+     * exactly like a missing account. The audit service writes in its own
+     * transaction, so the row survives this one's rollback.
+     */
+    private ResourceNotFoundException refused(AuditEventType type, String action, UUID targetId) {
+        auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .userId(accountAccess.currentUserId().orElse(null))
+                .eventType(type)
+                .eventDescription("User " + action + " refused: the caller may not administer this account")
+                .resourceId(targetId.toString())
+                .entityType("USER")
+                .status(AuditStatus.FAILURE)
+                .build());
+        return userNotFound(targetId);
+    }
+
+    /**
+     * A registration the caller may not grant, recorded: one FAILURE row with
+     * the actor id and the requested role codes only (no username, email,
+     * phone or password from the request). Returned for the caller to throw,
+     * a 403: unlike an id-based refusal this is not an existence question.
+     */
+    private AccessDeniedException refusedGrant(Set<String> roleNames, AccessDeniedException denied) {
+        List<String> requested = roleNames.stream()
+                .filter(Objects::nonNull)
+                .map(r -> r.trim().toUpperCase(Locale.ROOT))
+                .sorted()
+                .toList();
+        auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .userId(accountAccess.currentUserId().orElse(null))
+                .eventType(AuditEventType.USER_CREATE)
+                .eventDescription("User registration refused: the caller may not grant these roles")
+                .details(Map.of("requestedRoles", requested))
+                .entityType("USER")
+                .status(AuditStatus.FAILURE)
+                .build());
+        return denied;
+    }
+
+    /** The one answer for a missing account and for one the caller may not touch. */
+    private static ResourceNotFoundException userNotFound(UUID id) {
+        return new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + id);
     }
 
     /** True when the string is non-null and non-blank. */

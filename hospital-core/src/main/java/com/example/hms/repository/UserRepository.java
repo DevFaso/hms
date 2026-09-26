@@ -27,6 +27,18 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("select (count(u) > 0) from User u where lower(u.email) = lower(:email)")
     Boolean existsByEmail(@Param("email") String email);
 
+    /**
+     * Does ANOTHER account (deleted ones included) hold this username, ignoring
+     * case? Login resolves usernames case-insensitively while uq_user_username
+     * does not, so a case variant would make both accounts unresolvable.
+     */
+    @Query("select (count(u) > 0) from User u where lower(u.username) = lower(:username) and u.id <> :id")
+    boolean existsUsernameOnOtherAccount(@Param("username") String username, @Param("id") UUID id);
+
+    /** The same question for an email. */
+    @Query("select (count(u) > 0) from User u where lower(u.email) = lower(:email) and u.id <> :id")
+    boolean existsEmailOnOtherAccount(@Param("email") String email, @Param("id") UUID id);
+
     /* ---------- Simple finders ---------- */
     @Query("select u from User u where lower(u.email) = lower(:email)")
     Optional<User> findByEmail(@Param("email") String email);
