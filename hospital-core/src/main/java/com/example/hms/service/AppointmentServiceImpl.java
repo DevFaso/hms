@@ -66,12 +66,21 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Override
     @Transactional(readOnly = true)
     public List<AppointmentResponseDTO> getAppointmentsByPatientUsername(String patientUsername, Locale locale, String username) {
+        User currentUser = getUserOrThrow(username);
         User patientUser = userRepository.findByUsername(patientUsername)
             .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + patientUsername));
+        // A patient caller may name only themselves: another account answers
+        // as an unknown username does, before the patient lookup below, which
+        // would otherwise tell an account with a patient row from one without.
+        // Compared as user ids, not strings -- usernames resolve
+        // case-insensitively (lower(u.username) = lower(:username)).
+        if (subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.APPOINTMENT_READS)
+                && !patientUser.getId().equals(currentUser.getId())) {
+            throw new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + patientUsername);
+        }
         Patient patient = patientRepository.findByUserId(patientUser.getId())
             .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USERNAME_PREFIX + patientUsername));
 
-        User currentUser = getUserOrThrow(username);
         return getAppointmentsByPatientScoped(patient.getId(), currentUser);
     }
     private final EmailService emailService;
@@ -104,6 +113,14 @@ public class AppointmentServiceImpl implements AppointmentService {
      * browser) is never the one used for it.
      */
     private final com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
+    /**
+     * The three reads by id, patient id and patient username admit
+     * ROLE_PATIENT. Owning the record was one road in and hospital scope the
+     * other, and a patient holds a ROLE_PATIENT assignment at the hospitals
+     * that registered them — so hospital scope handed a patient every other
+     * patient's appointments there. A patient-only caller now reads their own.
+     */
+    private final PatientSubjectReadGuard subjectReadGuard;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -118,6 +135,8 @@ public class AppointmentServiceImpl implements AppointmentService {
     // existing USER_NOT_FOUND_PREFIX sibling above.
     private static final String PATIENT_NOT_FOUND_FOR_USERNAME_PREFIX = "Patient not found for username: ";
     private static final String APPOINTMENT_NOT_FOUND_MESSAGE = "Appointment not found";
+    /** What an unknown patient id answers on the by-patient read, and so what a refused one answers too. */
+    private static final String PATIENT_NOT_FOUND_MESSAGE = "Patient not found";
     private static final String ROLE_SUPER_ADMIN_CODE = "ROLE_SUPER_ADMIN";
     private static final String ROLE_ADMIN_CODE = "ROLE_ADMIN";
     private static final String ROLE_PATIENT_CODE = "ROLE_PATIENT";
@@ -791,6 +810,14 @@ public class AppointmentServiceImpl implements AppointmentService {
         Appointment appointment = appointmentRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_MESSAGE));
 
+        // A patient caller reads only their own: another patient's appointment
+        // answers exactly as a missing id does. Without this, the hospital
+        // scope below admitted any appointment at a hospital where the patient
+        // is registered.
+        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.APPOINTMENT_READS, appointment.getPatient())) {
+            throw new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_MESSAGE);
+        }
+
         if (!isSuperAdmin(currentUser)) {
             boolean isPatient = appointment.getPatient().getUser().getId().equals(currentUser.getId());
             if (!isPatient && !hasHospitalAccess(currentUser, appointment.getHospital().getId())) {
@@ -859,6 +886,11 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Transactional(readOnly = true)
     public List<AppointmentResponseDTO> getAppointmentsByPatientId(UUID patientId, Locale locale, String username) {
         User user = getUserOrThrow(username);
+        // A patient caller reads only their own. Another patient's id answers
+        // exactly as an unknown one does, before the patient lookup.
+        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.APPOINTMENT_READS, patientId)) {
+            throw new ResourceNotFoundException(PATIENT_NOT_FOUND_MESSAGE);
+        }
         return getAppointmentsByPatientScoped(patientId, user);
     }
 
@@ -890,7 +922,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
 
         Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_MESSAGE));
 
         // patient.getUser() is nullable in practice — the same dangling-FK class
         // that produced the registrations 500 (a patient row whose user was

@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.*;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.*;
@@ -10,11 +11,13 @@ import com.example.hms.payload.dto.discharge.DischargeSummaryResponseDTO;
 import com.example.hms.payload.dto.procedure.ProcedureOrderResponseDTO;
 import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanResponseDTO;
 import com.example.hms.repository.*;
+import com.example.hms.repository.PatientRepository;
 import com.example.hms.service.impl.*;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.*;
@@ -59,6 +62,16 @@ class TenantIsolationTest {
         @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
         @InjectMocks private ProcedureOrderServiceImpl service;
+
+        /**
+         * The real subject guard. These tests set no authentication, so it waves
+         * every read through, as it does for any caller that is not patient-only;
+         * the patient cases are in PatientSubjectReadGuardTest and the
+         * per-service ownership tests.
+         */
+        @Spy
+        private PatientSubjectReadGuard subjectReadGuard =
+            new PatientSubjectReadGuard(mock(ControllerAuthUtils.class), mock(PatientRepository.class));
 
         private Hospital hospitalA, hospitalB;
         private Patient patientA, patientB;
