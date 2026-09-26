@@ -57,7 +57,12 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -1092,26 +1097,26 @@ class EmpiServiceImplTest {
         transaction.executeWithoutResult(status -> {
             merged[0] = empiService.mergePatientsAtAuthorisedHospital(
                 actingHospital, patients[0], patients[1], EmpiMergeType.AUTOMATED, "HL7 ADT^A40");
-            Mockito.verify(kafkaTemplate, Mockito.never())
+            verify(kafkaTemplate, never())
                 .send(anyString(), anyString(), any(EmpiEventPayload.class));
         });
 
         assertThat(merged[0]).isNotNull();
         ArgumentCaptor<EmpiMergeEvent> event = ArgumentCaptor.forClass(EmpiMergeEvent.class);
-        Mockito.verify(mergeEventRepository).save(event.capture());
+        verify(mergeEventRepository).save(event.capture());
         assertThat(event.getValue().getHospitalId()).isEqualTo(actingHospital);
         assertThat(event.getValue().getMergeType()).isEqualTo(EmpiMergeType.AUTOMATED);
         assertThat(event.getValue().getMergedBy()).isNull();
         ArgumentCaptor<EmpiEventPayload> sent = ArgumentCaptor.forClass(EmpiEventPayload.class);
-        Mockito.verify(kafkaTemplate, Mockito.times(2)).send(eq(EMPI_TOPIC), anyString(), sent.capture());
+        verify(kafkaTemplate, times(2)).send(eq(EMPI_TOPIC), anyString(), sent.capture());
         assertThat(sent.getAllValues()).extracting(EmpiEventPayload::getEventType)
             .containsExactly("IDENTITY_LINKED", "IDENTITIES_MERGED");
         // The scope is the one handed over, never one resolved from a request.
-        Mockito.verify(roleValidator, Mockito.never()).requireActiveHospitalId();
-        Mockito.verify(roleValidator, Mockito.never()).isSuperAdminFromJwtClaim();
+        verify(roleValidator, never()).requireActiveHospitalId();
+        verify(roleValidator, never()).isSuperAdminFromJwtClaim();
         // Judged on the identities it loaded by patient id: the tenant-aware
         // findById answers empty on a thread with no HospitalContext.
-        Mockito.verify(masterIdentityRepository, Mockito.never()).findById(any());
+        verify(masterIdentityRepository, never()).findById(any());
     }
 
     @Test
@@ -1125,8 +1130,8 @@ class EmpiServiceImplTest {
             actingHospital, patients[0], patients[1], EmpiMergeType.AUTOMATED, null));
 
         assertThat(refused).isExactlyInstanceOf(AccessDeniedException.class);
-        Mockito.verify(patientRepository, Mockito.never()).findByIdUnscoped(any());
-        Mockito.verify(mergeEventRepository, Mockito.never()).save(any());
+        verify(patientRepository, never()).findByIdUnscoped(any());
+        verify(mergeEventRepository, never()).save(any());
     }
 
     @Test
@@ -1142,8 +1147,8 @@ class EmpiServiceImplTest {
                 actingHospital, patients[0], patients[1], EmpiMergeType.AUTOMATED, null)));
 
         assertThat(refused).isExactlyInstanceOf(ResourceNotFoundException.class);
-        Mockito.verify(mergeEventRepository, Mockito.never()).save(any());
-        Mockito.verify(kafkaTemplate, Mockito.never()).send(anyString(), anyString(), any(EmpiEventPayload.class));
+        verify(mergeEventRepository, never()).save(any());
+        verify(kafkaTemplate, never()).send(anyString(), anyString(), any(EmpiEventPayload.class));
     }
 
     @Test
@@ -1154,7 +1159,7 @@ class EmpiServiceImplTest {
         assertThatThrownBy(() -> empiService.mergePatientsAtAuthorisedHospital(
             null, primary, secondary, EmpiMergeType.AUTOMATED, null))
             .isExactlyInstanceOf(IllegalArgumentException.class);
-        Mockito.verifyNoInteractions(registrationRepository, masterIdentityRepository, mergeEventRepository);
+        verifyNoInteractions(registrationRepository, masterIdentityRepository, mergeEventRepository);
     }
 
     /* ── One merge, however many race; nothing recorded for a rollback ── */
@@ -1179,9 +1184,9 @@ class EmpiServiceImplTest {
 
         assertIdenticalRefusal(lost, later);
         assertThat(lost).isExactlyInstanceOf(BusinessException.class);
-        Mockito.verify(mergeEventRepository, Mockito.never()).save(any());
-        Mockito.verify(kafkaTemplate, Mockito.never()).send(anyString(), anyString(), any(EmpiEventPayload.class));
-        Mockito.verify(auditEventLogService, Mockito.never()).logEvent(any());
+        verify(mergeEventRepository, never()).save(any());
+        verify(kafkaTemplate, never()).send(anyString(), anyString(), any(EmpiEventPayload.class));
+        verify(auditEventLogService, never()).logEvent(any());
     }
 
     @Test
@@ -1191,12 +1196,12 @@ class EmpiServiceImplTest {
 
         transaction.executeWithoutResult(status -> {
             empiService.mergePatients(patients[0], patients[1], EmpiMergeType.MANUAL, null);
-            Mockito.verify(auditEventLogService, Mockito.never()).logEvent(any());
+            verify(auditEventLogService, never()).logEvent(any());
         });
 
         ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
             ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
-        Mockito.verify(auditEventLogService).logEvent(audit.capture());
+        verify(auditEventLogService).logEvent(audit.capture());
         assertThat(audit.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.PATIENT_MERGE);
         assertThat(audit.getValue().getStatus()).isEqualTo(com.example.hms.enums.AuditStatus.SUCCESS);
     }
@@ -1211,7 +1216,7 @@ class EmpiServiceImplTest {
             throw new IllegalStateException("the caller's own work failed after the merge");
         }));
 
-        Mockito.verify(auditEventLogService, Mockito.never()).logEvent(any());
+        verify(auditEventLogService, never()).logEvent(any());
     }
 
     @Test
@@ -1221,15 +1226,15 @@ class EmpiServiceImplTest {
         // refusal - and not a surprise at the caller's commit.
         UUID hospital = UUID.randomUUID();
         UUID[] patients = kafkaMergeFixture(hospital, hospital);
-        Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("constraint"))
+        doThrow(new org.springframework.dao.DataIntegrityViolationException("constraint"))
             .when(masterIdentityRepository).flush();
 
         Throwable refused = catchThrowable(() -> transaction.executeWithoutResult(status ->
             empiService.mergePatients(patients[0], patients[1], EmpiMergeType.MANUAL, null)));
 
         assertThat(refused).isExactlyInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
-        Mockito.verify(auditEventLogService, Mockito.never()).logEvent(any());
-        Mockito.verify(kafkaTemplate, Mockito.never()).send(anyString(), anyString(), any(EmpiEventPayload.class));
+        verify(auditEventLogService, never()).logEvent(any());
+        verify(kafkaTemplate, never()).send(anyString(), anyString(), any(EmpiEventPayload.class));
     }
 
     /**

@@ -113,9 +113,15 @@ class EmpiAuthorisedMergePortInjectionTest {
         // Moving the method back onto EmpiService would hand it to every
         // class that injects EmpiService — which is exactly what this type
         // exists to prevent.
-        assertThat(Stream.of(EmpiService.class.getMethods())
+        List<String> shared = Stream.of(EmpiService.class.getMethods())
             .map(Method::getName)
-            .filter(Objects::nonNull))
+            .filter(Objects::nonNull)
+            .toList();
+        // Non-empty, and the interface it should be: a "does not contain" on
+        // an empty list would pass for any interface at all.
+        assertThat(shared)
+            .isNotEmpty()
+            .contains("mergePatients", "mergeIdentities")
             .doesNotContain("mergePatientsAtAuthorisedHospital");
     }
 }
