@@ -86,7 +86,7 @@ a 404; on HL7 v2 it is the same ACK code and the same ACK text.
 **Known violation — do not copy:** `ObservationFhirWriteService` answers 404
 for an unknown lab result and 403 ("does not belong to the active hospital
 scope") for another tenant's, which is exactly the oracle above. It is
-recorded as a code defect.
+tracked as a defect to fix.
 
 ### Resolving the tenant, and what this skill will not promise
 
@@ -126,9 +126,9 @@ or the request body on its four-argument overload) — and the raw context
 populated differently by auth path: from the JWT's `hospital_id` claim on
 the Keycloak path, from live assignments on the password path. A helper
 that encodes one pin rule does exist — `HospitalContext.pinnedHospitalId()`
-— and roughly a dozen services use it, but not every resolver does, and
-some services still inline their own check. That inconsistency is recorded
-as code debt. Until it is resolved, rely on the endpoint's own resolver and
+— and seven services and three controller or support classes call it, but
+not every resolver does, and some services still inline their own check.
+That inconsistency is tracked as debt. Until it is resolved, rely on the endpoint's own resolver and
 test the unpinned-super-admin case on that endpoint, rather than reasoning
 from a rule written here.
 

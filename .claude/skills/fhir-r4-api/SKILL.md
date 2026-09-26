@@ -208,12 +208,12 @@ the body's `note[0].text` appends to `lab_results.notes` (pipe
 separator; duplicate text is a no-op). `PUT /Observation/vital-*`
 returns `422 BUSINESSRULE` because the 1:N `PatientVitalSign` →
 Observation expansion has no single-row write target. Tenant
-scope: `LabResult.labOrder.hospital.id` must match the active
-hospital (missing or mismatched → 403). *Superseded: this is a known
-oracle — an unknown id gets 404 and a foreign one 403 — and ownership of
-a lab result is ordering **or** performing hospital (`LabOrder.isHandledBy`),
-not one column; see the cross-tenant gate in the `multi-tenancy-scoping`
-skill. Do not copy.* Audit:
+scope: the result is loaded by id, then `LabOrder.isHandledBy(activeHospital)`
+must hold — ownership of a lab result is the ordering **or** the performing
+hospital, not one column. A missing hospital scope answers 403, an unknown
+id 404, and another tenant's result 403. *That last split is a known
+oracle — do not copy the answer shape; see the cross-tenant gate in the
+`multi-tenancy-scoping` skill.* Audit:
 `LAB_RESULT_UPDATED` with `entityType="LAB_RESULT"`.
 
 ### Audit naming convention

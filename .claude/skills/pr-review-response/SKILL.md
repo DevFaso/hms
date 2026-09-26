@@ -432,9 +432,10 @@ list is cross-cutting muscle memory.
   PR #351; the assumption that "`findById` is tenant-aware" was
   recorded incorrectly in earlier skills notes.
 - **Cross-tenant guard must DENY on null/empty active hospital
-  context, not allow.** *(Superseded in part: the raw-context null check
-  below is not reliable for an unpinned super-admin — follow "Resolving the
-  tenant" in the `multi-tenancy-scoping` skill.)* A guard that only
+  context, not allow.** *(Superseded in part: a null check on the raw
+  hospital context is not a reliable "no tenant" test for a super-admin,
+  because what that context holds differs by auth path. Follow "Resolving
+  the tenant" in the `multi-tenancy-scoping` skill.)* A guard that only
   rejects when both the stored hospitalId AND the resolved one are
   non-null reads "no tenant" as "unscoped, allow" — the inverse of the
   "invisible cross-tenant rejection" contract. Refuse on "no tenant"
