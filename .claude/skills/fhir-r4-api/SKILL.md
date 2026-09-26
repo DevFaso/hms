@@ -79,6 +79,44 @@ pieces that unlock the full SMART app launch flow. When extending,
 keep `.well-known/smart-configuration` aligned with the Keycloak OIDC
 issuer (`app.auth.oidc.issuer-uri`).
 
+## Tenant boundary — one interceptor, not per-provider guards
+
+`FhirTenantBoundaryInterceptor` bounds every FHIR request to the caller's
+hospital; `FhirTenantBoundary` is the one definition of "visible at this
+hospital". Before it, four providers (`Encounter`, `Condition`,
+`MedicationRequest`, `Immunization`) read with bare `findById` /
+`findByPatient_Id` on entities that are not `TenantScoped`, so any bearer
+token read every hospital's rows. Do not fix a tenancy gap by adding a guard
+to one provider method: teach the boundary.
+
+- **Adding a provider:** add its type — and every id prefix its mapper
+  mints (`labresult-`, `vital-<uuid>-<component>`, `upl-`, ...) — to
+  `FhirTenantBoundary.KNOWN_TYPES` and `visibleIdParts`, with a literal JPQL
+  query. Until then every read and search of it is refused (fail closed), and
+  `FhirTenantBoundaryIT.everyProviderIsCovered` fails.
+- **The bound hospital comes from the principal.** `boundHospital` accepts the
+  active hospital only when the principal holds it (or is a super-admin who
+  pinned it). `HospitalContextRequestOverrides` takes `X-Hospital-Id` for ANY
+  hospital when the principal holds none, so never read `getActiveHospitalId()`
+  on a FHIR path as if it were validated — read the bound value.
+- **The role is checked at the bound hospital, not in the union.**
+  `holdsRoleAt` asks whether the principal holds a role the operation needs
+  (`requiredRoleCodes`: readers / `$export` admin / writers) AT the bound
+  hospital — live assignments for an HMS token, the `role_assignments`
+  claim for a Keycloak token. Any path matcher sees only the union of the
+  caller's roles across hospitals.
+- **Indistinguishable by construction.** The named-id gate runs before the
+  provider and asks only "is it visible here", so a foreign id, a missing id
+  and a malformed id all get `new ResourceNotFoundException(request.getId())`.
+  The pre-check is load-bearing, not redundant with the output filter:
+  without it, `GET Patient/{foreign}` was a 500 (the mapper's lazy load) while
+  an unknown id was a 404.
+- **`$everything` is the one output-filter exemption** (`SELF_SCOPED_OPERATIONS`):
+  its sections follow the E8 policy across hospitals. Its named-id gate still
+  applies. A new self-scoped operation needs the same explicit listing.
+- **Totals:** searches lose `_count` / `_offset` at the boundary so the bundle
+  the filter corrects is the whole (provider-capped) result.
+
 ## FHIR write API (Patient — row 20 foundation)
 
 Gated by `app.fhir.write.enabled` (env `FHIR_WRITE_ENABLED`,
