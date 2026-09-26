@@ -2,12 +2,17 @@ package com.example.hms.integration;
 
 import com.example.hms.BaseIT;
 import com.example.hms.model.Consultation;
+import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.UltrasoundOrder;
 import com.example.hms.repository.ConsultationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UltrasoundOrderRepository;
+import com.example.hms.repository.UserRepository;
+import com.example.hms.security.IdleSessionGate;
 import com.example.hms.security.oidc.IssuerAwareBearerTokenResolver;
+import com.example.hms.security.oidc.KeycloakHospitalContextFilter;
+import com.example.hms.security.oidc.KeycloakHospitalContextResolver;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -50,6 +55,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -94,12 +100,22 @@ class PatientSubjectReadSecurityIT extends BaseIT {
         when(patientRepository.existsByIdAndUserId(ownPatientId, patientUserId)).thenReturn(true);
     }
 
+    private final UUID hospitalA = UUID.randomUUID();
+    private final UUID hospitalB = UUID.randomUUID();
+
     private UltrasoundOrder ultrasoundOrderOf(UUID patientId) {
+        return ultrasoundOrderOf(patientId, hospitalA);
+    }
+
+    private UltrasoundOrder ultrasoundOrderOf(UUID patientId, UUID hospitalId) {
         Patient subject = new Patient();
         subject.setId(patientId);
+        Hospital hospital = new Hospital();
+        hospital.setId(hospitalId);
         UltrasoundOrder order = new UltrasoundOrder();
         order.setId(orderId);
         order.setPatient(subject);
+        order.setHospital(hospital);
         return order;
     }
 
@@ -165,16 +181,33 @@ class PatientSubjectReadSecurityIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("a Keycloak doctor still reads another patient's ultrasound order and list")
+    @DisplayName("a Keycloak doctor at hospital A still reads another patient's ultrasound order and list there")
     void staffUnchanged() throws Exception {
-        String doctor = token("doctor001", UUID.randomUUID(), "DOCTOR");
+        String doctor = token("doctor001", UUID.randomUUID(), hospitalA, "DOCTOR");
         when(ultrasoundOrderRepository.findById(orderId)).thenReturn(Optional.of(ultrasoundOrderOf(otherPatientId)));
-        when(ultrasoundOrderRepository.findAllByPatientId(otherPatientId)).thenReturn(List.of(ultrasoundOrderOf(otherPatientId)));
+        // Acting at hospital A, the list reads the readable hospitals at the database.
+        when(ultrasoundOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedDateDesc(eq(otherPatientId), any()))
+            .thenReturn(List.of(ultrasoundOrderOf(otherPatientId)));
 
         assertThat(getAs(doctor, "/ultrasound/orders/{id}", orderId).getResponse().getStatus()).isEqualTo(200);
         MvcResult list = getAs(doctor, "/ultrasound/orders/patient/{pid}", otherPatientId);
         assertThat(list.getResponse().getStatus()).isEqualTo(200);
         assertThat(objectMapper.readTree(list.getResponse().getContentAsString())).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("a Keycloak doctor at hospital A is refused B's ultrasound order by id, exactly as a missing one")
+    void staffAtAnotherHospitalAnswersAsMissing() throws Exception {
+        String doctor = token("doctor001", UUID.randomUUID(), hospitalA, "DOCTOR");
+        when(ultrasoundOrderRepository.findById(orderId))
+            .thenReturn(Optional.of(ultrasoundOrderOf(otherPatientId, hospitalB)));
+        MvcResult foreign = getAs(doctor, "/ultrasound/orders/{id}", orderId);
+
+        when(ultrasoundOrderRepository.findById(orderId)).thenReturn(Optional.empty());
+        MvcResult missing = getAs(doctor, "/ultrasound/orders/{id}", orderId);
+
+        assertThat(foreign.getResponse().getStatus()).isEqualTo(404);
+        assertThat(errorShape(foreign)).isEqualTo(errorShape(missing));
     }
 
     // ── token minting ──────────────────────────────────────────────────────
@@ -185,8 +218,13 @@ class PatientSubjectReadSecurityIT extends BaseIT {
      * and a Keycloak subject that is NOT the user id.
      */
     private static String token(String username, UUID appUserId, String... realmRoles) {
+        return token(username, appUserId, null, realmRoles);
+    }
+
+    /** With {@code hospital_id}, the claim KeycloakHospitalContextResolver makes the active hospital. */
+    private static String token(String username, UUID appUserId, UUID hospitalId, String... realmRoles) {
         Instant now = Instant.now();
-        JWTClaimsSet claims = new JWTClaimsSet.Builder()
+        JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
             .jwtID(UUID.randomUUID().toString())
             .issuer(OidcResourceServerIntegrationTest.TEST_ISSUER)
             .subject(UUID.randomUUID().toString())
@@ -198,9 +236,11 @@ class PatientSubjectReadSecurityIT extends BaseIT {
             .claim("typ", "Bearer")
             .claim("azp", "hms-portal")
             .claim("appUserId", appUserId.toString())
-            .claim("realm_access", Map.of("roles", List.of(realmRoles)))
-            .build();
-        SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).keyID("b2own-test").build(), claims);
+            .claim("realm_access", Map.of("roles", List.of(realmRoles)));
+        if (hospitalId != null) {
+            claims.claim("hospital_id", hospitalId.toString());
+        }
+        SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).keyID("b2own-test").build(), claims.build());
         try {
             jwt.sign(new RSASSASigner(KEYS.getPrivate()));
         } catch (JOSEException e) {
@@ -243,6 +283,21 @@ class PatientSubjectReadSecurityIT extends BaseIT {
         @Primary
         BearerTokenResolver issuerAwareBearerTokenResolver() {
             return new IssuerAwareBearerTokenResolver(OidcResourceServerIntegrationTest.TEST_ISSUER);
+        }
+
+        /**
+         * Production registers this filter only when an issuer URI is
+         * configured, which the test profile does not do — so without it a
+         * Keycloak principal would never get the hospital its
+         * {@code hospital_id} claim names, and every staff read would stop at
+         * "select a hospital". The same class, wired exactly as SecurityConfig
+         * wires it (after the bearer-token filter).
+         */
+        @Bean
+        KeycloakHospitalContextFilter keycloakHospitalContextFilter(KeycloakHospitalContextResolver resolver,
+                                                                   IdleSessionGate idleSessionGate,
+                                                                   UserRepository userRepository) {
+            return new KeycloakHospitalContextFilter(resolver, idleSessionGate, userRepository);
         }
     }
 }

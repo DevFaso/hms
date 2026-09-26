@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.model.Patient;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.CustomUserDetails;
@@ -22,6 +23,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -94,7 +96,7 @@ class PatientSubjectReadGuardTest {
     @DisplayName("a row whose patient cannot be placed is never a patient's")
     void nullSubjectIsNeverOwned() {
         passwordLogin("ROLE_PATIENT");
-        assertThat(guard.mayRead(ROLES, null)).isFalse();
+        assertThat(guard.mayRead(ROLES, (UUID) null)).isFalse();
         verify(patientRepository, never()).existsByIdAndUserId(any(), any());
     }
 
@@ -147,5 +149,31 @@ class PatientSubjectReadGuardTest {
         assertThat(guard.isPatientOnly(PatientSubjectReaderRoles.APPOINTMENT_READS)).isFalse();
         // ...but a consultation read does not admit it: there it is a patient.
         assertThat(guard.isPatientOnly(PatientSubjectReaderRoles.CONSULTATIONS_BY_PATIENT)).isTrue();
+    }
+
+    @Test
+    @DisplayName("the Patient overload: own yes, another's no, null never")
+    void patientOverload() {
+        passwordLogin("ROLE_PATIENT");
+        Patient own = new Patient();
+        own.setId(ownPatientId);
+        Patient other = new Patient();
+        other.setId(otherPatientId);
+
+        assertThat(guard.mayRead(ROLES, own)).isTrue();
+        assertThat(guard.mayRead(ROLES, other)).isFalse();
+        assertThat(guard.mayRead(ROLES, (Patient) null)).isFalse();
+        assertThat(guard.callerOwns(null)).isFalse();
+    }
+
+    @Test
+    @DisplayName("for staff the Patient overload never touches the subject, so no lazy proxy is initialised")
+    void staffNeverTouchTheSubject() {
+        passwordLogin("ROLE_DOCTOR");
+        Patient subject = mock(Patient.class);
+
+        assertThat(guard.mayRead(ROLES, subject)).isTrue();
+        verifyNoInteractions(subject);
+        verify(patientRepository, never()).existsByIdAndUserId(any(), any());
     }
 }

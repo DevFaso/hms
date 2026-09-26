@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.enums.ImagingReportStatus;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.AppointmentMapper;
 import com.example.hms.mapper.ImagingOrderMapper;
@@ -56,6 +57,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -264,6 +266,7 @@ class PatientSubjectReadOwnershipTest {
 
         private final UUID reportId = UUID.randomUUID();
         private final UUID orderId = UUID.randomUUID();
+        private final ImagingReportResponseDTO dto = new ImagingReportResponseDTO();
 
         private ImagingOrder orderFor(UUID patientId) {
             ImagingOrder order = new ImagingOrder();
@@ -273,38 +276,83 @@ class PatientSubjectReadOwnershipTest {
             return order;
         }
 
-        private ImagingReport reportFor(UUID patientId) {
+        /** A report for that patient's order, as the sign ceremony leaves it or not. */
+        private ImagingReport reportFor(UUID patientId, ImagingReportStatus status, boolean signed) {
             ImagingReport report = new ImagingReport();
             report.setId(reportId);
             report.setImagingOrder(orderFor(patientId));
             report.setHospital(report.getImagingOrder().getHospital());
+            report.setReportStatus(status);
+            report.setSignedAt(signed ? LocalDateTime.now() : null);
             return report;
         }
 
-        @Test
-        @DisplayName("a patient reads their own report, by id and by order")
-        void patientReadsOwn() {
-            passwordLogin("ROLE_PATIENT");
-            ImagingReport own = reportFor(ownPatientId);
-            ImagingReportResponseDTO dto = new ImagingReportResponseDTO();
-            when(imagingReportRepository.findById(reportId)).thenReturn(Optional.of(own));
-            when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(own.getImagingOrder()));
+        private void stub(ImagingReport report) {
+            when(imagingReportRepository.findById(reportId)).thenReturn(Optional.of(report));
+            when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(report.getImagingOrder()));
             when(imagingReportRepository.findFirstByImagingOrder_IdAndLatestVersionIsTrue(orderId))
-                .thenReturn(Optional.of(own));
-            when(imagingReportMapper.toResponseDTO(own)).thenReturn(dto);
+                .thenReturn(Optional.of(report));
+            when(imagingReportMapper.toResponseDTO(report)).thenReturn(dto);
+        }
+
+        private void stubNothing() {
+            when(imagingReportRepository.findById(reportId)).thenReturn(Optional.empty());
+            when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.empty());
+        }
+
+        @Test
+        @DisplayName("a patient reads their own signed report, by id and by order")
+        void patientReadsOwnSignedReport() {
+            passwordLogin("ROLE_PATIENT");
+            stub(reportFor(ownPatientId, ImagingReportStatus.FINAL, true));
 
             assertThat(service.getReport(reportId)).isSameAs(dto);
             assertThat(service.getLatestReportForOrder(orderId)).isSameAs(dto);
         }
 
         @Test
+        @DisplayName("their own DRAFT report answers as a missing one, by id and by order (clinical safety)")
+        void ownUnsignedReportAnswersAsMissing() {
+            passwordLogin("ROLE_PATIENT");
+            stub(reportFor(ownPatientId, ImagingReportStatus.DRAFT, false));
+            ResourceNotFoundException byId = catchThrowableOfType(() -> service.getReport(reportId),
+                ResourceNotFoundException.class);
+            ResourceNotFoundException byOrder = catchThrowableOfType(() -> service.getLatestReportForOrder(orderId),
+                ResourceNotFoundException.class);
+            // By order, the answer is the order's own "no report yet" one.
+            when(imagingReportRepository.findFirstByImagingOrder_IdAndLatestVersionIsTrue(orderId))
+                .thenReturn(Optional.empty());
+            when(imagingReportRepository.findTopByImagingOrder_IdOrderByReportVersionDesc(orderId))
+                .thenReturn(Optional.empty());
+            ResourceNotFoundException noReport = catchThrowableOfType(() -> service.getLatestReportForOrder(orderId),
+                ResourceNotFoundException.class);
+            stubNothing();
+
+            assertSameNotFound(() -> { throw byId; }, () -> service.getReport(reportId));
+            assertSameNotFound(() -> { throw byOrder; }, () -> { throw noReport; });
+            verifyNoInteractions(imagingReportMapper);
+        }
+
+        @Test
+        @DisplayName("their own PRELIMINARY, or a signed report later CANCELLED, is not theirs to read either")
+        void preliminaryAndVoidedAreNotReleased() {
+            passwordLogin("ROLE_PATIENT");
+            stub(reportFor(ownPatientId, ImagingReportStatus.PRELIMINARY, false));
+            assertThat(catchThrowableOfType(() -> service.getReport(reportId), ResourceNotFoundException.class))
+                .isNotNull();
+            stub(reportFor(ownPatientId, ImagingReportStatus.CANCELLED, true));
+            assertThat(catchThrowableOfType(() -> service.getReport(reportId), ResourceNotFoundException.class))
+                .isNotNull();
+        }
+
+        @Test
         @DisplayName("another patient's report answers as a missing id, before the hospital check")
         void foreignReportAnswersAsMissing() {
             passwordLogin("ROLE_PATIENT");
-            when(imagingReportRepository.findById(reportId)).thenReturn(Optional.of(reportFor(otherPatientId)));
-            Executable refused = () -> service.getReport(reportId);
-            ResourceNotFoundException first = catchThrowableOfType(refused::execute, ResourceNotFoundException.class);
-            when(imagingReportRepository.findById(reportId)).thenReturn(Optional.empty());
+            stub(reportFor(otherPatientId, ImagingReportStatus.FINAL, true));
+            ResourceNotFoundException first = catchThrowableOfType(() -> service.getReport(reportId),
+                ResourceNotFoundException.class);
+            stubNothing();
 
             assertSameNotFound(() -> { throw first; }, () -> service.getReport(reportId));
             verifyNoInteractions(roleValidator, imagingReportMapper);
@@ -314,24 +362,23 @@ class PatientSubjectReadOwnershipTest {
         @DisplayName("another patient's order answers as a missing order, before the hospital check")
         void foreignOrderAnswersAsMissing() {
             passwordLogin("ROLE_PATIENT");
-            when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(orderFor(otherPatientId)));
-            ResourceNotFoundException first = catchThrowableOfType(() -> service.getLatestReportForOrder(orderId), ResourceNotFoundException.class);
-            when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.empty());
+            stub(reportFor(otherPatientId, ImagingReportStatus.FINAL, true));
+            ResourceNotFoundException first = catchThrowableOfType(() -> service.getLatestReportForOrder(orderId),
+                ResourceNotFoundException.class);
+            stubNothing();
 
             assertSameNotFound(() -> { throw first; }, () -> service.getLatestReportForOrder(orderId));
-            verifyNoInteractions(roleValidator, imagingReportRepository, imagingReportMapper);
+            verifyNoInteractions(roleValidator, imagingReportMapper);
         }
 
         @Test
-        @DisplayName("staff read another patient's report, as before")
+        @DisplayName("staff read another patient's report in any status, as before")
         void staffUnchanged() {
             passwordLogin("ROLE_DOCTOR");
-            ImagingReport other = reportFor(otherPatientId);
-            ImagingReportResponseDTO dto = new ImagingReportResponseDTO();
-            when(imagingReportRepository.findById(reportId)).thenReturn(Optional.of(other));
-            when(imagingReportMapper.toResponseDTO(other)).thenReturn(dto);
+            stub(reportFor(otherPatientId, ImagingReportStatus.DRAFT, false));
 
             assertThat(service.getReport(reportId)).isSameAs(dto);
+            assertThat(service.getLatestReportForOrder(orderId)).isSameAs(dto);
         }
     }
 
@@ -413,33 +460,44 @@ class PatientSubjectReadOwnershipTest {
         @Mock private UltrasoundOrderRepository orderRepository;
         @Mock private UltrasoundReportRepository reportRepository;
         @Mock private UltrasoundMapper ultrasoundMapper;
+        @Mock private RoleValidator roleValidator;
         @Spy private PatientSubjectReadGuard subjectReadGuard = realGuard();
         @InjectMocks private UltrasoundServiceImpl service;
 
         private final UUID orderId = UUID.randomUUID();
         private final UUID reportId = UUID.randomUUID();
+        private final Hospital hospitalA = hospital(UUID.randomUUID());
+        private final Hospital hospitalB = hospital(UUID.randomUUID());
 
-        private UltrasoundOrder orderFor(UUID patientId) {
+        private UltrasoundOrder orderFor(UUID patientId, Hospital at) {
             UltrasoundOrder order = new UltrasoundOrder();
             order.setId(orderId);
             order.setPatient(patient(patientId));
+            order.setHospital(at);
             return order;
         }
 
-        private UltrasoundReport reportFor(UUID patientId) {
+        /** A report, released to the patient (reviewed and communicated) or not. */
+        private UltrasoundReport reportFor(UltrasoundOrder order, boolean released) {
             UltrasoundReport report = new UltrasoundReport();
             report.setId(reportId);
-            report.setUltrasoundOrder(orderFor(patientId));
+            report.setUltrasoundOrder(order);
+            report.setHospital(order.getHospital());
+            report.setReportReviewedByProvider(released);
+            report.setPatientNotifiedAt(released ? LocalDateTime.now() : null);
+            order.setReport(report);
             return report;
         }
 
-        private void stubRows(UUID patientId) {
-            UltrasoundOrder order = orderFor(patientId);
-            UltrasoundReport report = reportFor(patientId);
+        private void stubRows(UUID patientId, Hospital at, boolean released) {
+            UltrasoundOrder order = orderFor(patientId, at);
+            UltrasoundReport report = reportFor(order, released);
             when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+            when(orderRepository.findAllByPatientId(patientId)).thenReturn(List.of(order));
             when(reportRepository.findById(reportId)).thenReturn(Optional.of(report));
             when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.of(report));
-            when(ultrasoundMapper.toOrderResponseDTO(any())).thenReturn(UltrasoundOrderResponseDTO.builder().id(orderId).build());
+            when(ultrasoundMapper.toOrderResponseDTO(any())).thenAnswer(inv -> UltrasoundOrderResponseDTO.builder()
+                .id(orderId).report(UltrasoundReportResponseDTO.builder().id(reportId).build()).build());
             when(ultrasoundMapper.toReportResponseDTO(any())).thenReturn(UltrasoundReportResponseDTO.builder().id(reportId).build());
         }
 
@@ -450,26 +508,61 @@ class PatientSubjectReadOwnershipTest {
         }
 
         @Test
-        @DisplayName("a patient reads their own order, list, report and report by order")
+        @DisplayName("a patient reads their own order, list, and released report by id and by order")
         void patientReadsOwn() {
             passwordLogin("ROLE_PATIENT");
-            stubRows(ownPatientId);
+            stubRows(ownPatientId, hospitalB, true);
 
-            assertThat(service.getOrderById(orderId).getId()).isEqualTo(orderId);
+            assertThat(service.getOrderById(orderId).getReport()).isNotNull();
             assertThat(service.getReportById(reportId).getId()).isEqualTo(reportId);
             assertThat(service.getReportByOrderId(orderId).getId()).isEqualTo(reportId);
-            service.getOrdersByPatientId(ownPatientId);
-            verify(orderRepository).findAllByPatientId(ownPatientId);
+            assertThat(service.getOrdersByPatientId(ownPatientId)).singleElement()
+                .satisfies(o -> assertThat(o.getReport()).isNotNull());
+            // Ownership is the patient's boundary, not the active hospital.
+            verifyNoInteractions(roleValidator);
+        }
+
+        @Test
+        @DisplayName("their own report not yet reviewed and communicated answers as a missing one (clinical safety)")
+        void ownUnreleasedReportAnswersAsMissing() {
+            passwordLogin("ROLE_PATIENT");
+            stubRows(ownPatientId, hospitalA, false);
+            ResourceNotFoundException byId = catchThrowableOfType(() -> service.getReportById(reportId),
+                ResourceNotFoundException.class);
+            ResourceNotFoundException byOrder = catchThrowableOfType(() -> service.getReportByOrderId(orderId),
+                ResourceNotFoundException.class);
+            // ...and their own order carries no report until it is released.
+            assertThat(service.getOrderById(orderId).getReport()).isNull();
+            assertThat(service.getOrdersByPatientId(ownPatientId)).singleElement()
+                .satisfies(o -> assertThat(o.getReport()).isNull());
+            stubNoRows();
+
+            assertSameNotFound(() -> { throw byId; }, () -> service.getReportById(reportId));
+            assertSameNotFound(() -> { throw byOrder; }, () -> service.getReportByOrderId(orderId));
+        }
+
+        @Test
+        @DisplayName("reviewed but not yet communicated is still not released")
+        void reviewedButNotCommunicated() {
+            passwordLogin("ROLE_PATIENT");
+            stubRows(ownPatientId, hospitalA, false);
+            reportRepository.findById(reportId).orElseThrow().setReportReviewedByProvider(true);
+
+            assertThat(catchThrowableOfType(() -> service.getReportById(reportId), ResourceNotFoundException.class))
+                .isNotNull();
         }
 
         @Test
         @DisplayName("another patient's order, report and report-by-order answer as missing ids")
         void foreignByIdAnswersAsMissing() {
             passwordLogin("ROLE_PATIENT");
-            stubRows(otherPatientId);
-            ResourceNotFoundException order = catchThrowableOfType(() -> service.getOrderById(orderId), ResourceNotFoundException.class);
-            ResourceNotFoundException report = catchThrowableOfType(() -> service.getReportById(reportId), ResourceNotFoundException.class);
-            ResourceNotFoundException byOrder = catchThrowableOfType(() -> service.getReportByOrderId(orderId), ResourceNotFoundException.class);
+            stubRows(otherPatientId, hospitalA, true);
+            ResourceNotFoundException order = catchThrowableOfType(() -> service.getOrderById(orderId),
+                ResourceNotFoundException.class);
+            ResourceNotFoundException report = catchThrowableOfType(() -> service.getReportById(reportId),
+                ResourceNotFoundException.class);
+            ResourceNotFoundException byOrder = catchThrowableOfType(() -> service.getReportByOrderId(orderId),
+                ResourceNotFoundException.class);
             stubNoRows();
 
             assertSameNotFound(() -> { throw order; }, () -> service.getOrderById(orderId));
@@ -491,16 +584,46 @@ class PatientSubjectReadOwnershipTest {
         }
 
         @Test
-        @DisplayName("staff read another patient's, as before")
-        void staffUnchanged() {
-            passwordLogin("ROLE_MIDWIFE");
-            stubRows(otherPatientId);
+        @DisplayName("a nurse at hospital A reads A's order and unreleased report, as before")
+        void staffAtTheirHospital() {
+            passwordLogin("ROLE_NURSE");
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalA.getId());
+            stubRows(otherPatientId, hospitalA, false);
 
-            assertThat(service.getOrderById(orderId).getId()).isEqualTo(orderId);
+            assertThat(service.getOrderById(orderId).getReport()).isNotNull();
             assertThat(service.getReportById(reportId).getId()).isEqualTo(reportId);
             assertThat(service.getReportByOrderId(orderId).getId()).isEqualTo(reportId);
             service.getOrdersByPatientId(otherPatientId);
             verify(orderRepository).findAllByPatientId(otherPatientId);
+        }
+
+        @Test
+        @DisplayName("a nurse at hospital A is refused B's prenatal order and report by id, exactly as a miss")
+        void staffAtAnotherHospitalAnswersAsMissing() {
+            passwordLogin("ROLE_NURSE");
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalA.getId());
+            stubRows(otherPatientId, hospitalB, true);
+            ResourceNotFoundException order = catchThrowableOfType(() -> service.getOrderById(orderId),
+                ResourceNotFoundException.class);
+            ResourceNotFoundException report = catchThrowableOfType(() -> service.getReportById(reportId),
+                ResourceNotFoundException.class);
+            ResourceNotFoundException byOrder = catchThrowableOfType(() -> service.getReportByOrderId(orderId),
+                ResourceNotFoundException.class);
+            stubNoRows();
+
+            assertSameNotFound(() -> { throw order; }, () -> service.getOrderById(orderId));
+            assertSameNotFound(() -> { throw report; }, () -> service.getReportById(reportId));
+            assertSameNotFound(() -> { throw byOrder; }, () -> service.getReportByOrderId(orderId));
+        }
+
+        @Test
+        @DisplayName("a super-admin in global view (null scope) reads any hospital's")
+        void superAdminGlobalView() {
+            passwordLogin("ROLE_SUPER_ADMIN", "ROLE_PATIENT", "ROLE_DOCTOR");
+            stubRows(otherPatientId, hospitalB, false);
+
+            assertThat(service.getOrderById(orderId).getId()).isEqualTo(orderId);
+            assertThat(service.getReportById(reportId).getId()).isEqualTo(reportId);
         }
     }
 
@@ -621,6 +744,20 @@ class PatientSubjectReadOwnershipTest {
             assertSameNotFound(() -> { throw refused; },
                 () -> service.getAppointmentsByPatientUsername("patient002", Locale.ENGLISH, CALLER));
             verify(patientRepository, never()).findByUserId(other.getId());
+        }
+
+        @Test
+        @DisplayName("a patient names themselves in another case and still reads their own (ids, not strings)")
+        void ownUsernameInAnotherCase() {
+            passwordLogin("ROLE_PATIENT");
+            Patient own = patientRow(ownPatientId, caller);
+            // The repository resolves usernames case-insensitively.
+            when(userRepository.findByUsername("PATIENT001")).thenReturn(Optional.of(caller));
+            when(patientRepository.findByUserId(callerUserId)).thenReturn(Optional.of(own));
+            when(patientRepository.findById(ownPatientId)).thenReturn(Optional.of(own));
+            when(appointmentRepository.findByPatient_Id(ownPatientId)).thenReturn(List.of(appointmentOf(own)));
+
+            assertThat(service.getAppointmentsByPatientUsername("PATIENT001", Locale.ENGLISH, CALLER)).hasSize(1);
         }
 
         @Test

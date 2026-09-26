@@ -105,6 +105,21 @@ class PatientSubjectReaderRolesMirrorTest {
             .isEqualTo(admitted);
     }
 
+    /**
+     * The endpoints registered with {@link PatientSubjectReadGuard}, as
+     * {@code Controller#handler} — what {@code PatientSubjectReadCoverageTest}
+     * accepts as guarded. One table, so registering an endpoint here is also
+     * what pins its role set.
+     */
+    static Set<String> registeredHandlers() {
+        Set<String> keys = new TreeSet<>();
+        readers().forEach(args -> {
+            Object[] a = args.get();
+            keys.add(((Class<?>) a[0]).getSimpleName() + "#" + a[1]);
+        });
+        return keys;
+    }
+
     private static Method handler(Class<?> controller, String name) {
         List<Method> matches = Arrays.stream(controller.getDeclaredMethods())
             .filter(m -> m.getName().equals(name))

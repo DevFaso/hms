@@ -34,6 +34,7 @@ import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import java.util.Set;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.utility.RoleValidator;
 
 @Service
 @RequiredArgsConstructor
@@ -52,6 +53,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
     private final PatientSubjectReadGuard subjectReadGuard;
+    private final RoleValidator roleValidator;
 
     @Override
     public UltrasoundOrderResponseDTO createOrder(UltrasoundOrderRequestDTO request, UUID orderedByUserId) {
@@ -136,12 +138,16 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     public UltrasoundOrderResponseDTO getOrderById(UUID orderId) {
         UltrasoundOrder order = orderRepository.findById(orderId)
             .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_PREFIX + orderId));
-        // A patient caller reads only their own; another patient's order
-        // answers exactly as a missing id does.
-        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.ULTRASOUND_READS, patientIdOf(order))) {
+        // A patient caller reads only their own; staff read their active
+        // hospital's. Either refusal answers exactly as a missing id does.
+        boolean patientOnly = subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.ULTRASOUND_READS);
+        boolean readable = patientOnly
+            ? subjectReadGuard.callerOwns(order.getPatient())
+            : inStaffScope(order.getHospital());
+        if (!readable) {
             throw new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_PREFIX + orderId);
         }
-        return ultrasoundMapper.toOrderResponseDTO(order);
+        return toOrderResponseDTO(order, patientOnly);
     }
 
     @Override
@@ -168,6 +174,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.ULTRASOUND_READS, patientId)) {
             return List.of();
         }
+        boolean patientOnly = subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.ULTRASOUND_READS);
         HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
         UUID actingHospitalId = ctx.pinnedHospitalId();
         List<UltrasoundOrder> orders;
@@ -186,7 +193,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
                 "Cross-hospital ultrasound order read on the treatment relationship");
         }
         return orders.stream()
-            .map(ultrasoundMapper::toOrderResponseDTO)
+            .map(order -> toOrderResponseDTO(order, patientOnly))
             .toList();
     }
 
@@ -298,10 +305,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     public UltrasoundReportResponseDTO getReportById(UUID reportId) {
         UltrasoundReport report = reportRepository.findById(reportId)
             .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_PREFIX + reportId));
-        // A patient caller reads only their own; another patient's report
-        // answers exactly as a missing id does.
-        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.ULTRASOUND_READS,
-                patientIdOf(report.getUltrasoundOrder()))) {
+        if (!mayReadReport(report)) {
             throw new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_PREFIX + reportId);
         }
         return ultrasoundMapper.toReportResponseDTO(report);
@@ -312,22 +316,60 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     public UltrasoundReportResponseDTO getReportByOrderId(UUID orderId) {
         UltrasoundReport report = reportRepository.findByUltrasoundOrderId(orderId)
             .orElseThrow(() -> reportForOrderNotFound(orderId));
-        // A patient caller reads only their own; the report on another
-        // patient's order answers exactly as an order with no report does.
-        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.ULTRASOUND_READS,
-                patientIdOf(report.getUltrasoundOrder()))) {
+        if (!mayReadReport(report)) {
             throw reportForOrderNotFound(orderId);
         }
         return ultrasoundMapper.toReportResponseDTO(report);
     }
 
-    private static ResourceNotFoundException reportForOrderNotFound(UUID orderId) {
-        return new ResourceNotFoundException("Ultrasound report not found for order ID: " + orderId);
+    /**
+     * The one rule for reading an ultrasound report by id or by order; a
+     * refusal is answered by the caller exactly as a missing report is.
+     *
+     * <p>A patient-only caller reads a report only when it is theirs AND
+     * {@link UltrasoundReport#isReleasedToPatient() released to them}: reviewed
+     * by a provider and communicated. An unreviewed report can carry a finding
+     * nobody has discussed with the patient yet. Release is asked first — it
+     * costs nothing — and ownership second, which initialises the order.
+     *
+     * <p>Staff read reports at their active hospital only, as the imaging and
+     * procedure siblings do; before this, any clinician read any tenant's
+     * prenatal report by id.
+     */
+    private boolean mayReadReport(UltrasoundReport report) {
+        if (subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.ULTRASOUND_READS)) {
+            return report.isReleasedToPatient()
+                && subjectReadGuard.callerOwns(report.getUltrasoundOrder().getPatient());
+        }
+        return inStaffScope(report.getHospital());
     }
 
-    /** The patient an ultrasound order belongs to, or null when it cannot be placed. */
-    private static UUID patientIdOf(UltrasoundOrder order) {
-        return order != null && order.getPatient() != null ? order.getPatient().getId() : null;
+    /**
+     * The imaging and procedure siblings' hospital boundary: a staff caller
+     * reads rows at their active hospital; a super-admin in global view (a
+     * null scope) reads any. Not applied to a patient-only caller, whose
+     * boundary is ownership — their own record at any hospital, as on the
+     * encounter reads.
+     */
+    private boolean inStaffScope(Hospital hospital) {
+        UUID scope = roleValidator.requireActiveHospitalId();
+        return scope == null || hospital == null || scope.equals(hospital.getId());
+    }
+
+    /**
+     * The order DTO embeds its report. A patient-only caller gets the report
+     * only once it is released to them — the same rule as reading it directly.
+     */
+    private UltrasoundOrderResponseDTO toOrderResponseDTO(UltrasoundOrder order, boolean patientOnly) {
+        UltrasoundOrderResponseDTO dto = ultrasoundMapper.toOrderResponseDTO(order);
+        if (patientOnly && dto != null && order.getReport() != null && !order.getReport().isReleasedToPatient()) {
+            dto.setReport(null);
+        }
+        return dto;
+    }
+
+    private static ResourceNotFoundException reportForOrderNotFound(UUID orderId) {
+        return new ResourceNotFoundException("Ultrasound report not found for order ID: " + orderId);
     }
 
     @Override

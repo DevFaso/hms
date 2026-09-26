@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.model.Patient;
 import com.example.hms.repository.PatientRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -52,37 +53,61 @@ public class PatientSubjectReadGuard {
 
     /**
      * May the current caller go on to read {@code subjectPatientId}'s rows on
-     * an endpoint whose non-subject roles are {@code nonSubjectRoles}?
+     * an endpoint whose non-subject roles are {@code nonSubjectRoles}? For the
+     * list reads, which are handed a patient id.
      *
      * <p>True for every caller who is not patient-only there — staff, staff
      * who are also patients, a super-admin, and a call with no authentication
      * at all (internal paths: every endpoint sits behind {@code @PreAuthorize}).
      * For a patient-only caller, true only when their account is linked to
-     * exactly that patient row. A {@code null} subject — a row whose patient
-     * cannot be placed — is never theirs.
+     * exactly that patient row. A {@code null} subject is never theirs.
      *
      * @param nonSubjectRoles  the endpoint's set from {@link PatientSubjectReaderRoles}
      * @param subjectPatientId the patient the requested rows belong to, may be null
      */
     public boolean mayRead(Set<String> nonSubjectRoles, UUID subjectPatientId) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (!ReaderRolePredicates.isPatientOnly(auth, nonSubjectRoles)) {
-            return true;
-        }
-        UUID callerUserId = authUtils.resolveUserId(auth).orElse(null);
-        return callerUserId != null && subjectPatientId != null
-            && patientRepository.existsByIdAndUserId(subjectPatientId, callerUserId);
+        return !isPatientOnly(nonSubjectRoles) || ownsPatientId(subjectPatientId);
     }
 
     /**
-     * Does the current caller reach an endpoint with these non-subject roles
-     * as its subject and nobody else? For the one read that names its subject
-     * by something other than an id
-     * ({@code GET /appointments/patients/username/{patientUsername}}), which
-     * must compare that name with the caller's own before it looks anything up.
+     * The same question for a by-id read that has the row's patient in hand
+     * ({@code order.getPatient()}): null-safe, and the subject's id is read
+     * only once the caller is known to be patient-only.
+     *
+     * <p>Pass a {@code Patient} the caller already holds a reference to. Where
+     * the patient sits behind a lazy association that staff reads never touch
+     * (a report's order), ask {@link #isPatientOnly} first and only then
+     * {@link #callerOwns}, so a clinician's read does not pay a SELECT to
+     * initialise it.
+     */
+    public boolean mayRead(Set<String> nonSubjectRoles, Patient subject) {
+        return !isPatientOnly(nonSubjectRoles) || callerOwns(subject);
+    }
+
+    /**
+     * Does the current caller hold these non-subject roles' endpoint as its
+     * subject and nobody else? Asked first wherever reading the subject, or a
+     * patient-only rule such as "released reports only", costs something.
      */
     public boolean isPatientOnly(Set<String> nonSubjectRoles) {
         return ReaderRolePredicates.isPatientOnly(
             SecurityContextHolder.getContext().getAuthentication(), nonSubjectRoles);
+    }
+
+    /**
+     * Is {@code subject} the current caller's own patient row? Null-safe: a
+     * row whose patient cannot be placed, or a caller with no resolvable user
+     * id, owns nothing. Only meaningful for a caller {@link #isPatientOnly}
+     * has already classed as the subject.
+     */
+    public boolean callerOwns(Patient subject) {
+        return subject != null && ownsPatientId(subject.getId());
+    }
+
+    private boolean ownsPatientId(UUID subjectPatientId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        UUID callerUserId = authUtils.resolveUserId(auth).orElse(null);
+        return callerUserId != null && subjectPatientId != null
+            && patientRepository.existsByIdAndUserId(subjectPatientId, callerUserId);
     }
 }

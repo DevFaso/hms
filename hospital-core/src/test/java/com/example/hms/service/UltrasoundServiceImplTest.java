@@ -74,6 +74,9 @@ class UltrasoundServiceImplTest {
     private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    /** Unstubbed: a null scope, the global view, so the by-id reads keep their unscoped answer here. */
+    @Mock
+    private com.example.hms.utility.RoleValidator roleValidator;
 
     @InjectMocks
     private UltrasoundServiceImpl ultrasoundService;

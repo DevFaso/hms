@@ -66,19 +66,21 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Override
     @Transactional(readOnly = true)
     public List<AppointmentResponseDTO> getAppointmentsByPatientUsername(String patientUsername, Locale locale, String username) {
-        // A patient caller may name only themselves. Anyone else answers as an
-        // unknown username does, and before the lookups below -- which would
-        // otherwise tell an account without a patient row from one with none.
-        if (subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.APPOINTMENT_READS)
-                && (patientUsername == null || !patientUsername.equals(username))) {
-            throw new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + patientUsername);
-        }
+        User currentUser = getUserOrThrow(username);
         User patientUser = userRepository.findByUsername(patientUsername)
             .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + patientUsername));
+        // A patient caller may name only themselves: another account answers
+        // as an unknown username does, before the patient lookup below, which
+        // would otherwise tell an account with a patient row from one without.
+        // Compared as user ids, not strings -- usernames resolve
+        // case-insensitively (lower(u.username) = lower(:username)).
+        if (subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.APPOINTMENT_READS)
+                && !patientUser.getId().equals(currentUser.getId())) {
+            throw new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + patientUsername);
+        }
         Patient patient = patientRepository.findByUserId(patientUser.getId())
             .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USERNAME_PREFIX + patientUsername));
 
-        User currentUser = getUserOrThrow(username);
         return getAppointmentsByPatientScoped(patient.getId(), currentUser);
     }
     private final EmailService emailService;
@@ -812,8 +814,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         // answers exactly as a missing id does. Without this, the hospital
         // scope below admitted any appointment at a hospital where the patient
         // is registered.
-        UUID subjectPatientId = appointment.getPatient() != null ? appointment.getPatient().getId() : null;
-        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.APPOINTMENT_READS, subjectPatientId)) {
+        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.APPOINTMENT_READS, appointment.getPatient())) {
             throw new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_MESSAGE);
         }
 

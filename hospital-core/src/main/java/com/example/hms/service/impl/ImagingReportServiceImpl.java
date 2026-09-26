@@ -313,11 +313,12 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     public ImagingReportResponseDTO getReport(UUID reportId) {
         ImagingReport report = imagingReportRepository.findById(reportId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId));
-        // A patient caller reads only their own: another patient's report
-        // answers exactly as a missing id does, and before the hospital check
-        // in requireReportInScope, which can answer differently.
-        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.IMAGING_REPORT_READS,
-                patientIdOf(report.getImagingOrder()))) {
+        // A patient caller reads only their own, released report: another
+        // patient's, or one not yet signed, answers exactly as a missing id
+        // does, and before the hospital check in requireReportInScope, which
+        // can answer differently.
+        if (subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.IMAGING_REPORT_READS)
+                && !releasedToCaller(report)) {
             throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
         }
         return imagingReportMapper.toResponseDTO(requireReportInScope(report));
@@ -330,13 +331,19 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             .orElseThrow(() -> new ResourceNotFoundException(MSG_ORDER_NOT_FOUND, imagingOrderId));
         // A patient caller reads only their own: another patient's order
         // answers exactly as a missing id does, and before the hospital check.
-        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.IMAGING_REPORT_READS, patientIdOf(order))) {
+        boolean patientOnly = subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.IMAGING_REPORT_READS);
+        if (patientOnly && !subjectReadGuard.callerOwns(order.getPatient())) {
             throw new ResourceNotFoundException(MSG_ORDER_NOT_FOUND, imagingOrderId);
         }
         requireOrderInScope(order);
         ImagingReport report = imagingReportRepository.findFirstByImagingOrder_IdAndLatestVersionIsTrue(imagingOrderId)
             .orElseGet(() -> imagingReportRepository.findTopByImagingOrder_IdOrderByReportVersionDesc(imagingOrderId)
                 .orElseThrow(() -> new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, imagingOrderId)));
+        // Their own order, but the latest read is not signed yet: the patient
+        // is answered as though the study had no report.
+        if (patientOnly && !report.isReleasedToPatient()) {
+            throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, imagingOrderId);
+        }
         return imagingReportMapper.toResponseDTO(report);
     }
 
@@ -415,9 +422,14 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         return order;
     }
 
-    /** The patient an imaging order belongs to, or null when it cannot be placed. */
-    private static UUID patientIdOf(ImagingOrder order) {
-        return order != null && order.getPatient() != null ? order.getPatient().getId() : null;
+    /**
+     * For a patient-only caller: is this report theirs and released to them?
+     * Release is asked first — it costs nothing — and ownership second, which
+     * initialises the report's order.
+     */
+    private boolean releasedToCaller(ImagingReport report) {
+        return report.isReleasedToPatient()
+            && subjectReadGuard.callerOwns(report.getImagingOrder().getPatient());
     }
 
     /**

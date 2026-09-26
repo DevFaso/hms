@@ -111,8 +111,7 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         // A patient caller reads only their own: another patient's order
         // answers exactly as a missing id does, and before the hospital check
         // in requireInScope, which can answer differently.
-        UUID subjectPatientId = order.getPatient() != null ? order.getPatient().getId() : null;
-        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.PROCEDURE_ORDER_READS, subjectPatientId)) {
+        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.PROCEDURE_ORDER_READS, order.getPatient())) {
             throw procedureOrderNotFound(orderId);
         }
         return toResponseDTO(requireInScope(order));
