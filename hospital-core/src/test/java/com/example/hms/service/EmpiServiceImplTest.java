@@ -57,7 +57,12 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -142,6 +147,9 @@ class EmpiServiceImplTest {
         // view — the only caller a null scope may stand for. The unverified
         // (authorities-only) caller stubs this false explicitly.
         lenient().when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        // The conditional MERGED transition wins unless a test says a
+        // concurrent merge got there first.
+        lenient().when(masterIdentityRepository.claimForMerge(any(), any())).thenReturn(1);
     }
 
     @AfterEach
@@ -1072,6 +1080,161 @@ class EmpiServiceImplTest {
         Mockito.verify(kafkaTemplate, Mockito.times(2)).send(eq(EMPI_TOPIC), anyString(), sent.capture());
         assertThat(sent.getAllValues()).extracting(EmpiEventPayload::getEventType)
             .containsExactly("IDENTITY_LINKED", "IDENTITIES_MERGED");
+    }
+
+    /* ── mergePatientsAtAuthorisedHospital: the MLLP A40 entry point ───────
+       No request context on the thread, the hospital handed over explicitly,
+       and every other rule exactly as for a caller pinned to that hospital. */
+
+    @Test
+    void mergePatientsAtAuthorisedHospital_mergesOnAThreadWithNoContextAndSendsOnlyAfterCommit() {
+        UUID actingHospital = UUID.randomUUID();
+        UUID[] patients = kafkaMergeFixture(actingHospital, actingHospital);
+        // The MLLP worker: no HospitalContext, and nothing for RoleValidator to find.
+        HospitalContextHolder.clear();
+
+        EmpiMergeEventResponseDTO[] merged = new EmpiMergeEventResponseDTO[1];
+        transaction.executeWithoutResult(status -> {
+            merged[0] = empiService.mergePatientsAtAuthorisedHospital(
+                actingHospital, patients[0], patients[1], EmpiMergeType.AUTOMATED, "HL7 ADT^A40");
+            verify(kafkaTemplate, never())
+                .send(anyString(), anyString(), any(EmpiEventPayload.class));
+        });
+
+        assertThat(merged[0]).isNotNull();
+        ArgumentCaptor<EmpiMergeEvent> event = ArgumentCaptor.forClass(EmpiMergeEvent.class);
+        verify(mergeEventRepository).save(event.capture());
+        assertThat(event.getValue().getHospitalId()).isEqualTo(actingHospital);
+        assertThat(event.getValue().getMergeType()).isEqualTo(EmpiMergeType.AUTOMATED);
+        assertThat(event.getValue().getMergedBy()).isNull();
+        ArgumentCaptor<EmpiEventPayload> sent = ArgumentCaptor.forClass(EmpiEventPayload.class);
+        verify(kafkaTemplate, times(2)).send(eq(EMPI_TOPIC), anyString(), sent.capture());
+        assertThat(sent.getAllValues()).extracting(EmpiEventPayload::getEventType)
+            .containsExactly("IDENTITY_LINKED", "IDENTITIES_MERGED");
+        // The scope is the one handed over, never one resolved from a request.
+        verify(roleValidator, never()).requireActiveHospitalId();
+        verify(roleValidator, never()).isSuperAdminFromJwtClaim();
+        // Judged on the identities it loaded by patient id: the tenant-aware
+        // findById answers empty on a thread with no HospitalContext.
+        verify(masterIdentityRepository, never()).findById(any());
+    }
+
+    @Test
+    void mergePatientsAtAuthorisedHospital_refusesAPatientNotRegisteredThereBeforeProvisioning() {
+        UUID registeredAt = UUID.randomUUID();
+        UUID[] patients = kafkaMergeFixture(registeredAt, registeredAt);
+        HospitalContextHolder.clear();
+        UUID actingHospital = UUID.randomUUID();
+
+        Throwable refused = catchThrowable(() -> empiService.mergePatientsAtAuthorisedHospital(
+            actingHospital, patients[0], patients[1], EmpiMergeType.AUTOMATED, null));
+
+        assertThat(refused).isExactlyInstanceOf(AccessDeniedException.class);
+        verify(patientRepository, never()).findByIdUnscoped(any());
+        verify(mergeEventRepository, never()).save(any());
+    }
+
+    @Test
+    void mergePatientsAtAuthorisedHospital_refusesAnIdentityStampedElsewhereAndSendsNothing() {
+        // Registered at the acting hospital, but the primary's identity belongs
+        // to another: the pinned caller's rule, not a global view.
+        UUID actingHospital = UUID.randomUUID();
+        UUID[] patients = kafkaMergeFixture(actingHospital, UUID.randomUUID());
+        HospitalContextHolder.clear();
+
+        Throwable refused = catchThrowable(() -> transaction.executeWithoutResult(status ->
+            empiService.mergePatientsAtAuthorisedHospital(
+                actingHospital, patients[0], patients[1], EmpiMergeType.AUTOMATED, null)));
+
+        assertThat(refused).isExactlyInstanceOf(ResourceNotFoundException.class);
+        verify(mergeEventRepository, never()).save(any());
+        verify(kafkaTemplate, never()).send(anyString(), anyString(), any(EmpiEventPayload.class));
+    }
+
+    @Test
+    void mergePatientsAtAuthorisedHospital_requiresTheHospital() {
+        UUID primary = UUID.randomUUID();
+        UUID secondary = UUID.randomUUID();
+
+        assertThatThrownBy(() -> empiService.mergePatientsAtAuthorisedHospital(
+            null, primary, secondary, EmpiMergeType.AUTOMATED, null))
+            .isExactlyInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(registrationRepository, masterIdentityRepository, mergeEventRepository);
+    }
+
+    /* ── One merge, however many race; nothing recorded for a rollback ── */
+
+    @Test
+    void mergePatients_losingTheClaimToAConcurrentMergeIsRefusedExactlyLikeAnAlreadyMergedIdentity() {
+        renderMessagesWithArguments();
+        UUID hospital = UUID.randomUUID();
+        UUID[] patients = kafkaMergeFixture(hospital, hospital);
+        // Both merges read the secondary as ACTIVE; the other one claimed the
+        // row first, so this one's conditional update matched nothing.
+        when(masterIdentityRepository.claimForMerge(any(), any())).thenReturn(0);
+
+        Throwable lost = catchThrowable(() -> transaction.executeWithoutResult(status ->
+            empiService.mergePatients(patients[0], patients[1], EmpiMergeType.MANUAL, null)));
+
+        // The reference: the same merge arriving after the winner committed.
+        EmpiMasterIdentity secondary = masterIdentityRepository.findByPatientId(patients[1]).orElseThrow();
+        secondary.setStatus(EmpiIdentityStatus.MERGED);
+        Throwable later = catchThrowable(() ->
+            empiService.mergePatients(patients[0], patients[1], EmpiMergeType.MANUAL, null));
+
+        assertIdenticalRefusal(lost, later);
+        assertThat(lost).isExactlyInstanceOf(BusinessException.class);
+        verify(mergeEventRepository, never()).save(any());
+        verify(kafkaTemplate, never()).send(anyString(), anyString(), any(EmpiEventPayload.class));
+        verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    @Test
+    void mergePatients_writesItsSuccessAuditOnlyOnceTheTransactionCommits() {
+        UUID hospital = UUID.randomUUID();
+        UUID[] patients = kafkaMergeFixture(hospital, hospital);
+
+        transaction.executeWithoutResult(status -> {
+            empiService.mergePatients(patients[0], patients[1], EmpiMergeType.MANUAL, null);
+            verify(auditEventLogService, never()).logEvent(any());
+        });
+
+        ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.PATIENT_MERGE);
+        assertThat(audit.getValue().getStatus()).isEqualTo(com.example.hms.enums.AuditStatus.SUCCESS);
+    }
+
+    @Test
+    void mergePatients_aTransactionRolledBackAfterTheMergeLeavesNoSuccessAudit() {
+        UUID hospital = UUID.randomUUID();
+        UUID[] patients = kafkaMergeFixture(hospital, hospital);
+
+        catchThrowable(() -> transaction.executeWithoutResult(status -> {
+            empiService.mergePatients(patients[0], patients[1], EmpiMergeType.MANUAL, null);
+            throw new IllegalStateException("the caller's own work failed after the merge");
+        }));
+
+        verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    @Test
+    void mergePatients_aFlushFailureSurfacesFromTheCallAndRecordsNothing() {
+        // Flushed inside the call, so a constraint or lock failure is this
+        // method's exception - where a caller can still answer it as a
+        // refusal - and not a surprise at the caller's commit.
+        UUID hospital = UUID.randomUUID();
+        UUID[] patients = kafkaMergeFixture(hospital, hospital);
+        doThrow(new org.springframework.dao.DataIntegrityViolationException("constraint"))
+            .when(masterIdentityRepository).flush();
+
+        Throwable refused = catchThrowable(() -> transaction.executeWithoutResult(status ->
+            empiService.mergePatients(patients[0], patients[1], EmpiMergeType.MANUAL, null)));
+
+        assertThat(refused).isExactlyInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        verify(auditEventLogService, never()).logEvent(any());
+        verify(kafkaTemplate, never()).send(anyString(), anyString(), any(EmpiEventPayload.class));
     }
 
     /**
