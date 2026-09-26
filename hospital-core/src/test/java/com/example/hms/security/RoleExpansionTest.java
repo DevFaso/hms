@@ -26,6 +26,8 @@ class RoleExpansionTest {
         Paths.get("src/main/java/com/example/hms/security/JwtTokenProvider.java");
     private static final Path SECURITY_CONFIG =
         Paths.get("src/main/java/com/example/hms/config/SecurityConfig.java");
+    private static final Path KEYCLOAK_CONVERTER =
+        Paths.get("src/main/java/com/example/hms/security/oidc/KeycloakJwtAuthenticationConverter.java");
 
     @Test
     @DisplayName("a super-admin holds exactly ROLE_SUPER_ADMIN plus the one inherited list, in order")
@@ -71,13 +73,15 @@ class RoleExpansionTest {
     }
 
     @Test
-    @DisplayName("neither auth path carries an inheritance list of its own")
+    @DisplayName("no auth path carries an inheritance list of its own")
     void bothPathsCallTheOneRule() throws IOException {
         String jwt = Files.readString(JWT_PROVIDER, StandardCharsets.UTF_8);
         String config = Files.readString(SECURITY_CONFIG, StandardCharsets.UTF_8);
 
         assertThat(jwt).as("JwtTokenProvider expands through RoleExpansion").contains("RoleExpansion.expand(");
         assertThat(config).as("SecurityConfig maps through RoleExpansion").contains("RoleExpansion.authoritiesMapper()");
+        assertThat(Files.readString(KEYCLOAK_CONVERTER, StandardCharsets.UTF_8))
+            .as("the Keycloak converter expands through RoleExpansion").contains("RoleExpansion.expand(");
         // ROLE_STAFF appears in an inheritance list and nowhere else in the
         // JWT provider; in SecurityConfig it belongs only to request matchers.
         assertThat(jwt).as("no inline inheritance list in JwtTokenProvider").doesNotContain("ROLE_STAFF");

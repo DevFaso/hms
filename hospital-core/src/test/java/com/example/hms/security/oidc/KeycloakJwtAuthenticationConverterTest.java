@@ -1,5 +1,7 @@
 package com.example.hms.security.oidc;
 
+import com.example.hms.security.RoleExpansion;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
@@ -41,18 +43,62 @@ class KeycloakJwtAuthenticationConverterTest {
     }
 
     @Test
-    void mergesRealmAndClientRolesAndDeduplicates() {
+    @DisplayName("no client's roles grant anything - an unrelated client's super_admin and doctor least of all")
+    void clientRolesGrantNothing() {
         Jwt jwt = jwt(Map.of(
                 "sub", "u-1",
-                "realm_access", Map.of("roles", List.of("doctor", "nurse")),
                 "resource_access", Map.of(
-                        "hms-portal", Map.of("roles", List.of("doctor", "patient")),
-                        "hms-api", Map.of("roles", List.of("staff"))
+                        "billing-app", Map.of("roles", List.of("super_admin", "doctor")),
+                        "hms-portal", Map.of("roles", List.of("ROLE_HOSPITAL_ADMIN")),
+                        "hms-backend", Map.of("roles", List.of("audit.view")),
+                        "account", Map.of("roles", List.of("manage-account", "view-profile"))
                 )
         ));
 
+        assertThat(converter.convert(jwt).getAuthorities()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("realm roles still map when client roles ride alongside, and only they do")
+    void realmRolesMapAlongsideIgnoredClientRoles() {
+        Jwt jwt = jwt(Map.of(
+                "sub", "u-1",
+                "realm_access", Map.of("roles", List.of("doctor", "nurse", "doctor")),
+                "resource_access", Map.of("billing-app", Map.of("roles", List.of("super_admin")))
+        ));
+
         assertThat(authorityNames(converter.convert(jwt)))
-                .containsExactlyInAnyOrder("ROLE_DOCTOR", "ROLE_NURSE", "ROLE_PATIENT", "ROLE_STAFF");
+                .containsExactlyInAnyOrder("ROLE_DOCTOR", "ROLE_NURSE");
+    }
+
+    @Test
+    @DisplayName("a physician or a surgeon is a doctor over Keycloak, as over the password path")
+    void doctorEquivalenceApplies() {
+        Jwt physician = jwt(Map.of("sub", "u-1", "realm_access", Map.of("roles", List.of("PHYSICIAN"))));
+        Jwt surgeon = jwt(Map.of("sub", "u-2", "realm_access", Map.of("roles", List.of("ROLE_SURGEON"))));
+
+        assertThat(authorityNames(converter.convert(physician))).containsExactlyInAnyOrder("ROLE_PHYSICIAN", "ROLE_DOCTOR");
+        assertThat(authorityNames(converter.convert(surgeon))).containsExactlyInAnyOrder("ROLE_SURGEON", "ROLE_DOCTOR");
+    }
+
+    @Test
+    @DisplayName("a super-admin inherits exactly RoleExpansion's list")
+    void superAdminInheritsTheOneList() {
+        Jwt jwt = jwt(Map.of("sub", "u-1", "realm_access", Map.of("roles", List.of("super_admin"))));
+
+        assertThat(converter.convert(jwt).getAuthorities())
+                .extracting(GrantedAuthority::getAuthority)
+                .containsExactlyElementsOf(RoleExpansion.expand(List.of("ROLE_SUPER_ADMIN")));
+    }
+
+    @Test
+    @DisplayName("Keycloak's stock realm roles pass through as they always have, and widen nothing")
+    void stockRealmRolesPassThrough() {
+        Jwt jwt = jwt(Map.of("sub", "u-1", "realm_access",
+                Map.of("roles", List.of("PATIENT", "offline_access", "uma_authorization", "default-roles-hms"))));
+
+        assertThat(authorityNames(converter.convert(jwt))).containsExactlyInAnyOrder(
+                "ROLE_PATIENT", "ROLE_OFFLINE_ACCESS", "ROLE_UMA_AUTHORIZATION", "ROLE_DEFAULT-ROLES-HMS");
     }
 
     @Test

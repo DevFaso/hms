@@ -1,5 +1,6 @@
 package com.example.hms.security.oidc;
 
+import com.example.hms.security.RoleExpansion;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
@@ -10,21 +11,36 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 /**
  * Maps Keycloak JWT claims to Spring Security {@code GrantedAuthority}s.
  *
- * <p>S-03 phase 1: this converter is the bridge between Keycloak realm/client roles
- * (claim layout: {@code realm_access.roles} and {@code resource_access.<client>.roles})
- * and the existing {@code ROLE_*} authority strings used throughout the app
- * ({@code SecurityConstants}). Roles are normalised to upper-case and prefixed with
- * {@code ROLE_} when the claim value isn't already prefixed, so Keycloak admins can
- * configure roles either as {@code ROLE_DOCTOR} or simply {@code DOCTOR}.</p>
+ * <p>Only {@code realm_access.roles} is read. Every HMS role is a realm role:
+ * {@code keycloak/realm-export.json} defines the {@code ROLE_*} set under
+ * {@code roles.realm} and no client role at all, the {@code hms-claims} scope
+ * maps {@code realm_access.roles}, and the KC-4 migration
+ * ({@code scripts/keycloak-migration}) assigns users realm roles only.
+ * {@code resource_access.<client>.roles} is deliberately ignored: it carries
+ * the roles of EVERY client in the realm that the user holds one on
+ * (Keycloak's own {@code account} client puts {@code manage-account} and
+ * {@code view-profile} in every token), so reading it let a role named
+ * {@code doctor} or {@code super_admin} on any unrelated client become a
+ * platform authority.
+ *
+ * <p>Roles are upper-cased and prefixed with {@code ROLE_} when not already
+ * prefixed, so a realm role may be named {@code ROLE_DOCTOR} or {@code doctor},
+ * and then widened by {@link RoleExpansion#expand}, the rule the password path
+ * ({@code JwtTokenProvider.getAuthenticationFromJwt}) applies: the same role
+ * list yields the same authority set on both paths.
+ *
+ * <p>Keycloak's stock realm roles ({@code offline_access},
+ * {@code uma_authorization}, {@code default-roles-<realm>}) pass through as
+ * {@code ROLE_OFFLINE_ACCESS} and the like, as they always have. No guard
+ * names them.
  *
  * <p>This converter is always available as a Spring bean. It is only wired into the
  * resource-server filter chain when {@code app.auth.oidc.issuer-uri} is non-empty
@@ -35,7 +51,6 @@ public class KeycloakJwtAuthenticationConverter implements Converter<Jwt, Abstra
 
     private static final String ROLE_PREFIX = "ROLE_";
     private static final String CLAIM_REALM_ACCESS = "realm_access";
-    private static final String CLAIM_RESOURCE_ACCESS = "resource_access";
     private static final String CLAIM_ROLES = "roles";
     private static final String CLAIM_PREFERRED_USERNAME = "preferred_username";
     private static final String CLAIM_EMAIL = "email";
@@ -48,40 +63,18 @@ public class KeycloakJwtAuthenticationConverter implements Converter<Jwt, Abstra
     }
 
     /**
-     * Collect realm + client roles from the Keycloak token and turn each into a
-     * {@code ROLE_*} {@link SimpleGrantedAuthority}, de-duplicated.
+     * The realm roles, normalised to {@code ROLE_*} and expanded by
+     * {@link RoleExpansion}; de-duplicated, in claim order.
      */
     Collection<GrantedAuthority> extractAuthorities(Jwt jwt) {
-        Set<String> roleNames = new HashSet<>();
-        roleNames.addAll(extractRealmRoles(jwt));
-        roleNames.addAll(extractAllClientRoles(jwt));
-
-        Collection<GrantedAuthority> authorities = new ArrayList<>(roleNames.size());
-        for (String role : roleNames) {
-            authorities.add(new SimpleGrantedAuthority(normaliseRoleName(role)));
-        }
-        return authorities;
+        List<String> normalised = rolesFromClaim(jwt.getClaim(CLAIM_REALM_ACCESS)).stream()
+            .map(this::normaliseRoleName)
+            .toList();
+        return RoleExpansion.expand(normalised).stream()
+            .<GrantedAuthority>map(SimpleGrantedAuthority::new)
+            .toList();
     }
 
-    private List<String> extractRealmRoles(Jwt jwt) {
-        Object realmAccess = jwt.getClaim(CLAIM_REALM_ACCESS);
-        return rolesFromClaim(realmAccess);
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<String> extractAllClientRoles(Jwt jwt) {
-        Object resourceAccess = jwt.getClaim(CLAIM_RESOURCE_ACCESS);
-        if (!(resourceAccess instanceof Map<?, ?> resourceMap)) {
-            return List.of();
-        }
-        List<String> all = new ArrayList<>();
-        for (Object clientEntry : resourceMap.values()) {
-            all.addAll(rolesFromClaim(clientEntry));
-        }
-        return all;
-    }
-
-    @SuppressWarnings("unchecked")
     private List<String> rolesFromClaim(Object claim) {
         if (!(claim instanceof Map<?, ?> map)) {
             return List.of();
@@ -104,7 +97,7 @@ public class KeycloakJwtAuthenticationConverter implements Converter<Jwt, Abstra
 
     String normaliseRoleName(String role) {
         Objects.requireNonNull(role, "role");
-        String upper = role.toUpperCase();
+        String upper = role.toUpperCase(Locale.ROOT);
         return upper.startsWith(ROLE_PREFIX) ? upper : ROLE_PREFIX + upper;
     }
 
