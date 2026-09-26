@@ -12,7 +12,6 @@ import com.example.hms.model.Role;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
-import com.example.hms.repository.support.TenantAwareJpaRepository;
 import com.example.hms.security.EncryptionKeyHolder;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
@@ -23,11 +22,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
-import org.springframework.boot.persistence.autoconfigure.EntityScan;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
@@ -51,7 +47,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @DataJpaTest
 @ActiveProfiles("test")
-@Import({LabResultTrendReadableQueryTest.JpaConfig.class, TenantContextAccessor.class, EncryptionKeyHolder.class})
+// Exactly PatientRepositoryTenantScopeTest's configuration, so the two share
+// one cached context. A test-specific JpaConfig made this a new context, and
+// one more EntityManagerFactory in the test JVM was enough to exhaust the heap
+// under the full suite (PatientRepositoryRegistrationScopeTest's context then
+// failed to load with OutOfMemoryError).
+@Import({TenantContextAccessor.class, EncryptionKeyHolder.class})
 class LabResultTrendReadableQueryTest {
 
     private static final PageRequest WINDOW = PageRequest.of(0, 12);
@@ -243,12 +244,5 @@ class LabResultTrendReadableQueryTest {
 
     private String nextId() {
         return String.format("%05d", sequence.incrementAndGet());
-    }
-
-    @Configuration
-    @EnableJpaRepositories(basePackages = "com.example.hms.repository",
-        repositoryBaseClass = TenantAwareJpaRepository.class)
-    @EntityScan(basePackageClasses = Patient.class)
-    static class JpaConfig {
     }
 }
