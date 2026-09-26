@@ -17,6 +17,7 @@ import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.RoleRepository;
+import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.IdleSessionTracker;
@@ -95,6 +96,7 @@ class UserEndpointAuthorizationIT extends BaseIT {
     @Autowired private PatientRepository patientRepository;
     @Autowired private AuditEventLogRepository auditEventLogRepository;
     @Autowired private PatientHospitalRegistrationRepository registrationRepository;
+    @Autowired private StaffRepository staffRepository;
     @Autowired private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
     private final List<UUID> createdUsers = new ArrayList<>();
@@ -139,6 +141,7 @@ class UserEndpointAuthorizationIT extends BaseIT {
         patientRepository.deleteAllById(createdPatients);
         // Includes accounts admin-register made during a test.
         for (UUID userId : createdUsers) {
+            staffRepository.deleteAll(staffRepository.findByUserId(userId));
             assignmentRepository.deleteAll(assignmentRepository.findByUserId(userId));
         }
         userRepository.deleteAllById(createdUsers);
@@ -375,6 +378,109 @@ class UserEndpointAuthorizationIT extends BaseIT {
         assertThat(realPatient.getId()).isNotNull();
     }
 
+    // ------------------------------------------------ who may grant what
+
+    @Test
+    @DisplayName("a nurse requesting SUPER_ADMIN gets 403, no account is created, and one FAILURE row names the roles only")
+    void nurseCannotMintASuperAdmin() throws Exception {
+        auditEventLogRepository.deleteAllInBatch();
+        String nurse = hms(nurseA, "ROLE_NURSE");
+        String suffix = next();
+        String username = "minted" + suffix;
+
+        MvcResult refused = perform(post("/users/admin-register"), nurse, Map.of(
+            "username", username,
+            "email", username + "@evil.test",
+            "password", "Chosen-Pass-1",
+            "firstName", "Mint",
+            "lastName", "Admin",
+            "phoneNumber", "+22676" + suffix,
+            "roleNames", List.of("SUPER_ADMIN")));
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(userRepository.findByUsernameIgnoreCase(username)).isEmpty();
+        List<AuditEventLog> failures = auditEventLogRepository.findAll().stream()
+            .filter(row -> row.getStatus() == AuditStatus.FAILURE)
+            .toList();
+        assertThat(failures).hasSize(1);
+        assertThat(failures.get(0).getUser().getId()).isEqualTo(nurseA.getId());
+        assertThat(String.valueOf(failures.get(0).getDetails())).contains("SUPER_ADMIN")
+            .doesNotContain(username).doesNotContain("Chosen").doesNotContain("evil");
+
+        // Nor any other staff role, even at the nurse's own hospital.
+        Map<String, Object> doctor = new java.util.HashMap<>(signup("docmint", "DOCTOR", hospitalA));
+        doctor.put("licenseNumber", "LIC-" + next());
+        assertThat(status(post("/users/admin-register"), nurse, doctor)).isEqualTo(403);
+    }
+
+    @Test
+    @DisplayName("a hospital admin cannot grant HOSPITAL_ADMIN, nor any role at another hospital")
+    void hospitalAdminCannotGrantAdminOrElsewhere() throws Exception {
+        String admin = hms(adminA, "ROLE_HOSPITAL_ADMIN");
+
+        assertThat(status(post("/users/admin-register"), admin, signup("peer", "HOSPITAL_ADMIN", hospitalA)))
+            .isEqualTo(403);
+        assertThat(status(post("/users/admin-register"), admin, signup("sa", "SUPER_ADMIN", hospitalA)))
+            .isEqualTo(403);
+        assertThat(status(post("/users/admin-register"), admin, signup("recB", "RECEPTIONIST", hospitalB)))
+            .isEqualTo(403);
+
+        // A PATIENT registration lands at the caller's own active hospital
+        // whatever hospitalId the body names (resolveHospitalForPatient reads
+        // the context first), so this one is allowed, and is created at A.
+        MvcResult patient = perform(post("/users/admin-register"), admin, signup("patB", "PATIENT", hospitalB));
+        assertThat(patient.getResponse().getStatus()).isEqualTo(201);
+        UUID patientId = idOf(patient);
+        createdUsers.add(patientId);
+        assertThat(assignmentRepository.findByUserId(patientId))
+            .allSatisfy(a -> assertThat(a.getHospital().getId()).isEqualTo(hospitalA.getId()));
+    }
+
+    @Test
+    @DisplayName("staff creation still works: a hospital admin at home, the super-admin anywhere")
+    void staffCreationStillWorks() throws Exception {
+        Map<String, Object> receptionist = new java.util.HashMap<>(signup("recnew", "RECEPTIONIST", hospitalA));
+        receptionist.put("jobTitle", "RECEPTIONIST");
+        MvcResult byAdmin = perform(post("/users/admin-register"), hms(adminA, "ROLE_HOSPITAL_ADMIN"), receptionist);
+        assertThat(byAdmin.getResponse().getStatus()).isEqualTo(201);
+        createdUsers.add(idOf(byAdmin));
+
+        Map<String, Object> doctor = new java.util.HashMap<>(signup("docnew", "DOCTOR", hospitalB));
+        doctor.put("licenseNumber", "LIC-" + next());
+        doctor.put("jobTitle", "DOCTOR");
+        MvcResult bySuperAdmin = perform(post("/users/admin-register"), hms(superAdmin, "ROLE_SUPER_ADMIN"), doctor);
+        assertThat(bySuperAdmin.getResponse().getStatus()).isEqualTo(201);
+        createdUsers.add(idOf(bySuperAdmin));
+    }
+
+    @Test
+    @DisplayName("a hospital admin cannot take over a peer admin at the same hospital")
+    void hospitalAdminCannotTakeOverPeer() throws Exception {
+        User peer = account("hadmA2", "ROLE_HOSPITAL_ADMIN", hospitalA);
+        String hashBefore = hashOf(peer);
+
+        assertThat(status(put("/users/" + peer.getId()), hms(adminA, "ROLE_HOSPITAL_ADMIN"),
+            Map.of("password", "Takeover-Pass-1"))).isEqualTo(404);
+        assertThat(hashOf(peer)).isEqualTo(hashBefore);
+        assertThat(status(put("/users/" + peer.getId()), hms(superAdmin, "ROLE_SUPER_ADMIN"),
+            Map.of("firstName", "Renamed"))).isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("a surgeon's compensation works: register the patient, discard the orphan")
+    void surgeonCompensation() throws Exception {
+        User surgeon = account("surA", "ROLE_SURGEON", hospitalA);
+        String token = hms(surgeon, "ROLE_SURGEON");
+
+        MvcResult registered = perform(post("/users/admin-register"), token, signup("orphan", "PATIENT", hospitalA));
+        assertThat(registered.getResponse().getStatus()).isEqualTo(201);
+        UUID orphanId = idOf(registered);
+        createdUsers.add(orphanId);
+
+        assertThat(status(delete("/users/" + orphanId), token, null)).isEqualTo(200);
+        assertThat(userRepository.findById(orphanId).orElseThrow().isDeleted()).isTrue();
+    }
+
     // -------------------------------------------------------------- helpers
 
     private String next() {
@@ -452,6 +558,22 @@ class UserEndpointAuthorizationIT extends BaseIT {
             .build());
         createdPatients.add(saved.getId());
         return saved;
+    }
+
+    private Map<String, Object> signup(String prefix, String role, Hospital hospital) {
+        String suffix = next();
+        return Map.of(
+            "username", prefix + suffix,
+            "email", prefix + suffix + "@signup.test",
+            "firstName", prefix,
+            "lastName", "Signup" + suffix,
+            "phoneNumber", "+22677" + suffix,
+            "roleNames", List.of(role),
+            "hospitalId", hospital.getId().toString());
+    }
+
+    private UUID idOf(MvcResult result) throws Exception {
+        return UUID.fromString(objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asText());
     }
 
     private String hashOf(User user) {

@@ -55,6 +55,7 @@ class UserControllerTest {
     @MockitoBean private HospitalRepository hospitalRepository;
     @MockitoBean private UserRepository userRepository;
     @MockitoBean private UserRoleHospitalAssignmentRepository assignmentRepository;
+    @MockitoBean private com.example.hms.utility.RoleValidator roleValidator;
 
     // -------------------------------------------------------------------------
     // adminRegister — SUPER_ADMIN without hospitalId must succeed (201)
@@ -214,9 +215,8 @@ class UserControllerTest {
     private void authenticateAs(String username, String... authorities) {
         // Directly on the holders: the slice runs with addFilters=false, so
         // neither request.getUserPrincipal() nor the request-post-processor
-        // route reaches the controller. The hospital context carries the
-        // verified super-admin flag canSeeDeleted() reads, set here as the
-        // real filters set it for a super-admin token.
+        // route reaches the controller. The super-admin signal canSeeDeleted()
+        // reads is RoleValidator's, stubbed as it answers for such a token.
         authenticateAs(username,
             java.util.Arrays.asList(authorities).contains("ROLE_SUPER_ADMIN"), authorities);
     }
@@ -226,20 +226,18 @@ class UserControllerTest {
             .setAuthentication(
                 new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
                     username, "n/a", AuthorityUtils.createAuthorityList(authorities)));
-        com.example.hms.security.context.HospitalContextHolder.setContext(
-            com.example.hms.security.context.HospitalContext.builder().superAdmin(superAdminFlag).build());
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(superAdminFlag);
     }
 
     @org.junit.jupiter.api.AfterEach
     void clearSecurityContext() {
         org.springframework.security.core.context.SecurityContextHolder.clearContext();
-        com.example.hms.security.context.HospitalContextHolder.clear();
     }
 
     @Test
     void inflatedSuperAdminAuthority_withoutTheVerifiedFlag_getsTheLiveView() throws Exception {
-        // canSeeDeleted() trusts the hospital context's flag, not an authority
-        // another path may have copied in.
+        // canSeeDeleted() asks RoleValidator's super-admin signal, not the
+        // authorities collection.
         when(userService.getAllUsers(0, 10, false, false))
                 .thenReturn(org.springframework.data.domain.Page.empty());
         authenticateAs("impostor", false, "ROLE_SUPER_ADMIN");

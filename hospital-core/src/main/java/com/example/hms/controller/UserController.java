@@ -2,13 +2,13 @@ package com.example.hms.controller;
 
 import com.example.hms.config.SecurityConstants;
 import com.example.hms.security.audit.WriteAudited;
-import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.payload.dto.AdminSignupRequest;
 import com.example.hms.payload.dto.MessageResponse;
 import com.example.hms.payload.dto.UpdateUserRequestDTO;
 import com.example.hms.payload.dto.UserResponseDTO;
 import com.example.hms.payload.dto.UserSummaryDTO;
 import com.example.hms.service.UserService;
+import com.example.hms.utility.RoleValidator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -50,6 +50,7 @@ public class UserController {
 
     private final UserService userService;
     private final com.example.hms.repository.HospitalRepository hospitalRepository;
+    private final RoleValidator roleValidator;
 
     @WriteAudited(skip = true, reason = "service emits USER_CREATE / USER_UPDATE / USER_DELETE")
     @Operation(
@@ -180,11 +181,10 @@ public class UserController {
      * identities; scoping the directory itself is the larger pre-existing
      * question, and the deleted view must not widen it.
      */
-    private static boolean canSeeDeleted() {
-        // The hospital context's verified super-admin flag, the one
-        // UserAccountAccess decides on, not the authorities collection, which
-        // other paths inflate.
-        return HospitalContextHolder.getContextOrEmpty().isSuperAdmin();
+    private boolean canSeeDeleted() {
+        // The same super-admin signal the rest of the /users rules use
+        // (UserAccountAccess), so the two cannot disagree.
+        return roleValidator.isSuperAdminFromJwtClaim();
     }
 
     @WriteAudited(skip = true, reason = "service emits USER_CREATE / USER_UPDATE / USER_DELETE")

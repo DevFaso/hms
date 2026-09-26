@@ -108,6 +108,10 @@ class UserServiceImplTest {
         lenient().when(accountAccess.canAdminister(any())).thenReturn(true);
         lenient().when(accountAccess.canView(any())).thenReturn(true);
         lenient().when(accountAccess.canDelete(any())).thenReturn(true);
+        // Registration runs as a super-admin: the grant check resolves the hospital and allows.
+        UserAccountAccess.Grant anywhere = org.mockito.Mockito.mock(UserAccountAccess.Grant.class);
+        lenient().when(anywhere.requireAt(any())).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(accountAccess.requireMayGrant(any())).thenReturn(anywhere);
     }
 
     @Test
@@ -1562,6 +1566,36 @@ class UserServiceImplTest {
             assertThatThrownBy(() -> userService.getUserById(userId))
                     .isInstanceOf(ResourceNotFoundException.class);
             verifyNoInteractions(userMapper);
+        }
+
+        @Test
+        @DisplayName("a registration the caller may not grant: 403, one FAILURE row with actor id and role codes only, nothing written")
+        void refusedGrantIsAuditedAndWritesNothing() {
+            UUID actorId = UUID.randomUUID();
+            when(accountAccess.requireMayGrant(any()))
+                    .thenThrow(new org.springframework.security.access.AccessDeniedException("Access denied"));
+            when(accountAccess.currentUserId()).thenReturn(Optional.of(actorId));
+            AdminSignupRequest request = new AdminSignupRequest();
+            request.setUsername("mint-admin");
+            request.setEmail("mint@evil.test");
+            request.setPassword("Chosen-Pass-1");
+            request.setFirstName("Mint");
+            request.setLastName("Admin");
+            request.setPhoneNumber("+22670999999");
+            request.setRoleNames(Set.of("SUPER_ADMIN"));
+
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(request))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+            ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> row =
+                    ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+            verify(auditEventLogService).logEvent(row.capture());
+            assertThat(row.getValue().getStatus()).isEqualTo(com.example.hms.enums.AuditStatus.FAILURE);
+            assertThat(row.getValue().getUserId()).isEqualTo(actorId);
+            assertThat(String.valueOf(row.getValue().getDetails())).contains("SUPER_ADMIN")
+                    .doesNotContain("mint").doesNotContain("Chosen").doesNotContain("+22670999999");
+            // Refused before any lookup: not even the duplicate checks ran.
+            verifyNoInteractions(userRepository, passwordEncoder, assignmentService);
         }
 
         @Test

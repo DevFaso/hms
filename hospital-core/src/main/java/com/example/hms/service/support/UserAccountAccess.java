@@ -9,20 +9,19 @@ import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
-import com.example.hms.security.HospitalUserDetails;
-import com.example.hms.security.context.HospitalContextHolder;
-import com.example.hms.security.tenant.TenantContextAccessor;
+import com.example.hms.security.RoleExpansion;
+import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -32,32 +31,38 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Who may read or change a user ACCOUNT through {@code /users}.
+ * Who may read, change, delete or create a user ACCOUNT through {@code /users}.
  *
  * <p>Before this existed, {@code GET/PUT/DELETE /users/{id}} and the directory
  * reads carried no guard at all: any authenticated principal, a patient's
  * mobile token included, could set another account's password, rename,
- * deactivate or delete it, and list every account. The rules live here, in
- * the service layer, so a future controller over {@code UserService} cannot
- * route around them.
+ * deactivate or delete it, and list every account; and any registrar could
+ * register an account in ANY role at ANY hospital, a platform super-admin
+ * included. The rules live here, in the service layer, so a future
+ * controller over {@code UserService} cannot route around them.
  *
  * <p>The decisions:
  * <ul>
  *   <li><b>Administer</b> (edit another account, delete, restore): a
- *       super-admin; or a hospital admin whose target holds NO super-admin
- *       role, has every one of its hospital assignments at hospitals the
- *       caller administers, and, if it has a patient record, every
- *       registration of that record (any status) there too. "Every", not
- *       "any": a patient here who is an admin, or registered, elsewhere must
- *       not be handed to this hospital's admin, who could reset the password
- *       and sign in as them.</li>
+ *       super-admin; or a hospital admin whose target holds NO admin role
+ *       (super-admin, hospital admin or admin, active or not), has every one
+ *       of its hospital assignments at hospitals the caller administers, and,
+ *       if it has a patient record, every registration of that record (any
+ *       status) there too. "Every", not "any": a patient here who is an admin,
+ *       or registered, elsewhere must not be handed to this hospital's admin,
+ *       who could reset the password and sign in as them. Admins are
+ *       administered by the super-admin only, so one hospital admin cannot
+ *       take over a peer.</li>
+ *   <li><b>Grant</b> (admin-register): a super-admin grants any role at any
+ *       hospital; a hospital admin grants non-admin roles at hospitals they
+ *       administer; every other registrar grants PATIENT only, at a hospital
+ *       where they hold a registrar role.</li>
  *   <li><b>Self</b>: any principal may read their own account, and edit its
  *       contact fields. The credential and status fields go through their own
  *       endpoints (see {@code UserServiceImpl.updateUser}).</li>
  *   <li><b>Discard an unclaimed patient account</b>: the compensation the
  *       patient-registration form sends when the patient row fails after the
- *       account was created. Only an account that is plainly that orphan
- *       qualifies (see {@link #canDelete}).</li>
+ *       account was created (see {@link #canDelete}).</li>
  *   <li><b>Directory</b> (list / search): staff only, meaning a caller holding
  *       an active assignment in any role other than PATIENT, or a super-admin.
  *       Decided from the assignment table, not from token authorities: a
@@ -66,9 +71,13 @@ import java.util.stream.Collectors;
  *       token would admit every patient.</li>
  * </ul>
  *
- * <p>Each public decision loads the caller's and the target's assignments
- * once. Callers answer a refused id-based request exactly as they answer a
- * missing one, so the refusal is not an existence oracle.
+ * <p>Role codes are compared after {@link RoleExpansion}, on the token's
+ * authorities and on the caller's assignment codes alike, so a surgeon who is
+ * admitted as DOCTOR by the annotation is a DOCTOR here too.
+ *
+ * <p>Each public decision builds the caller once. Callers answer a refused
+ * id-based request exactly as they answer a missing one, so the refusal is not
+ * an existence oracle.
  */
 @Component
 @RequiredArgsConstructor
@@ -89,71 +98,56 @@ public class UserAccountAccess {
     private static final String HOSPITAL_ADMIN = "HOSPITAL_ADMIN";
     private static final String PATIENT = "PATIENT";
 
-    /** The admin-register roles, bare; the same constant feeds both controller annotations. */
-    static final Set<String> REGISTRAR_ROLES = Arrays.stream(SecurityConstants.USER_REGISTRAR_AUTHORITIES.split(","))
-        .map(role -> bare(role.replace("'", "")))
+    /** Roles only a super-admin grants, and whose holders only a super-admin administers. */
+    static final Set<String> ADMIN_ROLES = Set.of(SUPER_ADMIN, HOSPITAL_ADMIN, "ADMIN");
+
+    /** The admin-register roles, bare; the same constant feeds the annotations and SecurityConfig. */
+    static final Set<String> REGISTRAR_ROLES = Arrays.stream(
+            SecurityConstants.authorities(SecurityConstants.USER_REGISTRAR_AUTHORITIES))
+        .map(UserAccountAccess::bare)
         .collect(Collectors.toUnmodifiableSet());
 
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final PatientRepository patientRepository;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final StaffRepository staffRepository;
-    private final TenantContextAccessor tenantContext;
+    private final RoleValidator roleValidator;
 
     /**
-     * The caller as the decisions see them, loaded once per decision.
+     * The caller as one decision sees them, built once per decision.
      *
-     * @param activeAssignments the caller's ACTIVE assignments
+     * @param activeAssignments the caller's ACTIVE assignments; empty for a
+     *                          super-admin, whom no rule needs them for
      */
     private record Caller(UUID id, boolean superAdmin, Set<String> bareAuthorities,
                           List<UserRoleHospitalAssignment> activeAssignments) {
 
-        boolean presents(String bareRole) {
-            return bareAuthorities.contains(bareRole);
+        boolean presentsAny(Set<String> bareRoles) {
+            return bareAuthorities.stream().anyMatch(bareRoles::contains);
         }
 
-        /** Hospitals where the caller actively holds one of these roles. */
+        /** Hospitals where the caller actively holds one of these roles, after RoleExpansion. */
         Set<UUID> hospitalsWhereHolding(Set<String> bareRoles) {
             return activeAssignments.stream()
-                .filter(a -> bareRoles.contains(roleCode(a.getRole())))
+                .filter(a -> expandedCodes(a.getRole()).stream().anyMatch(bareRoles::contains))
                 .map(UserAccountAccess::hospitalIdOf)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         }
     }
 
-    /** The caller's HMS user id, or empty when it cannot be established. */
+    /**
+     * The caller's HMS user id, from {@link RoleValidator#getCurrentUserId()}.
+     * That resolver reads the password-login principal only; a Keycloak token
+     * is not identified yet (the resolver work is batch 2), so on the OIDC
+     * path self-service and the directory fail closed.
+     */
     public Optional<UUID> currentUserId() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated()) {
-            return Optional.empty();
-        }
-        if (auth.getPrincipal() instanceof HospitalUserDetails details && details.getUserId() != null) {
-            return Optional.of(details.getUserId());
-        }
-        if (auth instanceof JwtAuthenticationToken token) {
-            // Keycloak maps the user attribute app_user_id to this claim; it is
-            // the HMS user id. The subject is Keycloak's own id and matches no
-            // users row, so it is deliberately not a fallback.
-            UUID fromClaim = parseUuid(token.getToken().getClaimAsString("appUserId"));
-            if (fromClaim != null) {
-                return Optional.of(fromClaim);
-            }
-        }
-        return Optional.ofNullable(HospitalContextHolder.getContextOrEmpty().getPrincipalUserId());
+        return Optional.ofNullable(roleValidator.getCurrentUserId());
     }
 
     public boolean isSelf(User target) {
         return target != null && currentUserId().map(target.getId()::equals).orElse(false);
-    }
-
-    /**
-     * The discrete super-admin flag of the request's hospital context, not the
-     * authorities collection, which is inflated for other purposes (see
-     * {@code RoleValidator.isSuperAdminFromJwtClaim}).
-     */
-    public boolean isSuperAdmin() {
-        return tenantContext.isSuperAdmin();
     }
 
     /**
@@ -165,15 +159,16 @@ public class UserAccountAccess {
         if (target == null) {
             return false;
         }
-        if (isSelf(target) || isSuperAdmin()) {
+        Caller caller = caller();
+        if (caller.superAdmin() || target.getId().equals(caller.id())) {
             return true;
         }
-        Set<UUID> administered = administeredHospitals(caller());
+        Set<UUID> administered = administeredHospitals(caller);
         if (administered.isEmpty()) {
             return false;
         }
         List<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUserId(target.getId());
-        return !holdsSuperAdmin(target, assignments)
+        return !holdsAny(target, assignments, Set.of(SUPER_ADMIN))
             && assignments.stream().map(UserAccountAccess::hospitalIdOf).anyMatch(administered::contains);
     }
 
@@ -182,10 +177,9 @@ public class UserAccountAccess {
         if (target == null) {
             return false;
         }
-        if (isSuperAdmin()) {
-            return true;
-        }
-        return administers(caller(), target, assignmentRepository.findByUserId(target.getId()));
+        Caller caller = caller();
+        return caller.superAdmin()
+            || administers(caller, target, assignmentRepository.findByUserId(target.getId()));
     }
 
     /**
@@ -210,12 +204,83 @@ public class UserAccountAccess {
         if (target == null) {
             return false;
         }
-        if (isSuperAdmin()) {
+        Caller caller = caller();
+        if (caller.superAdmin()) {
             return true;
         }
-        Caller caller = caller();
         List<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUserId(target.getId());
         return administers(caller, target, assignments) || isUnclaimedOrphan(caller, target, assignments);
+    }
+
+    /**
+     * May the caller register an account in these roles? Checked in two steps
+     * over one caller: this one, on the role set alone, runs before anything
+     * about the request is looked up; {@link Grant#requireAt} then checks the
+     * hospital the registration resolves to.
+     * <ul>
+     *   <li>super-admin: any role, any hospital (or none);</li>
+     *   <li>hospital admin: no admin role, at a hospital where they hold an
+     *       active HOSPITAL_ADMIN assignment;</li>
+     *   <li>any other registrar: PATIENT only, at a hospital where they
+     *       actively hold a registrar role.</li>
+     * </ul>
+     *
+     * @throws AccessDeniedException when no hospital could make this role set allowed
+     */
+    public Grant requireMayGrant(Collection<String> requestedRoles) {
+        Caller caller = caller();
+        if (caller.superAdmin()) {
+            return new Grant(true, false, Set.of(), false, Set.of());
+        }
+        Set<String> roles = requestedRoles.stream()
+            .filter(Objects::nonNull)
+            .map(UserAccountAccess::bare)
+            .collect(Collectors.toSet());
+        boolean nonAdminRoles = !roles.isEmpty() && roles.stream().noneMatch(ADMIN_ROLES::contains);
+        boolean patientOnly = roles.equals(Set.of(PATIENT));
+        Set<UUID> adminHospitals = administeredHospitals(caller);
+        Set<UUID> registrarHospitals = caller.presentsAny(REGISTRAR_ROLES)
+            ? caller.hospitalsWhereHolding(REGISTRAR_ROLES)
+            : Set.of();
+        boolean asAdmin = nonAdminRoles && !adminHospitals.isEmpty();
+        boolean asRegistrar = patientOnly && !registrarHospitals.isEmpty();
+        if (!asAdmin && !asRegistrar) {
+            throw new AccessDeniedException("Access denied");
+        }
+        return new Grant(false, asAdmin, adminHospitals, asRegistrar, registrarHospitals);
+    }
+
+    /** What {@link #requireMayGrant} allowed, waiting for the hospital the registration resolves to. */
+    public static final class Grant {
+        private final boolean anywhere;
+        private final boolean asAdmin;
+        private final Set<UUID> adminHospitals;
+        private final boolean asRegistrar;
+        private final Set<UUID> registrarHospitals;
+
+        private Grant(boolean anywhere, boolean asAdmin, Set<UUID> adminHospitals,
+                      boolean asRegistrar, Set<UUID> registrarHospitals) {
+            this.anywhere = anywhere;
+            this.asAdmin = asAdmin;
+            this.adminHospitals = adminHospitals;
+            this.asRegistrar = asRegistrar;
+            this.registrarHospitals = registrarHospitals;
+        }
+
+        /**
+         * @return {@code hospitalId}, when the grant holds there
+         * @throws AccessDeniedException otherwise; a {@code null} hospital
+         *                               (a global assignment) is the super-admin's only
+         */
+        public UUID requireAt(UUID hospitalId) {
+            boolean allowed = anywhere || (hospitalId != null
+                && ((asAdmin && adminHospitals.contains(hospitalId))
+                    || (asRegistrar && registrarHospitals.contains(hospitalId))));
+            if (!allowed) {
+                throw new AccessDeniedException("Access denied");
+            }
+            return hospitalId;
+        }
     }
 
     /**
@@ -223,10 +288,8 @@ public class UserAccountAccess {
      * {@link AccessDeniedException} for everyone else, patients included.
      */
     public void requireDirectoryAccess() {
-        if (isSuperAdmin()) {
-            return;
-        }
-        boolean staff = caller().activeAssignments().stream()
+        Caller caller = caller();
+        boolean staff = caller.superAdmin() || caller.activeAssignments().stream()
             .map(a -> roleCode(a.getRole()))
             .anyMatch(code -> !code.isEmpty() && !PATIENT.equals(code));
         if (!staff) {
@@ -236,32 +299,33 @@ public class UserAccountAccess {
 
     private Caller caller() {
         UUID id = currentUserId().orElse(null);
+        boolean superAdmin = roleValidator.isSuperAdminFromJwtClaim();
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        Set<String> authorities = auth == null ? Set.of() : auth.getAuthorities().stream()
-            .map(GrantedAuthority::getAuthority)
-            .filter(Objects::nonNull)
+        Set<String> authorities = auth == null ? Set.of() : RoleExpansion.expand(auth.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(Objects::nonNull)
+                .map(UserAccountAccess::prefixed)
+                .toList())
+            .stream()
             .map(UserAccountAccess::bare)
             .collect(Collectors.toSet());
-        List<UserRoleHospitalAssignment> active = id == null
+        List<UserRoleHospitalAssignment> active = superAdmin || id == null
             ? List.of()
             : assignmentRepository.findByUser_IdAndActiveTrue(id);
-        return new Caller(id, isSuperAdmin(), authorities, active);
+        return new Caller(id, superAdmin, authorities, active);
     }
 
     /** Hospitals where the caller holds an ACTIVE hospital-admin assignment, if they present the role at all. */
     private static Set<UUID> administeredHospitals(Caller caller) {
-        if (caller.id() == null || !caller.presents(HOSPITAL_ADMIN)) {
+        if (caller.id() == null || !caller.presentsAny(Set.of(HOSPITAL_ADMIN))) {
             return Set.of();
         }
         return caller.hospitalsWhereHolding(Set.of(HOSPITAL_ADMIN));
     }
 
     private boolean administers(Caller caller, User target, List<UserRoleHospitalAssignment> assignments) {
-        if (caller.superAdmin()) {
-            return true;
-        }
         Set<UUID> administered = administeredHospitals(caller);
-        if (administered.isEmpty() || assignments.isEmpty() || holdsSuperAdmin(target, assignments)) {
+        if (administered.isEmpty() || assignments.isEmpty() || holdsAny(target, assignments, ADMIN_ROLES)) {
             return false;
         }
         boolean assignedOnlyHere = assignments.stream()
@@ -279,7 +343,7 @@ public class UserAccountAccess {
 
     private boolean isUnclaimedOrphan(Caller caller, User target, List<UserRoleHospitalAssignment> assignments) {
         if (caller.id() == null || caller.id().equals(target.getId()) || target.isDeleted()
-                || REGISTRAR_ROLES.stream().noneMatch(caller::presents)) {
+                || !caller.presentsAny(REGISTRAR_ROLES)) {
             return false;
         }
         if (target.getLastLoginAt() != null || target.getLastOidcLoginAt() != null || assignments.isEmpty()) {
@@ -303,12 +367,12 @@ public class UserAccountAccess {
             && !staffRepository.existsByUserId(target.getId());
     }
 
-    /** Any trace of super-admin on the target, active or not, global role or assignment. */
-    private static boolean holdsSuperAdmin(User target, List<UserRoleHospitalAssignment> assignments) {
+    /** Any trace of these roles on the target, active or not, global role or assignment. */
+    private static boolean holdsAny(User target, List<UserRoleHospitalAssignment> assignments, Set<String> bareRoles) {
         boolean viaAssignment = assignments.stream()
-            .anyMatch(a -> SUPER_ADMIN.equals(roleCode(a.getRole())));
+            .anyMatch(a -> bareRoles.contains(roleCode(a.getRole())));
         boolean viaGlobalRole = target.getUserRoles().stream()
-            .anyMatch(ur -> SUPER_ADMIN.equals(roleCode(ur.getRole())));
+            .anyMatch(ur -> bareRoles.contains(roleCode(ur.getRole())));
         return viaAssignment || viaGlobalRole;
     }
 
@@ -321,6 +385,17 @@ public class UserAccountAccess {
 
     private static UUID hospitalIdOf(UserRoleHospitalAssignment assignment) {
         return assignment.getHospital() == null ? null : assignment.getHospital().getId();
+    }
+
+    /** An assignment's role and what RoleExpansion implies by it, bare. */
+    private static Set<String> expandedCodes(Role role) {
+        String code = roleCode(role);
+        if (code.isEmpty()) {
+            return Set.of();
+        }
+        return RoleExpansion.expand(List.of(prefixed(code))).stream()
+            .map(UserAccountAccess::bare)
+            .collect(Collectors.toSet());
     }
 
     /** The role's code without its {@code ROLE_} prefix, upper-case; "" when unknown. */
@@ -337,14 +412,8 @@ public class UserAccountAccess {
         return upper.startsWith("ROLE_") ? upper.substring("ROLE_".length()) : upper;
     }
 
-    private static UUID parseUuid(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        try {
-            return UUID.fromString(raw.trim());
-        } catch (IllegalArgumentException ignored) {
-            return null;
-        }
+    private static String prefixed(String role) {
+        String upper = role.trim().toUpperCase(Locale.ROOT);
+        return upper.startsWith("ROLE_") ? upper : "ROLE_" + upper;
     }
 }

@@ -12,7 +12,7 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.CustomUserDetails;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
-import com.example.hms.security.tenant.TenantContextAccessor;
+import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -31,6 +31,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -61,7 +62,7 @@ class UserAccountAccessTest {
     @BeforeEach
     void setUp() {
         access = new UserAccountAccess(assignmentRepository, patientRepository, registrationRepository,
-            staffRepository, new TenantContextAccessor());
+            staffRepository, new RoleValidator(assignmentRepository));
     }
 
     @AfterEach
@@ -308,6 +309,109 @@ class UserAccountAccessTest {
     }
 
     @Nested
+    @DisplayName("a hospital admin and a peer admin")
+    class PeerAdmin {
+
+        @Test
+        @DisplayName("an account holding HOSPITAL_ADMIN or ADMIN, active or not, is the super-admin's only")
+        void peerAdminsAreSuperAdminOnly() {
+            signIn(false, "ROLE_HOSPITAL_ADMIN");
+            callerHolds(assignment("ROLE_HOSPITAL_ADMIN", hospitalA, true));
+
+            User peer = targetWith(assignment("ROLE_HOSPITAL_ADMIN", hospitalA, true));
+            User formerPeer = targetWith(assignment("ROLE_NURSE", hospitalA, true),
+                assignment("ROLE_HOSPITAL_ADMIN", hospitalA, false));
+            User backOffice = targetWith(assignment("ROLE_ADMIN", hospitalA, true));
+            assertThat(access.canAdminister(peer)).isFalse();
+            assertThat(access.canAdminister(formerPeer)).isFalse();
+            assertThat(access.canAdminister(backOffice)).isFalse();
+            assertThat(access.canDelete(peer)).isFalse();
+
+            signIn(true, "ROLE_SUPER_ADMIN");
+            assertThat(access.canAdminister(peer)).isTrue();
+        }
+    }
+
+    @Nested
+    @DisplayName("granting roles (admin-register)")
+    class Grant {
+
+        private UUID grant(String role, Hospital at) {
+            return access.requireMayGrant(Set.of(role)).requireAt(at == null ? null : at.getId());
+        }
+
+        @Test
+        @DisplayName("the super-admin grants any role, at any hospital or none")
+        void superAdminGrantsAnything() {
+            signIn(true, "ROLE_SUPER_ADMIN");
+
+            assertThat(grant("SUPER_ADMIN", null)).isNull();
+            assertThat(grant("ROLE_HOSPITAL_ADMIN", hospitalB)).isEqualTo(hospitalB.getId());
+        }
+
+        @Test
+        @DisplayName("a hospital admin grants non-admin roles at their hospital only")
+        void hospitalAdminGrantsNonAdminRolesAtHome() {
+            signIn(false, "ROLE_HOSPITAL_ADMIN");
+            callerHolds(assignment("ROLE_HOSPITAL_ADMIN", hospitalA, true));
+
+            assertThat(grant("NURSE", hospitalA)).isEqualTo(hospitalA.getId());
+            assertThat(grant("PATIENT", hospitalA)).isEqualTo(hospitalA.getId());
+            for (String adminRole : new String[] {"SUPER_ADMIN", "HOSPITAL_ADMIN", "ADMIN", "ROLE_HOSPITAL_ADMIN"}) {
+                assertThatThrownBy(() -> grant(adminRole, hospitalA)).as(adminRole)
+                    .isInstanceOf(AccessDeniedException.class);
+            }
+            assertThatThrownBy(() -> grant("NURSE", hospitalB)).isInstanceOf(AccessDeniedException.class);
+            assertThatThrownBy(() -> grant("NURSE", null)).isInstanceOf(AccessDeniedException.class);
+            assertThatThrownBy(() -> access.requireMayGrant(Set.of("NURSE", "HOSPITAL_ADMIN")))
+                .isInstanceOf(AccessDeniedException.class);
+        }
+
+        @Test
+        @DisplayName("a nurse grants PATIENT only, at a hospital where they register; SUPER_ADMIN never")
+        void registrarGrantsPatientOnly() {
+            signIn(false, "ROLE_NURSE");
+            callerHolds(assignment("ROLE_NURSE", hospitalA, true));
+
+            assertThat(grant("PATIENT", hospitalA)).isEqualTo(hospitalA.getId());
+            // Refused on the role set alone, before any hospital is resolved.
+            assertThatThrownBy(() -> access.requireMayGrant(Set.of("SUPER_ADMIN")))
+                .isInstanceOf(AccessDeniedException.class);
+            assertThatThrownBy(() -> grant("DOCTOR", hospitalA)).isInstanceOf(AccessDeniedException.class);
+            assertThatThrownBy(() -> grant("HOSPITAL_ADMIN", hospitalA)).isInstanceOf(AccessDeniedException.class);
+            assertThatThrownBy(() -> grant("PATIENT", hospitalB)).isInstanceOf(AccessDeniedException.class);
+            assertThatThrownBy(() -> grant("PATIENT", null)).isInstanceOf(AccessDeniedException.class);
+        }
+
+        @Test
+        @DisplayName("a nurse's own patient assignment elsewhere is not a place they register")
+        void ownPatientAssignmentIsNotARegistrarHospital() {
+            signIn(false, "ROLE_NURSE", "ROLE_PATIENT");
+            callerHolds(assignment("ROLE_NURSE", hospitalA, true), assignment("ROLE_PATIENT", hospitalB, true));
+
+            assertThatThrownBy(() -> grant("PATIENT", hospitalB)).isInstanceOf(AccessDeniedException.class);
+        }
+
+        @Test
+        @DisplayName("a surgeon registers patients at their hospital, as a DOCTOR by RoleExpansion")
+        void surgeonRegistersPatients() {
+            signIn(false, "ROLE_SURGEON");
+            callerHolds(assignment("ROLE_SURGEON", hospitalA, true));
+
+            assertThat(grant("PATIENT", hospitalA)).isEqualTo(hospitalA.getId());
+        }
+
+        @Test
+        @DisplayName("a patient grants nothing")
+        void patientGrantsNothing() {
+            signIn(false, "ROLE_PATIENT");
+            callerHolds(assignment("ROLE_PATIENT", hospitalA, true));
+
+            assertThatThrownBy(() -> grant("PATIENT", hospitalA)).isInstanceOf(AccessDeniedException.class);
+        }
+    }
+
+    @Nested
     @DisplayName("discarding an unclaimed patient account (patient-form's compensation)")
     class DiscardUnclaimed {
 
@@ -339,6 +443,15 @@ class UserAccountAccessTest {
 
             assertThat(access.canDelete(freshAtB)).isFalse();
             // The same doctor still discards the one at A, where they register.
+            assertThat(access.canDelete(orphan)).isTrue();
+        }
+
+        @Test
+        @DisplayName("a surgeon (a DOCTOR by RoleExpansion) discards the orphan at their hospital")
+        void surgeonCompensates() {
+            signIn(false, "ROLE_SURGEON");
+            callerHolds(assignment("ROLE_SURGEON", hospitalA, true));
+
             assertThat(access.canDelete(orphan)).isTrue();
         }
 
