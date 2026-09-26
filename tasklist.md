@@ -2202,6 +2202,84 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+### Execution plan (2026-09-26)
+
+The roadmap above is done except #46 (deferred by the user). What remains is
+this section. It is worked down in **batches of five or six PRs**, each off
+develop in its own worktree, never stacked, each a draft until the
+coordinator has reviewed it at its current head. A batch lands (and is synced
+to prod when the user says "sync") before the next one starts. Batches are
+chosen so no two PRs in one batch touch the same files.
+
+**Batch 1 — in flight.**
+1. **URGENT: `/users` account takeover** (`fix/users-endpoint-authorization`).
+   `PUT /users/{id}` has no role check and `UserServiceImpl.updateUser` no
+   caller check, so any authenticated principal, a patient included, can set
+   any account's password, username, email or active flag, a super-admin's
+   included; `DELETE` and the directory reads are equally open. Live on prod.
+   See "`/users` is largely ungated" below.
+2. FHIR `Patient` read/search answers 500 for every caller (lazy
+   `hospitalRegistrations`, open-in-view off) (`fix/fhir-patient-lazy-load`).
+3. EMPI: a null scope read as global view without the verified super-admin
+   check (two places), inactive registrations counted, Kafka events sent
+   before commit (`fix/empi-scope-and-event-timing`).
+4. Lab results loaded across every hospital and filtered in memory, on five
+   callers (`fix/lab-result-patient-query-scope`) — keeping the
+   ordered-OR-performed-OR-treatment rule, not ordering hospital only.
+5. The `pr-review-response` skill's coordinator mode: agents stop readying
+   their own PRs (`chore/pr-review-coordinator-mode`).
+6. This plan (`chore/tasklist-execution-plan`).
+
+**Batch 2 — the security root causes.** Most scoping bugs of the last two
+waves trace to these, so they come before any more per-endpoint fixes.
+- One tenant resolver: `RoleValidator.requireActiveHospitalId()` and
+  `ControllerAuthUtils.resolveHospitalScope` agree on super-admin semantics;
+  step 4's authorities-only global view goes; the raw-context readers
+  (seven in `fhir/**` alone) delegate. Design first, then one PR.
+- Hospital claims in the JWT go stale, and there is no deterministic primary
+  hospital.
+- `ctx.isSuperAdmin()` is authority-derived, and `CrossTenantReadAudit` skips
+  the two cases most worth tracing.
+- `KeycloakJwtAuthenticationConverter` flattens every realm client's roles and
+  skips `RoleExpansion`; role equivalence differs between layers.
+- 235 dead `hasAuthority(...)` clauses, and a ratchet pairing every
+  `@PreAuthorize` with its `SecurityConfig` matcher.
+- Staff who are also patients: the prescription twin of #754.
+
+**Batch 3 — pharmacy and lab, finished.** The items under "The pharmacy and
+laboratory flows: what wave 2 left underneath it" that remain unowned; the
+reference range a patient is shown; the HL7 residuals (#753's deferred list,
+the A40 rollback-only trap, unbounded demographics and OBX-5); and the two
+migrations queued during the wave — the partner no-show column (the reason
+text currently carries a literal `"Partner no-show: "` prefix) and the HL7
+casing backfill. Pre-allocate: **V165** and **V166**.
+
+**Batch 4 — patient apps.** SSO chat cannot resolve the user id; sign-out does
+not revoke the session; no `Accept-Language` and English error text in the
+French build; raw enums on the health-records screens; chat attachments,
+mark-read and the raw timestamp; the pre-brand blue theme. Then parity
+phase 3 (account flows) and phase 4 (push, chat attachments, Spanish).
+
+**Batch 5 — translations and portal quality.** 237 enum fields without
+`| enumLabel`; 219 `ResourceNotFoundException` prose keys; 46 bundle values
+with destroyed accents (restore from a verified source, never guess);
+`BusinessException` resolving no keys; the non-reactive `role-context` stub;
+the Angular 22 / Spring Boot 4.1 pins.
+
+**Batch 6 — data integrity and operations.** 37 tables with `patient_id` and
+no foreign key, and the orphans already on dev; encounters outliving their
+attending's assignment; outbound mail on the request thread;
+`LoginAttemptService` per-JVM lockout; the Play Store privacy-policy URL; the
+mobile release runbook.
+
+**Needs a decision from the user before it can be scheduled:** French
+"publier" vs "valider" for lab release; whether a clinician sees a
+preliminary value before release; `patient_diagnoses` has no `hospital_id`
+(add the column, drop the read, or accept); whether any external system uses
+FHIR on prod (lab and reception roles are now refused); a hospital switcher
+for users who are not super-admins; #46 kiosk check-in. The two clinical
+questions below need a clinician, not an engineer.
+
 - **Device-only history notes are filed under a different identity per login path
   (#709 iOS, #710 Android).** The personal notes on My Medical History live only
   on the phone and are keyed by the Keycloak `sub` for an SSO session and by the
@@ -2772,7 +2850,10 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   a coverage test is what stops that, and it is the E8 #49 problem in
   miniature: there is no annotation meaning "this query is tenant-scoped" to
   scan for.
-- **`getAfterVisitSummary` reads unscoped.** It resolves by bare `findById`
+- **~~`getAfterVisitSummary` reads unscoped.~~ Closed by #746** (with
+  ownership for a patient caller; #754 added the staff-owner fallback). The
+  sibling bullet on `getEncounterById`'s null-hospital bypass is still open.
+  It resolved by bare `findById`
   with no hospital check, on an endpoint that also admits `ROLE_PATIENT` — so
   staff at one hospital can read the AVS written by another's checkout. A read,
   not a write, so it belongs with E8 #49's classification pass rather than the
@@ -2811,7 +2892,12 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   Until then the leak stands, and it is small next to the ungated endpoint that
   already lets any authenticated caller set another user's password.
 
-- **`/users` is largely ungated.** Only `POST /users/admin-register` and
+- **URGENT — an account takeover, live on prod. Owned by
+  `fix/users-endpoint-authorization` (batch 1).** `UserServiceImpl.updateUser`
+  applies the password, username, email and `active` from the body with no
+  caller check, so the gap below is not "largely ungated" but any
+  authenticated principal setting any account's password.
+  **`/users` is largely ungated.** Only `POST /users/admin-register` and
   `PATCH /users/{id}/restore` carry `@PreAuthorize`; `GET /users`,
   `GET /users/{id}`, `GET /users/search`, `PUT /users/{id}` and
   `DELETE /users/{id}` have none, and `SecurityConfig` matches only the
@@ -3544,7 +3630,7 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   merges whatever GitHub shows as ready, a self-readied PR ships its open
   findings. The skill needs a coordinator mode in which the agent pushes, hands
   back and leaves the PR a draft. **This is the most important process fix from
-  the wave.** Unowned.
+  the wave.** Owned by `chore/pr-review-coordinator-mode` (batch 1).
 
 - **~~The FHIR read API was open to every authenticated user, across every
   tenant.~~ Closed by #752 (who may reach `/fhir/**`: the chart-reader roles,
@@ -3622,25 +3708,30 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
     `FhirTenantBoundary.isVisible` is a false positive: the caller is itself
     `@Transactional`.)
 
-- **OPEN, platform-wide: `X-Hospital-Id` is honoured for ANY hospital when
-  the principal holds none.** The cause is one clause,
-  `|| effective.getPermittedHospitalIds().isEmpty()` in
-  `HospitalContextRequestOverrides.applyRequestOverrides` line 70: a principal
-  with an empty permitted set may pin whatever hospital the header names.
-  **Nearly every PATIENT is in that set:** patients hold a global
-  (no-hospital) `ROLE_PATIENT` assignment ("patients can exist system-wide",
-  `UserRoleHospitalAssignmentServiceImpl` ~line 1029), and
-  `JwtTokenProvider.buildHospitalContext` builds the permitted set from
-  non-null hospital ids only. So is a Keycloak token without hospital claims,
-  and an HMS token whose assignments were revoked after sign-in. Every
-  endpoint that resolves the active hospital (through `RoleValidator` or the
-  raw context) then acts AT the hospital the header names. #755 stopped
-  trusting the value on FHIR paths only. The premise several fixes this wave
-  leaned on - "a patient principal always resolves one hospital" - does not
-  hold under a header. Fix the clause, not each reader: refuse the header for
-  a non-super-admin with no permitted hospital. **Check the patient flows
-  before shipping that**, since it changes what every patient's active
-  hospital is. **The most important item from this wave.** Unowned.
+- **~~`X-Hospital-Id` was honoured for ANY hospital when the principal held
+  none.~~ Closed by #770**, which removed the empty-permitted-set clause from
+  `HospitalContextRequestOverrides`: a patient (global `ROLE_PATIENT`
+  assignment), a Keycloak token without hospital claims, or a user whose
+  assignments were revoked can no longer act at a hospital by naming it. The
+  one portal caller that sent the header with an empty set was a revoked
+  staff member being pinned back into their hospital, i.e. the hole itself;
+  the patient apps never send the header. #770 also stopped
+  `PharmacyDirectoryController` trusting a raw `hospitalId` parameter and
+  header, and stopped logging the raw malformed header value (log forging).
+  What it left, all bounded by token lifetime or legacy data:
+  - A super-admin demoted after sign-in keeps the override until the token
+    expires (`superAdminFlag` comes from the token).
+  - On the Keycloak path the permitted set comes from the token's
+    `role_assignments` / `hospital_id` claims, so a user revoked at a hospital
+    keeps it until the token expires (the legacy path reads it live).
+  - Staff whose role exists only in `user_roles`, with no assignment row, have
+    no hospital at all; the portal already sent them no header, so only a raw
+    API client lost the override.
+  - A header the filter rejects is ignored, not refused, platform-wide: the
+    request runs at the caller's own active hospital. Endpoints that take a
+    requested hospital (encounters, insurance) still refuse it themselves.
+    Whether a rejected header should be a 4xx everywhere is a platform
+    decision, not recorded as a defect.
 
 - **~~Cross-tenant defects on the FHIR write and EMPI paths.~~ Closed by
   #750:** `PUT /Patient/{id}` counts only an ACTIVE registration at the
