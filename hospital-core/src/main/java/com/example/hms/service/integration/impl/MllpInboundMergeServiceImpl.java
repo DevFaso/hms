@@ -65,6 +65,10 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
 
         String survivingMrn = parsed.survivingMrn().trim();
         String priorMrn = parsed.priorMrn().trim();
+        // MSH-10 as every log line below shows it: the same quoting and
+        // escaping as the dead-letter reason, so a sender cannot forge or
+        // reorder a log line with ANSI, separator or bidi characters.
+        String loggedControlId = MllpRecordingContext.quotedControlId(messageControlId);
 
         if (survivingMrn.equalsIgnoreCase(priorMrn)) {
             // Not an error worth alarming about, but not a merge either.
@@ -94,7 +98,7 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             log.warn("MLLP A40 rejected — unknown identifier(s): surviving known={} "
                     + "prior known={} (sender={}/{} hospital={} msgCtrlId={})",
                 survivorKnown, retireeKnown,
-                sendingApplication, sendingFacility, hospitalId, messageControlId);
+                sendingApplication, sendingFacility, hospitalId, loggedControlId);
             recordReject(receivingHospital, sendingApplication, sendingFacility,
                 messageControlId, "identifier not found");
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
@@ -155,7 +159,7 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             log.warn("MLLP A40 cross-tenant reject — surviving={} registered={} "
                     + "prior={} registered={} at hospital={} (sender={}/{} msgCtrlId={})",
                 survivingPatientId, survivorIsOurs, retiringPatientId, retireeIsOurs,
-                hospitalId, sendingApplication, sendingFacility, messageControlId);
+                hospitalId, sendingApplication, sendingFacility, loggedControlId);
             recordReject(receivingHospital, sendingApplication, sendingFacility,
                 messageControlId, "cross-tenant rejection");
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
@@ -169,7 +173,7 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             log.info("MLLP A40 no-op — both identifiers already resolve to patient {} "
                 + "(sender={}/{} hospital={} msgCtrlId={})",
                 survivingPatientId, sendingApplication, sendingFacility,
-                hospitalId, messageControlId);
+                hospitalId, loggedControlId);
             return MllpInboundOutcome.ACCEPTED;
         }
 
@@ -190,7 +194,7 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // the sender's queue.
             log.warn("MLLP A40 refused by the merge service — sender={}/{} hospital={} "
                     + "msgCtrlId={}: {}",
-                sendingApplication, sendingFacility, hospitalId, messageControlId,
+                sendingApplication, sendingFacility, hospitalId, loggedControlId,
                 ex.getMessage());
             return MllpInboundOutcome.REJECTED_INVALID;
         }
@@ -198,7 +202,7 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
         log.info("MLLP A40 applied — patients {} <- {} "
             + "sender={}/{} hospital={} msgCtrlId={}",
             survivingPatientId, retiringPatientId,
-            sendingApplication, sendingFacility, hospitalId, messageControlId);
+            sendingApplication, sendingFacility, hospitalId, loggedControlId);
         return MllpInboundOutcome.ACCEPTED;
     }
 

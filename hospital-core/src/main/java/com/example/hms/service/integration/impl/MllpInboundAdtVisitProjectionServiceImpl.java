@@ -22,6 +22,7 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.platform.AdtIntakeProviderConfigRepository;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.integration.MllpInboundAdtVisitProjectionService;
+import com.example.hms.service.integration.message.MllpRecordingContext;
 import com.example.hms.utility.Hl7FieldBounds;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedAdtMessage;
 
@@ -139,9 +140,10 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         // step that reads it, so a long location cannot skip a discharge.
         if (!Hl7FieldBounds.fits(parsed.visitNumber().trim(), Hl7FieldBounds.VISIT_NUMBER_MAX)) {
             UUID hospitalId = receivingHospital.getId();
+            String loggedControlId = MllpRecordingContext.quotedControlId(messageControlId);
             log.warn("ADT visit-sync skipped — PV1-19 is wider than its column "
                     + "(sender={}/{} hospital={} msgCtrlId={})",
-                sendingApplication, sendingFacility, hospitalId, messageControlId);
+                sendingApplication, sendingFacility, hospitalId, loggedControlId);
             return VisitProjectionResult.SKIPPED;
         }
 

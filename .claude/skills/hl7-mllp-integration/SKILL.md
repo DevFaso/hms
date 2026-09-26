@@ -139,9 +139,12 @@ only an optional step reads rejects what works today.
   `Hl7FieldBoundsColumnWidthTest`, or a migration will silently move one
   without the other. `Hl7FieldBounds.fits` counts code points, as
   `VARCHAR(n)` does - not `String.length()`.
-- Sender text quoted into a reason an operator reads goes through
-  `MllpRecordingContext.withControlId`, which quotes and escapes it, so the
-  sender cannot write text that reads as our own finding.
+- MSH-10 shown to an operator - in a dead-letter reason or a log line -
+  goes through `MllpRecordingContext.withControlId` / `quotedControlId`,
+  which quote and escape it, so the sender cannot write text that reads as
+  our own finding. Those are MSH-10 only: other sender text in a reason
+  (the OBR-2 placer, the MSH-3/MSH-4 pair) is not quoted yet, and a general
+  helper for it is an open follow-up - do not reuse `withControlId` for it.
 - **Not yet covered: demographics and OBX-5.** PID-5/7/8/11 go into
   `Patient` columns of 100 (sex: 10) and OBX-5 into `result_value` (2048),
   unbounded. An over-width value fails at flush: `AE Server-side handler

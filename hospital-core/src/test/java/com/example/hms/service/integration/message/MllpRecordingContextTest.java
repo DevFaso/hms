@@ -183,4 +183,16 @@ class MllpRecordingContextTest {
         assertThat(MllpRecordingContext.withControlId("r", rlo))
             .isEqualTo("r (MSH-10 \"x\\u202ey\\u200b\\u2028\\u2066\")");
     }
+
+    @Test
+    @DisplayName("Only spaces are stripped: a trailing control character is kept, escaped, and tells two ids apart")
+    void aTrailingControlCharacterIsKeptAndShown() {
+        // String.trim() would strip the BEL, and ABC and ABC+BEL - different
+        // ids, echoed differently in MSA-2 - would render the same.
+        assertThat(MllpRecordingContext.quotedControlId("ABC" + (char) 7))
+            .isEqualTo("\"ABC\\u0007\"")
+            .isNotEqualTo(MllpRecordingContext.quotedControlId("ABC"));
+        assertThat(MllpRecordingContext.quotedControlId("  ABC  ")).isEqualTo("\"ABC\"");
+        assertThat(MllpRecordingContext.quotedControlId(null)).isNull();
+    }
 }

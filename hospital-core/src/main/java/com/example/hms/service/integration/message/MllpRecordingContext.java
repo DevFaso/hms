@@ -194,9 +194,38 @@ public final class MllpRecordingContext {
      * rather than rendered.
      */
     public static String withControlId(String reason, String messageControlId) {
-        return StringUtils.hasText(messageControlId)
-            ? reason + " (MSH-10 " + quoted(messageControlId.trim()) + ")"
-            : reason;
+        String quoted = quotedControlId(messageControlId);
+        return quoted != null ? reason + " (MSH-10 " + quoted + ")" : reason;
+    }
+
+    /**
+     * MSH-10 as it may be shown to an operator - in a dead-letter reason or a
+     * log line - or null when there is none. One rule for both: quoted, with
+     * quotes, backslashes and every character that could reorder or hide text
+     * escaped, so a sender cannot forge or rearrange what an operator reads.
+     *
+     * <p>Only spaces are stripped from the ends, not {@code String.trim()}'s
+     * whole control range: {@code ABC} and {@code ABC} followed by a BEL are
+     * different ids, MSA-2 echoes them differently, and they must not render
+     * the same here.
+     */
+    public static String quotedControlId(String messageControlId) {
+        if (!StringUtils.hasText(messageControlId)) {
+            return null;
+        }
+        return quoted(stripSpaces(messageControlId));
+    }
+
+    private static String stripSpaces(String value) {
+        int start = 0;
+        int end = value.length();
+        while (start < end && value.charAt(start) == ' ') {
+            start++;
+        }
+        while (end > start && value.charAt(end - 1) == ' ') {
+            end--;
+        }
+        return value.substring(start, end);
     }
 
     /**

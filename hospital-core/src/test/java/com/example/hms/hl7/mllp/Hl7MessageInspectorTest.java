@@ -142,4 +142,28 @@ class Hl7MessageInspectorTest {
             .isInstanceOf(MllpProtocolException.class)
             .isNotInstanceOf(MllpFieldWidthException.class);
     }
+
+    @Test
+    void aRefusedSenderFieldKeepsTheControlIdToAnswerOn() {
+        // The refusal must echo MSH-10 in MSA-2 or the sender cannot match it
+        // and resends. The refused field itself is replaced, never carried.
+        String body = withHeaderField("MSH-4", "F".repeat(181));
+
+        assertThatThrownBy(() -> Hl7MessageInspector.parseHeader(body))
+            .isInstanceOfSatisfying(MllpFieldWidthException.class, refused -> {
+                assertThat(refused.replyHeader()).isNotNull();
+                assertThat(refused.replyHeader().messageControlId()).isEqualTo("MSG-42");
+                assertThat(refused.replyHeader().sendingApplication()).isEqualTo("MINDRAY");
+                assertThat(refused.replyHeader().sendingFacility()).isEqualTo("?");
+            });
+    }
+
+    @Test
+    void anOverWidthControlIdLeavesNothingToEcho() {
+        String body = withHeaderField("MSH-10", "C".repeat(256));
+
+        assertThatThrownBy(() -> Hl7MessageInspector.parseHeader(body))
+            .isInstanceOfSatisfying(MllpFieldWidthException.class,
+                refused -> assertThat(refused.replyHeader()).isNull());
+    }
 }

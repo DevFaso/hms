@@ -564,4 +564,19 @@ class Hl7MessageDispatcherTest {
             .doesNotContain("RRRR");
         verifyNoInteractions(inboundMerge);
     }
+
+    @Test
+    void anOverWidthSenderFieldIsAnArThatEchoesTheControlId() {
+        // Before the parse-time bound this frame got an AR echoing MSH-10.
+        // It still must: without MSA-2 the sender cannot match the refusal,
+        // times out and resends, and every resend is a new dead letter.
+        String adt = "MSH|^~\\&|REGISTRATION|" + "F".repeat(181) + "|HMS|HOSP1|20260428||ADT^A08|CTRL-SENDER|P|2.5\r"
+                   + "PID|1||MRN-001||DOE^JANE\r";
+
+        assertThat(dispatcher.dispatch(adt, "10.0.0.74:1"))
+            .contains("MSA|AR|CTRL-SENDER")
+            .contains("Invalid MSH: MSH-4 exceeds 180 characters")
+            .doesNotContain("FFFF");
+        verifyNoInteractions(allowlist, inboundLab, inboundAdt, inboundMerge);
+    }
 }

@@ -133,10 +133,16 @@ public class Hl7MessageDispatcher {
                 // not-allowlisted path was fixed for. There is no sender to
                 // bound by when the header is the thing that would not parse.
                 null);
-            Hl7MessageHeader fallback = new Hl7MessageHeader(
-                "|", "^~\\&", "?", "?", "HMS", "HMS", "", "ACK", "?", "P", "2.5"
-            );
-            return Hl7AckBuilder.buildAck(fallback, Hl7AckBuilder.AckCode.AR, "Invalid MSH: " + ex.getMessage());
+            // A refused sender field still leaves a readable MSH-10: answer on
+            // that header, so MSA-2 echoes it and the sender can match its
+            // own refusal instead of resending. Only an unreadable MSH, or an
+            // over-width MSH-10 itself, falls back to the anonymous envelope.
+            Hl7MessageHeader envelope = ex instanceof MllpFieldWidthException widthRefusal
+                    && widthRefusal.replyHeader() != null
+                ? widthRefusal.replyHeader()
+                : new Hl7MessageHeader(
+                    "|", "^~\\&", "?", "?", "HMS", "HMS", "", "ACK", "?", "P", "2.5");
+            return Hl7AckBuilder.buildAck(envelope, Hl7AckBuilder.AckCode.AR, "Invalid MSH: " + ex.getMessage());
         }
 
         // Allowlist gate — runs before any domain work so unknown

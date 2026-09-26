@@ -9,7 +9,25 @@ package com.example.hms.hl7.mllp;
  * names the field and the limit, never the value.
  */
 public class MllpFieldWidthException extends MllpProtocolException {
+
+    /** The header to answer on, or null when MSH-10 itself was refused. */
+    private final transient Hl7MessageHeader replyHeader;
+
     public MllpFieldWidthException(String message) {
+        this(message, null);
+    }
+
+    public MllpFieldWidthException(String message, Hl7MessageHeader replyHeader) {
         super(message);
+        this.replyHeader = replyHeader;
+    }
+
+    /**
+     * The parsed header with each refused field replaced by {@code ?}, so the
+     * refusal can echo the message's own MSH-10 in MSA-2 and the sender can
+     * match it; null when MSH-10 is the field refused, which cannot be echoed.
+     */
+    public Hl7MessageHeader replyHeader() {
+        return replyHeader;
     }
 }
