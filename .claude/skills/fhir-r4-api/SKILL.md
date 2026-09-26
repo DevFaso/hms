@@ -79,6 +79,42 @@ pieces that unlock the full SMART app launch flow. When extending,
 keep `.well-known/smart-configuration` aligned with the Keycloak OIDC
 issuer (`app.auth.oidc.issuer-uri`).
 
+## Who reaches `/fhir/**` (the role gate)
+
+`SecurityConfig` gates the servlet in four steps, first match wins:
+`GET /fhir/metadata` and `GET /fhir/.well-known/smart-configuration` stay
+`permitAll`; `POST $export` (system and Patient) admits the `SUPER_ADMIN` +
+`HOSPITAL_ADMIN` pair its service admits; reads (`GET /fhir/**`,
+`POST /fhir/*/_search`) admit `FHIR_READER_AUTHORITIES` — the chart-reader
+set of `EncounterController.ENCOUNTER_LIST_ROLES` plus `ROLE_PHYSICIAN` /
+`ROLE_SURGEON` named explicitly (`RoleExpansion` expands HMS-minted tokens,
+not Keycloak ones); every other method admits `FHIR_WRITER_AUTHORITIES`, the
+same set without the consulting clinicians. `SecurityConfigFhirMatcherTest`
+fails if the reader set drifts from the encounter-list annotation.
+
+Until that matcher existed, `/fhir/**` rode `anyRequest().authenticated()`
+and a patient's mobile-app token reached every provider. Two rules follow:
+
+- **A new FHIR operation that needs a role outside the reader set gets its
+  own matcher above the `/fhir/**` one** (first match wins, and the reader
+  matcher is terminal) — never a wider reader set.
+- **A role gate is not a tenant gate.** Admission says nothing about which
+  hospital's rows a reader may see — that is the tenant boundary below; this
+  matcher must never be widened or narrowed to stand in for tenant scoping.
+- **The matcher sees the UNION of the caller's roles** across all their
+  hospitals: a DOCTOR at A who is a RECEPTIONIST at B passes it while acting
+  at B. The tenant boundary below checks the role held at the bound hospital
+  and refuses that caller at B.
+- **No machine role is admitted.** `ROLE_FHIR_CLIENT` cannot be provisioned
+  today, and `KeycloakJwtAuthenticationConverter` maps a role of any realm
+  client to `ROLE_*` — admitting it would let an unrelated client role named
+  `fhir_client` grant the whole chart. Add it back only with a real way to
+  grant it.
+
+`FhirRoleGateIT` sends real tokens through the real filter chain: an
+HMS-minted JWT (through `JwtAuthenticationFilter` and `RoleExpansion`) and a
+Keycloak-shaped RS256 JWT (through the real `KeycloakJwtAuthenticationConverter`).
+
 ## Tenant boundary — one interceptor, not per-provider guards
 
 `FhirTenantBoundaryInterceptor` bounds every FHIR request to the caller's
@@ -226,7 +262,10 @@ to honor. Caught in PR #343 Copilot review.
 `reasonCode[0].text → chiefComplaint` (only when currently
 blank). Tenant scope via `EncounterRepository.findByIdAndHospital_Id`
 with a defence-in-depth hospital-equality check on the loaded
-entity (missing scope or mismatch → 403). New
+entity (missing scope or mismatch → 403 — *superseded: a mismatch must
+answer exactly like a miss; see the cross-tenant gate in the
+`multi-tenancy-scoping` skill. The branch is unreachable here because the
+lookup is already scoped.*). New
 `AuditEventType.ENCOUNTER_UPDATE` with `entityType="ENCOUNTER"`.
 Note: the constant is `ENCOUNTER_UPDATE` not `ENCOUNTER_UPDATED`
 (naming-convention bug caught in PR #350 review — fix slated for
@@ -243,8 +282,12 @@ the body's `note[0].text` appends to `lab_results.notes` (pipe
 separator; duplicate text is a no-op). `PUT /Observation/vital-*`
 returns `422 BUSINESSRULE` because the 1:N `PatientVitalSign` →
 Observation expansion has no single-row write target. Tenant
-scope: `LabResult.labOrder.hospital.id` must match the active
-hospital (missing or mismatched → 403). Audit:
+scope: the result is loaded by id, then `LabOrder.isHandledBy(activeHospital)`
+must hold — ownership of a lab result is the ordering **or** the performing
+hospital, not one column. A missing hospital scope answers 403, an unknown
+id 404, and another tenant's result 403. *That last split is a known
+oracle — do not copy the answer shape; see the cross-tenant gate in the
+`multi-tenancy-scoping` skill.* Audit:
 `LAB_RESULT_UPDATED` with `entityType="LAB_RESULT"`.
 
 ### Audit naming convention
@@ -308,6 +351,11 @@ to DENY first (return `Optional.empty()`) when
 null`, THEN check the stored vs current hospital equality. See
 the `multi-tenancy-scoping` skill for the full pattern. Caught
 on PR #351.
+
+> **Superseded in part:** the raw-context null check above is not reliable
+> for an unpinned super-admin — the value differs by auth path and by
+> resolver. Follow "Resolving the tenant" in the `multi-tenancy-scoping`
+> skill instead.
 
 ### Bulk-data spec: 400 on malformed `_since` / `_outputFormat`
 

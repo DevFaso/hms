@@ -36,7 +36,16 @@ design until terminology binding (gap #5) and the inbound MLLP listener
 
 - `GET /fhir/metadata` is public (per the FHIR R4 spec — clients fetch the
   CapabilityStatement before authenticating).
-- Every other `/fhir/**` endpoint requires the same Bearer JWT used elsewhere.
+- Every other `/fhir/**` endpoint requires the same Bearer JWT used elsewhere
+  **and a role** (`SecurityConfig`):
+  - reads (`GET`, and `POST <type>/_search`): the chart readers — `DOCTOR`,
+    `PHYSICIAN`, `SURGEON`, `NURSE`, `MIDWIFE`, `RADIOLOGIST`,
+    `ANESTHESIOLOGIST`, `PHYSIOTHERAPIST`, `SUPER_ADMIN`;
+  - `POST $export`: `SUPER_ADMIN`, `HOSPITAL_ADMIN` (the pair its service admits);
+  - every other method (the flag-gated writes): `DOCTOR`, `PHYSICIAN`,
+    `SURGEON`, `NURSE`, `MIDWIFE`, `SUPER_ADMIN`.
+
+  A patient token, and every non-clinical staff role, gets 403.
 - **Tenancy is enforced once, at the servlet, by `FhirTenantBoundaryInterceptor`**
   — not by the providers, four of which (`Encounter`, `Condition`,
   `MedicationRequest`, `Immunization`) read with no hospital filter. The
@@ -44,6 +53,15 @@ design until terminology binding (gap #5) and the inbound MLLP listener
   and where they do (`Patient`) they scope to every permitted hospital and
   organisation, not the one the request is acting in. See
   [Tenant boundary](#tenant-boundary) below.
+- The role gate checks the **union** of the caller's roles across all their
+  hospitals (a Spring Security path matcher sees only flat authorities): a
+  DOCTOR at A who is a RECEPTIONIST at B passes it while acting at B. The
+  tenant boundary then checks the role held **at the hospital the request is
+  bound to**, and refuses that caller at B.
+- There is no integration identity yet: no machine role is provisioned in
+  any migration or in the realm, and no realm client has service accounts
+  enabled. An integration signs in as a staff user and is gated by that
+  user's role.
 - CSRF is exempted on `/fhir/**` (server-to-server clients use Bearer JWT,
   not browser cookies).
 

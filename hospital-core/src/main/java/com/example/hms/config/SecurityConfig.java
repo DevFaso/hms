@@ -58,6 +58,7 @@ import static com.example.hms.config.SecurityConstants.ROLE_PHYSIOTHERAPIST;
 import static com.example.hms.config.SecurityConstants.ROLE_RADIOLOGIST;
 import static com.example.hms.config.SecurityConstants.ROLE_STAFF;
 import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
+import static com.example.hms.config.SecurityConstants.ROLE_SURGEON;
 import static com.example.hms.config.SecurityConstants.ROLE_BILLING_SPECIALIST;
 import static com.example.hms.config.SecurityConstants.ROLE_ACCOUNTANT;
 import static com.example.hms.config.SecurityConstants.ROLE_ADMIN;
@@ -118,6 +119,64 @@ public class SecurityConfig {
      * admin to the hospital they are acting in.
      */
     static final String API_HOSPITAL_POSTURE = "/hospitals/*/record-access-posture";
+
+    /**
+     * The HAPI FHIR servlet ({@code FhirConfig}, mounted at {@code /fhir/*}).
+     * It answers with the whole chart — Encounter, Condition,
+     * MedicationRequest, Immunization, Observation, DiagnosticReport,
+     * DocumentReference — so a READ admits the roles that read the chart
+     * elsewhere: {@code EncounterController.ENCOUNTER_LIST_ROLES}
+     * ({@code SecurityConfigFhirMatcherTest} keeps the two equal).
+     *
+     * <p>Until these matchers existed {@code /fhir/**} fell through to
+     * {@code anyRequest().authenticated()}, so a patient's mobile-app bearer
+     * token, a receptionist or a billing clerk reached every provider.
+     *
+     * <p>What this does NOT do: a path matcher sees the union of the caller's
+     * authorities across every hospital they work at, so a DOCTOR at A who is
+     * a RECEPTIONIST at B passes while acting at B; and it says nothing about
+     * which hospital's rows an admitted caller sees. Both belong to the FHIR
+     * tenant boundary, which must bind the request to one hospital AND check
+     * the role held there.
+     *
+     * <p>No machine role is admitted. {@code ROLE_FHIR_CLIENT} (named by
+     * {@code IdleSessionGate}) cannot be granted today — no migration, realm
+     * role or service-account client provisions it — and the Keycloak
+     * converter maps a role of ANY realm client to {@code ROLE_*}, so listing
+     * it would let an unrelated client role named {@code fhir_client} grant
+     * the whole chart. It comes back with a real way to provision it.
+     *
+     * <p>{@code ROLE_PHYSICIAN} and {@code ROLE_SURGEON} are named on top:
+     * {@code RoleExpansion} grants them {@code ROLE_DOCTOR} only on tokens
+     * HMS mints ({@code JwtTokenProvider}), not on Keycloak tokens, whose
+     * converter does not expand. Every other {@code ROLE_DOCTOR} guard in the
+     * code carries the same SSO gap; it is closed here only for this gate.
+     */
+    static final String[] FHIR_READER_AUTHORITIES = {
+        ROLE_DOCTOR, RoleExpansion.ROLE_PHYSICIAN, ROLE_SURGEON, ROLE_NURSE, ROLE_MIDWIFE,
+        ROLE_RADIOLOGIST, ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_SUPER_ADMIN
+    };
+
+    /**
+     * FHIR writes (PUT Patient / Encounter / Observation, the conditional
+     * POST Patient — all behind {@code app.fhir.write.enabled}) and every
+     * other method that is not a read. The write services check only the
+     * tenant, so the role gate is here: the charting clinicians, without the
+     * consulting clinicians, who read the chart and write only within their
+     * own specialty surface ({@code CONSULTING_CLINICIANS_AUTHORITIES}).
+     */
+    static final String[] FHIR_WRITER_AUTHORITIES = {
+        ROLE_DOCTOR, RoleExpansion.ROLE_PHYSICIAN, ROLE_SURGEON, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN
+    };
+
+    /**
+     * {@code $export} (system and Patient level) is a POST, and its service
+     * ({@code FhirBulkExportService.requireBulkExportRole}) and the status
+     * controller admit SUPER_ADMIN and HOSPITAL_ADMIN. The matcher carries the
+     * same pair, ahead of the other {@code /fhir/**} matchers, so the hospital
+     * admin keeps the export and gains no clinical read.
+     */
+    static final String[] FHIR_BULK_EXPORT_PATHS = {"/fhir/$export", "/fhir/Patient/$export"};
 
     private static final String API_REGISTRATIONS = "/registrations";
     private static final String API_REGISTRATIONS_PATTERN = API_REGISTRATIONS + "/**";
@@ -399,6 +458,15 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/fhir/metadata").permitAll()
                 // SMART-on-FHIR App Launch 1.0 discovery — public per spec.
                 .requestMatchers(HttpMethod.GET, "/fhir/.well-known/smart-configuration").permitAll()
+                // Everything else on the FHIR servlet, first match wins:
+                // $export (its own admin pair), then reads — GET, and the
+                // POST form of a search — for the chart readers, then every
+                // other method for the charting clinicians only.
+                .requestMatchers(HttpMethod.POST, FHIR_BULK_EXPORT_PATHS)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+                .requestMatchers(HttpMethod.GET, "/fhir/**").hasAnyAuthority(FHIR_READER_AUTHORITIES)
+                .requestMatchers(HttpMethod.POST, "/fhir/*/_search").hasAnyAuthority(FHIR_READER_AUTHORITIES)
+                .requestMatchers("/fhir/**").hasAnyAuthority(FHIR_WRITER_AUTHORITIES)
                 // CDS Hooks discovery — public per HL7 CDS Hooks 1.0 spec
                 // (decision-support clients enumerate services before auth).
                 .requestMatchers(HttpMethod.GET, "/cds-services").permitAll()

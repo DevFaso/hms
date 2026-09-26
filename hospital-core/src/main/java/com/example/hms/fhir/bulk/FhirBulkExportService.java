@@ -50,9 +50,11 @@ import java.util.UUID;
  * {@code NOT_FOUND} (cross-tenant rejection is invisible).
  *
  * <p>Authorisation: a completed export is a bulk PHI extract, so kickoff
- * requires SUPER_ADMIN or HOSPITAL_ADMIN — checked here because the
- * HAPI servlet space ({@code /fhir/**}) carries no role gate of its
- * own. The status controller mirrors the same gate.
+ * requires SUPER_ADMIN or HOSPITAL_ADMIN. {@code SecurityConfig} admits the
+ * same pair on {@code POST /fhir/$export} and {@code /fhir/Patient/$export}
+ * ({@code FHIR_BULK_EXPORT_PATHS}); the check stays here as well because the
+ * service is the gate that knows it is an export. The status controller
+ * mirrors the same gate.
  *
  * <p>Feature-flagged via
  * {@link FhirOperationsProperties.BulkExport#isEnabled()}; flag-off now

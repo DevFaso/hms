@@ -42,8 +42,17 @@ import java.util.UUID;
 /**
  * FHIR R4 resource provider for {@code Patient}.
  *
- * <p>Read is tenant-scoped through {@link PatientRepository#findById(Object)} which
- * already applies hospital-context filters via the {@code tenantContext} bean.
+ * <p>Tenancy, stated as it is rather than as it was once described. Read and
+ * {@code _id} search go through {@link PatientRepository#findById(Object)},
+ * which {@code TenantAwareJpaRepository} filters with
+ * {@code TenantScopeSpecification}: a patient is found when registered at ANY
+ * hospital the caller is permitted at (every assignment of a multi-hospital
+ * user, every hospital of a permitted organisation), and a super-admin is not
+ * filtered at all. That is wider than the active hospital the other FHIR
+ * providers anchor on. The {@code tenantContext} bean filters only the
+ * name/identifier search query. Writes do NOT rely on either: PUT and the
+ * conditional POST are gated on a registration at the active hospital inside
+ * {@link PatientFhirWriteService}.
  *
  * <p>Search is intentionally narrow at this stage — it covers the parameters
  * downstream consumers (OpenMRS, DHIS2 Tracker, OpenHIE) require for patient
@@ -168,6 +177,10 @@ public class PatientFhirResourceProvider implements IResourceProvider {
      * <p>Feature-flagged: when {@code app.fhir.write.enabled=false}
      * (default) the write service throws {@code MethodNotAllowedException}
      * → 405.
+     *
+     * <p>The tenant gate is in {@link PatientFhirWriteService#update}: a
+     * patient not registered at the caller's active hospital answers the same
+     * 404 as one that does not exist.
      */
     @Update
     public MethodOutcome update(

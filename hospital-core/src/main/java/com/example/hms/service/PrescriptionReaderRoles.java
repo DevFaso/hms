@@ -1,7 +1,6 @@
 package com.example.hms.service;
 
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 
 import java.util.Set;
 
@@ -97,19 +96,8 @@ public final class PrescriptionReaderRoles {
      * not change.
      */
     public static boolean isPatientOnly(Authentication auth) {
-        if (auth == null) {
-            return false;
-        }
-        boolean patient = false;
-        for (GrantedAuthority authority : auth.getAuthorities()) {
-            String name = authority.getAuthority();
-            if (CLINICAL_READER_ROLES.contains(name)) {
-                return false;
-            }
-            if ("ROLE_PATIENT".equals(name)) {
-                patient = true;
-            }
-        }
-        return patient;
+        // One implementation, shared with the encounter reads; only the role
+        // set is this endpoint's own.
+        return ReaderRolePredicates.isPatientOnly(auth, CLINICAL_READER_ROLES);
     }
 }
