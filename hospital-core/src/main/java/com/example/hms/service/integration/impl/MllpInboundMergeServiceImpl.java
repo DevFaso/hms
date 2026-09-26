@@ -189,9 +189,11 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // Already merged, or a domain rule the merge service owns. AE
             // rather than AA: the sender's request was not applied and their
             // queue should say so.
-            // The only A40 refusal that writes no integration_message_event
-            // row, so MSH-10 in the log is the only way to correlate it with
-            // the sender's queue.
+            // This refusal writes no integration_message_event row, so MSH-10
+            // in the log is the only way to correlate it with the sender's
+            // queue. It is not the only one: the missing PID-3/MRG-1,
+            // no-hospital and same-identifier refusals above write no row
+            // either, and their log lines do not carry MSH-10 yet.
             log.warn("MLLP A40 refused by the merge service — sender={}/{} hospital={} "
                     + "msgCtrlId={}: {}",
                 sendingApplication, sendingFacility, hospitalId, loggedControlId,

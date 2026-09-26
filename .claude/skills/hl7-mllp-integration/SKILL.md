@@ -139,12 +139,16 @@ only an optional step reads rejects what works today.
   `Hl7FieldBoundsColumnWidthTest`, or a migration will silently move one
   without the other. `Hl7FieldBounds.fits` counts code points, as
   `VARCHAR(n)` does - not `String.length()`.
-- MSH-10 shown to an operator - in a dead-letter reason or a log line -
-  goes through `MllpRecordingContext.withControlId` / `quotedControlId`,
-  which quote and escape it, so the sender cannot write text that reads as
-  our own finding. Those are MSH-10 only: other sender text in a reason
+- MSH-10 in the ADT and A40 dead-letter reasons, and in the merge-service
+  and visit-projection log lines #753 touched, goes through
+  `MllpRecordingContext.withControlId` / `quotedControlId`, which quote and
+  escape it so the sender cannot write text that reads as our own finding.
+  Not yet everywhere: the A02, A03 and auto-create audit descriptions in
+  the visit projection still format MSH-10 raw - persisted audit text, so
+  quoting it is a behaviour change and an open follow-up - and so do older
+  log lines. The helpers are MSH-10 only: other sender text in a reason
   (the OBR-2 placer, the MSH-3/MSH-4 pair) is not quoted yet, and a general
-  helper for it is an open follow-up - do not reuse `withControlId` for it.
+  helper for it is also a follow-up - do not reuse `withControlId` for it.
 - **Not yet covered: demographics and OBX-5.** PID-5/7/8/11 go into
   `Patient` columns of 100 (sex: 10) and OBX-5 into `result_value` (2048),
   unbounded. An over-width value fails at flush: `AE Server-side handler
