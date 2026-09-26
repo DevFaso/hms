@@ -55,6 +55,15 @@ public class SecurityConstants {
     public static final String CONSULTING_CLINICIANS_ROLES =
         "'RADIOLOGIST','ANESTHESIOLOGIST','PHYSIOTHERAPIST'";
     public static final String ROLE_MIDWIFE = "ROLE_MIDWIFE";
+
+    /**
+     * Who may register an account ({@code POST /users/admin-register}) and so
+     * also send the patient-registration form's compensation delete. A SpEL
+     * fragment for {@code hasAnyAuthority(...)}, written once: both
+     * {@code UserController} annotations and {@code UserAccountAccess} read it.
+     */
+    public static final String USER_REGISTRAR_AUTHORITIES =
+        "'ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE'";
     public static final String ROLE_BILLING_SPECIALIST = "ROLE_BILLING_SPECIALIST";
 
     // Pharmacy sub-roles

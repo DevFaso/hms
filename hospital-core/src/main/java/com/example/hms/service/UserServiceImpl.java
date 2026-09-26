@@ -39,6 +39,8 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.service.support.UserAccountAccess;
+import com.example.hms.utility.MessageUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -99,7 +101,7 @@ public class UserServiceImpl implements UserService {
     private final StaffRepository staffRepository;
     private final PatientRepository patientRepository;
     private final PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
-    private final com.example.hms.service.support.UserAccountAccess accountAccess;
+    private final UserAccountAccess accountAccess;
 
     @Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -1008,11 +1010,13 @@ public class UserServiceImpl implements UserService {
     public void deleteUser(UUID id) {
         // An administrator of the account, or a registrar discarding the
         // unclaimed patient account its own failed registration just created
-        // (patient-form's compensation). Anyone else: the missing-user answer.
+        // (patient-form's compensation). Anyone else: the missing-user answer,
+        // and a FAILURE row.
         User user = userRepository.findById(id)
-                .filter(target -> accountAccess.canAdminister(target)
-                        || accountAccess.canDiscardUnclaimedPatientAccount(target))
                 .orElseThrow(() -> userNotFound(id));
+        if (!accountAccess.canDelete(user)) {
+            throw refused(AuditEventType.USER_DELETE, "delete", id);
+        }
 
         user.setDeleted(true);
         user.setActive(false);
@@ -1041,8 +1045,10 @@ public class UserServiceImpl implements UserService {
         // soft delete hard-deletes the assignments, so in practice a restore
         // is a super-admin action (the deleted view is super-admin-only too).
         User user = userRepository.findById(id)
-                .filter(accountAccess::canAdminister)
                 .orElseThrow(() -> userNotFound(id));
+        if (!accountAccess.canAdminister(user)) {
+            throw refused(AuditEventType.USER_ENABLE, "restore", id);
+        }
 
         user.setDeleted(false);
         user.setActive(true);
@@ -1107,12 +1113,13 @@ public class UserServiceImpl implements UserService {
         // Editing your own account is the profile page: contact fields only,
         // whoever you are. Anyone else's account needs an administrator of it
         // (UserAccountAccess.canAdminister) and is otherwise refused exactly
-        // like a missing id.
+        // like a missing id, with a FAILURE row.
         if (accountAccess.isSelf(user)) {
             requireSelfServiceChangesOnly(user, dto);
         } else if (!accountAccess.canAdminister(user)) {
-            throw userNotFound(id);
+            throw refused(AuditEventType.USER_UPDATE, "update", id);
         }
+        requireIdentifiersFree(user, dto);
 
         // ── Merge-preserve: only overwrite fields that are explicitly provided ──
 
@@ -1229,16 +1236,53 @@ public class UserServiceImpl implements UserService {
      */
     private static void requireSelfServiceChangesOnly(User user, UpdateUserRequestDTO dto) {
         if (dto.getActive() != null && !dto.getActive().equals(user.isActive())) {
-            throw new BusinessException("An account cannot change its own active status.");
+            throw new BusinessException(MessageUtil.resolve("user.update.self.active"));
         }
         if (hasText(dto.getPassword())) {
-            throw new BusinessException(
-                    "Change your own password with POST /auth/me/change-password.");
+            throw new BusinessException(MessageUtil.resolve("user.update.self.password"));
         }
         if (hasText(dto.getUsername()) && !dto.getUsername().equals(user.getUsername())) {
-            throw new BusinessException(
-                    "Change your own username with POST /auth/me/change-username.");
+            throw new BusinessException(MessageUtil.resolve("user.update.self.username"));
         }
+    }
+
+    /**
+     * A changed username or email must not be held by ANOTHER account in any
+     * letter case, deleted accounts included. uq_user_username is case
+     * sensitive but login resolves usernames case-insensitively, so renaming
+     * a nurse to a case variant of the super-admin's username would leave the
+     * super-admin's login unresolvable: a tenant admin locking out the
+     * platform admin. The same query shape as {@code changeOwnUsername}'s
+     * check, excluding the account itself; the message never names the other
+     * account.
+     */
+    private void requireIdentifiersFree(User user, UpdateUserRequestDTO dto) {
+        if (hasText(dto.getUsername()) && !dto.getUsername().equals(user.getUsername())
+                && userRepository.existsUsernameOnOtherAccount(dto.getUsername(), user.getId())) {
+            throw new BusinessException(MessageUtil.resolve("user.update.username.taken"));
+        }
+        if (hasText(dto.getEmail()) && !dto.getEmail().equals(user.getEmail())
+                && userRepository.existsEmailOnOtherAccount(dto.getEmail(), user.getId())) {
+            throw new BusinessException(MessageUtil.resolve("user.update.email.taken"));
+        }
+    }
+
+    /**
+     * A refused cross-account write: recorded as a FAILURE (actor id and
+     * target id only: no names, never the submitted values), then answered
+     * exactly like a missing account. The audit service writes in its own
+     * transaction, so the row survives this one's rollback.
+     */
+    private ResourceNotFoundException refused(AuditEventType type, String action, UUID targetId) {
+        auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .userId(accountAccess.currentUserId().orElse(null))
+                .eventType(type)
+                .eventDescription("User " + action + " refused: the caller may not administer this account")
+                .resourceId(targetId.toString())
+                .entityType("USER")
+                .status(AuditStatus.FAILURE)
+                .build());
+        return userNotFound(targetId);
     }
 
     /** The one answer for a missing account and for one the caller may not touch. */

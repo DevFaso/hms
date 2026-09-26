@@ -4,13 +4,17 @@ import com.example.hms.BaseIT;
 import com.example.hms.enums.OrganizationType;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Organization;
+import com.example.hms.enums.AuditStatus;
+import com.example.hms.model.AuditEventLog;
 import com.example.hms.model.Patient;
+import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.Role;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.OrganizationRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.UserRepository;
@@ -90,6 +94,7 @@ class UserEndpointAuthorizationIT extends BaseIT {
     @Autowired private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Autowired private PatientRepository patientRepository;
     @Autowired private AuditEventLogRepository auditEventLogRepository;
+    @Autowired private PatientHospitalRegistrationRepository registrationRepository;
     @Autowired private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
     private final List<UUID> createdUsers = new ArrayList<>();
@@ -128,6 +133,9 @@ class UserEndpointAuthorizationIT extends BaseIT {
     @AfterEach
     void tearDown() {
         auditEventLogRepository.deleteAllInBatch();
+        for (UUID patientId : createdPatients) {
+            registrationRepository.deleteAll(registrationRepository.findByPatientId(patientId));
+        }
         patientRepository.deleteAllById(createdPatients);
         // Includes accounts admin-register made during a test.
         for (UUID userId : createdUsers) {
@@ -211,6 +219,68 @@ class UserEndpointAuthorizationIT extends BaseIT {
 
         assertThat(hashOf(doctorB)).isEqualTo(doctorHash);
         assertThat(userRepository.findById(doctorB.getId()).orElseThrow().isDeleted()).isFalse();
+    }
+
+    @Test
+    @DisplayName("a hospital admin cannot rename their nurse to a case variant of the super-admin's username")
+    void caseVariantRenameCannotLockOutTheSuperAdmin() throws Exception {
+        String admin = hms(adminA, "ROLE_HOSPITAL_ADMIN");
+        String variant = superAdmin.getUsername().toUpperCase(java.util.Locale.ROOT);
+
+        MvcResult refused = perform(put("/users/" + nurseA.getId()), admin, Map.of("username", variant));
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(400);
+        assertThat(refused.getResponse().getContentAsString())
+            .doesNotContainIgnoringCase(superAdmin.getUsername());
+        assertThat(userRepository.findById(nurseA.getId()).orElseThrow().getUsername())
+            .isEqualTo(nurseA.getUsername());
+        // The super-admin's login lookup still resolves to exactly one row.
+        assertThat(userRepository.findByUsernameIgnoreCase(variant)).map(User::getId).contains(superAdmin.getId());
+
+        String email = superAdmin.getEmail().toUpperCase(java.util.Locale.ROOT);
+        assertThat(status(put("/users/" + nurseA.getId()), admin, Map.of("email", email))).isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName("a hospital admin cannot reset a patient who is assigned here but registered at another hospital")
+    void patientRegisteredElsewhereIsNotThisAdminsToReset() throws Exception {
+        String admin = hms(adminA, "ROLE_HOSPITAL_ADMIN");
+        Patient record = patientRow(patientA);
+        registrationRepository.save(PatientHospitalRegistration.builder()
+            .patient(record)
+            .hospital(hospitalB)
+            .mrn("MRN-B-" + next())
+            .registrationDate(LocalDate.now())
+            .active(false)
+            .build());
+        String hashBefore = hashOf(patientA);
+
+        assertThat(status(put("/users/" + patientA.getId()), admin, Map.of("password", "Admin-Reset-Pass-1")))
+            .isEqualTo(404);
+        assertThat(hashOf(patientA)).isEqualTo(hashBefore);
+    }
+
+    @Test
+    @DisplayName("a refused cross-account write answers 404 and leaves one FAILURE row: actor and target ids, no values")
+    void refusedWriteIsAudited() throws Exception {
+        auditEventLogRepository.deleteAllInBatch();
+        String doctor = hms(doctorB, "ROLE_DOCTOR");
+        String hashBefore = hashOf(nurseA);
+
+        assertThat(status(put("/users/" + nurseA.getId()), doctor,
+            Map.of("password", "Attacker-Chosen-1", "email", "attacker@evil.test"))).isEqualTo(404);
+
+        List<AuditEventLog> failures = auditEventLogRepository.findAll().stream()
+            .filter(row -> nurseA.getId().toString().equals(row.getResourceId()))
+            .filter(row -> row.getStatus() == AuditStatus.FAILURE)
+            .toList();
+        assertThat(failures).hasSize(1);
+        AuditEventLog row = failures.get(0);
+        assertThat(row.getUser()).isNotNull();
+        assertThat(row.getUser().getId()).isEqualTo(doctorB.getId());
+        assertThat(String.valueOf(row.getDetails()) + row.getEventDescription() + row.getResourceName())
+            .doesNotContain("Attacker").doesNotContain("evil").doesNotContain(nurseA.getUsername());
+        assertThat(hashOf(nurseA)).isEqualTo(hashBefore);
     }
 
     // ------------------------------------------------ the legitimate callers

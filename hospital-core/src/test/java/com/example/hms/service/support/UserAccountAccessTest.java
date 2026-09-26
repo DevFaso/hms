@@ -1,18 +1,18 @@
 package com.example.hms.service.support;
 
-import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Role;
-import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRole;
 import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.CustomUserDetails;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.TenantContextAccessor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -50,6 +50,7 @@ class UserAccountAccessTest {
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private PatientRepository patientRepository;
     @Mock private StaffRepository staffRepository;
+    @Mock private PatientHospitalRegistrationRepository registrationRepository;
 
     private UserAccountAccess access;
 
@@ -59,8 +60,8 @@ class UserAccountAccessTest {
 
     @BeforeEach
     void setUp() {
-        access = new UserAccountAccess(assignmentRepository, patientRepository, staffRepository,
-            new ControllerAuthUtils(assignmentRepository));
+        access = new UserAccountAccess(assignmentRepository, patientRepository, registrationRepository,
+            staffRepository, new TenantContextAccessor());
     }
 
     @AfterEach
@@ -200,6 +201,24 @@ class UserAccountAccessTest {
         }
 
         @Test
+        @DisplayName("…nor a patient assigned here but registered at another hospital (any status)")
+        void hospitalAdminStopsAtAPatientsOtherRegistrations() {
+            signIn(false, "ROLE_HOSPITAL_ADMIN");
+            callerHolds(assignment("ROLE_HOSPITAL_ADMIN", hospitalA, true));
+            User patient = targetWith(assignment("ROLE_PATIENT", hospitalA, true));
+            when(patientRepository.existsByUserId(patient.getId())).thenReturn(true);
+
+            when(registrationRepository.findHospitalIdsByPatientUserId(patient.getId()))
+                .thenReturn(List.of(hospitalA.getId(), hospitalB.getId()));
+            assertThat(access.canAdminister(patient)).isFalse();
+            assertThat(access.canDelete(patient)).isFalse();
+
+            when(registrationRepository.findHospitalIdsByPatientUserId(patient.getId()))
+                .thenReturn(List.of(hospitalA.getId()));
+            assertThat(access.canAdminister(patient)).isTrue();
+        }
+
+        @Test
         @DisplayName("…nor an account with no assignment at all (a soft delete removes them)")
         void hospitalAdminCannotReachUnassignedAccount() {
             signIn(false, "ROLE_HOSPITAL_ADMIN");
@@ -300,44 +319,58 @@ class UserAccountAccessTest {
             callerHolds(assignment("ROLE_RECEPTIONIST", hospitalA, true));
             orphan = targetWith(assignment("ROLE_PATIENT", hospitalA, false));
             when(patientRepository.existsByUserId(orphan.getId())).thenReturn(false);
-            when(staffRepository.findByUserId(orphan.getId())).thenReturn(List.of());
+            when(staffRepository.existsByUserId(orphan.getId())).thenReturn(false);
         }
 
         @Test
         @DisplayName("the account the failed registration just made qualifies")
         void justCreatedOrphanQualifies() {
-            assertThat(access.canDiscardUnclaimedPatientAccount(orphan)).isTrue();
+            assertThat(access.canDelete(orphan)).isTrue();
+        }
+
+        @Test
+        @DisplayName("a doctor at A who is a patient at B cannot discard B's fresh account")
+        void patientAtAnotherHospitalCannotDiscard() {
+            signIn(false, "ROLE_DOCTOR", "ROLE_PATIENT");
+            callerHolds(assignment("ROLE_DOCTOR", hospitalA, true), assignment("ROLE_PATIENT", hospitalB, true));
+            User freshAtB = targetWith(assignment("ROLE_PATIENT", hospitalB, false));
+            when(patientRepository.existsByUserId(freshAtB.getId())).thenReturn(false);
+            when(staffRepository.existsByUserId(freshAtB.getId())).thenReturn(false);
+
+            assertThat(access.canDelete(freshAtB)).isFalse();
+            // The same doctor still discards the one at A, where they register.
+            assertThat(access.canDelete(orphan)).isTrue();
         }
 
         @Test
         @DisplayName("a caller without a registrar role cannot discard it")
         void nonRegistrarCannot() {
             signIn(false, "ROLE_PATIENT");
-            assertThat(access.canDiscardUnclaimedPatientAccount(orphan)).isFalse();
+            assertThat(access.canDelete(orphan)).isFalse();
         }
 
         @Test
         @DisplayName("an account with a patient row is a real patient, not an orphan")
         void patientRowDisqualifies() {
             when(patientRepository.existsByUserId(orphan.getId())).thenReturn(true);
-            assertThat(access.canDiscardUnclaimedPatientAccount(orphan)).isFalse();
+            assertThat(access.canDelete(orphan)).isFalse();
         }
 
         @Test
         @DisplayName("an account with a staff row disqualifies")
         void staffRowDisqualifies() {
-            when(staffRepository.findByUserId(orphan.getId())).thenReturn(List.of(new Staff()));
-            assertThat(access.canDiscardUnclaimedPatientAccount(orphan)).isFalse();
+            when(staffRepository.existsByUserId(orphan.getId())).thenReturn(true);
+            assertThat(access.canDelete(orphan)).isFalse();
         }
 
         @Test
         @DisplayName("an account that has signed in, by password or by SSO, disqualifies")
         void signedInDisqualifies() {
             orphan.setLastLoginAt(LocalDateTime.now());
-            assertThat(access.canDiscardUnclaimedPatientAccount(orphan)).isFalse();
+            assertThat(access.canDelete(orphan)).isFalse();
             orphan.setLastLoginAt(null);
             orphan.setLastOidcLoginAt(java.time.OffsetDateTime.now());
-            assertThat(access.canDiscardUnclaimedPatientAccount(orphan)).isFalse();
+            assertThat(access.canDelete(orphan)).isFalse();
         }
 
         @Test
@@ -346,42 +379,42 @@ class UserAccountAccessTest {
             UserRoleHospitalAssignment stale = assignment("ROLE_PATIENT", hospitalA, false);
             stale.setCreatedAt(LocalDateTime.now().minus(UserAccountAccess.UNCLAIMED_ACCOUNT_WINDOW).minusMinutes(1));
             User old = targetWith(stale);
-            assertThat(access.canDiscardUnclaimedPatientAccount(old)).isFalse();
+            assertThat(access.canDelete(old)).isFalse();
 
             // A previous compensation soft-deleted this account (and its
             // assignments); admin-register restored the old row and assigned it anew.
             orphan.setCreatedAt(LocalDateTime.now().minusDays(3));
-            assertThat(access.canDiscardUnclaimedPatientAccount(orphan)).isTrue();
+            assertThat(access.canDelete(orphan)).isTrue();
         }
 
         @Test
         @DisplayName("any non-patient role, or a patient assignment at another hospital, disqualifies")
         void otherRolesOrHospitalsDisqualify() {
             User staff = targetWith(assignment("ROLE_PATIENT", hospitalA, false), assignment("ROLE_NURSE", hospitalA, true));
-            assertThat(access.canDiscardUnclaimedPatientAccount(staff)).isFalse();
+            assertThat(access.canDelete(staff)).isFalse();
 
             User elsewhere = targetWith(assignment("ROLE_PATIENT", hospitalB, false));
-            assertThat(access.canDiscardUnclaimedPatientAccount(elsewhere)).isFalse();
+            assertThat(access.canDelete(elsewhere)).isFalse();
 
             User globalAdmin = targetWith(assignment("ROLE_PATIENT", hospitalA, false));
             UserRole link = new UserRole();
             link.setUser(globalAdmin);
             link.setRole(role("ROLE_SUPER_ADMIN"));
             globalAdmin.getUserRoles().add(link);
-            assertThat(access.canDiscardUnclaimedPatientAccount(globalAdmin)).isFalse();
+            assertThat(access.canDelete(globalAdmin)).isFalse();
 
-            assertThat(access.canDiscardUnclaimedPatientAccount(targetWith())).isFalse();
+            assertThat(access.canDelete(targetWith())).isFalse();
         }
 
         @Test
         @DisplayName("a deleted account, or the caller's own, disqualifies")
         void deletedOrSelfDisqualifies() {
             orphan.setDeleted(true);
-            assertThat(access.canDiscardUnclaimedPatientAccount(orphan)).isFalse();
+            assertThat(access.canDelete(orphan)).isFalse();
 
             User self = account(callerId);
             when(assignmentRepository.findByUserId(callerId)).thenReturn(List.of(assignment("ROLE_PATIENT", hospitalA, true)));
-            assertThat(access.canDiscardUnclaimedPatientAccount(self)).isFalse();
+            assertThat(access.canDelete(self)).isFalse();
         }
     }
 }

@@ -21,6 +21,7 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
+import com.example.hms.service.support.UserAccountAccess;
 import com.example.hms.utility.UserDisplayUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -71,7 +72,7 @@ class UserServiceImplTest {
     @Mock private PasswordHistoryService passwordHistoryService;
     @Mock private com.example.hms.security.LoginAttemptService loginAttemptService;
     @Mock private AssignmentLinkService assignmentLinkService;
-    @Mock private com.example.hms.service.support.UserAccountAccess accountAccess;
+    @Mock private UserAccountAccess accountAccess;
 
     @InjectMocks
     private UserServiceImpl userService;
@@ -106,6 +107,7 @@ class UserServiceImplTest {
         // UserAccountAccessTest / UserEndpointAuthorizationIT.
         lenient().when(accountAccess.canAdminister(any())).thenReturn(true);
         lenient().when(accountAccess.canView(any())).thenReturn(true);
+        lenient().when(accountAccess.canDelete(any())).thenReturn(true);
     }
 
     @Test
@@ -1374,7 +1376,67 @@ class UserServiceImplTest {
 
             assertThat(user.getPasswordHash()).isEqualTo(EXISTING_HASH);
             verify(userRepository, never()).save(any());
-            verifyNoInteractions(passwordEncoder, auditEventLogService);
+            verifyNoInteractions(passwordEncoder);
+        }
+
+        @Test
+        @DisplayName("a refused PUT writes exactly one FAILURE row, actor and target ids only, and saves nothing")
+        void refusedWriteLeavesOneFailureRow() {
+            UUID actorId = UUID.randomUUID();
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            refuseAdministration();
+            when(accountAccess.currentUserId()).thenReturn(Optional.of(actorId));
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setPassword("Attacker-Chosen-1");
+            dto.setEmail("attacker@evil.test");
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(ResourceNotFoundException.class);
+
+            ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> row =
+                    ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+            verify(auditEventLogService).logEvent(row.capture());
+            assertThat(row.getValue().getStatus()).isEqualTo(com.example.hms.enums.AuditStatus.FAILURE);
+            assertThat(row.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.USER_UPDATE);
+            assertThat(row.getValue().getUserId()).isEqualTo(actorId);
+            assertThat(row.getValue().getResourceId()).isEqualTo(userId.toString());
+            // Never the submitted values, nor any name.
+            assertThat(row.getValue().getDetails()).isNull();
+            assertThat(row.getValue().getUserName()).isNull();
+            assertThat(row.getValue().getResourceName()).isNull();
+            assertThat(row.getValue().getEventDescription())
+                    .doesNotContain("Attacker").doesNotContain("evil").doesNotContain("testuser");
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("an admin rename to a case variant of another account's username: 400, nothing saved, other account not named")
+        void adminRenameToCaseVariantIsRefused() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.existsUsernameOnOtherAccount("SuperAdmin", userId)).thenReturn(true);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setUsername("SuperAdmin");
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessageNotContaining("SuperAdmin");
+            assertThat(user.getUsername()).isEqualTo("testuser");
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("an admin re-email to one another account holds: 400, nothing saved")
+        void adminReEmailToTakenAddressIsRefused() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.existsEmailOnOtherAccount("Boss@Example.com", userId)).thenReturn(true);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setEmail("Boss@Example.com");
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessageNotContaining("Boss");
+            assertThat(user.getEmail()).isEqualTo("test@example.com");
+            verify(userRepository, never()).save(any());
         }
 
         @Test
@@ -1387,7 +1449,7 @@ class UserServiceImplTest {
 
             assertThatThrownBy(() -> userService.updateUser(userId, dto))
                     .isInstanceOf(com.example.hms.exception.BusinessException.class)
-                    .hasMessageContaining("/auth/me/change-password");
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("user.update.self.password"));
             assertThat(user.getPasswordHash()).isEqualTo(EXISTING_HASH);
             verify(userRepository, never()).save(any());
         }
@@ -1416,7 +1478,7 @@ class UserServiceImplTest {
 
             assertThatThrownBy(() -> userService.updateUser(userId, dto))
                     .isInstanceOf(com.example.hms.exception.BusinessException.class)
-                    .hasMessageContaining("/auth/me/change-username");
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("user.update.self.username"));
             verify(userRepository, never()).save(any());
         }
 
@@ -1450,8 +1512,7 @@ class UserServiceImplTest {
         @DisplayName("DELETE by a registrar of the unclaimed account its failed registration made: soft-deleted")
         void registrarDiscardsUnclaimedAccount() {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-            refuseAdministration();
-            when(accountAccess.canDiscardUnclaimedPatientAccount(user)).thenReturn(true);
+            when(accountAccess.canDelete(user)).thenReturn(true);
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
             when(staffRepository.findByUserId(userId)).thenReturn(List.of());
 
@@ -1465,12 +1526,14 @@ class UserServiceImplTest {
         @DisplayName("DELETE of any other account without administering it: 404, untouched")
         void deleteByStrangerIsRefusedAsMissing() {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-            refuseAdministration();
-            when(accountAccess.canDiscardUnclaimedPatientAccount(user)).thenReturn(false);
+            when(accountAccess.canDelete(user)).thenReturn(false);
 
             assertThatThrownBy(() -> userService.deleteUser(userId))
                     .isInstanceOf(ResourceNotFoundException.class);
             assertThat(user.isDeleted()).isFalse();
+            verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(r ->
+                    r.getStatus() == com.example.hms.enums.AuditStatus.FAILURE
+                            && r.getEventType() == com.example.hms.enums.AuditEventType.USER_DELETE));
             verify(userRepository, never()).save(any());
             verifyNoInteractions(assignmentService);
         }
@@ -1486,6 +1549,8 @@ class UserServiceImplTest {
                     .isInstanceOf(ResourceNotFoundException.class);
             assertThat(user.isDeleted()).isTrue();
             verify(userRepository, never()).save(any());
+            verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(r ->
+                    r.getStatus() == com.example.hms.enums.AuditStatus.FAILURE));
         }
 
         @Test

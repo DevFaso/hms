@@ -1,6 +1,8 @@
 package com.example.hms.controller;
 
+import com.example.hms.config.SecurityConstants;
 import com.example.hms.security.audit.WriteAudited;
+import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.payload.dto.AdminSignupRequest;
 import com.example.hms.payload.dto.MessageResponse;
 import com.example.hms.payload.dto.UpdateUserRequestDTO;
@@ -55,7 +57,7 @@ public class UserController {
         description = "SUPER/HOSPITAL_ADMIN can register any role. RECEPTIONIST can only register PATIENT; hospital is resolved from JWT."
     )
     @PostMapping("/admin-register")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority(" + SecurityConstants.USER_REGISTRAR_AUTHORITIES + ")")
     public ResponseEntity<UserResponseDTO> adminRegister(
         @Valid @RequestBody AdminSignupRequest request,
         Authentication auth // inject instead of pulling from SecurityContextHolder
@@ -178,14 +180,11 @@ public class UserController {
      * identities; scoping the directory itself is the larger pre-existing
      * question, and the deleted view must not widen it.
      */
-    private boolean canSeeDeleted() {
-        // From the SecurityContext, not a method-injected Authentication: the
-        // latter rides request.getUserPrincipal(), which is only populated by
-        // the security filter chain and is null in filterless slices.
-        Set<String> authorities = extractAuthorities(
-            org.springframework.security.core.context.SecurityContextHolder
-                .getContext().getAuthentication());
-        return authorities.contains(SUPER_ADMIN_AUTHORITY);
+    private static boolean canSeeDeleted() {
+        // The hospital context's verified super-admin flag, the one
+        // UserAccountAccess decides on, not the authorities collection, which
+        // other paths inflate.
+        return HospitalContextHolder.getContextOrEmpty().isSuperAdmin();
     }
 
     @WriteAudited(skip = true, reason = "service emits USER_CREATE / USER_UPDATE / USER_DELETE")
@@ -207,7 +206,7 @@ public class UserController {
             + "admin-register admits) may also discard the unclaimed patient account its own "
             + "failed patient registration just created. Anything else answers 404.")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority(" + SecurityConstants.USER_REGISTRAR_AUTHORITIES + ")")
     public ResponseEntity<MessageResponse> deleteUser(@PathVariable UUID id) {
         userService.deleteUser(id);
         return ResponseEntity.ok(new MessageResponse("User deleted successfully."));
