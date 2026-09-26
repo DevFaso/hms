@@ -43,35 +43,6 @@ public interface EmpiService {
     EmpiMergeEventResponseDTO mergePatients(UUID primaryPatientId, UUID secondaryPatientId,
                                             com.example.hms.enums.empi.EmpiMergeType mergeType, String notes);
 
-    /**
-     * {@link #mergePatients}, acting at a hospital the CALLER has already
-     * established and authorised, instead of one resolved from the request.
-     *
-     * <p><b>For callers with no request context only — today, exactly one:
-     * the inbound HL7 {@code ADT^A40} path.</b> An MLLP worker thread has no
-     * authentication and no {@code HospitalContext}, so {@link #mergePatients}
-     * cannot resolve a scope there and refuses every merge. That path already
-     * knows the hospital (the allowlisted sender's) and has already checked
-     * that both patients are registered there, so it hands that hospital over
-     * here rather than fabricating a security context on the worker thread.
-     *
-     * <p>Nothing about the merge itself is relaxed. {@code actingHospitalId} is
-     * held to exactly the rules a caller pinned to that hospital is held to:
-     * both patients registered there, both master identities stamped with it,
-     * never the global view. What this method trusts is the caller's claim to
-     * act AT that hospital, which is why a REST controller must never call it
-     * with an id taken from a request — that is {@link #mergePatients}'s job,
-     * and its scope comes from the verified context.
-     *
-     * @param actingHospitalId the hospital the merge acts at; required
-     * @throws IllegalArgumentException when {@code actingHospitalId} is null
-     */
-    @Transactional
-    EmpiMergeEventResponseDTO mergePatientsAtAuthorisedHospital(UUID actingHospitalId,
-                                                                UUID primaryPatientId, UUID secondaryPatientId,
-                                                                com.example.hms.enums.empi.EmpiMergeType mergeType,
-                                                                String notes);
-
     @Transactional
     EmpiMergeEventResponseDTO mergeIdentities(UUID primaryIdentityId, EmpiMergeRequestDTO request);
 }

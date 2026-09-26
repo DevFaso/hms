@@ -63,7 +63,10 @@ import java.util.UUID;
  * allowlisted sender cannot probe another tenant's identifier space.
  * AR is left for the transport-level refusals the dispatcher itself
  * makes — an unparseable MSH, a sender that is not allowlisted at all,
- * an unsupported message type — none of which depend on tenant data.
+ * an unsupported message type — none of which depend on tenant data, and
+ * for one terminal domain answer, {@code REJECTED_NOT_OWNER}, which an
+ * inbound service may return only after it has established that the
+ * receiving hospital holds every patient the message names.
  */
 @Component
 public class Hl7MessageDispatcher {
@@ -436,6 +439,13 @@ public class Hl7MessageDispatcher {
             case REJECTED_INVALID ->
                 Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
                     label + " invalid or missing required fields");
+            // Terminal, so AR: the message is valid and the patients are the
+            // hospital's own, and resending it cannot change the answer.
+            // Returned only after the registration gate has passed for every
+            // patient named, so it is not the cross-tenant oracle above.
+            case REJECTED_NOT_OWNER ->
+                Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AR,
+                    label + " not applied: a patient identity is owned by another hospital");
         };
     }
 }

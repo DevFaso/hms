@@ -122,16 +122,17 @@ class Hl7MessageDispatcherTest {
     }
 
     @Test
-    void noOutcomeFromAnyInboundHandlerProducesAnAr() {
+    void noOutcomeFromAnyInboundHandlerProducesAnArExceptTheTerminalNotOwner() {
         // AR is reserved for the dispatcher's own transport-level refusals
         // (bad MSH, sender not allowlisted, unsupported type) — none of which
-        // depend on tenant data. Every outcome ANY of the three domain
-        // handlers can return maps to AA or AE, so none of them can reopen
-        // the enumeration oracle by picking a different constant. All three
-        // handlers, not the lab one alone: the oracle this closes lived in
-        // the other two.
+        // depend on tenant data — and for ONE domain answer, NOT_OWNER, which
+        // the A40 path returns only after its registration gate has passed
+        // (see onlyTheA40MergePathReferencesTheTerminalOutcome). Every other
+        // outcome ANY of the three domain handlers can return maps to AA or
+        // AE, so none of them can reopen the enumeration oracle by picking a
+        // different constant.
         //
-        // The enum assertion is the other half of the guard. A fourth
+        // The enum assertion is the other half of the guard. A fifth
         // constant would not be covered by the loop, and
         // REJECTED_CROSS_TENANT is precisely the constant whose return this
         // is meant to prevent.
@@ -139,7 +140,8 @@ class Hl7MessageDispatcherTest {
             .containsExactlyInAnyOrder(
                 MllpInboundOutcome.ACCEPTED,
                 MllpInboundOutcome.REJECTED_NOT_FOUND,
-                MllpInboundOutcome.REJECTED_INVALID);
+                MllpInboundOutcome.REJECTED_INVALID,
+                MllpInboundOutcome.REJECTED_NOT_OWNER);
 
         allowSender();
         String oru = "MSH|^~\\&|MINDRAY|LAB1|HMS|HOSP1|20260428||ORU^R01|MSG-8|P|2.5\r"
@@ -150,6 +152,9 @@ class Hl7MessageDispatcherTest {
                    + "PID|1||MRN-ANY||DOE^JANE\r";
 
         for (MllpInboundOutcome outcome : MllpInboundOutcome.values()) {
+            if (outcome == MllpInboundOutcome.REJECTED_NOT_OWNER) {
+                continue;
+            }
             when(inboundLab.processOruR01(any(), eq(hospital), anyString(), anyString(),
                 any(), anyString())).thenReturn(outcome);
             when(inboundAdt.processAdt(any(), eq(hospital), anyString(), anyString(), any()))
@@ -161,6 +166,48 @@ class Hl7MessageDispatcherTest {
             assertThat(dispatcher.dispatch(adt, "10.0.0.1:1")).doesNotContain("MSA|AR|");
             assertThat(dispatcher.dispatch(A40, "10.0.0.1:1")).doesNotContain("MSA|AR|");
         }
+    }
+
+    @Test
+    void theTerminalNotOwnerOutcomeIsAnArThatNamesTheConditionAndNoPatient() {
+        allowSender();
+        when(inboundMerge.processMerge(any(), eq(hospital), anyString(), anyString(), any()))
+            .thenReturn(MllpInboundOutcome.REJECTED_NOT_OWNER);
+
+        assertThat(dispatcher.dispatch(A40, "10.0.0.1:1"))
+            .contains("MSA|AR|")
+            .contains("ADT^A40 not applied: a patient identity is owned by another hospital");
+    }
+
+    @Test
+    void onlyTheA40MergePathReferencesTheTerminalOutcome() throws java.io.IOException {
+        // NOT_OWNER is safe only where it is returned AFTER a registration
+        // gate for every patient named; anywhere else it is the old
+        // cross-tenant oracle under a new name. So only the A40 merge service
+        // (which has that gate), the enum and the dispatcher's mapping may
+        // refer to it. Read from the compiled main classes: a reference to an
+        // enum constant is a name in the referencing class's constant pool.
+        java.net.URL mainCode = Hl7MessageDispatcher.class.getProtectionDomain().getCodeSource().getLocation();
+        var resolver = new org.springframework.core.io.support.PathMatchingResourcePatternResolver(
+            getClass().getClassLoader());
+        java.util.Set<String> referrers = new java.util.TreeSet<>();
+        for (var resource : resolver.getResources("classpath*:com/example/hms/**/*.class")) {
+            String url = resource.getURL().toString();
+            if (!url.startsWith(mainCode.toString())) {
+                continue;
+            }
+            byte[] bytes;
+            try (var in = resource.getInputStream()) {
+                bytes = in.readAllBytes();
+            }
+            if (new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1).contains("REJECTED_NOT_OWNER")) {
+                referrers.add(resource.getFilename());
+            }
+        }
+        assertThat(referrers)
+            .isNotEmpty()
+            .allSatisfy(name -> assertThat(name).matches(
+                "MllpInboundOutcome\\.class|MllpInboundMergeServiceImpl\\.class|Hl7MessageDispatcher(\\$\\d+)?\\.class"));
     }
 
     @Test

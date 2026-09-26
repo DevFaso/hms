@@ -2,6 +2,7 @@ package com.example.hms.service.empi;
 
 import com.example.hms.enums.empi.EmpiAliasType;
 import com.example.hms.enums.empi.EmpiIdentityStatus;
+import com.example.hms.enums.empi.EmpiMergeType;
 import com.example.hms.enums.empi.EmpiResolutionState;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -40,7 +41,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class EmpiServiceImpl implements EmpiService {
+public class EmpiServiceImpl implements EmpiService, EmpiAuthorisedMergePort {
 
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final String EVENT_IDENTITY_LINKED = "IDENTITY_LINKED";
@@ -303,13 +304,23 @@ public class EmpiServiceImpl implements EmpiService {
             throw new BusinessException(MessageUtil.resolve(MSG_MERGE_SAME_IDENTITY));
         }
         if (secondary.getStatus() == EmpiIdentityStatus.MERGED) {
-            throw new BusinessException(MessageUtil.resolve(MSG_MERGE_ALREADY_MERGED, secondary.getEmpiNumber()));
+            throw alreadyMerged(secondary);
         }
         // ── Tenant isolation (empi-identity skill: v0 merges are intra-tenant).
         // Identities with no hospital stamp (legacy/system rows) are exempt. ──
         if (primary.getHospitalId() != null && secondary.getHospitalId() != null
             && !primary.getHospitalId().equals(secondary.getHospitalId())) {
             throw new BusinessException(MessageUtil.resolve(MSG_MERGE_CROSS_TENANT));
+        }
+
+        // ── The transition itself, decided by the database. The status read
+        // above is a fast path, not a guarantee: two merges of the same pair
+        // running at once both read ACTIVE. Whichever claims the row second
+        // gets 0 and the same refusal as a merge that arrived after the
+        // first had committed — so one merge event, one IDENTITIES_MERGED
+        // event and one PATIENT_MERGE audit row, however many raced. ──
+        if (masterIdentityRepository.claimForMerge(secondary.getId(), EmpiIdentityStatus.MERGED) == 0) {
+            throw alreadyMerged(secondary);
         }
 
         HospitalContext context = HospitalContextHolder.getContextOrEmpty();
@@ -330,9 +341,22 @@ public class EmpiServiceImpl implements EmpiService {
         mergeEventRepository.save(mergeEvent);
         masterIdentityRepository.save(secondary);
         masterIdentityRepository.save(primary);
+        // Flush HERE, inside the call: a constraint or lock failure then
+        // surfaces as this method's exception, where the caller can still
+        // answer it as a refusal. Left to the caller's commit, it would
+        // arrive after the caller had already decided the merge succeeded.
+        masterIdentityRepository.flush();
 
         publishEvent(buildMergeEventPayload(primary, secondary, mergeEvent));
-        emitMergeAudit(primary, secondary, mergeEvent);
+        // After commit, like the Kafka event: a SUCCESS row written now, in
+        // the audit service's own REQUIRES_NEW transaction, would survive this
+        // transaction rolling back and record a merge that never happened.
+        UUID primaryId = primary.getId();
+        String primaryEmpiNumber = primary.getEmpiNumber();
+        String secondaryEmpiNumber = secondary.getEmpiNumber();
+        EmpiMergeType mergeType = mergeEvent.getMergeType();
+        TransactionCallbacks.afterCommit(() ->
+            emitMergeAudit(primaryId, primaryEmpiNumber, secondaryEmpiNumber, mergeType));
         return empiMapper.toMergeEventDto(mergeEvent);
     }
 
@@ -345,7 +369,7 @@ public class EmpiServiceImpl implements EmpiService {
     }
 
     /**
-     * See {@link EmpiService#mergePatientsAtAuthorisedHospital}: the inbound
+     * See {@link EmpiAuthorisedMergePort}: the inbound
      * HL7 A40 path, which has no request context to resolve a scope from and
      * has already settled which hospital it acts at.
      *
@@ -451,17 +475,25 @@ public class EmpiServiceImpl implements EmpiService {
         }
     }
 
-    /** Skill merge-step 5: PATIENT_MERGE audit trail — best-effort, never rolls back the merge. */
-    private void emitMergeAudit(EmpiMasterIdentity primary, EmpiMasterIdentity secondary, EmpiMergeEvent mergeEvent) {
+    private static BusinessException alreadyMerged(EmpiMasterIdentity secondary) {
+        return new BusinessException(MessageUtil.resolve(MSG_MERGE_ALREADY_MERGED, secondary.getEmpiNumber()));
+    }
+
+    /**
+     * Skill merge-step 5: PATIENT_MERGE audit trail — best-effort, never rolls
+     * back the merge. Runs after commit, so it takes values, not entities.
+     */
+    private void emitMergeAudit(UUID primaryId, String primaryEmpiNumber, String secondaryEmpiNumber,
+                                EmpiMergeType mergeType) {
         try {
             auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
                 .eventType(com.example.hms.enums.AuditEventType.PATIENT_MERGE)
                 .status(com.example.hms.enums.AuditStatus.SUCCESS)
-                .eventDescription("EMPI merge: " + secondary.getEmpiNumber()
-                    + " merged into " + primary.getEmpiNumber()
-                    + " (" + mergeEvent.getMergeType() + ")")
+                .eventDescription("EMPI merge: " + secondaryEmpiNumber
+                    + " merged into " + primaryEmpiNumber
+                    + " (" + mergeType + ")")
                 .entityType("EmpiMasterIdentity")
-                .resourceId(primary.getId() != null ? primary.getId().toString() : null)
+                .resourceId(primaryId != null ? primaryId.toString() : null)
                 .build());
         } catch (RuntimeException ex) {
             log.warn("Failed to emit PATIENT_MERGE audit event: {}", ex.getMessage());

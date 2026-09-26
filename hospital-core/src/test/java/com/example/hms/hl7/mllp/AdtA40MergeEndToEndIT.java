@@ -1,11 +1,13 @@
 package com.example.hms.hl7.mllp;
 
 import com.example.hms.BaseIT;
+import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.OrganizationType;
 import com.example.hms.enums.empi.EmpiAliasType;
 import com.example.hms.enums.empi.EmpiIdentityStatus;
 import com.example.hms.enums.empi.EmpiMergeType;
 import com.example.hms.enums.integration.IntegrationMessageStatus;
+import com.example.hms.model.AuditEventLog;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Organization;
 import com.example.hms.model.Patient;
@@ -16,6 +18,7 @@ import com.example.hms.model.empi.EmpiMasterIdentity;
 import com.example.hms.model.empi.EmpiMergeEvent;
 import com.example.hms.model.integration.IntegrationMessageEvent;
 import com.example.hms.model.platform.MllpAllowedSender;
+import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
@@ -33,6 +36,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -42,6 +46,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -71,6 +80,9 @@ class AdtA40MergeEndToEndIT extends BaseIT {
     private static final String REMOTE = "127.0.0.1:0";
     private static final String NOT_FOUND_MSA_TEXT = "ADT^A40 referenced entity not found";
     private static final String INVALID_MSA_TEXT = "ADT^A40 invalid or missing required fields";
+    private static final String NOT_OWNER_MSA_TEXT =
+        "ADT^A40 not applied: a patient identity is owned by another hospital";
+    private static final String FLUSH_FAIL_MARKER = "A40FLUSHFAIL";
 
     private static final AtomicInteger SEQUENCE = new AtomicInteger();
 
@@ -85,6 +97,8 @@ class AdtA40MergeEndToEndIT extends BaseIT {
     @Autowired private EmpiMergeEventRepository mergeEventRepository;
     @Autowired private MllpAllowedSenderRepository allowedSenderRepository;
     @Autowired private IntegrationMessageEventRepository messageEventRepository;
+    @Autowired private AuditEventLogRepository auditEventLogRepository;
+    @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private PlatformTransactionManager transactionManager;
 
     private TransactionTemplate tx;
@@ -144,6 +158,7 @@ class AdtA40MergeEndToEndIT extends BaseIT {
                 aliasRepository.deleteAll(aliasRepository.findByMasterIdentity_Id(identityId));
             }
         });
+        auditEventLogRepository.deleteAll(mergeAudits());
         identityRepository.deleteAllByIdInBatch(identityIds);
         messageEventRepository.deleteAll(messageEventRepository.findAll().stream()
             .filter(row -> row.getIntegrationId() != null
@@ -199,9 +214,12 @@ class AdtA40MergeEndToEndIT extends BaseIT {
             assertThat(moved.getMasterIdentity().getId()).isEqualTo(survivorIdentity.getId());
         });
         assertThat(failedRows()).isEmpty();
+        // The SUCCESS audit, written after commit, exactly once.
+        assertThat(mergeAuditsFor(survivorIdentity)).hasSize(1);
 
         String resend = dispatcher.dispatch(a40("MSG-OK2-" + run, survivingMrn, priorMrn), REMOTE);
         assertThat(msa(resend)).isEqualTo("MSA|AA|MSG-OK2-" + run);
+        assertThat(mergeAuditsFor(survivorIdentity)).hasSize(1);
     }
 
     @Test
@@ -260,18 +278,20 @@ class AdtA40MergeEndToEndIT extends BaseIT {
             assertThat(identityRepository.findByPatientId(survivor.getId()).orElseThrow().getId())
                 .isEqualTo(survivorIdentity.getId());
         });
+        assertDeadLetter("merge refused by EMPI", "MSG-R-" + run, survivingMrn, priorMrn);
+        assertThat(mergeAuditsFor(survivorIdentity)).isEmpty();
     }
 
     @Test
-    @DisplayName("a patient registered here but whose identity belongs to another hospital is refused, not merged")
-    void identityStampedElsewhereIsRefusedEvenWhenRegisteredHere() {
+    @DisplayName("a pair registered here but owned by another hospital gets a terminal AR naming the condition")
+    void identityOwnedElsewhereIsATerminalRefusal() {
         String run = nextId();
         String survivingMrn = "A40HS-" + run;
         String priorMrn = "A40HP-" + run;
-        // The retiree's home hospital is elsewhere and its master identity is
-        // stamped there; it is ALSO registered at the receiving hospital, so
-        // the MLLP gate passes. EMPI's own rule — a caller merges only
-        // identities stamped with its hospital — must still hold on this path.
+        // A referred patient: home hospital elsewhere, master identity stamped
+        // there, but ALSO registered at the receiving hospital, so the
+        // registration gate passes. EMPI would refuse it on every retry, so
+        // the answer is AR, and says why without naming anyone.
         Patient survivor = patientAt(receiving, receiving);
         Patient retiree = patientAt(elsewhere, receiving);
         identityFor(survivor, receiving, survivingMrn);
@@ -279,9 +299,91 @@ class AdtA40MergeEndToEndIT extends BaseIT {
 
         String ack = dispatcher.dispatch(a40("MSG-H-" + run, survivingMrn, priorMrn), REMOTE);
 
-        assertThat(msa(ack)).isEqualTo("MSA|AE|MSG-H-" + run + "|" + INVALID_MSA_TEXT);
+        assertThat(msa(ack)).isEqualTo("MSA|AR|MSG-H-" + run + "|" + NOT_OWNER_MSA_TEXT);
         tx.executeWithoutResult(status -> assertThat(mergeEventRepository
             .findTopBySecondaryIdentity_IdOrderByMergedAtDesc(retireeIdentity.getId())).isEmpty());
+        assertDeadLetter("identity owned by another hospital", "MSG-H-" + run, survivingMrn, priorMrn);
+    }
+
+    @Test
+    @DisplayName("two copies of one A40 racing on two connections apply ONE merge, one event, one audit row")
+    void concurrentDuplicatesMergeOnce() throws Exception {
+        ExecutorService workers = Executors.newFixedThreadPool(2);
+        try {
+            // Several pairs, so that at least some copies genuinely overlap.
+            for (int attempt = 0; attempt < 5; attempt++) {
+                String run = nextId();
+                String survivingMrn = "A40CS-" + run;
+                String priorMrn = "A40CP-" + run;
+                Patient survivor = patientAt(receiving, receiving);
+                Patient retiree = patientAt(receiving, receiving);
+                EmpiMasterIdentity survivorIdentity = identityFor(survivor, receiving, survivingMrn);
+                EmpiMasterIdentity retireeIdentity = identityFor(retiree, receiving, priorMrn);
+
+                CountDownLatch go = new CountDownLatch(1);
+                // Worker threads, like MLLP workers: no security context.
+                Future<String> first = workers.submit(() -> {
+                    go.await();
+                    return dispatcher.dispatch(a40("MSG-C1-" + run, survivingMrn, priorMrn), REMOTE);
+                });
+                Future<String> second = workers.submit(() -> {
+                    go.await();
+                    return dispatcher.dispatch(a40("MSG-C2-" + run, survivingMrn, priorMrn), REMOTE);
+                });
+                go.countDown();
+                List<String> answers = List.of(
+                    msa(first.get(60, TimeUnit.SECONDS)), msa(second.get(60, TimeUnit.SECONDS)));
+
+                Integer merges = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM empi.merge_events WHERE secondary_identity_id = ?",
+                    Integer.class, retireeIdentity.getId());
+                assertThat(merges).as("merge events for pair %s", run).isEqualTo(1);
+                assertThat(mergeAuditsFor(survivorIdentity)).as("PATIENT_MERGE audits for pair %s", run)
+                    .hasSize(1);
+                // One copy applied it. The other either arrived after the
+                // commit (both MRNs now resolve to one patient: AA) or lost
+                // the claim mid-flight (the already-merged refusal: AE).
+                assertThat(answers).anySatisfy(msa -> assertThat(msa).startsWith("MSA|AA|"));
+                assertThat(answers).allSatisfy(msa -> assertThat(msa)
+                    .matches("MSA\\|AA\\|MSG-C[12]-" + run
+                        + "|MSA\\|AE\\|MSG-C[12]-" + run + "\\|" + java.util.regex.Pattern.quote(INVALID_MSA_TEXT)));
+            }
+        } finally {
+            workers.shutdownNow();
+        }
+    }
+
+    @Test
+    @DisplayName("a merge that fails when flushed answers its refusal and leaves no SUCCESS audit")
+    void flushFailureIsARefusalWithNoSuccessAudit() {
+        String run = nextId();
+        String survivingMrn = "A40FS-" + run;
+        String priorMrn = "A40FP-" + run;
+        Patient survivor = patientAt(receiving, receiving);
+        Patient retiree = patientAt(receiving, receiving);
+        EmpiMasterIdentity survivorIdentity = identityFor(survivor, receiving, survivingMrn);
+        EmpiMasterIdentity retireeIdentity = identityFor(retiree, receiving, priorMrn);
+        String controlId = FLUSH_FAIL_MARKER + "-" + run;
+        // A constraint that only this message's merge row breaks: the notes
+        // carry MSH-10. It fails on INSERT, which Hibernate defers to flush.
+        jdbcTemplate.execute("ALTER TABLE empi.merge_events ADD CONSTRAINT a40it_flush_fail "
+            + "CHECK (notes IS NULL OR notes NOT LIKE '%" + FLUSH_FAIL_MARKER + "%')");
+        String ack;
+        try {
+            ack = dispatcher.dispatch(a40(controlId, survivingMrn, priorMrn), REMOTE);
+        } finally {
+            jdbcTemplate.execute("ALTER TABLE empi.merge_events DROP CONSTRAINT a40it_flush_fail");
+        }
+
+        assertThat(msa(ack)).isEqualTo("MSA|AE|" + controlId + "|" + INVALID_MSA_TEXT);
+        tx.executeWithoutResult(status -> {
+            assertThat(mergeEventRepository
+                .findTopBySecondaryIdentity_IdOrderByMergedAtDesc(retireeIdentity.getId())).isEmpty();
+            assertThat(identityRepository.findByPatientId(retiree.getId()).orElseThrow().getStatus())
+                .isEqualTo(EmpiIdentityStatus.ACTIVE);
+        });
+        assertThat(mergeAuditsFor(survivorIdentity)).isEmpty();
+        assertDeadLetter("merge refused by EMPI", controlId, survivingMrn, priorMrn);
     }
 
     /* ── fixtures ─────────────────────────────────────────────────────── */
@@ -301,6 +403,35 @@ class AdtA40MergeEndToEndIT extends BaseIT {
             .filter(segment -> segment.startsWith("MSA|"))
             .findFirst()
             .orElseThrow(() -> new AssertionError("no MSA segment in " + ack));
+    }
+
+    /** One FAILED row with this reason and MSH-10, and no MRN or payload in it. */
+    private void assertDeadLetter(String reason, String controlId, String... mrns) {
+        List<IntegrationMessageEvent> rows = failedRows().stream()
+            .filter(row -> row.getErrorMessage() != null && row.getErrorMessage().startsWith(reason))
+            .toList();
+        assertThat(rows).hasSize(1);
+        IntegrationMessageEvent row = rows.get(0);
+        assertThat(row.getErrorMessage()).contains("\"" + controlId + "\"");
+        assertThat(row.getPayload()).isNull();
+        for (String mrn : mrns) {
+            assertThat(row.getErrorMessage()).doesNotContain(mrn);
+        }
+    }
+
+    /** Every PATIENT_MERGE audit row for merges into this test's identities. */
+    private List<AuditEventLog> mergeAudits() {
+        List<String> ids = identityIds.stream().map(UUID::toString).toList();
+        return auditEventLogRepository.findAll().stream()
+            .filter(row -> row.getEventType() == AuditEventType.PATIENT_MERGE)
+            .filter(row -> ids.contains(row.getResourceId()))
+            .toList();
+    }
+
+    private List<AuditEventLog> mergeAuditsFor(EmpiMasterIdentity survivor) {
+        return mergeAudits().stream()
+            .filter(row -> survivor.getId().toString().equals(row.getResourceId()))
+            .toList();
     }
 
     private List<IntegrationMessageEvent> failedRows() {

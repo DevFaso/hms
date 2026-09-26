@@ -9,6 +9,7 @@ import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.payload.dto.empi.EmpiIdentityResponseDTO;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.service.empi.EmpiAuthorisedMergePort;
 import com.example.hms.service.empi.EmpiService;
 import com.example.hms.service.integration.MllpInboundAdtVisitProjectionService;
 import com.example.hms.service.integration.MllpInboundLabService;
@@ -71,6 +72,7 @@ class AdtCrossTenantAckTest {
     @Mock private PatientHospitalRegistrationRepository registrationRepository;
     @Mock private MllpInboundAdtVisitProjectionService visitProjection;
     @Mock private IntegrationMessageRecorder messageRecorder;
+    @Mock private EmpiAuthorisedMergePort authorisedMerge;
 
     private Hl7MessageDispatcher dispatcher;
     private Hospital hospital;
@@ -98,7 +100,7 @@ class AdtCrossTenantAckTest {
             empiService, patientRepository, registrationRepository, visitProjection,
             messageRecorder);
         MllpInboundMergeServiceImpl mergeService = new MllpInboundMergeServiceImpl(
-            empiService, registrationRepository, messageRecorder);
+            empiService, registrationRepository, messageRecorder, authorisedMerge);
 
         dispatcher = new Hl7MessageDispatcher(
             new Hl7v2MessageBuilder(), allowlist, inboundLab, adtService, mergeService,
@@ -130,11 +132,13 @@ class AdtCrossTenantAckTest {
             .thenReturn(false);
     }
 
-    private static EmpiIdentityResponseDTO identity(UUID patientId) {
+    /** Stamped with the receiving hospital: ownership is not what these tests vary. */
+    private EmpiIdentityResponseDTO identity(UUID patientId) {
         return EmpiIdentityResponseDTO.builder()
             .id(UUID.randomUUID())
             .empiNumber("E-" + patientId)
             .patientId(patientId)
+            .hospitalId(hospital.getId())
             .build();
     }
 
@@ -285,7 +289,7 @@ class AdtCrossTenantAckTest {
         String ack = dispatcher.dispatch(a40(LOCAL_MRN, LOCAL_MRN + "-2"), "10.0.0.1:1");
 
         assertThat(msa(ack)).isEqualTo("MSA|AA|CTRL-SAME");
-        verify(empiService).mergePatientsAtAuthorisedHospital(
+        verify(authorisedMerge).mergePatientsAtAuthorisedHospital(
             eq(hospital.getId()), eq(localPatientId), eq(secondLocalId), any(), any());
     }
 }

@@ -7,6 +7,7 @@ import com.example.hms.enums.empi.EmpiMergeType;
 import com.example.hms.model.Hospital;
 import com.example.hms.payload.dto.empi.EmpiIdentityResponseDTO;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
+import com.example.hms.service.empi.EmpiAuthorisedMergePort;
 import com.example.hms.service.empi.EmpiService;
 import com.example.hms.service.integration.MllpInboundMergeService;
 import com.example.hms.service.integration.MllpInboundOutcome;
@@ -40,10 +41,21 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
     /** {@code integration_message_event.message_type} for this path. */
     private static final String MESSAGE_TYPE = "ADT^A40";
 
+    /** Dead-letter reason for a merge EMPI refused after the gate let it through. */
+    static final String REASON_EMPI_REFUSED = "merge refused by EMPI";
+    /** Dead-letter reason for a pair whose master identity another hospital owns. */
+    static final String REASON_NOT_OWNER = "identity owned by another hospital";
+
     private final EmpiService empiService;
     private final PatientHospitalRegistrationRepository registrationRepository;
     // Last so existing positional constructor calls only append.
     private final IntegrationMessageRecorder messageRecorder;
+    /**
+     * The merge that acts at an explicitly given hospital. Its own narrow type
+     * so that only a class that asks for it by name can reach it; this is the
+     * one class that may (EmpiAuthorisedMergePortInjectionTest).
+     */
+    private final EmpiAuthorisedMergePort authorisedMerge;
 
     @Override
     @Transactional
@@ -85,8 +97,8 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
 
         UUID hospitalId = receivingHospital.getId();
 
-        Optional<UUID> survivor = resolvePatient(survivingMrn);
-        Optional<UUID> retiree = resolvePatient(priorMrn);
+        Optional<EmpiIdentityResponseDTO> survivor = resolvePatient(survivingMrn);
+        Optional<EmpiIdentityResponseDTO> retiree = resolvePatient(priorMrn);
         if (survivor.isEmpty() || retiree.isEmpty()) {
             // Deliberately NOT auto-provisioned. An unrecognised identifier in
             // a merge message means the two systems disagree about who exists,
@@ -107,8 +119,8 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
         }
 
-        UUID survivingPatientId = survivor.get();
-        UUID retiringPatientId = retiree.get();
+        UUID survivingPatientId = survivor.get().getPatientId();
+        UUID retiringPatientId = retiree.get().getPatientId();
 
         // THE GATE — and it runs BEFORE any other answer that depends on what
         // these two identifiers are to each other.
@@ -181,12 +193,43 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             return MllpInboundOutcome.ACCEPTED;
         }
 
+        // OWNERSHIP — the rule EMPI applies, checked here so it can be
+        // answered honestly. EMPI merges only master identities stamped with
+        // the hospital it acts at; registration (the gate above) is not
+        // ownership. A patient referred in from another hospital is
+        // registered here but its identity is stamped with its home hospital,
+        // so without this check the pair passed the gate, EMPI refused it,
+        // and the sender got "invalid or missing required fields" on every
+        // retry, forever, for a message with nothing wrong in it.
+        //
+        // A distinct, TERMINAL answer (AR), and not the cross-tenant one.
+        // The indistinguishability rule protects identifiers the sender's
+        // hospital cannot see; this runs only after the gate has established
+        // that the hospital holds a registration for BOTH patients, so it
+        // tells the sender nothing about any patient it does not already
+        // have. Answering it like an unknown MRN would be a false answer
+        // that protects no one. The ACK names the condition and no patient.
+        // Which hospital should own a merged identity is the open design
+        // question on EmpiServiceImpl.requirePatientInTenant; this does not
+        // change the ownership model, only states it.
+        boolean survivorOwnedHere = hospitalId.equals(survivor.get().getHospitalId());
+        boolean retireeOwnedHere = hospitalId.equals(retiree.get().getHospitalId());
+        if (!survivorOwnedHere || !retireeOwnedHere) {
+            log.warn("MLLP A40 not applied — identity owned elsewhere: surviving={} ownedHere={} "
+                    + "prior={} ownedHere={} at hospital={} (sender={}/{} msgCtrlId={})",
+                survivingPatientId, survivorOwnedHere, retiringPatientId, retireeOwnedHere,
+                hospitalId, sendingApplication, sendingFacility, loggedControlId);
+            recordReject(receivingHospital, sendingApplication, sendingFacility,
+                messageControlId, REASON_NOT_OWNER);
+            return MllpInboundOutcome.REJECTED_NOT_OWNER;
+        }
+
         try {
             // The receiving hospital, handed over explicitly: this thread has no
             // request context for EMPI to resolve one from, and mergePatients
             // refuses every merge without one. The allowlist established this
             // hospital and the gate above authorised both patients at it.
-            empiService.mergePatientsAtAuthorisedHospital(
+            authorisedMerge.mergePatientsAtAuthorisedHospital(
                 hospitalId,
                 survivingPatientId, retiringPatientId,
                 // AUTOMATED, not MANUAL: no human made this call, and the
@@ -205,15 +248,18 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // the server-error AE instead of this one. Rolling back on purpose
             // turns that into a silent rollback of everything this message did.
             rollBackThisMessage();
-            // This refusal writes no integration_message_event row, so MSH-10
-            // in the log is the only way to correlate it with the sender's
-            // queue. It is not the only one: the missing PID-3/MRG-1,
-            // no-hospital and same-identifier refusals above write no row
-            // either, and their log lines do not carry MSH-10 yet.
-            log.warn("MLLP A40 refused by the merge service — sender={}/{} hospital={} "
-                    + "msgCtrlId={}: {}",
+            // A dead letter, so a partner queue stuck on this refusal shows
+            // on the integration-messages surface instead of only in a log.
+            // REQUIRES_NEW, so it survives the rollback just marked. The
+            // exception's message stays out of both: a constraint failure's
+            // text can quote the row, and the merge notes carry the MRNs.
+            recordReject(receivingHospital, sendingApplication, sendingFacility,
+                messageControlId, REASON_EMPI_REFUSED);
+            log.warn("MLLP A40 refused by the merge service — surviving={} prior={} "
+                    + "sender={}/{} hospital={} msgCtrlId={}: {}",
+                survivingPatientId, retiringPatientId,
                 sendingApplication, sendingFacility, hospitalId, loggedControlId,
-                ex.getMessage());
+                ex.getClass().getSimpleName());
             return MllpInboundOutcome.REJECTED_INVALID;
         }
 
@@ -286,11 +332,13 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
         }
     }
 
-    /** Resolve an MRN to its patient through EMPI, or empty if unknown. */
-    private Optional<UUID> resolvePatient(String mrn) {
+    /**
+     * Resolve an MRN to its master identity through EMPI, or empty if unknown
+     * or not linked to a patient.
+     */
+    private Optional<EmpiIdentityResponseDTO> resolvePatient(String mrn) {
         return empiService.findIdentityByAlias(EmpiAliasType.MRN, mrn)
-            .map(EmpiIdentityResponseDTO::getPatientId)
-            .filter(java.util.Objects::nonNull);
+            .filter(identity -> identity.getPatientId() != null);
     }
 
     private boolean isRegisteredHere(UUID patientId, UUID hospitalId) {

@@ -142,6 +142,9 @@ class EmpiServiceImplTest {
         // view — the only caller a null scope may stand for. The unverified
         // (authorities-only) caller stubs this false explicitly.
         lenient().when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        // The conditional MERGED transition wins unless a test says a
+        // concurrent merge got there first.
+        lenient().when(masterIdentityRepository.claimForMerge(any(), any())).thenReturn(1);
     }
 
     @AfterEach
@@ -1154,28 +1157,79 @@ class EmpiServiceImplTest {
         Mockito.verifyNoInteractions(registrationRepository, masterIdentityRepository, mergeEventRepository);
     }
 
+    /* ── One merge, however many race; nothing recorded for a rollback ── */
+
     @Test
-    void mergePatientsAtAuthorisedHospital_isCalledOnlyByTheInboundA40Path() throws java.io.IOException {
-        // It trusts its caller's claim to act at a hospital. A REST controller
-        // passing a request-supplied id here would bypass the verified scope
-        // mergePatients resolves, so any new caller has to be a decision.
-        java.nio.file.Path main = java.nio.file.Paths.get("src/main/java");
-        List<String> callers;
-        try (java.util.stream.Stream<java.nio.file.Path> files = java.nio.file.Files.walk(main)) {
-            callers = files
-                .filter(file -> file.toString().endsWith(".java"))
-                .filter(file -> {
-                    try {
-                        return java.nio.file.Files.readString(file)
-                            .contains(".mergePatientsAtAuthorisedHospital(");
-                    } catch (java.io.IOException ex) {
-                        throw new java.io.UncheckedIOException(ex);
-                    }
-                })
-                .map(file -> file.getFileName().toString())
-                .toList();
-        }
-        assertThat(callers).containsExactly("MllpInboundMergeServiceImpl.java");
+    void mergePatients_losingTheClaimToAConcurrentMergeIsRefusedExactlyLikeAnAlreadyMergedIdentity() {
+        renderMessagesWithArguments();
+        UUID hospital = UUID.randomUUID();
+        UUID[] patients = kafkaMergeFixture(hospital, hospital);
+        // Both merges read the secondary as ACTIVE; the other one claimed the
+        // row first, so this one's conditional update matched nothing.
+        when(masterIdentityRepository.claimForMerge(any(), any())).thenReturn(0);
+
+        Throwable lost = catchThrowable(() -> transaction.executeWithoutResult(status ->
+            empiService.mergePatients(patients[0], patients[1], EmpiMergeType.MANUAL, null)));
+
+        // The reference: the same merge arriving after the winner committed.
+        EmpiMasterIdentity secondary = masterIdentityRepository.findByPatientId(patients[1]).orElseThrow();
+        secondary.setStatus(EmpiIdentityStatus.MERGED);
+        Throwable later = catchThrowable(() ->
+            empiService.mergePatients(patients[0], patients[1], EmpiMergeType.MANUAL, null));
+
+        assertIdenticalRefusal(lost, later);
+        assertThat(lost).isExactlyInstanceOf(BusinessException.class);
+        Mockito.verify(mergeEventRepository, Mockito.never()).save(any());
+        Mockito.verify(kafkaTemplate, Mockito.never()).send(anyString(), anyString(), any(EmpiEventPayload.class));
+        Mockito.verify(auditEventLogService, Mockito.never()).logEvent(any());
+    }
+
+    @Test
+    void mergePatients_writesItsSuccessAuditOnlyOnceTheTransactionCommits() {
+        UUID hospital = UUID.randomUUID();
+        UUID[] patients = kafkaMergeFixture(hospital, hospital);
+
+        transaction.executeWithoutResult(status -> {
+            empiService.mergePatients(patients[0], patients[1], EmpiMergeType.MANUAL, null);
+            Mockito.verify(auditEventLogService, Mockito.never()).logEvent(any());
+        });
+
+        ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        Mockito.verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.PATIENT_MERGE);
+        assertThat(audit.getValue().getStatus()).isEqualTo(com.example.hms.enums.AuditStatus.SUCCESS);
+    }
+
+    @Test
+    void mergePatients_aTransactionRolledBackAfterTheMergeLeavesNoSuccessAudit() {
+        UUID hospital = UUID.randomUUID();
+        UUID[] patients = kafkaMergeFixture(hospital, hospital);
+
+        catchThrowable(() -> transaction.executeWithoutResult(status -> {
+            empiService.mergePatients(patients[0], patients[1], EmpiMergeType.MANUAL, null);
+            throw new IllegalStateException("the caller's own work failed after the merge");
+        }));
+
+        Mockito.verify(auditEventLogService, Mockito.never()).logEvent(any());
+    }
+
+    @Test
+    void mergePatients_aFlushFailureSurfacesFromTheCallAndRecordsNothing() {
+        // Flushed inside the call, so a constraint or lock failure is this
+        // method's exception - where a caller can still answer it as a
+        // refusal - and not a surprise at the caller's commit.
+        UUID hospital = UUID.randomUUID();
+        UUID[] patients = kafkaMergeFixture(hospital, hospital);
+        Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("constraint"))
+            .when(masterIdentityRepository).flush();
+
+        Throwable refused = catchThrowable(() -> transaction.executeWithoutResult(status ->
+            empiService.mergePatients(patients[0], patients[1], EmpiMergeType.MANUAL, null)));
+
+        assertThat(refused).isExactlyInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        Mockito.verify(auditEventLogService, Mockito.never()).logEvent(any());
+        Mockito.verify(kafkaTemplate, Mockito.never()).send(anyString(), anyString(), any(EmpiEventPayload.class));
     }
 
     /**
