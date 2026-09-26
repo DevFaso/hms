@@ -49,6 +49,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceImplTest {
@@ -69,6 +71,7 @@ class UserServiceImplTest {
     @Mock private PasswordHistoryService passwordHistoryService;
     @Mock private com.example.hms.security.LoginAttemptService loginAttemptService;
     @Mock private AssignmentLinkService assignmentLinkService;
+    @Mock private com.example.hms.service.support.UserAccountAccess accountAccess;
 
     @InjectMocks
     private UserServiceImpl userService;
@@ -97,6 +100,12 @@ class UserServiceImplTest {
         superAdminRole.setId(UUID.randomUUID());
         superAdminRole.setCode("ROLE_SUPER_ADMIN");
         superAdminRole.setName("ROLE_SUPER_ADMIN");
+
+        // The behaviour tests below run as an administrator of the account;
+        // the guard itself is exercised in AccountAccessGuard and in
+        // UserAccountAccessTest / UserEndpointAuthorizationIT.
+        lenient().when(accountAccess.canAdminister(any())).thenReturn(true);
+        lenient().when(accountAccess.canView(any())).thenReturn(true);
     }
 
     @Test
@@ -1327,6 +1336,180 @@ class UserServiceImplTest {
             UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
             dto.setActive(active);
             return dto;
+        }
+    }
+
+    // =====================================================================
+    // The caller guard (UserAccountAccess) as the service applies it
+    // =====================================================================
+
+    @Nested
+    @DisplayName("account access guard")
+    class AccountAccessGuard {
+
+        private static final String EXISTING_HASH = "$2a$10$existingHash";
+
+        @BeforeEach
+        void target() {
+            user.setPasswordHash(EXISTING_HASH);
+            user.setActive(true);
+            user.setDeleted(false);
+        }
+
+        private void refuseAdministration() {
+            when(accountAccess.canAdminister(user)).thenReturn(false);
+        }
+
+        @Test
+        @DisplayName("PUT on someone else's account without administering it: 404, nothing saved, hash unchanged")
+        void updateByStrangerIsRefusedAsMissing() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            refuseAdministration();
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setPassword("Attacker-Chosen-1");
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessage(new ResourceNotFoundException("User not found with ID: " + userId).getMessage());
+
+            assertThat(user.getPasswordHash()).isEqualTo(EXISTING_HASH);
+            verify(userRepository, never()).save(any());
+            verifyNoInteractions(passwordEncoder, auditEventLogService);
+        }
+
+        @Test
+        @DisplayName("a self-edit may not set a password: it goes through /auth/me/change-password")
+        void selfEditCannotSetPassword() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.isSelf(user)).thenReturn(true);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setPassword("New-Password-1");
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessageContaining("/auth/me/change-password");
+            assertThat(user.getPasswordHash()).isEqualTo(EXISTING_HASH);
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a self-edit may not switch its own account off")
+        void selfEditCannotChangeActive() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.isSelf(user)).thenReturn(true);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setActive(false);
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            assertThat(user.isActive()).isTrue();
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a self-edit may not rename: it goes through /auth/me/change-username")
+        void selfEditCannotRename() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.isSelf(user)).thenReturn(true);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setUsername("someone-else");
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessageContaining("/auth/me/change-username");
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("the profile form's self-edit — names, email, phone, the unchanged username and active flag — saves")
+        void profileSelfEditSaves() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.isSelf(user)).thenReturn(true);
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(assignmentRepository.findByUser(any())).thenReturn(Set.of());
+            when(userMapper.toResponseDTO(any(), any())).thenReturn(new UserResponseDTO());
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setFirstName("Awa");
+            dto.setLastName("Traore");
+            dto.setEmail("awa@example.com");
+            dto.setPhoneNumber("+22670111111");
+            dto.setUsername("testuser");
+            dto.setActive(true);
+
+            userService.updateUser(userId, dto);
+
+            assertThat(user.getFirstName()).isEqualTo("Awa");
+            assertThat(user.getEmail()).isEqualTo("awa@example.com");
+            assertThat(user.getPasswordHash()).isEqualTo(EXISTING_HASH);
+            verify(userRepository).save(user);
+            // The self path never consults the administrator rule.
+            verify(accountAccess, never()).canAdminister(any());
+        }
+
+        @Test
+        @DisplayName("DELETE by a registrar of the unclaimed account its failed registration made: soft-deleted")
+        void registrarDiscardsUnclaimedAccount() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            refuseAdministration();
+            when(accountAccess.canDiscardUnclaimedPatientAccount(user)).thenReturn(true);
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+
+            userService.deleteUser(userId);
+
+            assertThat(user.isDeleted()).isTrue();
+            verify(assignmentService).deleteAllAssignmentsForUser(userId);
+        }
+
+        @Test
+        @DisplayName("DELETE of any other account without administering it: 404, untouched")
+        void deleteByStrangerIsRefusedAsMissing() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            refuseAdministration();
+            when(accountAccess.canDiscardUnclaimedPatientAccount(user)).thenReturn(false);
+
+            assertThatThrownBy(() -> userService.deleteUser(userId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            assertThat(user.isDeleted()).isFalse();
+            verify(userRepository, never()).save(any());
+            verifyNoInteractions(assignmentService);
+        }
+
+        @Test
+        @DisplayName("restore of an account the caller does not administer: 404, still deleted")
+        void restoreByNonAdministratorIsRefusedAsMissing() {
+            user.setDeleted(true);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            refuseAdministration();
+
+            assertThatThrownBy(() -> userService.restoreUser(userId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            assertThat(user.isDeleted()).isTrue();
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("GET by id the caller may not view: 404, same as missing")
+        void getByIdNotViewableIsRefusedAsMissing() {
+            when(userRepository.findByIdWithRolesAndProfiles(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.canView(user)).thenReturn(false);
+
+            assertThatThrownBy(() -> userService.getUserById(userId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            verifyNoInteractions(userMapper);
+        }
+
+        @Test
+        @DisplayName("the directory refuses a non-staff caller before any query runs")
+        void directoryRefusalPrecedesTheQuery() {
+            doThrow(new org.springframework.security.access.AccessDeniedException("Access denied"))
+                    .when(accountAccess).requireDirectoryAccess();
+
+            assertThatThrownBy(() -> userService.getAllUsers(0, 10, false, false))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            assertThatThrownBy(() -> userService.searchUsers("a", null, null, 0, 10, false, false))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            verifyNoInteractions(userRepository);
         }
     }
 }

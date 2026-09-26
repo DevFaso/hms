@@ -141,14 +141,21 @@ public class UserController {
         return ResponseEntity.badRequest().build();
     }
 
-    @Operation(summary = "Get user by ID")
+    // Who may read, edit, delete and restore which account, and who may use the
+    // directory, is decided in the service (UserAccountAccess), so no other
+    // entry point over UserService can skip it. A refused id answers 404, the
+    // same as a missing one.
+    @Operation(summary = "Get user by ID",
+        description = "Your own account, or one you administer (super-admin; hospital admin of a "
+            + "hospital the account is assigned to). Anything else answers 404.")
     @GetMapping("/{id}")
     public ResponseEntity<UserResponseDTO> getUserById(@PathVariable UUID id) {
         return ResponseEntity.ok(userService.getUserById(id));
     }
 
     @Operation(summary = "Get all users with pagination (summary view)",
-        description = "includeDeleted=true also returns soft-deleted accounts; onlyDeleted=true "
+        description = "Staff only: a caller with no active non-patient assignment gets 403. "
+            + "includeDeleted=true also returns soft-deleted accounts; onlyDeleted=true "
             + "returns only them (the restore worklist). Both are honoured only for SUPER_ADMIN "
             + "- the user directory is global, so surfacing deleted identities to a "
             + "hospital-scoped admin would let one tenant enumerate another tenant's account "
@@ -182,7 +189,12 @@ public class UserController {
     }
 
     @WriteAudited(skip = true, reason = "service emits USER_CREATE / USER_UPDATE / USER_DELETE")
-    @Operation(summary = "Update user by ID (partial update — only send fields you want to change)")
+    @Operation(summary = "Update user by ID (partial update — only send fields you want to change)",
+        description = "Your own account: names, email and phone only; the password, username and "
+            + "active flag have their own rules (POST /auth/me/change-password, "
+            + "/auth/me/change-username). Another account: super-admin, or a hospital admin when "
+            + "every one of its assignments is at a hospital they administer and it is not a "
+            + "super-admin. Anything else answers 404.")
     @PutMapping("/{id}")
     public ResponseEntity<UserResponseDTO> updateUser(@PathVariable UUID id,
                                                       @Valid @RequestBody UpdateUserRequestDTO dto) {
@@ -190,8 +202,12 @@ public class UserController {
     }
 
     @WriteAudited(skip = true, reason = "service emits USER_CREATE / USER_UPDATE / USER_DELETE")
-    @Operation(summary = "Delete user by ID (Soft Delete)")
+    @Operation(summary = "Delete user by ID (Soft Delete)",
+        description = "Administrators of the account, as for update. A registrar (the roles "
+            + "admin-register admits) may also discard the unclaimed patient account its own "
+            + "failed patient registration just created. Anything else answers 404.")
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<MessageResponse> deleteUser(@PathVariable UUID id) {
         userService.deleteUser(id);
         return ResponseEntity.ok(new MessageResponse("User deleted successfully."));
@@ -205,7 +221,8 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
-    @Operation(summary = "Search users by name, role, or email with pagination (summary view)")
+    @Operation(summary = "Search users by name, role, or email with pagination (summary view)",
+        description = "Staff only: a caller with no active non-patient assignment gets 403.")
     @GetMapping("/search")
     public ResponseEntity<Page<UserSummaryDTO>> searchUsers(
             @RequestParam(required = false) String name,

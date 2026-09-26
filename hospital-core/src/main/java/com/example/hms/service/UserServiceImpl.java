@@ -99,6 +99,7 @@ public class UserServiceImpl implements UserService {
     private final StaffRepository staffRepository;
     private final PatientRepository patientRepository;
     private final PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
+    private final com.example.hms.service.support.UserAccountAccess accountAccess;
 
     @Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -968,8 +969,10 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public UserResponseDTO getUserById(UUID id) {
+        // Refused exactly like a missing id: no existence oracle.
         User user = userRepository.findByIdWithRolesAndProfiles(id)
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + id));
+                .filter(accountAccess::canView)
+                .orElseThrow(() -> userNotFound(id));
         Set<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUser(user);
         return userMapper.toResponseDTO(user, assignments);
     }
@@ -978,6 +981,7 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public Page<UserSummaryDTO> getAllUsers(int page, int size, boolean includeDeleted,
                                             boolean onlyDeleted) {
+        accountAccess.requireDirectoryAccess();
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<User> users = userRepository.findAllPaged(includeDeleted, onlyDeleted, pageable);
         return users.map(userMapper::toSummaryDTO);
@@ -987,6 +991,7 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public Page<UserSummaryDTO> searchUsers(String name, String role, String email, int page, int size,
                                             boolean includeDeleted, boolean onlyDeleted) {
+        accountAccess.requireDirectoryAccess();
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<User> users = userRepository.searchUsers(
             name, role, email, includeDeleted, onlyDeleted, pageable);
@@ -1001,8 +1006,13 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public void deleteUser(UUID id) {
+        // An administrator of the account, or a registrar discarding the
+        // unclaimed patient account its own failed registration just created
+        // (patient-form's compensation). Anyone else: the missing-user answer.
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + id));
+                .filter(target -> accountAccess.canAdminister(target)
+                        || accountAccess.canDiscardUnclaimedPatientAccount(target))
+                .orElseThrow(() -> userNotFound(id));
 
         user.setDeleted(true);
         user.setActive(false);
@@ -1026,8 +1036,13 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public void restoreUser(UUID id) {
+        // The same tenant rule as editing: a hospital admin restores only an
+        // account whose assignments are all at hospitals they administer. A
+        // soft delete hard-deletes the assignments, so in practice a restore
+        // is a super-admin action (the deleted view is super-admin-only too).
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + id));
+                .filter(accountAccess::canAdminister)
+                .orElseThrow(() -> userNotFound(id));
 
         user.setDeleted(false);
         user.setActive(true);
@@ -1087,7 +1102,17 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponseDTO updateUser(UUID id, UpdateUserRequestDTO dto) {
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> userNotFound(id));
+
+        // Editing your own account is the profile page: contact fields only,
+        // whoever you are. Anyone else's account needs an administrator of it
+        // (UserAccountAccess.canAdminister) and is otherwise refused exactly
+        // like a missing id.
+        if (accountAccess.isSelf(user)) {
+            requireSelfServiceChangesOnly(user, dto);
+        } else if (!accountAccess.canAdminister(user)) {
+            throw userNotFound(id);
+        }
 
         // ── Merge-preserve: only overwrite fields that are explicitly provided ──
 
@@ -1134,15 +1159,13 @@ public class UserServiceImpl implements UserService {
         // clears the other account's counter. It also leaves two rows the
         // case-insensitive findByUsername cannot resolve, which breaks login
         // for both: the throttle is the smaller half of that bug. The
-        // uniqueness check and the missing guard are the fix; both are in
-        // tasklist.md.
+        // uniqueness check is the remaining fix and is in tasklist.md; the
+        // caller guard is the one at the top of this method.
         //
         // The transition guard is about not clearing on an ordinary edit; it
-        // is NOT an authorization control. PUT /users/{id} has no
-        // @PreAuthorize, so a caller who wants to clear someone's throttle can
-        // send {active:false} then {active:true} — and that endpoint already
-        // lets them set the password outright. The gap is the missing guard,
-        // and the rename leak it leaves behind; both are in tasklist.md.
+        // is NOT an authorization control. Authorization is the check at the
+        // top of this method: only an administrator of the account reaches
+        // here with a status change, since a self-edit cannot make one.
         final String usernameAfterUpdate = user.getUsername();
         if (reactivated) {
             TransactionCallbacks.afterCommit(
@@ -1192,6 +1215,35 @@ public class UserServiceImpl implements UserService {
 
         Set<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUser(updated);
         return userMapper.toResponseDTO(updated, assignments);
+    }
+
+    /**
+     * The fields an account holder may change on their own account through
+     * {@code PUT /users/{id}}: names, email and phone. The rest have their own
+     * endpoints, which apply rules this one does not: the password needs the
+     * current one and the history check ({@code POST /auth/me/change-password}),
+     * the username the character and uniqueness rules
+     * ({@code POST /auth/me/change-username}), and nobody switches their own
+     * account on or off. Sending the current value back unchanged is not a
+     * change, so the profile form, which always sends the username, still works.
+     */
+    private static void requireSelfServiceChangesOnly(User user, UpdateUserRequestDTO dto) {
+        if (dto.getActive() != null && !dto.getActive().equals(user.isActive())) {
+            throw new BusinessException("An account cannot change its own active status.");
+        }
+        if (hasText(dto.getPassword())) {
+            throw new BusinessException(
+                    "Change your own password with POST /auth/me/change-password.");
+        }
+        if (hasText(dto.getUsername()) && !dto.getUsername().equals(user.getUsername())) {
+            throw new BusinessException(
+                    "Change your own username with POST /auth/me/change-username.");
+        }
+    }
+
+    /** The one answer for a missing account and for one the caller may not touch. */
+    private static ResourceNotFoundException userNotFound(UUID id) {
+        return new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + id);
     }
 
     /** True when the string is non-null and non-blank. */
