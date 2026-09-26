@@ -287,9 +287,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * {@link HospitalContextRequestOverrides#applyRequestOverrides} so the
      * legacy bearer path and the OIDC path
      * ({@code KeycloakHospitalContextFilter}) honour the
-     * {@code X-Hospital-Id} header identically. Behaviour is unchanged
-     * vs. the inline implementation; the only difference is log-line
-     * prefix ({@code [AUTH]} now, was {@code [JWT]}).
+     * {@code X-Hospital-Id} header identically. It differs from the old
+     * inline implementation in the log-line prefix ({@code [AUTH]} now,
+     * was {@code [JWT]}) and in no longer letting a principal with an
+     * empty permitted hospital set pin any hospital it names.
      */
     private HospitalContext applyRequestOverrides(HospitalContext context, HttpServletRequest request) {
         return HospitalContextRequestOverrides.applyRequestOverrides(context, request);

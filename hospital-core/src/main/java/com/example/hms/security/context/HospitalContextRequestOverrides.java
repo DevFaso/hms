@@ -40,10 +40,18 @@ public final class HospitalContextRequestOverrides {
      * <ul>
      *   <li>No header / blank header → context returned unchanged.</li>
      *   <li>Malformed UUID → warning logged, context returned unchanged.</li>
-     *   <li>UUID outside the principal's permitted scope (and not super
-     *       admin) → warning logged, context returned unchanged.</li>
-     *   <li>Otherwise → context with {@code activeHospitalId} replaced
-     *       by the requested UUID.</li>
+     *   <li>Super admin → context with {@code activeHospitalId} replaced
+     *       by the requested UUID (the chip-scoped view).</li>
+     *   <li>UUID in the principal's permitted hospital set → context with
+     *       {@code activeHospitalId} replaced by the requested UUID.</li>
+     *   <li>Anything else → warning logged, context returned unchanged.
+     *       That includes a principal whose permitted set is EMPTY: an
+     *       empty set means the principal holds no hospital, not that it
+     *       may pick any. It is empty for a patient (ROLE_PATIENT is a
+     *       global, no-hospital assignment), for a user whose assignments
+     *       were revoked after sign-in (the set is read live), and for a
+     *       Keycloak token with no hospital claims; honouring the header
+     *       for them let each one act at any hospital it named.</li>
      * </ul>
      */
     public static HospitalContext applyRequestOverrides(HospitalContext context,
@@ -66,8 +74,9 @@ public final class HospitalContextRequestOverrides {
             return effective;
         }
 
+        // No empty-set escape: a principal with no permitted hospital has no
+        // hospital to switch to (see the javadoc above).
         boolean permitted = effective.isSuperAdmin()
-            || effective.getPermittedHospitalIds().isEmpty()
             || effective.getPermittedHospitalIds().contains(requestedHospital);
 
         if (!permitted) {
