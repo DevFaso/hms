@@ -91,6 +91,7 @@ public class FhirTenantBoundary {
     private static final String ROLE_PREFIX = "ROLE_";
 
     private static final int UUID_LENGTH = 36;
+    private static final int MAX_IN_LIST = 1000;
     private static final String IDS = "ids";
     private static final String HOSPITAL = "hospitalId";
 
@@ -215,7 +216,9 @@ public class FhirTenantBoundary {
             return null;
         }
         String value = entry.toString().trim();
-        int at = value.lastIndexOf('@');
+        // indexOf, as KeycloakHospitalContextResolver parses the same claim:
+        // the two must agree on which hospital an entry names.
+        int at = value.indexOf('@');
         if (at <= 0 || !hospitalId.toString().equalsIgnoreCase(value.substring(at + 1).trim())) {
             return null;
         }
@@ -265,7 +268,14 @@ public class FhirTenantBoundary {
                 collect(visible, idParts, DISCHARGE_PREFIX, DISCHARGE_SUMMARIES, hospitalId);
             }
             default -> {
-                // Not taught here: nothing of this type leaves the server.
+                // Not taught here: nothing of this type leaves the server. A
+                // type listed in KNOWN_TYPES must never land here — that is
+                // a rule someone forgot, and it would refuse every row of the
+                // type while every guard stayed green.
+                if (KNOWN_TYPES.contains(resourceType)) {
+                    throw new IllegalStateException("FHIR type " + resourceType
+                        + " is in KNOWN_TYPES but has no visibility rule");
+                }
             }
         }
         return visible;
@@ -315,14 +325,24 @@ public class FhirTenantBoundary {
         }
     }
 
+    /**
+     * Runs {@code jpql} over {@code rows} in chunks: an unscoped provider can
+     * hand back every row a patient has at every hospital, and one IN list
+     * that long would exceed the driver's bind-parameter limit.
+     */
     private List<UUID> query(String jpql, Set<UUID> rows, UUID hospitalId) {
         if (rows.isEmpty()) {
             return List.of();
         }
-        return entityManager.createQuery(jpql, UUID.class)
-            .setParameter(IDS, rows)
-            .setParameter(HOSPITAL, hospitalId)
-            .getResultList();
+        List<UUID> all = new ArrayList<>(rows);
+        List<UUID> found = new ArrayList<>();
+        for (int from = 0; from < all.size(); from += MAX_IN_LIST) {
+            found.addAll(entityManager.createQuery(jpql, UUID.class)
+                .setParameter(IDS, all.subList(from, Math.min(all.size(), from + MAX_IN_LIST)))
+                .setParameter(HOSPITAL, hospitalId)
+                .getResultList());
+        }
+        return found;
     }
 
     private static UUID parse(String raw) {

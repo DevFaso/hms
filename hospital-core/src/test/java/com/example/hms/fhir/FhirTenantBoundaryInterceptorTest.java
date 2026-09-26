@@ -221,6 +221,19 @@ class FhirTenantBoundaryInterceptorTest {
     }
 
     @Test
+    @DisplayName("the resource step 2 already gated is not looked up a second time")
+    void gatedReadIsNotCheckedTwice() {
+        actAt(HOSPITAL_A, Set.of(HOSPITAL_A), false, false);
+        when(boundary.isVisible("Encounter", OWN, HOSPITAL_A)).thenReturn(true);
+        SystemRequestDetails request = request(RestOperationTypeEnum.READ, "Encounter", OWN);
+        interceptor.bindAndGate(request, RestOperationTypeEnum.READ);
+
+        interceptor.filterOutgoing(request, new ResponseDetails(200, new Encounter().setId(OWN)));
+
+        verify(boundary, org.mockito.Mockito.times(1)).isVisible("Encounter", OWN, HOSPITAL_A);
+    }
+
+    @Test
     @DisplayName("a response without a bound hospital lets nothing through")
     void unboundResponseIsEmpty() {
         SystemRequestDetails request = request(RestOperationTypeEnum.SEARCH_TYPE, "Encounter", null);

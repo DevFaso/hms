@@ -79,6 +79,9 @@ public class FhirTenantBoundaryInterceptor {
     /** Where the bound hospital travels from step 1 to step 3 within one request. */
     static final String BOUND_HOSPITAL = FhirTenantBoundaryInterceptor.class.getName() + ".boundHospital";
 
+    /** The {@code Type/id} step 2 found visible, so step 3 need not ask again for the same resource. */
+    static final String GATED_ID = FhirTenantBoundaryInterceptor.class.getName() + ".gatedId";
+
     /** Operations whose response the operation itself scopes (see the class comment). */
     static final Set<String> SELF_SCOPED_OPERATIONS = Set.of("$everything");
 
@@ -122,9 +125,11 @@ public class FhirTenantBoundaryInterceptor {
         }
 
         IIdType named = request.getId();
-        if (named != null && named.hasIdPart()
-            && !boundary.isVisible(request.getResourceName(), named.getIdPart(), hospitalId)) {
-            throw new ResourceNotFoundException(named);
+        if (named != null && named.hasIdPart()) {
+            if (!boundary.isVisible(request.getResourceName(), named.getIdPart(), hospitalId)) {
+                throw new ResourceNotFoundException(named);
+            }
+            request.getUserData().put(GATED_ID, request.getResourceName() + "/" + named.getIdPart());
         }
     }
 
@@ -144,7 +149,7 @@ public class FhirTenantBoundaryInterceptor {
         if (ENVELOPE_TYPES.contains(fhirContext.getResourceType(resource))) {
             return;
         }
-        if (!isVisible(resource, hospitalId)) {
+        if (!alreadyGated(request, resource) && !isVisible(resource, hospitalId)) {
             log.debug("[FHIR] withheld an out-of-scope {} from a {} response",
                 fhirContext.getResourceType(resource), request.getRestOperationType());
             IIdType named = request.getId();
@@ -207,6 +212,13 @@ public class FhirTenantBoundaryInterceptor {
         return visible != null && visible.contains(resource.getIdElement().getIdPart());
     }
 
+    /** The response is the very resource step 2 already found visible: no second lookup. */
+    private boolean alreadyGated(RequestDetails request, IBaseResource resource) {
+        Object gated = request.getUserData().get(GATED_ID);
+        return gated != null && resource.getIdElement() != null && resource.getIdElement().hasIdPart()
+            && gated.equals(fhirContext.getResourceType(resource) + "/" + resource.getIdElement().getIdPart());
+    }
+
     private boolean isVisible(IBaseResource resource, UUID hospitalId) {
         return hospitalId != null
             && resource.getIdElement() != null
@@ -216,18 +228,15 @@ public class FhirTenantBoundaryInterceptor {
     }
 
     private static ForbiddenOperationException noRoleHere() {
-        String message = "The caller holds no role at the bound hospital that may make this FHIR request.";
-        OperationOutcome outcome = new OperationOutcome();
-        outcome.addIssue()
-            .setSeverity(OperationOutcome.IssueSeverity.ERROR)
-            .setCode(OperationOutcome.IssueType.FORBIDDEN)
-            .setDiagnostics(message);
-        return new ForbiddenOperationException(message, outcome);
+        return forbidden("The caller holds no role at the bound hospital that may make this FHIR request.");
     }
 
     private static ForbiddenOperationException noHospitalScope() {
-        String message = "FHIR requests require an active hospital scope held by the caller; "
-            + "a super-admin supplies X-Hospital-Id, anyone else authenticates as a hospital-scoped user.";
+        return forbidden("FHIR requests require an active hospital scope held by the caller; "
+            + "a super-admin supplies X-Hospital-Id, anyone else authenticates as a hospital-scoped user.");
+    }
+
+    private static ForbiddenOperationException forbidden(String message) {
         OperationOutcome outcome = new OperationOutcome();
         outcome.addIssue()
             .setSeverity(OperationOutcome.IssueSeverity.ERROR)

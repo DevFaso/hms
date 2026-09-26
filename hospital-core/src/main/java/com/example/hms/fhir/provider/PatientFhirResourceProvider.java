@@ -126,13 +126,17 @@ public class PatientFhirResourceProvider implements IResourceProvider {
             : null;
 
         var sort = Sort.by(Sort.Order.asc("lastName"), Sort.Order.asc("firstName"));
+        // The page is capped, so it must be a page of the hospital the request
+        // is bound to: capping across every permitted hospital and then letting
+        // the tenant boundary drop the others silently loses the bound
+        // hospital's own matches past the cap.
         var page = patientRepository.searchPatientsExtended(
             mrn,
             namePattern,
             normalizeDob(dob),
             phonePattern,
             emailPattern,
-            null,
+            FhirTenancy.requireHospitalScope("Patient"),
             activeFlag,
             PageRequest.of(0, DEFAULT_PAGE_SIZE, sort)
         );
