@@ -36,7 +36,7 @@ import java.util.UUID;
  *   <li>{@code sub} — stable subject identifier.</li>
  *   <li>{@code preferred_username} — username the app echoes via {@code Authentication.getName()}.</li>
  *   <li>{@code realm_access.roles} — realm roles (mapped to {@code ROLE_*} authorities).</li>
- *   <li>{@code resource_access.&lt;client&gt;.roles} — per-client roles (also mapped).</li>
+ *   <li>{@code resource_access.&lt;client&gt;.roles} — per-client roles (emitted, never mapped).</li>
  * </ul></p>
  */
 public final class KeycloakJwtFixture {
@@ -172,6 +172,11 @@ public final class KeycloakJwtFixture {
         public TokenSpec withRealmRoles(List<String> roles) {
             return new TokenSpec(issuer, subject, preferredUsername, email, audiences,
                     authorizedParty, roles, clientRoles, hospitalId, roleAssignments, ttl);
+        }
+
+        public TokenSpec withClientRoles(Map<String, List<String>> roles) {
+            return new TokenSpec(issuer, subject, preferredUsername, email, audiences,
+                    authorizedParty, realmRoles, roles, hospitalId, roleAssignments, ttl);
         }
 
         public TokenSpec withIssuer(String newIssuer) {

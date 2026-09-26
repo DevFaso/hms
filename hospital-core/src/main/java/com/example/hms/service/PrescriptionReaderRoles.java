@@ -49,18 +49,18 @@ public final class PrescriptionReaderRoles {
      * therefore skips the ownership check. Roles named for role-expansion
      * parity are right in a set that opens a door and wrong in one that closes
      * one: {@code ROLE_PHYSICIAN} and {@code ROLE_SURGEON} were briefly named
-     * here for that reason and it was backwards, because a principal holding
-     * one of them plus {@code ROLE_PATIENT} enters through the PATIENT door on
-     * the Keycloak path (no expansion there) and naming the role would then
-     * have waived the very guard that principal needs.
+     * here for that reason and it was backwards. Both auth paths now expand
+     * them to {@code ROLE_DOCTOR} ({@code RoleExpansion}), which is in this
+     * set, so naming them is not needed; and the rule stands for any role the
+     * annotation does not admit, since a principal holding one plus
+     * {@code ROLE_PATIENT} enters through the PATIENT door, and naming the
+     * role would waive the very guard that principal needs.
      *
      * <p>{@code ROLE_SUPER_ADMIN} needs no exception either, and this is worth
      * checking rather than assuming: {@code SUPER_ADMIN_INHERITS} does include
      * {@code ROLE_PATIENT}, but it includes {@code ROLE_DOCTOR} in the same
      * breath, and that is already in this set — so an expanded super-admin is
-     * a clinical reader without being named. Unexpanded, on the OIDC path, they
-     * hold no {@code ROLE_PATIENT} either unless the realm grants it, and if it
-     * does they are refused, like the surgeon, in the safe direction.
+     * a clinical reader without being named, on both auth paths.
      *
      * <p>{@code PrescriptionAfterWriteCallerGuardTest.theRoleSetMirrorsTheAnnotation}
      * fails if the two ever disagree — in either direction, because each is a

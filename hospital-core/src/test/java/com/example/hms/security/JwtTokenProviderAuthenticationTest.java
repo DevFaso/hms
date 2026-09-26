@@ -1,20 +1,26 @@
 package com.example.hms.security;
 
+import com.example.hms.security.oidc.KeycloakJwtAuthenticationConverter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -127,6 +133,79 @@ class JwtTokenProviderAuthenticationTest {
         assertThat(auth.getAuthorities())
             .extracting(GrantedAuthority::getAuthority)
             .containsExactlyElementsOf(RoleExpansion.expand(List.of("ROLE_SUPER_ADMIN")));
+    }
+
+    /**
+     * The same CANONICAL role list ({@code ROLE_} + upper case, as the role
+     * table stores them), once on a token HMS minted and once on a Keycloak
+     * token, must authenticate with the same authorities in the same order:
+     * both paths widen through {@link RoleExpansion} and nothing else. For a
+     * non-canonical name the paths differ; see the test after this one.
+     */
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("roleLists")
+    @DisplayName("a Keycloak token and an HMS token with the same canonical role names carry the same authorities")
+    void sameCanonicalRolesSameAuthoritiesOnBothPaths(List<String> roles) {
+        UUID userId = UUID.randomUUID();
+        String username = "parity.user";
+        String token = provider.generateAccessToken(new TokenUserDescriptor(userId, username, roles));
+        when(userDetailsService.loadUserByUsername(username)).thenReturn(new StubHospitalUserDetails(
+            userId, username, true, List.of()));
+        lenient().when(tenantRoleAssignmentAccessor.findAssignmentsForUser(userId)).thenReturn(List.of());
+
+        List<String> passwordPath = provider.getAuthenticationFromJwt(token).getAuthorities().stream()
+            .map(GrantedAuthority::getAuthority).toList();
+        Jwt keycloakToken = Jwt.withTokenValue("kc")
+            .header("alg", "RS256")
+            .subject(username)
+            .claim("realm_access", Map.of("roles", roles))
+            .build();
+        List<String> keycloakPath = new KeycloakJwtAuthenticationConverter().convert(keycloakToken)
+            .getAuthorities().stream().map(GrantedAuthority::getAuthority).toList();
+
+        assertThat(keycloakPath).containsExactlyElementsOf(passwordPath);
+    }
+
+    /**
+     * Documents, does not endorse: the Keycloak converter upper-cases a role
+     * name before prefixing it, the HMS path only prefixes it. So a
+     * non-canonical {@code physician} is {@code ROLE_PHYSICIAN} (and therefore
+     * a doctor) over Keycloak but {@code ROLE_physician}, matching no guard,
+     * over an HMS token. HMS tokens carry role codes from the role table,
+     * which are canonical, so this does not arise there today; it is why the
+     * parity test above is scoped to canonical names.
+     */
+    @Test
+    @DisplayName("known difference: a non-canonical role name is upper-cased over Keycloak only")
+    void nonCanonicalRoleNamesDifferBetweenThePaths() {
+        UUID userId = UUID.randomUUID();
+        String username = "lowercase.user";
+        String token = provider.generateAccessToken(new TokenUserDescriptor(userId, username, List.of("physician")));
+        when(userDetailsService.loadUserByUsername(username)).thenReturn(new StubHospitalUserDetails(
+            userId, username, true, List.of()));
+        lenient().when(tenantRoleAssignmentAccessor.findAssignmentsForUser(userId)).thenReturn(List.of());
+
+        List<String> passwordPath = provider.getAuthenticationFromJwt(token).getAuthorities().stream()
+            .map(GrantedAuthority::getAuthority).toList();
+        Jwt keycloakToken = Jwt.withTokenValue("kc")
+            .header("alg", "RS256")
+            .subject(username)
+            .claim("realm_access", Map.of("roles", List.of("physician")))
+            .build();
+        List<String> keycloakPath = new KeycloakJwtAuthenticationConverter().convert(keycloakToken)
+            .getAuthorities().stream().map(GrantedAuthority::getAuthority).toList();
+
+        assertThat(passwordPath).containsExactly("ROLE_physician");
+        assertThat(keycloakPath).containsExactly("ROLE_PHYSICIAN", "ROLE_DOCTOR");
+    }
+
+    static Stream<List<String>> roleLists() {
+        return Stream.of(
+            List.of("ROLE_SUPER_ADMIN"),
+            List.of("ROLE_PHYSICIAN"),
+            List.of("ROLE_SURGEON", "ROLE_PATIENT"),
+            List.of("ROLE_HOSPITAL_ADMIN", "ROLE_DOCTOR"),
+            List.of("ROLE_NURSE", "ROLE_STAFF"));
     }
 
     /**

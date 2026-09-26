@@ -26,6 +26,8 @@ class RoleExpansionTest {
         Paths.get("src/main/java/com/example/hms/security/JwtTokenProvider.java");
     private static final Path SECURITY_CONFIG =
         Paths.get("src/main/java/com/example/hms/config/SecurityConfig.java");
+    private static final Path KEYCLOAK_CONVERTER =
+        Paths.get("src/main/java/com/example/hms/security/oidc/KeycloakJwtAuthenticationConverter.java");
 
     @Test
     @DisplayName("a super-admin holds exactly ROLE_SUPER_ADMIN plus the one inherited list, in order")
@@ -71,7 +73,7 @@ class RoleExpansionTest {
     }
 
     @Test
-    @DisplayName("neither auth path carries an inheritance list of its own")
+    @DisplayName("no auth path carries an inheritance list of its own")
     void bothPathsCallTheOneRule() throws IOException {
         String jwt = Files.readString(JWT_PROVIDER, StandardCharsets.UTF_8);
         String config = Files.readString(SECURITY_CONFIG, StandardCharsets.UTF_8);
@@ -81,6 +83,16 @@ class RoleExpansionTest {
         // ROLE_STAFF appears in an inheritance list and nowhere else in the
         // JWT provider; in SecurityConfig it belongs only to request matchers.
         assertThat(jwt).as("no inline inheritance list in JwtTokenProvider").doesNotContain("ROLE_STAFF");
+        String converter = Files.readString(KEYCLOAK_CONVERTER, StandardCharsets.UTF_8);
+        assertThat(converter).as("the Keycloak converter expands through RoleExpansion").contains("RoleExpansion.expand(");
+        // Same test as for JwtTokenProvider: roles that appear only in an
+        // inheritance list have no business in the converter.
+        assertThat(converter).as("no inline inheritance list in the Keycloak converter")
+            .doesNotContain("ROLE_STAFF")
+            .doesNotContain("ROLE_LAB_SCIENTIST")
+            .doesNotContain("ROLE_RECEPTIONIST")
+            .as("no inline doctor equivalence in the Keycloak converter")
+            .doesNotContain("ROLE_SURGEON");
         assertThat(config).as("no inline inheritance list in SecurityConfig")
             .doesNotContain("ROLE_STAFF, ROLE_PATIENT")
             .doesNotContain("inherited.forEach");
