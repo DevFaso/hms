@@ -6,14 +6,12 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.Organization;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.model.AuditEventLog;
-import com.example.hms.model.EmailChangeRequest;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.Role;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.AuditEventLogRepository;
-import com.example.hms.repository.EmailChangeRequestRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
@@ -69,8 +67,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  *       super-admin emergency MFA-reset picker;</li>
  *   <li>{@code GET/PUT /users/{own id}}: the profile page, for every signed-in
  *       user including patients (names and phone; the username and email are
- *       sent back unchanged, and a changed email goes to
- *       {@code POST /auth/me/change-email} with the current password);</li>
+ *       sent back unchanged, and a changed email is refused: an administrator
+ *       of the account changes it);</li>
  *   <li>{@code GET/PUT/DELETE /users/{id}}, {@code PATCH .../restore}: the
  *       user-list admin page (super-admin);</li>
  *   <li>{@code DELETE /users/{id}}: patient-form's compensation when the
@@ -100,8 +98,6 @@ class UserEndpointAuthorizationIT extends BaseIT {
     @Autowired private AuditEventLogRepository auditEventLogRepository;
     @Autowired private PatientHospitalRegistrationRepository registrationRepository;
     @Autowired private StaffRepository staffRepository;
-    @Autowired private EmailChangeRequestRepository emailChangeRequestRepository;
-    @Autowired private com.example.hms.security.LoginAttemptService loginAttemptService;
     @Autowired private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
     private final List<UUID> createdUsers = new ArrayList<>();
@@ -145,8 +141,6 @@ class UserEndpointAuthorizationIT extends BaseIT {
         }
         patientRepository.deleteAllById(createdPatients);
         // Includes accounts admin-register made during a test.
-        emailChangeRequestRepository.deleteAll(emailChangeRequestRepository.findAll().stream()
-            .filter(r -> createdUsers.contains(r.getUserId())).toList());
         for (UUID userId : createdUsers) {
             staffRepository.deleteAll(staffRepository.findByUserId(userId));
             assignmentRepository.deleteAll(assignmentRepository.findByUserId(userId));
@@ -555,104 +549,23 @@ class UserEndpointAuthorizationIT extends BaseIT {
     // ------------------------------------------------- self email change
 
     @Test
-    @DisplayName("a self email change needs the current password AND the code sent to the new address; no address is echoed")
-    void selfEmailChangeWaitsForTheCode() throws Exception {
+    @DisplayName("an account holder cannot change their own email on PUT; an administrator of the account still can")
+    void selfEmailChangeIsRefusedAdminChangeIsNot() throws Exception {
         String patient = hms(patientA, "ROLE_PATIENT");
         String original = patientA.getEmail();
-        String typed = "  Awa" + next() + "@Self.Test ";
-        String wanted = typed.trim().toLowerCase(java.util.Locale.ROOT);
+        String wanted = "awa" + next() + "@self.test";
 
-        // The profile PUT no longer carries an email change.
-        assertThat(status(put("/users/" + patientA.getId()), patient, Map.of("email", wanted))).isEqualTo(400);
-
-        // A stolen session without the password: refused, one FAILURE row with ids only.
-        MvcResult wrong = perform(post("/auth/me/change-email"), patient,
-            Map.of("currentPassword", "Not-The-Password-1", "newEmail", typed));
-        assertThat(wrong.getResponse().getStatus()).isEqualTo(400);
-        assertNoAddressIn(wrong, original, wanted);
-        List<AuditEventLog> refusals = failureRowsFor(patientA);
-        assertThat(refusals).hasSize(1);
-        assertThat(String.valueOf(refusals.get(0).getEventDescription()) + refusals.get(0).getDetails())
-            .doesNotContain(original).doesNotContain(wanted).doesNotContain("Not-The-Password");
-
-        // With the password: a code goes to the new address, the email does NOT change yet.
-        MvcResult requested = perform(post("/auth/me/change-email"), patient,
-            Map.of("currentPassword", ORIGINAL_HASH_PASSWORD, "newEmail", typed));
-        assertThat(requested.getResponse().getStatus()).isEqualTo(200);
-        assertNoAddressIn(requested, original, wanted);
-        assertThat(objectMapper.readTree(requested.getResponse().getContentAsString()).get("delivery").get(0)
-            .get("purpose").asText()).isEqualTo("EMAIL_CHANGE_CODE");
-        assertThat(emailOf(patientA)).isEqualTo(original);
-        EmailChangeRequest pending = emailChangeRequestRepository.findAll().stream()
-            .filter(r -> patientA.getId().equals(r.getUserId())).findFirst().orElseThrow();
-        assertThat(pending.getPendingEmail()).isEqualTo(wanted);
-        // The code only ever exists hashed; plant a known one, as the mailbox would hold it.
-        pending.setCodeHash(passwordEncoder.encode("424242"));
-        emailChangeRequestRepository.save(pending);
-
-        // A wrong code changes nothing.
-        MvcResult wrongCode = perform(post("/auth/me/change-email/confirm"), patient, Map.of("code", "000000"));
-        assertThat(wrongCode.getResponse().getStatus()).isEqualTo(400);
+        MvcResult self = perform(put("/users/" + patientA.getId()).header(HttpHeaders.ACCEPT_LANGUAGE, "en"),
+            patient, Map.of("email", wanted));
+        assertThat(self.getResponse().getStatus()).isEqualTo(400);
+        assertThat(message(self)).isEqualTo(com.example.hms.utility.MessageUtil.resolve("user.update.self.email"));
         assertThat(emailOf(patientA)).isEqualTo(original);
 
-        // The code applies it, normalised; the answer still names neither address in clear.
-        MvcResult confirmed = perform(post("/auth/me/change-email/confirm"), patient, Map.of("code", "424242"));
-        assertThat(confirmed.getResponse().getStatus()).isEqualTo(200);
-        assertNoAddressIn(confirmed, original, wanted);
-        assertThat(emailOf(patientA)).isEqualTo(wanted);
-        // Spent: the same code cannot be replayed.
-        assertThat(status(post("/auth/me/change-email/confirm"), patient, Map.of("code", "424242"))).isEqualTo(400);
-    }
-
-    @Test
-    @DisplayName("five wrong passwords lock the email change, not the owner's sign-in")
-    void wrongPasswordsHereDoNotLockSignIn() throws Exception {
-        String nurse = hms(nurseA, "ROLE_NURSE");
-        for (int i = 0; i < 5; i++) {
-            assertThat(status(post("/auth/me/change-email"), nurse,
-                Map.of("currentPassword", "Wrong-" + i, "newEmail", "n" + next() + "@self.test"))).isEqualTo(400);
-        }
-        // The endpoint is locked now, even with the right password...
-        MvcResult locked = perform(post("/auth/me/change-email").header(HttpHeaders.ACCEPT_LANGUAGE, "en"), nurse,
-            Map.of("currentPassword", ORIGINAL_HASH_PASSWORD, "newEmail", "n" + next() + "@self.test"));
-        assertThat(locked.getResponse().getStatus()).isEqualTo(400);
-        assertThat(message(locked)).isEqualTo(com.example.hms.utility.MessageUtil.resolve("user.email.change.locked"));
-        // ...but signing in is not.
-        assertThat(loginAttemptService.isLocked(nurseA.getUsername())).isFalse();
-        MvcResult login = mockMvc.perform(post("/auth/login").with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(
-                    Map.of("username", nurseA.getUsername(), "password", ORIGINAL_HASH_PASSWORD))))
-            .andReturn();
-        assertThat(login.getResponse().getStatus()).isEqualTo(200);
-    }
-
-    @Test
-    @DisplayName("a self email change to a case variant of another account's email is refused without naming it")
-    void selfEmailChangeKeepsTheCaseInsensitiveUniqueness() throws Exception {
-        String nurse = hms(nurseA, "ROLE_NURSE");
-        String variant = superAdmin.getEmail().toUpperCase(java.util.Locale.ROOT);
-
-        MvcResult taken = perform(post("/auth/me/change-email"), nurse,
-            Map.of("currentPassword", ORIGINAL_HASH_PASSWORD, "newEmail", variant));
-
-        assertThat(taken.getResponse().getStatus()).isEqualTo(400);
-        assertThat(taken.getResponse().getContentAsString())
-            .doesNotContainIgnoringCase(superAdmin.getEmail()).doesNotContain(superAdmin.getUsername());
-        assertThat(emailOf(nurseA)).isEqualTo(nurseA.getEmail());
-        assertThat(failureRowsFor(nurseA)).hasSize(1);
-    }
-
-    @Test
-    @DisplayName("a Keycloak session cannot request or confirm an email change: Keycloak owns it on that path")
-    void keycloakSessionCannotChangeTheEmail() throws Exception {
-        String kc = keycloakPatient();
-        MvcResult requested = perform(post("/auth/me/change-email").header(HttpHeaders.ACCEPT_LANGUAGE, "en"), kc,
-            Map.of("currentPassword", ORIGINAL_HASH_PASSWORD, "newEmail", "kc" + next() + "@self.test"));
-        assertThat(requested.getResponse().getStatus()).isEqualTo(400);
-        assertThat(message(requested))
-            .isEqualTo(com.example.hms.utility.MessageUtil.resolve("user.email.change.external"));
-        assertThat(status(post("/auth/me/change-email/confirm"), kc, Map.of("code", "424242"))).isEqualTo(400);
+        // A hospital admin of the account: unchanged by this PR.
+        String nurseWanted = "nurse" + next() + "@admin.test";
+        assertThat(status(put("/users/" + nurseA.getId()), hms(adminA, "ROLE_HOSPITAL_ADMIN"),
+            Map.of("email", nurseWanted))).isEqualTo(200);
+        assertThat(emailOf(nurseA)).isEqualTo(nurseWanted);
     }
 
     @Test
@@ -675,18 +588,22 @@ class UserEndpointAuthorizationIT extends BaseIT {
             hms(superAdmin, "ROLE_SUPER_ADMIN")))).contains(x.getId(), adminA.getId());
     }
 
-    private void assertNoAddressIn(MvcResult result, String... addresses) throws Exception {
-        String body = result.getResponse().getContentAsString();
-        for (String address : addresses) {
-            assertThat(body).doesNotContainIgnoringCase(address);
-        }
-    }
+    @Test
+    @DisplayName("a scoped role search finds an admin-registered nurse still waiting for her code, as the list does")
+    void scopedRoleSearchFindsAPendingAccount() throws Exception {
+        User pendingNurse = account("pendN", "ROLE_NURSE", hospitalA);
+        deactivateAssignments(pendingNurse);
+        String receptionist = hms(receptionistA, "ROLE_RECEPTIONIST");
 
-    private List<AuditEventLog> failureRowsFor(User user) {
-        return auditEventLogRepository.findAll().stream()
-            .filter(row -> user.getId().toString().equals(row.getResourceId()))
-            .filter(row -> row.getStatus() == AuditStatus.FAILURE)
-            .toList();
+        assertThat(ids(page(get("/users").param("size", "100"), receptionist))).contains(pendingNurse.getId());
+        var nurses = page(get("/users/search").param("role", "ROLE_NURSE").param("size", "100"), receptionist);
+        assertThat(ids(nurses)).containsExactlyInAnyOrder(nurseA.getId(), pendingNurse.getId());
+        assertThat(total(nurses)).isEqualTo(2);
+        // A nurse assigned only at B, pending or not, stays out.
+        User pendingAtB = account("pendB", "ROLE_NURSE", hospitalB);
+        deactivateAssignments(pendingAtB);
+        assertThat(ids(page(get("/users/search").param("role", "NURSE").param("size", "100"), receptionist)))
+            .doesNotContain(pendingAtB.getId());
     }
 
     private void deactivateAssignments(User user) {

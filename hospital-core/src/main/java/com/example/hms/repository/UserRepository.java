@@ -133,10 +133,14 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     /*
      * The search filters. When scoped, the role must be held through an
-     * ACTIVE assignment at one of the caller's hospitals, and a global
-     * UserRole does not count: otherwise a nurse at A searching
-     * role=HOSPITAL_ADMIN would find A's receptionist because that account
-     * administers hospital B, which is another tenant's fact.
+     * assignment at one of the caller's hospitals, and a global UserRole does
+     * not count: otherwise a nurse at A searching role=HOSPITAL_ADMIN would
+     * find A's receptionist because that account administers hospital B,
+     * which is another tenant's fact. Active or not, as the list's scope is:
+     * an admin-registered nurse whose assignment waits for her emailed code
+     * is listed by GET /users and must be found by role=NURSE too.
+     * Unscoped (the super-admin), the role filter is unchanged: an active
+     * assignment anywhere, or a global UserRole.
      */
     String DIRECTORY_SEARCH_FILTERS = """
           AND ( :name IS NULL
@@ -152,8 +156,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                     SELECT 1 FROM UserRoleHospitalAssignment a
                     JOIN a.role r
                     WHERE a.user = u
-                      AND a.active = true
-                      AND (:scoped = false OR a.hospital.id IN :hospitalIds)
+                      AND ((:scoped = false AND a.active = true)
+                           OR (:scoped = true AND a.hospital.id IN :hospitalIds))
                       AND (LOWER(r.code) = LOWER(cast(:role AS string)) OR LOWER(r.name) = LOWER(cast(:role AS string)))
                 )
                 OR (:scoped = false

@@ -1257,13 +1257,14 @@ public class UserServiceImpl implements UserService {
      * endpoints, which apply rules this one does not: the password needs the
      * current one and the history check ({@code POST /auth/me/change-password}),
      * the username the character and uniqueness rules
-     * ({@code POST /auth/me/change-username}), the email the current password
-     * ({@code POST /auth/me/change-email}: it is where a password reset is
-     * sent, so it needs the current password and a code sent to the new
-     * address; rebinding it from a stolen session would otherwise turn a
-     * short-lived token into a permanent takeover), and nobody switches their own account
-     * on or off. Sending the current value back unchanged is not a change, so
-     * the profile form, which always sends the username and email, still works.
+     * ({@code POST /auth/me/change-username}), and nobody switches their own
+     * account on or off. The email is not self-service at all for now: it is
+     * where a password reset is sent, so letting a session change it with no
+     * re-authentication would turn a stolen short-lived token into a
+     * permanent takeover. An administrator of the account changes it (the
+     * {@code canAdminister} path) until a verified self-service flow lands.
+     * Sending the current value back unchanged is not a change, so the
+     * profile form, which always sends the username and email, still works.
      */
     private static void requireSelfServiceChangesOnly(User user, UpdateUserRequestDTO dto) {
         if (dto.getActive() != null && !dto.getActive().equals(user.isActive())) {
