@@ -81,13 +81,16 @@ issuer (`app.auth.oidc.issuer-uri`).
 
 ## Who reaches `/fhir/**` (the role gate)
 
-`SecurityConfig` admits the servlet to `FHIR_READER_AUTHORITIES` only — the
-chart-reader set of `EncounterController.ENCOUNTER_LIST_ROLES`, plus
-`ROLE_PHYSICIAN` / `ROLE_SURGEON` named explicitly (`RoleExpansion` does not
-run on the Keycloak path) and the machine role `ROLE_FHIR_CLIENT`. `POST
-$export` has its own matcher ahead of it with the `SUPER_ADMIN` +
-`HOSPITAL_ADMIN` pair its service admits. `GET /fhir/metadata` and
-`GET /fhir/.well-known/smart-configuration` stay `permitAll`.
+`SecurityConfig` gates the servlet in four steps, first match wins:
+`GET /fhir/metadata` and `GET /fhir/.well-known/smart-configuration` stay
+`permitAll`; `POST $export` (system and Patient) admits the `SUPER_ADMIN` +
+`HOSPITAL_ADMIN` pair its service admits; reads (`GET /fhir/**`,
+`POST /fhir/*/_search`) admit `FHIR_READER_AUTHORITIES` — the chart-reader
+set of `EncounterController.ENCOUNTER_LIST_ROLES` plus `ROLE_PHYSICIAN` /
+`ROLE_SURGEON` named explicitly (`RoleExpansion` expands HMS-minted tokens,
+not Keycloak ones); every other method admits `FHIR_WRITER_AUTHORITIES`, the
+same set without the consulting clinicians. `SecurityConfigFhirMatcherTest`
+fails if the reader set drifts from the encounter-list annotation.
 
 Until that matcher existed, `/fhir/**` rode `anyRequest().authenticated()`
 and a patient's mobile-app token reached every provider. Two rules follow:
@@ -98,8 +101,19 @@ and a patient's mobile-app token reached every provider. Two rules follow:
 - **A role gate is not a tenant gate.** Admission says nothing about which
   hospital's rows a reader may see; this matcher must never be widened or
   narrowed to stand in for tenant scoping.
+- **The matcher sees the UNION of the caller's roles** across all their
+  hospitals. The tenant layer must check the role held at the hospital the
+  request is bound to — a DOCTOR at A who is a RECEPTIONIST at B passes the
+  matcher while acting at B.
+- **No machine role is admitted.** `ROLE_FHIR_CLIENT` cannot be provisioned
+  today, and `KeycloakJwtAuthenticationConverter` maps a role of any realm
+  client to `ROLE_*` — admitting it would let an unrelated client role named
+  `fhir_client` grant the whole chart. Add it back only with a real way to
+  grant it.
 
-`FhirRoleGateIT` runs the real filter chain for both principal shapes.
+`FhirRoleGateIT` sends real tokens through the real filter chain: an
+HMS-minted JWT (through `JwtAuthenticationFilter` and `RoleExpansion`) and a
+Keycloak-shaped RS256 JWT (through the real `KeycloakJwtAuthenticationConverter`).
 
 ## FHIR write API (Patient — row 20 foundation)
 

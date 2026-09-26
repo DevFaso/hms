@@ -36,17 +36,33 @@ design until terminology binding (gap #5) and the inbound MLLP listener
 
 - `GET /fhir/metadata` is public (per the FHIR R4 spec — clients fetch the
   CapabilityStatement before authenticating).
-- Every other `/fhir/**` endpoint requires the same Bearer JWT used elsewhere,
-  **and one of the chart-reader roles** (`SecurityConfig.FHIR_READER_AUTHORITIES`):
-  `DOCTOR`, `PHYSICIAN`, `SURGEON`, `NURSE`, `MIDWIFE`, `RADIOLOGIST`,
-  `ANESTHESIOLOGIST`, `PHYSIOTHERAPIST`, `SUPER_ADMIN`, or the machine role
-  `FHIR_CLIENT`. A patient token, and every non-clinical staff role, gets 403.
-  `POST $export` admits `SUPER_ADMIN` and `HOSPITAL_ADMIN` instead (the pair its
-  service admits). An integration client should be given `ROLE_FHIR_CLIENT`
-  rather than a clinician's role.
-- All reads go through the existing JPA repositories, so the tenant scope
-  applied via `HospitalContextHolder` and the `tenantContext` SpEL bean is
-  preserved without any extra plumbing.
+- Every other `/fhir/**` endpoint requires the same Bearer JWT used elsewhere
+  **and a role** (`SecurityConfig`):
+  - reads (`GET`, and `POST <type>/_search`): the chart readers — `DOCTOR`,
+    `PHYSICIAN`, `SURGEON`, `NURSE`, `MIDWIFE`, `RADIOLOGIST`,
+    `ANESTHESIOLOGIST`, `PHYSIOTHERAPIST`, `SUPER_ADMIN`;
+  - `POST $export`: `SUPER_ADMIN`, `HOSPITAL_ADMIN` (the pair its service admits);
+  - every other method (the flag-gated writes): `DOCTOR`, `PHYSICIAN`,
+    `SURGEON`, `NURSE`, `MIDWIFE`, `SUPER_ADMIN`.
+
+  A patient token, and every non-clinical staff role, gets 403.
+- **Reads are NOT tenant-scoped yet.** The role gate above says who may use
+  FHIR, not which hospital's rows they see. `Encounter`, `Condition`,
+  `MedicationRequest` and `Immunization` read with no hospital filter at all
+  (bare `findById` / `findByPatient_Id` on entities that are not
+  `TenantScoped`), and `Patient` is scoped to every hospital and organisation
+  the caller holds rather than the one it is acting in. An admitted caller
+  can therefore read other hospitals' rows until the per-hospital tenant
+  boundary (the follow-up to the role gate) lands.
+- The role gate checks the **union** of the caller's roles across all their
+  hospitals (a Spring Security path matcher sees only flat authorities): a
+  DOCTOR at A who is a RECEPTIONIST at B passes while acting at B. The tenant
+  boundary must check the role held **at the hospital the request is bound
+  to**.
+- There is no integration identity yet: no machine role is provisioned in
+  any migration or in the realm, and no realm client has service accounts
+  enabled. An integration signs in as a staff user and is gated by that
+  user's role.
 - CSRF is exempted on `/fhir/**` (server-to-server clients use Bearer JWT,
   not browser cookies).
 
