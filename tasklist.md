@@ -3336,8 +3336,9 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 - **Access-control gaps found by chasing other access-control gaps.** Each was
   found while fixing something adjacent, which is the argument for finishing a
   family rather than the one instance that was reported.
-  - **`GET /encounters/{encounterId}/avs` has no access control at all** — not
-    a missing ownership check, no hospital scope either.
+  - **~~`GET /encounters/{encounterId}/avs` had no access control at all.~~
+    Closed by #746 (merged).** Not a missing ownership check - no hospital
+    scope either.
     `EncounterServiceImpl.getAfterVisitSummary` does a bare `findById`,
     confirms `checkoutTimestamp` is non-null, and maps; the controller does not
     even take the authentication object, while the `checkOut` handler twenty
@@ -3345,9 +3346,11 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
     authenticated caller in the role set — which includes ROLE_PATIENT and
     ROLE_RECEPTIONIST — reads ANY after-visit summary on the platform, across
     every tenant, given an encounter id. An AVS carries diagnoses, medications
-    and discharge instructions. Owned by `fix/encounter-read-access-control`.
-  - `GET /encounters/{id}` has hospital scope and no ownership, so a patient
-    reads another patient's encounter within their own hospital. Same branch.
+    and discharge instructions. It was closed by #746 together with
+    `GET /encounters/{encounterId}/notes/history`, which had only an
+    `existsById` and was found by sweeping the controller.
+  - ~~`GET /encounters/{id}` had hospital scope and no ownership.~~ Closed by
+    #746 as well.
   - `GET /prescriptions/{id}` had the same ownership gap, bounded to the
     patient's own hospital because a patient principal always resolves one.
     Closed by `fix/prescription-read-patient-ownership`.
@@ -3362,7 +3365,11 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
     password-path double.
   - `RoleExpansion` runs on the password path but **not** on the Keycloak path,
     so a role set that leans on `ROLE_DOCTOR` expansion silently excludes
-    physicians and surgeons in a Keycloak deployment. Name them explicitly.
+    physicians and surgeons in a Keycloak deployment. Name them explicitly -
+    **but only in a set that GRANTS access.** In a set that decides who is
+    *not* a patient, naming them is backwards: see the bullet below on role
+    sets that remove subject status, where doing exactly this opened an
+    ownership bypass over Keycloak that had to be backed out.
 
 - **`clinical.patient_diagnoses` has no `hospital_id` column at all** (V14), so
   the patient-snapshot drawer reads it patient-wide — unfiltered, not tested by
@@ -3375,7 +3382,8 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   the legacy read, or accept and record it.** Unowned, awaiting that decision.
 
 - **Residuals from the access-control work, none blocking.**
-  - `EncounterServiceImpl`'s sibling: `getInboxItems` keeps six more
+  - `ResultReviewServiceImpl.getInboxItems` (called from `MeController`)
+    keeps six more
     staff-id-filtered reads (consults, signatures, encounters, clarification
     counts, pharmacy notifications, refills). Not the same read as the review
     queue — those are items addressed TO the clinician rather than their own
@@ -3385,10 +3393,10 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
     when no duplicates exist, so a tenant carrying duplicates gets a 500
     instead of the uniform 404. Pre-existing and shared by every
     `/me/patient/*` read. Unowned.
-  - `getPrescriptionAfterWrite` is a public method that deliberately skips an
-    authorization check, guarded only by a javadoc. An enforcement test pinning
-    its three callers, in the shape of `SchedulerLockCoverageTest`, would stop
-    that drifting. Unowned.
+  - ~~`getPrescriptionAfterWrite` was guarded only by a javadoc.~~ Closed:
+    `PrescriptionAfterWriteCallerGuardTest` (#744) pins its callers - two, the
+    write handlers, since `resolve-clarification` moved back to the guarded
+    read.
   - `ROLE_ADMIN` sits on the `/prescriptions` route guard and nav item and on
     neither backend read, and `RoleExpansion` grants it nothing, so an admin
     opening the page gets "failed to load". Unowned.
@@ -3396,10 +3404,12 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
     page, so a narrowed read records a narrower treatment-relationship trail.
     No caller combines `patientId` with `status` today; the API permits it.
     Needs a decision from whoever owns E8/E9 reach. Unowned.
-  - The prescriptions page's `HISTORY_ROLES` and `VERIFIER_ROLES` gates use
-    `hasAnyActiveRole` against `ROLE_DOCTOR` — the portal half of the
-    equivalence split, on a page where it was fixed for one gate and not the
-    others. Unowned.
+  - The prescriptions page's `HISTORY_ROLES` gate uses `hasAnyActiveRole`
+    against `ROLE_DOCTOR` - the portal half of the equivalence split, on a page
+    where it was fixed for another gate. (`VERIFIER_ROLES` is pharmacist,
+    pharmacy verifier and super-admin, with no `ROLE_DOCTOR`, so it does not
+    share the gap; do not add doctor equivalence there, or prescribers are
+    offered the verify button.) Unowned.
   - `integration_message_event.payload` is plain TEXT with no
     `EncryptedStringConverter`, and the dispatcher's parse-failure rows put raw
     HL7 in it. The body is the only diagnostic for an unparseable message, so
@@ -3493,8 +3503,10 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 - **`ControllerAuthUtils` is being imported into services.** Both
   `fix/prescription-read-patient-ownership` and
   `fix/encounter-read-access-control` do it, for the same reason:
-  `authService.getCurrentUserId()` returns null (and throws) on a
-  `JwtAuthenticationToken`, so the service layer has nowhere else to resolve a
+  `authService.getCurrentUserId()` throws `UnauthorizedException` for any
+  principal that is not `CustomUserDetails`, including a
+  `JwtAuthenticationToken` - it never returns null, so a null check around it
+  on the OIDC path never fires, so the service layer has nowhere else to resolve a
   principal's user id. `resolveUserId` belongs in `security`/`utility`, or on
   `RoleValidator` beside `getCurrentUserId()`, with that gap closed. A shared
   refactor for after both land. Unowned.
@@ -3534,16 +3546,17 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   back and leaves the PR a draft. **This is the most important process fix from
   the wave.** Unowned.
 
-- **The FHIR read API was open to every authenticated user, across every
-  tenant.** `FhirConfig` mounts the server with no `@Conditional`; `/fhir/**`
+- **OPEN, LIVE ON DEVELOP: the FHIR read API is open to every authenticated
+  user, across every tenant.** `FhirConfig` mounts the server with no `@Conditional`; `/fhir/**`
   had no role rule and fell through to `anyRequest().authenticated()`; there is
   no FHIR authorization interceptor; and `EncounterFhirResourceProvider` read
   through unfiltered `findById`/`findByPatient_Id` on an entity that is not
-  `TenantScoped`. So a patient, with an ordinary mobile-app token, could read
+  `TenantScoped`. So a patient, with an ordinary mobile-app token, can read
   any encounter on the platform. Reported for Condition, MedicationRequest and
-  Immunization too. Layer 1 (who may reach `/fhir/**`) is
-  `fix/fhir-read-tenancy` (#752); layer 2 (per-hospital filtering, one
-  interceptor rather than per-method guards) is #755.
+  Immunization too. **Not fixed until both PRs merge.** Layer 1 (who may reach
+  `/fhir/**`) is `fix/fhir-role-gate` (#752); layer 2 (per-hospital filtering,
+  one interceptor rather than per-method guards) is `fix/fhir-read-tenancy`
+  (#755).
   Two constraints layer 2 must honour, recorded because a path-level matcher
   cannot: a user's roles are checked as the union across all their hospitals,
   so a doctor at A who is a receptionist at B passes while acting at B - layer
@@ -3566,10 +3579,11 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   stamped with the patient's first hospital - which hospital owns an identity
   is an open design question. Unowned.
 
-- **Lab trend history was readable across every tenant.**
+- **OPEN, LIVE ON DEVELOP: lab trend history is readable across every
+  tenant.**
   `GET /lab-results/patient/{patientId}/test/{testDefinitionId}/compare-sequential`
-  had no scope check at all and returned the patient's name with twelve
-  results; the same unscoped query fed the trend on `GET /lab-results/{id}` and
+  has no scope check at all and returns the patient's name with twelve
+  results; **not fixed until #751 merges**; the same unscoped query fed the trend on `GET /lab-results/{id}` and
   `/{id}/compare`. Owned by `fix/lab-result-null-pin` (#751), which also makes
   a null hospital pin unscoped only for a verified super-admin. Found in that
   work: fourteen existing tests had been passing **only because of** the null
@@ -3629,7 +3643,8 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   H2 cannot drop the `platform` schema because the ShedLock table depends on
   it, so whichever `@DataJpaTest` context comes up next gets a half-built
   schema. A flaky test that blocks merges is also a test that can make a real
-  failure look like a flake. Owned by `fix/flaky-registration-scope-test`.
+  failure look like a flake. An agent is working on it; no branch or PR
+  exists yet, so treat it as open until one does.
 
 - **Two layers of this codebase disagree about role equivalence.**
   `RoleExpansion` grants a physician or surgeon ROLE_DOCTOR while the
