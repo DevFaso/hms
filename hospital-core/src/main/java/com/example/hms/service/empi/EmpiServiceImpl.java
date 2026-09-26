@@ -22,6 +22,7 @@ import com.example.hms.repository.empi.EmpiMergeEventRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.utility.MessageUtil;
+import com.example.hms.utility.TransactionCallbacks;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -118,27 +119,50 @@ public class EmpiServiceImpl implements EmpiService {
         // and cross-facility affiliation, so another hospital's row must read as
         // absent rather than as data. EmpiMasterIdentityRepository is an unscoped
         // JpaRepository, so nothing below this filters by tenant. ──
+        CallerScope scope = callerScope();
         return masterIdentityRepository.findByPatientId(patientId)
-            .filter(this::isVisibleToCaller)
+            .filter(scope::sees)
             .map(empiMapper::toIdentityDto);
     }
 
     /**
-     * Whether the caller's active hospital may see this identity.
+     * The caller's reach over master identities: one pinned hospital, or the
+     * whole index for a VERIFIED super-admin in global view.
      *
-     * <p>Null active hospital = super-admin, unscoped. A scoped caller sees only
-     * identities stamped with their own hospital — and NOT unstamped ones: a
-     * legacy row with a null {@code hospitalId} belongs to nobody in particular,
-     * and handing it to whichever tenant asks first is the same disclosure by a
-     * different route. Super-admin remains able to reconcile those.
+     * <p>A scoped caller sees only identities stamped with their own hospital —
+     * and NOT unstamped ones: a legacy row with a null {@code hospitalId}
+     * belongs to nobody in particular, and handing it to whichever tenant asks
+     * first is the same disclosure by a different route. The verified
+     * super-admin remains able to reconcile those.
+     *
+     * <p>A null {@code hospitalId} WITHOUT {@code verifiedGlobalView} sees
+     * nothing: every identity reads as absent, so each caller path refuses it
+     * with the answer it already gives for a miss.
      */
-    private boolean isVisibleToCaller(EmpiMasterIdentity identity) {
-        return isVisibleTo(identity, roleValidator.requireActiveHospitalId());
+    private record CallerScope(UUID hospitalId, boolean verifiedGlobalView) {
+        boolean sees(EmpiMasterIdentity identity) {
+            if (verifiedGlobalView) {
+                return true;
+            }
+            return hospitalId != null && hospitalId.equals(identity.getHospitalId());
+        }
     }
 
-    private static boolean isVisibleTo(EmpiMasterIdentity identity, UUID activeHospitalId) {
-        return activeHospitalId == null
-            || (identity.getHospitalId() != null && activeHospitalId.equals(identity.getHospitalId()));
+    /**
+     * {@code requireActiveHospitalId()}, without the road that lets an
+     * unverified principal read a null scope as "unscoped".
+     *
+     * <p>{@code requireActiveHospitalId()} returns null two ways: step 1, a real
+     * super-admin in global view ({@code HospitalContext.isSuperAdmin()}, which
+     * is what {@code isSuperAdminFromJwtClaim()} reads), and step 4, a safety
+     * net keyed on the AUTHORITIES collection, which the RoleValidator javadoc
+     * warns can be inflated. Only the verified flag makes a null scope global
+     * view — the stance of #746, #750 and #751.
+     */
+    private CallerScope callerScope() {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        boolean verifiedGlobalView = activeHospitalId == null && roleValidator.isSuperAdminFromJwtClaim();
+        return new CallerScope(activeHospitalId, verifiedGlobalView);
     }
 
     /**
@@ -152,9 +176,9 @@ public class EmpiServiceImpl implements EmpiService {
      * at, which is wider than the active one, so the visibility check is still
      * needed on top of it.
      */
-    private Optional<EmpiMasterIdentity> findVisibleIdentity(UUID identityId, UUID activeHospitalId) {
+    private Optional<EmpiMasterIdentity> findVisibleIdentity(UUID identityId, CallerScope scope) {
         return masterIdentityRepository.findById(identityId)
-            .filter(identity -> isVisibleTo(identity, activeHospitalId));
+            .filter(scope::sees);
     }
 
     /**
@@ -167,14 +191,20 @@ public class EmpiServiceImpl implements EmpiService {
      *
      * <p>Registration, not {@code Patient.hospitalId}: a patient may legitimately
      * be registered at several hospitals, and each of those hospitals may
-     * reconcile them.
+     * reconcile them. An ACTIVE registration, as the FHIR write gate counts
+     * since #750: a discharged registration is history, not a current claim on
+     * the patient.
+     *
+     * <p>A null scope skips the check only for a verified super-admin in global
+     * view; an unverified one gets the refusal a foreign patient gets.
      */
     private void requirePatientInTenant(UUID patientId) {
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        if (activeHospitalId == null) {
+        CallerScope scope = callerScope();
+        if (scope.verifiedGlobalView()) {
             return;
         }
-        if (!registrationRepository.existsByPatientIdAndHospitalId(patientId, activeHospitalId)) {
+        if (scope.hospitalId() == null
+            || !registrationRepository.existsByPatientIdAndHospitalIdAndActiveTrue(patientId, scope.hospitalId())) {
             throw new org.springframework.security.access.AccessDeniedException(
                 MessageUtil.resolve(MSG_MERGE_CROSS_TENANT));
         }
@@ -236,11 +266,12 @@ public class EmpiServiceImpl implements EmpiService {
         // or a hospital-A admin pairs their own identity with candidate UUIDs
         // and reads off which exist at other hospitals (partial ownership is not
         // partial permission; the HL7 A40 rule, #738). Both lookups run before
-        // either is judged, so owning one side costs what owning neither does. ──
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        Optional<EmpiMasterIdentity> primaryLookup = findVisibleIdentity(primaryIdentityId, activeHospitalId);
+        // either is judged, so owning one side costs what owning neither does.
+        // An unverified null scope sees nothing, so it lands here too. ──
+        CallerScope scope = callerScope();
+        Optional<EmpiMasterIdentity> primaryLookup = findVisibleIdentity(primaryIdentityId, scope);
         Optional<EmpiMasterIdentity> secondaryLookup =
-            findVisibleIdentity(request.getSecondaryIdentityId(), activeHospitalId);
+            findVisibleIdentity(request.getSecondaryIdentityId(), scope);
         if (primaryLookup.isEmpty() || secondaryLookup.isEmpty()) {
             throw new ResourceNotFoundException(MSG_MERGE_IDENTITY_NOT_FOUND);
         }
@@ -510,6 +541,19 @@ public class EmpiServiceImpl implements EmpiService {
             .build();
     }
 
+    /**
+     * Send an EMPI event once the surrounding transaction COMMITS.
+     *
+     * <p>Every caller runs inside a transaction — and {@code mergePatients}
+     * publishes {@code IDENTITY_LINKED} while provisioning, before
+     * {@code mergeIdentities} can still refuse; on the HL7 A40 path it shares a
+     * REQUIRED transaction with {@code MllpInboundMergeServiceImpl.processMerge}.
+     * A send made inline would leave consumers holding an event for a change a
+     * rollback erased. Deferring here, the one place every event passes, keeps
+     * every present and future caller on the same timing. The send itself stays
+     * asynchronous; with no transaction active it runs inline, as before (see
+     * {@link TransactionCallbacks}).
+     */
     private void publishEvent(EmpiEventPayload payload) {
         if (payload == null) {
             return;
@@ -523,11 +567,14 @@ public class EmpiServiceImpl implements EmpiService {
             log.debug("No Kafka template available for EMPI events, skipping publish");
             return;
         }
-        try {
-            template.send(kafkaProperties.getEmpiIdentityTopic(), payload.getEmpiNumber(), payload);
-        } catch (RuntimeException ex) {
-            log.warn("Failed to publish EMPI event {}", payload, ex);
-        }
+        String topic = kafkaProperties.getEmpiIdentityTopic();
+        TransactionCallbacks.afterCommit(() -> {
+            try {
+                template.send(topic, payload.getEmpiNumber(), payload);
+            } catch (RuntimeException ex) {
+                log.warn("Failed to publish EMPI event {}", payload, ex);
+            }
+        });
     }
 
     private EmpiEventPayload buildIdentityEventPayload(EmpiMasterIdentity identity, String eventType) {
