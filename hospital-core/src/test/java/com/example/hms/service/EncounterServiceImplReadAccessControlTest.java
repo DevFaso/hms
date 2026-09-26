@@ -40,7 +40,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 /**
  * Access control on the three encounter READS.
@@ -237,7 +238,7 @@ class EncounterServiceImplReadAccessControlTest {
     }
 
     // ==================================================================
-    // GET /encounters/{encounterId}/avs — the unbounded one
+    // The after-visit summary read: the one that had no boundary at all
     // ==================================================================
 
     @Nested
@@ -276,7 +277,7 @@ class EncounterServiceImplReadAccessControlTest {
             Encounter mine = encounterAt(hospital, callerPatient, true);
 
             assertThat(service.getAfterVisitSummary(mine.getId())).isNotNull();
-            org.mockito.Mockito.verify(patientRepository, org.mockito.Mockito.never()).findByUserId(any());
+            verify(patientRepository, never()).findByUserId(any());
         }
 
         @Test
@@ -307,7 +308,9 @@ class EncounterServiceImplReadAccessControlTest {
             authenticateAs("ROLE_PATIENT");
             Encounter mine = encounterAt(hospital, callerPatient, true);
 
-            assertThatThrownBy(() -> service.getAfterVisitSummary(mine.getId()))
+            UUID mineId = mine.getId();
+
+            assertThatThrownBy(() -> service.getAfterVisitSummary(mineId))
                 .isInstanceOf(ResourceNotFoundException.class);
         }
 
@@ -353,7 +356,9 @@ class EncounterServiceImplReadAccessControlTest {
             Encounter here = encounterAt(hospital, strangerPatient, true);
             UUID missing = missingEncounterId();
 
-            assertThatThrownBy(() -> service.getAfterVisitSummary(here.getId()))
+            UUID hereId = here.getId();
+
+            assertThatThrownBy(() -> service.getAfterVisitSummary(hereId))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Hospital context required");
             assertThatThrownBy(() -> service.getAfterVisitSummary(missing))
@@ -406,6 +411,52 @@ class EncounterServiceImplReadAccessControlTest {
         }
 
         @Test
+        @DisplayName("a nurse who was a patient at ANOTHER hospital still reads her own AVS from it")
+        void staffWhoIsAlsoAPatientReadsTheirOwnSummaryAtAnotherHospital() {
+            // ROLE_NURSE makes her a non-subject reader, so she is held to her
+            // own hospital — which refused her her OWN visit summary from the
+            // hospital that treated her, on an endpoint that promises patients
+            // may read their own. Ownership now lets her through.
+            authenticateAs("ROLE_NURSE", "ROLE_PATIENT");
+            Encounter mineElsewhere = encounterAt(otherHospital, callerPatient, true);
+
+            assertThat(service.getAfterVisitSummary(mineElsewhere.getId())).isNotNull();
+        }
+
+        @Test
+        @DisplayName("a nurse linked to the patient row but WITHOUT ROLE_PATIENT is refused it elsewhere")
+        void linkedStaffWithoutPatientRoleIsRefusedTheSummaryElsewhere() {
+            // The account is linked to the patient row (existsByIdAndUserId is
+            // true, stubbed in setUp), but the patient grant was never given or
+            // has been revoked. Ownership must not open another hospital's
+            // record through ROLE_NURSE alone — and the refusal must look like
+            // a missing id.
+            authenticateAs("ROLE_NURSE");
+            Encounter linkedElsewhere = encounterAt(otherHospital, callerPatient, true);
+            UUID missing = missingEncounterId();
+
+            ResourceNotFoundException refusal =
+                captureNotFound(() -> service.getAfterVisitSummary(linkedElsewhere.getId()));
+            ResourceNotFoundException absent = captureNotFound(() -> service.getAfterVisitSummary(missing));
+
+            assertIndistinguishable(refusal, linkedElsewhere.getId(), absent, missing);
+        }
+
+        @Test
+        @DisplayName("that nurse is still refused a stranger's AVS at another hospital, indistinguishably")
+        void staffWhoIsAlsoAPatientIsStillRefusedAStrangersSummaryElsewhere() {
+            authenticateAs("ROLE_NURSE", "ROLE_PATIENT");
+            Encounter strangersElsewhere = encounterAt(otherHospital, strangerPatient, true);
+            UUID missing = missingEncounterId();
+
+            ResourceNotFoundException refusal =
+                captureNotFound(() -> service.getAfterVisitSummary(strangersElsewhere.getId()));
+            ResourceNotFoundException absent = captureNotFound(() -> service.getAfterVisitSummary(missing));
+
+            assertIndistinguishable(refusal, strangersElsewhere.getId(), absent, missing);
+        }
+
+        @Test
         @DisplayName("a receptionist who is also a patient reads the front desk's AVS, not only their own")
         void receptionistWhoIsAlsoAPatientIsAFrontDeskReader() {
             // The AVS annotation admits ROLE_RECEPTIONIST, so on THIS endpoint
@@ -445,7 +496,8 @@ class EncounterServiceImplReadAccessControlTest {
 
             // Refused before the lookup, so a real id and a fictional one get
             // the same answer.
-            assertThatThrownBy(() -> service.getAfterVisitSummary(elsewhere.getId()))
+            UUID elsewhereId = elsewhere.getId();
+            assertThatThrownBy(() -> service.getAfterVisitSummary(elsewhereId))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Hospital context required");
             assertThatThrownBy(() -> service.getAfterVisitSummary(missing))
@@ -459,14 +511,16 @@ class EncounterServiceImplReadAccessControlTest {
             authenticateAs("ROLE_DOCTOR");
             Encounter elsewhereNotCheckedOut = encounterAt(otherHospital, strangerPatient, false);
 
-            assertThatThrownBy(() -> service.getAfterVisitSummary(elsewhereNotCheckedOut.getId()))
+            UUID elsewhereNotCheckedOutId = elsewhereNotCheckedOut.getId();
+
+            assertThatThrownBy(() -> service.getAfterVisitSummary(elsewhereNotCheckedOutId))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .isNotInstanceOf(BusinessException.class);
         }
     }
 
     // ==================================================================
-    // GET /encounters/{id}
+    // The encounter detail read
     // ==================================================================
 
     @Nested
@@ -511,7 +565,9 @@ class EncounterServiceImplReadAccessControlTest {
             authenticateAs("ROLE_PATIENT");
             Encounter mine = encounterAt(hospital, callerPatient, false);
 
-            assertThatThrownBy(() -> service.getEncounterById(mine.getId(), locale))
+            UUID mineId = mine.getId();
+
+            assertThatThrownBy(() -> service.getEncounterById(mineId, locale))
                 .isInstanceOf(ResourceNotFoundException.class);
         }
 
@@ -576,8 +632,47 @@ class EncounterServiceImplReadAccessControlTest {
             authenticateAs("ROLE_PATIENT", "ROLE_RECEPTIONIST");
             Encounter strangers = encounterAt(hospital, strangerPatient, false);
 
-            assertThatThrownBy(() -> service.getEncounterById(strangers.getId(), locale))
+            UUID strangersId = strangers.getId();
+
+            assertThatThrownBy(() -> service.getEncounterById(strangersId, locale))
                 .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("a nurse who was a patient at ANOTHER hospital still reads her own encounter from it")
+        void staffWhoIsAlsoAPatientReadsTheirOwnEncounterAtAnotherHospital() {
+            authenticateAs("ROLE_NURSE", "ROLE_PATIENT");
+            Encounter mineElsewhere = encounterAt(otherHospital, callerPatient, false);
+
+            assertThat(service.getEncounterById(mineElsewhere.getId(), locale)).isNotNull();
+        }
+
+        @Test
+        @DisplayName("a nurse linked to the patient row but WITHOUT ROLE_PATIENT is refused the encounter elsewhere")
+        void linkedStaffWithoutPatientRoleIsRefusedTheEncounterElsewhere() {
+            authenticateAs("ROLE_NURSE");
+            Encounter linkedElsewhere = encounterAt(otherHospital, callerPatient, false);
+            UUID missing = missingEncounterId();
+
+            ResourceNotFoundException refusal =
+                captureNotFound(() -> service.getEncounterById(linkedElsewhere.getId(), locale));
+            ResourceNotFoundException absent = captureNotFound(() -> service.getEncounterById(missing, locale));
+
+            assertIndistinguishable(refusal, linkedElsewhere.getId(), absent, missing);
+        }
+
+        @Test
+        @DisplayName("that nurse is still refused a stranger's encounter at another hospital, indistinguishably")
+        void staffWhoIsAlsoAPatientIsStillRefusedAStrangersEncounterElsewhere() {
+            authenticateAs("ROLE_NURSE", "ROLE_PATIENT");
+            Encounter strangersElsewhere = encounterAt(otherHospital, strangerPatient, false);
+            UUID missing = missingEncounterId();
+
+            ResourceNotFoundException refusal =
+                captureNotFound(() -> service.getEncounterById(strangersElsewhere.getId(), locale));
+            ResourceNotFoundException absent = captureNotFound(() -> service.getEncounterById(missing, locale));
+
+            assertIndistinguishable(refusal, strangersElsewhere.getId(), absent, missing);
         }
 
         @Test
@@ -651,7 +746,9 @@ class EncounterServiceImplReadAccessControlTest {
             Encounter elsewhere = encounterAt(otherHospital, strangerPatient, false);
             UUID missing = missingEncounterId();
 
-            assertThatThrownBy(() -> service.getEncounterById(elsewhere.getId(), locale))
+            UUID elsewhereId = elsewhere.getId();
+
+            assertThatThrownBy(() -> service.getEncounterById(elsewhereId, locale))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Hospital context required");
             assertThatThrownBy(() -> service.getEncounterById(missing, locale))
@@ -661,7 +758,7 @@ class EncounterServiceImplReadAccessControlTest {
     }
 
     // ==================================================================
-    // GET /encounters/{encounterId}/notes/history
+    // The note history read
     // ==================================================================
 
     @Nested
@@ -677,6 +774,39 @@ class EncounterServiceImplReadAccessControlTest {
             UUID missing = missingEncounterId();
 
             ResourceNotFoundException refusal = captureNotFound(() -> service.getEncounterNoteHistory(elsewhere.getId(), locale));
+            ResourceNotFoundException absent = captureNotFound(() -> service.getEncounterNoteHistory(missing, locale));
+
+            assertIndistinguishable(refusal, elsewhere.getId(), absent, missing);
+        }
+
+        @Test
+        @DisplayName("owning the encounter does not open another hospital's note trail — this endpoint admits no patient")
+        void ownershipDoesNotWidenNoteHistory() {
+            // The staff-who-are-also-patients fallback applies only where the
+            // annotation admits ROLE_PATIENT. Note history does not, so a nurse
+            // who owns the encounter at another hospital is refused exactly as
+            // a missing id is.
+            authenticateAs("ROLE_NURSE", "ROLE_PATIENT");
+            Encounter mineElsewhere = encounterAt(otherHospital, callerPatient, false);
+            UUID missing = missingEncounterId();
+
+            ResourceNotFoundException refusal =
+                captureNotFound(() -> service.getEncounterNoteHistory(mineElsewhere.getId(), locale));
+            ResourceNotFoundException absent = captureNotFound(() -> service.getEncounterNoteHistory(missing, locale));
+
+            assertIndistinguishable(refusal, mineElsewhere.getId(), absent, missing);
+        }
+
+        @Test
+        @DisplayName("a super-admin who has pinned one hospital is bounded by it, indistinguishably")
+        void superAdminPinnedToOneHospitalIsBounded() {
+            lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            authenticateAs("ROLE_SUPER_ADMIN");
+            Encounter elsewhere = encounterAt(otherHospital, strangerPatient, false);
+            UUID missing = missingEncounterId();
+
+            ResourceNotFoundException refusal =
+                captureNotFound(() -> service.getEncounterNoteHistory(elsewhere.getId(), locale));
             ResourceNotFoundException absent = captureNotFound(() -> service.getEncounterNoteHistory(missing, locale));
 
             assertIndistinguishable(refusal, elsewhere.getId(), absent, missing);
@@ -702,7 +832,9 @@ class EncounterServiceImplReadAccessControlTest {
             Encounter elsewhere = encounterAt(otherHospital, strangerPatient, false);
             UUID missing = missingEncounterId();
 
-            assertThatThrownBy(() -> service.getEncounterNoteHistory(elsewhere.getId(), locale))
+            UUID elsewhereId = elsewhere.getId();
+
+            assertThatThrownBy(() -> service.getEncounterNoteHistory(elsewhereId, locale))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Hospital context required");
             assertThatThrownBy(() -> service.getEncounterNoteHistory(missing, locale))
