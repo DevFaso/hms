@@ -1899,15 +1899,13 @@ public class PatientServiceImpl implements PatientService {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_LAB_RESULT)) {
             return List.of();
         }
-        // Read at the database: only what this hospital may read is loaded
-        // (ordered in the readable set, or performed by its own laboratory).
-        // The timeline then keeps the ordered-in-the-readable-set rows it has
-        // always shown; a result the acting hospital only PERFORMED for
-        // another hospital is not a timeline row here, as before.
-        return labResultRepository.findPatientResultsReadableAt(patientId, readableHospitalIds, actingHospitalId,
+        // Ordered in the readable set, read at the database — the rows the
+        // timeline has always shown, and no others. No acting hospital, so the
+        // query's performed-here clause is off: a result this hospital's
+        // laboratory only performed for another hospital was never a timeline
+        // row, and it is no longer loaded just to be dropped.
+        return labResultRepository.findPatientResultsReadableAt(patientId, readableHospitalIds, null,
                 false, Pageable.unpaged()).stream()
-            .filter(result -> result.getLabOrder() != null
-                && isReadableHospital(readableHospitalIds, result.getLabOrder().getHospital()))
             // Same as prescriptions: the category rides on the lab order's encounter.
             .filter(result -> withheld.admit(result.getLabOrder().getHospital(),
                 departmentOf(result.getLabOrder().getEncounter()), actingHospitalId,
@@ -2154,15 +2152,13 @@ public class PatientServiceImpl implements PatientService {
         int limit,
         Set<String> sensitiveSections
     ) {
-        // Read at the database for the acting hospital alone (what it ordered
-        // or its laboratory performed), then narrowed to what it ordered: this
-        // section has always been acting-hospital only, unlike the medications
-        // and imaging beside it, which read the readable set.
+        // Ordered at the acting hospital, read at the database: this section
+        // has always been acting-hospital only, unlike the medications and
+        // imaging beside it, which read the readable set. No acting hospital
+        // is passed as the performer, so nothing this hospital's laboratory
+        // ran for another hospital is loaded.
         List<LabResult> results = labResultRepository.findPatientResultsReadableAt(patientId, Set.of(hospitalId),
-                hospitalId, false, Pageable.unpaged()).stream()
-            .filter(result -> result.getLabOrder() != null
-                && result.getLabOrder().getHospital() != null
-                && hospitalId.equals(result.getLabOrder().getHospital().getId()))
+                null, false, Pageable.unpaged()).stream()
             .sorted(Comparator.comparing(LabResult::getResultDate, Comparator.nullsLast(Comparator.reverseOrder())))
             .toList();
         boolean sectionSensitive = results.stream().anyMatch(this::isSensitiveLabResult);

@@ -594,8 +594,7 @@ class PatientLabResultServiceImplTest {
         LabResult foreign = buildLabResult("6.2", "mmol/L", true, false); foreign.setLabOrder(foreignOrder);
         when(patientChartAccess.require(eq(patientId), isNull())).thenReturn(patient);
         // Stubbed so the test would SEE the leak if the fallback ever ran again.
-        lenient().when(labResultRepository.findPatientResultsReadableAt(any(), any(), any(), anyBoolean(), any()))
-            .thenReturn(List.of(foreign));
+        lenient().when(labResultRepository.findAllPatientResults(any(), any())).thenReturn(List.of(foreign));
 
         // The key matters as much as the type. ResourceNotFoundException is
         // @ResponseStatus(NOT_FOUND), so the type pins 404-not-403; the key
@@ -607,6 +606,7 @@ class PatientLabResultServiceImplTest {
             .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
             .isEqualTo("patient.notFound");
 
+        verify(labResultRepository, never()).findAllPatientResults(any(), any());
         verify(labResultRepository, never()).findPatientResultsReadableAt(any(), any(), any(), anyBoolean(), any());
         verifyNoInteractions(reachRecorder);
     }
@@ -631,19 +631,18 @@ class PatientLabResultServiceImplTest {
         LabResult own = buildLabResult("5.1", "mmol/L", true, false); own.setLabOrder(order);
         when(patientChartAccess.require(eq(patientId), isNull())).thenReturn(patient);
         ArgumentCaptor<Pageable> page = ArgumentCaptor.forClass(Pageable.class);
-        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(Set.of(new UUID(0L, 0L))),
-            isNull(), eq(true), page.capture())).thenReturn(List.of(own));
+        when(labResultRepository.findAllPatientResults(eq(patientId), page.capture())).thenReturn(List.of(own));
 
         List<PatientLabResultResponseDTO> results =
             service.getLabResultsForPatientPortal(patientId, null, 10);
 
         assertThat(results).extracting(PatientLabResultResponseDTO::getValue).containsExactly("5.1");
         // Newest ten at the database — this used to load the patient's whole
-        // result history, fully hydrated, to sort and cut it in memory.
+        // result history, fully hydrated, to sort and cut it in memory. id
+        // breaks resultDate ties, so the wider second read cannot reorder them.
         assertThat(page.getValue().getPageSize()).isEqualTo(10);
-        assertThat(page.getValue().getSort().getOrderFor("resultDate"))
-            .isNotNull()
-            .returns(Sort.Direction.DESC, Sort.Order::getDirection);
+        assertThat(page.getValue().getSort())
+            .containsExactly(Sort.Order.desc("resultDate"), Sort.Order.desc("id"));
         assertThat(results).extracting(PatientLabResultResponseDTO::getHospitalId)
             .containsExactly(otherHospitalId);
         // Nothing to disclose against: there is no acting hospital.

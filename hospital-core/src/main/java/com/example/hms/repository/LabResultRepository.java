@@ -13,6 +13,7 @@ import org.springframework.stereotype.Repository;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
@@ -116,25 +117,41 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      *
      * <p>Readable is B1's predicate widened by the patient-read rule, exactly
      * {@link #findTrendReadableAt}'s: an order placed at any of
-     * {@code readableHospitalIds} (the acting hospital plus the
-     * treatment-relationship set from {@code RecordAccessPolicy}), or an order
-     * the acting hospital's laboratory performed for somebody else
+     * {@code readableHospitalIds}, or an order the laboratory of
+     * {@code actingHospitalId} performed for somebody else
      * ({@code LabOrder.isHandledBy}). {@code performingHospital} is null on
      * most orders, so the clause compares its id and never joins it: an inner
-     * join would drop every order run where it was placed.
+     * join would drop every order run where it was placed. A null
+     * {@code actingHospitalId} switches the performed-here clause off, and the
+     * query is then exactly "ordered at one of these hospitals".
+     *
+     * <p>Who calls it, and how wide each read is:
+     * <ul>
+     *   <li>the doctor timeline ({@code PatientServiceImpl.collectLabResultEntries})
+     *       — the {@code RecordAccessPolicy} readable set (acting hospital plus
+     *       the treatment relationship), {@code actingHospitalId} null: widened,
+     *       ordered-at only;</li>
+     *   <li>the doctor record's lab section
+     *       ({@code PatientServiceImpl.collectDoctorRecordLabResults}) — the
+     *       acting hospital alone, {@code actingHospitalId} null: NOT widened,
+     *       unlike the medications and imaging beside it;</li>
+     *   <li>{@link #findAllPatientResults} — every hospital, for the two
+     *       callers that may read them all.</li>
+     * </ul>
+     * No caller passes an acting hospital today: neither surface above shows a
+     * result the acting hospital only performed for another hospital, and the
+     * query now leaves those rows unloaded instead of loading them to drop
+     * them. The clause stays, pinned by {@code LabResultPatientReadableQueryTest},
+     * so a surface that should show a laboratory its own work reads it with
+     * #751's rule rather than a new one.
      *
      * <p>This replaced the unscoped {@code findByLabOrder_Patient_Id} pair,
      * which loaded every hospital's rows for the patient, fully hydrated, for
      * the callers to throw most of them away in memory. There is no
-     * patient-only finder left to call by name. {@code globalView} is the one
-     * way to read across every hospital, and it has exactly two setters: a
-     * verified super-admin in global view ({@code ChartReviewServiceImpl},
-     * behind {@code PatientChartAccess}), and the patient portal, where the
-     * caller is the patient and owns every row
-     * ({@code PatientLabResultServiceImpl}).
+     * patient-only finder left to call by name.
      *
      * <p>{@code readableHospitalIds} must never be empty (PostgreSQL rejects
-     * {@code IN ()}); pass the nil UUID when there is no set to name.
+     * {@code IN ()}).
      *
      * <p>{@code labOrder.encounter} and its department are fetched because the
      * timeline's E8 #51 filter runs {@code effectiveCategory(labOrder.getEncounter())}
@@ -167,6 +184,24 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
                                                  @Param("actingHospitalId") UUID actingHospitalId,
                                                  @Param("globalView") boolean globalView,
                                                  Pageable pageable);
+
+    /**
+     * Every hospital's results for the patient: the only call that sets
+     * {@link #findPatientResultsReadableAt}'s {@code globalView} flag. Two
+     * callers may read that wide, and only they call this:
+     * <ul>
+     *   <li>a verified super-admin in global view
+     *       ({@code ChartReviewServiceImpl}; {@code PatientChartAccess} refuses a
+     *       null scope to anyone else);</li>
+     *   <li>the patient portal with no hospital
+     *       ({@code PatientLabResultServiceImpl}), where the caller is the
+     *       patient and owns every row.</li>
+     * </ul>
+     * The nil UUID names no hospital: the IN list must not be empty.
+     */
+    default List<LabResult> findAllPatientResults(UUID patientId, Pageable pageable) {
+        return findPatientResultsReadableAt(patientId, Set.of(new UUID(0L, 0L)), null, true, pageable);
+    }
 
     @EntityGraph(attributePaths = {
         "labOrder",

@@ -57,9 +57,6 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
      */
     private static final String MSG_PATIENT_NOT_FOUND = "patient.notFound";
 
-    /** The nil UUID: names no hospital, for an IN list that must not be empty. */
-    private static final UUID NO_HOSPITAL = new UUID(0L, 0L);
-
     private final LabResultRepository labResultRepository;
     private final PatientChartAccess patientChartAccess;
     private final HospitalRepository hospitalRepository;
@@ -153,7 +150,9 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
      * resolve, which is refused.
      */
     private List<LabResult> fetchRows(Patient patient, UUID hospitalId, int window, boolean portalView) {
-        Pageable pageable = PageRequest.of(0, window, Sort.by(Sort.Direction.DESC, "resultDate"));
+        // id breaks resultDate ties: the second, wider read must put the same
+        // rows first, or a tie at the boundary could swap between the two.
+        Pageable pageable = PageRequest.of(0, window, Sort.by(Sort.Direction.DESC, "resultDate", "id"));
         List<LabResult> results;
         if (hospitalId != null) {
             Hospital hospital = hospitalRepository.findById(hospitalId)
@@ -208,16 +207,12 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         } else {
             // Patient portal only: the caller IS the patient (or a proxy the
             // portal already authorized), the portal has no hospital scope to
-            // offer, and every row belongs to them. Every hospital's rows, read
-            // through the readable query's globalView flag (there is no
-            // patient-only finder left), newest first and limited at the
-            // database: this used to load the patient's whole result history,
-            // fully hydrated, to sort it and keep the window. The nil
-            // UUID names no hospital (PostgreSQL rejects an empty IN list).
-            // resultDate is NOT NULL, so the in-memory nulls-last ordering this
-            // replaced has nothing to reorder.
-            results = labResultRepository.findPatientResultsReadableAt(patient.getId(), Set.of(NO_HOSPITAL), null,
-                true, pageable);
+            // offer, and every row belongs to them. Every hospital's rows,
+            // newest first and limited at the database: this used to load the
+            // patient's whole result history, fully hydrated, to sort it and
+            // keep the window. resultDate is NOT NULL, so the in-memory
+            // nulls-last ordering this replaced has nothing to reorder.
+            results = labResultRepository.findAllPatientResults(patient.getId(), pageable);
         }
         return results;
     }

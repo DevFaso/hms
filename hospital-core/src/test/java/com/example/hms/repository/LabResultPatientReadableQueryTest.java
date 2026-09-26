@@ -59,7 +59,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Import({TenantContextAccessor.class, EncryptionKeyHolder.class})
 class LabResultPatientReadableQueryTest {
 
-    private static final UUID NO_HOSPITAL = new UUID(0L, 0L);
     private static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "resultDate");
 
     @Autowired private LabResultRepository labResultRepository;
@@ -147,14 +146,23 @@ class LabResultPatientReadableQueryTest {
     }
 
     @Test
-    @DisplayName("with no acting hospital the performed clause matches nothing: only the orders in the set")
+    @DisplayName("with no acting hospital the performed clause is off: exactly the orders placed in the set")
     void noActingHospitalMeansNoPerformedClause() {
-        // A reads its own orders, including the one it sent to B's laboratory;
-        // B's laboratory work for A is not a way in for anybody else.
-        List<LabResult> rows = labResultRepository.findPatientResultsReadableAt(patient.getId(),
-            Set.of(hospitalA.getId()), null, false, Pageable.unpaged());
-
-        assertThat(rows).extracting(LabResult::getId)
+        // The timeline's and the doctor record's call: B with no performer
+        // reads what B ordered, and NOT what B's laboratory ran for A.
+        assertThat(labResultRepository.findPatientResultsReadableAt(patient.getId(),
+            Set.of(hospitalB.getId()), null, false, Pageable.unpaged()))
+            .extracting(LabResult::getId)
+            .containsExactlyInAnyOrder(orderedAtB.getId(), otherTestAtB.getId());
+        // The same call with the readable set widened to T adds T's orders.
+        assertThat(labResultRepository.findPatientResultsReadableAt(patient.getId(),
+            Set.of(hospitalB.getId(), hospitalT.getId()), null, false, Pageable.unpaged()))
+            .extracting(LabResult::getId)
+            .containsExactlyInAnyOrder(orderedAtB.getId(), otherTestAtB.getId(), orderedAtT.getId());
+        // A reads its own orders, including the one it sent to B's laboratory.
+        assertThat(labResultRepository.findPatientResultsReadableAt(patient.getId(),
+            Set.of(hospitalA.getId()), null, false, Pageable.unpaged()))
+            .extracting(LabResult::getId)
             .containsExactlyInAnyOrder(performedAtBForA.getId(), orderedAndRunAtA.getId());
     }
 
@@ -189,15 +197,49 @@ class LabResultPatientReadableQueryTest {
     }
 
     @Test
-    @DisplayName("global view reads every hospital's rows, but still only this patient's")
-    void globalView() {
-        List<LabResult> rows = labResultRepository.findPatientResultsReadableAt(patient.getId(),
-            Set.of(NO_HOSPITAL), null, true, PageRequest.of(0, 20, NEWEST_FIRST));
+    @DisplayName("findAllPatientResults reads every hospital's rows, but still only this patient's")
+    void allPatientResults() {
+        List<LabResult> rows = labResultRepository.findAllPatientResults(patient.getId(),
+            PageRequest.of(0, 20, NEWEST_FIRST));
 
         assertThat(rows).extracting(LabResult::getId).containsExactly(
             orderedAtB.getId(), performedAtBForA.getId(), orderedAtT.getId(), orderedAndRunAtA.getId(),
             otherTestAtB.getId());
         assertThat(rows).extracting(LabResult::getId).doesNotContain(otherPatientAtB.getId());
+    }
+
+    @Test
+    @DisplayName("id breaks a resultDate tie, so a page boundary is the same on every read")
+    void resultDateTiesAreBrokenById() {
+        // Four rows at one instant, read two at a time: the two pages are
+        // disjoint and together hold all four, in id order. Without the id
+        // key the database may put a tied row on either page, on either read.
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        LocalDateTime instant = LocalDateTime.now().minusMinutes(5).withNano(0);
+        List<UUID> tied = new java.util.ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            tied.add(labResultRepository.save(LabResult.builder()
+                .labOrder(order(patient, hemoglobin, atA, null))
+                .actorType(ActorType.SYSTEM)
+                .actorLabel("MLLP:PATIENT/FIXTURE")
+                .resultValue("3" + i)
+                .resultDate(instant)
+                .build()).getId());
+        }
+        HospitalContextHolder.clear();
+        Sort withTieBreak = Sort.by(Sort.Direction.DESC, "resultDate", "id");
+
+        List<UUID> first = labResultRepository.findAllPatientResults(patient.getId(),
+            PageRequest.of(0, 2, withTieBreak)).stream().map(LabResult::getId).toList();
+        List<UUID> second = labResultRepository.findAllPatientResults(patient.getId(),
+            PageRequest.of(1, 2, withTieBreak)).stream().map(LabResult::getId).toList();
+
+        // The database orders a uuid by its bytes, unsigned, which is the
+        // order of its lower-case hex text (UUID.compareTo is signed).
+        List<UUID> expected = tied.stream()
+            .sorted(java.util.Comparator.comparing(UUID::toString).reversed()).toList();
+        assertThat(first).containsExactlyElementsOf(expected.subList(0, 2));
+        assertThat(second).containsExactlyElementsOf(expected.subList(2, 4));
     }
 
     @Test
