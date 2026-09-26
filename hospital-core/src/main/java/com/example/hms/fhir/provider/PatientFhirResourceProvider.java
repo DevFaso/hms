@@ -23,14 +23,17 @@ import com.example.hms.fhir.FhirTenantBoundary;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.fhir.everything.PatientEverythingParams;
 import com.example.hms.fhir.everything.PatientEverythingService;
-import com.example.hms.fhir.read.PatientFhirReadService;
+import com.example.hms.fhir.mapper.PatientFhirMapper;
 import com.example.hms.fhir.write.PatientFhirWriteService;
+import com.example.hms.model.Patient;
+import com.example.hms.repository.PatientRepository;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.OperationOutcome;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
@@ -40,15 +43,21 @@ import java.util.UUID;
 /**
  * FHIR R4 resource provider for {@code Patient}.
  *
- * <p>Every resource this provider returns is mapped by
- * {@link PatientFhirReadService} or {@link PatientFhirWriteService}, inside
- * their transaction: the mapper walks the LAZY
- * {@code Patient.hospitalRegistrations}, open-in-view is off, and the HAPI
- * servlet opens no transaction, so mapping an entity here was a 500 for every
- * caller. Nothing in this class touches an entity.
+ * <p>Every resource is mapped inside a transaction: {@link #read} and
+ * {@link #search} are read-only transactional (method by method: a
+ * class-level read-only transaction would also wrap the writes), and the
+ * writes are mapped by {@link PatientFhirWriteService} inside its own. The
+ * mapper walks the LAZY {@code Patient.hospitalRegistrations}, open-in-view
+ * is off and the HAPI servlet opens no transaction, so mapping outside one
+ * was a 500 for every caller.
+ *
+ * <p>A resource carries the MRN of the hospital the request is bound to
+ * ({@link FhirTenantBoundary#boundHospital}) and no other: every hospital's
+ * MRN would tell a reader at A where else the patient is registered, and
+ * under which record number.
  *
  * <p>Tenancy, stated as it is rather than as it was once described. Read and
- * {@code _id} search go through {@link com.example.hms.repository.PatientRepository#findById(Object)},
+ * {@code _id} search go through {@link PatientRepository#findById(Object)},
  * which {@code TenantAwareJpaRepository} filters with
  * {@code TenantScopeSpecification}: a patient is found when registered at ANY
  * hospital the caller is permitted at (every assignment of a multi-hospital
@@ -69,19 +78,22 @@ public class PatientFhirResourceProvider implements IResourceProvider {
 
     private static final int DEFAULT_PAGE_SIZE = 50;
 
-    private final PatientFhirReadService readService;
+    private final PatientRepository patientRepository;
+    private final PatientFhirMapper patientMapper;
     private final PatientFhirWriteService writeService;
     private final PatientEverythingService everythingService;
     private final FhirTenantBoundary tenantBoundary;
 
     public PatientFhirResourceProvider(
-        PatientFhirReadService readService,
+        PatientRepository patientRepository,
+        PatientFhirMapper patientMapper,
         PatientFhirWriteService writeService,
         PatientEverythingService everythingService,
         FhirTenantBoundary tenantBoundary
     ) {
         this.tenantBoundary = tenantBoundary;
-        this.readService = readService;
+        this.patientRepository = patientRepository;
+        this.patientMapper = patientMapper;
         this.writeService = writeService;
         this.everythingService = everythingService;
     }
@@ -92,10 +104,13 @@ public class PatientFhirResourceProvider implements IResourceProvider {
     }
 
     @Read
+    @Transactional(readOnly = true)
     public org.hl7.fhir.r4.model.Patient read(@IdParam IdType id) {
         UUID uuid = parseUuid(id);
-        return readService.read(uuid)
+        UUID boundHospital = FhirTenantBoundary.boundHospital(HospitalContextHolder.getContextOrEmpty());
+        Patient entity = patientRepository.findById(uuid)
             .orElseThrow(() -> new ResourceNotFoundException(id));
+        return patientMapper.toFhir(entity, boundHospital);
     }
 
     /**
@@ -107,6 +122,7 @@ public class PatientFhirResourceProvider implements IResourceProvider {
      * parameter (which matches first / last / concatenated name).
      */
     @Search
+    @Transactional(readOnly = true)
     public List<org.hl7.fhir.r4.model.Patient> search(
         @OptionalParam(name = "_id") TokenParam idParam,
         @OptionalParam(name = "identifier") TokenParam identifier,
@@ -127,7 +143,8 @@ public class PatientFhirResourceProvider implements IResourceProvider {
             if (!tenantBoundary.isVisible("Patient", uuid.toString(), boundHospital)) {
                 return Collections.emptyList();
             }
-            return readService.read(uuid)
+            return patientRepository.findById(uuid)
+                .map(patient -> patientMapper.toFhir(patient, boundHospital))
                 .map(List::of)
                 .orElseGet(Collections::emptyList);
         }
@@ -152,17 +169,20 @@ public class PatientFhirResourceProvider implements IResourceProvider {
         // is bound to (the interceptor has already refused a request with none): capping across every permitted hospital and then letting
         // the tenant boundary drop the others silently loses the bound
         // hospital's own matches past the cap.
-        return readService.search(
-            new PatientFhirReadService.SearchCriteria(
-                mrn,
-                namePattern,
-                normalizeDob(dob),
-                phonePattern,
-                emailPattern,
-                boundHospital,
-                activeFlag),
+        var page = patientRepository.searchPatientsExtended(
+            mrn,
+            namePattern,
+            normalizeDob(dob),
+            phonePattern,
+            emailPattern,
+            boundHospital,
+            activeFlag,
             PageRequest.of(0, DEFAULT_PAGE_SIZE, sort)
         );
+
+        return page.stream()
+            .map(patient -> patientMapper.toFhir(patient, boundHospital))
+            .toList();
     }
 
     /**

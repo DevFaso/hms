@@ -54,12 +54,12 @@ import java.util.UUID;
  * unknown id and another tenant's id are indistinguishable (the rule HL7
  * settled in #715/#738).
  *
- * <p>Both return the FHIR resource, mapped before the transaction ends:
- * {@link PatientFhirMapper#toFhir} walks the LAZY
- * {@code Patient.hospitalRegistrations}, which neither operation loads (and
- * a PUT that changes nothing leaves even the patient an uninitialised
- * proxy). Mapped by the provider after the commit, both answered 500 with
- * the write already done.
+ * <p>Both return the FHIR resource, mapped before the transaction ends: the
+ * mapper walks the LAZY {@code Patient.hospitalRegistrations}, which neither
+ * operation loads (and a PUT that changes nothing leaves even the patient an
+ * uninitialised proxy). Mapped by the provider after the commit, both
+ * answered 500 with the write already done. The resource carries the MRN of
+ * the write's hospital only, as a read does.
  *
  * <p>Feature-flagged via {@link FhirWriteProperties#isEnabled()};
  * disabled state surfaces as {@code 405 Method Not Allowed} from the
@@ -132,13 +132,15 @@ public class PatientFhirWriteService {
             .orElseThrow(() -> patientNotFound(patientId));
         patientMapper.applyFhirUpdates(existing, fhirIn);
         Patient saved = patientRepository.save(existing);
+        // Flushed before the audit: the audit commits on its own
+        // (REQUIRES_NEW), so a flush failure after it (a length, a constraint)
+        // would leave a SUCCESS row for an update that rolled back. And before
+        // mapping, so the resource carries what the row now holds: @PreUpdate
+        // lower-cases the email and stamps updatedAt only at flush.
+        patientRepository.flush();
         emitAudit(AuditEventType.PATIENT_UPDATE, saved,
             "FHIR PUT applied contact/address updates to Patient/" + saved.getId());
-        // Flushed before mapping, so the resource carries what the row now
-        // holds: @PreUpdate normalises (the email is lower-cased) and stamps
-        // updatedAt (meta.lastUpdated) only when the update is flushed.
-        patientRepository.flush();
-        return patientMapper.toFhir(saved);
+        return toFhir(saved, hospitalId);
     }
 
     /**
@@ -224,7 +226,17 @@ public class PatientFhirWriteService {
         emitAudit(AuditEventType.PATIENT_ACCESS, resolved,
             "FHIR conditional-create matched an active MRN — returned existing Patient/"
                 + resolved.getId());
-        return patientMapper.toFhir(resolved);
+        return toFhir(resolved, callerHospitalId);
+    }
+
+    /**
+     * The answer's resource, mapped inside the write transaction: with the MRN
+     * of the hospital the write is scoped to only, or every MRN for a verified
+     * super-admin in global view ({@code null}, which {@link #resolveWriteScope}
+     * returns for no one else).
+     */
+    private org.hl7.fhir.r4.model.Patient toFhir(Patient patient, UUID writeScope) {
+        return writeScope == null ? patientMapper.toFhir(patient) : patientMapper.toFhir(patient, writeScope);
     }
 
     /**
