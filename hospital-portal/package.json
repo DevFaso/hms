@@ -72,8 +72,8 @@
     "@fullcalendar/daygrid": "^6.1.20",
     "@fullcalendar/interaction": "^6.1.20",
     "@fullcalendar/timegrid": "^6.1.20",
-    "@grafana/faro-web-sdk": "^2.3.1",
-    "@grafana/faro-web-tracing": "^2.3.1",
+    "@grafana/faro-web-sdk": "^2.12.1",
+    "@grafana/faro-web-tracing": "^2.12.1",
     "@ngx-translate/core": "17.0.0",
     "@ngx-translate/http-loader": "17.0.0",
     "@stomp/stompjs": "^7.3.0",
@@ -105,9 +105,9 @@
     "karma-coverage": "2.2.1",
     "karma-jasmine": "5.1.0",
     "karma-jasmine-html-reporter": "^2.3.0",
-    "prettier": "^3.6.2",
+    "prettier": "^3.9.9",
     "puppeteer": "^25.11.0",
     "typescript": "6.0.3",
-    "typescript-eslint": "^8.70.0"
+    "typescript-eslint": "^8.70.1"
   }
 }
