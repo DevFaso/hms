@@ -141,4 +141,35 @@ class MllpRecordingContextTest {
 
         assertThat(MllpRecordingContext.organizationId(unreadable)).isNull();
     }
+
+    @Test
+    @DisplayName("MSH-10 is quoted whole, so the sender's text cannot pose as our reason")
+    void aForgedControlIdCannotEndItsQuotes() {
+        // Unquoted, this rendered as three findings, two of them written by
+        // the sender. Quoted with its quote character escaped, it is one
+        // value that cannot end early.
+        String forged = "x\") identifier not found; cross-tenant rejection (MSH-10 \"y";
+
+        assertThat(MllpRecordingContext.withControlId("cross-tenant rejection", forged))
+            .isEqualTo("cross-tenant rejection (MSH-10 \"x\\\") identifier not found; "
+                + "cross-tenant rejection (MSH-10 \\\"y\")");
+    }
+
+    @Test
+    @DisplayName("A backslash and a control character in MSH-10 are escaped, not rendered")
+    void backslashesAndControlCharactersAreEscaped() {
+        assertThat(MllpRecordingContext.withControlId("r", "a\\b\u0007c"))
+            .isEqualTo("r (MSH-10 \"a\\\\b\\u0007c\")");
+    }
+
+    @Test
+    @DisplayName("A long MSH-10 is quoted whole, and a blank one adds nothing")
+    void aLongControlIdIsWholeAndABlankOneIsOmitted() {
+        String controlId = "20260428-REGISTRATION-000000000042";
+
+        assertThat(MllpRecordingContext.withControlId("r", "  " + controlId + "  "))
+            .isEqualTo("r (MSH-10 \"" + controlId + "\")");
+        assertThat(MllpRecordingContext.withControlId("r", "   ")).isEqualTo("r");
+        assertThat(MllpRecordingContext.withControlId("r", null)).isEqualTo("r");
+    }
 }

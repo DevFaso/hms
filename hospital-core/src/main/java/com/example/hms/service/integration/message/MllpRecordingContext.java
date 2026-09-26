@@ -176,18 +176,41 @@ public final class MllpRecordingContext {
     }
 
     /**
-     * A dead-letter reason with MSH-10 appended, as parsed - the one
-     * definition the ADT and A40 paths share.
+     * A dead-letter reason with MSH-10 appended - the one definition the ADT
+     * and A40 paths share.
      *
-     * <p>Not capped: {@code Hl7MessageInspector} refuses an MSH-10 wider than
-     * the 255 of the columns it is stored in, and a shorter cap would make
-     * two control ids that share a prefix indistinguishable in the row that
-     * exists to tell them apart.
+     * <p>Whole, not capped: {@code Hl7MessageInspector} refuses an MSH-10
+     * wider than the 255 of the columns it is stored in, and a shorter cap
+     * would make two control ids that share a prefix indistinguishable in the
+     * row that exists to tell them apart.
+     *
+     * <p>Quoted and escaped, because it is the sender's text inside a reason
+     * an operator reads as ours. Unquoted, an MSH-10 of
+     * {@code x) identifier not found; cross-tenant rejection (MSH-10 y}
+     * renders as several findings the sender wrote. In quotes, with {@code "}
+     * and backslash escaped, the value cannot end early, and a control
+     * character is shown as a backslash-u hex escape rather than rendered.
      */
     public static String withControlId(String reason, String messageControlId) {
         return StringUtils.hasText(messageControlId)
-            ? reason + " (MSH-10 " + messageControlId.trim() + ")"
+            ? reason + " (MSH-10 " + quoted(messageControlId.trim()) + ")"
             : reason;
+    }
+
+    /** {@code value} in double quotes, with quotes, backslashes and control characters escaped. */
+    private static String quoted(String value) {
+        StringBuilder out = new StringBuilder(value.length() + 2).append('"');
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c == '"' || c == '\\') {
+                out.append('\\').append(c);
+            } else if (Character.isISOControl(c)) {
+                out.append(String.format("\\u%04x", (int) c));
+            } else {
+                out.append(c);
+            }
+        }
+        return out.append('"').toString();
     }
 
     /**

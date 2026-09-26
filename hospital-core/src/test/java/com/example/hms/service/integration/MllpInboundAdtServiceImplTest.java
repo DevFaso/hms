@@ -187,7 +187,7 @@ class MllpInboundAdtServiceImplTest {
             eq(IntegrationMessageDirection.INBOUND),
             eq("ADT^A08"), isNull(),
             eq(IntegrationMessageStatus.FAILED),
-            eq("cross-tenant rejection (MSH-10 MSG-1)"),
+            eq("cross-tenant rejection (MSH-10 \"MSG-1\")"),
             any());
     }
 
@@ -208,7 +208,7 @@ class MllpInboundAdtServiceImplTest {
             // message; the badge is kept honest by the correlation id, not by
             // filing this as healthy inbound traffic.
             eq(IntegrationMessageStatus.FAILED),
-            eq("PID-3 not found (MSH-10 MSG-1)"),
+            eq("PID-3 not found (MSH-10 \"MSG-1\")"),
             any());
     }
 
@@ -381,10 +381,10 @@ class MllpInboundAdtServiceImplTest {
         verify(messageRecorder).recordMessage(
             eq("MLLP:REG/HOSP1"), any(), eq(IntegrationMessageDirection.INBOUND),
             eq("ADT^A08"), isNull(), eq(IntegrationMessageStatus.FAILED),
-            eq("PID-3 not found (MSH-10 " + first + ")"), any());
+            eq("PID-3 not found (MSH-10 \"" + first + "\")"), any());
         verify(messageRecorder).recordMessage(
             eq("MLLP:REG/HOSP1"), any(), eq(IntegrationMessageDirection.INBOUND),
             eq("ADT^A08"), isNull(), eq(IntegrationMessageStatus.FAILED),
-            eq("PID-3 not found (MSH-10 " + second + ")"), any());
+            eq("PID-3 not found (MSH-10 \"" + second + "\")"), any());
     }
 }

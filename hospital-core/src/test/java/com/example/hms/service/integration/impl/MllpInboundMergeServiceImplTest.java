@@ -201,7 +201,7 @@ class MllpInboundMergeServiceImplTest {
             eq(IntegrationMessageDirection.INBOUND),
             eq("ADT^A40"), isNull(),
             eq(IntegrationMessageStatus.FAILED),
-            eq("cross-tenant rejection (MSH-10 MSG-A40-1)"),
+            eq("cross-tenant rejection (MSH-10 \"MSG-A40-1\")"),
             any());
     }
 
@@ -220,7 +220,7 @@ class MllpInboundMergeServiceImplTest {
             // retrying sender flooding the badge is the correlation id, not
             // the status.
             eq(IntegrationMessageStatus.FAILED),
-            eq("identifier not found (MSH-10 MSG-A40-1)"),
+            eq("identifier not found (MSH-10 \"MSG-A40-1\")"),
             any());
     }
 
@@ -369,7 +369,7 @@ class MllpInboundMergeServiceImplTest {
             eq(IntegrationMessageDirection.INBOUND),
             eq("ADT^A40"), isNull(),
             eq(IntegrationMessageStatus.FAILED),
-            eq("identifier not found (MSH-10 " + controlId + ")"),
+            eq("identifier not found (MSH-10 \"" + controlId + "\")"),
             any());
     }
 }

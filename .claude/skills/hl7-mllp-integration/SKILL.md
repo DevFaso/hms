@@ -135,6 +135,13 @@ only an optional step reads rejects what works today.
   into a `VARCHAR(255)` is a sink no wrapper sees. A new field that reaches
   a sink gets a bound in `Hl7FieldBounds`, checked where it is parsed.
 - A refusal names the field and the limit, **never the value**.
+- A new bound is a copy of an entity `@Column(length)`: add the pair to
+  `Hl7FieldBoundsColumnWidthTest`, or a migration will silently move one
+  without the other. `Hl7FieldBounds.fits` counts code points, as
+  `VARCHAR(n)` does - not `String.length()`.
+- Sender text quoted into a reason an operator reads goes through
+  `MllpRecordingContext.withControlId`, which quotes and escapes it, so the
+  sender cannot write text that reads as our own finding.
 - **Not yet covered: demographics.** PID-5/7/8/11 go into `Patient`
   columns of 100 (sex: 10) unbounded, and an over-width value fails at
   commit with a generic AE and no dead-letter row. Known debt: they are not

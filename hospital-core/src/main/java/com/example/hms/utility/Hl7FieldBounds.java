@@ -41,7 +41,10 @@ package com.example.hms.utility;
  *
  * <p>The limits are column widths, not HL7's nominal field lengths: real
  * senders exceed v2.5's 20-character MSH-10, and a tighter bound would refuse
- * messages that store and match correctly.
+ * messages that store and match correctly. Each is a copy of an entity's
+ * {@code @Column(length)}, and {@code Hl7FieldBoundsColumnWidthTest} fails
+ * the build when a migration moves one without the other. Widths are counted
+ * in characters (code points), as {@code VARCHAR(n)} counts them.
  *
  * <p><b>Whitespace.</b> The MSH fields are bounded untrimmed, because they
  * reach sinks untrimmed - MSA-2 echoes MSH-10 as sent, and the dispatcher
@@ -86,8 +89,16 @@ public final class Hl7FieldBounds {
 
     private Hl7FieldBounds() {}
 
-    /** Absent is within bounds: whether a field is mandatory is decided elsewhere. */
+    /**
+     * Whether {@code value} fits a {@code VARCHAR(max)} column. Absent is
+     * within bounds: whether a field is mandatory is decided elsewhere.
+     *
+     * <p>Counted in code points, as Postgres counts {@code VARCHAR(n)}, not
+     * in UTF-16 units: {@code String.length()} counts a supplementary-plane
+     * character (an emoji, a rare CJK ideograph) twice, and would refuse a
+     * name that fits its column.
+     */
     public static boolean fits(String value, int max) {
-        return value == null || value.length() <= max;
+        return value == null || value.codePointCount(0, value.length()) <= max;
     }
 }
