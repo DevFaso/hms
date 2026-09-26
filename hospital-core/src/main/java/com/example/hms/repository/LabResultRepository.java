@@ -207,6 +207,21 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
     })
     Page<LabResult> findByLabOrder_Hospital_IdIn(Collection<UUID> hospitalIds, Pageable pageable);
 
+    /**
+     * A patient's newest results for one test that a hospital may read: the
+     * orders placed at any of {@code readableHospitalIds} (the acting hospital
+     * plus the treatment-relationship set), and the orders this hospital's
+     * laboratory performed for somebody else (B1).
+     *
+     * <p>This is the ONLY patient-trend query on the repository. There used to
+     * be an unscoped {@code findTop12ByLabOrder_Patient_Id...} beside it, and
+     * three endpoints leaked every hospital's values through it; a trend query
+     * that answers without a hospital does not exist to be found by name.
+     * {@code globalView} is the single way to read across hospitals, and only
+     * {@code LabResultServiceImpl} sets it, for a verified super-admin with no
+     * hospital pinned. {@code readableHospitalIds} must never be empty
+     * (PostgreSQL rejects {@code IN ()}).
+     */
     @EntityGraph(attributePaths = {
         "labOrder",
         "labOrder.patient",
@@ -217,10 +232,21 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         "assignment",
         "assignment.user"
     })
-    List<LabResult> findTop12ByLabOrder_Patient_IdAndLabOrder_LabTestDefinition_IdOrderByResultDateDesc(
-        UUID patientId,
-        UUID labTestDefinitionId
-    );
+    @Query("""
+        SELECT r FROM LabResult r
+        WHERE r.labOrder.patient.id = :patientId
+          AND r.labOrder.labTestDefinition.id = :labTestDefinitionId
+          AND (:globalView = true
+               OR r.labOrder.hospital.id IN :readableHospitalIds
+               OR r.labOrder.performingHospital.id = :actingHospitalId)
+        ORDER BY r.resultDate DESC
+    """)
+    List<LabResult> findTrendReadableAt(@Param("patientId") UUID patientId,
+                                        @Param("labTestDefinitionId") UUID labTestDefinitionId,
+                                        @Param("readableHospitalIds") Collection<UUID> readableHospitalIds,
+                                        @Param("actingHospitalId") UUID actingHospitalId,
+                                        @Param("globalView") boolean globalView,
+                                        Pageable pageable);
 
     @EntityGraph(attributePaths = {
         "labOrder",

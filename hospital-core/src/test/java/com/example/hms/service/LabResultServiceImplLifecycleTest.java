@@ -71,6 +71,7 @@ class LabResultServiceImplLifecycleTest {
     @Mock private CriticalValueNotificationService criticalValueNotificationService;
     @Mock private com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
 
     @InjectMocks
     private LabResultServiceImpl service;
@@ -517,6 +518,8 @@ class LabResultServiceImplLifecycleTest {
                 return 1;
             });
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        // A null scope is unscoped only for the verified super-admin flag.
+        org.mockito.Mockito.lenient().when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(true);
         when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
