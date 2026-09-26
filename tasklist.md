@@ -3639,12 +3639,23 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   #746 closed for encounters. Unowned.
 
 - **`PatientRepositoryRegistrationScopeTest` fails non-deterministically in
-  CI**, and did so on three PRs in one night, each touching nothing near it.
-  H2 cannot drop the `platform` schema because the ShedLock table depends on
-  it, so whichever `@DataJpaTest` context comes up next gets a half-built
-  schema. A flaky test that blocks merges is also a test that can make a real
-  failure look like a flake. An agent is working on it; no branch or PR
-  exists yet, so treat it as open until one does.
+  CI, and the cause is heap exhaustion, not the test.** It failed on three PRs
+  in one night, each touching nothing near it, and every failure ends in
+  `Failed to load ApplicationContext ... OutOfMemoryError: Java heap space`.
+  Spring caches up to 32 test contexts and closes none before the JVM exits,
+  each full context holding roughly 80-130 MB; with `forkEvery=250` the second
+  fork builds about twenty contexts before this test, live heap climbs to
+  about 1.9 GB of the 2 GB limit, and whichever context is built next dies.
+  It passes on a rerun because whether it fits depends on how much
+  soft-referenced cache a full GC can still free. The test itself is innocent.
+  An earlier version of this bullet blamed H2 failing to drop the `platform`
+  schema because ShedLock depends on it; that was wrong. Those DDL errors are
+  logged and ignored once per context start, in passing runs as well as
+  failing ones. Found alongside it: every `@SpringBootTest` on the test profile
+  shared one H2 database name, so each context start dropped and rebuilt the
+  schema under the others. Both are addressed by
+  `fix/flaky-registration-scope-test` (#757): a context-cache cap and one H2
+  database per context.
 
 - **Two layers of this codebase disagree about role equivalence.**
   `RoleExpansion` grants a physician or surgeon ROLE_DOCTOR while the
