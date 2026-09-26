@@ -20,6 +20,8 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UltrasoundOrderRepository;
 import com.example.hms.repository.UltrasoundReportRepository;
 import com.example.hms.service.UltrasoundService;
+import com.example.hms.service.PatientSubjectReadGuard;
+import com.example.hms.service.PatientSubjectReaderRoles;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +51,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     private final UltrasoundMapper ultrasoundMapper;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    private final PatientSubjectReadGuard subjectReadGuard;
 
     @Override
     public UltrasoundOrderResponseDTO createOrder(UltrasoundOrderRequestDTO request, UUID orderedByUserId) {
@@ -133,6 +136,11 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     public UltrasoundOrderResponseDTO getOrderById(UUID orderId) {
         UltrasoundOrder order = orderRepository.findById(orderId)
             .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_PREFIX + orderId));
+        // A patient caller reads only their own; another patient's order
+        // answers exactly as a missing id does.
+        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.ULTRASOUND_READS, patientIdOf(order))) {
+            throw new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_PREFIX + orderId);
+        }
         return ultrasoundMapper.toOrderResponseDTO(order);
     }
 
@@ -154,6 +162,12 @@ public class UltrasoundServiceImpl implements UltrasoundService {
      * keeps the unscoped read. Every foreign row surfaced is accounted.
      */
     private List<UltrasoundOrderResponseDTO> readOrders(UUID patientId, UltrasoundOrderStatus status) {
+        // A patient caller reads only their own. Another patient's id answers
+        // exactly as an id that matches no row does -- an empty list -- and
+        // before any lookup that could answer differently.
+        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.ULTRASOUND_READS, patientId)) {
+            return List.of();
+        }
         HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
         UUID actingHospitalId = ctx.pinnedHospitalId();
         List<UltrasoundOrder> orders;
@@ -284,6 +298,12 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     public UltrasoundReportResponseDTO getReportById(UUID reportId) {
         UltrasoundReport report = reportRepository.findById(reportId)
             .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_PREFIX + reportId));
+        // A patient caller reads only their own; another patient's report
+        // answers exactly as a missing id does.
+        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.ULTRASOUND_READS,
+                patientIdOf(report.getUltrasoundOrder()))) {
+            throw new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_PREFIX + reportId);
+        }
         return ultrasoundMapper.toReportResponseDTO(report);
     }
 
@@ -291,8 +311,23 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Transactional(readOnly = true)
     public UltrasoundReportResponseDTO getReportByOrderId(UUID orderId) {
         UltrasoundReport report = reportRepository.findByUltrasoundOrderId(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException("Ultrasound report not found for order ID: " + orderId));
+            .orElseThrow(() -> reportForOrderNotFound(orderId));
+        // A patient caller reads only their own; the report on another
+        // patient's order answers exactly as an order with no report does.
+        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.ULTRASOUND_READS,
+                patientIdOf(report.getUltrasoundOrder()))) {
+            throw reportForOrderNotFound(orderId);
+        }
         return ultrasoundMapper.toReportResponseDTO(report);
+    }
+
+    private static ResourceNotFoundException reportForOrderNotFound(UUID orderId) {
+        return new ResourceNotFoundException("Ultrasound report not found for order ID: " + orderId);
+    }
+
+    /** The patient an ultrasound order belongs to, or null when it cannot be placed. */
+    private static UUID patientIdOf(UltrasoundOrder order) {
+        return order != null && order.getPatient() != null ? order.getPatient().getId() : null;
     }
 
     @Override

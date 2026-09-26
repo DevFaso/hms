@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.ImagingModality;
 import com.example.hms.enums.ImagingOrderPriority;
 import com.example.hms.enums.ImagingOrderStatus;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
@@ -38,6 +40,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import java.util.Map;
@@ -61,6 +64,16 @@ class ImagingOrderServiceImplTest {
 
     @InjectMocks
     private ImagingOrderServiceImpl imagingOrderService;
+
+    /**
+     * The real subject guard. These tests set no authentication, so it waves
+     * every read through, as it does for any caller that is not patient-only;
+     * the patient cases are in PatientSubjectReadGuardTest and the
+     * per-service ownership tests.
+     */
+    @Spy
+    private PatientSubjectReadGuard subjectReadGuard =
+        new PatientSubjectReadGuard(mock(ControllerAuthUtils.class), mock(PatientRepository.class));
     @Mock
     private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock

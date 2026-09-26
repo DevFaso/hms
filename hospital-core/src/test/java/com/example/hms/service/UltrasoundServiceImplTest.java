@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.UltrasoundOrderStatus;
 import com.example.hms.enums.UltrasoundScanType;
 import com.example.hms.exception.BusinessException;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
@@ -38,6 +40,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -74,6 +77,16 @@ class UltrasoundServiceImplTest {
 
     @InjectMocks
     private UltrasoundServiceImpl ultrasoundService;
+
+    /**
+     * The real subject guard. These tests set no authentication, so it waves
+     * every read through, as it does for any caller that is not patient-only;
+     * the patient cases are in PatientSubjectReadGuardTest and the
+     * per-service ownership tests.
+     */
+    @Spy
+    private PatientSubjectReadGuard subjectReadGuard =
+        new PatientSubjectReadGuard(mock(ControllerAuthUtils.class), mock(PatientRepository.class));
 
     private UUID patientId;
     private UUID hospitalId;
