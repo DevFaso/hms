@@ -1,4 +1,5 @@
 import { HttpClient } from '@angular/common/http';
+import { NotificationDeliveryStatus } from '../shared/delivery-warnings';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
@@ -81,6 +82,12 @@ export interface Assignment {
   active: boolean;
 }
 
+/** Answer of both email-change steps: a message and what was mailed where (masked). */
+export interface EmailChangeResponse {
+  message: string;
+  delivery?: NotificationDeliveryStatus[];
+}
+
 export interface ProfileUpdateRequest {
   firstName?: string;
   lastName?: string;
@@ -114,9 +121,26 @@ export class ProfileService {
     return this.http.get<UserProfile>(`/users/${userId}`);
   }
 
-  /** PUT /users/:id  — update user profile */
+  /** PUT /users/:id  — update user profile (names and phone; the email has its own endpoint) */
   updateProfile(userId: string, data: ProfileUpdateRequest): Observable<UserProfile> {
     return this.http.put<UserProfile>(`/users/${userId}`, data);
+  }
+
+  /**
+   * POST /auth/me/change-email — step 1 of changing the signed-in user's own
+   * email. Needs the current password; sends a code to the NEW address. The
+   * email does not change until {@link confirmOwnEmailChange} gets that code.
+   */
+  changeOwnEmail(currentPassword: string, newEmail: string): Observable<EmailChangeResponse> {
+    return this.http.post<EmailChangeResponse>('/auth/me/change-email', {
+      currentPassword,
+      newEmail,
+    });
+  }
+
+  /** POST /auth/me/change-email/confirm — step 2: the code; applies the change. */
+  confirmOwnEmailChange(code: string): Observable<EmailChangeResponse> {
+    return this.http.post<EmailChangeResponse>('/auth/me/change-email/confirm', { code });
   }
 
   /** GET /auth/credentials/me — credential health (MFA, recovery, password status) */

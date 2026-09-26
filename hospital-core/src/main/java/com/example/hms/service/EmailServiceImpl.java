@@ -1,5 +1,8 @@
 package com.example.hms.service;
 
+import com.example.hms.utility.ActivationDeliveryTracker;
+import com.example.hms.utility.EmailAddresses;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -293,7 +296,8 @@ public class EmailServiceImpl implements EmailService {
                                    String subject, String htmlBody,
                                    byte[] attachment, String filename, String contentType) {
         validateAddresses(to);
-        log.info("📧 Sending email to: {}, subject: {}", to, subject);
+        log.info("📧 Sending email to: {}, subject: {}",
+            to.stream().map(ActivationDeliveryTracker::maskEmail).toList(), subject);
         mailSender.send(mime -> {
             var multipart = attachment != null;
             var helper = new MimeMessageHelper(mime, multipart, "UTF-8");
@@ -525,6 +529,85 @@ public class EmailServiceImpl implements EmailService {
         log.info("✅ Recovery contact verification email sent to {}", to);
     }
 
+    /*
+     * The three self-service email-change mails. None pre-validates the
+     * address (sendHtml does, with the shared rule) and none logs it.
+     */
+
+    @Override
+    public void sendEmailChangeVerificationEmail(String to, String verificationCode, Locale locale) {
+        if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
+        Locale l = recipientLocale(locale);
+        String escapedCode = escapeHtml(verificationCode);
+
+        String header = brandHeader(l, GRADIENT_BLUE, COLOR_BRAND_TINT,
+            "&#128274; " + text(l, "email.change.code.heading"));
+
+        String bodyContent = BODY_OPEN
+            + BODY_PARAGRAPH_OPEN + text(l, "email.change.code.body.intro") + CLOSE_PARAGRAPH
+            + HTML_CENTER_BLOCK
+            + "<div style=\"display:inline-block;background:#f1f5f9;border:2px dashed #94a3b8;"
+            + "border-radius:12px;padding:20px 40px;\">"
+            + "<span style=\"font-size:32px;font-weight:700;letter-spacing:8px;color:#1e293b;font-family:monospace;\">"
+            + escapedCode
+            + "</span>"
+            + CLOSE_DIV
+            + CLOSE_DIV
+            + "<p style=\"font-size:14px;color:#64748b;text-align:center;margin:0 0 24px;\">"
+            + text(l, "email.change.code.body.expiry")
+            + CLOSE_PARAGRAPH
+            + HR
+            + alertBox(text(l, KEY_UNEXPECTED_TITLE), text(l, "email.change.code.body.unexpected"))
+            + CLOSE_DIV;
+
+        String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
+        sendHtml(List.of(to), List.of(), List.of(), text(l, "email.change.code.subject"), body);
+        log.info("✅ Email-change verification code sent");
+    }
+
+    @Override
+    public void sendEmailChangedNoticeEmail(String to, String displayName, String maskedAddress, Locale locale) {
+        if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
+        Locale l = recipientLocale(locale);
+        LocalDateTime changedAt = LocalDateTime.now(ZoneOffset.UTC);
+
+        String header = brandHeader(l, GRADIENT_BLUE, COLOR_BRAND_TINT,
+            "&#128274; " + text(l, "email.change.notice.heading"));
+
+        String bodyContent = BODY_OPEN
+            + GREETING_PARAGRAPH_OPEN + greetingHi(l, displayName) + CLOSE_PARAGRAPH
+            + BODY_PARAGRAPH_OPEN
+            + text(l, "email.change.notice.body.intro", escapeHtml(maskedAddress),
+                humanDate(changedAt.toLocalDate(), l), CLOCK_TIME.format(changedAt))
+            + CLOSE_PARAGRAPH
+            + HR
+            + alertBox(text(l, KEY_UNEXPECTED_TITLE), text(l, "email.change.notice.body.unexpected"))
+            + CLOSE_DIV;
+
+        String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
+        sendHtml(List.of(to), List.of(), List.of(), text(l, "email.change.notice.subject"), body);
+        log.info("✅ Email-changed notice sent to the previous address");
+    }
+
+    @Override
+    public void sendEmailAddressInUseNoticeEmail(String to, Locale locale) {
+        if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
+        Locale l = recipientLocale(locale);
+
+        String header = brandHeader(l, GRADIENT_BLUE, COLOR_BRAND_TINT,
+            "&#128274; " + text(l, "email.change.inuse.heading"));
+
+        String bodyContent = BODY_OPEN
+            + BODY_PARAGRAPH_OPEN + text(l, "email.change.inuse.body.intro") + CLOSE_PARAGRAPH
+            + HR
+            + alertBox(text(l, KEY_UNEXPECTED_TITLE), text(l, "email.change.inuse.body.unexpected"))
+            + CLOSE_DIV;
+
+        String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
+        sendHtml(List.of(to), List.of(), List.of(), text(l, "email.change.inuse.subject"), body);
+        log.info("✅ Email-in-use notice sent");
+    }
+
     @Override
     public void sendUsernameReminderEmail(String toEmail, String username, Locale locale) {
         Locale l = recipientLocale(locale);
@@ -735,8 +818,12 @@ public class EmailServiceImpl implements EmailService {
              + HTML_P_DIV_CLOSE;
     }
 
+    /**
+     * The shared rule ({@link EmailAddresses#isDeliverable}), so an address a
+     * caller accepted is never refused here. Addresses are not logged: this
+     * runs for every mail and a recipient address is personal data.
+     */
     private static void validateAddresses(List<String> addresses) {
-        log.info("validateAddresses input: {}", addresses);
         if (addresses == null || addresses.isEmpty()) {
             throw new IllegalArgumentException("Recipient list cannot be empty");
         }
@@ -744,8 +831,7 @@ public class EmailServiceImpl implements EmailService {
             if (addr == null || addr.isBlank()) {
                 throw new IllegalArgumentException("Empty email address");
             }
-            // Simple RFC check — character-class exclusions prevent backtracking/ReDoS
-            if (!addr.matches("^[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}$")) {
+            if (!EmailAddresses.isDeliverable(addr)) {
                 throw new IllegalArgumentException("Invalid email format: " + addr);
             }
         }
