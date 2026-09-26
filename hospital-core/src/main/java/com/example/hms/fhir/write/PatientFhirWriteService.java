@@ -54,6 +54,13 @@ import java.util.UUID;
  * unknown id and another tenant's id are indistinguishable (the rule HL7
  * settled in #715/#738).
  *
+ * <p>Both return the FHIR resource, mapped before the transaction ends:
+ * {@link PatientFhirMapper#toFhir} walks the LAZY
+ * {@code Patient.hospitalRegistrations}, which neither operation loads (and
+ * a PUT that changes nothing leaves even the patient an uninitialised
+ * proxy). Mapped by the provider after the commit, both answered 500 with
+ * the write already done.
+ *
  * <p>Feature-flagged via {@link FhirWriteProperties#isEnabled()};
  * disabled state surfaces as {@code 405 Method Not Allowed} from the
  * provider.
@@ -118,7 +125,7 @@ public class PatientFhirWriteService {
      * unscoped, as before this gate; see {@link #resolveWriteScope}.
      */
     @Transactional
-    public Patient update(UUID patientId, org.hl7.fhir.r4.model.Patient fhirIn) {
+    public org.hl7.fhir.r4.model.Patient update(UUID patientId, org.hl7.fhir.r4.model.Patient fhirIn) {
         ensureEnabled();
         UUID hospitalId = resolveWriteScope();
         Patient existing = findWritable(patientId, hospitalId)
@@ -127,7 +134,11 @@ public class PatientFhirWriteService {
         Patient saved = patientRepository.save(existing);
         emitAudit(AuditEventType.PATIENT_UPDATE, saved,
             "FHIR PUT applied contact/address updates to Patient/" + saved.getId());
-        return saved;
+        // Flushed before mapping, so the resource carries what the row now
+        // holds: @PreUpdate normalises (the email is lower-cased) and stamps
+        // updatedAt (meta.lastUpdated) only when the update is flushed.
+        patientRepository.flush();
+        return patientMapper.toFhir(saved);
     }
 
     /**
@@ -140,7 +151,9 @@ public class PatientFhirWriteService {
      * search parameter is rejected as 422.
      */
     @Transactional(readOnly = true)
-    public Patient conditionalCreate(String ifNoneExistRaw, org.hl7.fhir.r4.model.Patient fhirIn) {
+    public org.hl7.fhir.r4.model.Patient conditionalCreate(
+        String ifNoneExistRaw, org.hl7.fhir.r4.model.Patient fhirIn
+    ) {
         ensureEnabled();
         // Request-shape validation reads no data, so it cannot be an existence
         // oracle and keeps its documented 422 answers. The scope is resolved
@@ -211,7 +224,7 @@ public class PatientFhirWriteService {
         emitAudit(AuditEventType.PATIENT_ACCESS, resolved,
             "FHIR conditional-create matched an active MRN — returned existing Patient/"
                 + resolved.getId());
-        return resolved;
+        return patientMapper.toFhir(resolved);
     }
 
     /**

@@ -93,8 +93,9 @@ class PatientFhirWriteServiceTenancyTest {
         when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(mine.getId(), callerHospital))
             .thenReturn(Optional.of(registration(mine, true)));
 
+        org.hl7.fhir.r4.model.Patient mapped = mapsTo(mine);
         org.hl7.fhir.r4.model.Patient body = new org.hl7.fhir.r4.model.Patient();
-        assertThat(service.update(mine.getId(), body)).isSameAs(mine);
+        assertThat(service.update(mine.getId(), body)).isSameAs(mapped);
 
         verify(patientMapper).applyFhirUpdates(mine, body);
         verify(patientRepository).save(mine);
@@ -195,8 +196,9 @@ class PatientFhirWriteServiceTenancyTest {
         Patient elsewhere = patient();
         when(patientRepository.findById(elsewhere.getId())).thenReturn(Optional.of(elsewhere));
 
+        org.hl7.fhir.r4.model.Patient mapped = mapsTo(elsewhere);
         org.hl7.fhir.r4.model.Patient body = new org.hl7.fhir.r4.model.Patient();
-        assertThat(service.update(elsewhere.getId(), body)).isSameAs(elsewhere);
+        assertThat(service.update(elsewhere.getId(), body)).isSameAs(mapped);
 
         verify(registrationRepository, never()).findByPatientIdAndHospitalIdAndActiveTrue(any(), any());
         verify(patientRepository).save(elsewhere);
@@ -211,9 +213,10 @@ class PatientFhirWriteServiceTenancyTest {
         stubMrnToken(callerHospital);
         when(registrationRepository.findActiveByHospitalIdAndIdentifier(callerHospital, MRN))
             .thenReturn(List.of(registration(mine, true)));
+        org.hl7.fhir.r4.model.Patient mapped = mapsTo(mine);
 
         assertThat(service.conditionalCreate(ifNoneExist(callerHospital), new org.hl7.fhir.r4.model.Patient()))
-            .isSameAs(mine);
+            .isSameAs(mapped);
     }
 
     @Test
@@ -246,9 +249,10 @@ class PatientFhirWriteServiceTenancyTest {
         stubMrnToken(otherHospital);
         when(registrationRepository.findActiveByHospitalIdAndIdentifier(otherHospital, MRN))
             .thenReturn(List.of(registration(theirs, true)));
+        org.hl7.fhir.r4.model.Patient mapped = mapsTo(theirs);
 
         assertThat(service.conditionalCreate(ifNoneExist(otherHospital), new org.hl7.fhir.r4.model.Patient()))
-            .isSameAs(theirs);
+            .isSameAs(mapped);
     }
 
     @Test
@@ -312,6 +316,19 @@ class PatientFhirWriteServiceTenancyTest {
         registration.setPatient(patient);
         registration.setActive(active);
         return registration;
+    }
+
+    /**
+     * The resource the mapper produces for {@code entity}: the service must
+     * return THIS, mapped inside its own transaction, never the entity for the
+     * provider to map after the commit (a LAZY registrations walk with no
+     * session - a 500 once the write was done).
+     */
+    private org.hl7.fhir.r4.model.Patient mapsTo(Patient entity) {
+        org.hl7.fhir.r4.model.Patient mapped = new org.hl7.fhir.r4.model.Patient();
+        mapped.setId(entity.getId().toString());
+        when(patientMapper.toFhir(entity)).thenReturn(mapped);
+        return mapped;
     }
 
     private static Patient patient() {

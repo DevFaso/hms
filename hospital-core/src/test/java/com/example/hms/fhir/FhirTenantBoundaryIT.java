@@ -118,6 +118,7 @@ class FhirTenantBoundaryIT {
     @Autowired private IdleSessionTracker idleSessionTracker;
     @Autowired private FhirTenantBoundary boundary;
     @Autowired private FhirContext fhirContext;
+    @Autowired private FhirWriteProperties writeProperties;
     @Autowired private List<IResourceProvider> providers;
     @Autowired private OrganizationRepository organizationRepository;
     @Autowired private HospitalRepository hospitalRepository;
@@ -141,6 +142,7 @@ class FhirTenantBoundaryIT {
     private User superAdmin;
     private Patient patientP;
     private Patient patientQ;
+    private String mrnOfPAtA;
     private final Rows atA = new Rows();
     private final Rows atB = new Rows();
 
@@ -200,7 +202,7 @@ class FhirTenantBoundaryIT {
         superAdmin = saveUser("root");
 
         patientP = savePatient(hospitalA);
-        register(patientP, hospitalA);
+        mrnOfPAtA = register(patientP, hospitalA);
         register(patientP, hospitalB);
         patientQ = savePatient(hospitalB);
         register(patientQ, hospitalB);
@@ -246,11 +248,72 @@ class FhirTenantBoundaryIT {
             assertThat(response.getStatusCode().value()).as(type).isEqualTo(200);
             assertThat(response.getBody()).as(type).contains(atA.idOf(type));
         }
-        // Patient is gated here too, but its in-tenant read is not asserted:
-        // PatientFhirMapper touches the LAZY hospitalRegistrations with no
-        // session open (open-in-view is off and the HAPI servlet has no
-        // transaction), so GET Patient/{id} is a 500 on develop with or
-        // without this boundary — a separate defect, reported with this PR.
+    }
+
+    @Test
+    @DisplayName("an in-tenant Patient read and search answer 200 with the hospital's MRN")
+    void inTenantPatientReadAndSearchWork() {
+        // PatientFhirMapper walks the LAZY hospitalRegistrations; with
+        // open-in-view off, mapping outside a transaction was a 500 for every
+        // caller on every Patient read and search.
+        String token = legacyToken(doctorA, ROLE_DOCTOR);
+        String id = patientP.getId().toString();
+        String mrnSystem = "urn:hms:hospital:" + hospitalA.getId() + ":mrn";
+
+        ResponseEntity<String> read = get("/fhir/Patient/" + id, token, null);
+        assertThat(read.getStatusCode().value()).as(read.getBody()).isEqualTo(200);
+        assertThat(identifierValue(json(read), mrnSystem)).isEqualTo(mrnOfPAtA);
+
+        JsonNode byId = json(get("/fhir/Patient?_id=" + id, token, null));
+        assertThat(entryIds(byId)).containsExactly(id);
+
+        JsonNode byName = json(get("/fhir/Patient?name=" + patientP.getLastName(), token, null));
+        assertThat(entryIds(byName)).containsExactly(id);
+
+        JsonNode byMrn = json(get("/fhir/Patient?identifier=" + mrnOfPAtA, token, null));
+        assertThat(entryIds(byMrn)).containsExactly(id);
+    }
+
+    @Test
+    @DisplayName("a Patient PUT and conditional create answer with the resource, not a 500 after the commit")
+    void patientWritesAnswerWithTheResource() {
+        // The write flag is read on every request; flipped here rather than in
+        // a context of its own, and put back whatever happens.
+        boolean wasEnabled = writeProperties.isEnabled();
+        writeProperties.setEnabled(true);
+        try {
+            String token = legacyToken(doctorA, ROLE_DOCTOR);
+            String id = patientP.getId().toString();
+            String mrnSystem = "urn:hms:hospital:" + hospitalA.getId() + ":mrn";
+
+            // Nothing to change: no flush, so nothing initialises the registrations.
+            String unchanged = "{\"resourceType\":\"Patient\",\"id\":\"" + id + "\"}";
+            ResponseEntity<String> noOp = send(HttpMethod.PUT, "/fhir/Patient/" + id, unchanged, token, null);
+            assertThat(noOp.getStatusCode().value()).as(noOp.getBody()).isEqualTo(200);
+            assertThat(identifierValue(objectMapper.readTree(noOp.getBody()), mrnSystem)).isEqualTo(mrnOfPAtA);
+
+            String newPhone = "+22670" + nextId().substring(6);
+            String newEmail = "Changed." + nextId() + "@Boundary.Test";
+            String changed = "{\"resourceType\":\"Patient\",\"id\":\"" + id + "\",\"telecom\":["
+                + "{\"system\":\"phone\",\"use\":\"mobile\",\"value\":\"" + newPhone + "\"},"
+                + "{\"system\":\"email\",\"value\":\"" + newEmail + "\"}]}";
+            ResponseEntity<String> update = send(HttpMethod.PUT, "/fhir/Patient/" + id, changed, token, null);
+            assertThat(update.getStatusCode().value()).as(update.getBody()).isEqualTo(200);
+            assertThat(update.getBody()).contains(newPhone);
+            // What the row holds, not what was sent: the entity lower-cases the email when it is flushed.
+            assertThat(update.getBody()).contains(newEmail.toLowerCase()).doesNotContain(newEmail);
+
+            String body = "{\"resourceType\":\"Patient\",\"identifier\":[{\"system\":\"" + mrnSystem
+                + "\",\"value\":\"" + mrnOfPAtA + "\"}]}";
+            ResponseEntity<String> conditional = send(HttpMethod.POST, "/fhir/Patient", body, token,
+                "identifier=" + mrnSystem + "|" + mrnOfPAtA);
+            assertThat(conditional.getStatusCode().value()).as(conditional.getBody()).isEqualTo(200);
+            JsonNode resolved = objectMapper.readTree(conditional.getBody());
+            assertThat(resolved.get("id").asText()).isEqualTo(id);
+            assertThat(identifierValue(resolved, mrnSystem)).isEqualTo(mrnOfPAtA);
+        } finally {
+            writeProperties.setEnabled(wasEnabled);
+        }
     }
 
     @Test
@@ -431,6 +494,31 @@ class FhirTenantBoundaryIT {
             .as("%s body", type).isEqualTo(missing.getBody().replace(missingId, "{id}"));
     }
 
+    private ResponseEntity<String> send(HttpMethod method, String path, String body, String bearer,
+                                        String ifNoneExist) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.ACCEPT, FHIR_JSON);
+        headers.set(HttpHeaders.CONTENT_TYPE, FHIR_JSON);
+        headers.setBearerAuth(bearer);
+        if (ifNoneExist != null) {
+            headers.set("If-None-Exist", ifNoneExist);
+        }
+        return rest.exchange(path, method, new HttpEntity<>(body, headers), String.class);
+    }
+
+    /** The value of the resource's identifier in {@code system}, or null. */
+    private static String identifierValue(JsonNode patient, String system) {
+        JsonNode identifiers = patient.get("identifier");
+        if (identifiers != null) {
+            for (JsonNode identifier : identifiers) {
+                if (system.equals(identifier.path("system").asText())) {
+                    return identifier.path("value").asText();
+                }
+            }
+        }
+        return null;
+    }
+
     private ResponseEntity<String> get(String path, String bearer, String hospitalHeader) {
         HttpHeaders headers = new HttpHeaders();
         headers.set(HttpHeaders.ACCEPT, FHIR_JSON);
@@ -603,14 +691,17 @@ class FhirTenantBoundaryIT {
         return saved;
     }
 
-    private void register(Patient patient, Hospital hospital) {
+    /** Registers the patient and answers the MRN it was given. */
+    private String register(Patient patient, Hospital hospital) {
+        String mrn = "MRN-FB-" + nextId();
         registrations.add(registrationRepository.save(PatientHospitalRegistration.builder()
             .patient(patient)
             .hospital(hospital)
-            .mrn("MRN-FB-" + nextId())
+            .mrn(mrn)
             .registrationDate(LocalDate.now())
             .active(true)
             .build()).getId());
+        return mrn;
     }
 
     private String nextId() {
