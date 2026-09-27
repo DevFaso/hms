@@ -69,8 +69,8 @@ struct VisitSummaryCard: View {
                         .tracking(0.5)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
-                        .background(Color.blue.opacity(0.1))
-                        .foregroundColor(.blue)
+                        .background(Color("BrandPrimary").opacity(0.1))
+                        .foregroundColor(Color("BrandPrimaryText"))
                         .clipShape(Capsule())
                 }
 
@@ -138,7 +138,7 @@ struct VisitSummaryCard: View {
 
                 // Patient education
                 if let education = summary.patientEducationProvided, !education.isEmpty {
-                    iconSection(icon: "book.fill", iconColor: .blue, title: "Patient Education", body: education)
+                    iconSection(icon: "book.fill", iconColor: Color("BrandPrimary"), title: "Patient Education", body: education)
                 }
 
                 // Additional notes
@@ -167,11 +167,11 @@ struct VisitSummaryCard: View {
             // Provider avatar circle
             ZStack {
                 Circle()
-                    .fill(Color.blue.opacity(0.12))
+                    .fill(Color("BrandPrimary").opacity(0.12))
                     .frame(width: 44, height: 44)
                 Image(systemName: "person.fill")
                     .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(.blue)
+                    .foregroundColor(Color("BrandPrimaryText"))
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -193,8 +193,8 @@ struct VisitSummaryCard: View {
                         .font(.caption.weight(.medium))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .background(Color.blue.opacity(0.1))
-                        .foregroundColor(.blue)
+                        .background(Color("BrandPrimary").opacity(0.1))
+                        .foregroundColor(Color("BrandPrimaryText"))
                         .clipShape(Capsule())
                 }
                 statusBadge
@@ -269,7 +269,7 @@ struct VisitSummaryCard: View {
             HStack(spacing: 6) {
                 Image(systemName: "pill.fill")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.blue)
+                    .foregroundColor(Color("BrandPrimaryText"))
                 Text("Medications")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.secondary)
@@ -280,8 +280,8 @@ struct VisitSummaryCard: View {
                     .font(.caption2.weight(.bold))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color.blue.opacity(0.12))
-                    .foregroundColor(.blue)
+                    .background(Color("BrandPrimary").opacity(0.12))
+                    .foregroundColor(Color("BrandPrimaryText"))
                     .clipShape(Capsule())
             }
 
@@ -289,12 +289,12 @@ struct VisitSummaryCard: View {
                 ForEach(Array(meds.enumerated()), id: \.offset) { idx, med in
                     HStack(spacing: 10) {
                         Circle()
-                            .fill(Color.blue.opacity(0.15))
+                            .fill(Color("BrandPrimary").opacity(0.15))
                             .frame(width: 28, height: 28)
                             .overlay(
                                 Image(systemName: "pill.fill")
                                     .font(.system(size: 11))
-                                    .foregroundColor(.blue)
+                                    .foregroundColor(Color("BrandPrimaryText"))
                             )
 
                         VStack(alignment: .leading, spacing: 1) {

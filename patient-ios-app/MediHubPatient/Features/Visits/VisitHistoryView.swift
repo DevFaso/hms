@@ -93,8 +93,8 @@ struct EncounterRowView: View {
                 if let type = encounter.type {
                     Text(type.capitalized).font(.caption).bold()
                         .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Color.accentColor.opacity(0.1))
-                        .foregroundColor(.accentColor)
+                        .background(Color("BrandPrimary").opacity(0.1))
+                        .foregroundColor(Color("BrandPrimaryText"))
                         .cornerRadius(4)
                 }
                 Spacer()

@@ -191,7 +191,7 @@ struct HealthRecordsView: View {
             let profile = vm.summary?.profile
             Text(profile?.fullName.isEmpty == false ? profile?.fullName ?? "my_chart".localized : "my_chart".localized)
                 .font(.title3.bold())
-                .foregroundColor(.accentColor)
+                .foregroundColor(Color("BrandPrimaryText"))
             if let mrn = profile?.mrn, !mrn.isEmpty {
                 Text(String(format: "mrn_format".localized, mrn)).font(.subheadline)
             }
@@ -465,7 +465,7 @@ private struct SourceLine: View {
             Text("Source: \(text)")
                 .font(.caption)
                 .fontWeight(.medium)
-                .foregroundColor(Color("BrandBlue"))
+                .foregroundColor(Color("BrandPrimaryText"))
         }
     }
 }
@@ -479,7 +479,7 @@ struct TabChip: View {
             Text(title)
                 .font(.subheadline).bold()
                 .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(isSelected ? Color.accentColor : Color(.secondarySystemBackground))
+                .background(isSelected ? Color("BrandPrimary") : Color(.secondarySystemBackground))
                 .foregroundColor(isSelected ? .white : .primary)
                 .cornerRadius(20)
         }
