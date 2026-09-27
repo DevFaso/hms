@@ -24,8 +24,6 @@ import {
   WebhookEndpointRegistered,
   WebhookEventType,
 } from '../services/integration-keys.service';
-import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
-import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 
@@ -50,13 +48,7 @@ interface RevealedSecret {
 @Component({
   selector: 'app-webhooks',
   standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    TranslateModule,
-    HospitalScopeChipComponent,
-    HospitalScopeHintComponent,
-  ],
+  imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './webhooks.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './webhooks.scss',
@@ -110,21 +102,16 @@ export class WebhooksComponent implements OnInit, OnDestroy {
   private readonly confirmDialog = viewChild<ElementRef<HTMLElement>>('confirmDialog');
   private dialogOpener: HTMLElement | null = null;
 
-  readonly scopeReady = this.roleCtx.hasHospitalScope;
-
   private readonly load$ = new Subject<void>();
   private loadSub?: Subscription;
 
   ngOnInit(): void {
     this.loadSub = this.load$
       .pipe(
-        // One switchMap for both lists: only the LATEST scope may update
-        // the view, and a push while unpinned cancels any in-flight
-        // response (the #551 lesson).
+        // One switchMap for both lists: only the LATEST load may update the
+        // view (the #551 lesson). A scope change rebuilds the page (the
+        // route gate), so no other hospital's response can land.
         switchMap(() => {
-          if (!this.scopeReady()) {
-            return of({ keys: [] as ApiKey[], endpoints: [] as WebhookEndpoint[], failed: false });
-          }
           this.loading.set(true);
           this.loadFailed.set(false);
           return forkJoin({ keys: this.api.listKeys(), endpoints: this.api.listEndpoints() }).pipe(
@@ -143,23 +130,11 @@ export class WebhooksComponent implements OnInit, OnDestroy {
         this.endpoints.set(state.endpoints);
         this.loadFailed.set(state.failed);
       });
-    this.reloadForScope();
+    this.load$.next();
   }
 
   ngOnDestroy(): void {
     this.loadSub?.unsubscribe();
-  }
-
-  onScopeChange(_hospitalId: string | null): void {
-    this.reloadForScope();
-  }
-
-  private reloadForScope(): void {
-    this.keys.set([]);
-    this.endpoints.set([]);
-    this.loadFailed.set(false);
-    this.deliveriesFor.set(null);
-    this.load$.next();
   }
 
   load(): void {

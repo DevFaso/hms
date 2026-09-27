@@ -2,41 +2,123 @@
   <header class="page-header">
     <h1>{{ 'PANEL.TITLE' | translate }}</h1>
     <div class="header-actions">
-      <app-hospital-scope-chip (scopeChange)="onScopeChange($event)" />
-      @if (scopeReady()) {
-        <button
-          type="button"
-          class="btn-primary"
-          data-testid="open-assign"
-          (click)="openAssign($event)"
-        >
-          <span class="material-symbols-outlined">person_add</span>
-          {{ 'PANEL.ASSIGN' | translate }}
-        </button>
-      }
+      <button
+        type="button"
+        class="btn-primary"
+        data-testid="open-assign"
+        (click)="openAssign($event)"
+      >
+        <span class="material-symbols-outlined">person_add</span>
+        {{ 'PANEL.ASSIGN' | translate }}
+      </button>
     </div>
   </header>
 
-  <app-hospital-scope-hint />
-  @if (scopeReady()) {
-    <!-- ── My panel ─────────────────────────────────────────────────── -->
-    <section class="card">
-      <h2>{{ 'PANEL.MY_PANEL' | translate }}</h2>
-      @if (noStaffProfile()) {
-        <p class="hint">{{ 'PANEL.NO_STAFF_PROFILE' | translate }}</p>
-      } @else if (myPanelLoading()) {
-        <p class="hint">{{ 'COMMON.LOADING' | translate }}</p>
-      } @else if (myPanelRows().length === 0) {
-        <p class="hint">{{ 'PANEL.EMPTY' | translate }}</p>
-      } @else {
-        <p class="count-line">
-          {{ 'PANEL.COUNT' | translate: { count: myPanelTotal() } }}
+  <!-- ── My panel ─────────────────────────────────────────────────── -->
+  <section class="card">
+    <h2>{{ 'PANEL.MY_PANEL' | translate }}</h2>
+    @if (noStaffProfile()) {
+      <p class="hint">{{ 'PANEL.NO_STAFF_PROFILE' | translate }}</p>
+    } @else if (myPanelLoading()) {
+      <p class="hint">{{ 'COMMON.LOADING' | translate }}</p>
+    } @else if (myPanelRows().length === 0) {
+      <p class="hint">{{ 'PANEL.EMPTY' | translate }}</p>
+    } @else {
+      <p class="count-line">
+        {{ 'PANEL.COUNT' | translate: { count: myPanelTotal() } }}
+      </p>
+      @if (myPanelTruncated()) {
+        <p class="hint">
+          {{
+            'PANEL.SHOWING_FIRST'
+              | translate: { shown: myPanelRows().length, total: myPanelTotal() }
+          }}
         </p>
-        @if (myPanelTruncated()) {
+      }
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>{{ 'PANEL.PATIENT' | translate }}</th>
+              <th>{{ 'PANEL.ROLE' | translate }}</th>
+              <th>{{ 'PANEL.SINCE' | translate }}</th>
+              <th>
+                <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of myPanelRows(); track row.id) {
+              <tr>
+                <td>
+                  <a [routerLink]="['/patients', row.patientId]">{{ row.patientName }}</a>
+                </td>
+                <td>{{ roleKey(row.panelRole) | translate }}</td>
+                <td>{{ row.assignedOn | date: 'mediumDate' }}</td>
+                <td>
+                  <button type="button" class="btn-link danger" (click)="openEnd(row, $event)">
+                    {{ 'PANEL.END' | translate }}
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+
+  <!-- ── Admin overview ───────────────────────────────────────────── -->
+  @if (isAdmin()) {
+    <section class="card">
+      <h2>{{ 'PANEL.OVERVIEW' | translate }}</h2>
+      @if (overviewFailed()) {
+        <p class="hint error-hint">{{ 'PANEL.OVERVIEW_UNAVAILABLE' | translate }}</p>
+      } @else if (overviewRows().length === 0) {
+        <p class="hint">{{ 'PANEL.OVERVIEW_EMPTY' | translate }}</p>
+      } @else {
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>{{ 'PANEL.PROVIDER' | translate }}</th>
+                <th>{{ 'PANEL.ROLE' | translate }}</th>
+                <th class="num">{{ 'PANEL.ACTIVE_COUNT' | translate }}</th>
+                <th>
+                  <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of overviewRows(); track row.providerStaffId + row.panelRole) {
+                <tr>
+                  <td>{{ row.providerName }}</td>
+                  <td>{{ roleKey(row.panelRole) | translate }}</td>
+                  <td class="num">{{ row.activeCount }}</td>
+                  <td>
+                    <!-- A real button, not a clickable row: assistive tech
+                         gets an action with a name, Space activates it. -->
+                    <button type="button" class="btn-link" (click)="openDrilldown(row)">
+                      {{ 'PANEL.VIEW' | translate }}
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      @if (drilldownProvider(); as drill) {
+        <h3>
+          {{ 'PANEL.DRILLDOWN' | translate: { name: drill.providerName } }} —
+          {{ roleKey(drill.panelRole) | translate }}
+        </h3>
+        @if (drilldownTruncated()) {
           <p class="hint">
             {{
               'PANEL.SHOWING_FIRST'
-                | translate: { shown: myPanelRows().length, total: myPanelTotal() }
+                | translate: { shown: drilldownRows().length, total: drilldownTotal() }
             }}
           </p>
         }
@@ -45,7 +127,6 @@
             <thead>
               <tr>
                 <th>{{ 'PANEL.PATIENT' | translate }}</th>
-                <th>{{ 'PANEL.ROLE' | translate }}</th>
                 <th>{{ 'PANEL.SINCE' | translate }}</th>
                 <th>
                   <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
@@ -53,12 +134,11 @@
               </tr>
             </thead>
             <tbody>
-              @for (row of myPanelRows(); track row.id) {
+              @for (row of drilldownRows(); track row.id) {
                 <tr>
                   <td>
                     <a [routerLink]="['/patients', row.patientId]">{{ row.patientName }}</a>
                   </td>
-                  <td>{{ roleKey(row.panelRole) | translate }}</td>
                   <td>{{ row.assignedOn | date: 'mediumDate' }}</td>
                   <td>
                     <button type="button" class="btn-link danger" (click)="openEnd(row, $event)">
@@ -72,92 +152,6 @@
         </div>
       }
     </section>
-
-    <!-- ── Admin overview ───────────────────────────────────────────── -->
-    @if (isAdmin()) {
-      <section class="card">
-        <h2>{{ 'PANEL.OVERVIEW' | translate }}</h2>
-        @if (overviewFailed()) {
-          <p class="hint error-hint">{{ 'PANEL.OVERVIEW_UNAVAILABLE' | translate }}</p>
-        } @else if (overviewRows().length === 0) {
-          <p class="hint">{{ 'PANEL.OVERVIEW_EMPTY' | translate }}</p>
-        } @else {
-          <div class="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>{{ 'PANEL.PROVIDER' | translate }}</th>
-                  <th>{{ 'PANEL.ROLE' | translate }}</th>
-                  <th class="num">{{ 'PANEL.ACTIVE_COUNT' | translate }}</th>
-                  <th>
-                    <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (row of overviewRows(); track row.providerStaffId + row.panelRole) {
-                  <tr>
-                    <td>{{ row.providerName }}</td>
-                    <td>{{ roleKey(row.panelRole) | translate }}</td>
-                    <td class="num">{{ row.activeCount }}</td>
-                    <td>
-                      <!-- A real button, not a clickable row: assistive tech
-                           gets an action with a name, Space activates it. -->
-                      <button type="button" class="btn-link" (click)="openDrilldown(row)">
-                        {{ 'PANEL.VIEW' | translate }}
-                      </button>
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        }
-
-        @if (drilldownProvider(); as drill) {
-          <h3>
-            {{ 'PANEL.DRILLDOWN' | translate: { name: drill.providerName } }} —
-            {{ roleKey(drill.panelRole) | translate }}
-          </h3>
-          @if (drilldownTruncated()) {
-            <p class="hint">
-              {{
-                'PANEL.SHOWING_FIRST'
-                  | translate: { shown: drilldownRows().length, total: drilldownTotal() }
-              }}
-            </p>
-          }
-          <div class="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>{{ 'PANEL.PATIENT' | translate }}</th>
-                  <th>{{ 'PANEL.SINCE' | translate }}</th>
-                  <th>
-                    <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (row of drilldownRows(); track row.id) {
-                  <tr>
-                    <td>
-                      <a [routerLink]="['/patients', row.patientId]">{{ row.patientName }}</a>
-                    </td>
-                    <td>{{ row.assignedOn | date: 'mediumDate' }}</td>
-                    <td>
-                      <button type="button" class="btn-link danger" (click)="openEnd(row, $event)">
-                        {{ 'PANEL.END' | translate }}
-                      </button>
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        }
-      </section>
-    }
   }
 </div>
 

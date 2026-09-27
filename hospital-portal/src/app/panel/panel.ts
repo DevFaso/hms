@@ -23,8 +23,6 @@ import {
 import { StaffResponse, StaffService } from '../services/staff.service';
 import { PatientResponse } from '../services/patient.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
-import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
-import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 
@@ -45,15 +43,7 @@ import { ToastService } from '../core/toast.service';
 @Component({
   selector: 'app-panel',
   standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    RouterModule,
-    TranslateModule,
-    PatientPickerComponent,
-    HospitalScopeChipComponent,
-    HospitalScopeHintComponent,
-  ],
+  imports: [CommonModule, FormsModule, RouterModule, TranslateModule, PatientPickerComponent],
   templateUrl: './panel.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './panel.scss',
@@ -104,8 +94,6 @@ export class PanelComponent implements OnInit {
   private dialogOpener: HTMLElement | null = null;
 
   readonly pickerHospitalId = computed(() => this.roleCtx.effectiveHospitalIdForRequest());
-  /** Null in a super-admin's global view — nothing hospital-pinned can load yet. */
-  readonly scopeReady = this.roleCtx.hasHospitalScope;
   readonly isAdmin = computed(() =>
     this.roleCtx.hasAnyActiveRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']),
   );
@@ -122,28 +110,8 @@ export class PanelComponent implements OnInit {
   readonly drilldownTruncated = computed(() => this.drilldownTotal() > this.drilldownRows().length);
 
   ngOnInit(): void {
-    this.reloadForScope();
-  }
-
-  /** The chip pinned (or cleared) a hospital: all panel state belongs to the old scope. */
-  onScopeChange(_hospitalId: string | null): void {
-    this.reloadForScope();
-  }
-
-  private reloadForScope(): void {
-    this.drilldownProvider.set(null);
-    this.drilldownRows.set([]);
-    this.drilldownTotal.set(0);
-    this.overviewRows.set([]);
-    this.overviewFailed.set(false);
-    this.myPanelRows.set([]);
-    this.myPanelTotal.set(0);
-    this.noStaffProfile.set(false);
-    this.staffOptions.set([]);
-    if (!this.scopeReady()) {
-      // Global view: the backend refuses unpinned panel reads by design.
-      return;
-    }
+    // The route gate builds this page only with a hospital pinned, and
+    // rebuilds it on a scope change, so every load starts from empty state.
     this.loadMyPanel();
     if (this.isAdmin()) {
       this.loadOverview();

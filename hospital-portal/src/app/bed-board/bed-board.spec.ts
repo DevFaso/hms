@@ -176,29 +176,14 @@ describe('BedBoardComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('a super-admin in global view sees the pick-a-hospital hint and no request is made', () => {
-    // A bed board belongs to a building: nothing to fetch until one is picked.
-    roleCtx.set({ superAdmin: true, hospitalId: null });
+  it('carries no scope chip or hint of its own: the route gate owns them', () => {
+    // /bed-board is flagged requiresHospitalScope; the shell shows the one
+    // chip and keeps the page unbuilt until a hospital is pinned.
     const fixture = TestBed.createComponent(BedBoardComponent);
     fixture.detectChanges();
-    expect(boardSpy.getBoard).not.toHaveBeenCalled();
-    expect(transferSpy.getPending).not.toHaveBeenCalled();
-    expect(
-      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="scope-hint"]'),
-    ).toBeTruthy();
-  });
-
-  it('picking a hospital after landing in global view loads that board', () => {
-    roleCtx.set({ superAdmin: true, hospitalId: null });
-    const fixture = TestBed.createComponent(BedBoardComponent);
-    fixture.detectChanges();
-    expect(boardSpy.getBoard).not.toHaveBeenCalled();
-
-    // What the chip does on a pick: pin the scope, then tell the host.
-    roleCtx.scopeToHospital('h1');
-    fixture.componentInstance.onScopeChange();
-    expect(boardSpy.getBoard).toHaveBeenCalledTimes(1);
-    expect(transferSpy.getPending).toHaveBeenCalledTimes(1);
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('app-hospital-scope-chip')).toBeNull();
+    expect(el.querySelector('app-hospital-scope-hint')).toBeNull();
   });
 
   it('loads the board on init', () => {

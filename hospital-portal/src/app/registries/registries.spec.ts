@@ -104,12 +104,13 @@ describe('RegistriesComponent', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
-  it('a super-admin in global view sees the pick-a-hospital hint and no cohort is requested', () => {
-    scope.set({ superAdmin: true, hospitalId: null });
+  it('carries no scope chip or hint of its own: the route gate owns them', () => {
+    // The route is flagged requiresHospitalScope: the shell shows the one
+    // chip and builds this page only with a hospital pinned.
     fixture.detectChanges();
-    expect(registryService.registry).not.toHaveBeenCalled();
-    expect(registryService.counts).not.toHaveBeenCalled();
-    expect(root().querySelector('[data-testid="scope-hint"]')).toBeTruthy();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('app-hospital-scope-chip')).toBeNull();
+    expect(el.querySelector('app-hospital-scope-hint')).toBeNull();
   });
 
   it('loads the first page of the ACTIVE cohort of the first programme on init', () => {

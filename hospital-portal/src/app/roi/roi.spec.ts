@@ -9,7 +9,6 @@ import { RoiComponent } from './roi';
 import { RoiPage, RoiRequest, RoiService } from '../services/roi.service';
 import { PatientService } from '../services/patient.service';
 import { HospitalService } from '../services/hospital.service';
-import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 
@@ -79,7 +78,6 @@ describe('RoiComponent', () => {
       'getMyHospitalAsResponse',
     ]);
     hospitalSpy.list.and.returnValue(of([]));
-    const scopeUrlSpy = jasmine.createSpyObj('HospitalScopeUrlService', ['applyUrlScopeSync']);
 
     await TestBed.configureTestingModule({
       imports: [RoiComponent, TranslateModule.forRoot()],
@@ -91,7 +89,6 @@ describe('RoiComponent', () => {
           useValue: { search: () => of([]), lookup: () => of([]), list: () => of([]) },
         },
         { provide: HospitalService, useValue: hospitalSpy },
-        { provide: HospitalScopeUrlService, useValue: scopeUrlSpy },
         {
           provide: RoleContextService,
           useValue: {
@@ -119,11 +116,13 @@ describe('RoiComponent', () => {
     expect(component.rows().length).toBe(1);
   });
 
-  it('a global-view super-admin gets the pick-a-hospital state — no requests fired', () => {
-    scopedHospitalId.set(null);
+  it('carries no scope chip or hint of its own: the route gate owns them', () => {
+    // The route is flagged requiresHospitalScope: the shell shows the one
+    // chip and builds this page only with a hospital pinned.
     fixture.detectChanges();
-    expect(roiService.worklist).not.toHaveBeenCalled();
-    expect(component.scopeReady()).toBeFalse();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('app-hospital-scope-chip')).toBeNull();
+    expect(el.querySelector('app-hospital-scope-hint')).toBeNull();
   });
 
   it('an outage renders unavailable — never an empty queue', () => {
@@ -133,18 +132,18 @@ describe('RoiComponent', () => {
     expect(component.rows().length).toBe(0);
   });
 
-  it('unpinning the scope mid-flight drops the old hospital response — PHI never repopulates', () => {
+  it('a response landing after a scope change rebuilt the page never repopulates it — no PHI', () => {
+    // The route gate destroys and rebuilds the page on a scope change; the
+    // old instance's in-flight worklist must die with it.
     const slow = new Subject<RoiPage>();
     roiService.worklist.and.returnValue(slow.asObservable());
     fixture.detectChanges(); // init fires the PENDING load; response still in flight
 
-    scopedHospitalId.set(null); // super-admin returns to global view
-    component.onScopeChange(null);
+    fixture.destroy();
     slow.next(page([request()])); // the previous hospital's rows arrive late
     slow.complete();
 
     expect(component.rows().length).toBe(0);
-    expect(component.scopeReady()).toBeFalse();
   });
 
   it('a slow response for the previous status never overwrites the newer one', () => {

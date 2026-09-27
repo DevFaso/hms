@@ -1,4 +1,12 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -6,11 +14,7 @@ import { ToastService } from '../core/toast.service';
 import { PharmacyService, MtmReviewRequest, MtmReviewResponse } from '../services/pharmacy.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleContextService } from '../core/role-context.service';
-import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
-import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
-import { Subject, finalize, takeUntil } from 'rxjs';
-import { ActivatedRoute } from '@angular/router';
-import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
+import { finalize } from 'rxjs';
 
 /**
  * P-09: MTM (Medication Therapy Management) review screen — pharmacist-led
@@ -21,29 +25,17 @@ import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 @Component({
   selector: 'app-mtm-review',
   standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    TranslateModule,
-    EnumLabelPipe,
-    HospitalScopeChipComponent,
-    HospitalScopeHintComponent,
-  ],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './mtm-review.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './mtm-review.scss',
 })
 export class MtmReviewComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
   private readonly svc = inject(PharmacyService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
-  private readonly route = inject(ActivatedRoute);
-  private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly translate = inject(TranslateService);
-  /** See RoleContextService.hasHospitalScope: loads and write buttons wait for a pinned hospital. */
-  readonly scopeReady = this.roleContext.hasHospitalScope;
-  /** Emits on every scope change so a response for the previous hospital can never land. */
-  private readonly scopeChanged$ = new Subject<void>();
 
   reviews = signal<MtmReviewResponse[]>([]);
   loading = signal(false);
@@ -55,20 +47,12 @@ export class MtmReviewComponent implements OnInit {
   form: MtmReviewRequest = this.emptyForm();
 
   ngOnInit(): void {
-    // Read ?hospitalId= before the first load: the chip does the same in its
-    // own ngOnInit, which runs after ours, and the interceptor must see the
-    // right scope on the initial fetch (the pattern every chip host uses).
-    this.scopeUrl.applyUrlScopeSync(this.route);
-    this.loadReviews();
-  }
-
-  onScopeChange(): void {
-    this.scopeChanged$.next();
     this.loadReviews();
   }
 
   loadReviews(): void {
-    // hasHospitalScope is exactly "this is non-null": one gate, no fallback.
+    // The route gate renders this page only with a hospital pinned; the null
+    // check narrows the type and never falls back to another hospital.
     const hospitalId = this.roleContext.effectiveHospitalIdForRequest();
     if (hospitalId == null) {
       this.reviews.set([]);
@@ -79,7 +63,7 @@ export class MtmReviewComponent implements OnInit {
     this.svc
       .listMtmReviewsByHospital(hospitalId, 0, 50)
       .pipe(
-        takeUntil(this.scopeChanged$),
+        takeUntilDestroyed(this.destroyRef),
         finalize(() => this.loading.set(false)),
       )
       .subscribe({

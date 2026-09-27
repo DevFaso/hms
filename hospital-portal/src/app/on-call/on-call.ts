@@ -1,11 +1,13 @@
 import {
   Component,
+  DestroyRef,
   OnInit,
   computed,
   inject,
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -20,11 +22,7 @@ import {
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
-import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
-import { Subject, finalize, takeUntil } from 'rxjs';
-import { ActivatedRoute } from '@angular/router';
-import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
+import { finalize } from 'rxjs';
 
 /** Form model: datetime-local strings, converted to ISO with offset on submit. */
 interface OnCallFormModel {
@@ -47,30 +45,18 @@ interface OnCallFormModel {
 @Component({
   selector: 'app-on-call',
   standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    TranslateModule,
-    EnumLabelPipe,
-    HospitalScopeChipComponent,
-    HospitalScopeHintComponent,
-  ],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './on-call.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './on-call.scss',
 })
 export class OnCallComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
   private readonly onCallService = inject(OnCallService);
   private readonly staffService = inject(StaffService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly roleContext = inject(RoleContextService);
-  private readonly route = inject(ActivatedRoute);
-  private readonly scopeUrl = inject(HospitalScopeUrlService);
-  /** See RoleContextService.hasHospitalScope: loads and write buttons wait for a pinned hospital. */
-  readonly scopeReady = this.roleContext.hasHospitalScope;
-  /** Emits on every scope change so a response for the previous hospital can never land. */
-  private readonly scopeChanged$ = new Subject<void>();
 
   entries = signal<OnCallScheduleResponse[]>([]);
   loading = signal(true);
@@ -97,29 +83,10 @@ export class OnCallComponent implements OnInit {
   deleting = signal(false);
 
   ngOnInit(): void {
-    // Read ?hospitalId= before the first load: the chip does the same in its
-    // own ngOnInit, which runs after ours, and the interceptor must see the
-    // right scope on the initial fetch (the pattern every chip host uses).
-    this.scopeUrl.applyUrlScopeSync(this.route);
-    this.load();
-  }
-
-  onScopeChange(): void {
-    this.scopeChanged$.next();
-    // The form's staff and departments are cached per hospital: drop them so
-    // a super-admin pinned elsewhere is not offered the previous tenant's staff.
-    this.staffOptions.set([]);
-    this.departments.set([]);
     this.load();
   }
 
   load(): void {
-    if (!this.scopeReady()) {
-      this.entries.set([]);
-      this.error.set(null);
-      this.loading.set(false);
-      return;
-    }
     this.loading.set(true);
     this.error.set(null);
     const from = this.filterFrom
@@ -129,7 +96,7 @@ export class OnCallComponent implements OnInit {
     this.onCallService
       .list(from, to)
       .pipe(
-        takeUntil(this.scopeChanged$),
+        takeUntilDestroyed(this.destroyRef),
         finalize(() => this.loading.set(false)),
       )
       .subscribe({
