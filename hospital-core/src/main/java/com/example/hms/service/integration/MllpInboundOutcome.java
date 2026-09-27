@@ -12,6 +12,8 @@ package com.example.hms.service.integration;
  *       belongs to another hospital)</li>
  *   <li>{@link #REJECTED_INVALID}      → AE (parse failure, missing
  *       mandatory fields, etc.)</li>
+ *   <li>{@link #REJECTED_NOT_OWNER}    → AR (terminal: patients the
+ *       hospital holds, but an action only another hospital may take)</li>
  * </ul>
  *
  * <p><b>There is deliberately no cross-tenant outcome.</b> There used to
@@ -45,5 +47,18 @@ package com.example.hms.service.integration;
 public enum MllpInboundOutcome {
     ACCEPTED,
     REJECTED_NOT_FOUND,
-    REJECTED_INVALID
+    REJECTED_INVALID,
+    /**
+     * The message is well formed and names patients the receiving hospital
+     * holds, but it asks for something only another hospital may do — today,
+     * an {@code ADT^A40} whose master identity is owned (stamped) by another
+     * hospital. Terminal: AR, because resending cannot change the answer.
+     *
+     * <p>Not the cross-tenant outcome that used to exist. It may be returned
+     * only AFTER the caller has established that the receiving hospital holds
+     * a registration for every patient the message names, so it answers a
+     * question about patients the sender's hospital can already see, and
+     * says nothing about any it cannot.
+     */
+    REJECTED_NOT_OWNER
 }

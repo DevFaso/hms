@@ -47,10 +47,11 @@ import java.util.UUID;
  *   <li>{@code ADT^A40} — patient merge (Tier 2 item 41). Parsed via
  *       {@link Hl7v2MessageBuilder#parseAdtA40} (PID-3 survives, MRG-1 is
  *       retired) and applied through {@link MllpInboundMergeService}, which
- *       enforces its own cross-tenant gate because the EMPI merge service's
- *       guards read the caller's hospital from a security context this
- *       thread does not have. Never auto-creates: both identifiers must
- *       already be known to EMPI.</li>
+ *       enforces its own cross-tenant gate and then hands EMPI the receiving
+ *       hospital explicitly, because the EMPI merge service otherwise reads
+ *       the caller's hospital from a security context this thread does not
+ *       have. Never auto-creates: both identifiers must already be known to
+ *       EMPI.</li>
  *   <li>Anything else — AR (Application Reject).</li>
  * </ul>
  *
@@ -62,7 +63,10 @@ import java.util.UUID;
  * allowlisted sender cannot probe another tenant's identifier space.
  * AR is left for the transport-level refusals the dispatcher itself
  * makes — an unparseable MSH, a sender that is not allowlisted at all,
- * an unsupported message type — none of which depend on tenant data.
+ * an unsupported message type — none of which depend on tenant data, and
+ * for one terminal domain answer, {@code REJECTED_NOT_OWNER}, which an
+ * inbound service may return only after it has established that the
+ * receiving hospital holds every patient the message names.
  */
 @Component
 public class Hl7MessageDispatcher {
@@ -435,6 +439,13 @@ public class Hl7MessageDispatcher {
             case REJECTED_INVALID ->
                 Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
                     label + " invalid or missing required fields");
+            // Terminal, so AR: the message is valid and the patients are the
+            // hospital's own, and resending it cannot change the answer.
+            // Returned only after the registration gate has passed for every
+            // patient named, so it is not the cross-tenant oracle above.
+            case REJECTED_NOT_OWNER ->
+                Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AR,
+                    label + " not applied: a patient identity is owned by another hospital");
         };
     }
 }

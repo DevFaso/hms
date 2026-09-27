@@ -11,21 +11,40 @@ import com.example.hms.utility.Hl7v2MessageBuilder.ParsedMergeMessage;
  * PATIENT_MERGE audit event, and A40 was explicitly deferred. This is the
  * inbound trigger for it.
  *
- * <p><b>It is not a thin adapter, and the reason is a security one.</b> Every
- * tenant guard inside {@code EmpiServiceImpl} is written against the CALLER's
- * active hospital, resolved from the security context — and
- * {@code isVisibleToCaller} treats a null active hospital as "unscoped, allow".
- * There is no security context on an MLLP worker thread, so on this path those
- * guards pass unconditionally. Wiring A40 straight through to
- * {@code mergePatients} would hand an allowlisted sender the ability to merge
- * <em>any two patients in the system</em>: the allowlist decides which sender
- * may connect, and nothing would decide which patients they may merge.
+ * <p><b>It is not a thin adapter, and the reason is a security one.</b>
+ * {@code EmpiService.mergePatients} takes its scope from the CALLER's request
+ * context — the active hospital resolved from the security context — and an
+ * MLLP worker thread has neither authentication nor a {@code HospitalContext}.
+ * So nothing EMPI could read on this thread says which patients a sender may
+ * merge: the allowlist decides which sender may connect and at which
+ * hospital, and deciding which patients follows from that is this service's
+ * job.
  *
  * <p>So this service enforces the boundary itself, before delegating —
  * <b>both</b> patients must already be registered at the receiving hospital.
  * That is the same gate {@code MllpInboundAdtServiceImpl} applies to
  * demographic updates, and for the same reason: a sender at hospital B has no
  * business reshaping identity for a patient known only to hospital A.
+ *
+ * <p>Then ownership, which is EMPI's rule, checked here so it can be answered
+ * honestly: both master identities must be stamped with the receiving
+ * hospital. A pair that is registered here but owned elsewhere (a referred
+ * patient) is refused with a terminal AR that names the condition, because
+ * no resend can fix it. Only then does it delegate to
+ * {@code EmpiAuthorisedMergePort}, handing over the receiving hospital
+ * explicitly; EMPI re-applies the rules a caller pinned to that hospital is
+ * held to (registration there, identities stamped with it), never a global
+ * view, and a merge it refuses is answered AE and recorded as a dead letter.
+ *
+ * <p>History, because the javadoc here used to say otherwise: this path
+ * called {@code mergePatients} from #527 on, on the belief that EMPI's guards
+ * pass unconditionally without a security context. They never did —
+ * {@code RoleValidator.requireActiveHospitalId()} THROWS
+ * ({@code HOSPITAL_CONTEXT_REQUIRED}) for a caller with neither context nor
+ * authentication — so every A40 that passed this gate was refused inside EMPI,
+ * and the refusal left the shared transaction rollback-only, which turned the
+ * intended AE into a server error on commit. {@code AdtA40MergeEndToEndIT}
+ * drives the real chain and pins both halves.
  *
  * <p>Merges are never auto-created from unknown identifiers. Both sides must
  * already exist in EMPI; an unrecognised MRN is rejected, not provisioned.

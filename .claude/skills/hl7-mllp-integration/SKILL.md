@@ -23,11 +23,15 @@ load-bearing for **all** inbound HL7 work — follow it.
 4. **Parse domain segments** — `Hl7v2MessageBuilder.parseOruR01` /
    `parseAdtMessage`. Unparseable → record FAILED + return AE.
 5. **Call inbound service** — `MllpInbound{Lab,Adt,Merge}Service`. Map
-   outcome to ACK: `ACCEPTED → AA`, `REJECTED_NOT_FOUND/INVALID → AE`.
-   There is no third mapping. `AR` belongs to the dispatcher's own
-   transport-level refusals (bad MSH, sender not allowlisted, unsupported
-   type) and to nothing a domain handler returns — see **Cross-tenant
-   gate**.
+   outcome to ACK: `ACCEPTED → AA`, `REJECTED_NOT_FOUND/INVALID → AE`,
+   `REJECTED_NOT_OWNER → AR`. `AR` otherwise belongs to the dispatcher's
+   own transport-level refusals (bad MSH, sender not allowlisted,
+   unsupported type). `REJECTED_NOT_OWNER` is the one terminal domain
+   answer, and a handler may return it ONLY after it has established that
+   the receiving hospital holds a registration for every patient the
+   message names (today: an A40 whose master identity another hospital
+   owns). Before that point every refusal is `REJECTED_NOT_FOUND` — see
+   **Cross-tenant gate**. Never use it to say "not yours".
 
 ## Idempotency rules (MSH-10)
 
@@ -107,10 +111,23 @@ feed stops — it is the newest row for its correlation id, so it stays
 counted until an operator resolves it.
 
 The gate lives in the inbound services rather than in `EmpiServiceImpl`
-because there is **no security context on an MLLP worker thread**: every
-guard that resolves the caller's hospital from it reads a null active
-hospital as "unscoped, allow". Do not add anything on this path that reads
-the security context.
+because there is **no security context on an MLLP worker thread**, so no
+request-scoped guard can decide anything there. Do not assume such a guard
+"passes" without one: `RoleValidator.requireActiveHospitalId()` THROWS
+`HOSPITAL_CONTEXT_REQUIRED` for a caller with neither context nor
+authentication, and `TenantAwareJpaRepository.findById` answers empty for a
+`TenantScoped` entity. That is how every inbound A40 was refused from #527
+until the fix that added `EmpiAuthorisedMergePort` (a narrow type only the A40 path may inject):
+the MLLP path hands EMPI the hospital it already established (allowlist) and
+authorised (the gate), and EMPI holds the merge to a pinned caller's rules at
+it. Do the same for any new worker-thread path — pass the scope explicitly,
+never fabricate a security context, and prove it with a test that runs the
+REAL downstream service on a thread with no context
+(`AdtA40MergeEndToEndIT`); a mocked `EmpiService` cannot see this class of
+bug. And when a domain call inside the handler's transaction can throw, mark
+the transaction rollback-only yourself before returning the refusal, or the
+commit throws `UnexpectedRollbackException` and the sender gets the
+server-error AE instead of yours.
 
 ## Field widths
 
