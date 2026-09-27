@@ -5,6 +5,7 @@ import com.example.hms.model.BirthPlan;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
+import com.example.hms.model.PatientInsurance;
 import com.example.hms.model.RefillRequest;
 import com.example.hms.model.Role;
 import com.example.hms.model.User;
@@ -13,6 +14,7 @@ import com.example.hms.repository.BirthPlanRepository;
 import com.example.hms.repository.HighRiskPregnancyCarePlanRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
+import com.example.hms.repository.PatientInsuranceRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.RefillRequestRepository;
 import com.example.hms.repository.RoleRepository;
@@ -86,6 +88,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * booking, portal refill) or 400 (high-risk plan) beside a 404 — so a patient
  * could learn which ids exist. Each now answers the foreign row exactly as the
  * missing one: same status, same message once the id is masked, same path.
+ * PatientInsurance also used to refuse a Keycloak patient their OWN insurance
+ * ({@code RoleValidator.getCurrentUserId()} is null on this token).
  *
  * <p>People (users, patients, registrations) are real rows so the ownership
  * checks and the hospital filter run for real; the clinical rows are mocked
@@ -109,6 +113,7 @@ class PatientExistenceOracleSecurityIT extends BaseIT {
 
     @MockitoBean private BirthPlanRepository birthPlanRepository;
     @MockitoBean private HighRiskPregnancyCarePlanRepository carePlanRepository;
+    @MockitoBean private PatientInsuranceRepository insuranceRepository;
     @MockitoBean private RefillRequestRepository refillRequestRepository;
 
     private final AtomicInteger sequence = new AtomicInteger();
@@ -180,6 +185,28 @@ class PatientExistenceOracleSecurityIT extends BaseIT {
         assertSame(refused, missing, planId, planId);
     }
 
+    // ── patient insurance (and item 4: a Keycloak patient reads their own) ──
+
+    @Test
+    @DisplayName("a Keycloak patient lists their own insurance; another patient's id answers as an unknown one")
+    void insurance() throws Exception {
+        when(insuranceRepository.findByPatient_Id(caller.getId())).thenReturn(List.of(insuranceOf(caller)));
+        MvcResult own = send(get("/patient-insurances/patient/{pid}", caller.getId()));
+        assertThat(own.getResponse().getStatus()).as(own.getResponse().getContentAsString()).isEqualTo(200);
+        assertThat(objectMapper.readTree(own.getResponse().getContentAsString())).hasSize(1);
+
+        UUID unknown = UUID.randomUUID();
+        assertSame(send(get("/patient-insurances/patient/{pid}", stranger.getId())),
+            send(get("/patient-insurances/patient/{pid}", unknown)), stranger.getId(), unknown);
+        verify(insuranceRepository, never()).findByPatient_Id(stranger.getId());
+
+        UUID insuranceId = UUID.randomUUID();
+        when(insuranceRepository.findById(insuranceId)).thenReturn(Optional.of(insuranceOf(stranger)));
+        MvcResult refused = send(get("/patient-insurances/{id}", insuranceId));
+        when(insuranceRepository.findById(insuranceId)).thenReturn(Optional.empty());
+        assertSame(refused, send(get("/patient-insurances/{id}", insuranceId)), insuranceId, insuranceId);
+    }
+
     // ── booking ────────────────────────────────────────────────────────────
 
     @Test
@@ -236,6 +263,15 @@ class PatientExistenceOracleSecurityIT extends BaseIT {
             "hospitalId", hospital.getId(),
             "appointmentDate", LocalDate.now().plusDays(3).toString(),
             "startTime", "10:00:00"));
+    }
+
+    private static PatientInsurance insuranceOf(Patient patient) {
+        PatientInsurance insurance = new PatientInsurance();
+        insurance.setId(UUID.randomUUID());
+        insurance.setPatient(patient);
+        insurance.setPayerCode("AETNA");
+        insurance.setPolicyNumber("POL-1");
+        return insurance;
     }
 
     private User patientUser(Role patientRole) {

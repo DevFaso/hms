@@ -140,6 +140,24 @@ public class PatientSubjectReadGuard {
         return ReaderRolePredicates.holdsPatientRole(SecurityContextHolder.getContext().getAuthentication());
     }
 
+    /**
+     * Is the patient row with this id the current caller's own? For a service
+     * that must decide ownership by id before loading the row (so a refused
+     * id and an unknown one answer alike).
+     */
+    public boolean ownsPatientRow(UUID subjectPatientId) {
+        return ownsPatientId(subjectPatientId);
+    }
+
+    /**
+     * The current caller's HMS user id on either login path (the
+     * {@code appUserId} claim on a Keycloak token), empty when it cannot be
+     * resolved.
+     */
+    public java.util.Optional<UUID> callerUserId() {
+        return authUtils.resolveUserId(SecurityContextHolder.getContext().getAuthentication());
+    }
+
     private boolean ownsPatientId(UUID subjectPatientId) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         UUID callerUserId = authUtils.resolveUserId(auth).orElse(null);
