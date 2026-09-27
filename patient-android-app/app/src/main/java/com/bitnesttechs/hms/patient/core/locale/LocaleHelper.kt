@@ -11,7 +11,7 @@ object LocaleHelper {
     private const val KEY_LANGUAGE = "selected_language"
 
     /** Supported language codes */
-    val supportedLanguages = listOf("en", "fr")
+    val supportedLanguages = listOf("en", "fr", "es")
 
     fun getLanguage(context: Context): String {
         val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
@@ -36,20 +36,25 @@ object LocaleHelper {
     fun getDisplayName(languageCode: String): String {
         return when (languageCode) {
             "fr" -> "Français"
+            "es" -> "Español"
             else -> "English"
         }
     }
 
     fun translateProviderDescriptor(context: Context, value: String?): String? {
         val raw = value?.takeIf { it.isNotBlank() } ?: return null
-        if (getLanguage(context) != "fr") return raw
+        val descriptors = when (getLanguage(context)) {
+            "fr" -> frenchProviderDescriptors
+            "es" -> spanishProviderDescriptors
+            else -> return raw
+        }
 
         val key = raw.trim()
             .uppercase(Locale.ROOT)
             .replace(Regex("[^A-Z0-9]+"), "_")
             .trim('_')
 
-        return frenchProviderDescriptors[key] ?: raw
+        return descriptors[key] ?: raw
     }
 
     fun applyLocale(context: Context): Context {
@@ -104,5 +109,49 @@ object LocaleHelper {
         "SURGERY" to "Chirurgie",
         "GENERAL_SURGERY" to "Chirurgie générale",
         "DENTISTRY" to "Dentisterie"
+    )
+
+    private val spanishProviderDescriptors = mapOf(
+        "DOCTOR" to "Médico",
+        "PHYSICIAN" to "Médico",
+        "PRIMARY_PHYSICIAN" to "Médico de cabecera",
+        "NURSE" to "Enfermero(a)",
+        "SPECIALIST" to "Especialista",
+        "SPECIALTY" to "Especialidad",
+        "SPECIALITY" to "Especialidad",
+        "PROVIDER" to "Profesional",
+        "GENERAL_MEDICINE" to "Medicina general",
+        "FAMILY_MEDICINE" to "Medicina familiar",
+        "INTERNAL_MEDICINE" to "Medicina interna",
+        "CARDIOLOGY" to "Cardiología",
+        "DERMATOLOGY" to "Dermatología",
+        "PEDIATRICS" to "Pediatría",
+        "OBSTETRICS_GYNECOLOGY" to "Ginecología y obstetricia",
+        "OBSTETRICS_AND_GYNECOLOGY" to "Ginecología y obstetricia",
+        "GYNECOLOGY" to "Ginecología",
+        "ORTHOPEDICS" to "Ortopedia",
+        "ORTHOPAEDICS" to "Ortopedia",
+        "NEUROLOGY" to "Neurología",
+        "PSYCHIATRY" to "Psiquiatría",
+        "RADIOLOGY" to "Radiología",
+        "ANESTHESIOLOGY" to "Anestesiología",
+        "EMERGENCY_MEDICINE" to "Medicina de urgencias",
+        "ONCOLOGY" to "Oncología",
+        "OPHTHALMOLOGY" to "Oftalmología",
+        "ENT" to "ORL",
+        "OTOLARYNGOLOGY" to "Otorrinolaringología (ORL)",
+        "UROLOGY" to "Urología",
+        "NEPHROLOGY" to "Nefrología",
+        "GASTROENTEROLOGY" to "Gastroenterología",
+        "ENDOCRINOLOGY" to "Endocrinología",
+        "PULMONOLOGY" to "Neumología",
+        "RESPIRATORY_MEDICINE" to "Neumología",
+        "RHEUMATOLOGY" to "Reumatología",
+        "HEMATOLOGY" to "Hematología",
+        "INFECTIOUS_DISEASE" to "Enfermedades infecciosas",
+        "PATHOLOGY" to "Anatomía patológica",
+        "SURGERY" to "Cirugía",
+        "GENERAL_SURGERY" to "Cirugía general",
+        "DENTISTRY" to "Odontología"
     )
 }

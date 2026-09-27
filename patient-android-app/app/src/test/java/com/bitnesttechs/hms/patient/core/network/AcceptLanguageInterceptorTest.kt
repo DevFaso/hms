@@ -15,6 +15,7 @@ class AcceptLanguageInterceptorTest {
     @Test
     fun `sends the app language on every request`() {
         assertEquals("fr", sentLanguage("fr"))
+        assertEquals("es", sentLanguage("es"))
         assertEquals("en", sentLanguage("en"))
     }
 

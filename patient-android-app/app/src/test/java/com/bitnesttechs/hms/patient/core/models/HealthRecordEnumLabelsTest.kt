@@ -17,7 +17,7 @@ import org.junit.Test
  */
 class HealthRecordEnumLabelsTest {
 
-    private val locales = listOf("values", "values-fr")
+    private val locales = listOf("values", "values-fr", "values-es")
     private val strings = locales.associateWith { StringsXml.read(it) }
 
     private fun <T : Enum<T>> assertEveryConstantLabelled(entries: List<T>, prefix: String, labelRes: (T) -> Int) {
@@ -65,6 +65,9 @@ class HealthRecordEnumLabelsTest {
         assertEquals("Acknowledged", en["referral_status_acknowledged"])
         assertEquals("Confirmée", fr["referral_status_acknowledged"])
         assertEquals("Transfert d'urgence", fr["referral_type_emergency_transfer"])
+        val es = strings.getValue("values-es")
+        assertEquals("Revisiones requeridas", es["tp_status_revisions_required"])
+        assertEquals("Confirmada", es["referral_status_acknowledged"])
     }
 
     @Test
