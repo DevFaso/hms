@@ -25,6 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
@@ -46,6 +47,8 @@ public class PatientRecallServiceImpl implements PatientRecallService {
     private final StaffRepository staffRepository;
     private final AppointmentRepository appointmentRepository;
     private final RoleValidator roleValidator;
+    /** Same clock as {@code RecallReminderService}'s notice window (TimeConfig). */
+    private final Clock clock;
 
     @Override
     @Transactional
@@ -138,7 +141,7 @@ public class PatientRecallServiceImpl implements PatientRecallService {
 
     private PatientRecall finish(PatientRecall recall, RecallStatus status) {
         recall.setStatus(status);
-        recall.setClosedAt(LocalDateTime.now());
+        recall.setClosedAt(LocalDateTime.now(clock));
         recall.setClosedByUserId(roleValidator.getCurrentUserId());
         return recallRepository.save(recall);
     }

@@ -27,6 +27,7 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.scheduling.PatientRecallRepository;
 import com.example.hms.utility.RoleValidator;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -60,7 +61,7 @@ class PatientRecallServiceImplTest {
     void setUp() {
         service = new PatientRecallServiceImpl(recallRepository, patientRepository,
             hospitalRepository, departmentRepository, staffRepository,
-            appointmentRepository, roleValidator);
+            appointmentRepository, roleValidator, Clock.systemDefaultZone());
 
         hospitalId = UUID.randomUUID();
         hospital = new Hospital();
