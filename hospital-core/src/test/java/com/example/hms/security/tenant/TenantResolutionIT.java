@@ -228,6 +228,54 @@ class TenantResolutionIT {
     }
 
     @Test
+    @DisplayName("a revoked selection is ignored (and audited) on the scope-establishing paths, refused on data paths")
+    void revokedSelectionCanStillReestablishTheScope() {
+        User user = saveUser("rechoose");
+        UserRoleHospitalAssignment atA = assign(user, doctor, hospitalA, true);
+        assign(user, doctor, hospitalB, true);
+        String token = legacyToken(user, "ROLE_DOCTOR");
+        atA.setActive(false);
+        assignmentRepository.save(atA);
+        String stale = hospitalA.getId().toString();
+
+        ResponseEntity<String> bootstrap = get("/auth/session/bootstrap", token, stale);
+        assertThat(bootstrap.getStatusCode().value()).as(bootstrap.getBody()).isEqualTo(200);
+        assertThat(bootstrap.getBody()).as("the scope the portal re-chooses from")
+            .contains(hospitalB.getId().toString()).doesNotContain(stale);
+        ResponseEntity<String> assignmentsNow = get("/me/assignments", token, stale);
+        assertThat(assignmentsNow.getStatusCode().value()).as(assignmentsNow.getBody()).isEqualTo(200);
+        ResponseEntity<String> refresh = send(HttpMethod.POST, "/auth/token/refresh", "{}", token, stale);
+        assertThat(refresh.getBody()).as("refresh is not a scope refusal").doesNotContain("hospital_scope_refused");
+        ResponseEntity<String> logout = send(HttpMethod.POST, "/auth/logout", "{}", token, stale);
+        assertThat(logout.getStatusCode().is2xxSuccessful()).as(logout.getBody()).isTrue();
+
+        ResponseEntity<String> data = get(ME_HOSPITAL, legacyToken(user, "ROLE_DOCTOR"), stale);
+        assertThat(data.getStatusCode().value()).as("a data path still refuses it").isEqualTo(403);
+        assertThat(data.getBody()).contains("NO_LONGER_PERMITTED");
+        assertThat(auditEventLogRepository.findAll()).as("the ignored header is still audited (deduplicated hourly)")
+            .anyMatch(row -> row.getEventDescription() != null
+                && row.getEventDescription().startsWith("Hospital scope refused"));
+    }
+
+    @Test
+    @DisplayName("Keycloak: a revoked selection does not block the session bootstrap either")
+    void keycloakRevokedSelectionCanStillBootstrap() {
+        User user = saveUser("kc-rechoose");
+        UserRoleHospitalAssignment atA = assign(user, doctor, hospitalA, true);
+        assign(user, doctor, hospitalB, true);
+        atA.setActive(false);
+        assignmentRepository.save(atA);
+        idleSessionTracker.touch(user.getId());
+        String token = keycloak.mintToken(KeycloakJwtFixture.TokenSpec.defaults(TEST_ISSUER, OidcTestConfig.AUDIENCE)
+            .withRealmRoles(List.of("DOCTOR"))
+            .linkedTo(user.getId(), user.getUsername()));
+        String stale = hospitalA.getId().toString();
+
+        assertThat(get("/me/assignments", token, stale).getStatusCode().value()).isEqualTo(200);
+        assertThat(get(ME_HOSPITAL, token, stale).getStatusCode().value()).isEqualTo(403);
+    }
+
+    @Test
     @DisplayName("a demoted super-admin's token no longer passes a SUPER_ADMIN guard (Q10 A)")
     void demotedSuperAdmin() {
         User root = saveUser("demoted");
@@ -323,7 +371,15 @@ class TenantResolutionIT {
 
     /** A write: the double-submit CSRF cookie and header the portal sends. */
     private ResponseEntity<String> send(HttpMethod method, String path, String body, String bearer) {
+        return send(method, path, body, bearer, null);
+    }
+
+    private ResponseEntity<String> send(HttpMethod method, String path, String body, String bearer,
+                                        String hospitalHeader) {
         HttpHeaders headers = new HttpHeaders();
+        if (hospitalHeader != null) {
+            headers.set(HOSPITAL_HEADER, hospitalHeader);
+        }
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
         headers.setBearerAuth(bearer);

@@ -106,6 +106,41 @@ class ActingScopeResolverTest {
     }
 
     @Nested
+    @DisplayName("scope-establishing paths ignore a refused header instead of refusing the request")
+    class ScopeEstablishing {
+
+        private HospitalContext onPath(String uri, String header, TenantRoleAssignment... held) {
+            when(accessor.findAssignmentsForUser(USER)).thenReturn(List.of(held));
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api" + uri);
+            request.setContextPath("/api");
+            request.addHeader("X-Hospital-Id", header);
+            return resolver.withHeader(resolver.liveContext(USER, "someone"), request);
+        }
+
+        @Test
+        @DisplayName("each named path answers on the live scope, and the refusal is still audited")
+        void ignoredAndAudited() {
+            when(repository.existsByUserIdAndHospitalIdAndActiveFalse(USER, B)).thenReturn(true);
+            for (String path : ActingScopeResolver.SCOPE_ESTABLISHING_PATHS) {
+                HospitalContext context = onPath(path, B.toString(), at(A, "ROLE_DOCTOR"));
+                assertThat(ActingScopeResolver.isRefusedHeader(context)).as(path).isFalse();
+                assertThat(context.pinnedHospitalId()).as(path).isEqualTo(A);
+            }
+            verify(audit, org.mockito.Mockito.times(ActingScopeResolver.SCOPE_ESTABLISHING_PATHS.size()))
+                .recordRefusal(USER, "someone", B, ActingScope.Reason.NO_LONGER_PERMITTED, ActingScope.Source.HEADER);
+        }
+
+        @Test
+        @DisplayName("a data path, or a path that only starts like one, still carries the refusal")
+        void dataPathsStillRefuse() {
+            assertThat(ActingScopeResolver.isRefusedHeader(onPath("/me/hospital", B.toString(), at(A, "ROLE_DOCTOR"))))
+                .isTrue();
+            assertThat(ActingScopeResolver.isRefusedHeader(
+                onPath("/me/assignments/other", B.toString(), at(A, "ROLE_DOCTOR")))).isTrue();
+        }
+    }
+
+    @Nested
     @DisplayName("the active organisation follows the acting hospital (policies, plan gating; never a read scope)")
     class ActiveOrganization {
 

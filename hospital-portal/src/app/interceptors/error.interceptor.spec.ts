@@ -40,7 +40,7 @@ describe('errorInterceptor', () => {
     router.navigate.and.resolveTo(true);
     impersonation = jasmine.createSpyObj('ImpersonationService', ['isActive', 'forceStop']);
     impersonation.isActive.and.returnValue(false);
-    sessionScope = jasmine.createSpyObj('SessionScopeService', ['hydrate']);
+    sessionScope = jasmine.createSpyObj('SessionScopeService', ['hydrate', 'forgetHospital']);
     sessionScope.hydrate.and.returnValue(of(null));
 
     TestBed.configureTestingModule({

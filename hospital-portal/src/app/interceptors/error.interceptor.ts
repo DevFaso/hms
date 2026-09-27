@@ -106,7 +106,13 @@ function hospitalScopeRefusal(error: HttpErrorResponse): string | null {
 /** One re-bootstrap at a time: every request in flight carries the same stale chip. */
 let rebootstrappingScope = false;
 
-function rebootstrapScope(sessionScope: SessionScopeService): void {
+function rebootstrapScope(
+  sessionScope: SessionScopeService,
+  refusedHospitalId: string | null,
+): void {
+  // Forget the refused hospital first: if the bootstrap cannot be reached the
+  // stored profile stands in, and it must not bring the stale chip back.
+  sessionScope.forgetHospital(refusedHospitalId);
   if (rebootstrappingScope) return;
   rebootstrappingScope = true;
   sessionScope.hydrate().subscribe({
@@ -232,7 +238,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         // A refused hospital scope is the page's to report, not a forbidden
         // page; a stale chip is corrected by re-reading the scope.
         if (hospitalScopeRefusal(error) === 'NO_LONGER_PERMITTED') {
-          rebootstrapScope(sessionScope);
+          rebootstrapScope(sessionScope, req.headers.get('X-Hospital-Id'));
         }
       } else if (error.status === 403) {
         // Never redirect (or re-report) when the audit sink itself is forbidden.

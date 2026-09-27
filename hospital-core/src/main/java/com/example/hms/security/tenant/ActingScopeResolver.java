@@ -187,10 +187,47 @@ public class ActingScopeResolver {
         if (applied.getScopeRefusal() == ActingScope.Reason.NOT_PERMITTED) {
             ActingScope.Reason reason = classifyRefusal(applied.getPrincipalUserId(), applied.getRefusedHospitalId());
             if (reason != ActingScope.Reason.NOT_PERMITTED) {
-                return applied.toBuilder().scopeRefusal(reason).build();
+                applied = applied.toBuilder().scopeRefusal(reason).build();
             }
         }
+        if (isRefusedHeader(applied) && isScopeEstablishing(request)) {
+            // The client is asking which hospitals it may choose (or leaving):
+            // a stale selection must not lock it out of the very call that
+            // replaces it. The refusal is still recorded; the header is
+            // ignored and the request runs on the live scope alone.
+            auditRefusedHeader(applied);
+            return live;
+        }
         return applied;
+    }
+
+    /**
+     * Paths a client needs in order to (re)establish its hospital scope, or to
+     * leave: an {@code X-Hospital-Id} the caller may no longer use is IGNORED
+     * there (and audited) instead of refused, so a revoked selection cannot
+     * lock the portal out of its own recovery. Relative to the servlet
+     * context ({@code /api}). Everything else refuses a refused header (403).
+     */
+    public static final Set<String> SCOPE_ESTABLISHING_PATHS = Set.of(
+        "/auth/session/bootstrap",
+        "/auth/logout",
+        "/auth/token/refresh",
+        "/me/assignments");
+
+    /** True when {@code request} targets one of {@link #SCOPE_ESTABLISHING_PATHS}. */
+    public static boolean isScopeEstablishing(HttpServletRequest request) {
+        if (request == null || request.getRequestURI() == null) {
+            return false;
+        }
+        String path = request.getRequestURI();
+        String context = request.getContextPath();
+        if (context != null && !context.isEmpty() && path.startsWith(context)) {
+            path = path.substring(context.length());
+        }
+        if (path.length() > 1 && path.endsWith("/")) {
+            path = path.substring(0, path.length() - 1);
+        }
+        return SCOPE_ESTABLISHING_PATHS.contains(path);
     }
 
     /**
