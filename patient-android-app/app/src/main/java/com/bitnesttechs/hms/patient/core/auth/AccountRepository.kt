@@ -23,7 +23,10 @@ sealed class AccountResult {
  * address or a token exists.
  */
 @Singleton
-class AccountRepository @Inject constructor(private val api: ApiService) {
+class AccountRepository @Inject constructor(
+    private val api: ApiService,
+    private val tokenStorage: TokenStorage
+) {
 
     /** POST /auth/password/request: 204 whatever the address, so any HTTP answer is "sent". */
     suspend fun requestPasswordReset(email: String): AccountResult = call {
@@ -38,7 +41,13 @@ class AccountRepository @Inject constructor(private val api: ApiService) {
      */
     suspend fun confirmPasswordReset(token: String, newPassword: String): AccountResult = call {
         val response = api.confirmPasswordReset(PasswordResetConfirm(token.trim(), newPassword))
-        if (response.isSuccessful) AccountResult.Done
+        if (response.isSuccessful) {
+            // The password saved for biometric sign-in is the old one now (the
+            // backend answers 204 whether or not the token was valid, so this
+            // cannot tell; forgetting it only costs one typed sign-in).
+            tokenStorage.clearCredentials()
+            AccountResult.Done
+        }
         else AccountResult.Failed(R.string.reset_failed, ServerMessage.parse(response.errorBody()?.string()))
     }
 
@@ -58,7 +67,13 @@ class AccountRepository @Inject constructor(private val api: ApiService) {
     suspend fun changePassword(current: String, new: String): AccountResult = call {
         val response = api.changePassword(ChangePasswordRequest(current, new))
         when {
-            response.isSuccessful -> AccountResult.Done
+            response.isSuccessful -> {
+                // Keep biometric sign-in working: it replays the saved password.
+                if (tokenStorage.savedUsername != null && tokenStorage.savedPassword != null) {
+                    tokenStorage.savedPassword = new
+                }
+                AccountResult.Done
+            }
             response.code() == 401 -> AccountResult.Failed(R.string.change_password_wrong_current)
             else -> AccountResult.Failed(
                 R.string.change_password_failed,

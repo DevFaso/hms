@@ -43,7 +43,8 @@ class AccountFlowsTest {
     @After fun tearDown() = Dispatchers.resetMain()
 
     private val api = mockk<ApiService>()
-    private val accounts = AccountRepository(api)
+    private val tokenStorage = mockk<com.bitnesttechs.hms.patient.core.auth.TokenStorage>(relaxed = true)
+    private val accounts = AccountRepository(api, tokenStorage)
     private fun json(code: Int, body: String = "{}") =
         Response.error<Unit>(code, body.toResponseBody("application/json".toMediaType()))
 
@@ -170,6 +171,42 @@ class AccountFlowsTest {
         coVerify { api.changePassword(ChangePasswordRequest("old-passw0rd", "new-passw0rd")) }
         assertTrue(vm.state.value.done)
         assertEquals("", vm.state.value.current)
+    }
+
+    @Test
+    fun `a changed password replaces the one saved for biometric sign-in`() = runTest {
+        every { tokenStorage.savedUsername } returns "awa"
+        every { tokenStorage.savedPassword } returns "old-passw0rd"
+        coEvery { api.changePassword(any()) } returns Response.success(Unit)
+        changeVm("old-passw0rd", "new-passw0rd").submit()
+        io.mockk.verify { tokenStorage.savedPassword = "new-passw0rd" }
+    }
+
+    @Test
+    fun `no saved credentials means nothing is saved by a password change`() = runTest {
+        every { tokenStorage.savedUsername } returns null
+        every { tokenStorage.savedPassword } returns null
+        coEvery { api.changePassword(any()) } returns Response.success(Unit)
+        changeVm("old-passw0rd", "new-passw0rd").submit()
+        io.mockk.verify(exactly = 0) { tokenStorage.savedPassword = any() }
+    }
+
+    @Test
+    fun `a refused password change keeps the saved password`() = runTest {
+        every { tokenStorage.savedUsername } returns "awa"
+        every { tokenStorage.savedPassword } returns "old-passw0rd"
+        coEvery { api.changePassword(any()) } returns json(401)
+        changeVm("old-passw0rd", "new-passw0rd").submit()
+        io.mockk.verify(exactly = 0) { tokenStorage.savedPassword = any() }
+    }
+
+    @Test
+    fun `a password reset forgets the credentials saved for biometric sign-in`() = runTest {
+        coEvery { api.confirmPasswordReset(any()) } returns Response.success(204, Unit)
+        ForgotPasswordViewModel(accounts).apply {
+            onCode("tok"); onNewPassword("n3w-passw0rd"); onConfirmPassword("n3w-passw0rd"); confirm()
+        }
+        io.mockk.verify(exactly = 1) { tokenStorage.clearCredentials() }
     }
 
     @Test
