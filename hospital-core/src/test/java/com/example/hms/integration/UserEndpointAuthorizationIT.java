@@ -8,6 +8,7 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.model.AuditEventLog;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
+import com.example.hms.model.PatientPrimaryCare;
 import com.example.hms.model.Role;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
@@ -15,6 +16,7 @@ import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
+import com.example.hms.repository.PatientPrimaryCareRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.StaffRepository;
@@ -97,6 +99,7 @@ class UserEndpointAuthorizationIT extends BaseIT {
     @Autowired private PatientRepository patientRepository;
     @Autowired private AuditEventLogRepository auditEventLogRepository;
     @Autowired private PatientHospitalRegistrationRepository registrationRepository;
+    @Autowired private PatientPrimaryCareRepository primaryCareRepository;
     @Autowired private StaffRepository staffRepository;
     @Autowired private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
@@ -138,6 +141,7 @@ class UserEndpointAuthorizationIT extends BaseIT {
         auditEventLogRepository.deleteAllInBatch();
         for (UUID patientId : createdPatients) {
             registrationRepository.deleteAll(registrationRepository.findByPatientId(patientId));
+            primaryCareRepository.deleteAll(primaryCareRepository.findByPatient_IdOrderByStartDateDesc(patientId));
         }
         patientRepository.deleteAllById(createdPatients);
         // Includes accounts admin-register made during a test.
@@ -196,6 +200,42 @@ class UserEndpointAuthorizationIT extends BaseIT {
             assertThat(status(get("/users"), patient, null)).isEqualTo(403);
             assertThat(status(get("/users/search").param("name", "a"), patient, null)).isEqualTo(403);
         }
+    }
+
+    @Test
+    @DisplayName("the patient chat picker's sources answer the patient /users refuses, with an addressable user id")
+    void patientChatPickerSourcesStayOpen() throws Exception {
+        // The portal's new-conversation picker, for a patient, reads the care
+        // team and the appointments instead of the directory (#776 closed it).
+        // Registered, as every portal patient is: without a registration row
+        // /me/patient/appointments answered 404 "Patient not found" here.
+        Patient record = patientRow(patientA);
+        registrationRepository.save(PatientHospitalRegistration.builder()
+            .patient(record)
+            .hospital(hospitalA)
+            .mrn("MRN-A-" + next())
+            .registrationDate(LocalDate.now())
+            .active(true)
+            .build());
+        User doctorA = account("docA", "ROLE_DOCTOR", hospitalA);
+        primaryCareRepository.save(PatientPrimaryCare.builder()
+            .patient(record)
+            .hospital(hospitalA)
+            .assignment(assignmentRepository.findByUserId(doctorA.getId()).get(0))
+            .startDate(LocalDate.now())
+            .current(true)
+            .build());
+        String patient = hms(patientA, "ROLE_PATIENT");
+
+        assertThat(status(get("/users"), patient, null)).isEqualTo(403);
+        MvcResult careTeam = perform(get("/me/patient/care-team"), patient, null);
+        assertThat(careTeam.getResponse().getStatus()).isEqualTo(200);
+        // The chat send API addresses a USER id: the entry carries it.
+        assertThat(objectMapper.readTree(careTeam.getResponse().getContentAsString())
+            .at("/data/primaryCare/doctorUserId").asText()).isEqualTo(doctorA.getId().toString());
+        MvcResult appointments = perform(get("/me/patient/appointments"), patient, null);
+        assertThat(appointments.getResponse().getStatus())
+            .as(appointments.getResponse().getContentAsString()).isEqualTo(200);
     }
 
     @Test

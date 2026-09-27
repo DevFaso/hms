@@ -249,6 +249,8 @@ interface AppointmentApiResponse {
   startTime: string;
   endTime: string;
   staffName: string;
+  /** The clinician's USER id — what the chat send API addresses. */
+  staffUserId?: string | null;
   departmentName: string;
   reason: string;
   status: string;
@@ -413,6 +415,46 @@ export interface CareTeamMember {
 
 export interface CareTeamDTO {
   members: CareTeamMember[];
+}
+
+/**
+ * One primary-care link as `GET /me/patient/care-team` really sends it
+ * (backend `CareTeamDTO.PrimaryCareEntry`). {@link CareTeamDTO} above is the
+ * shape `my-care-team` expects and the endpoint has never sent.
+ */
+interface PrimaryCareEntryApi {
+  id: string;
+  hospitalName?: string | null;
+  doctorUserId?: string | null;
+  doctorDisplay?: string | null;
+  current?: boolean;
+}
+
+/** Raw `GET /me/patient/care-team` payload (backend `CareTeamDTO`). */
+interface CareTeamApiResponse {
+  primaryCare?: PrimaryCareEntryApi | null;
+  primaryCareHistory?: PrimaryCareEntryApi[] | null;
+}
+
+/** A clinician a patient can address a chat message to. */
+export interface MessageableClinician {
+  /** The clinician's user id — the chat send API's `recipientId`. */
+  userId: string;
+  name: string;
+  hospitalName: string | null;
+}
+
+/**
+ * Keeps only entries that can address a message (a user id and a name),
+ * first occurrence wins, so the order of the input is the order shown.
+ */
+function distinctClinicians(list: MessageableClinician[]): MessageableClinician[] {
+  const seen = new Set<string>();
+  return list.filter((c) => {
+    if (!c.userId || !c.name.trim() || seen.has(c.userId)) return false;
+    seen.add(c.userId);
+    return true;
+  });
 }
 
 export interface PortalPrescription {
@@ -1008,6 +1050,49 @@ export class PatientPortalService {
     return this.http.get<ApiWrapper<CareTeamDTO>>(`${this.base}/care-team`).pipe(
       map((r) => r.data),
       catchError(() => of({ members: [] })),
+    );
+  }
+
+  /**
+   * The patient's primary-care providers, current first, as chat recipients.
+   * Errors propagate: the chat picker has to tell "you have no care team"
+   * from "the care team could not be loaded".
+   */
+  getMyCareTeamClinicians(): Observable<MessageableClinician[]> {
+    return this.http.get<ApiWrapper<CareTeamApiResponse>>(`${this.base}/care-team`).pipe(
+      map((r) => {
+        const team = r.data;
+        const entries = [
+          ...(team?.primaryCare ? [team.primaryCare] : []),
+          ...(team?.primaryCareHistory ?? []),
+        ];
+        return distinctClinicians(
+          entries.map((e) => ({
+            userId: e.doctorUserId ?? '',
+            name: e.doctorDisplay ?? '',
+            hospitalName: e.hospitalName ?? null,
+          })),
+        );
+      }),
+    );
+  }
+
+  /**
+   * The clinicians of the patient's appointments, as chat recipients — what
+   * the native apps offer when starting a conversation. Errors propagate, as
+   * for {@link getMyCareTeamClinicians}.
+   */
+  getMyAppointmentClinicians(): Observable<MessageableClinician[]> {
+    return this.http.get<ApiWrapper<AppointmentApiResponse[]>>(`${this.base}/appointments`).pipe(
+      map((r) =>
+        distinctClinicians(
+          (r.data ?? []).map((a) => ({
+            userId: a.staffUserId ?? '',
+            name: a.staffName ?? '',
+            hospitalName: a.hospitalName ?? null,
+          })),
+        ),
+      ),
     );
   }
 
