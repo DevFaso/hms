@@ -245,7 +245,7 @@ class ReferenceCatalogServiceImplTest {
 
         assertThatThrownBy(() -> service.importCatalog(catalogId, file))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("Catalog not found");
+                .hasFieldOrPropertyWithValue("messageKey", "referenceCatalog.notFound");
     }
 
     @Test
@@ -348,7 +348,7 @@ class ReferenceCatalogServiceImplTest {
 
         assertThatThrownBy(() -> service.schedulePublish(catalogId, req))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("Catalog not found");
+                .hasFieldOrPropertyWithValue("messageKey", "referenceCatalog.notFound");
     }
 
     // ---- code normalization edge cases ----

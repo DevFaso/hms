@@ -725,7 +725,12 @@ class PatientSubjectReadOwnershipTest {
             // lookup itself answers for a row that does not exist, as staff see it.
             passwordLogin("ROLE_RECEPTIONIST");
             ResourceNotFoundException missing = catchThrowableOfType(() -> service.getAppointmentsByPatientId(unknownPatientId, Locale.ENGLISH, CALLER), ResourceNotFoundException.class);
-            assertSameNotFound(() -> { throw refused; }, () -> { throw missing; });
+            // Two different ids, each echoed back as asked: the same key, and the
+            // same sentence once the id each caller supplied is masked.
+            assertThat(missing).isNotNull();
+            assertThat(refused.getMessageKey()).isEqualTo(missing.getMessageKey());
+            assertThat(refused.getMessage().replace(otherPatientId.toString(), "<id>"))
+                .isEqualTo(missing.getMessage().replace(unknownPatientId.toString(), "<id>"));
             verify(appointmentRepository, never()).findByPatient_Id(otherPatientId);
         }
 

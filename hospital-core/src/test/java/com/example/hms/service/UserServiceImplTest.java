@@ -1379,7 +1379,7 @@ class UserServiceImplTest {
 
             assertThatThrownBy(() -> userService.updateUser(userId, dto))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessage(new ResourceNotFoundException("User not found with ID: " + userId).getMessage());
+                    .hasMessage(new ResourceNotFoundException("user.notFound", userId).getMessage());
 
             assertThat(user.getPasswordHash()).isEqualTo(EXISTING_HASH);
             verify(userRepository, never()).save(any());

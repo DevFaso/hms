@@ -210,7 +210,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
     @Transactional
     public String sendRecoveryContactVerificationCode(UUID userId, UUID contactId) {
         UserRecoveryContact contact = recoveryContactRepository.findById(contactId)
-            .orElseThrow(() -> new ResourceNotFoundException("Recovery contact not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("recoveryContact.notFound", contactId));
 
         if (!contact.getUser().getId().equals(userId)) {
             throw new IllegalArgumentException("Recovery contact does not belong to user");
@@ -242,7 +242,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
     @Transactional
     public UserRecoveryContactDTO verifyRecoveryContact(UUID userId, UUID contactId, String code) {
         UserRecoveryContact contact = recoveryContactRepository.findById(contactId)
-            .orElseThrow(() -> new ResourceNotFoundException("Recovery contact not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("recoveryContact.notFound", contactId));
 
         if (!contact.getUser().getId().equals(userId)) {
             throw new IllegalArgumentException("Recovery contact does not belong to user");

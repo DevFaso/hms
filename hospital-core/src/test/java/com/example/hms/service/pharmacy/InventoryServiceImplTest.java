@@ -211,7 +211,7 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.createInventoryItem(dto))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Pharmacy not found");
+                    .hasFieldOrPropertyWithValue("messageKey", "pharmacy.notFound");
         }
 
         @Test
@@ -225,7 +225,7 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.createInventoryItem(dto))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Medication catalog item not found");
+                    .hasFieldOrPropertyWithValue("messageKey", "medicationCatalogItem.notFound");
         }
     }
 
@@ -257,7 +257,7 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.getInventoryItem(inventoryItemId))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Inventory item not found");
+                    .hasFieldOrPropertyWithValue("messageKey", "inventoryItem.notFound");
         }
     }
 
@@ -295,7 +295,7 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.listByPharmacy(pharmacyId, pageable))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Pharmacy not found");
+                    .hasFieldOrPropertyWithValue("messageKey", "pharmacy.notFound");
         }
     }
 
@@ -549,7 +549,7 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.getStockLot(stockLotId))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Stock lot not found");
+                    .hasFieldOrPropertyWithValue("messageKey", "stockLot.notFound");
         }
     }
 
@@ -813,7 +813,7 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.getInventoryItem(inventoryItemId))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Pharmacy not found");
+                    .hasFieldOrPropertyWithValue("messageKey", "pharmacy.notFound");
         }
 
         @Test

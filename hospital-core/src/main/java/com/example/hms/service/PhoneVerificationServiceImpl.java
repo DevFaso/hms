@@ -122,7 +122,7 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
     public ChallengeView confirmRegistrationVerification(UUID challengeId, String code, UUID requestedByUserId) {
         PhoneOtpChallenge challenge = challengeRepository
             .findByIdAndRequestedByUserId(challengeId, requestedByUserId)
-            .orElseThrow(() -> new ResourceNotFoundException("Verification challenge not found: " + challengeId));
+            .orElseThrow(() -> new ResourceNotFoundException("phoneVerification.challenge.notFound", challengeId));
 
         if (challenge.isConsumed()) {
             throw new BusinessException("This verification code was already used — request a new one.");

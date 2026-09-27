@@ -212,8 +212,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
         return patientRepository.findByUserId(userId)
                 .map(Patient::getId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "No patient record linked to your account. Contact your care team."));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.portal.noRecord"));
     }
 
     // ── Profile ──────────────────────────────────────────────────────────
@@ -465,16 +464,16 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                                         Locale locale) {
         UUID patientId = resolvePatientId(auth);
         Patient patientEntity = patientRepository.findById(patientId)
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
 
         // Verify patient is registered at this hospital
         requireHospitalRegistration(patientId, dto.getHospitalId());
 
         Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalId()));
 
         Department department = departmentRepository.findById(dto.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Department not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", dto.getDepartmentId()));
         if (!department.getHospital().getId().equals(dto.getHospitalId())) {
             throw new BusinessException("Department does not belong to the selected hospital");
         }
@@ -483,7 +482,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         Staff staff;
         if (dto.getStaffId() != null) {
             staff = staffRepository.findByIdAndActiveTrue(dto.getStaffId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Provider not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("provider.notFound", dto.getStaffId()));
             if (!staff.getHospital().getId().equals(dto.getHospitalId())) {
                 throw new BusinessException("Provider does not belong to the selected hospital");
             }
@@ -616,7 +615,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                                       Locale locale) {
         UUID patientId = resolvePatientId(auth);
         Appointment appointment = appointmentRepository.findById(dto.getAppointmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", dto.getAppointmentId()));
 
         requirePatientOwnership(appointment, patientId);
 
@@ -661,7 +660,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                                           Locale locale) {
         UUID patientId = resolvePatientId(auth);
         Appointment appointment = appointmentRepository.findById(dto.getAppointmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", dto.getAppointmentId()));
 
         requirePatientOwnership(appointment, patientId);
 
@@ -736,7 +735,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         Patient patient = findPatient(auth);
 
         Prescription prescription = prescriptionRepository.findById(dto.getPrescriptionId())
-                .orElseThrow(() -> new ResourceNotFoundException("Prescription not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("prescription.notFound", dto.getPrescriptionId()));
 
         // Verify the prescription belongs to this patient
         if (!prescription.getPatient().getId().equals(patient.getId())) {
@@ -801,7 +800,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         UUID patientId = resolvePatientId(auth);
 
         RefillRequest refill = refillRequestRepository.findById(refillId)
-                .orElseThrow(() -> new ResourceNotFoundException("Refill request not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("refillRequest.notFound", refillId));
 
         if (!refill.getPatient().getId().equals(patientId)) {
             throw new AccessDeniedException("You do not have access to this refill request");
@@ -888,8 +887,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         UUID userId = authUtils.resolveUserId(auth)
                 .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
         return patientRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "No patient record linked to your account. Contact your care team."));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.portal.noRecord"));
     }
 
     /**
@@ -1221,7 +1219,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public void revokeProxy(Authentication auth, UUID proxyId) {
         UUID patientId = resolvePatientId(auth);
         PatientProxy proxy = patientProxyRepository.findById(proxyId)
-                .orElseThrow(() -> new ResourceNotFoundException("Proxy grant not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("proxyGrant.notFound", proxyId));
 
         if (!proxy.getGrantorPatient().getId().equals(patientId)) {
             throw new AccessDeniedException("You can only revoke proxies you have granted");
@@ -1288,7 +1286,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
 
         return patientRepository.findById(patientId)
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
     }
 
     private static boolean isProxyExpired(PatientProxy proxy) {
@@ -1536,16 +1534,14 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private PatientEducationProgress requireAssignedEducation(UUID patientId, UUID resourceId) {
         return educationProgressRepository
                 .findTopByPatientIdAndResourceIdOrderByCreatedAtDesc(patientId, resourceId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "No education resource assigned to you with id " + resourceId));
+                .orElseThrow(() -> new ResourceNotFoundException("educationResource.notAssigned", resourceId));
     }
 
     private EducationResource requireActiveEducationResource(UUID resourceId) {
         EducationResource resource = educationResourceRepository.findById(resourceId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Education resource not found: " + resourceId));
+                .orElseThrow(() -> new ResourceNotFoundException("educationResource.notFound", resourceId));
         if (Boolean.FALSE.equals(resource.getIsActive())) {
-            throw new ResourceNotFoundException("Education resource not found: " + resourceId);
+            throw new ResourceNotFoundException("educationResource.notFound", resourceId);
         }
         return resource;
     }
@@ -1677,7 +1673,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public List<QuestionnaireDTO> getQuestionnairesForAppointment(Authentication auth, UUID appointmentId) {
         UUID patientId = resolvePatientId(auth);
         Appointment appointment = appointmentRepository.findById(appointmentId)
-                .orElseThrow(() -> new ResourceNotFoundException("appointment.notfound", appointmentId));
+                .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", appointmentId));
 
         // Ownership check — patient can only see their own appointment's questionnaires
         if (!appointment.getPatient().getId().equals(patientId)) {
@@ -1729,7 +1725,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", patientId));
 
         Appointment appointment = appointmentRepository.findById(dto.getAppointmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("appointment.notfound", dto.getAppointmentId()));
+                .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", dto.getAppointmentId()));
 
         // Ownership check
         if (!appointment.getPatient().getId().equals(patientId)) {

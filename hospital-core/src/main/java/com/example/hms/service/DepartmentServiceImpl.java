@@ -315,9 +315,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Transactional(readOnly = true)
     public DepartmentResponseDTO getDepartmentById(UUID id, Locale locale) {
         Department department = departmentRepository.findByIdWithHeadOfDepartment(id)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage(MESSAGE_DEPARTMENT_NOT_FOUND, new Object[]{id}, locale)
-                ));
+                .orElseThrow(() -> new ResourceNotFoundException(MESSAGE_DEPARTMENT_NOT_FOUND, id));
 
         enforceHospitalScopeOnEntity(department, locale);
         return buildLocalizedResponse(department, locale);
@@ -327,9 +325,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Transactional(readOnly = true)
     public DepartmentStatsDTO getDepartmentStatistics(UUID departmentId, Locale locale) {
         Department department = departmentRepository.findByIdWithTranslations(departmentId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage(MESSAGE_DEPARTMENT_NOT_FOUND, new Object[]{departmentId}, locale)
-                ));
+                .orElseThrow(() -> new ResourceNotFoundException(MESSAGE_DEPARTMENT_NOT_FOUND, departmentId));
 
         enforceHospitalScopeOnEntity(department, locale);
 
@@ -423,10 +419,7 @@ public class DepartmentServiceImpl implements DepartmentService {
             log.warn("[dept:tenantGuard] User {} attempted access to department {} in hospital {} (active={})",
                     roleValidator.getCurrentUserId(), department.getId(),
                     department.getHospital().getId(), activeHospitalId);
-            throw new ResourceNotFoundException(
-                    messageSource.getMessage(MESSAGE_DEPARTMENT_NOT_FOUND,
-                            new Object[]{department.getId()},
-                            locale != null ? locale : DEFAULT_LOCALE));
+            throw new ResourceNotFoundException(MESSAGE_DEPARTMENT_NOT_FOUND, department.getId());
         }
     }
 
@@ -511,9 +504,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         }
 
         if (!authService.hasRole("ROLE_SUPER_ADMIN")) {
-            throw new ResourceNotFoundException(
-                messageSource.getMessage("assignment.notfound", new Object[]{currentUserId, hospital.getId()}, locale)
-            );
+            throw new ResourceNotFoundException("assignment.notFoundForUserHospital", currentUserId, hospital.getId());
         }
 
         Role hospitalAdminRole = resolveHospitalAdminRole(locale);
@@ -649,9 +640,7 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     private Department findDepartmentOrThrow(UUID id, Locale locale) {
         return departmentRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage(MESSAGE_DEPARTMENT_NOT_FOUND, new Object[]{id}, locale)
-                ));
+                .orElseThrow(() -> new ResourceNotFoundException(MESSAGE_DEPARTMENT_NOT_FOUND, id));
     }
 
 
@@ -676,9 +665,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     private Hospital resolveHospital(DepartmentRequestDTO dto, Locale locale) {
         if (dto.getHospitalId() != null) {
             return hospitalRepository.findById(dto.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                    messageSource.getMessage("hospital.notfound", new Object[]{dto.getHospitalId()}, locale)
-                ));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", dto.getHospitalId()));
         }
 
         return hospitalRepository.findByNameIgnoreCase(dto.getHospitalName())
@@ -756,9 +743,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         return roleRepository.findByCode(ROLE_HOSPITAL_ADMIN)
             .or(() -> roleRepository.findByNameIgnoreCase(ROLE_HOSPITAL_ADMIN))
             .or(() -> roleRepository.findByNameIgnoreCase("HOSPITAL_ADMIN"))
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage("role.notfound", new Object[]{ROLE_HOSPITAL_ADMIN}, locale)
-            ));
+            .orElseThrow(() -> new ResourceNotFoundException("role.notfound", ROLE_HOSPITAL_ADMIN));
     }
 
     private UserRoleHospitalAssignment provisionHospitalAdminAssignmentForSuperAdmin(UUID superAdminId,
@@ -769,9 +754,7 @@ public class DepartmentServiceImpl implements DepartmentService {
             superAdminId, hospital.getId());
 
         User user = userRepository.findById(superAdminId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage("user.notfound", new Object[]{superAdminId}, locale)
-            ));
+            .orElseThrow(() -> new ResourceNotFoundException("user.notfound", superAdminId));
 
         ensureUserHasRole(user, hospitalAdminRole);
 

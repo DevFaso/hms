@@ -34,7 +34,6 @@ import com.example.hms.security.context.HospitalContextHolder;
 @Slf4j
 @Transactional
 public class ImmunizationServiceImpl implements ImmunizationService {
-    private static final String IMMUNIZATION_NOT_FOUND_PREFIX = "Immunization not found with id: ";
 
 
     private final ImmunizationRepository immunizationRepository;
@@ -65,7 +64,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         Encounter encounter = null;
         if (requestDTO.getEncounterId() != null) {
             encounter = encounterRepository.findById(requestDTO.getEncounterId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Encounter not found with id: " + requestDTO.getEncounterId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", requestDTO.getEncounterId()));
         }
 
         PatientImmunization immunization = immunizationMapper.toEntity(requestDTO, patient, hospital, administeredBy, encounter);
@@ -81,7 +80,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.debug("Fetching immunization with id: {}", id);
         
         PatientImmunization immunization = immunizationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> new ResourceNotFoundException("immunization.notFound", id));
 
         return immunizationMapper.toResponseDTO(immunization);
     }
@@ -202,7 +201,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.info("Marking reminder sent for immunization: {}", immunizationId);
 
         PatientImmunization immunization = immunizationRepository.findById(immunizationId)
-                .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_PREFIX + immunizationId));
+                .orElseThrow(() -> new ResourceNotFoundException("immunization.notFound", immunizationId));
 
         immunization.setReminderSent(true);
         immunization.setReminderSentDate(LocalDate.now());
@@ -216,7 +215,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.info("Updating immunization with id: {}", id);
 
         PatientImmunization existingImmunization = immunizationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> new ResourceNotFoundException("immunization.notFound", id));
 
         // Update staff if changed
         if (requestDTO.getAdministeredByStaffId() != null && 
@@ -232,7 +231,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
             (existingImmunization.getEncounter() == null || 
              !existingImmunization.getEncounter().getId().equals(requestDTO.getEncounterId()))) {
             Encounter encounter = encounterRepository.findById(requestDTO.getEncounterId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Encounter not found with id: " + requestDTO.getEncounterId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", requestDTO.getEncounterId()));
             existingImmunization.setEncounter(encounter);
         }
 
@@ -248,7 +247,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.info("Deleting immunization with id: {}", id);
 
         PatientImmunization immunization = immunizationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> new ResourceNotFoundException("immunization.notFound", id));
 
         immunization.setActive(false);
         immunizationRepository.save(immunization);

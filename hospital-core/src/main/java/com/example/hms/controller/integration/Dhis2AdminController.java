@@ -52,8 +52,7 @@ public class Dhis2AdminController {
         }
         return configService.getFacilityConfig(hospitalId)
             .map(ResponseEntity::ok)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "No DHIS2 facility config for hospital " + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException("dhis2.facilityConfig.notFound", hospitalId));
     }
 
     @PutMapping("/facility")

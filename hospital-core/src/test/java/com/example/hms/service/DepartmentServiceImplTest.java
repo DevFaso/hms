@@ -172,7 +172,6 @@ class DepartmentServiceImplTest {
     @Test
     void getDepartmentById_throwsWhenNotFound() {
         when(departmentRepository.findByIdWithHeadOfDepartment(deptId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> departmentService.getDepartmentById(deptId, locale))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -515,7 +514,6 @@ class DepartmentServiceImplTest {
         dto.setName("Test");
 
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -667,7 +665,6 @@ class DepartmentServiceImplTest {
         when(authService.getCurrentUserId()).thenReturn(userId);
         when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId)).thenReturn(Optional.empty());
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(false);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -784,7 +781,6 @@ class DepartmentServiceImplTest {
         dto.setHospitalId(hospitalId);
         dto.setName("Test");
         when(departmentRepository.findById(deptId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> departmentService.updateDepartment(deptId, dto, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -805,7 +801,6 @@ class DepartmentServiceImplTest {
     @Test
     void getDepartmentStatistics_notFound_throws() {
         when(departmentRepository.findByIdWithTranslations(deptId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> departmentService.getDepartmentStatistics(deptId, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -816,7 +811,6 @@ class DepartmentServiceImplTest {
     @Test
     void updateDepartmentHead_departmentNotFound_throws() {
         when(departmentRepository.findById(deptId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> departmentService.updateDepartmentHead(deptId, staffId, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -827,7 +821,6 @@ class DepartmentServiceImplTest {
     @Test
     void getDepartmentWithStaff_notFound_throws() {
         when(departmentRepository.findById(deptId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> departmentService.getDepartmentWithStaff(deptId, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -919,7 +912,6 @@ class DepartmentServiceImplTest {
         when(roleAssignmentRepository.findFirstByHospitalIdAndRole_Name(hospitalId, "ROLE_HOSPITAL_ADMIN"))
             .thenReturn(Optional.empty());
         when(userRepository.findById(superAdminId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -1187,7 +1179,6 @@ class DepartmentServiceImplTest {
         dto.setName("Cross Update");
 
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> departmentService.updateDepartment(deptId, dto, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -1231,7 +1222,6 @@ class DepartmentServiceImplTest {
         when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
 
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> departmentService.deleteDepartment(deptId, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -1308,7 +1298,6 @@ class DepartmentServiceImplTest {
         when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
 
         when(departmentRepository.findByIdWithHeadOfDepartment(deptId)).thenReturn(Optional.of(department));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> departmentService.getDepartmentById(deptId, locale))
             .isInstanceOf(ResourceNotFoundException.class);

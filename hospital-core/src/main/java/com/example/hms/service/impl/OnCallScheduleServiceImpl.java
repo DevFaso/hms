@@ -110,12 +110,12 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
 
     private OnCallSchedule loadScoped(UUID id) {
         OnCallSchedule entry = onCallRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("On-call entry not found with ID: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException("onCall.entry.notFound", id));
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null && (entry.getStaff() == null || entry.getStaff().getHospital() == null
             || !hospitalId.equals(entry.getStaff().getHospital().getId()))) {
             // Cross-hospital rows read as absent, matching the house convention.
-            throw new ResourceNotFoundException("On-call entry not found with ID: " + id);
+            throw new ResourceNotFoundException("onCall.entry.notFound", id);
         }
         return entry;
     }

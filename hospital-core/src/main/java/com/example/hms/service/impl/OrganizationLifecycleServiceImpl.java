@@ -217,8 +217,7 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
 
     private Organization loadOrThrow(UUID organizationId) {
         return organizationRepository.findById(organizationId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Organization not found: " + organizationId));
+            .orElseThrow(() -> new ResourceNotFoundException("organization.notFound", organizationId));
     }
 
     private void requireTransition(Organization org, Set<OrganizationLifecycleState> allowed, String action) {

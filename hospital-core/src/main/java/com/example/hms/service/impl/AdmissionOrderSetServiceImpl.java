@@ -39,11 +39,6 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
 
     private static final Logger logger = LoggerFactory.getLogger(AdmissionOrderSetServiceImpl.class);
 
-    private static final String ORDER_SET_NOT_FOUND = "Admission order set not found";
-    private static final String HOSPITAL_NOT_FOUND = "Hospital not found";
-    private static final String DEPARTMENT_NOT_FOUND = "Department not found";
-    private static final String STAFF_NOT_FOUND = "Staff not found";
-    private static final String ADMISSION_NOT_FOUND = "Admission not found";
 
     private final AdmissionOrderSetRepository orderSetRepository;
     private final AdmissionRepository admissionRepository;
@@ -105,12 +100,12 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
     @Transactional
     public AdmissionOrderSetResponseDTO create(AdmissionOrderSetRequestDTO request) {
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
         Department department = request.getDepartmentId() == null ? null
             : departmentRepository.findById(request.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND));
+                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", request.getDepartmentId()));
         Staff createdBy = staffRepository.findById(request.getCreatedByStaffId())
-            .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getCreatedByStaffId()));
 
         AdmissionOrderSet entity = new AdmissionOrderSet();
         entity.setName(request.getName());
@@ -143,10 +138,10 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
                     + " but request targets " + request.getHospitalId());
         }
         Staff modifiedBy = staffRepository.findById(request.getCreatedByStaffId())
-            .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getCreatedByStaffId()));
         Department department = request.getDepartmentId() == null ? null
             : departmentRepository.findById(request.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND));
+                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", request.getDepartmentId()));
 
         // Freeze the parent: keep the row but flip active off so the picker
         // only surfaces the head of the version chain.
@@ -175,7 +170,7 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
     public AdmissionOrderSetResponseDTO deactivate(UUID id, String reason, UUID actingStaffId) {
         AdmissionOrderSet entity = loadOrderSet(id);
         Staff actor = staffRepository.findById(actingStaffId)
-            .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", actingStaffId));
         entity.deactivate(reason, actor);
         return mapper.toDto(orderSetRepository.save(entity));
     }
@@ -194,7 +189,7 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
         }
 
         Admission admission = admissionRepository.findById(admissionId)
-            .orElseThrow(() -> new ResourceNotFoundException(ADMISSION_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException("admission.notFound", admissionId));
 
         // Resolve the ordering staff's active hospital assignment so the lab
         // fan-out can populate LabOrderRequestDTO.assignmentId (@NotNull).
@@ -261,7 +256,7 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
 
     private AdmissionOrderSet loadOrderSet(UUID id) {
         return orderSetRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(ORDER_SET_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException("orderSet.notFound", id));
     }
 
     /**

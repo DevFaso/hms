@@ -331,11 +331,11 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
 
     private AppointmentSlot loadScoped(UUID slotId) {
         AppointmentSlot slot = slotRepository.findById(slotId)
-            .orElseThrow(() -> new ResourceNotFoundException("Slot not found with ID: " + slotId));
+            .orElseThrow(() -> new ResourceNotFoundException("slot.notFound", slotId));
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null && (slot.getHospital() == null
             || !hospitalId.equals(slot.getHospital().getId()))) {
-            throw new ResourceNotFoundException("Slot not found with ID: " + slotId);
+            throw new ResourceNotFoundException("slot.notFound", slotId);
         }
         return slot;
     }

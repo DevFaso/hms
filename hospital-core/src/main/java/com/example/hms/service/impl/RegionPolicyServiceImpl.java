@@ -135,11 +135,10 @@ public class RegionPolicyServiceImpl implements RegionPolicyService {
 
     private RegionPolicy loadOrThrow(OrganizationRegion region) {
         if (region == null) {
-            throw new ResourceNotFoundException("Region is required");
+            throw new ResourceNotFoundException("regionPolicy.region.required");
         }
         return regionPolicyRepository.findById(region)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Region policy not seeded for: " + region));
+            .orElseThrow(() -> new ResourceNotFoundException("regionPolicy.notSeeded", region));
     }
 
     private static String trimToNull(String v) {

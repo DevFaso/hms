@@ -408,7 +408,7 @@ class ProResponseServiceTest {
 
             assertThatThrownBy(() -> service.acknowledge(patientId, responseId, null, null))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("Screening response not found.");
+                .hasFieldOrPropertyWithValue("messageKey", "pro.response.notFound");
         }
     }
 

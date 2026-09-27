@@ -51,7 +51,7 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         }
 
         PatientHospitalRegistration registration = registrationRepository.findById(request.getRegistrationId())
-            .orElseThrow(() -> new ResourceNotFoundException("Registration not found with ID: " + request.getRegistrationId()));
+            .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", request.getRegistrationId()));
         if (!registration.isActive()) {
             throw new BusinessException("Registration is inactive and cannot be discharged");
         }
@@ -61,11 +61,11 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         ensureNoActiveRequest(registration.getId());
 
         Staff nurse = staffRepository.findByIdAndActiveTrue(request.getNurseStaffId())
-            .orElseThrow(() -> new ResourceNotFoundException("Nurse not found or inactive: " + request.getNurseStaffId()));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.nurse.notFoundOrInactive", request.getNurseStaffId()));
         validateStaffHospitalMatch(nurse, registration);
 
         UserRoleHospitalAssignment nurseAssignment = assignmentRepository.findById(request.getNurseAssignmentId())
-            .orElseThrow(() -> new ResourceNotFoundException("Assignment not found: " + request.getNurseAssignmentId()));
+            .orElseThrow(() -> new ResourceNotFoundException("roleAssignment.notFound", request.getNurseAssignmentId()));
         validateAssignment(nurseAssignment, nurse, registration.getHospital().getId());
 
         registration.markReadyForDischarge(nurse.getId(), request.getNurseSummary());
@@ -94,11 +94,11 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         ensurePending(approval);
 
         Staff doctor = staffRepository.findByIdAndActiveTrue(decision.getDoctorStaffId())
-            .orElseThrow(() -> new ResourceNotFoundException("Doctor not found or inactive: " + decision.getDoctorStaffId()));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.doctor.notFoundOrInactive", decision.getDoctorStaffId()));
         validateStaffHospitalMatch(doctor, approval.getRegistration());
 
         UserRoleHospitalAssignment doctorAssignment = assignmentRepository.findById(decision.getDoctorAssignmentId())
-            .orElseThrow(() -> new ResourceNotFoundException("Doctor assignment not found: " + decision.getDoctorAssignmentId()));
+            .orElseThrow(() -> new ResourceNotFoundException("roleAssignment.notFound", decision.getDoctorAssignmentId()));
         validateAssignment(doctorAssignment, doctor, approval.getHospital().getId());
 
         approval.setDoctor(doctor);
@@ -139,11 +139,11 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         ensurePending(approval);
 
         Staff doctor = staffRepository.findByIdAndActiveTrue(decision.getDoctorStaffId())
-            .orElseThrow(() -> new ResourceNotFoundException("Doctor not found or inactive: " + decision.getDoctorStaffId()));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.doctor.notFoundOrInactive", decision.getDoctorStaffId()));
         validateStaffHospitalMatch(doctor, approval.getRegistration());
 
         UserRoleHospitalAssignment doctorAssignment = assignmentRepository.findById(decision.getDoctorAssignmentId())
-            .orElseThrow(() -> new ResourceNotFoundException("Doctor assignment not found: " + decision.getDoctorAssignmentId()));
+            .orElseThrow(() -> new ResourceNotFoundException("roleAssignment.notFound", decision.getDoctorAssignmentId()));
         validateAssignment(doctorAssignment, doctor, approval.getHospital().getId());
 
         approval.setDoctor(doctor);
@@ -237,7 +237,7 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
 
     private DischargeApproval getApprovalOrThrow(UUID approvalId) {
         return dischargeApprovalRepository.findById(approvalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Discharge approval not found: " + approvalId));
+            .orElseThrow(() -> new ResourceNotFoundException("dischargeApproval.notFound", approvalId));
     }
 
     private void validateStaffHospitalMatch(Staff staff, PatientHospitalRegistration registration) {

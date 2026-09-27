@@ -141,7 +141,7 @@ public class InventoryServiceImpl implements InventoryService {
 
         User receivedByUser = dto.getReceivedBy() != null
                 ? userRepository.findById(dto.getReceivedBy())
-                    .orElseThrow(() -> new ResourceNotFoundException("User not found"))
+                    .orElseThrow(() -> new ResourceNotFoundException("user.notFound", dto.getReceivedBy()))
                 : resolveCurrentUser();
 
         StockLot lot = stockLotMapper.toEntity(dto, item, receivedByUser);
@@ -276,22 +276,22 @@ public class InventoryServiceImpl implements InventoryService {
 
     private Pharmacy resolvePharmacy(UUID pharmacyId) {
         return pharmacyRepository.findById(pharmacyId)
-                .orElseThrow(() -> new ResourceNotFoundException("Pharmacy not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notFound", pharmacyId));
     }
 
     private MedicationCatalogItem resolveMedication(UUID medicationId) {
         return medicationCatalogItemRepository.findById(medicationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Medication catalog item not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("medicationCatalogItem.notFound", medicationId));
     }
 
     private InventoryItem resolveInventoryItem(UUID id) {
         return inventoryItemRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Inventory item not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("inventoryItem.notFound", id));
     }
 
     private StockLot resolveStockLot(UUID id) {
         return stockLotRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Stock lot not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("stockLot.notFound", id));
     }
 
     private User resolveCurrentUser() {
@@ -300,14 +300,14 @@ public class InventoryServiceImpl implements InventoryService {
             throw new BusinessException("Unable to determine current user");
         }
         return userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Current user not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));
     }
 
     private void enforceHospitalScope(Pharmacy pharmacy) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null && pharmacy.getHospital() != null
                 && !pharmacy.getHospital().getId().equals(hospitalId)) {
-            throw new ResourceNotFoundException("Pharmacy not found");
+            throw new ResourceNotFoundException("pharmacy.notFound", pharmacy.getId());
         }
     }
 

@@ -391,8 +391,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             return null;
         }
         com.example.hms.model.labor.DeliveryRecord delivery = deliveryRecordRepository.findById(deliveryRecordId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Delivery record not found with ID: " + deliveryRecordId));
+            .orElseThrow(() -> new ResourceNotFoundException("deliveryRecord.notFound", deliveryRecordId));
 
         if (hospital != null && delivery.getHospital() != null
             && !hospital.getId().equals(delivery.getHospital().getId())) {
@@ -406,7 +405,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
                                                              UUID hospitalId) {
         if (registrationId != null) {
             PatientHospitalRegistration registration = registrationRepository.findById(registrationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Registration not found with ID: " + registrationId));
+                .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", registrationId));
             if (!registration.getPatient().getId().equals(patient.getId())) {
                 throw new BusinessException("Registration does not belong to the specified patient.");
             }
@@ -442,7 +441,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
     private Staff resolveRecorderStaff(UUID staffId, UUID recorderUserId, Hospital hospital) {
         if (staffId != null) {
             Staff staff = staffRepository.findByIdAndActiveTrue(staffId)
-                .orElseThrow(() -> new ResourceNotFoundException("Staff not found or inactive with ID: " + staffId));
+                .orElseThrow(() -> new ResourceNotFoundException("staff.not.found.or.inactive", staffId));
             if (hospital != null && staff.getHospital() != null
                 && !hospital.getId().equals(staff.getHospital().getId())) {
                 throw new BusinessException("Recorder staff assignment does not match resolved hospital context.");

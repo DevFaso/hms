@@ -191,7 +191,7 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
         String normalized = identifier.trim();
         return organizationRepository.findByCode(normalized.toUpperCase(Locale.ENGLISH))
             .or(() -> organizationRepository.findByNameIgnoreCase(normalized))
-            .orElseThrow(() -> new ResourceNotFoundException("organization.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException("organization.notfound", normalized));
     }
 
     private Hospital resolveHospital(String identifier, Organization organization) {

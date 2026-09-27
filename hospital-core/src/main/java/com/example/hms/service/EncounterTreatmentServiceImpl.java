@@ -34,13 +34,13 @@ public class EncounterTreatmentServiceImpl implements EncounterTreatmentService 
     @Transactional
     public EncounterTreatmentResponseDTO addTreatmentToEncounter(EncounterTreatmentRequestDTO dto) {
         Encounter encounter = encounterRepository.findById(dto.getEncounterId())
-                .orElseThrow(() -> new ResourceNotFoundException("Encounter not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", dto.getEncounterId()));
         Treatment treatment = treatmentRepository.findById(dto.getTreatmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Treatment not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("treatment.notfound", dto.getTreatmentId()));
         Staff staff = null;
         if (dto.getStaffId() != null) {
             staff = staffRepository.findById(dto.getStaffId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Staff not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", dto.getStaffId()));
         }
         EncounterTreatment entity = mapper.toEntity(dto, encounter, treatment, staff);
         return mapper.toDto(encounterTreatmentRepository.save(entity));
@@ -50,11 +50,11 @@ public class EncounterTreatmentServiceImpl implements EncounterTreatmentService 
     @Transactional(readOnly = true)
     public List<EncounterTreatmentResponseDTO> getTreatmentsByEncounter(UUID encounterId) {
         Encounter encounter = encounterRepository.findById(encounterId)
-                .orElseThrow(() -> new ResourceNotFoundException("Encounter not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", encounterId));
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && encounter.getHospital() != null
                 && !activeHospitalId.equals(encounter.getHospital().getId())) {
-            throw new ResourceNotFoundException("Encounter not found");
+            throw new ResourceNotFoundException("encounter.notfound", encounterId);
         }
         List<EncounterTreatment> list = encounterTreatmentRepository.findByEncounter_Id(encounterId);
         return list.stream().map(mapper::toDto).toList();

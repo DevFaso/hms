@@ -26,7 +26,6 @@ import java.util.UUID;
 public class SubscriptionServiceImpl implements SubscriptionService {
 
     private static final String DEFAULT_CURRENCY = "USD";
-    private static final String ERROR_PLAN_NOT_FOUND = "SubscriptionPlan not found: ";
 
     private final SubscriptionPlanRepository planRepository;
     private final OrganizationSubscriptionRepository subscriptionRepository;
@@ -62,7 +61,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     @Transactional
     public SubscriptionPlanResponseDTO updatePlan(UUID planId, SubscriptionPlanRequestDTO request) {
         SubscriptionPlan plan = planRepository.findById(planId)
-            .orElseThrow(() -> new ResourceNotFoundException(ERROR_PLAN_NOT_FOUND + planId));
+            .orElseThrow(() -> new ResourceNotFoundException("subscription.plan.notFound", planId));
         plan.setName(request.getName());
         plan.setTierCode(request.getTierCode());
         plan.setDescription(request.getDescription());
@@ -84,7 +83,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     @Transactional
     public void deactivatePlan(UUID planId) {
         SubscriptionPlan plan = planRepository.findById(planId)
-            .orElseThrow(() -> new ResourceNotFoundException(ERROR_PLAN_NOT_FOUND + planId));
+            .orElseThrow(() -> new ResourceNotFoundException("subscription.plan.notFound", planId));
         plan.setActive(false);
         planRepository.save(plan);
     }
@@ -97,7 +96,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         Organization organization = organizationRepository.findById(organizationId)
             .orElseThrow(() -> new ResourceNotFoundException("organization.notFound", organizationId));
         SubscriptionPlan plan = planRepository.findById(request.getPlanId())
-            .orElseThrow(() -> new ResourceNotFoundException(ERROR_PLAN_NOT_FOUND + request.getPlanId()));
+            .orElseThrow(() -> new ResourceNotFoundException("subscription.plan.notFound", request.getPlanId()));
 
         // PR #228 review — refuse to assign a deactivated plan. The
         // controller summary advertises that deactivated plans "reject new
@@ -139,7 +138,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     @Transactional
     public OrganizationSubscriptionResponseDTO cancel(UUID organizationId, UUID subscriptionId) {
         OrganizationSubscription sub = subscriptionRepository.findById(subscriptionId)
-            .orElseThrow(() -> new ResourceNotFoundException("Subscription not found: " + subscriptionId));
+            .orElseThrow(() -> new ResourceNotFoundException("subscription.notFound", subscriptionId));
         // PR #228 review — verify the subscription belongs to the
         // organization on the URL. Otherwise a super admin who knows a
         // subscription id could cancel it via any org's cancel route.

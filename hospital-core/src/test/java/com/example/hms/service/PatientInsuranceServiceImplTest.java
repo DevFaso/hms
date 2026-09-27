@@ -124,7 +124,6 @@ class PatientInsuranceServiceImplTest {
     @Test
     void getPatientInsuranceById_notFound_throws() {
         when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class))).thenReturn("not found");
 
         assertThatThrownBy(() -> service.getPatientInsuranceById(insuranceId, locale))
             .isInstanceOf(ResourceNotFoundException.class);

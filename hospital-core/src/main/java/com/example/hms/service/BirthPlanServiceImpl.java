@@ -299,7 +299,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
 
     private Patient getPatientByUserOrThrow(User user) {
         return patientRepository.findByUserId(user.getId())
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found for user: " + user.getUsername()));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundForUser", user.getUsername()));
     }
 
     private Hospital getHospitalByIdOrThrow(UUID hospitalId) {
@@ -309,7 +309,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
 
     private BirthPlan getBirthPlanByIdOrThrow(UUID id) {
         return birthPlanRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Birth plan not found with ID: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException("birthPlan.notFound", id));
     }
 
     private boolean hasRole(User user, String roleCode) {

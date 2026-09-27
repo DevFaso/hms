@@ -150,9 +150,7 @@ public class HospitalServiceImpl implements HospitalService {
         validateSuperAdminOrThrow(locale);
 
         if (!hospitalRepository.existsById(id)) {
-            throw new ResourceNotFoundException(
-                    messageSource.getMessage("hospital.notFound", new Object[]{id}, "Hospital not found with id: " + id, locale)
-            );
+            throw new ResourceNotFoundException("hospital.notFound", id);
         }
 
         hospitalRepository.deleteById(id);
@@ -207,10 +205,7 @@ public class HospitalServiceImpl implements HospitalService {
         List<Hospital> hospitals = hospitalRepository.findByOrganizationIdOrderByNameAsc(organizationId);
         if (hospitals.isEmpty()) {
             if (!organizationRepository.existsById(organizationId)) {
-                throw new ResourceNotFoundException(
-                        messageSource.getMessage("organization.notFound", new Object[]{organizationId},
-                                "Organization not found with id: " + organizationId, locale)
-                );
+                throw new ResourceNotFoundException("organization.notFound", organizationId);
             }
             return List.of();
         }
@@ -245,9 +240,7 @@ public class HospitalServiceImpl implements HospitalService {
 
     private Hospital getHospitalOrThrow(UUID id, Locale locale) {
         return hospitalRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage("hospital.notFound", new Object[]{id}, "Hospital not found with id: " + id, locale)
-                ));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", id));
     }
 
     private List<Hospital> applyHospitalScope(List<Hospital> hospitals) {
@@ -290,9 +283,7 @@ public class HospitalServiceImpl implements HospitalService {
 
     private Organization getOrganizationOrThrow(UUID id, Locale locale) {
         return organizationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage("organization.notFound", new Object[]{id}, "Organization not found with id: " + id, locale)
-                ));
+                .orElseThrow(() -> new ResourceNotFoundException("organization.notFound", id));
     }
 
     private void validateSuperAdminOrThrow(Locale locale) {

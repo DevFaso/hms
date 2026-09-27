@@ -67,7 +67,7 @@ public class ReportController {
             @AuthenticationPrincipal UserDetails principal) {
         UUID hospitalId = requireHospital();
         Hospital hospital = hospitalRepository.findById(hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         validateRecipients(request.getRecipients());
         ReportDefinition definition = definitionRepository.save(ReportDefinition.builder()
                 .hospital(hospital)
@@ -136,8 +136,7 @@ public class ReportController {
 
     private ReportDefinition loadScoped(UUID id) {
         return definitionRepository.findByIdAndHospital_Id(id, requireHospital())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                    "Report definition not found with ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("reportDefinition.notFound", id));
     }
 
     private static UUID requireHospital() {

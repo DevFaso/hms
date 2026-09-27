@@ -177,16 +177,12 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
 
     private Patient getPatientOrThrow(UUID patientId, Locale locale) {
         return patientRepository.findById(patientId).orElseThrow(() ->
-            new ResourceNotFoundException(
-                messageSource.getMessage("patient.notfound",
-                    new Object[]{patientId}, "Patient not found", locale)));
+            new ResourceNotFoundException("patient.notfound", patientId));
     }
 
     private PatientInsurance getInsuranceOrThrow(UUID insuranceId, Locale locale) {
         return patientInsuranceRepository.findById(insuranceId).orElseThrow(() ->
-            new ResourceNotFoundException(
-                messageSource.getMessage("patientinsurance.notfound",
-                    new Object[]{insuranceId}, "Patient insurance not found", locale)));
+            new ResourceNotFoundException("patientinsurance.notfound", insuranceId));
     }
 
     private void enforceSelfAccessIfPatient(Patient patient, Locale locale) {

@@ -65,7 +65,7 @@ public class AuditSavedSearchServiceImpl implements AuditSavedSearchService {
         validate(request);
 
         AuditSavedSearch entity = repository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Saved search not found: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException("auditSavedSearch.notFound", id));
 
         if (!owner.equals(entity.getOwnerUsername())) {
             // Sharing is read-only across owners — only the original owner
@@ -97,7 +97,7 @@ public class AuditSavedSearchServiceImpl implements AuditSavedSearchService {
     public void delete(UUID id) {
         String owner = currentOwnerOrThrow();
         AuditSavedSearch entity = repository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Saved search not found: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException("auditSavedSearch.notFound", id));
         if (!owner.equals(entity.getOwnerUsername())) {
             throw new UnauthorizedException("Only the owner can delete this saved search.");
         }

@@ -63,8 +63,7 @@ public class IntegrationHealthActionService {
      */
     public IntegrationProbeResultDTO testConnection(String integrationId, UUID organizationId) {
         IntegrationConnectivityProbe probe = Optional.ofNullable(probesById.get(integrationId))
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "No connectivity probe registered for integration: " + integrationId));
+            .orElseThrow(() -> new ResourceNotFoundException("integration.probe.notRegistered", integrationId));
 
         long start = System.nanoTime();
         Probe outcome;

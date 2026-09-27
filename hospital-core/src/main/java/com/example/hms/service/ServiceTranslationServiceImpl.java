@@ -35,10 +35,10 @@ public class ServiceTranslationServiceImpl implements ServiceTranslationService 
     @Transactional
     public ServiceTranslationResponseDTO createTranslation(ServiceTranslationRequestDTO dto, Locale locale) {
         Treatment treatment = treatmentRepository.findById(dto.getTreatmentId())
-                .orElseThrow(() -> new ResourceNotFoundException(getMessage("treatment.not.found", locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("treatment.not.found"));
 
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(dto.getAssignmentId())
-                .orElseThrow(() -> new ResourceNotFoundException(getMessage("assignment.not.found", locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("assignment.not.found"));
 
         ServiceTranslation translation = mapper.toEntity(dto, treatment, assignment);
         ServiceTranslation saved = translationRepository.save(translation);
@@ -49,7 +49,7 @@ public class ServiceTranslationServiceImpl implements ServiceTranslationService 
     @Transactional(readOnly = true)
     public ServiceTranslationResponseDTO getTranslationById(UUID id, Locale locale) {
         ServiceTranslation translation = translationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(getMessage(TRANSLATION_NOT_FOUND_KEY, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException(TRANSLATION_NOT_FOUND_KEY));
         return mapper.toDto(translation);
     }
 
@@ -66,7 +66,7 @@ public class ServiceTranslationServiceImpl implements ServiceTranslationService 
     @Transactional
     public ServiceTranslationResponseDTO updateTranslation(UUID id, ServiceTranslationRequestDTO dto, Locale locale) {
         ServiceTranslation translation = translationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(getMessage(TRANSLATION_NOT_FOUND_KEY, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException(TRANSLATION_NOT_FOUND_KEY));
 
         mapper.updateEntity(translation, dto);
         ServiceTranslation updated = translationRepository.save(translation);
@@ -77,13 +77,9 @@ public class ServiceTranslationServiceImpl implements ServiceTranslationService 
     @Transactional
     public void deleteTranslation(UUID id, Locale locale) {
         if (!translationRepository.existsById(id)) {
-            throw new ResourceNotFoundException(getMessage(TRANSLATION_NOT_FOUND_KEY, locale));
+            throw new ResourceNotFoundException(TRANSLATION_NOT_FOUND_KEY);
         }
         translationRepository.deleteById(id);
-    }
-
-    private String getMessage(String key, Locale locale) {
-        return messageSource.getMessage(key, null, locale);
     }
 }
 

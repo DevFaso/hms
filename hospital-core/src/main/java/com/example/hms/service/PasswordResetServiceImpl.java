@@ -68,7 +68,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
             log.trace("Password reset requested for {} (locale={}, ip={})", email, locale, requestIp);
         }
         User user = userRepository.findByEmail(email)
-            .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+            .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByEmail", email));
 
         // Enforce "one active token per user"
         tokenRepository.deleteByUser_IdAndConsumedAtIsNull(user.getId());
@@ -105,7 +105,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         String tokenHash = resolveTokenHash(token);
 
         PasswordResetToken resetToken = tokenRepository.findByTokenHash(tokenHash)
-            .orElseThrow(() -> new ResourceNotFoundException("Invalid or expired reset token."));
+            .orElseThrow(() -> new ResourceNotFoundException("passwordReset.token.invalid"));
 
         if (!resetToken.isValidAt(LocalDateTime.now(clock))) {
             throw new IllegalStateException("Reset token is invalid (expired or already used).");

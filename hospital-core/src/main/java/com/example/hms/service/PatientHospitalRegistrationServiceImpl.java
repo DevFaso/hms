@@ -49,8 +49,6 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final int MRN_CODE_LENGTH = 7;
     private static final int MAX_MRN_GENERATION_ATTEMPTS = 10;
-    private static final String MSG_REG_NOT_FOUND_ID = "Registration not found with ID: ";
-    private static final String MSG_REG_NOT_FOUND_MRN = "Registration not found with mrn: ";
 
     // -------------------- CREATE --------------------
     @Override
@@ -62,7 +60,7 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         if (!isBlank(dto.getPatientUsername())) {
             String identifier = dto.getPatientUsername().trim();
             patient = patientRepository.findByUsernameOrEmail(identifier)
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found with username/email: " + identifier));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundByIdentifier", identifier));
         } else {
             patient = patientRepository.findById(dto.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", dto.getPatientId()));
@@ -70,7 +68,7 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
 
         final Hospital hospital = !isBlank(dto.getHospitalName())
             ? hospitalRepository.findByName(dto.getHospitalName())
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with name: " + dto.getHospitalName()))
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", dto.getHospitalName()))
             : hospitalRepository.findById(dto.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalId()));
 
@@ -157,12 +155,12 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
     @Transactional(readOnly = true)
     public PatientHospitalRegistrationResponseDTO getById(UUID id) {
         PatientHospitalRegistration reg = registrationRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_REG_NOT_FOUND_ID + id));
+            .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", id));
         // ── Tenant isolation: cross-hospital rows read as 404, not 403 ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null
             && (reg.getHospital() == null || !activeHospitalId.equals(reg.getHospital().getId()))) {
-            throw new ResourceNotFoundException(MSG_REG_NOT_FOUND_ID + id);
+            throw new ResourceNotFoundException("registration.notFound", id);
         }
         return mapper.toResponseDTO(reg);
     }
@@ -270,7 +268,7 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         log.debug("Patching registration mrn: {}", mrn);
 
         PatientHospitalRegistration registration = registrationRepository.findByMrnAndHospitalName(mrn, dto.getHospitalName())
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_REG_NOT_FOUND_MRN + mrn));
+            .orElseThrow(() -> new ResourceNotFoundException("registration.notFoundByMrn", mrn));
 
         applyEditableFields(registration, dto, true);
         PatientHospitalRegistration updated = registrationRepository.save(registration);
@@ -283,7 +281,7 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
     public void deregisterPatient(UUID id) {
         log.debug("Deregister by registration UUID={}", id);
         PatientHospitalRegistration registration = registrationRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_REG_NOT_FOUND_ID + id));
+            .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", id));
         registrationRepository.delete(registration);
         log.info("🗑️ Deregistered Patient Registration ID '{}'", id);
     }
@@ -294,7 +292,7 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
     public PatientHospitalRegistrationResponseDTO updateRegistration(UUID id, PatientHospitalRegistrationRequestDTO dto) {
         log.debug("Update by registration UUID={}", id);
         PatientHospitalRegistration registration = registrationRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_REG_NOT_FOUND_ID + id));
+            .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", id));
         applyEditableFields(registration, dto, false);
         return mapper.toResponseDTO(registrationRepository.save(registration));
     }

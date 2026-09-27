@@ -163,7 +163,7 @@ public class OrganizationSecurityServiceImpl implements OrganizationSecurityServ
             String ruleValue, Integer priority) {
         
         OrganizationSecurityPolicy securityPolicy = securityPolicyRepository.findById(securityPolicyId)
-            .orElseThrow(() -> new ResourceNotFoundException("Security policy not found: " + securityPolicyId));
+            .orElseThrow(() -> new ResourceNotFoundException("securityPolicy.notFound", securityPolicyId));
 
         Optional<OrganizationSecurityRule> existingRule = 
             securityRuleRepository.findBySecurityPolicyIdAndCode(securityPolicyId, code);

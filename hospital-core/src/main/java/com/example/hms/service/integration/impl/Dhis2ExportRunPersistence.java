@@ -56,8 +56,7 @@ public class Dhis2ExportRunPersistence {
                                          UUID staffId,
                                          DhisAdxAggregator.AggregationResult aggregated) {
         final var hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Hospital not found: " + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
 
         final Dhis2ExportRun run = Dhis2ExportRun.builder()
             .hospital(hospital)

@@ -63,7 +63,6 @@ public class RoiRequestService {
     /** Worklist page-size ceiling: a triage read is a page, never a dump. */
     static final int MAX_WORKLIST_PAGE = 200;
 
-    private static final String NOT_FOUND = "ROI request not found.";
 
     private final RoiRequestRepository roiRepository;
     private final PatientRepository patientRepository;
@@ -253,7 +252,7 @@ public class RoiRequestService {
     private RoiRequest requirePendingInTenant(UUID requestId, UUID hospitalId) {
         RoiRequest request = roiRepository.findById(requestId)
             .filter(r -> r.getHospital() != null && hospitalId.equals(r.getHospital().getId()))
-            .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException("roi.request.notFound", requestId));
         if (request.getStatus() != RoiRequestStatus.PENDING) {
             throw new BusinessException("The request is already " + request.getStatus() + ".");
         }

@@ -183,7 +183,7 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
                             + "the patient is registered at. Select a hospital first.");
         }
         if (patientId == null) {
-            throw new ResourceNotFoundException("Patient not found: null");
+            throw new ResourceNotFoundException("patient.notFound", patientId);
         }
         return registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
@@ -242,7 +242,7 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     private PatientUploadedDocument requireOwnDocument(UUID patientId, UUID documentId) {
         return documentRepository
                 .findByIdAndPatient_IdAndDeletedAtIsNull(documentId, patientId)
-                .orElseThrow(() -> new ResourceNotFoundException("Document not found: " + documentId));
+                .orElseThrow(() -> new ResourceNotFoundException("patientDocument.notFound", documentId));
     }
 
     private UUID resolveUserId(Authentication auth) {
@@ -254,14 +254,12 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
         UUID userId = resolveUserId(auth);
         return patientRepository.findByUserId(userId)
                 .map(Patient::getId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "No patient record linked to your account. Contact your care team."));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.portal.noRecord"));
     }
 
     private Patient resolvePatient(UUID userId) {
         return patientRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "No patient record linked to your account. Contact your care team."));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.portal.noRecord"));
     }
 
     private User resolveUser(UUID userId) {

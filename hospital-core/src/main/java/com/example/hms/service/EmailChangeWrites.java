@@ -53,7 +53,7 @@ public class EmailChangeWrites {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void applyEmail(UUID userId, String email) {
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
+            .orElseThrow(() -> new ResourceNotFoundException("user.notFound", userId));
         user.setEmail(email);
         userRepository.saveAndFlush(user);
         resetTokenRepository.deleteByUser_IdAndConsumedAtIsNull(userId);

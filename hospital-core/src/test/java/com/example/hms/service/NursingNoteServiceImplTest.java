@@ -43,10 +43,10 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -457,7 +457,7 @@ class NursingNoteServiceImplTest {
     }
 
     @Test
-    void createNote_throwsWhenPatientMissingUsesMessageSource() {
+    void createNote_throwsWhenPatientMissingCarriesTheKeyAndId() {
         UUID actorUserId = UUID.randomUUID();
         UUID patientId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
@@ -474,12 +474,13 @@ class NursingNoteServiceImplTest {
         when(roleValidator.isNurse(actorUserId, hospitalId)).thenReturn(true);
         when(userRepository.findById(actorUserId)).thenReturn(Optional.of(author));
         when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(eq("patient.notFound"), any(), anyString(), any(Locale.class)))
-            .thenReturn("patient missing");
 
+        // A key and the id, resolved once by the exception in the request's
+        // locale - not a sentence pre-resolved here and then looked up again.
         ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class,
             () -> nursingNoteService.createNote(request, Locale.CANADA));
-        assertTrue(exception.getMessage().contains("patient missing"));
+        assertEquals("patient.notFound", exception.getMessageKey());
+        assertArrayEquals(new Object[] {patientId}, exception.getArgs());
         verifyNoInteractions(nursingNoteRepository);
     }
 

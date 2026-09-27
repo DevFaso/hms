@@ -208,7 +208,7 @@ class TreatmentPlanServiceImplTest {
 
         assertThatThrownBy(() -> service.create(requestDTO))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("Hospital not found");
+                .hasFieldOrPropertyWithValue("messageKey", "hospital.notFound");
     }
 
     @Test
@@ -219,7 +219,7 @@ class TreatmentPlanServiceImplTest {
 
         assertThatThrownBy(() -> service.create(requestDTO))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("Encounter not found");
+                .hasFieldOrPropertyWithValue("messageKey", "encounter.notfound");
     }
 
     @Test
@@ -232,7 +232,7 @@ class TreatmentPlanServiceImplTest {
 
         assertThatThrownBy(() -> service.create(requestDTO))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("Assignment not found");
+                .hasFieldOrPropertyWithValue("messageKey", "roleAssignment.notFound");
     }
 
     @Test
@@ -244,7 +244,7 @@ class TreatmentPlanServiceImplTest {
 
         assertThatThrownBy(() -> service.create(requestDTO))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("staff not found");
+                .hasFieldOrPropertyWithValue("messageKey", "staff.notFound");
     }
 
     @Test
@@ -409,7 +409,7 @@ class TreatmentPlanServiceImplTest {
 
         assertThatThrownBy(() -> service.update(planId, requestDTO))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("Treatment plan not found");
+                .hasFieldOrPropertyWithValue("messageKey", "treatmentPlan.notFound");
     }
 
     // ---- getById ----
@@ -431,7 +431,7 @@ class TreatmentPlanServiceImplTest {
 
         assertThatThrownBy(() -> service.getById(planId))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("Treatment plan not found");
+                .hasFieldOrPropertyWithValue("messageKey", "treatmentPlan.notFound");
     }
 
     // ---- listByPatient ----
@@ -575,7 +575,7 @@ class TreatmentPlanServiceImplTest {
         TreatmentPlanFollowUpRequestDTO request = new TreatmentPlanFollowUpRequestDTO();
         assertThatThrownBy(() -> service.updateFollowUp(planId, followUpId, request))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("follow-up not found");
+                .hasFieldOrPropertyWithValue("messageKey", "treatmentPlan.followUp.notFound");
     }
 
     // ---- addReview ----
@@ -624,7 +624,7 @@ class TreatmentPlanServiceImplTest {
 
         assertThatThrownBy(() -> service.addReview(planId, reviewReq))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("staff not found");
+                .hasFieldOrPropertyWithValue("messageKey", "staff.notFound");
     }
 
     @Test
@@ -688,7 +688,7 @@ class TreatmentPlanServiceImplTest {
 
         assertThatThrownBy(() -> service.create(requestDTO))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("Staff not found");
+                .hasFieldOrPropertyWithValue("messageKey", "staff.notFound");
     }
 
     // ---- supervising staff hospital mismatch ----

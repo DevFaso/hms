@@ -452,7 +452,7 @@ class StockTransactionServiceImplTest {
 
             assertThatThrownBy(() -> service.getTransaction(transactionId))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Stock transaction not found");
+                    .hasFieldOrPropertyWithValue("messageKey", "stockTransaction.notFound");
         }
     }
 
@@ -528,7 +528,7 @@ class StockTransactionServiceImplTest {
 
             assertThatThrownBy(() -> service.listByPharmacy(pharmacyId, pageable))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Pharmacy not found");
+                    .hasFieldOrPropertyWithValue("messageKey", "pharmacy.notFound");
         }
     }
 
@@ -628,7 +628,7 @@ class StockTransactionServiceImplTest {
 
             assertThatThrownBy(() -> service.getTransaction(transactionId))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Pharmacy not found");
+                    .hasFieldOrPropertyWithValue("messageKey", "pharmacy.notFound");
         }
     }
 
@@ -700,7 +700,7 @@ class StockTransactionServiceImplTest {
 
             assertThatThrownBy(() -> service.recordTransaction(dto))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Performer user not found");
+                    .hasFieldOrPropertyWithValue("messageKey", "stockTransaction.performer.notFound");
         }
     }
 }

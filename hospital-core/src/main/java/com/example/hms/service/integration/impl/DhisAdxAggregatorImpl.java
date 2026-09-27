@@ -57,8 +57,7 @@ public class DhisAdxAggregatorImpl implements DhisAdxAggregator {
                                                     LocalDate periodStart,
                                                     LocalDate periodEnd) {
         final Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Hospital not found: " + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
 
         final String orgUnitUid = hospital.getDhis2OrgUnitUid();
         if (orgUnitUid == null || orgUnitUid.isBlank()) {

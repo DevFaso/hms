@@ -142,7 +142,7 @@ public class NotificationServiceImpl implements NotificationService {
     @Transactional
     public List<NotificationPreferenceDTO> updatePreferences(UUID userId, List<NotificationPreferenceUpdateDTO> updates) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("user.notFound", userId));
 
         notificationPreferenceRepository.deleteByUser_Id(userId);
         notificationPreferenceRepository.flush();

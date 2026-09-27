@@ -31,8 +31,6 @@ import java.util.UUID;
 @Transactional
 public class PatientGuarantorServiceImpl implements PatientGuarantorService {
 
-    private static final String MSG_PATIENT_NOT_FOUND = "Patient not found with ID: ";
-    private static final String MSG_GUARANTOR_NOT_FOUND = "Guarantor not found with ID: ";
 
     private final PatientGuarantorRepository guarantorRepository;
     private final PatientRepository patientRepository;
@@ -45,7 +43,7 @@ public class PatientGuarantorServiceImpl implements PatientGuarantorService {
             throw new BusinessException("An active hospital is required to add a guarantor.");
         }
         Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         Hospital hospital = hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         if (!patient.isRegisteredInHospital(hospitalId)) {
@@ -124,11 +122,11 @@ public class PatientGuarantorServiceImpl implements PatientGuarantorService {
     private PatientGuarantor loadScoped(UUID patientId, UUID guarantorId, UUID hospitalId) {
         PatientGuarantor guarantor = guarantorRepository.findById(guarantorId)
             .filter(g -> g.getPatient() != null && Objects.equals(g.getPatient().getId(), patientId))
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_GUARANTOR_NOT_FOUND + guarantorId));
+            .orElseThrow(() -> new ResourceNotFoundException("guarantor.notFound", guarantorId));
         if (hospitalId != null
             && (guarantor.getHospital() == null
                 || !Objects.equals(guarantor.getHospital().getId(), hospitalId))) {
-            throw new ResourceNotFoundException(MSG_GUARANTOR_NOT_FOUND + guarantorId);
+            throw new ResourceNotFoundException("guarantor.notFound", guarantorId);
         }
         return guarantor;
     }

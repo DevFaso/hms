@@ -176,7 +176,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && order.getHospital() != null
                 && !activeHospitalId.equals(order.getHospital().getId())) {
-            throw new ResourceNotFoundException("Imaging order not found with ID: " + orderId);
+            throw new ResourceNotFoundException("imaging.order.notFound", orderId);
         }
         return imagingOrderMapper.toResponseDTO(order);
     }
@@ -265,7 +265,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
     private ImagingOrder getOrderEntity(UUID orderId) {
         return imagingOrderRepository.findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException("Imaging order not found with ID: " + orderId));
+            .orElseThrow(() -> new ResourceNotFoundException("imaging.order.notFound", orderId));
     }
 
     private List<ImagingOrder> loadDuplicateMatches(UUID patientId, ImagingModality modality, String bodyRegion, Integer lookbackDays) {

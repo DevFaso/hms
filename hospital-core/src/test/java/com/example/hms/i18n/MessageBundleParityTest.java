@@ -27,7 +27,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The four backend bundles agree with each other, and the exception sites that
- * name a key agree with the bundle.
+ * name a key agree with the bundle. The portal has had a strict
+ * {@code i18n:parity} gate for a long time; until this test the backend had
+ * none, and {@code messages_fr} and {@code messages_es} had drifted 77 and 73
+ * keys behind the base - each one falling back to English with no marker, so
+ * invisible in any test that resolves a single locale.
  *
  * <p>Both halves guard the same failure: a {@code {0}} that one side has and
  * the other does not. {@code messages_en} once carried {@code patient.notfound},
@@ -44,10 +48,13 @@ class MessageBundleParityTest {
     private static final Path MAIN_JAVA = Paths.get("src/main/java");
 
     /** Exceptions whose keyed sites must name a key the base bundle defines. */
-    private static final Set<String> KEYS_MUST_EXIST = Set.of("BusinessException");
+    private static final Set<String> KEYS_MUST_EXIST = Set.of("BusinessException", "ResourceNotFoundException");
 
     /** MessageFormat argument references: {@code {0}}, {@code {1,number}}, ... */
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{(\\d+)[^}]*}");
+
+    /** A key definition at the start of a line (the bundles use no continuation lines). */
+    private static final Pattern DEFINITION = Pattern.compile("^\\s*([^#!\\s=:][^\\s=:]*)\\s*[=:]");
 
     private static final Pattern KEY = Pattern.compile("[A-Za-z][A-Za-z0-9_-]*(?:\\.[A-Za-z0-9_-]+)+");
 
@@ -84,6 +91,58 @@ class MessageBundleParityTest {
             .as("Placeholders that differ from messages.properties in messages%s.properties "
                     + "— a missing {n} silently drops the argument the caller passed:%n%s",
                 suffix, String.join(System.lineSeparator(), drift))
+            .isEmpty();
+    }
+
+    @ParameterizedTest(name = "messages{0}.properties")
+    @ValueSource(strings = {"_en", "_fr", "_es"})
+    @DisplayName("a locale carries exactly the keys the base bundle carries")
+    void everyLocaleCarriesEveryBaseKey(String suffix) throws IOException {
+        SortedSet<String> base = new TreeSet<>(load("").stringPropertyNames());
+        SortedSet<String> bundle = new TreeSet<>(load(suffix).stringPropertyNames());
+
+        SortedSet<String> missing = new TreeSet<>(base);
+        missing.removeAll(bundle);
+        SortedSet<String> extra = new TreeSet<>(bundle);
+        extra.removeAll(base);
+
+        // A missing key falls back to the base bundle, which is English, so a
+        // French or Spanish clinician reads English with no marker at all and no
+        // test that resolves the key in one locale notices. An extra key is one
+        // the base (and so every other locale) has no text for.
+        assertThat(missing)
+            .as("Keys in messages.properties missing from messages%s.properties:%n%s",
+                suffix, String.join(System.lineSeparator(), missing))
+            .isEmpty();
+        assertThat(extra)
+            .as("Keys in messages%s.properties that messages.properties does not define:%n%s",
+                suffix, String.join(System.lineSeparator(), extra))
+            .isEmpty();
+    }
+
+    @ParameterizedTest(name = "messages{0}.properties")
+    @ValueSource(strings = {"", "_en", "_fr", "_es"})
+    @DisplayName("no bundle defines a key twice")
+    void noDuplicateKeys(String suffix) throws IOException {
+        // java.util.Properties keeps the last of two definitions silently, so a
+        // duplicate is invisible to every test that goes through it.
+        Map<String, Integer> seen = new HashMap<>();
+        List<String> duplicates = new ArrayList<>();
+        List<String> lines = Files.readAllLines(RESOURCES.resolve("messages" + suffix + ".properties"),
+            StandardCharsets.UTF_8);
+        for (int i = 0; i < lines.size(); i++) {
+            Matcher m = DEFINITION.matcher(lines.get(i));
+            if (m.find()) {
+                Integer first = seen.putIfAbsent(m.group(1), i + 1);
+                if (first != null) {
+                    duplicates.add(m.group(1) + " (lines " + first + " and " + (i + 1) + ")");
+                }
+            }
+        }
+
+        assertThat(duplicates)
+            .as("Keys defined twice in messages%s.properties:%n%s",
+                suffix, String.join(System.lineSeparator(), duplicates))
             .isEmpty();
     }
 
@@ -170,6 +229,10 @@ class MessageBundleParityTest {
         try (Stream<Path> files = Files.walk(MAIN_JAVA)) {
             for (Path file : files.filter(p -> p.toString().endsWith(".java")).toList()) {
                 String source = Files.readString(file, StandardCharsets.UTF_8);
+                // HAPI FHIR has a ResourceNotFoundException of its own, which takes prose.
+                if (source.contains("import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;")) {
+                    continue;
+                }
                 Map<String, String> constants = new HashMap<>();
                 Matcher c = KEY_CONSTANT.matcher(source);
                 while (c.find()) {
@@ -218,7 +281,7 @@ class MessageBundleParityTest {
     }
 
     /** Index of the ')' closing the '(' just before {@code from}, skipping string and char literals. */
-    private static int matchingParen(String s, int from) {
+    static int matchingParen(String s, int from) {
         int depth = 1;
         for (int i = from; i < s.length(); i++) {
             char ch = s.charAt(i);
@@ -246,7 +309,7 @@ class MessageBundleParityTest {
         return s.length();
     }
 
-    private static List<String> topLevelArguments(String s) {
+    static List<String> topLevelArguments(String s) {
         List<String> args = new ArrayList<>();
         int depth = 0;
         int start = 0;

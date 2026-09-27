@@ -131,7 +131,6 @@ class StaffAvailabilityServiceImplTest {
     void create_hospitalNotFound_throws() {
         StaffAvailabilityRequestDTO dto = buildDto(false);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
 
         assertThatThrownBy(() -> service.create(dto, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -142,7 +141,6 @@ class StaffAvailabilityServiceImplTest {
         StaffAvailabilityRequestDTO dto = buildDto(false);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
 
         assertThatThrownBy(() -> service.create(dto, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -184,7 +182,6 @@ class StaffAvailabilityServiceImplTest {
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.findById(any())).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("required");
 
         assertThatThrownBy(() -> service.create(dto, locale))
             .isInstanceOf(ResourceNotFoundException.class);

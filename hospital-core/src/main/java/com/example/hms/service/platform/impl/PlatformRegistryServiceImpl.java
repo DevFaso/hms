@@ -49,7 +49,6 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
     private static final String ORGANIZATION_SERVICE_ID_REQUIRED = "organizationServiceId is required";
     private static final String HOSPITAL_ID_REQUIRED = "hospitalId is required";
     private static final String DEPARTMENT_ID_REQUIRED = "departmentId is required";
-    private static final String PLATFORM_SERVICE_NOT_FOUND = "Platform service not found: ";
 
     private final OrganizationRepository organizationRepository;
     private final OrganizationPlatformServiceRepository organizationPlatformServiceRepository;
@@ -142,7 +141,7 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
         Hospital hospital = hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         OrganizationPlatformService service = organizationPlatformServiceRepository.findById(organizationServiceId)
-            .orElseThrow(() -> new ResourceNotFoundException(PLATFORM_SERVICE_NOT_FOUND + organizationServiceId));
+            .orElseThrow(() -> new ResourceNotFoundException("platform.service.notFound", organizationServiceId));
 
         validateHospitalBelongsToServiceOrganization(hospital, service);
 
@@ -171,7 +170,7 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
 
         HospitalPlatformServiceLink link = hospitalPlatformServiceLinkRepository
             .findByHospitalIdAndOrganizationServiceId(hospitalId, organizationServiceId)
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital link not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("platform.hospitalLink.notFound", hospitalId, organizationServiceId));
 
         Hospital hospital = link.getHospital();
         OrganizationPlatformService service = link.getOrganizationService();
@@ -209,7 +208,7 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
             .orElseThrow(() -> new ResourceNotFoundException("department.notFound", departmentId));
 
         OrganizationPlatformService service = organizationPlatformServiceRepository.findById(organizationServiceId)
-            .orElseThrow(() -> new ResourceNotFoundException(PLATFORM_SERVICE_NOT_FOUND + organizationServiceId));
+            .orElseThrow(() -> new ResourceNotFoundException("platform.service.notFound", organizationServiceId));
 
         validateDepartmentBelongsToServiceOrganization(department, service);
 
@@ -238,7 +237,7 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
 
         DepartmentPlatformServiceLink link = departmentPlatformServiceLinkRepository
             .findByDepartmentIdAndOrganizationServiceId(departmentId, organizationServiceId)
-            .orElseThrow(() -> new ResourceNotFoundException("Department link not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("platform.departmentLink.notFound", departmentId, organizationServiceId));
 
         Department department = link.getDepartment();
         OrganizationPlatformService service = link.getOrganizationService();
@@ -269,7 +268,7 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
         Objects.requireNonNull(serviceId, "serviceId is required");
 
         OrganizationPlatformService service = organizationPlatformServiceRepository.findById(serviceId)
-            .orElseThrow(() -> new ResourceNotFoundException(PLATFORM_SERVICE_NOT_FOUND + serviceId));
+            .orElseThrow(() -> new ResourceNotFoundException("platform.service.notFound", serviceId));
 
         UUID serviceOrganizationId = Optional.ofNullable(service.getOrganization())
             .map(Organization::getId)

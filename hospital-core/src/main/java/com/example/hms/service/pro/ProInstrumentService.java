@@ -66,7 +66,7 @@ public class ProInstrumentService {
     @Transactional(readOnly = true)
     public ProInstrument requireActive(String code) {
         return instrumentRepository.findByCodeAndActiveTrue(normalizeCode(code))
-            .orElseThrow(() -> new ResourceNotFoundException("Instrument not found: " + code));
+            .orElseThrow(() -> new ResourceNotFoundException("pro.instrument.notFound", code));
     }
 
     @Transactional(readOnly = true)

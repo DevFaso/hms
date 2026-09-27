@@ -426,12 +426,12 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
 
     private StaffShift loadShift(UUID id, Locale locale) {
         return shiftRepository.findDetailedById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(message("schedule.shift.notFound", locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("schedule.shift.notFound"));
     }
 
     private StaffLeaveRequest loadLeave(UUID id, Locale locale) {
         return leaveRepository.findDetailedById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(message("schedule.leave.notFound", locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("schedule.leave.notFound"));
     }
 
     private void ensureShiftMutable(StaffShift shift, Locale locale) {
@@ -640,12 +640,12 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
 
     private Staff findStaff(UUID staffId, Locale locale) {
         return staffRepository.findById(staffId)
-            .orElseThrow(() -> new ResourceNotFoundException(message("schedule.staff.notFound", locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("schedule.staff.notFound"));
     }
 
     private Hospital findHospital(UUID hospitalId, Locale locale) {
         return hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(message("schedule.hospital.notFound", locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("schedule.hospital.notFound"));
     }
 
     private Department resolveDepartment(UUID departmentId,
@@ -656,7 +656,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
             return staff.getDepartment();
         }
         Department department = departmentRepository.findById(departmentId)
-            .orElseThrow(() -> new ResourceNotFoundException(message("schedule.department.notFound", locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("schedule.department.notFound"));
         if (department.getHospital() == null || !Objects.equals(department.getHospital().getId(), hospital.getId())) {
             throw new BusinessRuleException(message("schedule.department.hospital.mismatch", locale));
         }
@@ -669,7 +669,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
     private User getCurrentUser(Locale locale) {
         UUID currentUserId = requireCurrentUserId(locale);
         return userRepository.findById(currentUserId)
-            .orElseThrow(() -> new ResourceNotFoundException(message("schedule.user.notFound", locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("schedule.user.notFound"));
     }
 
     private UUID requireCurrentUserId(Locale locale) {

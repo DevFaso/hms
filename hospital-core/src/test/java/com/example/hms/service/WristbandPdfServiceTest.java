@@ -232,7 +232,7 @@ class WristbandPdfServiceTest {
 
         assertThatThrownBy(() -> service.generateSpecimenLabelPdf(specimenId, hospitalId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Specimen not found");
+            .hasFieldOrPropertyWithValue("messageKey", "labspecimen.notfound");
     }
 
     // ── Stock-lot label (Tier 2 item 34) ────────────────────────────────
@@ -311,6 +311,6 @@ class WristbandPdfServiceTest {
 
         assertThatThrownBy(() -> service.generateStockLotLabelPdf(lotId, hospitalId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Stock lot not found");
+            .hasFieldOrPropertyWithValue("messageKey", "stockLot.notFound");
     }
 }

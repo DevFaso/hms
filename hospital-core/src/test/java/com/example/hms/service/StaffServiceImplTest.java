@@ -123,7 +123,6 @@ class StaffServiceImplTest {
     @Test
     void getStaffById_throwsWhenNotFound() {
         when(staffRepository.findById(staffId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> staffService.getStaffById(staffId, locale))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -349,7 +348,6 @@ class StaffServiceImplTest {
     @Test
     void updateStaffDepartment_staffNotFound_throws() {
         when(userRepository.findByEmail("unknown@test.com")).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> staffService.updateStaffDepartment("unknown@test.com", "Cardiology", "Test Hospital", locale))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -360,7 +358,6 @@ class StaffServiceImplTest {
         when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
         when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(user.getId())).thenReturn(Optional.of(staff));
         when(hospitalRepository.findByName("Unknown Hospital")).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> staffService.updateStaffDepartment("doctor@test.com", "Cardiology", "Unknown Hospital", locale))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -372,7 +369,6 @@ class StaffServiceImplTest {
         when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(user.getId())).thenReturn(Optional.of(staff));
         when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
         when(departmentRepository.findByHospitalIdAndNameIgnoreCase(hospitalId, "Unknown")).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> staffService.updateStaffDepartment("doctor@test.com", "Unknown", "Test Hospital", locale))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -513,7 +509,6 @@ class StaffServiceImplTest {
             .build();
 
         when(userRepository.findByEmail("unknown@test.com")).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -529,7 +524,6 @@ class StaffServiceImplTest {
 
         when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
         when(hospitalRepository.findByName("Unknown")).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -1044,7 +1038,6 @@ class StaffServiceImplTest {
     @Test
     void updateStaffLabRole_staffNotFound_throws() {
         when(staffRepository.findById(staffId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_SCIENTIST", locale))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -1103,10 +1096,8 @@ class StaffServiceImplTest {
 
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(roleRepository.findByCode("ROLE_LAB_SCIENTIST")).thenReturn(Optional.empty());
-        when(messageSource.getMessage(eq("staff.lab.role.notFound"), any(), any(Locale.class)))
-                .thenReturn("Role not found: ROLE_LAB_SCIENTIST");
-
         assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_SCIENTIST", locale))
-                .isInstanceOf(ResourceNotFoundException.class);
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasFieldOrPropertyWithValue("messageKey", "staff.lab.role.notFound");
     }
 }

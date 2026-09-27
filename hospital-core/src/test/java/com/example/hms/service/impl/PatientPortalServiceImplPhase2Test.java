@@ -904,7 +904,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.requestMedicationRefill(auth, dto))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Prescription not found");
+                    .hasFieldOrPropertyWithValue("messageKey", "prescription.notFound");
         }
 
         @Test
@@ -1246,7 +1246,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.cancelMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("No patient record linked");
+                    .hasFieldOrPropertyWithValue("messageKey", "patient.portal.noRecord");
         }
     }
 

@@ -28,7 +28,6 @@ import java.util.UUID;
 @Slf4j
 @Transactional
 public class SocialHistoryServiceImpl implements SocialHistoryService {
-    private static final String SOCIAL_HISTORY_NOT_FOUND_PREFIX = "Social history not found with id: ";
 
 
     private final SocialHistoryRepository socialHistoryRepository;
@@ -83,7 +82,7 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
         log.debug("Fetching social history with id: {}", id);
         
         PatientSocialHistory socialHistory = socialHistoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(SOCIAL_HISTORY_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> new ResourceNotFoundException("socialHistory.notFound", id));
 
         return socialHistoryMapper.toResponseDTO(socialHistory);
     }
@@ -133,7 +132,7 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
         log.info("Updating social history with id: {}", id);
 
         PatientSocialHistory existingHistory = socialHistoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(SOCIAL_HISTORY_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> new ResourceNotFoundException("socialHistory.notFound", id));
 
         // Update staff if changed
         if (requestDTO.getRecordedByStaffId() != null && 
@@ -156,7 +155,7 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
         log.info("Deleting social history with id: {}", id);
 
         PatientSocialHistory socialHistory = socialHistoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(SOCIAL_HISTORY_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> new ResourceNotFoundException("socialHistory.notFound", id));
 
         socialHistory.setActive(false);
         socialHistoryRepository.save(socialHistory);

@@ -63,8 +63,7 @@ public class DhisAdxExportServiceImpl implements DhisAdxExportService {
                                                      UUID staffId) {
         final Dhis2FacilityConfig config = facilityConfigRepository
             .findByHospital_IdAndActiveTrue(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "No active DHIS2 facility config for hospital " + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException("dhis2.facilityConfig.activeNotFound", hospitalId));
 
         if (config.getDefaultPeriodType() != periodType) {
             throw new BusinessException(

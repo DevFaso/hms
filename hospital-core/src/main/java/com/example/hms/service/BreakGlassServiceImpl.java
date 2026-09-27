@@ -96,11 +96,9 @@ public class BreakGlassServiceImpl implements BreakGlassService {
     public BreakGlassSessionResponseDTO declare(BreakGlassDeclareRequestDTO request) {
         User caller = currentUserOrThrow();
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Hospital not found: " + request.getHospitalId()));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
         Patient patient = patientRepository.findById(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Patient not found: " + request.getPatientId()));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
         ensurePrivilegedAtHospital(caller, hospital.getId(), DECLARE_ROLES);
 
@@ -136,8 +134,7 @@ public class BreakGlassServiceImpl implements BreakGlassService {
     public BreakGlassSessionResponseDTO revoke(UUID sessionId, BreakGlassRevokeRequestDTO request) {
         User caller = currentUserOrThrow();
         BreakGlassSession session = sessionRepository.findById(sessionId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Break-glass session not found: " + sessionId));
+            .orElseThrow(() -> new ResourceNotFoundException("breakGlass.session.notFound", sessionId));
 
         boolean isOwner = session.getUser().getId().equals(caller.getId());
         boolean isAdmin = hasAnyRoleAtHospital(caller, session.getHospital().getId(), ADMIN_REVOKE_ROLES)
@@ -171,8 +168,7 @@ public class BreakGlassServiceImpl implements BreakGlassService {
     public BreakGlassSessionResponseDTO review(UUID sessionId, BreakGlassReviewRequestDTO request) {
         User caller = currentUserOrThrow();
         BreakGlassSession session = sessionRepository.findById(sessionId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Break-glass session not found: " + sessionId));
+            .orElseThrow(() -> new ResourceNotFoundException("breakGlass.session.notFound", sessionId));
         boolean isAdmin = hasAnyRoleAtHospital(caller, session.getHospital().getId(), ADMIN_REVOKE_ROLES)
             || isSuperAdmin(caller);
         if (!isAdmin) {

@@ -49,8 +49,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
     @Override
     public LabInstrumentResponseDTO getById(UUID id, Locale locale) {
         LabInstrument instrument = instrumentRepository.findByIdAndActiveTrue(id)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage(INSTRUMENT_NOT_FOUND_KEY, new Object[]{id}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id));
         requireHospitalScope(instrument.getHospital().getId(), locale);
         return mapper.toDto(instrument);
     }
@@ -61,8 +60,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
         requireHospitalScope(hospitalId, locale);
 
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage("hospital.notfound", new Object[]{hospitalId}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", hospitalId));
 
         if (instrumentRepository.existsByHospitalIdAndSerialNumber(hospitalId, dto.getSerialNumber())) {
             throw new BusinessRuleException(
@@ -79,8 +77,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
     @Transactional
     public LabInstrumentResponseDTO update(UUID id, LabInstrumentRequestDTO dto, Locale locale) {
         LabInstrument instrument = instrumentRepository.findByIdAndActiveTrue(id)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage(INSTRUMENT_NOT_FOUND_KEY, new Object[]{id}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id));
         requireHospitalScope(instrument.getHospital().getId(), locale);
 
         // Check serial number uniqueness if changed
@@ -102,8 +99,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
     @Transactional
     public void deactivate(UUID id, Locale locale) {
         LabInstrument instrument = instrumentRepository.findByIdAndActiveTrue(id)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage(INSTRUMENT_NOT_FOUND_KEY, new Object[]{id}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id));
         requireHospitalScope(instrument.getHospital().getId(), locale);
         instrument.setActive(false);
         instrumentRepository.save(instrument);
@@ -114,8 +110,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
     private Department resolveDepartment(String departmentId, Locale locale) {
         if (departmentId == null || departmentId.isBlank()) return null;
         return departmentRepository.findById(UUID.fromString(departmentId))
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage("department.notfound", new Object[]{departmentId}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("department.notfound", departmentId));
     }
 
     private boolean hasHospitalAccess(UUID hospitalId) {

@@ -56,10 +56,10 @@ public class CdsAcknowledgementServiceImpl implements CdsAcknowledgementService 
         UUID userId = authUtils.resolveUserId(auth)
                 .orElseThrow(() -> new BusinessException("Unable to resolve user from authentication."));
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("user.notFound", userId));
 
         Patient patient = patientRepository.findById(request.getPatientId())
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(
                 auth, request.getHospitalId(), false);
@@ -98,7 +98,7 @@ public class CdsAcknowledgementServiceImpl implements CdsAcknowledgementService 
     public List<CdsAcknowledgementResponseDTO> activeForPatient(Authentication auth, UUID patientId) {
         authUtils.requireAuth(auth);
         Patient patient = patientRepository.findById(patientId)
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, null, false);
         requirePatientAccessible(auth, patient, resolvedHospitalId);
 

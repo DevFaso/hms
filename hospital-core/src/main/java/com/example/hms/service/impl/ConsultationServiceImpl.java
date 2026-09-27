@@ -66,7 +66,6 @@ import java.util.Locale;
 @Transactional
 public class ConsultationServiceImpl implements ConsultationService {
 
-    private static final String MSG_CONSULTANT_NOT_FOUND = "Consultant not found with ID: ";
     /** Entity label carried into the {@code safeInit} lazy-load diagnostics. */
     private static final String ENTITY = "Consultation";
 
@@ -112,7 +111,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         Encounter encounter = null;
         if (request.getEncounterId() != null) {
             encounter = encounterRepository.findById(request.getEncounterId())
-                .orElseThrow(() -> new ResourceNotFoundException("Encounter not found with ID: " + request.getEncounterId()));
+                .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", request.getEncounterId()));
         }
 
         Staff consultant = null;
@@ -156,7 +155,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && consultation.getHospital() != null
                 && !activeHospitalId.equals(consultation.getHospital().getId())) {
-            throw new ResourceNotFoundException("Consultation not found with ID: " + consultationId);
+            throw new ResourceNotFoundException("consultation.notFound", consultationId);
         }
         return toResponseDTO(consultation);
     }
@@ -346,7 +345,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         // shapes and is what the create path uses.
         Staff consultant = resolveStaff(consultantId, consultation.getHospital() != null
                 ? consultation.getHospital().getId() : null)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_CONSULTANT_NOT_FOUND + consultantId));
+            .orElseThrow(() -> new ResourceNotFoundException("consultation.consultant.notFound", consultantId));
 
         consultation.setConsultant(consultant);
         consultation.setStatus(ConsultationStatus.ACKNOWLEDGED);
@@ -364,7 +363,7 @@ public class ConsultationServiceImpl implements ConsultationService {
 
         if (updateDTO.getConsultantId() != null && !updateDTO.getConsultantId().equals(consultation.getConsultant() != null ? consultation.getConsultant().getId() : null)) {
             Staff consultant = staffRepository.findById(updateDTO.getConsultantId())
-                .orElseThrow(() -> new ResourceNotFoundException(MSG_CONSULTANT_NOT_FOUND + updateDTO.getConsultantId()));
+                .orElseThrow(() -> new ResourceNotFoundException("consultation.consultant.notFound", updateDTO.getConsultantId()));
             consultation.setConsultant(consultant);
         }
 
@@ -545,7 +544,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         }
 
         Staff consultant = staffRepository.findById(consultantId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_CONSULTANT_NOT_FOUND + consultantId));
+            .orElseThrow(() -> new ResourceNotFoundException("consultation.consultant.notFound", consultantId));
 
         consultation.setConsultant(consultant);
         consultation.setStatus(ConsultationStatus.ASSIGNED);
@@ -589,7 +588,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         }
 
         Staff consultant = staffRepository.findById(consultantId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_CONSULTANT_NOT_FOUND + consultantId));
+            .orElseThrow(() -> new ResourceNotFoundException("consultation.consultant.notFound", consultantId));
 
         UUID previousConsultantId = consultation.getConsultant() != null ? consultation.getConsultant().getId() : null;
         consultation.setConsultant(consultant);
@@ -722,7 +721,7 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     private Consultation getConsultationEntity(UUID consultationId) {
         return consultationRepository.findById(consultationId)
-            .orElseThrow(() -> new ResourceNotFoundException("Consultation not found with ID: " + consultationId));
+            .orElseThrow(() -> new ResourceNotFoundException("consultation.notFound", consultationId));
     }
 
     private LocalDateTime calculateSlaDueBy(ConsultationUrgency urgency) {
@@ -736,7 +735,7 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     private Staff resolveRequestingProvider(UUID identifier, UUID hospitalId) {
         return resolveStaff(identifier, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Requesting provider not found with ID: " + identifier));
+            .orElseThrow(() -> new ResourceNotFoundException("consultation.requestingProvider.notFound", identifier));
     }
 
     private Staff resolveConsultant(UUID identifier, UUID hospitalId) {

@@ -116,12 +116,12 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
     /** Cross-hospital rows read as absent, matching the house convention. */
     private AdvanceDirective loadScoped(UUID id) {
         AdvanceDirective directive = directiveRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Advance directive not found with ID: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException("advanceDirective.notFound", id));
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null
             && (directive.getHospital() == null
                 || !activeHospitalId.equals(directive.getHospital().getId()))) {
-            throw new ResourceNotFoundException("Advance directive not found with ID: " + id);
+            throw new ResourceNotFoundException("advanceDirective.notFound", id);
         }
         return directive;
     }

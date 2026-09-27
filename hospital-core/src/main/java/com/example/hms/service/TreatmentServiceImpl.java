@@ -50,12 +50,10 @@ public class TreatmentServiceImpl implements TreatmentService {
         treatmentValidationService.validateTreatmentCreation(dto, locale);
 
         Department department = departmentRepository.findById(dto.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage("department.notFound", new Object[]{dto.getDepartmentId()}, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", dto.getDepartmentId()));
 
         Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage("hospital.notFound", new Object[]{dto.getHospitalId()}, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalId()));
 
         UUID currentUserId = authService.getCurrentUserId();
         String token = authService.getCurrentUserToken();
@@ -91,18 +89,15 @@ public class TreatmentServiceImpl implements TreatmentService {
     @Transactional
     public TreatmentResponseDTO updateTreatment(UUID id, TreatmentRequestDTO dto, Locale locale) {
         Treatment treatment = treatmentRepository.findWithAssignmentById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage(TREATMENT_NOT_FOUND_KEY, new Object[]{id}, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException(TREATMENT_NOT_FOUND_KEY, id));
 
         treatmentValidationService.validateTreatmentUpdate(treatment, dto, locale);
 
         Department department = departmentRepository.findById(dto.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage("department.notFound", new Object[]{dto.getDepartmentId()}, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", dto.getDepartmentId()));
 
         Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage("hospital.notFound", new Object[]{dto.getHospitalId()}, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalId()));
 
         treatmentMapper.updateTreatmentFromDto(dto, treatment, department, hospital);
         Treatment updatedTreatment = treatmentRepository.save(treatment);
@@ -114,7 +109,7 @@ public class TreatmentServiceImpl implements TreatmentService {
     @Transactional
     public void deleteTreatment(UUID id) {
         if (!treatmentRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Treatment not found with id: " + id);
+            throw new ResourceNotFoundException("treatment.notfound", id);
         }
         treatmentRepository.deleteById(id);
     }
@@ -123,14 +118,12 @@ public class TreatmentServiceImpl implements TreatmentService {
     @Transactional(readOnly = true)
     public TreatmentResponseDTO getTreatmentById(UUID id, Locale locale, String language) {
         Treatment treatment = treatmentRepository.findWithAssignmentAndUserById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage(TREATMENT_NOT_FOUND_KEY, new Object[]{id}, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException(TREATMENT_NOT_FOUND_KEY, id));
 
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && treatment.getHospital() != null
                 && !activeHospitalId.equals(treatment.getHospital().getId())) {
-            throw new ResourceNotFoundException(
-                    messageSource.getMessage(TREATMENT_NOT_FOUND_KEY, new Object[]{id}, locale));
+            throw new ResourceNotFoundException(TREATMENT_NOT_FOUND_KEY, id);
         }
 
         return treatmentMapper.toTreatmentResponseDTO(treatment, language);

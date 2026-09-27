@@ -70,7 +70,6 @@ public class ProResponseService {
     static final int DEFAULT_HISTORY = 20;
 
     private static final String PATIENT_NOT_FOUND = "patient.notfound";
-    private static final String RESPONSE_NOT_FOUND = "Screening response not found.";
 
     private final ProResponseRepository responseRepository;
     private final ProInstrumentService instrumentService;
@@ -126,7 +125,7 @@ public class ProResponseService {
         requireInTenant(patient, hospitalId);
         ProResponse response = responseRepository
             .findByIdAndPatient_IdAndHospital_Id(responseId, patient.getId(), hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(RESPONSE_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException("pro.response.notFound", responseId));
         if (!response.isCriticalItemPositive()) {
             throw new BusinessException("Only a safety-item-positive response needs acknowledging.");
         }
