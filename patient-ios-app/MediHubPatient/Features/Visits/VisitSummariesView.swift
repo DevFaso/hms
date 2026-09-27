@@ -63,7 +63,7 @@ struct VisitSummaryCard: View {
 
                 // Encounter type badge
                 if let encounterType = summary.encounterType, !encounterType.isEmpty {
-                    Text(encounterType.replacingOccurrences(of: "_", with: " "))
+                    Text(EnumLabel.text(.encounterType, encounterType))
                         .font(.caption.weight(.semibold))
                         .textCase(.uppercase)
                         .tracking(0.5)
@@ -92,7 +92,7 @@ struct VisitSummaryCard: View {
                                 icon: "arrow.right.circle.fill",
                                 color: .indigo,
                                 label: "Disposition",
-                                value: disposition.replacingOccurrences(of: "_", with: " ").capitalized
+                                value: EnumLabel.text(.dischargeDisposition, disposition)
                             )
                         }
                         if let condition = summary.dischargeCondition, !condition.isEmpty {
