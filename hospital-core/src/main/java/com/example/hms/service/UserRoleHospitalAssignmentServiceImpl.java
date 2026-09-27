@@ -90,6 +90,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final String GLOBAL_SCOPE = "GLOBAL";
     private static final String MSG_ASSIGNMENT_NOT_FOUND = "assignment.notfound";
     private static final String MSG_ASSIGNMENT_CONFLICT = "assignment.conflict";
+    private static final String MSG_ASSIGNMENT_CONFLICT_INACTIVE = "assignment.conflict.inactive";
     private static final String MSG_ASSIGNMENT_DOCTOR_CONFLICT = "assignment.doctor.conflict";
     private static final String MSG_ROLE_DELETE_CONFLICT = "role.delete.conflict";
     private static final String MSG_ROLE_NOT_FOUND = "role.notfound";
@@ -100,6 +101,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final String MSG_ORGANIZATION_NOT_FOUND = "organization.notfound";
     private static final String DEFAULT_ASSIGNMENT_NOT_FOUND_PREFIX = "Assignment not found with ID: ";
     private static final String DEFAULT_ROLE_ALREADY_ASSIGNED = "Role already assigned to this user for this hospital.";
+    private static final String DEFAULT_ROLE_ASSIGNED_INACTIVE =
+        "This role was assigned to this user at this hospital before and is now inactive. Reactivate that assignment instead.";
     private static final String DEFAULT_ROLE_DELETE_CONFLICT = "Cannot delete role. It is assigned to one or more users.";
     private static final String DEFAULT_USER_NOT_FOUND_PREFIX = "User not found: ";
     private static final String DEFAULT_ROLE_NOT_FOUND_PREFIX = "Role not found with ID: ";
@@ -941,13 +944,37 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                     new Object[]{id},
                     DEFAULT_ASSIGNMENT_NOT_FOUND_PREFIX + id,
                     locale)));
-        if (Boolean.FALSE.equals(assignment.getActive())) {
-            log.info("⏭️ Assignment ID '{}' is already inactive — no change.", id);
+        if (!retire(assignment)) {
+            log.info("⏭️ Assignment ID '{}' is already inactive with no live invitation — no change.", id);
             return;
         }
-        assignment.setActive(false);
         assignmentRepository.save(assignment);
         log.info("🔒 Deactivated assignment ID '{}' (soft — history preserved).", id);
+    }
+
+    /**
+     * Takes an assignment out of use for good: inactive, and its invitation
+     * revoked. Returns whether anything changed.
+     *
+     * <p>Inactive alone is not enough. The public code-entry endpoint
+     * ({@link #verifyAssignmentByCode}) goes on to check the code for ANY row
+     * that is not both verified and active, and a matching code runs
+     * {@code activateVerifiedAssignment}, which switches the assignment AND the
+     * user account back on. A row that is only flagged inactive therefore came
+     * back on its old invitation code for as long as that code was valid - a
+     * deactivated invitation, or a removed user's assignment, re-enabled by
+     * whoever held the code. Clearing the code (and the one-time temporary
+     * password the verification would hand out) makes the refusal final;
+     * re-inviting goes through the resend path, which issues a new code.
+     */
+    private static boolean retire(UserRoleHospitalAssignment assignment) {
+        boolean changed = !Boolean.FALSE.equals(assignment.getActive())
+            || assignment.getConfirmationCode() != null
+            || assignment.getTempPlainPassword() != null;
+        assignment.setActive(false);
+        assignment.setConfirmationCode(null);
+        assignment.setTempPlainPassword(null);
+        return changed;
     }
 
     /**
@@ -960,16 +987,17 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
      * departed clinician's history was left pointing at nothing: on dev four
      * encounters could no longer be edited by anyone (2026-09-13). Deactivated,
      * the row still says who acted in which role at which hospital, the user's
-     * restore finds it, and V175's foreign keys can hold. Already-inactive rows
-     * are left as they are.
+     * restore finds it, and V175's foreign keys can hold. Each row's invitation
+     * is revoked with it, so no old code can switch it (or the account) back on.
      */
     @Override
     public void deleteAllAssignmentsForUser(UUID userId) {
         List<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUserId(userId);
+        // Every row, including a pending invitation that was never active:
+        // its code must stop working too (see retire).
         List<UserRoleHospitalAssignment> deactivated = assignments.stream()
-            .filter(a -> !Boolean.FALSE.equals(a.getActive()))
+            .filter(UserRoleHospitalAssignmentServiceImpl::retire)
             .toList();
-        deactivated.forEach(a -> a.setActive(false));
         assignmentRepository.saveAll(deactivated);
         log.info("🔒 Deactivated {} of {} assignment(s) for user ID '{}' (soft — history preserved).",
             deactivated.size(), assignments.size(), userId);
@@ -1087,6 +1115,14 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             : assignmentRepository.existsByUserIdAndHospitalIdAndRoleId(user.getId(), hospital.getId(), role.getId());
 
         if (alreadyAssigned) {
+            // Assignments are retired, not deleted, so the tuple can be taken by
+            // an inactive row (a removed user's, or one deactivated). Say so:
+            // the answer is to reactivate that row, not to create a second one.
+            if (existingIsInactive(user, role, hospital)) {
+                throw new ConflictException(
+                    messageSource.getMessage(MSG_ASSIGNMENT_CONFLICT_INACTIVE, null,
+                        DEFAULT_ROLE_ASSIGNED_INACTIVE, locale));
+            }
             log.info("⚠️ Role '{}' already assigned to user '{}' for hospital '{}'.",
                 getRoleCode(role),
                 user.getEmail(),
@@ -1095,6 +1131,13 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 messageSource.getMessage(MSG_ASSIGNMENT_CONFLICT, null,
                     DEFAULT_ROLE_ALREADY_ASSIGNED, locale));
         }
+    }
+
+    private boolean existingIsInactive(User user, Role role, Hospital hospital) {
+        Optional<UserRoleHospitalAssignment> existing = (hospital == null)
+            ? assignmentRepository.findByUserIdAndRoleIdAndHospitalIsNull(user.getId(), role.getId())
+            : assignmentRepository.findByUserIdAndHospitalIdAndRoleId(user.getId(), hospital.getId(), role.getId());
+        return existing.map(a -> Boolean.FALSE.equals(a.getActive())).orElse(false);
     }
 
     private Set<UUID> collectTargetHospitalIds(UserRoleAssignmentMultiRequestDTO request, Locale locale) {

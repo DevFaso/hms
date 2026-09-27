@@ -463,18 +463,76 @@ class UserRoleHospitalAssignmentServiceImplTest {
     void removingAUsersAssignmentsDeactivatesThemAndDeletesNothing() {
         UserRoleHospitalAssignment active = UserRoleHospitalAssignment.builder().active(true).build();
         active.setId(UUID.randomUUID());
-        UserRoleHospitalAssignment alreadyInactive = UserRoleHospitalAssignment.builder().active(false).build();
-        alreadyInactive.setId(UUID.randomUUID());
+        UserRoleHospitalAssignment retiredEarlier = UserRoleHospitalAssignment.builder().active(false).build();
+        retiredEarlier.setId(UUID.randomUUID());
         when(assignmentRepository.findByUserId(assignee.getId()))
-            .thenReturn(java.util.List.of(active, alreadyInactive));
+            .thenReturn(java.util.List.of(active, retiredEarlier));
 
         service.deleteAllAssignmentsForUser(assignee.getId());
 
         assertThat(active.getActive()).isFalse();
-        assertThat(alreadyInactive.getActive()).isFalse();
+        assertThat(retiredEarlier.getActive()).isFalse();
         verify(assignmentRepository).saveAll(java.util.List.of(active));
         verify(assignmentRepository, never()).deleteAll(any());
         verify(assignmentRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void aRetiredAssignmentCannotBeSwitchedBackOnWithItsOldCode() {
+        // A pending invitation (never active, code still valid) for a user who
+        // is then removed: the invitee's code used to re-enable the
+        // assignment and the account through the public code-entry endpoint.
+        assignment.setActive(false);
+        assignment.setTempPlainPassword("Temp@1234");
+        assignee.setActive(false);
+        when(assignmentRepository.findByUserId(assignee.getId())).thenReturn(java.util.List.of(assignment));
+        when(assignmentRepository.findByAssignmentCode(VALID_CODE)).thenReturn(Optional.of(assignment));
+
+        service.deleteAllAssignmentsForUser(assignee.getId());
+
+        assertThat(assignment.getConfirmationCode()).isNull();
+        assertThat(assignment.getTempPlainPassword()).isNull();
+        verify(assignmentRepository).saveAll(java.util.List.of(assignment));
+        assertThatThrownBy(() -> service.verifyAssignmentByCode(VALID_CODE, VALID_PIN))
+            .isInstanceOf(BusinessException.class);
+        assertThat(assignment.getActive()).isFalse();
+        assertThat(assignee.isActive()).isFalse();
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void deactivatingAPendingInvitationRevokesItsCode() {
+        UUID id = assignment.getId();
+        assignment.setActive(false);
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+
+        service.deactivateAssignment(id);
+
+        assertThat(assignment.getConfirmationCode()).isNull();
+        verify(assignmentRepository).save(assignment);
+    }
+
+    @Test
+    void reassigningARetiredRoleSaysToReactivateIt() {
+        UserRoleHospitalAssignment retired = UserRoleHospitalAssignment.builder().active(false).build();
+        retired.setId(UUID.randomUUID());
+        when(userRepository.findById(assignee.getId())).thenReturn(Optional.of(assignee));
+        when(roleRepository.findById(role.getId())).thenReturn(Optional.of(role));
+        when(hospitalRepository.findById(hospital.getId())).thenReturn(Optional.of(hospital));
+        when(assignmentRepository.existsByUserIdAndHospitalIdAndRoleId(assignee.getId(), hospital.getId(), role.getId()))
+            .thenReturn(true);
+        when(assignmentRepository.findByUserIdAndHospitalIdAndRoleId(assignee.getId(), hospital.getId(), role.getId()))
+            .thenReturn(Optional.of(retired));
+        com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO dto =
+            new com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO();
+        dto.setUserId(assignee.getId());
+        dto.setRoleId(role.getId());
+        dto.setHospitalId(hospital.getId());
+        dto.setActive(false);
+
+        assertThatThrownBy(() -> service.assignRole(dto))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("Reactivate that assignment");
     }
 
     @Test
