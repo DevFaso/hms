@@ -475,7 +475,7 @@
             {{ h.obstetricHistory?.previousCesareanSections ?? '—' }}
           </p>
           @if (h.obstetricHistory?.previousPregnancyComplications) {
-            <p class="muted">{{ h.obstetricHistory?.previousPregnancyComplications }}</p>
+            <p class="muted">{{ h.obstetricHistory.previousPregnancyComplications }}</p>
           }
         </div>
         @if (h.menstrualHistory?.lastMenstrualPeriod || h.menstrualHistory?.estimatedDueDate) {
@@ -484,16 +484,14 @@
             <p>
               {{ 'MATERNITY.LMP' | translate }}:
               {{
-                h.menstrualHistory?.lastMenstrualPeriod
-                  ? ($safeNavigationMigration(h.menstrualHistory?.lastMenstrualPeriod)
-                    | date: 'mediumDate')
+                h.menstrualHistory.lastMenstrualPeriod
+                  ? (h.menstrualHistory.lastMenstrualPeriod | date: 'mediumDate')
                   : '—'
               }}
               · {{ 'MATERNITY.EDD' | translate }}:
               {{
-                h.menstrualHistory?.estimatedDueDate
-                  ? ($safeNavigationMigration(h.menstrualHistory?.estimatedDueDate)
-                    | date: 'mediumDate')
+                h.menstrualHistory.estimatedDueDate
+                  ? (h.menstrualHistory.estimatedDueDate | date: 'mediumDate')
                   : '—'
               }}
             </p>
@@ -1095,12 +1093,12 @@
           }
           @if (r.midwife?.displayName) {
             <p class="muted">
-              {{ 'MATERNITY.REFERRED_BY' | translate }}: {{ r.midwife?.displayName }}
+              {{ 'MATERNITY.REFERRED_BY' | translate }}: {{ r.midwife.displayName }}
             </p>
           }
           @if (r.obgyn?.displayName) {
             <p class="muted">
-              {{ 'MATERNITY.ASSIGNED_OBGYN' | translate }}: {{ r.obgyn?.displayName }}
+              {{ 'MATERNITY.ASSIGNED_OBGYN' | translate }}: {{ r.obgyn.displayName }}
             </p>
           }
         </div>

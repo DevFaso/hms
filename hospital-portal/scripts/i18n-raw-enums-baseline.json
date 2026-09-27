@@ -90,7 +90,7 @@
     "src/app/lab/lab-test-config/lab-test-config.html::def.sampleType",
     "src/app/lab/lab.html::o.orderChannel",
     "src/app/lab/lab.html::s.specimenType",
-    "src/app/maternity/birth-plan-tab.html::p.deliveryPreferences?.backupDeliveryMethod",
+    "src/app/maternity/birth-plan-tab.html::p.deliveryPreferences.backupDeliveryMethod",
     "src/app/maternity/birth-plan-tab.html::p.deliveryPreferences?.preferredDeliveryMethod",
     "src/app/maternity/birth-plan-tab.html::p.postpartumPreferences?.feedingMethod",
     "src/app/maternity/maternity.html::h.specialistReferralReason",

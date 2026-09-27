@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
 import { BedBoardComponent } from './bed-board';
@@ -533,5 +533,24 @@ describe('BedBoardComponent', () => {
 
     const [, sent] = transferSpy.cancelTransfer.calls.mostRecent().args;
     expect(sent.cancellationReason).toBe('Patient improved');
+  });
+
+  it('titles the precautions dialog without a literal "null" when the name is unknown', () => {
+    // The title is a translate param; ngx-translate prints a null param as
+    // "null" and leaves "{{name}}" for an undefined one, so the template
+    // passes an empty string for a patient with no name on file.
+    TestBed.inject(TranslateService).setTranslation('en', {
+      BED_BOARD: { PRECAUTIONS_FOR: 'Isolation precautions — {{name}}' },
+    });
+    TestBed.inject(TranslateService).use('en');
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openPrecautions(occupant({ patientName: null }));
+    fixture.detectChanges();
+
+    const title = (fixture.nativeElement as HTMLElement)
+      .querySelector('[role="dialog"] h2')
+      ?.textContent?.trim();
+    expect(title).toBe('Isolation precautions —');
   });
 });

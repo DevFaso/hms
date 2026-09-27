@@ -67,7 +67,7 @@
             <td>
               {{
                 p.introduction?.expectedDueDate
-                  ? ($safeNavigationMigration(p.introduction?.expectedDueDate) | date: 'mediumDate')
+                  ? (p.introduction.expectedDueDate | date: 'mediumDate')
                   : '—'
               }}
             </td>
@@ -176,14 +176,14 @@
             {{ 'MATERNITY.EDD' | translate }}:
             {{
               p.introduction?.expectedDueDate
-                ? ($safeNavigationMigration(p.introduction?.expectedDueDate) | date: 'mediumDate')
+                ? (p.introduction.expectedDueDate | date: 'mediumDate')
                 : '—'
             }}
             · {{ 'BIRTH_PLAN.PLACE' | translate }}: {{ p.introduction?.placeOfBirth || '—' }} ·
             {{ 'BIRTH_PLAN.PROVIDER' | translate }}: {{ p.introduction?.healthcareProvider || '—' }}
           </p>
           @if (p.introduction?.medicalConditions) {
-            <p class="muted">{{ p.introduction?.medicalConditions }}</p>
+            <p class="muted">{{ p.introduction.medicalConditions }}</p>
           }
         </div>
         <div class="view-section">
@@ -192,21 +192,21 @@
             {{ p.deliveryPreferences?.preferredDeliveryMethod || '—' }}
             @if (p.deliveryPreferences?.backupDeliveryMethod) {
               ({{ 'BIRTH_PLAN.BACKUP' | translate }}:
-              {{ p.deliveryPreferences?.backupDeliveryMethod }})
+              {{ p.deliveryPreferences.backupDeliveryMethod }})
             }
           </p>
           @if (p.deliveryPreferences?.deliveryMethodNotes) {
-            <p class="muted">{{ p.deliveryPreferences?.deliveryMethodNotes }}</p>
+            <p class="muted">{{ p.deliveryPreferences.deliveryMethodNotes }}</p>
           }
         </div>
         <div class="view-section">
           <h3>{{ 'BIRTH_PLAN.SECTION_PAIN' | translate }}</h3>
           <p>{{ p.painManagement?.preferredApproach || '—' }}</p>
           @if (p.painManagement?.unmedicatedTechniques?.length) {
-            <p class="muted">{{ p.painManagement?.unmedicatedTechniques?.join(', ') }}</p>
+            <p class="muted">{{ p.painManagement.unmedicatedTechniques.join(', ') }}</p>
           }
           @if (p.painManagement?.medicatedOptions?.length) {
-            <p class="muted">{{ p.painManagement?.medicatedOptions?.join(', ') }}</p>
+            <p class="muted">{{ p.painManagement.medicatedOptions.join(', ') }}</p>
           }
         </div>
         <div class="view-section">
@@ -214,11 +214,11 @@
           @if (p.deliveryRoomEnvironment?.supportPersons?.length) {
             <p>
               {{ 'BIRTH_PLAN.SUPPORT_PERSONS' | translate }}:
-              {{ p.deliveryRoomEnvironment?.supportPersons?.join(', ') }}
+              {{ p.deliveryRoomEnvironment.supportPersons.join(', ') }}
             </p>
           }
           @if (p.deliveryRoomEnvironment?.environmentNotes) {
-            <p class="muted">{{ p.deliveryRoomEnvironment?.environmentNotes }}</p>
+            <p class="muted">{{ p.deliveryRoomEnvironment.environmentNotes }}</p>
           }
         </div>
         <div class="view-section">
@@ -234,7 +234,7 @@
             }
           </p>
           @if (p.postpartumPreferences?.postpartumNotes) {
-            <p class="muted">{{ p.postpartumPreferences?.postpartumNotes }}</p>
+            <p class="muted">{{ p.postpartumPreferences.postpartumNotes }}</p>
           }
         </div>
         @if (p.additionalWishes) {
