@@ -208,6 +208,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                 && !activeHospitalId.equals(invoice.getHospital().getId())) {
             throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, id);
         }
+        // A payment row references the invoice (fk_pt_invoice, no cascade):
+        // an invoice somebody has paid against is a financial record, so it
+        // is refused with a reason rather than failing on the foreign key.
+        if (paymentTransactionRepository.existsByInvoice_Id(id)) {
+            throw new BusinessException("billing.invoice.hasPayments");
+        }
         invoiceRepository.deleteById(id);
     }
 

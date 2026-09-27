@@ -371,4 +371,28 @@ class BillingInvoiceServiceImplTest {
 
         verify(paymentTransactionRepository, org.mockito.Mockito.never()).save(any());
     }
+    @Test
+    void deleteInvoice_withAPaymentRowIsRefusedNotAForeignKeyFailure() {
+        BillingInvoice invoice = payableInvoice(UUID.randomUUID());
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(paymentTransactionRepository.existsByInvoice_Id(invoice.getId())).thenReturn(true);
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.deleteInvoice(invoice.getId(), Locale.ENGLISH));
+
+        assertEquals("billing.invoice.hasPayments", refused.getMessageKey());
+        verify(invoiceRepository, org.mockito.Mockito.never()).deleteById(any());
+    }
+
+    @Test
+    void deleteInvoice_withoutPaymentsStillDeletes() {
+        BillingInvoice invoice = payableInvoice(UUID.randomUUID());
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(paymentTransactionRepository.existsByInvoice_Id(invoice.getId())).thenReturn(false);
+
+        billingInvoiceService.deleteInvoice(invoice.getId(), Locale.ENGLISH);
+
+        verify(invoiceRepository).deleteById(invoice.getId());
+    }
 }

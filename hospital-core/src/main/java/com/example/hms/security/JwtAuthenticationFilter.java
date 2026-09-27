@@ -514,6 +514,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return true;
         }
 
+        // Logout reads the bearer itself and only ever revokes what it is
+        // handed. Running this filter first would answer a valid-but-refused
+        // bearer (idle window passed, tenant suspended, already blacklisted,
+        // revoked by a global IAT) with a 401/423 before the controller runs,
+        // and the refresh token the client hands back would never be revoked.
+        if ("POST".equalsIgnoreCase(request.getMethod())
+                && uri.equals(request.getContextPath() + "/auth/logout")) {
+            return true;
+        }
+
         return PREFIX_SKIP_PATHS.stream().anyMatch(uri::startsWith);
     }
 }
