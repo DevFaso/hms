@@ -13,7 +13,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 import java.util.HashSet;
-import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -71,6 +70,8 @@ public class RoleValidator {
      * live, verified signal — so its callers stopped disagreeing with every
      * other scope decision. New code calls
      * {@link ActingScopeResolver#isVerifiedSuperAdmin()}.
+     *
+     * @deprecated use {@link ActingScopeResolver#isVerifiedSuperAdmin()}
      */
     @Deprecated(since = "tenant-resolution design, 2026-09")
     public boolean isSuperAdminFromAuth() { return isSuperAdminFromJwtClaim(); }

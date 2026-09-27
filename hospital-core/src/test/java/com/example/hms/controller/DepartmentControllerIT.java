@@ -70,8 +70,7 @@ class DepartmentControllerIT extends BaseIT {
 	 * super-admin in global view would (the authorities alone no longer make
 	 * a super-admin: the one tenant resolver's "step 4" is gone).
 	 */
-	@BeforeEach
-	void globalSuperAdmin() {
+	private void globalSuperAdmin() {
 		ActingScopeTestSupport.globalSuperAdmin(UUID.randomUUID());
 	}
 
@@ -82,6 +81,7 @@ class DepartmentControllerIT extends BaseIT {
 
 	@BeforeEach
 	void cleanDatabase() {
+		globalSuperAdmin();
 		departmentRepository.deleteAll();
 		assignmentRepository.deleteAll();
 		hospitalRepository.deleteAll();

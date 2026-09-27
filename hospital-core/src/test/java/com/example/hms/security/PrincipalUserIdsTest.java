@@ -10,7 +10,6 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -72,7 +71,7 @@ class PrincipalUserIdsTest {
     @Test
     @DisplayName("no principal, or an unknown principal type, has no id")
     void noPrincipal() {
-        assertThat(PrincipalUserIds.of(null)).isEqualTo(Optional.empty());
+        assertThat(PrincipalUserIds.of(null)).isEmpty();
         assertThat(PrincipalUserIds.of(new UsernamePasswordAuthenticationToken("name", null))).isEmpty();
     }
 

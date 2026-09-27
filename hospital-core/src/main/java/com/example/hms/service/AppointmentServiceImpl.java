@@ -1061,7 +1061,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 pinnedHospitalId, context.getPermittedHospitalIds(), actualHospitalIds);
             logHospitalLookup("assignments", actualHospitalIds);
         }
-        UUID activeCandidate = resolveActiveHospitalCandidate(context, actualHospitalIds);
+        UUID activeCandidate = resolveActiveHospitalCandidate(actualHospitalIds);
         if (activeCandidate != null) {
             return Set.of(activeCandidate);
         }
@@ -1096,7 +1096,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         logHospitalLookup("scope", hospitalScope);
     }
 
-    private UUID resolveActiveHospitalCandidate(HospitalContext context, Set<UUID> actualHospitalIds) {
+    private UUID resolveActiveHospitalCandidate(Set<UUID> actualHospitalIds) {
         UUID activeHospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
         if (activeHospitalId == null) {
             return null;

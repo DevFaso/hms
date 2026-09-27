@@ -105,7 +105,7 @@ public class ControllerAuthUtils {
         return switch (scope) {
             case ActingScope.Pinned pinned -> pinned.hospitalId();
             case ActingScope.Global global -> null;
-            case ActingScope.Refused refused -> refusedScope(auth, refused.reason(), requiredForReceptionist);
+            case ActingScope.Refused(ActingScope.Reason reason) -> refusedScope(auth, reason, requiredForReceptionist);
         };
     }
 
@@ -139,6 +139,7 @@ public class ControllerAuthUtils {
      * {@code SOLE_ASSIGNMENT} rule replaces it, and a caller with several
      * hospitals and none named has none.
      */
+    @SuppressWarnings("java:S1172") // kept for its callers: the scope no longer depends on the principal
     public UUID currentHospitalId(Authentication auth) {
         return contextHospitalId();
     }

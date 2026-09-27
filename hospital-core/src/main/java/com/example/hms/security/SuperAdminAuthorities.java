@@ -9,6 +9,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -43,13 +44,14 @@ public final class SuperAdminAuthorities {
         List<GrantedAuthority> authorities = reconciled.stream()
             .<GrantedAuthority>map(SimpleGrantedAuthority::new)
             .toList();
-        AbstractAuthenticationToken rebuilt;
-        if (authentication instanceof JwtAuthenticationToken jwt) {
-            rebuilt = new JwtAuthenticationToken(jwt.getToken(), authorities, jwt.getName());
-        } else if (authentication instanceof UsernamePasswordAuthenticationToken password) {
-            rebuilt = UsernamePasswordAuthenticationToken.authenticated(
-                password.getPrincipal(), password.getCredentials(), authorities);
-        } else {
+        AbstractAuthenticationToken rebuilt = switch (authentication) {
+            case JwtAuthenticationToken jwt -> new JwtAuthenticationToken(jwt.getToken(), authorities, jwt.getName());
+            // Credentials are erased once authenticated; nothing reads them after the filter.
+            case UsernamePasswordAuthenticationToken password -> UsernamePasswordAuthenticationToken.authenticated(
+                password.getPrincipal(), Objects.requireNonNullElse(password.getCredentials(), ""), authorities);
+            default -> null;
+        };
+        if (rebuilt == null) {
             return authentication;
         }
         rebuilt.setDetails(authentication.getDetails());

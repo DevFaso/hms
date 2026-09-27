@@ -113,6 +113,25 @@ class CdsAcknowledgementServiceImplTest {
     }
 
     @Test
+    @DisplayName("the hospital named in the body narrows the scope before the tenant-scoped patient load reads it")
+    void resolvesTheScopeBeforeTheScopedPatientLoad() {
+        stubInScopeUser();
+        when(repository.save(any(CdsAcknowledgement.class))).thenAnswer(inv -> {
+            CdsAcknowledgement saved = inv.getArgument(0);
+            saved.setId(UUID.randomUUID());
+            saved.setCreatedAt(LocalDateTime.now());
+            return saved;
+        });
+
+        service.acknowledge(auth, buildRequest(CdsAcknowledgementAction.ACKNOWLEDGED, null));
+
+        // The load seals the scope; a narrow after it would be refused.
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(authUtils, patientRepository);
+        order.verify(authUtils).resolveHospitalScope(auth, hospitalId, false);
+        order.verify(patientRepository).findById(patientId);
+    }
+
+    @Test
     @DisplayName("OVERRIDDEN requires a reason")
     void overridden_requiresReason() {
         CdsAcknowledgementRequestDTO request = buildRequest(CdsAcknowledgementAction.OVERRIDDEN, "  ");

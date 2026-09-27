@@ -59,7 +59,13 @@ public class HospitalIdNarrowingInterceptor implements HandlerInterceptor {
         this.resolverProvider = resolverProvider;
     }
 
+    /**
+     * Always true: a refused hospital is answered by throwing
+     * {@link HospitalScopeRefusedException} (403 through the exception
+     * handler), never by a silent {@code false}.
+     */
     @Override
+    @SuppressWarnings("java:S3516")
     public boolean preHandle(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response,
                              @NonNull Object handler) {
         if (!(handler instanceof HandlerMethod method) || HospitalContextHolder.getContext().isEmpty()
@@ -71,9 +77,8 @@ public class HospitalIdNarrowingInterceptor implements HandlerInterceptor {
         if (hospitalId == null || resolver == null) {
             return true;
         }
-        if (resolver.narrowTo(hospitalId) instanceof ActingScope.Refused refused) {
-            throw new HospitalScopeRefusedException(refused.reason(),
-                ActingScopeResolver.refusalMessage(refused.reason()));
+        if (resolver.narrowTo(hospitalId) instanceof ActingScope.Refused(ActingScope.Reason reason)) {
+            throw new HospitalScopeRefusedException(reason, ActingScopeResolver.refusalMessage(reason));
         }
         return true;
     }

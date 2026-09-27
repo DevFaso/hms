@@ -13,7 +13,6 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
-import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.utility.RoleValidator;
@@ -239,18 +238,7 @@ class PatientFhirWriteServiceTenancyTest {
         assertThat(nowhere).isInstanceOf(ResourceNotFoundException.class);
     }
 
-    @Test
-    void aSuperAdminInGlobalViewMayNotConditionallyCreate() {
-        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
-        stubMrnToken(otherHospital);
-        String header = ifNoneExist(otherHospital);
-        org.hl7.fhir.r4.model.Patient body = new org.hl7.fhir.r4.model.Patient();
-
-        assertThatThrownBy(() -> service.conditionalCreate(header, body))
-            .isInstanceOf(ForbiddenOperationException.class);
-        verify(registrationRepository, never()).findActiveByHospitalIdAndIdentifier(any(), any());
-    }
-
+    /** Q9: global view has no hospital to write at, so a conditional create is refused too. */
     @Test
     void conditionalCreateWithANullScopeTheVerifiedFlagDoesNotBackIsForbidden() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);

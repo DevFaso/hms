@@ -109,19 +109,8 @@ public class ActingScopeResolver {
         Set<String> roles = new LinkedHashSet<>();
         Map<UUID, UUID> hospitalOrganizations = new LinkedHashMap<>();
         for (TenantRoleAssignment assignment : assignments == null ? List.<TenantRoleAssignment>of() : assignments) {
-            if (!assignment.active()) {
-                continue;
-            }
-            String role = roleCode(assignment);
-            if (role != null) {
-                roles.add(role);
-            }
-            if (assignment.hospitalId() != null && hospitals.add(assignment.hospitalId())
-                && assignment.organizationId() != null) {
-                hospitalOrganizations.put(assignment.hospitalId(), assignment.organizationId());
-            }
-            if (assignment.organizationId() != null) {
-                organizations.add(assignment.organizationId());
+            if (assignment.active()) {
+                collect(assignment, hospitals, organizations, roles, hospitalOrganizations);
             }
         }
         boolean superAdmin = roles.contains(ROLE_SUPER_ADMIN);
@@ -158,6 +147,22 @@ public class ActingScopeResolver {
         return builder
             .scopeRefusal(hospitals.isEmpty() ? ActingScope.Reason.NO_HOSPITAL : ActingScope.Reason.AMBIGUOUS)
             .build();
+    }
+
+    /** One active assignment's contribution to the live context. */
+    private static void collect(TenantRoleAssignment assignment, Set<UUID> hospitals, Set<UUID> organizations,
+                                Set<String> roles, Map<UUID, UUID> hospitalOrganizations) {
+        String role = roleCode(assignment);
+        if (role != null) {
+            roles.add(role);
+        }
+        UUID organization = assignment.organizationId();
+        if (assignment.hospitalId() != null && hospitals.add(assignment.hospitalId()) && organization != null) {
+            hospitalOrganizations.put(assignment.hospitalId(), organization);
+        }
+        if (organization != null) {
+            organizations.add(organization);
+        }
     }
 
     /**
@@ -322,8 +327,8 @@ public class ActingScopeResolver {
             case ActingScope.Pinned pinned -> pinned.hospitalId();
             case ActingScope.Global global -> throw new HospitalScopeRefusedException(
                 "Select a hospital: this action needs one hospital and the request is in global view.");
-            case ActingScope.Refused refused -> throw new HospitalScopeRefusedException(
-                refused.reason(), refusalMessage(refused.reason()));
+            case ActingScope.Refused(ActingScope.Reason reason) -> throw new HospitalScopeRefusedException(
+                reason, refusalMessage(reason));
         };
     }
 

@@ -47,20 +47,30 @@ class HospitalIdNarrowingInterceptorTest {
     /** Stand-in handlers: the shapes the interceptor must recognise. */
     static class Handlers {
         @GetMapping("/h/{hospitalId}/x")
-        public void byPath(@PathVariable UUID hospitalId) { }
+        public void byPath(@PathVariable UUID hospitalId) {
+            // shape only: the interceptor reads the signature, never calls it
+        }
 
         @GetMapping("/x")
-        public void byParam(@RequestParam(required = false) UUID hospitalId) { }
+        public void byParam(@RequestParam(required = false) UUID hospitalId) {
+            // shape only: the interceptor reads the signature, never calls it
+        }
 
         @GetMapping("/h/{id}")
-        public void byNamedPath(@PathVariable("hospitalId") UUID id) { }
+        public void byNamedPath(@PathVariable("hospitalId") UUID id) {
+            // shape only: the interceptor reads the signature, never calls it
+        }
 
         @GetMapping("/book/{hospitalId}")
         @HospitalScopeExempt(reason = "the hospital is a booking target")
-        public void exempt(@PathVariable UUID hospitalId) { }
+        public void exempt(@PathVariable UUID hospitalId) {
+            // shape only: the interceptor reads the signature, never calls it
+        }
 
         @GetMapping("/y")
-        public void noHospital(@RequestParam UUID patientId) { }
+        public void noHospital(@RequestParam UUID patientId) {
+            // shape only: the interceptor reads the signature, never calls it
+        }
     }
 
     @BeforeEach
@@ -113,11 +123,14 @@ class HospitalIdNarrowingInterceptorTest {
 
     @Test
     @DisplayName("an unheld hospital is refused 403 with its reason, and audited")
-    void unheldHospitalIsRefused() {
+    void unheldHospitalIsRefused() throws Exception {
         ActingScopeTestSupport.actingAt(USER, A);
         when(assignments.existsByUserIdAndHospitalIdAndActiveFalse(USER, B)).thenReturn(true);
 
-        assertThatThrownBy(() -> interceptor.preHandle(pathRequest(B), new MockHttpServletResponse(), handler("byPath")))
+        MockHttpServletRequest request = pathRequest(B);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        HandlerMethod byPath = handler("byPath");
+        assertThatThrownBy(() -> interceptor.preHandle(request, response, byPath))
             .isInstanceOf(HospitalScopeRefusedException.class)
             .extracting(e -> ((HospitalScopeRefusedException) e).getReason())
             .isEqualTo("NO_LONGER_PERMITTED");

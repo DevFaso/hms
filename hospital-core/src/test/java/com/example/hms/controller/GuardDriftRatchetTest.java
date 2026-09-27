@@ -68,7 +68,7 @@ class GuardDriftRatchetTest {
                 }
             }
         }
-        assertThat(found.size()).as("the scan reached the guards").isPositive();
+        assertThat(found).as("the scan reached the guards").isNotEmpty();
 
         Set<String> unlisted = new TreeSet<>(found);
         unlisted.removeAll(DOCTOR_WITHOUT_NURSE.keySet());

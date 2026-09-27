@@ -382,7 +382,9 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(HospitalScopeRefusedException.class)
     public ResponseEntity<Object> handleHospitalScopeRefused(HospitalScopeRefusedException ex, WebRequest request) {
-        log.warn("Hospital scope refused ({}) at path {}", ex.getReason(), request.getDescription(false));
+        if (log.isWarnEnabled()) {
+            log.warn("Hospital scope refused ({}) at path {}", ex.getReason(), request.getDescription(false));
+        }
         Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN, ex.getMessage(), request);
         body.put("code", HospitalScopeRefusedException.CODE);
         body.put("reason", ex.getReason());

@@ -4,7 +4,6 @@ import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.HospitalScopeRefusedException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.User;
-import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.DashboardConfigResponseDTO;
 import com.example.hms.payload.dto.StaffResponseDTO;

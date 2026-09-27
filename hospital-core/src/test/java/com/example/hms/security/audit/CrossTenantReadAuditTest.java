@@ -20,6 +20,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -159,7 +160,7 @@ class CrossTenantReadAuditTest {
             com.example.hms.security.tenant.ActingScope.Source.HEADER, now + 61 * 60_000L);
 
         ArgumentCaptor<AuditEventRequestDTO> rows = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
-        verify(auditEventLogService, org.mockito.Mockito.times(3)).logEvent(rows.capture());
+        verify(auditEventLogService, times(3)).logEvent(rows.capture());
         AuditEventRequestDTO first = rows.getAllValues().get(0);
         assertThat(first.getEventType()).isEqualTo(AuditEventType.DATA_ACCESS);
         assertThat(first.getStatus()).isEqualTo(AuditStatus.REJECTED);
@@ -181,7 +182,7 @@ class CrossTenantReadAuditTest {
         audit.recordRefusal(UUID.randomUUID(), "x", null,
             com.example.hms.security.tenant.ActingScope.Reason.NOT_PERMITTED,
             com.example.hms.security.tenant.ActingScope.Source.HEADER);
-        verify(auditEventLogService, org.mockito.Mockito.times(1)).logEvent(org.mockito.ArgumentMatchers.any());
+        verify(auditEventLogService, times(1)).logEvent(org.mockito.ArgumentMatchers.any());
     }
 
     @Test
