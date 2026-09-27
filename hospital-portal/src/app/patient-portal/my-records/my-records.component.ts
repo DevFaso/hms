@@ -17,7 +17,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
   standalone: true,
   imports: [CommonModule, DatePipe, RouterLink, EnumLabelPipe, TranslateModule],
   templateUrl: './my-records.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-records.component.scss', '../patient-portal-pages.scss'],
 })
 export class MyRecordsComponent implements OnInit {

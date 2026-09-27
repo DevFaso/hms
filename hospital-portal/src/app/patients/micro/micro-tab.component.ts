@@ -19,7 +19,7 @@ import {
   standalone: true,
   imports: [CommonModule, TranslateModule],
   templateUrl: './micro-tab.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './micro-tab.component.scss',
 })
 export class MicroTabComponent implements OnInit {

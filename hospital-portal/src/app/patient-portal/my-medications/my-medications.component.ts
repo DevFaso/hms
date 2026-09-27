@@ -16,7 +16,7 @@ import { ToastService } from '../../core/toast.service';
   standalone: true,
   imports: [CommonModule, DatePipe, EnumLabelPipe, TranslateModule],
   templateUrl: './my-medications.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-medications.component.scss', '../patient-portal-pages.scss'],
 })
 export class MyMedicationsComponent implements OnInit {

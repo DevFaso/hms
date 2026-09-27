@@ -23,7 +23,7 @@ interface VitalGroup {
   standalone: true,
   imports: [CommonModule, DatePipe, EnumLabelPipe, TranslateModule],
   templateUrl: './my-vitals.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-vitals.component.scss', '../patient-portal-pages.scss'],
 })
 export class MyVitalsComponent implements OnInit {

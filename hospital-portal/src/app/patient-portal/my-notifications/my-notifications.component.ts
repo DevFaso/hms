@@ -10,7 +10,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
   standalone: true,
   imports: [DatePipe, TranslateModule, EnumLabelPipe],
   templateUrl: './my-notifications.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-notifications.component.scss', '../patient-portal-pages.scss'],
 })
 export class MyNotificationsComponent implements OnInit {

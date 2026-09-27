@@ -15,7 +15,7 @@ import { InsuranceIssue } from '../reception.service';
   standalone: true,
   imports: [CommonModule, TranslateModule],
   templateUrl: './insurance-issues-panel.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './insurance-issues-panel.component.scss',
 })
 export class InsuranceIssuesPanelComponent {
