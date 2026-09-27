@@ -125,3 +125,58 @@ describe('PatientPortalService lab results', () => {
     expect(mapped.map((l) => l.isAbnormal)).toEqual([true, true]);
   });
 });
+
+/**
+ * GET /me/patient/care-team returns CareTeamDTO { primaryCare,
+ * primaryCareHistory }. The portal declared `{ members }` for it and swallowed
+ * every error as an empty team.
+ */
+describe('PatientPortalService care team', () => {
+  let service: PatientPortalService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [PatientPortalService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(PatientPortalService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify());
+
+  it('passes the backend shape through', () => {
+    const pcp = {
+      id: 'pcp-1',
+      hospitalId: 'h-1',
+      hospitalName: null,
+      doctorUserId: 'd-1',
+      doctorDisplay: 'Dr Awa Traoré',
+      startDate: '2026-01-15',
+      endDate: null,
+      current: true,
+    };
+    let received: unknown;
+    service.getMyCareTeam().subscribe((t) => (received = t));
+    httpMock
+      .expectOne('/me/patient/care-team')
+      .flush({ data: { primaryCare: pcp, primaryCareHistory: [pcp] } });
+    expect(received).toEqual({ primaryCare: pcp, primaryCareHistory: [pcp] });
+  });
+
+  it('normalises an absent current provider and history', () => {
+    let received: unknown;
+    service.getMyCareTeam().subscribe((t) => (received = t));
+    httpMock.expectOne('/me/patient/care-team').flush({ data: {} });
+    expect(received).toEqual({ primaryCare: null, primaryCareHistory: [] });
+  });
+
+  it('lets a failure through instead of reporting an empty team', () => {
+    let failed = false;
+    service.getMyCareTeam().subscribe({ error: () => (failed = true) });
+    httpMock
+      .expectOne('/me/patient/care-team')
+      .flush('boom', { status: 500, statusText: 'Server Error' });
+    expect(failed).toBeTrue();
+  });
+});

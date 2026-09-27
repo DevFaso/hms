@@ -1693,3 +1693,96 @@ describe('dashboard - review queue and snapshot follow the hospital scope', () =
     expect(component.patientSnapshot()).toBeNull();
   });
 });
+
+/**
+ * The patient's "My care team" card read `members`, a field the care-team
+ * endpoint never sends, so it never appeared. It now shows the current
+ * primary care provider from CareTeamDTO.primaryCare. Asserted through the
+ * DOM in French: the card only counts once it renders, translated.
+ */
+describe('Dashboard patient care-team card', () => {
+  function renderPatient(): ComponentFixture<DashboardComponent> {
+    const authStub = jasmine.createSpyObj('AuthService', [
+      'getRoles',
+      'hasAnyRole',
+      'getToken',
+      'getUserProfile',
+      'getHospitalId',
+    ]);
+    authStub.getRoles.and.returnValue(['ROLE_PATIENT']);
+    authStub.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_PATIENT'));
+    authStub.getToken.and.returnValue('fake-token');
+    authStub.getUserProfile.and.returnValue({
+      id: 'u1',
+      username: 'awa',
+      email: 'awa@example.org',
+      roles: ['ROLE_PATIENT'],
+      active: true,
+    } as never);
+    TestBed.configureTestingModule({
+      imports: [DashboardComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter(appRoutes),
+        { provide: AuthService, useValue: authStub },
+        {
+          provide: PermissionService,
+          useValue: { hasPermission: () => false, hasAnyPermission: () => false },
+        },
+      ],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setFallbackLang('fr');
+    translate.use('fr');
+    translate.setTranslation('fr', {
+      DASHBOARD: { MY_CARE_TEAM: 'Mon équipe soignante' },
+      PORTAL: {
+        CARE_TEAM: { PRIMARY_PROVIDER: 'Médecin traitant', SINCE: 'Depuis le {{date}}' },
+      },
+    });
+    const fixture = TestBed.createComponent(DashboardComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.loading.set(false);
+    return fixture;
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  const card = (f: ComponentFixture<DashboardComponent>): HTMLElement | null =>
+    (f.nativeElement as HTMLElement).querySelector('[data-testid="dashboard-care-team"]');
+
+  it('shows the current primary care provider, translated', () => {
+    const fixture = renderPatient();
+    fixture.componentInstance.myCareTeam.set({
+      primaryCare: {
+        id: 'pcp-1',
+        hospitalId: 'h-1',
+        hospitalName: 'CHU Yalgado',
+        doctorUserId: 'd-1',
+        doctorDisplay: 'Dr Awa Traoré',
+        startDate: '2026-01-15',
+        endDate: null,
+        current: true,
+      },
+      primaryCareHistory: [],
+    });
+    fixture.detectChanges();
+
+    const el = card(fixture);
+    expect(el).not.toBeNull();
+    expect(el!.querySelector('.card-title')?.textContent?.trim()).toBe('Mon équipe soignante');
+    expect(el!.querySelector('.ctm-name')?.textContent?.trim()).toBe('Dr Awa Traoré');
+    const roles = Array.from(el!.querySelectorAll('.ctm-role')).map((r) => r.textContent?.trim());
+    expect(roles[0]).toBe('Médecin traitant');
+    expect(roles[1]).toBe('CHU Yalgado');
+    expect(roles[2]).toMatch(/^Depuis le /);
+  });
+
+  it('stays out of the way when there is no current provider', () => {
+    const fixture = renderPatient();
+    fixture.componentInstance.myCareTeam.set({ primaryCare: null, primaryCareHistory: [] });
+    fixture.detectChanges();
+    expect(card(fixture)).toBeNull();
+  });
+});

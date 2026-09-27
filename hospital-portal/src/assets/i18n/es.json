@@ -4463,7 +4463,10 @@
       "LOADING": "Cargando equipo de atención…",
       "EMPTY_TITLE": "Sin miembros del equipo de atención",
       "EMPTY_DESC": "La información de su equipo de atención aparecerá aquí.",
-      "PRIMARY_PROVIDER": "Médico de cabecera"
+      "PRIMARY_PROVIDER": "Médico de cabecera",
+      "SINCE": "Desde el {{date}}",
+      "HISTORY_TITLE": "Médicos de cabecera anteriores",
+      "LOAD_ERROR": "No se pudo cargar su equipo de atención. Reintente."
     },
     "RECORDS": {
       "TITLE": "Resumen de salud",

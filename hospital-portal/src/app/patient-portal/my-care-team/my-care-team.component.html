@@ -11,44 +11,68 @@
       <div class="portal-spinner"></div>
       <p>{{ 'PORTAL.CARE_TEAM.LOADING' | translate }}</p>
     </div>
-  } @else if (members().length === 0) {
-    <div class="portal-empty">
+  } @else if (failed()) {
+    <div class="portal-empty" role="alert" data-testid="care-team-error">
+      <span class="material-symbols-outlined">error</span>
+      <p>{{ 'PORTAL.CARE_TEAM.LOAD_ERROR' | translate }}</p>
+    </div>
+  } @else if (empty()) {
+    <div class="portal-empty" data-testid="care-team-empty">
       <span class="material-symbols-outlined">groups</span>
       <h3>{{ 'PORTAL.CARE_TEAM.EMPTY_TITLE' | translate }}</h3>
       <p>{{ 'PORTAL.CARE_TEAM.EMPTY_DESC' | translate }}</p>
     </div>
   } @else {
-    <section class="portal-section">
-      <div class="care-team-list">
-        @for (m of members(); track m.name) {
-          <div class="ct-card" [class.ct-primary]="m.isPrimary">
-            @if (m.isPrimary) {
-              <span class="ct-badge">{{ 'PORTAL.CARE_TEAM.PRIMARY_PROVIDER' | translate }}</span>
-            }
-            <div
-              class="ct-avatar"
-              [style.background]="m.isPrimary ? 'var(--primary-tint)' : '#f1f5f9'"
-            >
-              <span
-                class="material-symbols-outlined"
-                [style.color]="m.isPrimary ? 'var(--primary)' : '#64748b'"
-              >
-                {{ m.isPrimary ? 'star' : 'person' }}
-              </span>
+    @if (current(); as pcp) {
+      <section class="portal-section">
+        <div class="care-team-list">
+          <div class="ct-card ct-primary" data-testid="care-team-current">
+            <span class="ct-badge">{{ 'PORTAL.CARE_TEAM.PRIMARY_PROVIDER' | translate }}</span>
+            <div class="ct-avatar" style="background: var(--primary-tint)">
+              <span class="material-symbols-outlined" style="color: var(--primary)">star</span>
             </div>
             <div class="ct-info">
-              <span class="ct-name">{{ m.name }}</span>
-              <span class="ct-role">{{ m.specialty || m.role }}</span>
-              @if (m.phone) {
+              <span class="ct-name">{{ pcp.doctorDisplay || '—' }}</span>
+              @if (pcp.hospitalName) {
+                <span class="ct-role">{{ pcp.hospitalName }}</span>
+              }
+              @if (pcp.startDate) {
                 <span class="ct-contact">
-                  <span class="material-symbols-outlined" style="font-size: 14px">phone</span>
-                  {{ m.phone }}
+                  {{
+                    'PORTAL.CARE_TEAM.SINCE'
+                      | translate: { date: pcp.startDate | date: 'mediumDate' }
+                  }}
                 </span>
               }
             </div>
           </div>
-        }
-      </div>
-    </section>
+        </div>
+      </section>
+    }
+
+    @if (previous().length) {
+      <section class="portal-section" data-testid="care-team-history">
+        <h2 class="portal-section-title">{{ 'PORTAL.CARE_TEAM.HISTORY_TITLE' | translate }}</h2>
+        <div class="care-team-list">
+          @for (e of previous(); track e.id) {
+            <div class="ct-card">
+              <div class="ct-avatar" style="background: #f1f5f9">
+                <span class="material-symbols-outlined" style="color: #64748b">person</span>
+              </div>
+              <div class="ct-info">
+                <span class="ct-name">{{ e.doctorDisplay || '—' }}</span>
+                @if (e.hospitalName) {
+                  <span class="ct-role">{{ e.hospitalName }}</span>
+                }
+                <span class="ct-contact">
+                  {{ e.startDate ? (e.startDate | date: 'mediumDate') : '—' }} –
+                  {{ e.endDate ? (e.endDate | date: 'mediumDate') : '—' }}
+                </span>
+              </div>
+            </div>
+          }
+        </div>
+      </section>
+    }
   }
 </div>

@@ -4463,7 +4463,10 @@
       "LOADING": "Chargement de l’équipe soignante…",
       "EMPTY_TITLE": "Aucun membre de l’équipe",
       "EMPTY_DESC": "Les informations sur votre équipe soignante apparaîtront ici.",
-      "PRIMARY_PROVIDER": "Médecin traitant"
+      "PRIMARY_PROVIDER": "Médecin traitant",
+      "SINCE": "Depuis le {{date}}",
+      "HISTORY_TITLE": "Médecins traitants précédents",
+      "LOAD_ERROR": "Impossible de charger votre équipe soignante. Réessayez."
     },
     "RECORDS": {
       "TITLE": "Mon dossier médical",

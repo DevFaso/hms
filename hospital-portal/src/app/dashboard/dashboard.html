@@ -3031,9 +3031,10 @@
         </div>
       </section>
 
-      <!-- Care Team -->
-      @if (myCareTeam()?.members?.length) {
-        <section class="card patient-card patient-card-wide">
+      <!-- Care Team: the current primary care provider, as the care-team
+           endpoint defines it (the full history is on /my-care-team). -->
+      @if (myCareTeam()?.primaryCare; as pcp) {
+        <section class="card patient-card patient-card-wide" data-testid="dashboard-care-team">
           <div class="card-head">
             <div class="card-title-group">
               <span class="material-symbols-outlined card-title-icon" style="color: #ec4899"
@@ -3043,25 +3044,24 @@
             </div>
           </div>
           <div class="patient-card-body care-team-grid">
-            @for (member of myCareTeam()!.members.slice(0, 4); track member.name) {
-              <div class="care-team-member">
-                <div
-                  class="ctm-avatar"
-                  [style.background]="member.isPrimary ? 'var(--primary-tint)' : '#f1f5f9'"
-                >
-                  <span
-                    class="material-symbols-outlined"
-                    [style.color]="member.isPrimary ? 'var(--primary)' : '#64748b'"
-                  >
-                    {{ member.isPrimary ? 'star' : 'person' }}
-                  </span>
-                </div>
-                <div class="ctm-info">
-                  <span class="ctm-name">{{ member.name }}</span>
-                  <span class="ctm-role">{{ member.specialty || member.role }}</span>
-                </div>
+            <div class="care-team-member">
+              <div class="ctm-avatar" style="background: var(--primary-tint)">
+                <span class="material-symbols-outlined" style="color: var(--primary)">star</span>
               </div>
-            }
+              <div class="ctm-info">
+                <span class="ctm-name">{{ pcp.doctorDisplay || '—' }}</span>
+                <span class="ctm-role">{{ 'PORTAL.CARE_TEAM.PRIMARY_PROVIDER' | translate }}</span>
+                @if (pcp.hospitalName) {
+                  <span class="ctm-role">{{ pcp.hospitalName }}</span>
+                }
+                @if (pcp.startDate) {
+                  <span class="ctm-role">{{
+                    'PORTAL.CARE_TEAM.SINCE'
+                      | translate: { date: pcp.startDate | date: 'mediumDate' }
+                  }}</span>
+                }
+              </div>
+            </div>
           </div>
         </section>
       }

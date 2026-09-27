@@ -402,17 +402,29 @@ export interface PortalInvoice {
   description: string;
 }
 
-export interface CareTeamMember {
-  name: string;
-  role: string;
-  specialty: string;
-  phone: string;
-  email: string;
-  isPrimary: boolean;
+/**
+ * One primary-care link (CareTeamDTO.PrimaryCareEntry on the backend). The
+ * care team the endpoint returns IS the primary-care history: the current
+ * provider and every earlier one, with dates. `hospitalName` is declared by
+ * the DTO but not yet populated by PatientPortalServiceImpl.toCareTeamEntry.
+ */
+export interface PrimaryCareEntry {
+  id: string;
+  hospitalId: string | null;
+  hospitalName: string | null;
+  doctorUserId: string | null;
+  doctorDisplay: string | null;
+  /** ISO local date (yyyy-MM-dd). */
+  startDate: string | null;
+  endDate: string | null;
+  current: boolean;
 }
 
+/** GET /me/patient/care-team — CareTeamDTO { primaryCare, primaryCareHistory }. */
 export interface CareTeamDTO {
-  members: CareTeamMember[];
+  primaryCare: PrimaryCareEntry | null;
+  /** Newest first; includes the current link. */
+  primaryCareHistory: PrimaryCareEntry[];
 }
 
 export interface PortalPrescription {
@@ -1004,10 +1016,16 @@ export class PatientPortalService {
       .pipe(map((r) => r.data));
   }
 
+  /**
+   * Errors propagate: an outage must not read as "no care team" (the page
+   * shows its error state, the dashboard simply leaves the card out).
+   */
   getMyCareTeam(): Observable<CareTeamDTO> {
     return this.http.get<ApiWrapper<CareTeamDTO>>(`${this.base}/care-team`).pipe(
-      map((r) => r.data),
-      catchError(() => of({ members: [] })),
+      map((r) => ({
+        primaryCare: r.data?.primaryCare ?? null,
+        primaryCareHistory: r.data?.primaryCareHistory ?? [],
+      })),
     );
   }
 

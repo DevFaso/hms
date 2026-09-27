@@ -4463,7 +4463,10 @@
       "LOADING": "Loading care team...",
       "EMPTY_TITLE": "No care team members",
       "EMPTY_DESC": "Your care team information will appear here.",
-      "PRIMARY_PROVIDER": "Primary Care Provider"
+      "PRIMARY_PROVIDER": "Primary Care Provider",
+      "SINCE": "Since {{date}}",
+      "HISTORY_TITLE": "Previous primary care providers",
+      "LOAD_ERROR": "Your care team could not be loaded. Try again."
     },
     "RECORDS": {
       "TITLE": "Health Summary",
