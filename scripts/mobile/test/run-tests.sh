@@ -223,13 +223,14 @@ if wants plist; then
   run bash "$CIP" --mode source --plist "$S" --project-yml "$P" --xcconfig-dir "$TMP/xc-redirect"
   expect "source: an xcconfig redirect scheme that is not registered fails" 1 "from Dev.xcconfig is not registered"
 
-  # The repository's own Config/*.xcconfig: both API URLs resolve, and both
-  # issuers are the unescaped-// case, which warns while SSO is off.
+  # The repository's own Config/*.xcconfig: both API URLs and both issuers
+  # resolve (the issuers carry the https:/$()/ escape since #791), so nothing
+  # is reported for either.
   mutate "$S" "$TMP/s.plist" '<string>com.example.fixture</string>' \
     '<string>com.example.fixture</string><string>com.bitnesttechs.hms.patient.native</string>'
   run bash "$CIP" --mode source --plist "$TMP/s.plist" --project-yml "$P" --xcconfig-dir "$ROOT/patient-ios-app/Config"
-  expect "source: the repository's Config/*.xcconfig resolve (issuers only warn)" 0 \
-    "MEDIHUB_KEYCLOAK_ISSUER from Dev.xcconfig" "MEDIHUB_KEYCLOAK_ISSUER from Prod.xcconfig" '!MEDIHUB_API_BASE_URL in'
+  expect "source: the repository's Config/*.xcconfig resolve" 0 \
+    '!MEDIHUB_KEYCLOAK_ISSUER from Dev.xcconfig' '!MEDIHUB_KEYCLOAK_ISSUER from Prod.xcconfig' '!MEDIHUB_API_BASE_URL in'
 
   printf '<plist><dict><key>x</key>' > "$TMP/broken.plist"
   run bash "$CIP" --mode source --plist "$TMP/broken.plist" --project-yml "$P"
