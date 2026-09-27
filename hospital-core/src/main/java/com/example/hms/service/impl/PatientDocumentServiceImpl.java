@@ -68,6 +68,11 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
         UUID userId = resolveUserId(auth);
         Patient patient = resolvePatient(userId);
         User uploader = resolveUser(userId);
+        if (request.getNotes() != null
+                && request.getNotes().length() > PatientDocumentRequestDTO.NOTES_MAX_LENGTH) {
+            throw new IllegalArgumentException("Notes cannot exceed "
+                    + PatientDocumentRequestDTO.NOTES_MAX_LENGTH + " characters");
+        }
 
         FileUploadService.StoredFileDescriptor descriptor = fileUploadService.uploadPatientDocument(file, userId);
 

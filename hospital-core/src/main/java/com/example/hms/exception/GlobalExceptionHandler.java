@@ -384,7 +384,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Object> handleMaxUploadSize(MaxUploadSizeExceededException ex, WebRequest request) {
         log.warn("File upload too large: {}", ex.getMessage());
-        return buildErrorResponse(HttpStatus.PAYLOAD_TOO_LARGE, "File size exceeds the maximum allowed limit of 5MB", request);
+        return buildErrorResponse(HttpStatus.PAYLOAD_TOO_LARGE, "File size exceeds the maximum allowed limit of "
+                + com.example.hms.service.FileUploadService.MAX_UPLOAD_LABEL, request);
     }
 
 

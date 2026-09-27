@@ -151,6 +151,24 @@ class PatientDocumentServiceImplTest {
         }
 
         @Test
+        @DisplayName("refuses a note longer than the 2048-character column with a 400, before storing")
+        void refusesOverLongNotes() throws IOException {
+            MockMultipartFile file = new MockMultipartFile("file", "a.pdf", "application/pdf", new byte[] {1});
+            PatientDocumentRequestDTO request = PatientDocumentRequestDTO.builder()
+                    .documentType(PatientDocumentType.OTHER)
+                    .notes("x".repeat(PatientDocumentRequestDTO.NOTES_MAX_LENGTH + 1))
+                    .build();
+            when(patientRepository.findByUserId(userId)).thenReturn(Optional.of(patient));
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> service.uploadDocument(auth, file, request))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("2048");
+            verify(fileUploadService, never()).uploadPatientDocument(any(), any());
+            verify(documentRepository, never()).save(any());
+        }
+
+        @Test
         @DisplayName("throws ResourceNotFoundException when no patient linked to user")
         void throwsWhenPatientNotFound() {
             MockMultipartFile file = new MockMultipartFile("file", "test.pdf", "application/pdf", new byte[0]);
