@@ -25,10 +25,8 @@ test('finds the plain interpolation', () => {
 
 test('finds the shapes the first version missed', () => {
   assert.deepEqual(exprs('<p>{{ probe.status ?? "-" }}</p>'), ['probe.status']);
-  assert.deepEqual(exprs('<p>{{ a.priority ? a.priority : "-" }}</p>'), [
-    'a.priority',
-    'a.priority',
-  ]);
+  // The ternary's condition is tested, not rendered; its branch is rendered.
+  assert.deepEqual(exprs('<p>{{ a.priority ? a.priority : "-" }}</p>'), ['a.priority']);
   assert.deepEqual(exprs('<p [title]="row.severity"></p>'), ['row.severity']);
   assert.deepEqual(exprs('<p>{{ a?.b?.status }}</p>'), ['a?.b?.status']);
 });
@@ -224,4 +222,63 @@ test('a property read OFF an enum-named field is not that field', () => {
   // …while the field itself, and a method called on it, still are.
   assert.deepEqual(exprs('<span>{{ card.source }}</span>'), ['card.source']);
   assert.deepEqual(exprs('<span>{{ card?.source ?? "-" }}</span>'), ['card?.source']);
+});
+
+test('a translate parameter is spliced into the sentence raw', () => {
+  // The five onboarding role-welcome screens: `translate` resolved the key and
+  // the gate excused the whole binding, while ROLE_DOCTOR went into the text.
+  assert.deepEqual(
+    exprs("<p>{{ 'ONBOARDING.BODY' | translate: { role: a.roleName, org: a.hospitalName } }}</p>"),
+    ['a.roleName'],
+  );
+  assert.deepEqual(
+    exprs("<p>{{ 'ONBOARDING.BODY' | translate: { role: (a.roleName | roleLabel) } }}</p>"),
+    [],
+  );
+});
+
+test('a pipe inside parentheses resolves only its own group', () => {
+  // The scheduling picker: translate covered the fallback, not the fields.
+  assert.deepEqual(exprs("<i>{{ s.jobTitle ?? s.roleName ?? ('X.FALLBACK' | translate) }}</i>"), [
+    's.jobTitle',
+    's.roleName',
+  ]);
+  assert.deepEqual(
+    exprs(
+      "<i>{{ (s.jobTitle | enumLabel: 'jobTitle') || (s.roleName | roleLabel) || ('X' | translate) }}</i>",
+    ),
+    [],
+  );
+});
+
+test('a tested field is not a rendered one', () => {
+  assert.deepEqual(exprs("<i>{{ e.type ? (e.type | enumLabel: 'x') : '—' }}</i>"), []);
+  assert.deepEqual(exprs("<i>{{ t.type === 'error' ? 'error' : 'info' }}</i>"), []);
+  // Nested: both conditions are tests; the raw branch is still a render.
+  assert.deepEqual(exprs("<i>{{ n.type === 'A' ? 'warn' : n.kind ? n.kind : 'info' }}</i>"), [
+    'n.kind',
+  ]);
+  // `?.` and `??` are not ternaries.
+  assert.deepEqual(exprs("<i>{{ a?.status ?? '—' }}</i>"), ['a?.status']);
+});
+
+test('a key, or a pipe inside a string, cannot mislead the split', () => {
+  assert.deepEqual(exprs("<i>{{ 'A.status | x (' | translate }}</i>"), []);
+  assert.deepEqual(exprs("<i>{{ 'LABOR.OUTCOME_' + e.outcome | translate }}</i>"), []);
+  assert.deepEqual(exprs('<i>{{ x.status | lowercase }}</i>'), ['x.status']);
+  // Other pipes' arguments are configuration, not text.
+  assert.deepEqual(exprs('<i>{{ d.when | date: r.mode }}</i>'), []);
+});
+
+test('a field read off a signal or a non-null assertion is still a field', () => {
+  // `selectedStaff()!.jobTitle` and `deletingRef()?.targetSpecialty`: the
+  // receiver is a call, and FIELD used to require a plain identifier chain,
+  // so every modal that reads a signal was invisible.
+  assert.deepEqual(exprs('<i>{{ selectedStaff()!.jobTitle }}</i>'), ['selectedStaff()!.jobTitle']);
+  assert.deepEqual(exprs('<i>{{ ref()?.targetSpecialty }}</i>'), ['ref()?.targetSpecialty']);
+  assert.deepEqual(exprs('<i>{{ summary()!.profile.bloodType }}</i>'), [
+    'summary()!.profile.bloodType',
+  ]);
+  // A method taking an argument is not a field read; its return is unknown.
+  assert.deepEqual(exprs('<i>{{ label(x).status }}</i>'), []);
 });

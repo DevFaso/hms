@@ -25,6 +25,7 @@
  * So an interpolation now counts only where a person reads it — in element
  * text content, or in the value of a text-bearing attribute.
  */
+import { unresolvedParts } from './pipe-scope.mjs';
 
 /**
  * Field names that usually hold an enum. The TAIL is matched, not the whole
@@ -79,7 +80,7 @@ export const ENUM_WORDS = [
 
 /** `a.b?.c.encounterType` — any number of optional-chain steps. */
 const FIELD = new RegExp(
-  String.raw`\b[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)*` +
+  String.raw`\b[A-Za-z_$][\w$]*(?:\(\))?!?(?:\??\.[A-Za-z_$][\w$]*(?:\(\))?!?)*` +
     String.raw`\??\.\w*?(?:${ENUM_WORDS.join('|')})\b(?![?!]?\.[A-Za-z_$])`,
   'gi',
 );
@@ -134,12 +135,6 @@ const ATTR = /([@*#([]?[\w.\-$]+[)\]]?)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
 const COMMENT = /<!--[\s\S]*?-->/g;
 const INTERPOLATION = /\{\{([\s\S]*?)\}\}/g;
 
-/**
- * An expression already handed to a pipe that resolves it — enumLabel does the
- * job, and translate/date/number/currency mean the value is not a bare enum.
- */
-const RESOLVED = /\|\s*(enumLabel|roleLabel|translate|date|number|currency|percent)\b/;
-
 /** `[attr.aria-label]` and `[title]` and `matTooltip` all reduce to a name. */
 function attrName(raw) {
   return raw
@@ -166,10 +161,16 @@ export function rawEnumRenders(html) {
   // FIELD's own, so a binding Prettier wrapped over several lines — a `[title]`
   // ternary, a `{{ … }}` split after a `??` — points at the render, not at the
   // attribute name or the opening braces.
+  //
+  // Only the parts no resolving pipe covers are read (lib/pipe-scope.mjs): a
+  // `translate` anywhere in the binding used to excuse all of it, including
+  // the `{ role: a.roleName }` it splices into the sentence and the
+  // `s.roleName ?? ('…' | translate)` whose pipe covers only the fallback.
   const collectExpr = (body, index) => {
-    if (RESOLVED.test(body)) return;
-    for (const field of body.matchAll(FIELD)) {
-      hits.push({ expr: field[0], line: lineAt(index + field.index) });
+    for (const part of unresolvedParts(body)) {
+      for (const field of part.matchAll(FIELD)) {
+        hits.push({ expr: field[0], at: index + field.index, line: lineAt(index + field.index) });
+      }
     }
   };
 
@@ -218,5 +219,5 @@ export function rawEnumRenders(html) {
     collectExpr(binding[1], binding.index + 2);
   }
 
-  return hits.sort((a, b) => a.line - b.line);
+  return hits.sort((a, b) => a.at - b.at).map(({ expr, line }) => ({ expr, line }));
 }
