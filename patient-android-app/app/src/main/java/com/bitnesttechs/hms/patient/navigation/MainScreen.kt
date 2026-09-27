@@ -48,7 +48,8 @@ import com.bitnesttechs.hms.patient.features.visits.VisitHistoryScreen
 import com.bitnesttechs.hms.patient.features.vitals.VitalsScreen
 import com.bitnesttechs.hms.patient.features.visitsummaries.VisitSummariesScreen
 import com.bitnesttechs.hms.patient.R
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
+import com.bitnesttechs.hms.patient.ui.theme.OnBrandMuted
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
 import kotlinx.coroutines.launch
 
 sealed class Tab(val route: String, @StringRes val labelRes: Int, val icon: ImageVector) {
@@ -110,14 +111,14 @@ fun MainScreen(onLogout: () -> Unit) {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 // Header
                 Surface(
-                    color = BrandBlue,
+                    color = BrandPrimary,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(24.dp)) {
                         Text(stringResource(R.string.medihub), style = MaterialTheme.typography.headlineSmall,
                             color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.Bold)
                         Text(stringResource(R.string.patient_portal), style = MaterialTheme.typography.bodySmall,
-                            color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.8f))
+                            color = OnBrandMuted)
                     }
                 }
                 Spacer(Modifier.height(8.dp))

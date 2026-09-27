@@ -1,5 +1,6 @@
 package com.bitnesttechs.hms.patient.features.dashboard
 
+import com.bitnesttechs.hms.patient.ui.theme.OnBrandMuted
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -62,7 +63,7 @@ fun DashboardScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandBlue,
+                    containerColor = BrandPrimary,
                     titleContentColor = Color.White
                 ),
                 actions = {
@@ -86,7 +87,7 @@ fun DashboardScreen(
     ) { padding ->
         if (uiState.isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BrandBlue)
+                CircularProgressIndicator(color = BrandPrimary)
             }
             return@Scaffold
         }
@@ -102,7 +103,7 @@ fun DashboardScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = BrandBlue)
+                        colors = CardDefaults.cardColors(containerColor = BrandPrimary)
                     ) {
                         Row(
                             modifier = Modifier.padding(16.dp),
@@ -141,7 +142,7 @@ fun DashboardScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(
                                         Modifier.size(8.dp).clip(CircleShape)
-                                            .background(BrandBlue)
+                                            .background(BrandPrimary)
                                     )
                                     Spacer(Modifier.width(8.dp))
                                     Text(condition, style = MaterialTheme.typography.bodyMedium)
@@ -312,7 +313,7 @@ private fun RowScope.StatChip(label: String, value: String, icon: ImageVector) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
         Icon(icon, null, tint = Color.White, modifier = Modifier.size(24.dp))
         Text(value, color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Text(label, color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.labelSmall)
+        Text(label, color = OnBrandMuted, style = MaterialTheme.typography.labelSmall)
     }
 }
 
@@ -328,10 +329,10 @@ private fun QuickLinkItem(label: String, icon: ImageVector, onClick: () -> Unit)
     ) {
         Box(
             Modifier.size(48.dp).clip(RoundedCornerShape(12.dp))
-                .background(BrandLightBlue),
+                .background(BrandSoft),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, null, tint = BrandBlue, modifier = Modifier.size(24.dp))
+            Icon(icon, null, tint = BrandPrimary, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.height(4.dp))
         Text(
@@ -386,7 +387,7 @@ fun LabResultRow(lab: LabResultDto) {
 }
 
 @Composable
-fun StatusBadge(text: String, color: Color = BrandBlue, contentColor: Color = color) {
+fun StatusBadge(text: String, color: Color = BrandPrimary, contentColor: Color = color) {
     // `color` tints the pill; `contentColor` draws the label. They default to
     // the same value for the callers that pass an already-readable colour, but
     // a bright semantic fill needs a darker label or the 11 sp text falls

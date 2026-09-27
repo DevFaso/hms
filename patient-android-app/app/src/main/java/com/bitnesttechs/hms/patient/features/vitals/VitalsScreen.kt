@@ -19,8 +19,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bitnesttechs.hms.patient.core.models.VitalSignDto
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
-import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
+import com.bitnesttechs.hms.patient.ui.theme.BrandSoft
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,14 +38,14 @@ fun VitalsScreen(onBack: () -> Unit = {}, viewModel: VitalsViewModel = hiltViewM
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue,
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandPrimary,
                     titleContentColor = Color.White)
             )
         }
     ) { padding ->
         if (isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BrandBlue)
+                CircularProgressIndicator(color = BrandPrimary)
             }
             return@Scaffold
         }
@@ -116,7 +116,7 @@ fun VitalsScreen(onBack: () -> Unit = {}, viewModel: VitalsViewModel = hiltViewM
 }
 
 @Composable
-private fun VitalTile(label: String, value: String, icon: ImageVector, color: Color = BrandBlue, modifier: Modifier = Modifier) {
+private fun VitalTile(label: String, value: String, icon: ImageVector, color: Color = BrandPrimary, modifier: Modifier = Modifier) {
     Surface(modifier = modifier, shape = RoundedCornerShape(14.dp), color = color.copy(alpha = 0.08f)) {
         Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(icon, null, tint = color, modifier = Modifier.size(22.dp))

@@ -23,8 +23,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bitnesttechs.hms.patient.core.models.DischargeSummaryDto
 import com.bitnesttechs.hms.patient.core.models.MedicationReconciliationDto
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
-import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
+import com.bitnesttechs.hms.patient.ui.theme.BrandSoft
 import com.bitnesttechs.hms.patient.ui.theme.WarningOrange
 import com.bitnesttechs.hms.patient.ui.theme.SuccessGreen
 
@@ -48,7 +48,7 @@ fun VisitSummariesScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandBlue,
+                    containerColor = BrandPrimary,
                     titleContentColor = Color.White
                 )
             )
@@ -61,7 +61,7 @@ fun VisitSummariesScreen(
                     Modifier.fillMaxSize().padding(padding),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = BrandBlue)
+                    CircularProgressIndicator(color = BrandPrimary)
                 }
             }
             error != null -> {
@@ -144,7 +144,7 @@ private fun VisitSummaryCard(summary: DischargeSummaryDto) {
                 summary.encounterType?.let { type ->
                     Surface(
                         shape = RoundedCornerShape(20.dp),
-                        color = BrandBlue.copy(alpha = 0.1f)
+                        color = BrandPrimary.copy(alpha = 0.1f)
                     ) {
                         Text(
                             type.replace("_", " "),
@@ -153,7 +153,7 @@ private fun VisitSummaryCard(summary: DischargeSummaryDto) {
                                 letterSpacing = 0.5.sp,
                                 fontWeight = FontWeight.SemiBold
                             ),
-                            color = BrandBlue
+                            color = BrandPrimary
                         )
                     }
                 }
@@ -218,7 +218,7 @@ private fun VisitSummaryCard(summary: DischargeSummaryDto) {
                 }
 
                 summary.patientEducationProvided?.let {
-                    IconSection(icon = "", title = "Patient education", body = it, accentColor = BrandBlue)
+                    IconSection(icon = "", title = "Patient education", body = it, accentColor = BrandPrimary)
                 }
 
                 summary.additionalNotes?.let {
@@ -242,14 +242,14 @@ private fun CardHeader(summary: DischargeSummaryDto) {
             modifier = Modifier
                 .size(44.dp)
                 .clip(CircleShape)
-                .background(BrandBlue.copy(alpha = 0.12f)),
+                .background(BrandPrimary.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = (summary.dischargingProviderName?.firstOrNull()?.uppercase() ?: "P"),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = BrandBlue
+                color = BrandPrimary
             )
         }
 
@@ -278,13 +278,13 @@ private fun CardHeader(summary: DischargeSummaryDto) {
             summary.dischargeDate?.let {
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = BrandLightBlue
+                    color = BrandSoft
                 ) {
                     Text(
                         formatDateShort(it.take(10)),
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                         style = MaterialTheme.typography.labelSmall,
-                        color = BrandBlue,
+                        color = BrandPrimary,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -386,13 +386,13 @@ private fun MedicationsSection(meds: List<MedicationReconciliationDto>) {
             Text(
                 "Medications",
                 style = MaterialTheme.typography.labelMedium,
-                color = BrandBlue,
+                color = BrandPrimary,
                 fontWeight = FontWeight.SemiBold
             )
             Spacer(Modifier.weight(1f))
             Surface(
                 shape = RoundedCornerShape(20.dp),
-                color = BrandBlue.copy(alpha = 0.12f)
+                color = BrandPrimary.copy(alpha = 0.12f)
             ) {
                 Text(
                     "${meds.size}",
@@ -401,7 +401,7 @@ private fun MedicationsSection(meds: List<MedicationReconciliationDto>) {
                         fontWeight = FontWeight.Bold,
                         fontSize = 10.sp
                     ),
-                    color = BrandBlue
+                    color = BrandPrimary
                 )
             }
         }

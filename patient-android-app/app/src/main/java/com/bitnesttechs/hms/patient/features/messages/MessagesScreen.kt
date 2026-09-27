@@ -23,8 +23,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.locale.LocaleHelper
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
-import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
+import com.bitnesttechs.hms.patient.ui.theme.OnBrandMuted
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
+import com.bitnesttechs.hms.patient.ui.theme.BrandSoft
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.core.os.ConfigurationCompat
 import java.time.LocalDateTime
@@ -53,7 +54,7 @@ fun MessagesScreen(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.messages)) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue,
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandPrimary,
                     titleContentColor = Color.White)
             )
         },
@@ -63,7 +64,7 @@ fun MessagesScreen(
                     viewModel.loadCareTeam()
                     showProviderPicker = true
                 },
-                containerColor = BrandBlue
+                containerColor = BrandPrimary
             ) {
                 Icon(Icons.Default.Edit, stringResource(R.string.new_message), tint = Color.White)
             }
@@ -71,7 +72,7 @@ fun MessagesScreen(
     ) { padding ->
         if (isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BrandBlue)
+                CircularProgressIndicator(color = BrandPrimary)
             }
             return@Scaffold
         }
@@ -105,10 +106,10 @@ fun MessagesScreen(
                         },
                         leadingContent = {
                             Box(
-                                Modifier.size(44.dp).clip(CircleShape).background(BrandLightBlue),
+                                Modifier.size(44.dp).clip(CircleShape).background(BrandSoft),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.Person, null, tint = BrandBlue)
+                                Icon(Icons.Default.Person, null, tint = BrandPrimary)
                             }
                         },
                         trailingContent = {
@@ -145,7 +146,7 @@ fun MessagesScreen(
                 if (careTeamMembers.isEmpty()) {
                     Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                         if (isLoadingCareTeam) {
-                            CircularProgressIndicator(color = BrandBlue)
+                            CircularProgressIndicator(color = BrandPrimary)
                         } else {
                             Text(stringResource(R.string.no_providers_found), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -165,10 +166,10 @@ fun MessagesScreen(
                             },
                             leadingContent = {
                                 Box(
-                                    Modifier.size(40.dp).clip(CircleShape).background(BrandLightBlue),
+                                    Modifier.size(40.dp).clip(CircleShape).background(BrandSoft),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(Icons.Default.Person, null, tint = BrandBlue)
+                                    Icon(Icons.Default.Person, null, tint = BrandPrimary)
                                 }
                             },
                             modifier = Modifier.clickable {
@@ -222,7 +223,7 @@ fun MessageThreadScreen(
                         Icon(Icons.Default.ArrowBack, stringResource(R.string.back), tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue,
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandPrimary,
                     titleContentColor = Color.White)
             )
         },
@@ -254,7 +255,7 @@ fun MessageThreadScreen(
                         enabled = inputText.isNotBlank() && !isSending
                     ) {
                         if (isSending) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                        else Icon(Icons.Default.Send, null, tint = BrandBlue)
+                        else Icon(Icons.Default.Send, null, tint = BrandPrimary)
                     }
                 }
             }
@@ -262,7 +263,7 @@ fun MessageThreadScreen(
     ) { padding ->
         if (isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BrandBlue)
+                CircularProgressIndicator(color = BrandPrimary)
             }
             return@Scaffold
         }
@@ -284,7 +285,7 @@ fun MessageThreadScreen(
                             bottomStart = if (isMine) 16.dp else 4.dp,
                             bottomEnd = if (isMine) 4.dp else 16.dp
                         ),
-                        color = if (isMine) BrandBlue else MaterialTheme.colorScheme.surfaceVariant,
+                        color = if (isMine) BrandPrimary else MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier.widthIn(max = 280.dp)
                     ) {
                         Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -312,7 +313,7 @@ fun MessageThreadScreen(
                             }
                             ChatTime.bubbleLabel(msg.timestamp, LocalDateTime.now(), locale)?.let { sentAt -> Text(
                                 sentAt,
-                                color = if (isMine) Color.White.copy(alpha = 0.7f)
+                                color = if (isMine) OnBrandMuted
                                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                 style = MaterialTheme.typography.labelSmall,
                                 modifier = Modifier.align(Alignment.End)

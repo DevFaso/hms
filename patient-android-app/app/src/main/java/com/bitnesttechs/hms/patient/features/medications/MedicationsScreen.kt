@@ -28,7 +28,7 @@ import com.bitnesttechs.hms.patient.core.models.RefillDto
 import com.bitnesttechs.hms.patient.core.models.RefillStatus
 import androidx.compose.ui.res.stringResource
 import com.bitnesttechs.hms.patient.R
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
 import com.bitnesttechs.hms.patient.ui.theme.badgeFill
 import com.bitnesttechs.hms.patient.ui.theme.onBadge
 import com.bitnesttechs.hms.patient.ui.theme.ErrorRed
@@ -69,7 +69,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = androidx.compose.ui.graphics.Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue,
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandPrimary,
                     titleContentColor = androidx.compose.ui.graphics.Color.White)
             )
         }
@@ -91,7 +91,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                 medications.isEmpty() && prescriptions.isEmpty() && refills.isEmpty()
             if (isLoading && nothingLoadedYet) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = BrandBlue)
+                    CircularProgressIndicator(color = BrandPrimary)
                 }
                 return@Column
             }
@@ -116,7 +116,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                     )
                     if (isLoading) {
                         CircularProgressIndicator(
-                            color = BrandBlue,
+                            color = BrandPrimary,
                             strokeWidth = 2.dp,
                             modifier = Modifier.size(16.dp)
                         )

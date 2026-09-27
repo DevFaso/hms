@@ -16,8 +16,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bitnesttechs.hms.patient.core.models.NotificationDto
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
-import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
+import com.bitnesttechs.hms.patient.ui.theme.BrandSoft
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,7 +37,7 @@ fun NotificationsScreen(onBack: () -> Unit = {}, viewModel: NotificationsViewMod
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandBlue, titleContentColor = Color.White
+                    containerColor = BrandPrimary, titleContentColor = Color.White
                 ),
                 actions = {
                     if (unreadCount > 0L) {
@@ -52,7 +52,7 @@ fun NotificationsScreen(onBack: () -> Unit = {}, viewModel: NotificationsViewMod
     ) { padding ->
         if (isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BrandBlue)
+                CircularProgressIndicator(color = BrandPrimary)
             }
             return@Scaffold
         }
@@ -88,7 +88,7 @@ fun NotificationsScreen(onBack: () -> Unit = {}, viewModel: NotificationsViewMod
                 Icon(
                     imageVector = notificationIcon(notif.type),
                     contentDescription = null,
-                    tint = BrandBlue,
+                    tint = BrandPrimary,
                     modifier = Modifier.size(28.dp)
                 )
             },
@@ -115,7 +115,7 @@ fun NotificationsScreen(onBack: () -> Unit = {}, viewModel: NotificationsViewMod
 
 @Composable
 private fun NotificationRow(notif: NotificationDto, onTap: () -> Unit) {
-    val bgColor = if (notif.isRead) Color.Transparent else BrandLightBlue
+    val bgColor = if (notif.isRead) Color.Transparent else BrandSoft
 
     Surface(color = bgColor) {
         Row(
@@ -128,7 +128,7 @@ private fun NotificationRow(notif: NotificationDto, onTap: () -> Unit) {
         ) {
             Surface(
                 shape = RoundedCornerShape(10.dp),
-                color = if (notif.isRead) MaterialTheme.colorScheme.surfaceVariant else BrandBlue,
+                color = if (notif.isRead) MaterialTheme.colorScheme.surfaceVariant else BrandPrimary,
                 modifier = Modifier.size(40.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -152,7 +152,7 @@ private fun NotificationRow(notif: NotificationDto, onTap: () -> Unit) {
             }
             if (!notif.isRead) {
                 Box(Modifier.size(8.dp).padding(top = 6.dp)) {
-                    Surface(shape = RoundedCornerShape(50), color = BrandBlue,
+                    Surface(shape = RoundedCornerShape(50), color = BrandPrimary,
                         modifier = Modifier.size(8.dp)) {}
                 }
             }

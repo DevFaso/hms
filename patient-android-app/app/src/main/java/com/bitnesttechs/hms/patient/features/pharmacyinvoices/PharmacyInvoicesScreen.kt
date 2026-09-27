@@ -45,7 +45,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.models.PharmacyClaimDto
 import com.bitnesttechs.hms.patient.core.models.PharmacyPaymentDto
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
 import com.bitnesttechs.hms.patient.ui.theme.SuccessGreen
 import com.bitnesttechs.hms.patient.ui.theme.WarningAmber
 
@@ -71,7 +71,7 @@ fun PharmacyInvoicesScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandBlue,
+                    containerColor = BrandPrimary,
                     titleContentColor = Color.White
                 )
             )
@@ -79,7 +79,7 @@ fun PharmacyInvoicesScreen(
     ) { padding ->
         if (isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BrandBlue)
+                CircularProgressIndicator(color = BrandPrimary)
             }
             return@Scaffold
         }
@@ -120,7 +120,7 @@ private fun SummaryCard(label: String, amount: Double, currency: String, modifie
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = BrandBlue.copy(alpha = 0.08f))
+        colors = CardDefaults.cardColors(containerColor = BrandPrimary.copy(alpha = 0.08f))
     ) {
         Column(Modifier.padding(14.dp)) {
             Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -129,7 +129,7 @@ private fun SummaryCard(label: String, amount: Double, currency: String, modifie
                 "${"%.0f".format(amount)} $currency",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = BrandBlue
+                color = BrandPrimary
             )
         }
     }

@@ -23,7 +23,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.models.ProInstrumentView
 import com.bitnesttechs.hms.patient.core.models.ProScreeningEntry
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
 import com.bitnesttechs.hms.patient.ui.theme.ErrorRed
 import com.bitnesttechs.hms.patient.ui.theme.SuccessGreen
 import kotlinx.coroutines.launch
@@ -66,14 +66,14 @@ fun ScreeningsScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue, titleContentColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandPrimary, titleContentColor = Color.White)
             )
         }
     ) { padding ->
         when {
             state.active != null -> InstrumentForm(state, viewModel, Modifier.padding(padding))
             state.loading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BrandBlue)
+                CircularProgressIndicator(color = BrandPrimary)
             }
             state.failed -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
@@ -116,7 +116,7 @@ private fun ScreeningsList(state: ScreeningsViewModel.UiState, viewModel: Screen
                 Card(shape = RoundedCornerShape(12.dp)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(a.name ?: a.code, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Button(onClick = { viewModel.start(a) }, colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)) {
+                        Button(onClick = { viewModel.start(a) }, colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)) {
                             Text(stringResource(R.string.start_screening))
                         }
                     }
@@ -175,7 +175,7 @@ private fun InstrumentForm(state: ScreeningsViewModel.UiState, viewModel: Screen
     val instrument = state.instrument
     when {
         state.instrumentLoading -> Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = BrandBlue)
+            CircularProgressIndicator(color = BrandPrimary)
         }
         state.instrumentFailed || instrument == null -> Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
@@ -222,7 +222,7 @@ private fun InstrumentItems(instrument: ProInstrumentView, state: ScreeningsView
                     Text(it, style = MaterialTheme.typography.bodyMedium)
                 }
                 Text(stringResource(R.string.screening_progress, answered, instrument.items.size),
-                    style = MaterialTheme.typography.labelLarge, color = BrandBlue)
+                    style = MaterialTheme.typography.labelLarge, color = BrandPrimary)
             }
         }
         items(instrument.items, key = { it.itemNo }) { item ->
@@ -265,7 +265,7 @@ private fun InstrumentItems(instrument: ProInstrumentView, state: ScreeningsView
                     onClick = { viewModel.submit() },
                     enabled = !state.submitting,
                     modifier = Modifier.fillMaxWidth().height(52.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
                 ) {
                     if (state.submitting) {
                         CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)

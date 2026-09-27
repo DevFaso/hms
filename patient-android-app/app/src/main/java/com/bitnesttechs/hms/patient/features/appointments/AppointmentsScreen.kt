@@ -24,7 +24,7 @@ import androidx.navigation.NavController
 import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.models.BookAppointmentRequest
 import com.bitnesttechs.hms.patient.features.dashboard.StatusBadge
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
 import com.bitnesttechs.hms.patient.ui.theme.SuccessGreen
 import com.bitnesttechs.hms.patient.ui.theme.ErrorRed
 import kotlinx.coroutines.launch
@@ -76,7 +76,7 @@ fun AppointmentsScreen(
                         Icon(Icons.Default.Menu, contentDescription = stringResource(R.string.menu), tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue,
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandPrimary,
                     titleContentColor = Color.White),
                 actions = {
                     IconButton(onClick = { viewModel.load() }) {
@@ -88,7 +88,7 @@ fun AppointmentsScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { viewModel.showBooking() },
-                containerColor = BrandBlue
+                containerColor = BrandPrimary
             ) {
                 Icon(Icons.Default.Add, stringResource(R.string.book_appointment), tint = Color.White)
             }
@@ -96,7 +96,7 @@ fun AppointmentsScreen(
     ) { padding ->
         if (isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BrandBlue)
+                CircularProgressIndicator(color = BrandPrimary)
             }
             return@Scaffold
         }
@@ -181,10 +181,10 @@ fun AppointmentsScreen(
                             StatusBadge(
                                 text = appt.statusDisplay,
                                 color = when (appt.status.uppercase()) {
-                                    "SCHEDULED" -> BrandBlue
+                                    "SCHEDULED" -> BrandPrimary
                                     "COMPLETED" -> SuccessGreen
                                     "CANCELLED" -> ErrorRed
-                                    else -> BrandBlue
+                                    else -> BrandPrimary
                                 }
                             )
                         }
@@ -486,7 +486,7 @@ fun BookAppointmentSheet(
                     },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     enabled = canSubmit,
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
                 ) {
                     if (options.isBooking) {
                         CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)

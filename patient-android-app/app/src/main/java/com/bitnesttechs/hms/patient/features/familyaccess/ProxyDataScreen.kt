@@ -19,7 +19,8 @@ import androidx.lifecycle.viewModelScope
 import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.models.*
 import com.bitnesttechs.hms.patient.core.network.ApiService
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
+import com.bitnesttechs.hms.patient.ui.theme.OnBrandMuted
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
 import com.bitnesttechs.hms.patient.ui.theme.badgeFill
 import com.bitnesttechs.hms.patient.ui.theme.onBadge
 import com.bitnesttechs.hms.patient.ui.theme.SuccessGreen
@@ -114,7 +115,7 @@ fun ProxyDataScreen(
                         Text(
                             patientName,
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.8f)
+                            color = OnBrandMuted
                         )
                     }
                 },
@@ -124,7 +125,7 @@ fun ProxyDataScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandBlue, titleContentColor = Color.White
+                    containerColor = BrandPrimary, titleContentColor = Color.White
                 )
             )
         }
@@ -132,7 +133,7 @@ fun ProxyDataScreen(
         when {
             isLoading -> {
                 Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = BrandBlue)
+                    CircularProgressIndicator(color = BrandPrimary)
                 }
             }
             error != null -> {
@@ -172,7 +173,7 @@ private fun AppointmentsList(viewModel: ProxyDataViewModel, padding: PaddingValu
             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(2.dp)) {
                 Column(Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.CalendarToday, null, Modifier.size(20.dp), tint = BrandBlue)
+                        Icon(Icons.Default.CalendarToday, null, Modifier.size(20.dp), tint = BrandPrimary)
                         Spacer(Modifier.width(8.dp))
                         Text(appt.appointmentDate, fontWeight = FontWeight.Bold)
                         appt.timeDisplay?.let {
@@ -204,7 +205,7 @@ private fun MedicationsList(viewModel: ProxyDataViewModel, padding: PaddingValue
         items(medications) { med ->
             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(2.dp)) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Medication, null, Modifier.size(24.dp), tint = BrandBlue)
+                    Icon(Icons.Default.Medication, null, Modifier.size(24.dp), tint = BrandPrimary)
                     Spacer(Modifier.width(12.dp))
                     Column {
                         Text(med.name, fontWeight = FontWeight.Bold)
@@ -228,7 +229,7 @@ private fun LabResultsList(viewModel: ProxyDataViewModel, padding: PaddingValues
         items(results) { lab ->
             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(2.dp)) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Science, null, Modifier.size(24.dp), tint = BrandBlue)
+                    Icon(Icons.Default.Science, null, Modifier.size(24.dp), tint = BrandPrimary)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(lab.testName, fontWeight = FontWeight.Bold)
@@ -260,7 +261,7 @@ private fun BillingList(viewModel: ProxyDataViewModel, padding: PaddingValues) {
             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(2.dp)) {
                 Column(Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Receipt, null, Modifier.size(20.dp), tint = BrandBlue)
+                        Icon(Icons.Default.Receipt, null, Modifier.size(20.dp), tint = BrandPrimary)
                         Spacer(Modifier.width(8.dp))
                         Text(inv.invoiceNumber, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.weight(1f))
@@ -339,7 +340,7 @@ private fun SectionCard(title: String, icon: androidx.compose.ui.graphics.vector
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(icon, null, Modifier.size(20.dp), tint = BrandBlue)
+                Icon(icon, null, Modifier.size(20.dp), tint = BrandPrimary)
                 Spacer(Modifier.width(8.dp))
                 Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
             }
@@ -364,7 +365,7 @@ private fun statusColor(status: String): Color {
     return when (status.uppercase()) {
         "COMPLETED", "PAID", "CONFIRMED" -> SuccessGreen
         "CANCELLED", "REJECTED", "OVERDUE" -> ErrorRed
-        "PENDING", "SCHEDULED", "SENT" -> BrandBlue
+        "PENDING", "SCHEDULED", "SENT" -> BrandPrimary
         else -> Color.Gray
     }
 }

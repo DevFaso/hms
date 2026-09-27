@@ -18,7 +18,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.bitnesttechs.hms.patient.core.models.GrantProxyRequest
 import com.bitnesttechs.hms.patient.core.models.ProxyResponse
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
 import com.bitnesttechs.hms.patient.ui.theme.SuccessGreen
 import com.bitnesttechs.hms.patient.ui.theme.ErrorRed
 import com.bitnesttechs.hms.patient.ui.theme.WarningOrange
@@ -55,7 +55,7 @@ fun FamilyAccessScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandBlue,
+                    containerColor = BrandPrimary,
                     titleContentColor = Color.White
                 ),
                 actions = {
@@ -69,7 +69,7 @@ fun FamilyAccessScreen(
             if (selectedTab == 0) {
                 FloatingActionButton(
                     onClick = { showGrantSheet = true },
-                    containerColor = BrandBlue
+                    containerColor = BrandPrimary
                 ) {
                     Icon(Icons.Default.PersonAdd, "Grant Access", tint = Color.White)
                 }
@@ -95,7 +95,7 @@ fun FamilyAccessScreen(
 
             if (uiState.isLoading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = BrandBlue)
+                    CircularProgressIndicator(color = BrandPrimary)
                 }
                 return@Column
             }
@@ -216,7 +216,7 @@ fun ProxyCard(
                     Icons.Default.Person,
                     null,
                     modifier = Modifier.size(40.dp),
-                    tint = BrandBlue
+                    tint = BrandPrimary
                 )
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
@@ -397,7 +397,7 @@ fun GrantProxyBottomSheet(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = username.isNotBlank() && relationship.isNotBlank() && selectedPermissions.isNotEmpty(),
-                colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+                colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
             ) {
                 Icon(Icons.Default.PersonAdd, null)
                 Spacer(Modifier.width(8.dp))
@@ -434,7 +434,7 @@ fun ProxyDetailSheet(
         ) {
             // Header
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Person, null, Modifier.size(48.dp), tint = BrandBlue)
+                Icon(Icons.Default.Person, null, Modifier.size(48.dp), tint = BrandPrimary)
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text(
@@ -471,7 +471,7 @@ fun ProxyDetailSheet(
                         )
                         .padding(vertical = 8.dp)
                 ) {
-                    Icon(permissionIcon(perm), null, Modifier.size(20.dp), tint = BrandBlue)
+                    Icon(permissionIcon(perm), null, Modifier.size(20.dp), tint = BrandPrimary)
                     Spacer(Modifier.width(12.dp))
                     Text(
                         perm.lowercase().replace("_", " ").replaceFirstChar { it.uppercase() },

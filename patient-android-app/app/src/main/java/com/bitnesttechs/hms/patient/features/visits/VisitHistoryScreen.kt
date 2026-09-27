@@ -26,8 +26,8 @@ import com.bitnesttechs.hms.patient.core.models.DischargeSummaryDto
 import com.bitnesttechs.hms.patient.core.models.EncounterDto
 import com.bitnesttechs.hms.patient.core.models.FollowUpAppointmentDto
 import com.bitnesttechs.hms.patient.core.models.MedicationReconciliationDto
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
-import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
+import com.bitnesttechs.hms.patient.ui.theme.BrandSoft
 
 private fun formatDate(iso: String): String {
     return try {
@@ -63,7 +63,7 @@ fun VisitHistoryScreen(onBack: () -> Unit = {}, viewModel: VisitHistoryViewModel
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandBlue, titleContentColor = Color.White
+                    containerColor = BrandPrimary, titleContentColor = Color.White
                 )
             )
         }
@@ -78,7 +78,7 @@ fun VisitHistoryScreen(onBack: () -> Unit = {}, viewModel: VisitHistoryViewModel
 
             if (isLoading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = BrandBlue)
+                    CircularProgressIndicator(color = BrandPrimary)
                 }
                 return@Column
             }
@@ -142,20 +142,20 @@ private fun EncounterRow(encounter: EncounterDto, onClick: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(shape = RoundedCornerShape(10.dp), color = BrandLightBlue,
+            Surface(shape = RoundedCornerShape(10.dp), color = BrandSoft,
                 modifier = Modifier.size(44.dp)) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.LocalHospital, null, tint = BrandBlue, modifier = Modifier.size(22.dp))
+                    Icon(Icons.Default.LocalHospital, null, tint = BrandPrimary, modifier = Modifier.size(22.dp))
                 }
             }
             Column(Modifier.weight(1f)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     // Type chip like iOS
-                    Surface(shape = RoundedCornerShape(4.dp), color = BrandBlue.copy(alpha = 0.1f)) {
+                    Surface(shape = RoundedCornerShape(4.dp), color = BrandPrimary.copy(alpha = 0.1f)) {
                         Text(encounter.encounterType.replace("_", " ").replaceFirstChar { it.uppercase() },
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
-                            color = BrandBlue)
+                            color = BrandPrimary)
                     }
                 }
                 Spacer(Modifier.height(2.dp))
@@ -185,7 +185,7 @@ private fun EncounterRow(encounter: EncounterDto, onClick: () -> Unit) {
 private fun EncounterStatusChip(status: String) {
     val (bg, fg) = when (status.uppercase()) {
         "COMPLETED" -> Pair(Color(0xFFDCFCE7), Color(0xFF166534))
-        "IN_PROGRESS" -> Pair(Color(0xFFDBEAFE), BrandBlue)
+        "IN_PROGRESS" -> Pair(Color(0xFFDBEAFE), BrandPrimary)
         "CANCELLED" -> Pair(Color(0xFFFEE2E2), Color(0xFFDC2626))
         else -> Pair(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant)
     }
@@ -360,7 +360,7 @@ private fun SummaryField(label: String, value: String) {
             Text(
                 label,
                 style = MaterialTheme.typography.labelMedium,
-                color = BrandBlue,
+                color = BrandPrimary,
                 fontWeight = FontWeight.SemiBold
             )
             Text(

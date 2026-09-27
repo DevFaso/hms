@@ -66,7 +66,7 @@ import com.bitnesttechs.hms.patient.core.models.SurgicalHistoryEntry
 import com.bitnesttechs.hms.patient.features.medicalhistory.MedicalHistoryViewModel.Section
 import com.bitnesttechs.hms.patient.features.medicalhistory.MedicalHistoryViewModel.SectionState
 import com.bitnesttechs.hms.patient.features.medicalhistory.MedicalHistoryViewModel.TobaccoStatus
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
 import com.bitnesttechs.hms.patient.ui.theme.ErrorRed
 import kotlinx.coroutines.launch
 
@@ -116,7 +116,7 @@ fun MedicalHistoryScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue, titleContentColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandPrimary, titleContentColor = Color.White)
             )
         }
     ) { padding ->
@@ -126,7 +126,7 @@ fun MedicalHistoryScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             section(
-                title = R.string.mh_medical, icon = Icons.Default.MedicalServices, tint = BrandBlue,
+                title = R.string.mh_medical, icon = Icons.Default.MedicalServices, tint = BrandPrimary,
                 state = state.medical, emptyRes = R.string.mh_no_medical, plainEmpty = true,
                 onRetry = { viewModel.loadMedical() }
             ) { DiagnosisRow(it) }
@@ -261,7 +261,7 @@ private fun SectionHeader(text: String, icon: androidx.compose.ui.graphics.vecto
 @Composable
 private fun LoadingRow() {
     Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        CircularProgressIndicator(Modifier.size(20.dp), color = BrandBlue, strokeWidth = 2.dp)
+        CircularProgressIndicator(Modifier.size(20.dp), color = BrandPrimary, strokeWidth = 2.dp)
         Spacer(Modifier.width(12.dp))
         Text(stringResource(R.string.medical_history_loading), style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)

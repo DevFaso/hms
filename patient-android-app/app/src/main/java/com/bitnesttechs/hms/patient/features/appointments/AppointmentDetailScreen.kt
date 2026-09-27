@@ -43,7 +43,7 @@ fun AppointmentDetailScreen(
     val statusColor = when (appointment.status.uppercase()) {
         "SCHEDULED", "CONFIRMED" -> SuccessGreen
         "CANCELLED", "CANCELLED_BY_PATIENT" -> ErrorRed
-        "COMPLETED" -> BrandBlue
+        "COMPLETED" -> BrandPrimary
         "RESCHEDULED" -> WarningOrange
         "NO_SHOW" -> Color.Gray
         else -> WarningOrange
@@ -67,7 +67,7 @@ fun AppointmentDetailScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandBlue,
+                    containerColor = BrandPrimary,
                     titleContentColor = Color.White
                 )
             )
@@ -313,7 +313,7 @@ private fun RescheduleSheet(
                 onClick = { onConfirm(date, apiTime, apiEndTime) },
                 enabled = date.length >= 10 && sameDay,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+                colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
             ) { Text(stringResource(R.string.reschedule), fontWeight = FontWeight.SemiBold) }
             if (!sameDay) {
                 Text(stringResource(R.string.reschedule_crosses_midnight),
@@ -395,7 +395,7 @@ fun DetailCard(
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(icon, null, Modifier.size(20.dp), tint = BrandBlue)
+                Icon(icon, null, Modifier.size(20.dp), tint = BrandPrimary)
                 Spacer(Modifier.width(8.dp))
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }

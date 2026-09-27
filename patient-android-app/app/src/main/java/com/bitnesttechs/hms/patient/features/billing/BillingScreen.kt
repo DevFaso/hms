@@ -83,13 +83,13 @@ fun BillingScreen(onBack: () -> Unit = {}, viewModel: BillingViewModel = hiltVie
                         Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue, titleContentColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandPrimary, titleContentColor = Color.White)
             )
         }
     ) { padding ->
         if (isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BrandBlue)
+                CircularProgressIndicator(color = BrandPrimary)
             }
             return@Scaffold
         }
@@ -200,7 +200,7 @@ private fun InvoiceCard(invoice: InvoiceDto, payEnabled: Boolean, onPay: () -> U
                     onClick = onPay,
                     enabled = payEnabled,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
                 ) {
                     Icon(Icons.Default.Payments, null)
                     Spacer(Modifier.width(8.dp))
@@ -305,7 +305,7 @@ private fun PaymentSheet(
                 onClick = { onPay(amount ?: 0.0, method, reference, notes) },
                 enabled = amountValid && !isPaying,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+                colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
             ) {
                 if (isPaying) {
                     CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)

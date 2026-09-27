@@ -40,8 +40,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.bitnesttechs.hms.patient.core.auth.AuthResult
 import com.bitnesttechs.hms.patient.core.auth.TokenStorage
 import com.bitnesttechs.hms.patient.R
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
-import com.bitnesttechs.hms.patient.ui.theme.BrandDarkBlue
+import com.bitnesttechs.hms.patient.ui.theme.OnBrandMuted
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimaryDark
 import com.bitnesttechs.hms.patient.ui.theme.NeutralGrey
 import javax.inject.Inject
 
@@ -93,7 +94,7 @@ fun LoginScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(
-                Brush.verticalGradient(listOf(BrandBlue, BrandDarkBlue))
+                Brush.verticalGradient(listOf(BrandPrimary, BrandPrimaryDark))
             )
     ) {
         Column(
@@ -120,7 +121,7 @@ fun LoginScreen(
             )
             Text(
                 stringResource(R.string.patient_portal),
-                color = Color.White.copy(alpha = 0.8f),
+                color = OnBrandMuted,
                 fontSize = 16.sp
             )
             Spacer(Modifier.height(40.dp))
@@ -147,15 +148,15 @@ fun LoginScreen(
                     val fieldColors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color(0xFF1C1B1F),
                         unfocusedTextColor = Color(0xFF1C1B1F),
-                        focusedLabelColor = BrandBlue,
+                        focusedLabelColor = BrandPrimary,
                         unfocusedLabelColor = NeutralGrey,
-                        focusedLeadingIconColor = BrandBlue,
+                        focusedLeadingIconColor = BrandPrimary,
                         unfocusedLeadingIconColor = NeutralGrey,
-                        focusedTrailingIconColor = BrandBlue,
+                        focusedTrailingIconColor = BrandPrimary,
                         unfocusedTrailingIconColor = NeutralGrey,
-                        focusedBorderColor = BrandBlue,
+                        focusedBorderColor = BrandPrimary,
                         unfocusedBorderColor = NeutralGrey,
-                        cursorColor = BrandBlue
+                        cursorColor = BrandPrimary
                     )
 
                     // Username
@@ -213,7 +214,7 @@ fun LoginScreen(
                             .fillMaxWidth()
                             .height(52.dp),
                         enabled = username.isNotBlank() && password.isNotBlank() && !uiState.isLoading,
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
                     ) {
                         if (uiState.isLoading) {
                             CircularProgressIndicator(
@@ -234,9 +235,9 @@ fun LoginScreen(
                                 .fillMaxWidth()
                                 .height(52.dp)
                         ) {
-                            Icon(Icons.Default.Fingerprint, null, tint = BrandBlue)
+                            Icon(Icons.Default.Fingerprint, null, tint = BrandPrimary)
                             Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.biometric_sign_in), color = BrandBlue)
+                            Text(stringResource(R.string.biometric_sign_in), color = BrandPrimary)
                         }
                     }
 
@@ -249,9 +250,9 @@ fun LoginScreen(
                                 .height(52.dp),
                             enabled = !uiState.isLoading
                         ) {
-                            Icon(Icons.Default.Lock, null, tint = BrandBlue)
+                            Icon(Icons.Default.Lock, null, tint = BrandPrimary)
                             Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.sso_sign_in), color = BrandBlue)
+                            Text(stringResource(R.string.sso_sign_in), color = BrandPrimary)
                         }
                     }
 
@@ -262,7 +263,7 @@ fun LoginScreen(
                     ) {
                         Text(
                             stringResource(R.string.forgot_password),
-                            color = BrandDarkBlue,
+                            color = BrandPrimaryDark,
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }
@@ -272,7 +273,7 @@ fun LoginScreen(
             Spacer(Modifier.height(24.dp))
             Text(
                 stringResource(R.string.copyright),
-                color = Color.White.copy(alpha = 0.5f),
+                color = OnBrandMuted,
                 fontSize = 12.sp,
                 textAlign = TextAlign.Center
             )
