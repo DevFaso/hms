@@ -4,17 +4,8 @@ import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Component;
 
-import java.util.regex.Pattern;
-
 @Component
 public class MessageUtil {
-
-    /**
-     * What a bundle key looks like: dot-separated segments, no whitespace.
-     * A sentence always has a space, so it can never be a key.
-     */
-    private static final Pattern MESSAGE_KEY =
-        Pattern.compile("[A-Za-z][A-Za-z0-9_-]*(?:\\.[A-Za-z0-9_-]+)+");
 
     private static MessageSource messageSource;
 
@@ -36,9 +27,38 @@ public class MessageUtil {
         }
     }
 
-    /** True when {@code text} has the shape of a bundle key rather than of a sentence. */
+    /**
+     * True when {@code text} has the shape of a bundle key rather than of a
+     * sentence: two or more dot-separated segments of letters, digits, '_' or
+     * '-', starting with a letter, no whitespace. A sentence always has a
+     * space, so it can never be a key. Scanned by hand rather than with a
+     * regex, whose nested repetition backtracks on long input (Sonar S5998).
+     */
     public static boolean isMessageKey(String text) {
-        return text != null && MESSAGE_KEY.matcher(text).matches();
+        if (text == null || text.isEmpty() || !isAsciiLetter(text.charAt(0))) {
+            return false;
+        }
+        int segments = 1;
+        boolean segmentHasChars = false;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '.') {
+                if (!segmentHasChars) {
+                    return false;
+                }
+                segments++;
+                segmentHasChars = false;
+            } else if (isAsciiLetter(c) || (c >= '0' && c <= '9') || c == '_' || c == '-') {
+                segmentHasChars = true;
+            } else {
+                return false;
+            }
+        }
+        return segments >= 2 && segmentHasChars;
+    }
+
+    private static boolean isAsciiLetter(char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
     }
 
     /**
@@ -56,8 +76,7 @@ public class MessageUtil {
             return text;
         }
         try {
-            String resolved = messageSource.getMessage(text, args, LocaleContextHolder.getLocale());
-            return resolved != null ? resolved : text;
+            return messageSource.getMessage(text, args, LocaleContextHolder.getLocale());
         } catch (RuntimeException e) {
             return text;
         }
