@@ -1115,6 +1115,30 @@ class PatientPortalServiceImplPhase2Test {
             assertThat(result.getPrimaryCare()).isNull();
             assertThat(result.getPrimaryCareHistory()).isEmpty();
         }
+
+        @Test
+        @DisplayName("names the hospital of each entry, with one lookup")
+        void getCareTeam_namesTheHospitals() {
+            stubPatientResolution();
+            UUID hospitalA = UUID.randomUUID();
+            com.example.hms.model.Hospital a = new com.example.hms.model.Hospital();
+            a.setId(hospitalA);
+            a.setName("CHU Yalgado");
+            PatientPrimaryCareResponseDTO currentPcp = PatientPrimaryCareResponseDTO.builder()
+                    .id(UUID.randomUUID()).hospitalId(hospitalA).doctorDisplay("Dr. Smith").current(true).build();
+            PatientPrimaryCareResponseDTO noHospital = PatientPrimaryCareResponseDTO.builder()
+                    .id(UUID.randomUUID()).doctorDisplay("Dr. Jones").current(false).build();
+            when(primaryCareService.getCurrentPrimaryCare(patientId)).thenReturn(Optional.of(currentPcp));
+            when(primaryCareService.getPrimaryCareHistory(patientId)).thenReturn(List.of(currentPcp, noHospital));
+            when(hospitalRepository.findAllById(java.util.Set.of(hospitalA))).thenReturn(List.of(a));
+
+            CareTeamDTO result = service.getMyCareTeam(auth);
+
+            assertThat(result.getPrimaryCare().getHospitalName()).isEqualTo("CHU Yalgado");
+            assertThat(result.getPrimaryCareHistory().get(0).getHospitalName()).isEqualTo("CHU Yalgado");
+            assertThat(result.getPrimaryCareHistory().get(1).getHospitalName()).isNull();
+            verify(hospitalRepository, org.mockito.Mockito.times(1)).findAllById(any());
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════

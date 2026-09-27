@@ -835,13 +835,25 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public CareTeamDTO getMyCareTeam(Authentication auth) {
         UUID patientId = resolvePatientId(auth);
 
-        CareTeamDTO.PrimaryCareEntry currentPcp = primaryCareService.getCurrentPrimaryCare(patientId)
-                .map(this::toCareTeamEntry)
+        java.util.Optional<PatientPrimaryCareResponseDTO> current = primaryCareService.getCurrentPrimaryCare(patientId);
+        List<PatientPrimaryCareResponseDTO> past = primaryCareService.getPrimaryCareHistory(patientId);
+
+        // The entries carry a hospital id only; one lookup names them all, so
+        // the patient reads where their doctor practises, not a blank line.
+        Set<UUID> hospitalIds = new java.util.HashSet<>();
+        current.map(PatientPrimaryCareResponseDTO::getHospitalId).ifPresent(hospitalIds::add);
+        past.stream().map(PatientPrimaryCareResponseDTO::getHospitalId)
+                .filter(java.util.Objects::nonNull).forEach(hospitalIds::add);
+        Map<UUID, String> hospitalNames = hospitalIds.isEmpty() ? Map.of()
+                : hospitalRepository.findAllById(hospitalIds).stream()
+                        .collect(java.util.stream.Collectors.toMap(Hospital::getId, Hospital::getName, (a, b) -> a));
+
+        CareTeamDTO.PrimaryCareEntry currentPcp = current
+                .map(pcp -> toCareTeamEntry(pcp, hospitalNames))
                 .orElse(null);
 
-        List<CareTeamDTO.PrimaryCareEntry> history = primaryCareService.getPrimaryCareHistory(patientId)
-                .stream()
-                .map(this::toCareTeamEntry)
+        List<CareTeamDTO.PrimaryCareEntry> history = past.stream()
+                .map(pcp -> toCareTeamEntry(pcp, hospitalNames))
                 .toList();
 
         return CareTeamDTO.builder()
@@ -1157,10 +1169,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     }
 
     /** Map a PrimaryCareResponseDTO to a CareTeam entry. */
-    private CareTeamDTO.PrimaryCareEntry toCareTeamEntry(PatientPrimaryCareResponseDTO pcp) {
+    private static CareTeamDTO.PrimaryCareEntry toCareTeamEntry(PatientPrimaryCareResponseDTO pcp,
+                                                                Map<UUID, String> hospitalNames) {
         return CareTeamDTO.PrimaryCareEntry.builder()
                 .id(pcp.getId())
                 .hospitalId(pcp.getHospitalId())
+                .hospitalName(pcp.getHospitalId() == null ? null : hospitalNames.get(pcp.getHospitalId()))
                 .doctorUserId(pcp.getDoctorUserId())
                 .doctorDisplay(pcp.getDoctorDisplay())
                 .startDate(pcp.getStartDate())
