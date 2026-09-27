@@ -171,7 +171,6 @@ class PatientFhirWriteServiceTenancyTest {
     @Test
     void putWithANullScopeTheVerifiedFlagDoesNotBackIsForbidden() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
-        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
         UUID patientId = UUID.randomUUID();
 
         org.hl7.fhir.r4.model.Patient body = new org.hl7.fhir.r4.model.Patient();
@@ -190,24 +189,17 @@ class PatientFhirWriteServiceTenancyTest {
     }
 
     @Test
-    void aVerifiedSuperAdminInGlobalViewIsNotScopedToTheirJwtHomeHospital() {
-        // The raw HospitalContext still carries the JWT-derived home hospital
-        // for a super-admin with no X-Hospital-Id. Reading it scoped a
-        // global-view super-admin to that hospital; RoleValidator drops it.
-        UUID homeHospital = UUID.randomUUID();
-        HospitalContextHolder.setContext(HospitalContext.builder()
-            .superAdmin(true).activeHospitalId(homeHospital).build());
+    void aSuperAdminInGlobalViewMayNotWriteAPatient() {
+        // Design Q9, option A: every write needs one hospital. A verified
+        // super-admin in global view used to write any patient unscoped,
+        // against FhirTenancy's must-pin rule; now they pin a hospital first.
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
-        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
         Patient elsewhere = patient();
-        when(patientRepository.findById(elsewhere.getId())).thenReturn(Optional.of(elsewhere));
-
-        org.hl7.fhir.r4.model.Patient mapped = mapsTo(elsewhere, null);
         org.hl7.fhir.r4.model.Patient body = new org.hl7.fhir.r4.model.Patient();
-        assertThat(service.update(elsewhere.getId(), body)).isSameAs(mapped);
+        UUID id = elsewhere.getId();
 
-        verify(registrationRepository, never()).findByPatientIdAndHospitalIdAndActiveTrue(any(), any());
-        verify(patientRepository).save(elsewhere);
+        assertThatThrownBy(() -> service.update(id, body)).isInstanceOf(ForbiddenOperationException.class);
+        verify(patientRepository, never()).save(any());
     }
 
     /* ── POST /Patient + If-None-Exist ─────────────────────────────────── */
@@ -248,23 +240,20 @@ class PatientFhirWriteServiceTenancyTest {
     }
 
     @Test
-    void aVerifiedSuperAdminInGlobalViewMayNameAnyHospitalsMrn() {
+    void aSuperAdminInGlobalViewMayNotConditionallyCreate() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
-        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
-        Patient theirs = patient();
         stubMrnToken(otherHospital);
-        when(registrationRepository.findActiveByHospitalIdAndIdentifier(otherHospital, MRN))
-            .thenReturn(List.of(registration(theirs, true)));
-        org.hl7.fhir.r4.model.Patient mapped = mapsTo(theirs, null);
+        String header = ifNoneExist(otherHospital);
+        org.hl7.fhir.r4.model.Patient body = new org.hl7.fhir.r4.model.Patient();
 
-        assertThat(service.conditionalCreate(ifNoneExist(otherHospital), new org.hl7.fhir.r4.model.Patient()))
-            .isSameAs(mapped);
+        assertThatThrownBy(() -> service.conditionalCreate(header, body))
+            .isInstanceOf(ForbiddenOperationException.class);
+        verify(registrationRepository, never()).findActiveByHospitalIdAndIdentifier(any(), any());
     }
 
     @Test
     void conditionalCreateWithANullScopeTheVerifiedFlagDoesNotBackIsForbidden() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
-        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
         stubMrnToken(otherHospital);
         String header = ifNoneExist(otherHospital);
         org.hl7.fhir.r4.model.Patient body = new org.hl7.fhir.r4.model.Patient();
@@ -279,7 +268,6 @@ class PatientFhirWriteServiceTenancyTest {
         // Shape validation reads no data, so it runs before the scope: a
         // missing If-None-Exist is still 422, not "scope required".
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
-        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
         org.hl7.fhir.r4.model.Patient body = new org.hl7.fhir.r4.model.Patient();
 
         assertThatThrownBy(() -> service.conditionalCreate(null, body))

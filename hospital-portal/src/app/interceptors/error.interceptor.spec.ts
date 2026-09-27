@@ -12,6 +12,7 @@ import { of, throwError } from 'rxjs';
 
 import { errorInterceptor, clearReportedSilent403s } from './error.interceptor';
 import { AuthService } from '../auth/auth.service';
+import { SessionScopeService } from '../core/session-scope.service';
 import { ImpersonationService } from '../services/impersonation.service';
 import { DowntimeService } from '../services/downtime.service';
 
@@ -21,6 +22,7 @@ describe('errorInterceptor', () => {
   let auth: jasmine.SpyObj<AuthService>;
   let router: jasmine.SpyObj<Router>;
   let impersonation: jasmine.SpyObj<ImpersonationService>;
+  let sessionScope: jasmine.SpyObj<SessionScopeService>;
 
   beforeEach(() => {
     clearReportedSilent403s();
@@ -38,6 +40,8 @@ describe('errorInterceptor', () => {
     router.navigate.and.resolveTo(true);
     impersonation = jasmine.createSpyObj('ImpersonationService', ['isActive', 'forceStop']);
     impersonation.isActive.and.returnValue(false);
+    sessionScope = jasmine.createSpyObj('SessionScopeService', ['hydrate']);
+    sessionScope.hydrate.and.returnValue(of(null));
 
     TestBed.configureTestingModule({
       providers: [
@@ -46,6 +50,7 @@ describe('errorInterceptor', () => {
         { provide: AuthService, useValue: auth },
         { provide: Router, useValue: router },
         { provide: ImpersonationService, useValue: impersonation },
+        { provide: SessionScopeService, useValue: sessionScope },
       ],
     });
     http = TestBed.inject(HttpClient);
@@ -145,6 +150,36 @@ describe('errorInterceptor', () => {
 
     expect(router.navigate).not.toHaveBeenCalled();
     expect(error?.status).toBe(403);
+  });
+
+  describe('hospital scope refused (the one tenant resolver)', () => {
+    function refuse(reason: string): HttpErrorResponse | undefined {
+      let error: HttpErrorResponse | undefined;
+      http.get('/patients').subscribe({ error: (e) => (error = e) });
+      httpMock
+        .expectOne('/patients')
+        .flush(
+          { code: 'hospital_scope_refused', reason },
+          { status: 403, statusText: 'Forbidden' },
+        );
+      return error;
+    }
+
+    it('re-reads the session scope on a stale chip (NO_LONGER_PERMITTED), without the forbidden page', () => {
+      const error = refuse('NO_LONGER_PERMITTED');
+
+      expect(sessionScope.hydrate).toHaveBeenCalledTimes(1);
+      expect(router.navigate).not.toHaveBeenCalled();
+      expect(error?.status).toBe(403);
+    });
+
+    it('leaves any other refusal to the page: no re-bootstrap, no redirect', () => {
+      const error = refuse('NOT_PERMITTED');
+
+      expect(sessionScope.hydrate).not.toHaveBeenCalled();
+      expect(router.navigate).not.toHaveBeenCalled();
+      expect(error?.status).toBe(403);
+    });
   });
 
   it('on non-silent 403, redirects to the error page', () => {

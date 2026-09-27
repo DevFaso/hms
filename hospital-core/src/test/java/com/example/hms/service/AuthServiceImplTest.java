@@ -38,6 +38,21 @@ class AuthServiceImplTest {
     }
 
     @Test
+    void getCurrentUserId_resolvesAKeycloakPrincipalThroughAppUserId() {
+        // The trap the tasklist records: this used to throw for every
+        // JwtAuthenticationToken, so a guard built on it answered 401 to a
+        // Keycloak patient reading their own record.
+        UUID userId = UUID.randomUUID();
+        org.springframework.security.oauth2.jwt.Jwt jwt = org.springframework.security.oauth2.jwt.Jwt
+            .withTokenValue("t").header("alg", "none").claim("appUserId", userId.toString()).build();
+        SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(
+                jwt, List.of(new SimpleGrantedAuthority("ROLE_PATIENT"))));
+
+        assertThat(authService.getCurrentUserId()).isEqualTo(userId);
+    }
+
+    @Test
     void getCurrentUserId_throwsUnauthorized_whenNoAuth() {
         SecurityContextHolder.clearContext();
         assertThatThrownBy(authService::getCurrentUserId)

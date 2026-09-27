@@ -1,7 +1,6 @@
 package com.example.hms.utility;
 
-import com.example.hms.model.Hospital;
-import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.CustomUserDetails;
 import com.example.hms.security.context.HospitalContext;
@@ -40,13 +39,17 @@ import static org.mockito.Mockito.when;
  * </pre>
  *
  * The bug: when a super-admin user has exactly one active
- * {@link UserRoleHospitalAssignment} and that assignment is
+ * {@code UserRoleHospitalAssignment} and that assignment is
  * <b>global</b> (no hospital attached), the code did
  * {@code .getHospital().getId()} on a null reference. This used to be
  * unreachable because super-admins always had {@code X-Hospital-Id}
  * set, but the cross-tenant "global view" deliberately omits the
  * header — so the fallback path now fires and used to crash 10
  * dashboard endpoints simultaneously.
+ *
+ * <p>Since the one tenant resolver ({@code ActingScopeResolver}) the
+ * hospital-resolution methods here are adapters over it: the tests set the
+ * context the auth filters produce instead of stubbing assignment queries.
  */
 @ExtendWith(MockitoExtension.class)
 class RoleValidatorTest {
@@ -57,7 +60,7 @@ class RoleValidatorTest {
 
     @BeforeEach
     void setUp() {
-        roleValidator = new RoleValidator(assignmentRepository);
+        roleValidator = new RoleValidator(assignmentRepository, ActingScopeTestSupport.resolver(assignmentRepository, null));
     }
 
     @AfterEach
@@ -74,46 +77,30 @@ class RoleValidatorTest {
         assertThat(roleValidator.getCurrentHospitalId()).isNull();
     }
 
-    @Test
-    void getCurrentHospitalId_returnsNullWhenNoActiveAssignments() {
-        UUID userId = setAuthenticatedUser(UUID.randomUUID());
-        when(assignmentRepository.findByUser_IdAndActiveTrue(userId)).thenReturn(List.of());
-
-        assertThat(roleValidator.getCurrentHospitalId()).isNull();
-    }
-
-    @Test
-    void getCurrentHospitalId_returnsNullWhenMultipleActiveAssignments() {
-        UUID userId = setAuthenticatedUser(UUID.randomUUID());
-        when(assignmentRepository.findByUser_IdAndActiveTrue(userId))
-            .thenReturn(List.of(scopedAssignment(), scopedAssignment()));
-
-        assertThat(roleValidator.getCurrentHospitalId()).isNull();
-    }
-
-    @Test
-    void getCurrentHospitalId_returnsHospitalIdForSingleScopedAssignment() {
-        UUID userId = setAuthenticatedUser(UUID.randomUUID());
-        UUID hospitalId = UUID.randomUUID();
-        UserRoleHospitalAssignment assignment = scopedAssignment(hospitalId);
-        when(assignmentRepository.findByUser_IdAndActiveTrue(userId))
-            .thenReturn(List.of(assignment));
-
-        assertThat(roleValidator.getCurrentHospitalId()).isEqualTo(hospitalId);
-    }
-
     /**
-     * THE regression. Before the fix this NPE'd; after the fix it
-     * returns null so {@link RoleValidator#requireActiveHospitalId()}
-     * can fall through to its super-admin branch.
+     * {@code getCurrentHospitalId()} used to run its own "exactly one active
+     * assignment" query (and once NPE'd on a single GLOBAL assignment). It is
+     * the one resolver's answer now: the pinned hospital, else null, with no
+     * query of its own.
      */
     @Test
-    void getCurrentHospitalId_returnsNullForSingleGlobalAssignment() {
-        UUID userId = setAuthenticatedUser(UUID.randomUUID());
-        when(assignmentRepository.findByUser_IdAndActiveTrue(userId))
-            .thenReturn(List.of(globalAssignment()));
+    void getCurrentHospitalId_isThePinnedHospitalOfTheResolver() {
+        UUID hospitalId = UUID.randomUUID();
+        ActingScopeTestSupport.actingAt(UUID.randomUUID(), hospitalId);
+        assertThat(roleValidator.getCurrentHospitalId()).isEqualTo(hospitalId);
 
+        // Several hospitals and none named: no hospital, not the "only" one.
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .permittedHospitalIds(java.util.Set.of(UUID.randomUUID(), UUID.randomUUID()))
+            .scopeRefusal(com.example.hms.security.tenant.ActingScope.Reason.AMBIGUOUS)
+            .build());
         assertThat(roleValidator.getCurrentHospitalId()).isNull();
+
+        // A super-admin in global view (a single global assignment): null, no NPE.
+        ActingScopeTestSupport.globalSuperAdmin(UUID.randomUUID());
+        assertThat(roleValidator.getCurrentHospitalId()).isNull();
+
+        Mockito.verifyNoInteractions(assignmentRepository);
     }
 
     // ── requireActiveHospitalId ──────────────────────────────────────
@@ -134,21 +121,22 @@ class RoleValidatorTest {
     }
 
     /**
-     * The end-to-end case the cross-tenant slice hits in production:
-     * super-admin in global view (no X-Hospital-Id header so
-     * HospitalContext.activeHospitalId is null) AND the user has a
-     * single global assignment. Before the fix this NPE'd at
-     * getCurrentHospitalId line 95; after the fix the method returns
-     * null and lets the unscoped findAll path run.
+     * The global view a VERIFIED super-admin gets: null. And "step 4" is gone:
+     * a principal whose AUTHORITIES say super-admin while no verified context
+     * backs them (a test that skips the filter, an inflated authority list) is
+     * refused like anyone with no hospital, never given an unscoped read.
      */
     @Test
-    void requireActiveHospitalId_returnsNullForSuperAdminWithGlobalAssignment() {
-        UUID userId = setAuthenticatedUser(UUID.randomUUID(),
-            new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"));
-        when(assignmentRepository.findByUser_IdAndActiveTrue(userId))
-            .thenReturn(List.of(globalAssignment()));
-
+    void requireActiveHospitalId_isNullOnlyForAVerifiedSuperAdminInGlobalView() {
+        ActingScopeTestSupport.globalSuperAdmin(UUID.randomUUID());
         assertThat(roleValidator.requireActiveHospitalId()).isNull();
+
+        HospitalContextHolder.clear();
+        setAuthenticatedUser(UUID.randomUUID(), new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"));
+        org.assertj.core.api.Assertions.assertThatThrownBy(roleValidator::requireActiveHospitalId)
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessage(RoleValidator.HOSPITAL_CONTEXT_REQUIRED);
+        Mockito.verifyNoInteractions(assignmentRepository);
     }
 
     /**
@@ -254,13 +242,15 @@ class RoleValidatorTest {
         HospitalContextHolder.setContext(
             HospitalContext.builder().superAdmin(false).build());
         assertThat(roleValidator.isSuperAdminFromJwtClaim()).isFalse();
-        // Authorities-based check disagrees — proving the two are independent.
-        assertThat(roleValidator.isSuperAdminFromAuth()).isTrue();
+        // The deprecated authorities-based check no longer disagrees: it
+        // follows the verified signal, so an inflated authority grants nothing.
+        assertThat(roleValidator.isSuperAdminFromAuth()).isFalse();
 
         // Context with superAdmin=true → true
         HospitalContextHolder.setContext(
             HospitalContext.builder().superAdmin(true).build());
         assertThat(roleValidator.isSuperAdminFromJwtClaim()).isTrue();
+        assertThat(roleValidator.isSuperAdminFromAuth()).isTrue();
     }
 
     // ── helpers ──────────────────────────────────────────────────────
@@ -276,26 +266,6 @@ class RoleValidatorTest {
         Authentication auth = new UsernamePasswordAuthenticationToken(principal, "n/a", List.of(auths));
         SecurityContextHolder.getContext().setAuthentication(auth);
         return userId;
-    }
-
-    private UserRoleHospitalAssignment scopedAssignment() {
-        return scopedAssignment(UUID.randomUUID());
-    }
-
-    private UserRoleHospitalAssignment scopedAssignment(UUID hospitalId) {
-        Hospital h = new Hospital();
-        h.setId(hospitalId);
-        UserRoleHospitalAssignment a = new UserRoleHospitalAssignment();
-        a.setHospital(h);
-        return a;
-    }
-
-    private UserRoleHospitalAssignment globalAssignment() {
-        // Hospital deliberately left null — represents a SUPER_ADMIN
-        // role assigned without a tenant scope.
-        UserRoleHospitalAssignment a = new UserRoleHospitalAssignment();
-        a.setHospital(null);
-        return a;
     }
 
     // ── The two-layer role split: the annotation expands, these do not ──

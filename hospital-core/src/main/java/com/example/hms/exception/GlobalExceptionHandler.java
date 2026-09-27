@@ -375,6 +375,20 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
     }
 
+    /**
+     * A hospital scope the request cannot have (design §3.6). 403 with a code
+     * and the reason, so the portal re-reads its scope on a stale chip
+     * ({@code NO_LONGER_PERMITTED}) instead of showing the forbidden page.
+     */
+    @ExceptionHandler(HospitalScopeRefusedException.class)
+    public ResponseEntity<Object> handleHospitalScopeRefused(HospitalScopeRefusedException ex, WebRequest request) {
+        log.warn("Hospital scope refused ({}) at path {}", ex.getReason(), request.getDescription(false));
+        Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+        body.put("code", HospitalScopeRefusedException.CODE);
+        body.put("reason", ex.getReason());
+        return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
+    }
+
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     public ResponseEntity<Object> handleAccessDenied(AccessDeniedException ex, WebRequest req) {
         log.warn("Access denied: {}", ex.getMessage());

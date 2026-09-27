@@ -41,12 +41,11 @@ class FhirTenantBoundaryRoleTest {
     }
 
     private static JwtAuthenticationToken keycloak(List<String> roleAssignments) {
-        Jwt.Builder jwt = Jwt.withTokenValue("t").header("alg", "RS256").subject("kc-user")
-            .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60));
-        if (roleAssignments != null) {
-            jwt.claim(FhirTenantBoundary.CLAIM_ROLE_ASSIGNMENTS, roleAssignments);
-        }
-        return new JwtAuthenticationToken(jwt.build());
+        Jwt jwt = Jwt.withTokenValue("t").header("alg", "RS256").subject("kc-user")
+            .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60))
+            .claim("role_assignments", roleAssignments)
+            .build();
+        return new JwtAuthenticationToken(jwt);
     }
 
     @Test
@@ -57,25 +56,20 @@ class FhirTenantBoundaryRoleTest {
     }
 
     @Test
-    @DisplayName("Keycloak: only the role the claim pairs with THIS hospital counts")
-    void keycloakReadsThePairs() {
-        JwtAuthenticationToken dual = keycloak(List.of("ROLE_DOCTOR@" + A, "ROLE_RECEPTIONIST@" + B));
-        assertThat(boundary.holdsRoleAt(ctx(null, false), dual, A, FhirTenantBoundary.READ_ROLE_CODES)).isTrue();
-        assertThat(boundary.holdsRoleAt(ctx(null, false), dual, B, FhirTenantBoundary.READ_ROLE_CODES)).isFalse();
-        // Bare and prefixed codes are the same role; case does not matter.
-        assertThat(boundary.holdsRoleAt(ctx(null, false), keycloak(List.of("nurse@" + A.toString().toUpperCase())),
-            A, FhirTenantBoundary.READ_ROLE_CODES)).isTrue();
-        // Malformed entries and a missing claim hold nothing.
-        assertThat(boundary.holdsRoleAt(ctx(null, false), keycloak(List.of("ROLE_DOCTOR", "@" + A, "DOCTOR@")),
-            A, FhirTenantBoundary.READ_ROLE_CODES)).isFalse();
-        assertThat(boundary.holdsRoleAt(ctx(null, false), keycloak(null), A, FhirTenantBoundary.READ_ROLE_CODES))
-            .isFalse();
-        // A consulting clinician reads but does not write.
-        JwtAuthenticationToken radiologist = keycloak(List.of("ROLE_RADIOLOGIST@" + A));
-        assertThat(boundary.holdsRoleAt(ctx(null, false), radiologist, A, FhirTenantBoundary.READ_ROLE_CODES)).isTrue();
-        assertThat(boundary.holdsRoleAt(ctx(null, false), radiologist, A, FhirTenantBoundary.WRITE_ROLE_CODES))
+    @DisplayName("Keycloak: the role_assignments claim grants nothing; the linked account's live assignment decides")
+    void keycloakReadsTheLiveAssignmentsToo() {
+        JwtAuthenticationToken claimsDoctorAtB = keycloak(List.of("ROLE_DOCTOR@" + B));
+        // No linked local account (principalUserId null): the claim alone holds nothing.
+        assertThat(boundary.holdsRoleAt(ctx(null, false), claimsDoctorAtB, B, FhirTenantBoundary.READ_ROLE_CODES))
             .isFalse();
         verifyNoInteractions(assignments);
+
+        // Linked: the table answers, whatever the claim says.
+        when(assignments.existsActiveByUserAndHospitalAndAnyRoleCode(eq(USER), eq(B), any())).thenReturn(false);
+        assertThat(boundary.holdsRoleAt(ctx(USER, false), claimsDoctorAtB, B, FhirTenantBoundary.READ_ROLE_CODES))
+            .as("a role the claim asserts but the table no longer holds does not count")
+            .isFalse();
+        verify(assignments).existsActiveByUserAndHospitalAndAnyRoleCode(eq(USER), eq(B), any());
     }
 
     @Test

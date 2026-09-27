@@ -2,10 +2,8 @@ package com.example.hms.security;
 
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
-import com.example.hms.security.context.HospitalContextRequestOverrides;
 import com.example.hms.security.context.ImpersonationContextHolder;
-import com.example.hms.service.HospitalLifecycleStatusService;
-import com.example.hms.service.OrganizationLifecycleStatusService;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -27,7 +25,6 @@ import java.util.Date;
 import java.util.Deque;
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
@@ -43,8 +40,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final TokenBlacklistService tokenBlacklistService;
     private final WsTicketService wsTicketService;
     private final HospitalUserDetailsService hospitalUserDetailsService;
-    private final OrganizationLifecycleStatusService lifecycleStatusService;
-    private final HospitalLifecycleStatusService hospitalLifecycleStatusService;
+    private final TenantLifecycleGate tenantLifecycleGate;
+    private final ActingScopeResolver actingScopeResolver;
     private final GlobalSessionRevocationService globalSessionRevocationService;
     private final IdleSessionGate idleSessionGate;
 
@@ -266,12 +263,27 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // requests whose user is attached to an org in a non-active state
         // (SUSPENDED / ARCHIVED / PENDING_PURGE / PURGED). Super admins
         // bypass — they need cross-tenant access to manage these orgs.
-        if (isBlockedByTenantLifecycle(context)) {
+        if (tenantLifecycleGate.isBlocked(context)) {
             log.warn("[JWT] Refusing request on path={} — user's organization is blocked by tenant lifecycle", path);
             SecurityContextHolder.clearContext();
             HospitalContextHolder.clear();
             ImpersonationContextHolder.clear();
-            respondTenantBlocked(response);
+            HospitalScopeResponses.writeTenantBlocked(response);
+            return false;
+        }
+
+        // ── Refused X-Hospital-Id (design Q3, option A) ─────────────────
+        // A hospital the caller may not act at, named explicitly, is refused
+        // before any controller runs — never silently replaced by another
+        // hospital. The refusal is audited (hourly per actor, hospital and
+        // reason) and the 403 carries the reason, so the portal re-reads its
+        // scope on a stale chip (NO_LONGER_PERMITTED).
+        if (ActingScopeResolver.isRefusedHeader(context)) {
+            actingScopeResolver.auditRefusedHeader(context);
+            SecurityContextHolder.clearContext();
+            HospitalContextHolder.clear();
+            ImpersonationContextHolder.clear();
+            HospitalScopeResponses.writeRefusal(response, context.getScopeRefusal());
             return false;
         }
 
@@ -296,12 +308,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private boolean applyAuthentication(String jwt, HttpServletRequest request, String extractedSubject) {
         try {
             Authentication authentication = tokenProvider.getAuthenticationFromJwt(jwt);
+            // The one live computation (ActingScopeResolver), then the header.
+            HospitalContext context = tokenProvider.extractHospitalContext(jwt, authentication);
+            context = actingScopeResolver.withHeader(context, request);
+            // Q10, option A: a token still asserting ROLE_SUPER_ADMIN for a
+            // caller with no live SUPER_ADMIN assignment loses it, and the
+            // roles it inherited, on this request — not at refresh.
+            authentication = SuperAdminAuthorities.reconcile(authentication, context);
             log.debug("[JWT] Setting authentication for principal={} authorities={}",
                 authentication.getName(), authentication.getAuthorities());
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
-            HospitalContext context = tokenProvider.extractHospitalContext(jwt, authentication);
-            context = HospitalContextRequestOverrides.applyRequestOverrides(context, request);
             HospitalContextHolder.setContext(context);
             tokenProvider.extractImpersonationContext(jwt)
                 .ifPresent(ImpersonationContextHolder::set);
@@ -427,79 +444,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (!response.isCommitted()) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setHeader("WWW-Authenticate", IdleSessionGate.WWW_AUTHENTICATE_CHALLENGE);
-        }
-    }
-
-    /**
-     * Returns {@code true} when the authenticated user is attached to a
-     * blocked organization OR a blocked hospital and is not a super admin.
-     * Super admins always pass — they need cross-tenant access to manage
-     * blocked tenants.
-     *
-     * <p>Hospital-level lifecycle (MVP-c batch) layers on top of the org
-     * gate so a single hospital can be suspended without taking down the
-     * whole organization, and the JWT filter enforces it at login time.
-     */
-    private boolean isBlockedByTenantLifecycle(HospitalContext context) {
-        if (context.isSuperAdmin()) {
-            return false;
-        }
-        return isBlockedByOrgLifecycle(context) || isBlockedByHospitalLifecycle(context);
-    }
-
-    private boolean isBlockedByOrgLifecycle(HospitalContext context) {
-        Set<UUID> permitted = context.getPermittedOrganizationIds();
-        UUID active = context.getActiveOrganizationId();
-        if (permitted.isEmpty() && active == null) {
-            return false;
-        }
-        Set<UUID> blocked = lifecycleStatusService.getBlockedOrganizationIds();
-        return !blocked.isEmpty()
-            && (containsAny(blocked, permitted) || (active != null && blocked.contains(active)));
-    }
-
-    private boolean isBlockedByHospitalLifecycle(HospitalContext context) {
-        Set<UUID> permitted = context.getPermittedHospitalIds();
-        UUID active = context.getActiveHospitalId();
-        if (permitted.isEmpty() && active == null) {
-            return false;
-        }
-        Set<UUID> blocked = hospitalLifecycleStatusService.getBlockedHospitalIds();
-        return !blocked.isEmpty()
-            && (containsAny(blocked, permitted) || (active != null && blocked.contains(active)));
-    }
-
-    private static boolean containsAny(Set<UUID> haystack, Set<UUID> needles) {
-        for (UUID id : needles) {
-            if (haystack.contains(id)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /** 423 LOCKED with a clear, non-PII JSON body so the portal can surface
-     *  an actionable message. The frontend interceptor only special-cases
-     *  401/403 today, so a bare 423 with no body would render as a generic
-     *  request failure with no explanation. */
-    private void respondTenantBlocked(HttpServletResponse response) {
-        if (response.isCommitted()) {
-            return;
-        }
-        response.setStatus(423); // LOCKED — RFC 4918
-        response.setHeader("X-Block-Reason", "tenant-lifecycle");
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        try {
-            response.getWriter().write(
-                "{\"error\":\"tenant_blocked\","
-                    + "\"message\":\"Access to this organization is currently unavailable due to its lifecycle status. "
-                    + "Contact your super-admin if this is unexpected.\","
-                    + "\"status\":423,"
-                    + "\"blockReason\":\"tenant-lifecycle\"}"
-            );
-        } catch (IOException ex) {
-            log.warn("[JWT] Failed to write 423 tenant-blocked response body", ex);
         }
     }
 

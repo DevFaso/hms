@@ -1,5 +1,6 @@
 package com.example.hms.security.audit;
 
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.model.Hospital;
@@ -88,7 +89,7 @@ class WriteAuditInterceptorTest {
         ObjectProvider<AuditEventLogService> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(auditService);
         assignmentRepository = mock(UserRoleHospitalAssignmentRepository.class);
-        interceptor = new WriteAuditInterceptor(provider, providerOf(new ControllerAuthUtils(mock(UserRoleHospitalAssignmentRepository.class))),
+        interceptor = new WriteAuditInterceptor(provider, providerOf(new ControllerAuthUtils(ActingScopeTestSupport.resolver())),
             providerOf(assignmentRepository));
         ReflectionTestUtils.setField(interceptor, "enabled", true);
         authenticate();

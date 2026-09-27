@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.tenant.HospitalScopeExempt;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
 import com.example.hms.payload.dto.BillingInvoiceResponseDTO;
@@ -324,6 +325,7 @@ public class PatientPortalController {
             description = "Returns departments at the specified hospital (for booking form)")
     @GetMapping("/booking/hospitals/{hospitalId}/departments")
     @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    @HospitalScopeExempt(reason = "A patient choosing where to book: the hospital is the booking target, and a patient's own scope holds no hospital")
     public ResponseEntity<ApiResponseWrapper<List<Map<String, Object>>>> getDepartments(
             @PathVariable UUID hospitalId) {
         return ResponseEntity.ok(ApiResponseWrapper.success(
@@ -334,6 +336,7 @@ public class PatientPortalController {
             description = "Returns active providers (doctors/nurses) in a specific hospital department (for booking form)")
     @GetMapping("/booking/hospitals/{hospitalId}/departments/{departmentId}/providers")
     @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    @HospitalScopeExempt(reason = "A patient choosing where to book: the hospital is the booking target, and a patient's own scope holds no hospital")
     public ResponseEntity<ApiResponseWrapper<List<Map<String, Object>>>> getProviders(
             @PathVariable UUID hospitalId, @PathVariable UUID departmentId) {
         return ResponseEntity.ok(ApiResponseWrapper.success(

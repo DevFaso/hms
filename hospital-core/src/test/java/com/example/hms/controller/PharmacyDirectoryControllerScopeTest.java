@@ -2,7 +2,8 @@ package com.example.hms.controller;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.PharmacyType;
-import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.HospitalScopeRefusedException;
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.pharmacy.PharmacyRepository;
 import com.example.hms.security.RoleExpansion;
@@ -25,6 +26,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -62,7 +64,7 @@ class PharmacyDirectoryControllerScopeTest {
     @BeforeEach
     void setUp() {
         PharmacyDirectoryController controller = new PharmacyDirectoryController(
-            directoryService, pharmacyRepository, new ControllerAuthUtils(assignmentRepository));
+            directoryService, pharmacyRepository, new ControllerAuthUtils(ActingScopeTestSupport.resolver(assignmentRepository, null)));
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
         when(directoryService.listPatientPharmacies(any(), any())).thenReturn(List.of());
         when(pharmacyRepository.findByHospitalIdAndPharmacyTypeAndActiveTrue(any(), any())).thenReturn(List.of());
@@ -77,17 +79,16 @@ class PharmacyDirectoryControllerScopeTest {
 
     @Test
     @DisplayName("patients: a hospitalId the doctor does not hold is refused, not served")
-    void patientPharmaciesRefuseAnUnheldHospitalParameter() throws Exception {
+    void patientPharmaciesRefuseAnUnheldHospitalParameter() {
         clinicianAt(HOSPITAL_A);
-        when(assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(USER_ID, HOSPITAL_B)).thenReturn(false);
 
-        // BusinessException is @ResponseStatus(BAD_REQUEST).
-        mockMvc.perform(get(PATIENT_PATH, PATIENT_ID)
+        // The one resolver refuses a named hospital outside the live permitted
+        // set with a 403 carrying the reason; standalone MockMvc has no advice
+        // to render it, so the exception itself is the answer here.
+        assertThatThrownBy(() -> mockMvc.perform(get(PATIENT_PATH, PATIENT_ID)
                 .param("hospitalId", HOSPITAL_B.toString())
-                .principal(doctor()))
-            .andExpect(status().isBadRequest())
-            .andExpect(result -> assertThat(result.getResolvedException())
-                .isInstanceOf(BusinessException.class));
+                .principal(doctor())))
+            .hasCauseInstanceOf(HospitalScopeRefusedException.class);
         verify(directoryService, never()).listPatientPharmacies(any(), any());
     }
 
@@ -108,8 +109,13 @@ class PharmacyDirectoryControllerScopeTest {
     @Test
     @DisplayName("patients: a hospitalId the doctor holds is honoured")
     void patientPharmaciesHonourAHeldHospitalParameter() throws Exception {
-        clinicianAt(HOSPITAL_A);
-        when(assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(USER_ID, HOSPITAL_B)).thenReturn(true);
+        // Acting at A (the header), holding A and B live.
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(USER_ID)
+            .activeHospitalId(HOSPITAL_A)
+            .headerOverridden(true)
+            .permittedHospitalIds(Set.of(HOSPITAL_A, HOSPITAL_B))
+            .build());
 
         mockMvc.perform(get(PATIENT_PATH, PATIENT_ID)
                 .param("hospitalId", HOSPITAL_B.toString())
@@ -148,17 +154,13 @@ class PharmacyDirectoryControllerScopeTest {
 
     @Test
     @DisplayName("community: a hospitalId the doctor does not hold is refused, not served")
-    void communityPharmaciesRefuseAnUnheldHospitalParameter() throws Exception {
+    void communityPharmaciesRefuseAnUnheldHospitalParameter() {
         clinicianAt(HOSPITAL_A);
-        when(assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(USER_ID, HOSPITAL_B)).thenReturn(false);
 
-        // BusinessException is @ResponseStatus(BAD_REQUEST).
-        mockMvc.perform(get(COMMUNITY_PATH)
+        assertThatThrownBy(() -> mockMvc.perform(get(COMMUNITY_PATH)
                 .param("hospitalId", HOSPITAL_B.toString())
-                .principal(doctor()))
-            .andExpect(status().isBadRequest())
-            .andExpect(result -> assertThat(result.getResolvedException())
-                .isInstanceOf(BusinessException.class));
+                .principal(doctor())))
+            .hasCauseInstanceOf(HospitalScopeRefusedException.class);
         verify(pharmacyRepository, never()).findByHospitalIdAndPharmacyTypeAndActiveTrue(any(), any());
     }
 

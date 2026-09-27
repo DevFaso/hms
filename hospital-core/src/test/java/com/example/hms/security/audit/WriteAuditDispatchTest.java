@@ -1,5 +1,6 @@
 package com.example.hms.security.audit;
 
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -90,7 +91,7 @@ class WriteAuditDispatchTest {
         when(provider.getIfAvailable()).thenReturn(auditService);
         @SuppressWarnings("unchecked")
         ObjectProvider<ControllerAuthUtils> authUtils = mock(ObjectProvider.class);
-        when(authUtils.getIfAvailable()).thenReturn(new ControllerAuthUtils(mock(UserRoleHospitalAssignmentRepository.class)));
+        when(authUtils.getIfAvailable()).thenReturn(new ControllerAuthUtils(ActingScopeTestSupport.resolver()));
         @SuppressWarnings("unchecked")
         ObjectProvider<UserRoleHospitalAssignmentRepository> assignments = mock(ObjectProvider.class);
         when(assignments.getIfAvailable()).thenReturn(null);

@@ -33,6 +33,14 @@ export interface KeycloakUserPayload {
   readonly requiredActions: readonly string[];
 }
 
+/** The fields of a Keycloak user representation the tooling reads; the rest round-trips untouched. */
+export interface KeycloakUserRepresentation {
+  readonly id?: string;
+  readonly username?: string;
+  readonly attributes?: Readonly<Record<string, readonly string[]>>;
+  readonly [key: string]: unknown;
+}
+
 export interface KeycloakRoleRef {
   readonly id: string;
   readonly name: string;
@@ -198,6 +206,57 @@ export class KeycloakAdminClient {
         await safeText(res),
       );
     }
+  }
+
+  /** The full user representation (attributes included), or null when the id is unknown. */
+  async getUser(userId: string): Promise<KeycloakUserRepresentation | null> {
+    const res = await this.authedFetch(
+      `/admin/realms/${encodeURIComponent(this.opts.realm)}/users/${encodeURIComponent(userId)}`,
+    );
+    if (res.status === 404) return null;
+    if (!res.ok) {
+      throw new KeycloakError(
+        `Read user ${userId} failed: HTTP ${res.status}`,
+        res.status,
+        await safeText(res),
+      );
+    }
+    return (await res.json()) as KeycloakUserRepresentation;
+  }
+
+  /**
+   * Writes a full user representation back. Keycloak's PUT replaces the
+   * attribute map wholesale, so callers pass the representation they read
+   * with the one attribute changed, never a partial one.
+   */
+  async updateUser(userId: string, representation: KeycloakUserRepresentation): Promise<void> {
+    const res = await this.authedFetch(
+      `/admin/realms/${encodeURIComponent(this.opts.realm)}/users/${encodeURIComponent(userId)}`,
+      { method: 'PUT', body: JSON.stringify(representation) },
+    );
+    if (res.status !== 204 && !res.ok) {
+      throw new KeycloakError(
+        `Update user ${userId} failed: HTTP ${res.status}`,
+        res.status,
+        await safeText(res),
+      );
+    }
+  }
+
+  /** One page of realm users with their attributes (`briefRepresentation=false`). */
+  async listUsers(first: number, max: number): Promise<KeycloakUserRepresentation[]> {
+    const params = new URLSearchParams({
+      first: String(first),
+      max: String(max),
+      briefRepresentation: 'false',
+    });
+    const res = await this.authedFetch(
+      `/admin/realms/${encodeURIComponent(this.opts.realm)}/users?${params.toString()}`,
+    );
+    if (!res.ok) {
+      throw new KeycloakError(`List users failed: HTTP ${res.status}`, res.status, await safeText(res));
+    }
+    return (await res.json()) as KeycloakUserRepresentation[];
   }
 
   /** Triggers Keycloak to email the user the UPDATE_PASSWORD + VERIFY_EMAIL actions. */

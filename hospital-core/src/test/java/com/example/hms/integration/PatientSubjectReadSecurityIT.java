@@ -1,5 +1,7 @@
 package com.example.hms.integration;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
+import com.example.hms.security.TenantLifecycleGate;
 import com.example.hms.BaseIT;
 import com.example.hms.model.Consultation;
 import com.example.hms.model.Hospital;
@@ -88,6 +90,14 @@ class PatientSubjectReadSecurityIT extends BaseIT {
     @MockitoBean private PatientRepository patientRepository;
     @MockitoBean private UltrasoundOrderRepository ultrasoundOrderRepository;
     @MockitoBean private ConsultationRepository consultationRepository;
+    @Autowired private com.example.hms.repository.HospitalRepository hospitalRepository;
+    @Autowired private com.example.hms.repository.UserRepository userRepository;
+    @Autowired private com.example.hms.repository.RoleRepository roleRepository;
+    @Autowired private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Autowired private com.example.hms.repository.AuditEventLogRepository auditEventLogRepository;
+    /** Real local accounts: the Keycloak path places a caller by the appUserId account's live assignments. */
+    private com.example.hms.security.tenant.LinkedTestAccounts accounts;
+    @Autowired private com.example.hms.security.IdleSessionTracker idleSessionTracker;
 
     private final UUID patientUserId = UUID.randomUUID();
     private final UUID ownPatientId = UUID.randomUUID();
@@ -97,11 +107,20 @@ class PatientSubjectReadSecurityIT extends BaseIT {
 
     @BeforeEach
     void linkThePatientAccountToItsRow() {
+        accounts = new com.example.hms.security.tenant.LinkedTestAccounts(
+            hospitalRepository, userRepository, roleRepository, assignmentRepository, auditEventLogRepository);
+        hospitalA = accounts.hospital("Subject A").getId();
+        hospitalB = accounts.hospital("Subject B").getId();
         when(patientRepository.existsByIdAndUserId(ownPatientId, patientUserId)).thenReturn(true);
     }
 
-    private final UUID hospitalA = UUID.randomUUID();
-    private final UUID hospitalB = UUID.randomUUID();
+    @org.junit.jupiter.api.AfterEach
+    void removeTheAccounts() {
+        accounts.cleanUp();
+    }
+
+    private UUID hospitalA;
+    private UUID hospitalB;
 
     private UltrasoundOrder ultrasoundOrderOf(UUID patientId) {
         return ultrasoundOrderOf(patientId, hospitalA);
@@ -183,7 +202,7 @@ class PatientSubjectReadSecurityIT extends BaseIT {
     @Test
     @DisplayName("a Keycloak doctor at hospital A still reads another patient's ultrasound order and list there")
     void staffUnchanged() throws Exception {
-        String doctor = token("doctor001", UUID.randomUUID(), hospitalA, "DOCTOR");
+        String doctor = linkedToken("doctor001", hospitalA, "DOCTOR");
         when(ultrasoundOrderRepository.findById(orderId)).thenReturn(Optional.of(ultrasoundOrderOf(otherPatientId)));
         // Acting at hospital A, the list reads the readable hospitals at the database.
         when(ultrasoundOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedDateDesc(eq(otherPatientId), any()))
@@ -198,7 +217,7 @@ class PatientSubjectReadSecurityIT extends BaseIT {
     @Test
     @DisplayName("a Keycloak doctor at hospital A is refused B's ultrasound order by id, exactly as a missing one")
     void staffAtAnotherHospitalAnswersAsMissing() throws Exception {
-        String doctor = token("doctor001", UUID.randomUUID(), hospitalA, "DOCTOR");
+        String doctor = linkedToken("doctor001", hospitalA, "DOCTOR");
         when(ultrasoundOrderRepository.findById(orderId))
             .thenReturn(Optional.of(ultrasoundOrderOf(otherPatientId, hospitalB)));
         MvcResult foreign = getAs(doctor, "/ultrasound/orders/{id}", orderId);
@@ -211,6 +230,18 @@ class PatientSubjectReadSecurityIT extends BaseIT {
     }
 
     // ── token minting ──────────────────────────────────────────────────────
+
+    /**
+     * A token for a real local account holding {@code roles} at {@code hospitalId}: the
+     * appUserId claim names it and preferred_username matches it, as the one tenant resolver
+     * requires; the hospital claims are not read.
+     */
+    private String linkedToken(String username, UUID hospitalId, String... roles) {
+        com.example.hms.model.User user = accounts.userAt(username, hospitalId, roles);
+        // The account is linked, so the idle gate now applies on this path too.
+        idleSessionTracker.touch(user.getId());
+        return token(user.getUsername(), user.getId(), hospitalId, roles);
+    }
 
     /**
      * A token shaped as {@code keycloak/realm-export.json} issues one: realm
@@ -295,9 +326,12 @@ class PatientSubjectReadSecurityIT extends BaseIT {
          */
         @Bean
         KeycloakHospitalContextFilter keycloakHospitalContextFilter(KeycloakHospitalContextResolver resolver,
+                                                                   ActingScopeResolver actingScopeResolver,
                                                                    IdleSessionGate idleSessionGate,
+                                                                   TenantLifecycleGate tenantLifecycleGate,
                                                                    UserRepository userRepository) {
-            return new KeycloakHospitalContextFilter(resolver, idleSessionGate, userRepository);
+            return new KeycloakHospitalContextFilter(resolver, actingScopeResolver, idleSessionGate,
+                tenantLifecycleGate, userRepository);
         }
     }
 }

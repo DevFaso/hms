@@ -84,6 +84,13 @@ class PlatformRegistryControllerTest {
     @MockitoBean
     private com.example.hms.service.HospitalLifecycleStatusService hospitalLifecycleStatusService;
 
+    /** The JWT filter's shared lifecycle gate and the one tenant resolver it builds the context with. */
+    @MockitoBean
+    private com.example.hms.security.TenantLifecycleGate tenantLifecycleGate;
+
+    @MockitoBean
+    private com.example.hms.security.tenant.ActingScopeResolver actingScopeResolver;
+
     /** v1.0 row 7 fixup — JwtAuthenticationFilter now also depends on
      *  IdleSessionGate. */
     @MockitoBean

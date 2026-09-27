@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.ImagingReportStatus;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -98,7 +99,7 @@ class PatientSubjectReadOwnershipTest {
 
     private PatientSubjectReadGuard realGuard() {
         return new PatientSubjectReadGuard(
-            new ControllerAuthUtils(mock(UserRoleHospitalAssignmentRepository.class)), guardPatients);
+            new ControllerAuthUtils(ActingScopeTestSupport.resolver()), guardPatients);
     }
 
     @BeforeEach

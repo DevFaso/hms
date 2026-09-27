@@ -1,5 +1,6 @@
 package com.example.hms.security.context;
 
+import com.example.hms.security.tenant.ActingScope;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -8,22 +9,19 @@ import org.springframework.util.StringUtils;
 import java.util.UUID;
 
 /**
- * Applies request-scoped overrides on top of an authenticated principal's
- * {@link HospitalContext}.
+ * Applies the {@code X-Hospital-Id} header on top of an authenticated
+ * principal's {@link HospitalContext}.
  *
- * <p>The portal sends an {@code X-Hospital-Id} header to indicate which of
- * the user's permitted hospitals should be the active scope for this
- * request — used by users with multi-hospital role assignments to switch
- * between hospitals without re-logging-in. This helper validates the
- * header against the principal's permitted scope and returns a
- * {@link HospitalContext} with {@link HospitalContext#getActiveHospitalId()}
- * updated when the override is allowed, or the original context unchanged
- * when the header is absent, malformed, or out-of-scope.</p>
+ * <p>The portal sends the header to name the hospital a request acts at. It
+ * is an explicit claim, so a claim the caller may not make is <b>refused</b>,
+ * not ignored (design Q3, option A): the returned context carries
+ * {@link ActingScope.Reason#NOT_PERMITTED} and the two filters answer 403
+ * before any controller runs. {@code ActingScopeResolver} then tells a
+ * hospital the caller held once ({@code NO_LONGER_PERMITTED}, a stale chip)
+ * from one they never held (a probe) for the audit row and the portal.
  *
  * <p>Centralised here so the legacy {@code JwtAuthenticationFilter} and
- * the OIDC {@code KeycloakHospitalContextFilter} can both apply the same
- * rule — drift between the two would silently break multi-hospital users
- * once {@code app.auth.oidc.required=true} flips.</p>
+ * the OIDC {@code KeycloakHospitalContextFilter} apply the same rule.</p>
  */
 public final class HospitalContextRequestOverrides {
 
@@ -36,27 +34,19 @@ public final class HospitalContextRequestOverrides {
     }
 
     /**
-     * Apply the {@code X-Hospital-Id} header override to {@code context}.
+     * Apply the {@code X-Hospital-Id} header to {@code context}.
      * <ul>
      *   <li>No header / blank header → context returned unchanged.</li>
-     *   <li>Malformed UUID → warning logged, context returned unchanged.</li>
-     *   <li>Super admin → context with {@code activeHospitalId} replaced
-     *       by the requested UUID (the chip-scoped view).</li>
-     *   <li>UUID in the principal's permitted hospital set → context with
-     *       {@code activeHospitalId} replaced by the requested UUID.</li>
-     *   <li>Anything else → warning logged, context returned unchanged.
-     *       That includes a principal whose permitted set is EMPTY: an
-     *       empty set means the principal holds no hospital, not that it
-     *       may pick any. It is empty for a patient (ROLE_PATIENT is a
-     *       global, no-hospital assignment), for a Keycloak token with no
-     *       hospital claims, and, on the legacy HMS-token path only, for a
-     *       user whose assignments were revoked after sign-in: that path
-     *       reads the set live from the assignment table, while
-     *       {@code KeycloakHospitalContextResolver} builds it from the
-     *       token's {@code role_assignments} / {@code hospital_id} claims,
-     *       so a Keycloak user revoked at a hospital keeps it until the
-     *       token expires. Honouring the header for an empty set let each
-     *       of these principals act at any hospital it named.</li>
+     *   <li>Verified super admin → acting at the named hospital (the
+     *       chip-scoped view).</li>
+     *   <li>A hospital in the principal's live permitted set → acting at it.
+     *       This also settles a caller holding several hospitals, who
+     *       otherwise has none ({@code AMBIGUOUS}).</li>
+     *   <li>Anything else, including a malformed value and a principal whose
+     *       permitted set is EMPTY (a patient, a Keycloak principal with no
+     *       local account, a user whose assignments were revoked) → refused
+     *       with {@code NOT_PERMITTED}: no hospital is acted at, and the
+     *       filters answer 403.</li>
      * </ul>
      */
     public static HospitalContext applyRequestOverrides(HospitalContext context,
@@ -78,36 +68,38 @@ public final class HospitalContextRequestOverrides {
             // The value itself is not logged: it is caller-controlled, and a
             // CR/LF in it would forge log lines. Its length is enough to tell
             // a truncated id from garbage when supporting a client.
-            log.warn("[AUTH] Ignoring malformed {} header (length {})",
+            log.warn("[AUTH] Refusing malformed {} header (length {})",
                 HEADER_HOSPITAL_ID, headerValue.length());
-            return effective;
+            return refused(effective, null);
         }
 
         // No empty-set escape: a principal with no permitted hospital has no
-        // hospital to switch to (see the javadoc above).
+        // hospital to name (see the javadoc above).
         boolean permitted = effective.isSuperAdmin()
             || effective.getPermittedHospitalIds().contains(requestedHospital);
 
         if (!permitted) {
-            log.warn("[AUTH] Ignoring {} {} not in permitted scope {}",
-                HEADER_HOSPITAL_ID, requestedHospital, effective.getPermittedHospitalIds());
-            return effective;
-        }
-
-        if (effective.getActiveHospitalId() == null
-            || !requestedHospital.equals(effective.getActiveHospitalId())) {
-            log.debug("[AUTH] Overriding active hospital via header: {} (previously {})",
-                requestedHospital, effective.getActiveHospitalId());
+            log.warn("[AUTH] Refusing {} {}: not in the caller's permitted scope",
+                HEADER_HOSPITAL_ID, requestedHospital);
+            return refused(effective, requestedHospital);
         }
 
         return effective.toBuilder()
             .activeHospitalId(requestedHospital)
-            // Mark the context so RoleValidator can distinguish a
-            // header-overridden hospital from a JWT-derived primary.
-            // Super-admins specifically need this: their JWT carries a
-            // primary hospital, but the design treats them as global by
-            // default — only an explicit header scope should pin them.
+            // Explicit: a super-admin is pinned by it, and the provisional
+            // refusal of a multi-hospital caller is settled by it.
             .headerOverridden(true)
+            .scopeRefusal(null)
+            .refusedHospitalId(null)
+            .build();
+    }
+
+    private static HospitalContext refused(HospitalContext context, UUID requestedHospital) {
+        return context.toBuilder()
+            .activeHospitalId(null)
+            .headerOverridden(false)
+            .scopeRefusal(ActingScope.Reason.NOT_PERMITTED)
+            .refusedHospitalId(requestedHospital)
             .build();
     }
 }

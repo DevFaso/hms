@@ -3,6 +3,7 @@ package com.example.hms.security;
 import com.example.hms.security.auth.TenantRoleAssignment;
 import com.example.hms.security.auth.TenantRoleAssignmentAccessor;
 import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.tenant.ActingScope;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -84,8 +85,8 @@ class JwtTokenProviderHospitalContextTest {
     }
 
     @Test
-    @DisplayName("the token's primary hospital is kept while it is still permitted, so the active scope is stable")
-    void primaryIsKeptWhileStillPermitted() {
+    @DisplayName("two hospitals and no header: no acting hospital at all — neither the token's primary nor the newest")
+    void primaryHospitalIsNotAnAuthorizationInput() {
         when(accessor.findAssignmentsForUser(USER_ID))
             .thenReturn(List.of(nurseAt(HOSPITAL_A, ORG_A), nurseAt(HOSPITAL_B, ORG_A)));
         String token = provider.generateAccessToken(new TokenUserDescriptor(USER_ID, USERNAME, List.of("ROLE_NURSE")));
@@ -98,8 +99,9 @@ class JwtTokenProviderHospitalContextTest {
 
         assertThat(ctx.getPermittedHospitalIds()).containsExactlyInAnyOrder(HOSPITAL_A, HOSPITAL_B);
         assertThat(ctx.getActiveHospitalId())
-            .as("the primary chosen at login stays active while it is still permitted")
-            .isEqualTo(HOSPITAL_A);
+            .as("the primaryHospitalId claim is a UI hint; the request names its hospital (design Q2, option A)")
+            .isNull();
+        assertThat(ctx.getScopeRefusal()).isEqualTo(ActingScope.Reason.AMBIGUOUS);
     }
 
     @Test
@@ -115,6 +117,28 @@ class JwtTokenProviderHospitalContextTest {
 
         assertThat(ctx.getPermittedHospitalIds()).isEmpty();
         assertThat(ctx.getActiveHospitalId()).isNull();
+    }
+
+    @Test
+    @DisplayName("a super-admin demoted after login is not one on the next request, whatever the token asserts (Q4 B)")
+    void demotedSuperAdminIsNotASuperAdmin() {
+        TenantRoleAssignment superAdmin = new TenantRoleAssignment(null, null, "ROLE_SUPER_ADMIN", "Super", true);
+        when(accessor.findAssignmentsForUser(USER_ID)).thenReturn(List.of(superAdmin, nurseAt(HOSPITAL_A, ORG_A)));
+        String token = provider.generateAccessToken(
+            new TokenUserDescriptor(USER_ID, USERNAME, List.of("ROLE_SUPER_ADMIN", "ROLE_NURSE")));
+        List<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"));
+        Authentication tokenSaysSuperAdmin =
+            new UsernamePasswordAuthenticationToken(new PrincipalStub(authorities), null, authorities);
+
+        assertThat(provider.extractHospitalContext(token, tokenSaysSuperAdmin).isGlobalView())
+            .as("while the assignment is live: global view").isTrue();
+
+        // SUPER_ADMIN revoked after the token was minted.
+        when(accessor.findAssignmentsForUser(USER_ID)).thenReturn(List.of(nurseAt(HOSPITAL_A, ORG_A)));
+        HospitalContext ctx = provider.extractHospitalContext(token, tokenSaysSuperAdmin);
+
+        assertThat(ctx.isSuperAdmin()).isFalse();
+        assertThat(ctx.getActiveHospitalId()).isEqualTo(HOSPITAL_A);
     }
 
     private static TenantRoleAssignment nurseAt(UUID hospitalId, UUID organizationId) {
