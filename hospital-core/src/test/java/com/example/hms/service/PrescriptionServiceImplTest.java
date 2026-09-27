@@ -486,6 +486,8 @@ class PrescriptionServiceImplTest {
         prescription.setId(id);
         PrescriptionResponseDTO dto = PrescriptionResponseDTO.builder().id(id).build();
 
+        // A null scope reads across tenants only for a VERIFIED super-admin.
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
         when(prescriptionRepository.findById(id)).thenReturn(Optional.of(prescription));
         when(prescriptionMapper.toResponseDTO(prescription)).thenReturn(dto);
 
@@ -495,6 +497,7 @@ class PrescriptionServiceImplTest {
     @Test
     void getPrescriptionByIdThrowsWhenNotFound() {
         UUID id = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(prescriptionRepository.findById(id)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> prescriptionService.getPrescriptionById(id, Locale.ENGLISH))
