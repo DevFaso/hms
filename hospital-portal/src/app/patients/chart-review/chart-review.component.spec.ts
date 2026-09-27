@@ -216,12 +216,11 @@ describe('ChartReviewComponent', () => {
         '[data-testid="chart-review-panel-timeline"] .chart-review__pill',
       ) as NodeListOf<HTMLElement>,
     ).map((el) => (el.textContent ?? '').trim());
+    // The positive assertion is the whole test: an unkeyed value falls to the
+    // English LABELS net ("Ready for Discharge") before the Title-Case
+    // prettifier, and either way it is not the French key asserted here.
     for (const expected of ['pret-pour-la-sortie', 'resultats-disponibles', 'reporte']) {
       expect(pills).withContext(`timeline pill ${expected}`).toContain(expected);
-    }
-    // Title-Cased English is what an unkeyed value falls through to.
-    for (const english of ['Ready For Discharge', 'Results Available', 'Postponed']) {
-      expect(pills).withContext(`still English: ${english}`).not.toContain(english);
     }
   });
 });

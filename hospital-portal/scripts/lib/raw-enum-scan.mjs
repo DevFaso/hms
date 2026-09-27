@@ -88,6 +88,16 @@ const FIELD = new RegExp(
  * Attributes whose value a person reads. Everything else — `class`, `style`,
  * `id`, `data-*`, `routerLink`, a `(click)` handler, a `#ref` — is machinery,
  * and an enum inside one is not on screen.
+ *
+ * Every entry is an HTML attribute a browser or a screen reader presents, and
+ * each has a case in raw-enum-scan.test.mjs. `title`, `alt`, `placeholder`,
+ * `aria-label` and `label` (`<optgroup [label]>`, and the skip link's and KPI
+ * card's `[label]` inputs) are bound in the templates today; `aria-description`
+ * and `aria-valuetext` are not yet, and stay because they are read aloud the
+ * moment someone writes one. Angular Material's `matTooltip`/`matBadge` were
+ * listed once and are gone: the package is installed but no template in
+ * src/app uses a Material component, so they described config a reader had to
+ * re-verify rather than markup that exists.
  */
 const TEXT_ATTRS = new Set([
   'title',
@@ -97,16 +107,19 @@ const TEXT_ATTRS = new Set([
   'aria-description',
   'aria-valuetext',
   'label',
-  'mattooltip',
-  'matbadge',
 ]);
 
 /**
- * `value` is read only when it is written as a plain interpolated attribute:
- * `value="{{ x.status }}"` is painted into the field, while `[value]="x.status"`
- * on an `<option>` is the form value behind a label rendered separately.
+ * `value` is read only on an `<input>`, and only when written as a plain
+ * interpolated attribute: `<input value="{{ x.status }}">` is painted into the
+ * field. `[value]="x.status"` is a property binding whose text the scan cannot
+ * see as a string, and on an `<option>` or a `<button>` the value is the form
+ * value behind a label rendered separately — counting
+ * `<option value="{{ o.status }}">{{ o.status | enumLabel: 'x' }}</option>`
+ * would be the class-vs-label confusion this scan exists to remove, in the
+ * other direction.
  */
-const TEXT_IF_INTERPOLATED = new Set(['value']);
+const TEXT_IF_INTERPOLATED = new Map([['value', new Set(['input'])]]);
 
 /**
  * One attribute assignment. The name may be plain (`title=`), bound
@@ -149,9 +162,15 @@ export function rawEnumRenders(html) {
   const hits = [];
   const lineAt = (index) => html.slice(0, index).split('\n').length;
 
+  // `index` is the offset of `body` in the template. The line reported is the
+  // FIELD's own, so a binding Prettier wrapped over several lines — a `[title]`
+  // ternary, a `{{ … }}` split after a `??` — points at the render, not at the
+  // attribute name or the opening braces.
   const collectExpr = (body, index) => {
     if (RESOLVED.test(body)) return;
-    for (const field of body.matchAll(FIELD)) hits.push({ expr: field[0], line: lineAt(index) });
+    for (const field of body.matchAll(FIELD)) {
+      hits.push({ expr: field[0], line: lineAt(index + field.index) });
+    }
   };
 
   // Each `{{ … }}` is judged on its own. Testing the whole attribute value at
@@ -160,12 +179,23 @@ export function rawEnumRenders(html) {
   const collectValue = (value, index) => {
     const parts = [...value.matchAll(INTERPOLATION)];
     if (!parts.length) return collectExpr(value, index);
-    for (const part of parts) collectExpr(part[1], index);
+    for (const part of parts) collectExpr(part[1], index + part.index + 2);
   };
 
   // Commented-out markup is not on screen; counting it mints baseline pins for
   // dead code, and uncommenting the block then reports them stale.
   let work = html.replace(COMMENT, blank);
+
+  // The tag an attribute sits on, read from a copy with every attribute
+  // blanked so a `<` inside an earlier value (`*ngIf="a < b"`) cannot pose as
+  // the start of a tag.
+  const skeleton = work.replace(ATTR, blank);
+  const tagAt = (offset) => {
+    const open = skeleton.lastIndexOf('<', offset);
+    return open === -1
+      ? ''
+      : (/^<([A-Za-z][\w-]*)/.exec(skeleton.slice(open))?.[1] ?? '').toLowerCase();
+  };
 
   // Blank every attribute value, scanning the text-bearing ones on the way
   // past. Blanking through replace() keeps the offsets exact — hand-computed
@@ -175,14 +205,18 @@ export function rawEnumRenders(html) {
     const value = doubled ?? singled ?? '';
     const plain = !/^[[(@*#]/.test(name);
     const key = attrName(name);
-    if (TEXT_ATTRS.has(key) || (plain && TEXT_IF_INTERPOLATED.has(key))) {
-      collectValue(value, offset);
+    const readOn = TEXT_IF_INTERPOLATED.get(key);
+    if (TEXT_ATTRS.has(key) || (plain && readOn?.has(tagAt(offset)))) {
+      // The value ends one character (the closing quote) before the match does.
+      collectValue(value, offset + match.length - 1 - value.length);
     }
     return blank(match);
   });
 
   // What is left is element text content — the words on screen.
-  for (const binding of work.matchAll(INTERPOLATION)) collectExpr(binding[1], binding.index);
+  for (const binding of work.matchAll(INTERPOLATION)) {
+    collectExpr(binding[1], binding.index + 2);
+  }
 
   return hits.sort((a, b) => a.line - b.line);
 }
