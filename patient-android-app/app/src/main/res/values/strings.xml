@@ -859,4 +859,14 @@
 
     <!-- Account flows: forgot password, activation, MFA challenge, change password (wording from the portal LOGIN.*, VERIFY.*, MFA.*, PROFILE.*) -->
     <string name="change_password_current_required">Enter your current password.</string>
+
+    <!-- Failure details appended to a screen headline (never the exception text or a bare HTTP code) -->
+    <string name="error_network">no connection to the server</string>
+    <string name="error_timeout">the server took too long to answer</string>
+    <string name="error_session_expired">your session has expired, please sign in again</string>
+    <string name="error_forbidden">you do not have access to this</string>
+    <string name="error_not_found">not found</string>
+    <string name="error_server">server error, please try again later</string>
+    <string name="error_request_refused">the request was refused</string>
+    <string name="care_team_load_failed">Your care team could not be loaded (%1$s)</string>
 </resources>

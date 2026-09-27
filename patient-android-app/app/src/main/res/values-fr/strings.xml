@@ -859,4 +859,14 @@
 
     <!-- Account flows: forgot password, activation, MFA challenge, change password (wording from the portal LOGIN.*, VERIFY.*, MFA.*, PROFILE.*) -->
     <string name="change_password_current_required">Saisissez votre mot de passe actuel.</string>
+
+    <!-- Failure details appended to a screen headline (never the exception text or a bare HTTP code) -->
+    <string name="error_network">pas de connexion au serveur</string>
+    <string name="error_timeout">le serveur a mis trop de temps à répondre</string>
+    <string name="error_session_expired">votre session a expiré, veuillez vous reconnecter</string>
+    <string name="error_forbidden">vous n\'avez pas accès à cet élément</string>
+    <string name="error_not_found">introuvable</string>
+    <string name="error_server">erreur du serveur, veuillez réessayer plus tard</string>
+    <string name="error_request_refused">la demande a été refusée</string>
+    <string name="care_team_load_failed">Votre équipe soignante n\'a pas pu être chargée (%1$s)</string>
 </resources>

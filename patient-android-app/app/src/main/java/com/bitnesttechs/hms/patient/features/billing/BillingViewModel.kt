@@ -1,5 +1,6 @@
 package com.bitnesttechs.hms.patient.features.billing
 
+import com.bitnesttechs.hms.patient.core.network.FailureText
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bitnesttechs.hms.patient.core.models.InvoiceDto
@@ -51,10 +52,10 @@ class BillingViewModel @Inject constructor(private val api: ApiService) : ViewMo
                 if (resp.isSuccessful) {
                     invoices.value = resp.body()?.data ?: emptyList()
                 } else {
-                    loadError.value = "HTTP ${resp.code()}"
+                    loadError.value = FailureText.http(resp.code())
                 }
             } catch (e: Exception) {
-                loadError.value = e.message ?: e.javaClass.simpleName
+                loadError.value = FailureText.of(e)
             } finally {
                 isLoading.value = false
             }
@@ -84,10 +85,10 @@ class BillingViewModel @Inject constructor(private val api: ApiService) : ViewMo
                     _events.tryEmit(BillingEvent.PaymentRecorded)
                     load()
                 } else {
-                    _events.tryEmit(BillingEvent.PaymentFailed(serverMessage(resp.errorBody()?.string()) ?: "HTTP ${resp.code()}"))
+                    _events.tryEmit(BillingEvent.PaymentFailed(serverMessage(resp.errorBody()?.string()) ?: FailureText.http(resp.code())))
                 }
             } catch (e: Exception) {
-                _events.tryEmit(BillingEvent.PaymentFailed(e.message))
+                _events.tryEmit(BillingEvent.PaymentFailed(FailureText.of(e)))
             } finally {
                 isPaying.value = false
             }
