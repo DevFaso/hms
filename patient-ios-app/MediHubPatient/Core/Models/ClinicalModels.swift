@@ -19,7 +19,8 @@ struct EncounterDTO: Codable, Identifiable, Hashable {
 
     // Computed aliases used by views
     var date: String? { encounterDate }
-    var type: String? { encounterType?.replacingOccurrences(of: "_", with: " ") }
+    /// The encounter type in the app's language, not the wire value.
+    var type: String? { EnumLabel.label(.encounterType, encounterType) }
     var providerName: String? { staffName }
     var department: String? { departmentName }
     var reason: String? { chiefComplaint ?? appointmentReason }

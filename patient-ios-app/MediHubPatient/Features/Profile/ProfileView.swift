@@ -199,7 +199,7 @@ struct ProfileView: View {
     private func readOnlyContent(_ profile: PatientProfileDTO) -> some View {
         Section("personal_information".localized) {
             ProfileRow(label: "date_of_birth".localized, value: profile.dateOfBirth)
-            ProfileRow(label: "gender".localized, value: profile.gender)
+            ProfileRow(label: "gender".localized, value: EnumLabel.label(.gender, profile.gender, rawFallback: true))
             ProfileRow(label: "blood_type".localized, value: profile.bloodType)
             ProfileRow(label: "language".localized, value: profile.preferredLanguage)
             ProfileRow(label: "username".localized, value: profile.username)
@@ -241,7 +241,8 @@ struct ProfileView: View {
             ProfileRow(label: "name".localized, value: profile.emergencyContactName)
             ProfileRow(label: "phone".localized, value: profile.emergencyContactPhone)
             if let rel = profile.emergencyContactRelationship {
-                ProfileRow(label: "relationship".localized, value: rel)
+                ProfileRow(label: "relationship".localized,
+                           value: EnumLabel.label(.relationship, rel, rawFallback: true))
             }
         }
     }

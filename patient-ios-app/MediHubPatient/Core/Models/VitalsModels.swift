@@ -31,7 +31,7 @@ struct VitalSignDTO: Codable, Identifiable {
 
     var sourceDisplay: String {
         guard let src = source, !src.isEmpty else { return "—" }
-        return src.replacingOccurrences(of: "_", with: " ").capitalized
+        return EnumLabel.text(.vitalSource, src)
     }
 
     var bloodPressureDisplay: String {

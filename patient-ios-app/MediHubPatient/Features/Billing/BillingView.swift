@@ -90,7 +90,7 @@ struct InvoiceRowView: View {
                 Text(invoice.displayBalance, format: .currency(code: BillingView.currencyCode))
                     .font(.headline)
                     .foregroundColor(invoice.isPaid ? .secondary : .primary)
-                StatusBadge(text: invoice.status?.capitalized ?? "Pending",
+                StatusBadge(text: EnumLabel.text(.invoiceStatus, invoice.status ?? "SENT"),
                             color: invoice.statusColor)
             }
         }
@@ -135,7 +135,7 @@ struct PaymentSheet: View {
                 Section("Payment Method") {
                     Picker("Method", selection: $selectedMethod) {
                         ForEach(methods, id: \.self) { m in
-                            Text(m.replacingOccurrences(of: "_", with: " ").capitalized).tag(m)
+                            Text(EnumLabel.text(.paymentMethod, m)).tag(m)
                         }
                     }
                     .pickerStyle(.segmented)
