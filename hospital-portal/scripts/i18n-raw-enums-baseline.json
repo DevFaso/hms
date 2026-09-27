@@ -51,7 +51,6 @@
     "src/app/dashboard/in-basket-panel/in-basket-panel.html::item.itemType",
     "src/app/dashboard/patient-snapshot-drawer/patient-snapshot-drawer.html::med.frequency",
     "src/app/dashboard/patient-snapshot-drawer/patient-snapshot-drawer.html::pt.codeStatus",
-    "src/app/departments/department-detail.html::s.jobTitle",
     "src/app/digital-signatures/digital-signatures.html::entry.action",
     "src/app/digital-signatures/digital-signatures.html::selectedSignature()!.reportType",
     "src/app/digital-signatures/digital-signatures.html::selectedSignature()!.revocationReason",

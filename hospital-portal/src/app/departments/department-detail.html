@@ -143,29 +143,15 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th>{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+                <th>{{ 'STAFF.FULL_NAME' | translate }}</th>
                 <th>{{ 'STAFF.JOB_TITLE' | translate }}</th>
-                <th>{{ 'PATIENTS.EMAIL' | translate }}</th>
-                <th>{{ 'COMMON.STATUS' | translate }}</th>
               </tr>
             </thead>
             <tbody>
               @for (s of staff(); track s.id) {
                 <tr>
-                  <td class="name-cell">{{ s.name }}</td>
-                  <td>{{ s.jobTitle ?? '—' }}</td>
-                  <td>{{ s.email ?? '—' }}</td>
-                  <td>
-                    <span
-                      class="status-badge"
-                      [class.active]="s.active"
-                      [class.inactive]="!s.active"
-                    >
-                      {{
-                        s.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate)
-                      }}
-                    </span>
-                  </td>
+                  <td class="name-cell">{{ s.fullName || '—' }}</td>
+                  <td>{{ s.jobTitle ? (s.jobTitle | enumLabel: 'jobTitle') : '—' }}</td>
                 </tr>
               }
             </tbody>
