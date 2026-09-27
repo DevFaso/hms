@@ -83,17 +83,6 @@ class NotFoundMessageKeyTest {
     private static final Path MAIN_JAVA = Paths.get("src/main/java");
 
     /**
-     * Keys already carrying U+FFFD when this guard was added. Lower it, never raise it.
-     *
-     * <p>FR reached 0 on 2026-09-13: all 19 were retranslated from the English
-     * source during the French-completeness pass, rather than character-repaired,
-     * because a replacement glyph carries no information to repair from. ES keeps
-     * its budget — nobody has done that pass for Spanish yet.
-     */
-    private static final Map<String, Integer> MOJIBAKE_BUDGET =
-        Map.of("", 0, "_en", 0, "_fr", 0, "_es", 27);
-
-    /**
      * A maximal run of apostrophes. MessageFormat reads a doubled pair as one
      * literal quote, so an ODD-length run leaves one unpaired — and that one
      * opens a quoted section which eats the rest of the pattern, {@code {0}}
@@ -156,14 +145,15 @@ class NotFoundMessageKeyTest {
 
     @ParameterizedTest(name = "messages{0}.properties")
     @ValueSource(strings = {"", "_en", "_fr", "_es"})
-    @DisplayName("bundle mojibake does not spread")
+    @DisplayName("no bundle value carries mojibake")
     void bundleMojibakeDoesNotSpread(String suffix) throws IOException {
         // U+FFFD means the file was decoded with the wrong charset and the
-        // accent is gone for good — no runtime setting recovers it. These
-        // counts are damage that predates the guard: French and Spanish
-        // clinicians read a replacement glyph on those keys today. Ratcheted
-        // rather than asserted at zero because repairing them needs a native
-        // speaker per string, not a find-and-replace. It must not grow.
+        // accent is gone for good — no runtime setting recovers it. This was a
+        // ratchet (FR 19, ES 27) until both reached zero: FR was retranslated
+        // from the English source on 2026-09-13; ES was repaired word by word,
+        // each replacement glyph standing in a word that admits exactly one
+        // accented spelling ("n<U+FFFD>mero" can only be "número"), and the
+        // Spanish-only keys no code reads were removed rather than repaired.
         Properties bundle = load(suffix);
 
         List<String> corrupted = bundle.stringPropertyNames().stream()
@@ -175,7 +165,7 @@ class NotFoundMessageKeyTest {
             .as("New mojibake in messages%s.properties — copy the value from a "
                     + "clean source, never from a corrupted neighbour:%n%s",
                 suffix, String.join(System.lineSeparator(), corrupted))
-            .hasSizeLessThanOrEqualTo(MOJIBAKE_BUDGET.get(suffix));
+            .isEmpty();
     }
 
     @Test
