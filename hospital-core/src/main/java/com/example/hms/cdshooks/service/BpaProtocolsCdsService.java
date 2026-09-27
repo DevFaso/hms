@@ -89,9 +89,10 @@ public class BpaProtocolsCdsService implements CdsHookService {
         if (cards == null || cards.isEmpty()) {
             return cards == null ? List.of() : cards;
         }
-        // Read directly from the repository — patient access is already enforced
-        // upstream by the CdsHooksController, so the auth-gated service path is
-        // not needed here.
+        // Read directly from the repository — CdsHooksController admits only
+        // clinical roles and runs PatientChartAccess.require on context.patientId
+        // before any service evaluates, so the auth-gated service path is not
+        // needed here.
         List<CdsAcknowledgement> active =
                 acknowledgementRepository.findActiveForPatient(patientId, LocalDateTime.now());
         if (active.isEmpty()) {

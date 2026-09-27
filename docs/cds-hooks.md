@@ -13,10 +13,19 @@
 | Method | Path                              | Auth          | Purpose |
 | ------ | --------------------------------- | ------------- | ------- |
 | `GET`  | `/api/cds-services`               | **public**    | Service catalogue (per CDS Hooks spec). |
-| `POST` | `/api/cds-services/{serviceId}`   | Bearer JWT    | Invoke a service for a hook context. |
+| `POST` | `/api/cds-services/{serviceId}`   | Bearer JWT, clinical roles | Invoke a service for a hook context. |
 
 The discovery endpoint is intentionally unauthenticated — clients need to
-know what services exist before deciding whether to trigger them.
+know what services exist before deciding whether to trigger them. It carries
+no patient data.
+
+Invocation is admitted to `DOCTOR`, `NURSE`, `MIDWIFE`, `PHARMACIST` and
+`SUPER_ADMIN` (the same list that may acknowledge a card) and refused with
+`403` to everyone else, patients included. The patient in `context.patientId`
+must then be readable at the caller's hospital under the chart rule
+(`PatientChartAccess.require`); a patient at another hospital, a restricted
+chart, or an unresolved hospital scope answers `200 {"cards":[]}` — exactly
+what an unknown patient answers.
 
 ## Services in P0.3
 
