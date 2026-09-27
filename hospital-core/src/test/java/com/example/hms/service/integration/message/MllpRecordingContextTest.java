@@ -195,4 +195,29 @@ class MllpRecordingContextTest {
         assertThat(MllpRecordingContext.quotedControlId("  ABC  ")).isEqualTo("\"ABC\"");
         assertThat(MllpRecordingContext.quotedControlId(null)).isNull();
     }
+
+    @Test
+    @DisplayName("The MSH-10 key keeps control characters, so ABC and ABC+BEL are two keys; padding spaces are not")
+    void theControlIdKeyIsTheExactValueSpacesAside() {
+        String bel = String.valueOf((char) 7);
+        String tab = String.valueOf((char) 9);
+        assertThat(MllpRecordingContext.messageControlIdKey("ABC" + bel)).isEqualTo("ABC" + bel);
+        assertThat(MllpRecordingContext.messageControlIdKey(tab + "ABC")).isEqualTo(tab + "ABC");
+        assertThat(MllpRecordingContext.messageControlIdKey("ABC" + bel))
+            .isNotEqualTo(MllpRecordingContext.messageControlIdKey("ABC"));
+        // A space-padded retry of a message stored before the change (trim()med)
+        // still matches its row.
+        assertThat(MllpRecordingContext.messageControlIdKey("  ABC  ")).isEqualTo("ABC");
+        assertThat(MllpRecordingContext.messageControlIdKey("   ")).isNull();
+        assertThat(MllpRecordingContext.messageControlIdKey(null)).isNull();
+    }
+
+    @Test
+    @DisplayName("The sender key is the pair as the allowlist matches it: trimmed and upper-cased")
+    void theSenderKeyIsTheAllowlistForm() {
+        assertThat(MllpRecordingContext.senderKey(" roche_cobas ")).isEqualTo("ROCHE_COBAS");
+        assertThat(MllpRecordingContext.senderKey("LAB_A")).isEqualTo("LAB_A");
+        assertThat(MllpRecordingContext.senderKey("  ")).isNull();
+        assertThat(MllpRecordingContext.senderKey(null)).isNull();
+    }
 }

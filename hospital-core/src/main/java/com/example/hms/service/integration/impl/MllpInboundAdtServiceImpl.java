@@ -11,11 +11,14 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.service.empi.EmpiService;
 import com.example.hms.service.integration.MllpInboundAdtService;
 import com.example.hms.service.integration.MllpInboundAdtVisitProjectionService;
+import com.example.hms.service.integration.MllpInboundAdtVisitProjectionService.VisitProjectionResult;
 import com.example.hms.service.integration.MllpInboundOutcome;
 import com.example.hms.service.integration.message.IntegrationMessageRecorder;
 import com.example.hms.service.integration.message.MllpRecordingContext;
+import com.example.hms.utility.Hl7FieldBounds;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedAdtMessage;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -61,6 +64,22 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
         if (receivingHospital == null || receivingHospital.getId() == null) {
             log.warn("MLLP ADT rejected — no resolved hospital (sender={}/{})",
                 sendingApplication, sendingFacility);
+            return MllpInboundOutcome.REJECTED_INVALID;
+        }
+
+        // Every demographic this message would write, held to its column
+        // before anything is looked up - decided on the message alone, so the
+        // answer says nothing about any tenant. Refused, not truncated: a cut
+        // name is a different name stored as if it were the one sent. Until
+        // this check an over-width value failed at flush as a generic server
+        // error with no dead letter, and the sender retried it for ever.
+        String overWidth = firstOverWidthDemographic(parsed);
+        if (overWidth != null) {
+            log.warn("MLLP ADT rejected — {} (sender={}/{} hospital={} event={})",
+                overWidth, sendingApplication, sendingFacility,
+                receivingHospital.getId(), parsed.triggerEvent());
+            recordReject(parsed, receivingHospital, sendingApplication, sendingFacility,
+                messageControlId, overWidth);
             return MllpInboundOutcome.REJECTED_INVALID;
         }
 
@@ -151,9 +170,22 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
         // projection bean throws before reaching its own
         // try/transaction boundary.
         try {
-            visitProjection.projectVisit(
+            VisitProjectionResult projected = visitProjection.projectVisit(
                 parsed, patient, receivingHospital,
                 sendingApplication, sendingFacility, messageControlId);
+            if (projected == VisitProjectionResult.SKIPPED_OVER_WIDTH) {
+                // Still AA: the demographic update above landed and commits
+                // with this transaction. AE would make the sender resend a
+                // message whose demographics are already applied, only to
+                // skip the visit again - a retry loop over a permanent
+                // condition - and AR would say the message was refused when
+                // it was not. But a dropped discharge or transfer must not be
+                // invisible either (it was, before and after #753), so the
+                // skipped step leaves a dead letter: FAILED, no payload,
+                // MSH-10 quoted, one correlation id per sender and reason.
+                recordReject(parsed, receivingHospital, sendingApplication, sendingFacility,
+                    messageControlId, REASON_VISIT_NUMBER_OVER_WIDTH);
+            }
         } catch (RuntimeException ex) {
             // Note: at this point demographics have been WRITTEN to
             // the JDBC connection but the outer @Transactional commit
@@ -176,8 +208,10 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
      * take up to 64 KB of payload and the dispatcher's own parse-failure rows
      * use it, but a refusal on this path is reached once per probe by exactly
      * the sender this change is defending against — storing a full PID
-     * (MRN, name, date of birth, address) per attempt, unencrypted, would turn
-     * the compensating control into an unbounded PHI sink. MSH-10 is the
+     * (MRN, name, date of birth, address) per attempt would turn the
+     * compensating control into an unbounded PHI sink - encrypted at rest
+     * since the payload column gained its converter, but unbounded all the
+     * same. MSH-10 is the
      * sender's own message id, not patient data, and is what an operator needs
      * to correlate the refusal with the sender's queue. Such a row is not
      * replayable, which is correct: a cross-tenant message must not be
@@ -252,9 +286,47 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
      */
     private static final String CORRELATION_TYPE = "ADT";
 
+    /** Dead-letter reason for an accepted ADT whose visit step was refused for PV1-19's width. */
+    static final String REASON_VISIT_NUMBER_OVER_WIDTH = "visit sync skipped: PV1-19 exceeds "
+        + Hl7FieldBounds.VISIT_NUMBER_MAX + " characters";
+
     private static String messageTypeOf(ParsedAdtMessage parsed) {
         String trigger = parsed == null ? null : parsed.triggerEvent();
         return StringUtils.hasText(trigger) ? "ADT^" + trigger.trim() : "ADT";
+    }
+
+    /** One demographic field as {@link #applyDemographics} writes it, with its limit. */
+    private record DemographicField(String label, String value, int max) {
+    }
+
+    /**
+     * The first demographic that would not fit where
+     * {@link #applyDemographics} writes it, as a dead-letter reason naming the
+     * field and the limit (never the value), or null when all fit.
+     *
+     * <p>Checked as written: trimmed, and only when present, because a blank
+     * field is not applied. Counted with {@link Hl7FieldBounds#fitsSize}, as
+     * the {@code @Size} on each {@code Patient} field counts at flush. The
+     * reasons are a fixed set, so they may key a correlation id.
+     */
+    private static String firstOverWidthDemographic(ParsedAdtMessage parsed) {
+        List<DemographicField> fields = List.of(
+            new DemographicField("PID-5 family name", parsed.lastName(), Hl7FieldBounds.PERSON_NAME_MAX),
+            new DemographicField("PID-5 given name", parsed.firstName(), Hl7FieldBounds.PERSON_NAME_MAX),
+            new DemographicField("PID-5 middle name", parsed.middleName(), Hl7FieldBounds.PERSON_NAME_MAX),
+            new DemographicField("PID-8", parsed.sex(), Hl7FieldBounds.SEX_MAX),
+            new DemographicField("PID-11 street", parsed.addressLine1(), Hl7FieldBounds.ADDRESS_LINE_MAX),
+            new DemographicField("PID-11 city", parsed.city(), Hl7FieldBounds.ADDRESS_PART_MAX),
+            new DemographicField("PID-11 state", parsed.state(), Hl7FieldBounds.ADDRESS_PART_MAX),
+            new DemographicField("PID-11 zip", parsed.zipCode(), Hl7FieldBounds.ADDRESS_PART_MAX),
+            new DemographicField("PID-11 country", parsed.country(), Hl7FieldBounds.ADDRESS_PART_MAX));
+        for (DemographicField field : fields) {
+            if (StringUtils.hasText(field.value())
+                    && !Hl7FieldBounds.fitsSize(field.value().trim(), field.max())) {
+                return field.label() + " exceeds " + field.max() + " characters";
+            }
+        }
+        return null;
     }
 
     /**

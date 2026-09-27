@@ -201,7 +201,13 @@ class AdtA40MergeEndToEndIT extends BaseIT {
             assertThat(merge.get().getPrimaryIdentity().getId()).isEqualTo(survivorIdentity.getId());
             assertThat(merge.get().getMergeType()).isEqualTo(EmpiMergeType.AUTOMATED);
             assertThat(merge.get().getHospitalId()).isEqualTo(receiving.getId());
-            assertThat(merge.get().getNotes()).contains("HL7 ADT^A40").contains("MSG-OK-" + run);
+            assertThat(merge.get().getNotes()).contains("HL7 ADT^A40").contains("MSG-OK-" + run)
+                .contains(survivingMrn).contains(priorMrn);
+            // Both MRNs are in the note, so the column holds ciphertext, not the note.
+            String stored = jdbcTemplate.queryForObject(
+                "SELECT notes FROM empi.merge_events WHERE secondary_identity_id = ?",
+                String.class, retireeIdentity.getId());
+            assertThat(stored).startsWith("gcm1:").doesNotContain(priorMrn).doesNotContain(survivingMrn);
 
             EmpiMasterIdentity retired = identityRepository.findByPatientId(retiree.getId()).orElseThrow();
             assertThat(retired.getStatus()).isEqualTo(EmpiIdentityStatus.MERGED);
@@ -306,6 +312,18 @@ class AdtA40MergeEndToEndIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("an A40 merging an identifier into itself answers AE and leaves a dead letter naming MSH-10, not the MRN")
+    void aSelfMergeIsRefusedWithADeadLetter() {
+        String run = nextId();
+        String mrn = "A40SELF-" + run;
+
+        String ack = dispatcher.dispatch(a40("MSG-SELF-" + run, mrn, mrn), REMOTE);
+
+        assertThat(msa(ack)).isEqualTo("MSA|AE|MSG-SELF-" + run + "|" + INVALID_MSA_TEXT);
+        assertDeadLetter("PID-3 and MRG-1 are the same identifier", "MSG-SELF-" + run, mrn);
+    }
+
+    @Test
     @DisplayName("two copies of one A40 racing on two connections apply ONE merge, one event, one audit row")
     void concurrentDuplicatesMergeOnce() throws Exception {
         ExecutorService workers = Executors.newFixedThreadPool(2);
@@ -364,10 +382,12 @@ class AdtA40MergeEndToEndIT extends BaseIT {
         EmpiMasterIdentity survivorIdentity = identityFor(survivor, receiving, survivingMrn);
         EmpiMasterIdentity retireeIdentity = identityFor(retiree, receiving, priorMrn);
         String controlId = FLUSH_FAIL_MARKER + "-" + run;
-        // A constraint that only this message's merge row breaks: the notes
-        // carry MSH-10. It fails on INSERT, which Hibernate defers to flush.
+        // A constraint that only this message's merge row breaks: its retired
+        // identity. (Not the notes: they are encrypted, so no text in them is
+        // visible to a CHECK.) It fails on INSERT, which Hibernate defers to
+        // flush.
         jdbcTemplate.execute("ALTER TABLE empi.merge_events ADD CONSTRAINT a40it_flush_fail "
-            + "CHECK (notes IS NULL OR notes NOT LIKE '%" + FLUSH_FAIL_MARKER + "%')");
+            + "CHECK (secondary_identity_id <> '" + retireeIdentity.getId() + "')");
         String ack;
         try {
             ack = dispatcher.dispatch(a40(controlId, survivingMrn, priorMrn), REMOTE);

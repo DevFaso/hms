@@ -13,6 +13,7 @@ import com.example.hms.service.integration.MllpInboundMergeService;
 import com.example.hms.service.integration.MllpInboundOutcome;
 import com.example.hms.service.integration.message.IntegrationMessageRecorder;
 import com.example.hms.service.integration.message.MllpRecordingContext;
+import com.example.hms.utility.Hl7SenderText;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedMergeMessage;
 
 import java.util.Optional;
@@ -45,6 +46,12 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
     static final String REASON_EMPI_REFUSED = "merge refused by EMPI";
     /** Dead-letter reason for a pair whose master identity another hospital owns. */
     static final String REASON_NOT_OWNER = "identity owned by another hospital";
+    /** Dead-letter reason for a message that names only one side of the merge. */
+    static final String REASON_MISSING_IDENTIFIER = "missing PID-3 or MRG-1";
+    /** Dead-letter reason for a call with no receiving hospital to act at. */
+    static final String REASON_NO_HOSPITAL = "no resolved hospital";
+    /** Dead-letter reason for a message merging an identifier into itself. */
+    static final String REASON_SAME_IDENTIFIER = "PID-3 and MRG-1 are the same identifier";
 
     private final EmpiService empiService;
     private final PatientHospitalRegistrationRepository registrationRepository;
@@ -64,34 +71,47 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
                                            String sendingApplication,
                                            String sendingFacility,
                                            String messageControlId) {
-        if (parsed == null
-                || !StringUtils.hasText(parsed.survivingMrn())
-                || !StringUtils.hasText(parsed.priorMrn())) {
-            log.warn("MLLP A40 rejected — missing PID-3 or MRG-1 (sender={}/{} hospital={})",
-                sendingApplication, sendingFacility,
-                receivingHospital != null ? receivingHospital.getId() : null);
-            return MllpInboundOutcome.REJECTED_INVALID;
-        }
-        if (receivingHospital == null || receivingHospital.getId() == null) {
-            log.warn("MLLP A40 rejected — no resolved hospital (sender={}/{})",
-                sendingApplication, sendingFacility);
-            return MllpInboundOutcome.REJECTED_INVALID;
-        }
-
-        String survivingMrn = parsed.survivingMrn().trim();
-        String priorMrn = parsed.priorMrn().trim();
         // MSH-10 as every log line below shows it: the same quoting and
         // escaping as the dead-letter reason, so a sender cannot forge or
         // reorder a log line with ANSI, separator or bidi characters.
         String loggedControlId = MllpRecordingContext.quotedControlId(messageControlId);
 
+        // Every refusal below leaves a dead letter, these three included: a
+        // malformed merge with no row is a refusal nobody can find. Each is
+        // recorded like the others - FAILED, no payload, a correlation id
+        // from the sender and the fixed reason - and logs MSH-10 so the
+        // sender's own queue can be matched to it.
+        if (parsed == null
+                || !StringUtils.hasText(parsed.survivingMrn())
+                || !StringUtils.hasText(parsed.priorMrn())) {
+            UUID loggedHospitalId = receivingHospital != null ? receivingHospital.getId() : null;
+            log.warn("MLLP A40 rejected — missing PID-3 or MRG-1 (sender={}/{} hospital={} msgCtrlId={})",
+                sendingApplication, sendingFacility, loggedHospitalId, loggedControlId);
+            recordReject(receivingHospital, sendingApplication, sendingFacility,
+                messageControlId, REASON_MISSING_IDENTIFIER);
+            return MllpInboundOutcome.REJECTED_INVALID;
+        }
+        if (receivingHospital == null || receivingHospital.getId() == null) {
+            log.warn("MLLP A40 rejected — no resolved hospital (sender={}/{} msgCtrlId={})",
+                sendingApplication, sendingFacility, loggedControlId);
+            recordReject(receivingHospital, sendingApplication, sendingFacility,
+                messageControlId, REASON_NO_HOSPITAL);
+            return MllpInboundOutcome.REJECTED_INVALID;
+        }
+
+        String survivingMrn = parsed.survivingMrn().trim();
+        String priorMrn = parsed.priorMrn().trim();
+
         if (survivingMrn.equalsIgnoreCase(priorMrn)) {
             // Not an error worth alarming about, but not a merge either.
-            // The identifier itself stays out of the log line: PID-3 is an
-            // MRN, and an MRN in a log is PHI wherever that log ends up.
+            // The identifier itself stays out of the log line and the row:
+            // PID-3 is an MRN, and an MRN in a log is PHI wherever that log
+            // ends up.
             log.warn("MLLP A40 rejected — PID-3 and MRG-1 are the same identifier "
-                + "(sender={}/{} hospital={})",
-                sendingApplication, sendingFacility, receivingHospital.getId());
+                + "(sender={}/{} hospital={} msgCtrlId={})",
+                sendingApplication, sendingFacility, receivingHospital.getId(), loggedControlId);
+            recordReject(receivingHospital, sendingApplication, sendingFacility,
+                messageControlId, REASON_SAME_IDENTIFIER);
             return MllpInboundOutcome.REJECTED_INVALID;
         }
 
@@ -363,17 +383,25 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
      * <p>The MRNs stay here, and this is the one place on this path they do.
      * They are kept out of every log line because a log is copied and
      * retained where PHI should not go; a merge event without the two
-     * identifiers is unauditable. Recorded as debt: it lands in
-     * {@code EmpiMergeEvent.notes}, plain {@code TEXT} with no
-     * {@code EncryptedStringConverter}, and encrypting that column would
-     * have to cover every existing row.
+     * identifiers is unauditable - once merged, the retired MRN's alias
+     * belongs to the survivor and nothing else says which one it was. That is
+     * why {@code EmpiMergeEvent.notes} is encrypted at rest
+     * ({@code EncryptedStringConverter}, legacy rows by
+     * {@code PhiTextEncryptionBackfill}) rather than the MRNs dropped.
+     *
+     * <p>Every value in it is the sender's text - the sender pair, both MRNs,
+     * MSH-10 - so each is quoted and escaped ({@link Hl7SenderText}): a
+     * persisted note must not let a sender end one slot and write the next,
+     * nor carry an ANSI escape or a line separator into it.
      */
-    private String buildNotes(String survivingMrn, String priorMrn,
-                              String sendingApplication, String sendingFacility,
-                              String messageControlId) {
-        return "HL7 ADT^A40 from " + sendingApplication + "/" + sendingFacility
-            + ": MRN " + priorMrn + " merged into " + survivingMrn
-            + (StringUtils.hasText(messageControlId)
-                ? " (MSH-10 " + messageControlId + ")" : "");
+    static String buildNotes(String survivingMrn, String priorMrn,
+                             String sendingApplication, String sendingFacility,
+                             String messageControlId) {
+        String quotedControlId = MllpRecordingContext.quotedControlId(messageControlId);
+        return "HL7 ADT^A40 from " + Hl7SenderText.quote(sendingApplication)
+            + "/" + Hl7SenderText.quote(sendingFacility)
+            + ": MRN " + Hl7SenderText.quote(priorMrn)
+            + " merged into " + Hl7SenderText.quote(survivingMrn)
+            + (quotedControlId != null ? " (MSH-10 " + quotedControlId + ")" : "");
     }
 }

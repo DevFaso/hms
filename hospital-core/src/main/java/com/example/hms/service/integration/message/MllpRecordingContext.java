@@ -1,6 +1,7 @@
 package com.example.hms.service.integration.message;
 
 import com.example.hms.model.Hospital;
+import com.example.hms.utility.Hl7SenderText;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
@@ -199,10 +200,10 @@ public final class MllpRecordingContext {
     }
 
     /**
-     * MSH-10 as it may be shown to an operator - in a dead-letter reason or a
-     * log line - or null when there is none. One rule for both: quoted, with
-     * quotes, backslashes and every character that could reorder or hide text
-     * escaped, so a sender cannot forge or rearrange what an operator reads.
+     * MSH-10 as it may be shown to an operator - in a dead-letter reason, an
+     * audit description, a merge note or a log line - or null when there is
+     * none. One rule for all of them: {@link Hl7SenderText#quote}, the rule for
+     * every piece of sender text, after stripping surrounding spaces.
      *
      * <p>Only spaces are stripped from the ends, not {@code String.trim()}'s
      * whole control range: {@code ABC} and {@code ABC} followed by a BEL are
@@ -210,10 +211,50 @@ public final class MllpRecordingContext {
      * the same here.
      */
     public static String quotedControlId(String messageControlId) {
+        String key = messageControlIdKey(messageControlId);
+        return key == null ? null : Hl7SenderText.quote(key);
+    }
+
+    /**
+     * MSH-10 as an idempotency key and as the stored control id: the value as
+     * sent, with only surrounding spaces stripped, or null when blank.
+     *
+     * <p><b>Not {@code String.trim()}.</b> {@code trim()} strips every
+     * character up to U+0020, so {@code ABC} and {@code ABC} followed by a BEL
+     * (or a tab, or an ESC) collapsed into one key: the second message read as
+     * a replay of the first and was acknowledged without being stored. The key
+     * is now the exact bounded value ({@code Hl7MessageInspector} holds MSH-10
+     * to its 255-character column untrimmed), the same value MSA-2 echoes and
+     * {@link #quotedControlId} shows.
+     *
+     * <p><b>Why spaces are still stripped.</b> Rows written before this rule
+     * hold {@code trim()}med ids, and a replay must still match them. HL7 v2
+     * string fields treat trailing blanks as insignificant, and senders that
+     * pad fixed-width fields do send them, so a space-padded retry of a message
+     * stored before the change must keep matching its row; stripping spaces
+     * keeps exactly that. What no longer matches a legacy row is a retry whose
+     * MSH-10 begins or ends with a control character: before the change it
+     * was stored without it, now its key keeps it, so a pre-change message
+     * retried after the deploy with such an id is stored a second time. That
+     * needs a malformed id and a retry spanning the deploy; it is accepted as
+     * the cost of no longer collapsing distinct ids.
+     */
+    public static String messageControlIdKey(String messageControlId) {
         if (!StringUtils.hasText(messageControlId)) {
             return null;
         }
-        return quoted(stripSpaces(messageControlId));
+        return stripSpaces(messageControlId);
+    }
+
+    /**
+     * MSH-3 or MSH-4 as part of an idempotency key: trimmed and upper-cased
+     * the way the allowlist matches it, or null when blank. One allowlisted
+     * sender is one sender however it cases its header, so its replay key
+     * must not split by case either - the same rule {@link #integrationId}
+     * already applies to the row it files.
+     */
+    public static String senderKey(String senderField) {
+        return StringUtils.hasText(senderField) ? senderField.trim().toUpperCase(Locale.ROOT) : null;
     }
 
     private static String stripSpaces(String value) {
@@ -226,43 +267,6 @@ public final class MllpRecordingContext {
             end--;
         }
         return value.substring(start, end);
-    }
-
-    /**
-     * Whether {@code c} could make quoted text render as something other than
-     * what it is: a control character; a format character (the bidi embeddings,
-     * overrides and isolates U+202A-U+202E and U+2066-U+2069, the zero-width
-     * characters, the byte-order mark); a line or paragraph separator; a
-     * surrogate or private-use code unit. A right-to-left override inside the
-     * quotes can make the sender's text appear to sit outside them, so each of
-     * these is shown as its escape instead of being rendered.
-     */
-    private static boolean needsEscape(char c) {
-        if (Character.isISOControl(c)) {
-            return true;
-        }
-        int type = Character.getType(c);
-        return type == Character.FORMAT
-            || type == Character.LINE_SEPARATOR
-            || type == Character.PARAGRAPH_SEPARATOR
-            || type == Character.SURROGATE
-            || type == Character.PRIVATE_USE;
-    }
-
-    /** {@code value} in double quotes, with quotes, backslashes and {@link #needsEscape} characters escaped. */
-    private static String quoted(String value) {
-        StringBuilder out = new StringBuilder(value.length() + 2).append('"');
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            if (c == '"' || c == '\\') {
-                out.append('\\').append(c);
-            } else if (needsEscape(c)) {
-                out.append(String.format("\\u%04x", (int) c));
-            } else {
-                out.append(c);
-            }
-        }
-        return out.append('"').toString();
     }
 
     /**

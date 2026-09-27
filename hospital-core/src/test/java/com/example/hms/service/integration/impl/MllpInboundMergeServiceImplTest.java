@@ -171,6 +171,21 @@ class MllpInboundMergeServiceImplTest {
             .contains("MSG-A40-1");
     }
 
+    @Test
+    void everySenderValueInTheNotesIsQuotedSoNoneCanWriteTheNextSlot() {
+        // The note is persisted text an operator reads as ours. Each value in
+        // it is the sender's: quoted, escaped, never able to end its slot.
+        String esc = String.valueOf((char) 0x1B);
+        String lineSeparator = String.valueOf((char) 0x2028);
+        String notes = MllpInboundMergeServiceImpl.buildNotes(
+            "S\"1", "P\n1", "LIS" + esc + "[2J", "HOSP1", "  M) merged into X" + lineSeparator + "  ");
+
+        assertThat(notes).isEqualTo("HL7 ADT^A40 from \"LIS\\u001b[2J\"/\"HOSP1\": MRN \"P\\u000a1\" "
+            + "merged into \"S\\\"1\" (MSH-10 \"M) merged into X\\u2028\")");
+        assertThat(MllpInboundMergeServiceImpl.buildNotes("S", "P", "LIS", "HOSP1", null))
+            .isEqualTo("HL7 ADT^A40 from \"LIS\"/\"HOSP1\": MRN \"P\" merged into \"S\"");
+    }
+
     /* ── The cross-tenant gate ───────────────────────────────────────── */
 
     @Test
@@ -362,6 +377,25 @@ class MllpInboundMergeServiceImplTest {
         assertThat(service.processMerge(sameBothSides, hospital, "LIS", "HOSP1", "MSG-1"))
             .isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
         verifyNoInteractions(empiService);
+        // A refusal like any other: a FAILED row naming MSH-10, never the MRN.
+        verifyDeadLetter("PID-3 and MRG-1 are the same identifier (MSH-10 \"MSG-1\")");
+    }
+
+    /**
+     * Exactly one FAILED row with this reason, no payload, filed under the
+     * sender with a stable correlation id - the shape of every A40 refusal.
+     */
+    private void verifyDeadLetter(String reason) {
+        ArgumentCaptor<String> correlation = ArgumentCaptor.forClass(String.class);
+        verify(messageRecorder).recordMessage(
+            eq("MLLP:LIS/HOSP1"), any(),
+            eq(IntegrationMessageDirection.INBOUND),
+            eq("ADT^A40"), isNull(),
+            eq(IntegrationMessageStatus.FAILED),
+            eq(reason),
+            correlation.capture());
+        assertThat(correlation.getValue()).isNotNull();
+        assertThat(reason).doesNotContain(SURVIVING_MRN).doesNotContain(PRIOR_MRN);
     }
 
     @Test
@@ -424,6 +458,34 @@ class MllpInboundMergeServiceImplTest {
             .isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
 
         verifyNoInteractions(empiService);
+        // Each one leaves its dead letter, all three under one correlation id:
+        // one problem, one counted entry, however often the sender retries.
+        ArgumentCaptor<String> correlation = ArgumentCaptor.forClass(String.class);
+        verify(messageRecorder, org.mockito.Mockito.times(3)).recordMessage(
+            eq("MLLP:LIS/HOSP1"), any(),
+            eq(IntegrationMessageDirection.INBOUND),
+            eq("ADT^A40"), isNull(),
+            eq(IntegrationMessageStatus.FAILED),
+            eq("missing PID-3 or MRG-1 (MSH-10 \"M1\")"),
+            correlation.capture());
+        assertThat(correlation.getAllValues()).doesNotContainNull().containsOnly(correlation.getValue());
+    }
+
+    @Test
+    void theRefusalsBeforeTheGateKeepOneCorrelationIdAcrossRetries() {
+        // A retry carries a new MSH-10; the correlation id must not change
+        // with it, or every retry stacks a new unresolved dead letter.
+        ParsedMergeMessage same = new ParsedMergeMessage(SURVIVING_MRN, "HOSP1", SURVIVING_MRN, "HOSP1");
+        service.processMerge(same, hospital, "LIS", "HOSP1", "MSG-1");
+        service.processMerge(same, hospital, "LIS", "HOSP1", "MSG-2");
+        service.processMerge(message(), null, "LIS", "HOSP1", "MSG-3");
+
+        ArgumentCaptor<String> correlation = ArgumentCaptor.forClass(String.class);
+        verify(messageRecorder, org.mockito.Mockito.times(3)).recordMessage(
+            any(), any(), any(), any(), any(), any(), any(), correlation.capture());
+        assertThat(correlation.getAllValues().get(0)).isEqualTo(correlation.getAllValues().get(1));
+        // A different problem is a different entry.
+        assertThat(correlation.getAllValues().get(2)).isNotEqualTo(correlation.getAllValues().get(0));
     }
 
     @Test
@@ -433,6 +495,7 @@ class MllpInboundMergeServiceImplTest {
         assertThat(service.processMerge(message(), null, "LIS", "HOSP1", "M1"))
             .isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
         verifyNoInteractions(empiService);
+        verifyDeadLetter("no resolved hospital (MSH-10 \"M1\")");
     }
 
     @Test

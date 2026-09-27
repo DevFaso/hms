@@ -139,7 +139,9 @@ allowlist); PID-3 and MRG-1 in the ADT and A40 parsers; OBR-2 in
 `MllpInboundLabServiceImpl`, because the ORU parser is shared with paths
 where OBR-2 is not an accession; PV1-19 and PV1-3's point of care in the
 visit projection, their only reader, which skips rather than refusing the
-message - an over-width visit field must not drop a demographic update.
+message - an over-width visit field must not drop a demographic update. The
+message is still AA, but an over-width PV1-19 leaves a FAILED dead letter
+(no payload, MSH-10 quoted) so the dropped visit step is visible.
 Check a field where it is **read**: refusing the whole message for a field
 only an optional step reads rejects what works today.
 
@@ -156,22 +158,28 @@ only an optional step reads rejects what works today.
   `Hl7FieldBoundsColumnWidthTest`, or a migration will silently move one
   without the other. `Hl7FieldBounds.fits` counts code points, as
   `VARCHAR(n)` does - not `String.length()`.
-- MSH-10 in the ADT and A40 dead-letter reasons, and in the merge-service
-  and visit-projection log lines #753 touched, goes through
-  `MllpRecordingContext.withControlId` / `quotedControlId`, which quote and
-  escape it so the sender cannot write text that reads as our own finding.
-  Not yet everywhere: the A02, A03 and auto-create audit descriptions in
-  the visit projection still format MSH-10 raw - persisted audit text, so
-  quoting it is a behaviour change and an open follow-up - and so do older
-  log lines. The helpers are MSH-10 only: other sender text in a reason
-  (the OBR-2 placer, the MSH-3/MSH-4 pair) is not quoted yet, and a general
-  helper for it is also a follow-up - do not reuse `withControlId` for it.
-- **Not yet covered: demographics and OBX-5.** PID-5/7/8/11 go into
-  `Patient` columns of 100 (sex: 10) and OBX-5 into `result_value` (2048),
-  unbounded. An over-width value fails at flush: `AE Server-side handler
-  error`, no dead-letter row, and the sender retries indefinitely. OBX-3/6/7/11
-  are truncated at their sink (an older decision). Known debt: these are not
-  identifiers, so whether to refuse or truncate them is still undecided.
+- **Sender text is quoted wherever we write it.** A sender value that goes
+  into text we write - an audit description, a dead-letter reason, a merge
+  note - goes through `Hl7SenderText.quote`: double quotes, quote and
+  backslash escaped, and control, bidi, separator, zero-width, surrogate and
+  private-use characters shown as hex escapes. A sender can then neither end
+  its slot and write a finding of its own nor put an ANSI escape or a line
+  break into the text. MSH-10 goes through
+  `MllpRecordingContext.quotedControlId` / `withControlId` (the same quoting
+  after stripping surrounding spaces), in log lines too. Our own markers stay
+  unquoted (`Hl7SenderText.ABSENT`, `(over 255 characters)`), which is what
+  makes them unforgeable. Compute a quoted value into a local before a log
+  call (Sonar S2629). Known residual: the sender pair is still logged raw.
+- **Demographics and OBX-5 are refused too.** PID-5 (three name parts),
+  PID-8 and PID-11 (street, city, state, zip, country) are checked by
+  `MllpInboundAdtServiceImpl` before any lookup against the `Patient`
+  field's `@Size` (`Hl7FieldBounds.fitsSize`: bean validation runs at flush
+  and counts UTF-16 units); OBX-5 by the MLLP lab service and the HTTP
+  ingest against `result_value` (2048). Over-width is AE (HTTP: 400) with a
+  dead letter naming the field and the limit, instead of a flush-time
+  server error with no row. PID-7 is a date and has no width.
+  `Patient.addressLine1` is encrypted TEXT: its `@Size(255)` is its only
+  limit. OBX-3/6/7/11 are still truncated at their sink (an older decision).
 - MSH-9 is **not** bounded: not an identifier, and the recorder clamps the
   one column it reaches.
 

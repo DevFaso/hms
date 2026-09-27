@@ -2,7 +2,9 @@ package com.example.hms.model.integration;
 
 import com.example.hms.enums.integration.IntegrationMessageDirection;
 import com.example.hms.enums.integration.IntegrationMessageStatus;
+import com.example.hms.security.EncryptedStringConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -87,8 +89,19 @@ public class IntegrationMessageEvent {
     @Column(name = "correlation_id", length = 120)
     private String correlationId;
 
-    /** Truncated to 64 KB at the recorder; stored as TEXT so PHI fits. */
+    /**
+     * Truncated to 64 KB at the recorder; stored as TEXT, encrypted at rest.
+     *
+     * <p>It holds raw partner traffic: an unparseable HL7 message is recorded
+     * whole, PID and all, because the body is the only diagnostic there is -
+     * so the answer is encryption (and retention), not deletion. Nothing
+     * compares this column in SQL or JPQL (the search, the dead-letter count
+     * and the recurring-failure fold key on other columns), which is what makes
+     * a ciphertext column safe here. Legacy plaintext rows are encrypted at
+     * startup by {@code PhiTextEncryptionBackfill}.
+     */
     @Column(name = "payload", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String payload;
 
     @Enumerated(EnumType.STRING)
