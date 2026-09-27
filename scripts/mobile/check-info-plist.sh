@@ -383,7 +383,7 @@ scan_first_party_crypto() {
 # --------------------------------------------------------------------------
 
 check_source() {
-  local key yml_value want f name issuer sso api redirect
+  local key yml_value want f name issuer sso api redirect resolved
   # Every `$(NAME)` reference in project.yml must reach the generated plist
   # as that exact reference. A literal outranks the build setting: that is
   # how CFBundleVersion stayed "1" while CI set CURRENT_PROJECT_VERSION, and
@@ -423,9 +423,19 @@ check_source() {
   # The Release-* configurations are only resolved at archive time, which a
   # PR never reaches. Resolve each Config/*.xcconfig here so a bad per-env
   # value fails the PR rather than the release.
+  #
+  # Asked for and not there is a failure, not a pass: a renamed Config
+  # directory, or one emptied by a bad merge, would otherwise leave this
+  # gate green having resolved nothing.
   if [ -n "$XCCONFIG_DIR" ]; then
+    if [ ! -d "$XCCONFIG_DIR" ]; then
+      fail "the --xcconfig-dir directory is not there, so no per-env configuration was checked"
+      return 0
+    fi
+    resolved=0
     for f in "$XCCONFIG_DIR"/*.xcconfig; do
       [ -f "$f" ] || continue
+      resolved=$((resolved + 1))
       name=$(basename "$f")
       api=$(xcconfig_value "$f" MEDIHUB_API_BASE_URL)
       if ! is_https_url "$api"; then
@@ -440,6 +450,9 @@ check_source() {
       issuer=$(xcconfig_value "$f" MEDIHUB_KEYCLOAK_ISSUER)
       check_issuer "$name" "$sso" "$issuer"
     done
+    if [ "$resolved" -eq 0 ]; then
+      fail "the --xcconfig-dir directory holds no *.xcconfig, so no per-env configuration was checked"
+    fi
   fi
 }
 

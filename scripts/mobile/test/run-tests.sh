@@ -224,13 +224,17 @@ if wants plist; then
   expect "source: an xcconfig redirect scheme that is not registered fails" 1 "from Dev.xcconfig is not registered"
 
   # The repository's own Config/*.xcconfig: both API URLs and both issuers
-  # resolve (the issuers carry the https:/$()/ escape since #791), so nothing
-  # is reported for either.
+  # resolve (the issuers are escaped as https:/$()/host on the PR branch).
   mutate "$S" "$TMP/s.plist" '<string>com.example.fixture</string>' \
     '<string>com.example.fixture</string><string>com.bitnesttechs.hms.patient.native</string>'
   run bash "$CIP" --mode source --plist "$TMP/s.plist" --project-yml "$P" --xcconfig-dir "$ROOT/patient-ios-app/Config"
-  expect "source: the repository's Config/*.xcconfig resolve" 0 \
-    '!MEDIHUB_KEYCLOAK_ISSUER from Dev.xcconfig' '!MEDIHUB_KEYCLOAK_ISSUER from Prod.xcconfig' '!MEDIHUB_API_BASE_URL in'
+  expect "source: the repository's Config/*.xcconfig resolve" 0 '!MEDIHUB_KEYCLOAK_ISSUER from Dev.xcconfig' '!MEDIHUB_KEYCLOAK_ISSUER from Prod.xcconfig' '!MEDIHUB_API_BASE_URL in'
+
+  run bash "$CIP" --mode source --plist "$S" --project-yml "$P" --xcconfig-dir "$TMP/no-such-dir"
+  expect "source: a missing --xcconfig-dir fails rather than checking nothing" 1 "xcconfig-dir directory is not there"
+  mkdir -p "$TMP/xc-empty"
+  run bash "$CIP" --mode source --plist "$S" --project-yml "$P" --xcconfig-dir "$TMP/xc-empty"
+  expect "source: an --xcconfig-dir with no *.xcconfig fails rather than checking nothing" 1 "holds no *.xcconfig"
 
   printf '<plist><dict><key>x</key>' > "$TMP/broken.plist"
   run bash "$CIP" --mode source --plist "$TMP/broken.plist" --project-yml "$P"
@@ -341,13 +345,17 @@ fi
 
 if wants keystore; then
   echo "== CheckKeystore.java"
-  if command -v java >/dev/null 2>&1 && command -v keytool >/dev/null 2>&1; then
+  # MOBILE_TEST_JAVA / MOBILE_TEST_KEYTOOL exist so the missing-tool path
+  # below can itself be tested; nothing else sets them.
+  JAVA=${MOBILE_TEST_JAVA:-java}
+  KEYTOOL=${MOBILE_TEST_KEYTOOL:-keytool}
+  if command -v "$JAVA" >/dev/null 2>&1 && command -v "$KEYTOOL" >/dev/null 2>&1; then
     CK="$M/CheckKeystore.java"
-    keytool -genkeypair -keystore "$TMP/ks.jks" -storetype JKS -storepass storepw1 -keypass keypw1 \
+    "$KEYTOOL" -genkeypair -keystore "$TMP/ks.jks" -storetype JKS -storepass storepw1 -keypass keypw1 \
       -alias upload -keyalg RSA -keysize 2048 -dname CN=test -validity 1 >/dev/null 2>&1
-    keytool -genkeypair -keystore "$TMP/ks.p12" -storetype PKCS12 -storepass storepw2 \
+    "$KEYTOOL" -genkeypair -keystore "$TMP/ks.p12" -storetype PKCS12 -storepass storepw2 \
       -alias upload -keyalg RSA -keysize 2048 -dname CN=test -validity 1 >/dev/null 2>&1
-    ck() { STORE_PASSWORD=$2 KEY_ALIAS=$3 KEY_PASSWORD=$4 java "$CK" "$1"; }
+    ck() { STORE_PASSWORD=$2 KEY_ALIAS=$3 KEY_PASSWORD=$4 "$JAVA" "$CK" "$1"; }
     run ck "$TMP/ks.jks" storepw1 upload keypw1
     expect "keystore: JKS with the right four values opens" 0 "all verified"
     run ck "$TMP/ks.jks" wrong upload keypw1
@@ -363,8 +371,24 @@ if wants keystore; then
     printf 'not a keystore' > "$TMP/garbage.jks"
     run ck "$TMP/garbage.jks" storepw1 upload keypw1
     expect "keystore: a file that is not a keystore is named" 1 "ANDROID_KEYSTORE_BASE64 does not decode"
+  elif [ -n "${CI:-}" ]; then
+    # On a runner a missing JDK is a broken job, not a reason to go green
+    # having checked none of the keystore logic the release depends on.
+    OUT="java or keytool is not on PATH"
+    report_fail "keystore: java and keytool must be available on CI"
   else
-    echo "skip: java/keytool not on PATH"
+    echo "skip: java/keytool not on PATH (allowed only outside CI)"
+  fi
+
+  # The section's own missing-tool behaviour, run nested so the outer run
+  # keeps its real JDK. MOBILE_TEST_NESTED stops the recursion.
+  if [ -z "${MOBILE_TEST_NESTED:-}" ]; then
+    OUT=$(MOBILE_TEST_NESTED=1 CI=true MOBILE_TEST_JAVA=/nonexistent/java MOBILE_TEST_KEYTOOL=/nonexistent/keytool       bash "$HERE/run-tests.sh" keystore 2>&1)
+    STATUS=$?
+    expect "keystore: a missing JDK FAILS the section on CI" 1 "java and keytool must be available on CI"
+    OUT=$(env -u CI MOBILE_TEST_NESTED=1 MOBILE_TEST_JAVA=/nonexistent/java MOBILE_TEST_KEYTOOL=/nonexistent/keytool       bash "$HERE/run-tests.sh" keystore 2>&1)
+    STATUS=$?
+    expect "keystore: a missing JDK only skips outside CI" 0 "allowed only outside CI"
   fi
 fi
 
