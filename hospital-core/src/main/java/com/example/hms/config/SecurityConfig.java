@@ -394,6 +394,18 @@ public class SecurityConfig {
                     // XSRF dance). A forged cross-site logout cannot carry the
                     // SameSite=Strict refresh cookie, so it revokes nothing.
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/logout"),
+                    // MFA login step: authenticated by the one-time mfaToken in
+                    // the body, never by a cookie session.
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/mfa/verify"),
+                    // Change own password and the push-device registry: the
+                    // access token is read ONLY from the Authorization header
+                    // (JwtAuthenticationFilter.getJwtFromRequest, and the OIDC
+                    // resolver's default header-only delegate), never from a
+                    // cookie, so a cross-site request cannot carry credentials
+                    // and CSRF has nothing to protect. The native apps send no
+                    // XSRF header, which made these unreachable for them.
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/me/change-password"),
+                    PathPatternRequestMatcher.withDefaults().matcher("/me/push-devices/**"),
                     PathPatternRequestMatcher.withDefaults().matcher("/auth/password/**"),
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/resend-verification"),
                     // SockJS handshake & transport (xhr_send, xhr_streaming are POSTs

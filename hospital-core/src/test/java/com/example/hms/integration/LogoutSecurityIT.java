@@ -44,4 +44,33 @@ class LogoutSecurityIT extends BaseIT {
                         .content("{\"refreshToken\":\"not.a.valid.refresh\"}"))
                 .andExpect(status().isOk());
     }
+    // ── The native apps send no XSRF header: these must not answer 403 ──
+
+    @Test
+    @DisplayName("MFA verify without an XSRF header reaches the controller (401 on a bad mfaToken, not 403)")
+    void mfaVerifyIsNotBlockedByCsrf() throws Exception {
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"not.a.token\",\"code\":\"123456\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("change-password without an XSRF header is refused for authentication (401), not CSRF (403)")
+    void changePasswordIsNotBlockedByCsrf() throws Exception {
+        mockMvc.perform(post("/auth/me/change-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"currentPassword\":\"a\",\"newPassword\":\"b\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("the push-device registry without an XSRF header is refused for authentication (401), not CSRF (403)")
+    void pushDevicesAreNotBlockedByCsrf() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .put("/me/push-devices/7d0c2c4e-5a1f-4f55-9b1e-2d3a4c5b6e7f")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\":\"t\",\"platform\":\"IOS\"}"))
+                .andExpect(status().isUnauthorized());
+    }
 }
