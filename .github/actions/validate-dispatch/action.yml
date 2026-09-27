@@ -1,0 +1,35 @@
+name: Validate a dispatch input
+description: >-
+  Fails unless one workflow_dispatch input is exactly one of the allowed
+  values. The Run-workflow dialog constrains a choice input; an API dispatch
+  does not, and an unrecognised value otherwise matches no gate and turns a
+  release into a green run that shipped nothing. The logic is
+  scripts/mobile/validate-choice.sh, which the mobile script tests cover.
+
+  The VALUE is passed through the calling step's env as DISPATCH_VALUE, never
+  through `with:`, so a dispatched string reaches bash only as data:
+
+    - uses: ./.github/actions/validate-dispatch
+      env:
+        DISPATCH_VALUE: <the inputs.release_action expression>
+      with:
+        input-name: release_action
+        allowed: build_only stage_on_internal
+
+inputs:
+  input-name:
+    description: The dispatch input's name, used in messages.
+    required: true
+  allowed:
+    description: The allowed values, whitespace-separated plain tokens.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Check ${{ inputs.input-name }}
+      shell: bash
+      env:
+        DISPATCH_INPUT: ${{ inputs.input-name }}
+        DISPATCH_ALLOWED: ${{ inputs.allowed }}
+      run: bash "$GITHUB_ACTION_PATH/../../../scripts/mobile/validate-choice.sh"
