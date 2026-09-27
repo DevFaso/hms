@@ -10,6 +10,7 @@ import {
   InBasketItem,
 } from '../../services/in-basket.service';
 import { TranslateModule } from '@ngx-translate/core';
+import { RoleContextService } from '../../core/role-context.service';
 
 import { resetStoredLangForTests } from '../../shared/i18n/app-locale';
 function mockItem(overrides: Partial<InBasketItem> = {}): InBasketItem {
@@ -72,6 +73,25 @@ describe('InBasketPanelComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('reloads items and the unread badge when the hospital scope changes, dropping the old rows first', () => {
+    const roleContext = TestBed.inject(RoleContextService);
+    roleContext.activeHospitalId = 'hospital-a';
+    fixture.detectChanges();
+    expect(inBasketSpy.getItems).toHaveBeenCalledTimes(1);
+    expect(component.items().length).toBe(1);
+
+    // The next read, issued under hospital B, has not answered yet.
+    inBasketSpy.getItems.and.returnValue(of(mockPage([])));
+    inBasketSpy.getSummary.and.returnValue(of({ ...mockSummary(), totalUnread: 0 }));
+    roleContext.activeHospitalId = 'hospital-b';
+    fixture.detectChanges();
+
+    expect(inBasketSpy.getItems).toHaveBeenCalledTimes(2);
+    expect(inBasketSpy.getSummary).toHaveBeenCalledTimes(2);
+    expect(component.items()).toEqual([]);
+    expect(component.badgeCount()).toBe(0);
   });
 
   it('should load items and summary on init', () => {

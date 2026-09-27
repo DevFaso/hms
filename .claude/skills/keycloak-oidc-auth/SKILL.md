@@ -74,11 +74,22 @@ partner-webhook service users).
 
 ## Hospital context resolution
 
-`KeycloakHospitalContextFilter` reads the `hospital_id` claim from the
-OIDC token and seeds `HospitalContextHolder`. For internal JWTs the
-same claim is encoded by `JwtTokenProvider` at issuance. **Worker
-threads (MLLP, schedulers, Kafka consumers) have no filter** — they
-must resolve the hospital from the message envelope and set the
+Both filters build `HospitalContextHolder` from the SAME live
+computation, `ActingScopeResolver.liveContext` (the caller's active
+assignments), then apply `X-Hospital-Id` (refused with 403 when the
+caller may not name it), the tenant lifecycle gate (423) and the
+super-admin authority reconciliation (`SuperAdminAuthorities`: a
+`ROLE_SUPER_ADMIN` the assignment table does not back is dropped with
+what it inherited). The token's `hospital_id`, `role_assignments`,
+`primaryHospitalId` and `isSuperAdmin` claims are UI hints at most.
+
+On Keycloak the local account is the `appUserId` claim (mapped from the
+`app_user_id` attribute) and nothing else; the account must carry the
+token's username or email. A token without it gets no hospital scope
+(`NO_LOCAL_USER`). Run `npm run backfill:app-user-id -- --check` in
+`scripts/keycloak-migration` before any deploy that relies on it.
+**Worker threads (MLLP, schedulers, Kafka consumers) have no filter** —
+they must resolve the hospital from the message envelope and set the
 context explicitly if they need tenant-scoped repository finds.
 
 ## Env-sync discipline
