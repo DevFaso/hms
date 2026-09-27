@@ -1,4 +1,8 @@
-import { DOCTOR_EQUIVALENT_ROLES } from '../../core/role-equivalence';
+import {
+  DOCTOR_EQUIVALENT_ROLES,
+  expandRoleEquivalents,
+  roleSatisfies,
+} from '../../core/role-equivalence';
 
 /**
  * ROLE_DOCTOR and the authorities the BACKEND expands into it (role audit
@@ -30,6 +34,43 @@ const DOCTOR_ROLES: string[] = ['ROLE_DOCTOR', ...DOCTOR_EQUIVALENT_ROLES];
  * Single source of truth for PatientChartComponent and the Chart tab gate in
  * PatientDetailComponent — update here when the backend gates change.
  */
+/**
+ * Mirrors the backend `CdsAcknowledgementController.CLINICIAN_ROLES`, which
+ * gates BOTH `POST /cds-services/{id}` (the BPA panel's evaluate call) and
+ * `/cds-acknowledgements`: the roles that may dismiss a card are the roles
+ * that receive one. Every other role that opens a patient page — reception,
+ * hospital admin, the lab bench, the consulting clinicians — is refused with
+ * 403, so the panel must not render (nor call) for them. Physicians and
+ * surgeons are admitted through `roleSatisfies` / `expandRoleEquivalents`,
+ * as the backend's RoleExpansion admits them.
+ */
+export const CDS_CLINICIAN_ROLES: readonly string[] = [
+  'ROLE_DOCTOR',
+  'ROLE_NURSE',
+  'ROLE_MIDWIFE',
+  'ROLE_PHARMACIST',
+  'ROLE_SUPER_ADMIN',
+];
+
+/**
+ * True when the caller may invoke a CDS service. The single active role
+ * decides when one is pinned (a multi-role user scoped to reception gets no
+ * panel); otherwise any held role does.
+ */
+export function canInvokeCds(roleContext: {
+  activeRole: string | null;
+  activeRoles: string[];
+}): boolean {
+  const required = [...CDS_CLINICIAN_ROLES];
+  const active = roleContext.activeRole;
+  if (active) {
+    return roleSatisfies(required, active);
+  }
+  return expandRoleEquivalents(roleContext.activeRoles ?? []).some((role) =>
+    required.includes(role),
+  );
+}
+
 export const CHART_ROLES = {
   // E9 #69: every clinical role reads allergies (contrast, induction, therapy).
   viewAllergies: [

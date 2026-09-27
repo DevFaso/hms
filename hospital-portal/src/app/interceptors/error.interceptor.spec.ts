@@ -135,6 +135,18 @@ describe('errorInterceptor', () => {
     httpMock.expectNone('/frontend-audit');
   });
 
+  it('on a 403 from a CDS Hooks invocation (a POST), degrades quietly and does not redirect', () => {
+    let error: HttpErrorResponse | undefined;
+    http.post('/cds-services/hms-bpa-protocols', {}).subscribe({ error: (e) => (error = e) });
+    httpMock
+      .expectOne('/cds-services/hms-bpa-protocols')
+      .flush(null, { status: 403, statusText: 'Forbidden' });
+    httpMock.expectOne('/frontend-audit').flush({});
+
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(error?.status).toBe(403);
+  });
+
   it('on non-silent 403, redirects to the error page', () => {
     let error: HttpErrorResponse | undefined;
     http.post('/billing-invoices', {}).subscribe({ error: (e) => (error = e) });

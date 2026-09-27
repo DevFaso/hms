@@ -26,6 +26,7 @@ import {
   CHART_VIEW_ROLES,
   ENCOUNTER_VIEW_ROLES,
   VITALS_VIEW_ROLES,
+  canInvokeCds,
 } from './patient-chart/chart-access';
 import { AdvanceDirectivesTabComponent } from './advance-directives/advance-directives-tab.component';
 import { DIRECTIVE_ROLES } from './advance-directives/directive-access';
@@ -438,6 +439,16 @@ export class PatientDetailComponent implements OnInit {
    *  access at least one of allergies / diagnoses / chart updates). */
   canViewChart(): boolean {
     return this.roleContext.hasAnyActiveRole(CHART_VIEW_ROLES);
+  }
+
+  /**
+   * The Best-Practice Advisory panel POSTs to /cds-services on load, which the
+   * backend admits for CDS_CLINICIAN_ROLES only. Reception, admins, the lab
+   * bench and the consulting clinicians open this page too; for them the
+   * panel is not rendered at all.
+   */
+  canSeeBpaPanel(): boolean {
+    return canInvokeCds(this.roleContext);
   }
 
   /** Insurance endpoints grant HOSPITAL_ADMIN/RECEPTIONIST/NURSE/DOCTOR only

@@ -119,8 +119,10 @@
       (sessionChanged)="onBreakGlassSessionChanged()"
     />
 
-    <!-- Best-Practice Advisories — runs the patient-view CDS hook on chart load -->
-    <app-bpa-panel [patientId]="p.id" />
+    <!-- Best-Practice Advisories — runs the patient-view CDS hook on chart load (clinicians only) -->
+    @if (canSeeBpaPanel()) {
+      <app-bpa-panel [patientId]="p.id" />
+    }
 
     <!-- Tabs -->
     <div class="tabs">

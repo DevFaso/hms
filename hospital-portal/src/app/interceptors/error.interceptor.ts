@@ -36,6 +36,15 @@ const SILENT_403_PATTERNS = [
   /\/lab-specimens(\?|$|\/)/,
 ];
 
+/**
+ * POSTs that are reads in disguise and feed a background widget. A CDS Hooks
+ * invocation (`POST /cds-services/{id}`) is the BPA panel's evaluate call on
+ * chart load: the panel is gated to the clinician roles the backend admits,
+ * but if the two ever drift the chart must still open — the panel degrades to
+ * its error text instead of the whole page redirecting to /error/403.
+ */
+const SILENT_403_POST_PATTERNS = [/\/cds-services\/[^/?]+(\?|$)/];
+
 const SILENT_401_PATTERNS = [/\/chat\/mark-read\//];
 
 /**
@@ -191,8 +200,10 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         // Never redirect (or re-report) when the audit sink itself is forbidden.
         const isAuditCall = req.url.includes('/frontend-audit');
         const isSilent =
-          (req.method === 'GET' || req.method === 'HEAD') &&
-          SILENT_403_PATTERNS.some((pattern) => pattern.test(req.url));
+          ((req.method === 'GET' || req.method === 'HEAD') &&
+            SILENT_403_PATTERNS.some((pattern) => pattern.test(req.url))) ||
+          (req.method === 'POST' &&
+            SILENT_403_POST_PATTERNS.some((pattern) => pattern.test(req.url)));
         if (isSilent) {
           reportSilent403(http, req);
         } else if (!isAuditCall) {
