@@ -209,9 +209,13 @@ class AuthControllerTest {
     }
 
     @Test
-    void logout_prefersTheRefreshCookieOverTheBody() throws Exception {
-        givenToken("access.jwt", "doctor1", "jti-access");
-        givenToken("cookie.refresh", "doctor1", "jti-cookie");
+    void logout_revokesBothTheCookieAndTheBodyRefreshToken() throws Exception {
+        // The Android cookie jar keeps the login-time refresh cookie while the
+        // app rotates the token it really uses in the body: the cookie can be
+        // stale, so the body token must be revoked too.
+        givenToken("access.jwt", "patient1", "jti-access");
+        givenToken("cookie.refresh", "patient1", "jti-cookie");
+        givenToken("body.refresh", "patient1", "jti-body");
         when(refreshTokenCookieService.read(any())).thenReturn("cookie.refresh");
 
         mockMvc.perform(post("/auth/logout")
@@ -221,7 +225,7 @@ class AuthControllerTest {
                 .andExpect(status().isOk());
 
         verify(tokenBlacklistService).blacklist("jti-cookie", 4_102_444_800_000L);
-        verify(jwtTokenProvider, never()).validateToken("body.refresh");
+        verify(tokenBlacklistService).blacklist("jti-body", 4_102_444_800_000L);
     }
 
     @Test
@@ -240,15 +244,20 @@ class AuthControllerTest {
     }
 
     @Test
-    void logout_withoutBearer_revokesNoRefreshToken() throws Exception {
+    void logout_afterTheAccessTokenExpired_stillRevokesTheRefreshToken() throws Exception {
+        // An idle patient signs out with an expired access token: no bearer
+        // identity, but the refresh token they hand back must still die.
+        when(jwtTokenProvider.getJtiFromToken("expired.jwt"))
+                .thenThrow(new IllegalArgumentException("expired"));
         givenToken("refresh.jwt", "patient1", "jti-refresh");
 
         mockMvc.perform(post("/auth/logout")
+                        .header("Authorization", "Bearer expired.jwt")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"refresh.jwt\"}"))
                 .andExpect(status().isOk());
 
-        verify(tokenBlacklistService, never()).blacklist(any(), org.mockito.ArgumentMatchers.anyLong());
+        verify(tokenBlacklistService).blacklist("jti-refresh", 4_102_444_800_000L);
     }
 
     @Test

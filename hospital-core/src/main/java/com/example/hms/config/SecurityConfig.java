@@ -390,6 +390,10 @@ public class SecurityConfig {
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/register"),
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/bootstrap-signup"),
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/token/refresh"),
+                    // Logout from the native apps (Bearer + body refresh token, no
+                    // XSRF dance). A forged cross-site logout cannot carry the
+                    // SameSite=Strict refresh cookie, so it revokes nothing.
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/logout"),
                     PathPatternRequestMatcher.withDefaults().matcher("/auth/password/**"),
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/resend-verification"),
                     // SockJS handshake & transport (xhr_send, xhr_streaming are POSTs
@@ -436,6 +440,11 @@ public class SecurityConfig {
                 // Refresh is public (access token may be expired)
                 .requestMatchers(HttpMethod.POST, "/auth/token/refresh").permitAll()
                 .requestMatchers("/auth/token/**").authenticated()
+                // Logout is public: an idle client's access token has expired
+                // by the time it signs out, and it must still be able to hand
+                // back its refresh token for revocation. The endpoint only ever
+                // revokes the tokens presented to it (AuthController.logout).
+                .requestMatchers(HttpMethod.POST, "/auth/logout").permitAll()
                 .requestMatchers("/auth/logout").authenticated()
                 .requestMatchers("/auth/verify-password").authenticated()
                 .requestMatchers("/auth/me/**").authenticated()

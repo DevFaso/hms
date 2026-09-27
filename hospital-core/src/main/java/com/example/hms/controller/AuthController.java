@@ -560,10 +560,10 @@ public class AuthController {
     @WriteAudited(skip = true, reason = "emits LOGOUT / TOKEN_REFRESH itself, or is a check that mutates nothing")
     @PostMapping("/logout")
     @Operation(summary = "Logout current user",
-        description = "Revokes the bearer access token and the refresh token — the HttpOnly cookie "
-            + "(web) or the optional body field {\"refreshToken\": \"...\"} (mobile, which keeps its "
-            + "refresh token itself) — then clears the refresh cookie. A refresh token is revoked "
-            + "only when it belongs to the same user as the bearer.")
+        description = "Public. Revokes the bearer access token when one is sent, and every valid refresh "
+            + "token presented — the HttpOnly cookie (web) and the optional body field "
+            + "{\"refreshToken\": \"...\"} (mobile) — then clears the refresh cookie. With a bearer, "
+            + "a refresh token of another user is left alone. Always 200.")
     @ApiResponse(responseCode = "200", description = "Logout successful", content = @Content(schema = @Schema(implementation = MessageResponse.class)))
     public ResponseEntity<Object> logout(
             @RequestBody(required = false) java.util.Map<String, String> body,
@@ -598,11 +598,15 @@ public class AuthController {
         // was only half closed: the access token was blacklisted, but the
         // refresh token — which the mobile apps hold themselves and send in
         // the body — could mint a fresh pair until it expired.
-        String refreshToken = refreshTokenCookieService.read(request);
-        if (refreshToken == null && body != null) {
-            refreshToken = body.get("refreshToken");
+        // Both sources, not one or the other: the Android client's cookie jar
+        // keeps the refresh cookie from login while it rotates the refresh
+        // token it actually uses in the body, so the cookie can be stale.
+        String cookieRefresh = refreshTokenCookieService.read(request);
+        String bodyRefresh = body != null ? body.get("refreshToken") : null;
+        revokeRefreshTokenOnLogout(cookieRefresh, username, request.getRemoteAddr());
+        if (bodyRefresh != null && !bodyRefresh.equals(cookieRefresh)) {
+            revokeRefreshTokenOnLogout(bodyRefresh, username, request.getRemoteAddr());
         }
-        revokeRefreshTokenOnLogout(refreshToken, username, request.getRemoteAddr());
         // S-01: clear the HttpOnly refresh-token cookie
         refreshTokenCookieService.clear(response);
         SecurityContextHolder.clearContext();
@@ -612,13 +616,16 @@ public class AuthController {
     /**
      * Blacklist a refresh token presented at logout.
      *
-     * <p>Only when the bearer identified a user and the refresh token is a
-     * valid token for that SAME user: logout must not become a way to revoke
-     * somebody else's session with a token that leaked. An expired or
+     * <p>A valid refresh token is revoked on its own: holding it already lets
+     * the holder mint tokens with it, so revoking it grants nothing, and an
+     * idle client arrives here with an EXPIRED access token (no bearer
+     * identity) and must still be able to close its session. When the bearer
+     * did identify a user, a refresh token belonging to someone else is left
+     * alone, so logout cannot sign another person out. An expired or
      * unparseable refresh token needs no revocation and is ignored.
      */
     private void revokeRefreshTokenOnLogout(String refreshToken, String bearerUsername, String ip) {
-        if (refreshToken == null || refreshToken.isBlank() || bearerUsername == null) {
+        if (refreshToken == null || refreshToken.isBlank()) {
             return;
         }
         try {
@@ -626,7 +633,7 @@ public class AuthController {
                 return;
             }
             String subject = jwtTokenProvider.getUsernameFromJWT(refreshToken);
-            if (!bearerUsername.equals(subject)) {
+            if (bearerUsername != null && !bearerUsername.equals(subject)) {
                 log.warn("[LOGOUT] Refresh token not revoked: it belongs to a different user than the bearer");
                 return;
             }
@@ -641,7 +648,7 @@ public class AuthController {
                     .eventDescription("Refresh token revoked on logout (jti=" + jti + ")")
                     .ipAddress(ip)
                     .status(AuditStatus.SUCCESS)
-                    .userName(bearerUsername)
+                    .userName(subject)
                     .build());
         } catch (Exception ex) {
             log.debug("[LOGOUT] Could not revoke the refresh token: {}", ex.getMessage());
