@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.StaffShiftType;
+import com.example.hms.exception.BusinessRuleException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Staff;
 import com.example.hms.model.StaffAvailability;
@@ -24,14 +25,17 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.MessageSource;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.Collections;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -62,6 +66,14 @@ class StaffSchedulingServiceImplTest {
     @Mock
     private UserRepository userRepository;
 
+    /**
+     * Fixed "today", deliberately in the future: a date that is past on the
+     * injected clock but not on the system clock proves which one the guard reads.
+     */
+    private static final LocalDate TODAY = LocalDate.of(2099, 3, 2);
+    private static final Clock FIXED =
+        Clock.fixed(TODAY.atTime(9, 0).atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
+
     private StaffSchedulingServiceImpl service;
 
     @BeforeEach
@@ -82,8 +94,29 @@ class StaffSchedulingServiceImplTest {
             new com.example.hms.mapper.StaffSchedulingMapper(),
             roleValidator,
             messageSource,
-            userRepository
+            userRepository,
+            FIXED
         );
+    }
+
+    @Test
+    void scheduleShift_rejectsYesterdayOnTheInjectedClock() {
+        UUID staffId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Staff staff = buildStaff(staffId, hospitalId);
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(staff.getHospital()));
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+
+        StaffShiftRequestDTO yesterday = new StaffShiftRequestDTO(
+            staffId, hospitalId, null, TODAY.minusDays(1),
+            LocalTime.of(8, 0), LocalTime.of(16, 0), StaffShiftType.MORNING, null);
+
+        assertThatThrownBy(() -> service.scheduleShift(yesterday, Locale.ENGLISH))
+            .isInstanceOf(BusinessRuleException.class)
+            .hasMessageContaining("schedule.shift.pastDate");
+        verify(shiftRepository, never()).save(any(StaffShift.class));
     }
 
     @Test
@@ -91,7 +124,7 @@ class StaffSchedulingServiceImplTest {
         UUID staffId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
         UUID actorUserId = UUID.randomUUID();
-        LocalDate shiftDate = LocalDate.now().plusDays(1);
+        LocalDate shiftDate = TODAY.plusDays(1);
         LocalTime startTime = LocalTime.of(8, 0);
         LocalTime endTime = LocalTime.of(16, 0);
 
@@ -148,7 +181,7 @@ class StaffSchedulingServiceImplTest {
         UUID staffId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
         UUID actorUserId = UUID.randomUUID();
-        LocalDate shiftDate = LocalDate.now().plusDays(2);
+        LocalDate shiftDate = TODAY.plusDays(2);
         LocalTime startTime = LocalTime.of(10, 0);
         LocalTime endTime = LocalTime.of(18, 0);
 

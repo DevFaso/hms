@@ -36,6 +36,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -69,6 +70,12 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
     private final RoleValidator roleValidator;
     private final MessageSource messageSource;
     private final UserRepository userRepository;
+    /**
+     * The rota clock: "today" for the past-date guards and the default listing
+     * window, and the {@code statusChangedAt}/{@code reviewedAt} stamps, which
+     * only the mapper reads back.
+     */
+    private final Clock clock;
 
     @Override
     @Transactional
@@ -194,7 +201,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
             .notes(dto.notes())
             .scheduledBy(actor)
             .lastModifiedBy(actor)
-            .statusChangedAt(LocalDateTime.now())
+            .statusChangedAt(LocalDateTime.now(clock))
             .build();
         return shiftRepository.save(shift);
     }
@@ -224,7 +231,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         existing.setShiftType(dto.shiftType());
         existing.setNotes(dto.notes());
         existing.setLastModifiedBy(getCurrentUser(effectiveLocale));
-        existing.setStatusChangedAt(LocalDateTime.now());
+        existing.setStatusChangedAt(LocalDateTime.now(clock));
 
         StaffShift saved = shiftRepository.save(existing);
         log.info("[schedule] shift updated id={} staff={} date={}", shiftId, staff.getId(), dto.shiftDate());
@@ -252,7 +259,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         shift.setStatus(newStatus);
         shift.setCancellationReason(newStatus == StaffShiftStatus.CANCELLED ? dto.cancellationReason() : null);
         shift.setLastModifiedBy(getCurrentUser(effectiveLocale));
-        shift.setStatusChangedAt(LocalDateTime.now());
+        shift.setStatusChangedAt(LocalDateTime.now(clock));
 
         StaffShift saved = shiftRepository.save(shift);
         log.info("[schedule] shift status change id={} status={}", shiftId, newStatus);
@@ -358,7 +365,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         leave.setStatus(newStatus);
         leave.setManagerNote(dto.managerNote());
         leave.setReviewedBy(getCurrentUser(effectiveLocale));
-        leave.setReviewedAt(LocalDateTime.now());
+        leave.setReviewedAt(LocalDateTime.now(clock));
 
         if (newStatus == StaffLeaveStatus.APPROVED) {
             cancelOverlappingShiftsForLeave(leave, effectiveLocale);
@@ -381,7 +388,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         }
         leave.setStatus(StaffLeaveStatus.CANCELLED);
         leave.setReviewedBy(getCurrentUser(effectiveLocale));
-        leave.setReviewedAt(LocalDateTime.now());
+        leave.setReviewedAt(LocalDateTime.now(clock));
         StaffLeaveRequest saved = leaveRepository.save(leave);
         log.info("[leave] cancelled leaveId={}", leaveId);
         return mapper.toLeaveDto(saved);
@@ -478,7 +485,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
                                      Staff staff,
                                      Locale locale,
                                      UUID excludeShiftId) {
-        if (dto.shiftDate().isBefore(LocalDate.now())) {
+        if (dto.shiftDate().isBefore(LocalDate.now(clock))) {
             throw new BusinessRuleException(message("schedule.shift.pastDate", locale));
         }
         // Allow cross-midnight shifts where endTime < startTime (e.g. NIGHT: 16:30 → 01:30 next day)
@@ -574,7 +581,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
                                      Staff staff,
                                      Locale locale,
                                      UUID excludeLeaveId) {
-        if (dto.startDate().isBefore(LocalDate.now())) {
+        if (dto.startDate().isBefore(LocalDate.now(clock))) {
             throw new BusinessRuleException(message("schedule.leave.request.past", locale));
         }
         if (dto.endDate().isBefore(dto.startDate())) {
@@ -609,7 +616,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
             return;
         }
         User actor = getCurrentUser(locale);
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         for (StaffShift shift : shifts) {
             shift.setStatus(StaffShiftStatus.CANCELLED);
             shift.setCancellationReason(message("schedule.shift.cancelled.leave", locale));
@@ -690,7 +697,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
     }
 
     private DateRange resolveDateRange(LocalDate start, LocalDate end, Locale locale) {
-        LocalDate effectiveStart = start != null ? start : LocalDate.now();
+        LocalDate effectiveStart = start != null ? start : LocalDate.now(clock);
         LocalDate effectiveEnd = end != null ? end : effectiveStart.plusDays(14);
         if (effectiveEnd.isBefore(effectiveStart)) {
             throw new BusinessRuleException(message("schedule.dateRange.invalid", locale));
