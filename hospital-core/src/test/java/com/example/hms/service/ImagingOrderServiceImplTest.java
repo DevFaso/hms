@@ -61,6 +61,8 @@ class ImagingOrderServiceImplTest {
     private ImagingOrderMapper imagingOrderMapper;
     @Mock
     private com.example.hms.utility.RoleValidator roleValidator;
+    @Mock
+    private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
 
     @InjectMocks
     private ImagingOrderServiceImpl imagingOrderService;
@@ -600,5 +602,173 @@ class ImagingOrderServiceImplTest {
         when(imagingOrderRepository.findByStatusOrderByOrderedAtDesc(ImagingOrderStatus.COMPLETED)).thenReturn(List.of());
 
         assertThat(imagingOrderService.getAllOrders(ImagingOrderStatus.COMPLETED)).isEmpty();
+    }
+
+    // ── Write paths answer to the acting hospital, like getOrder ──
+
+    private ImagingOrder orderAt(Hospital at) {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setPatient(patient);
+        order.setHospital(at);
+        order.setModality(ImagingModality.XRAY);
+        order.setStatus(ImagingOrderStatus.DRAFT);
+        return order;
+    }
+
+    @Test
+    void writesToAnotherHospitalsOrder_answerExactlyAsAMissingOrder() {
+        // What the same id answers when no row matches it at all. Compared by
+        // message key: the resolved text depends on whichever MessageSource an
+        // earlier test left in MessageUtil.
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.empty());
+        String missingKey = ((ResourceNotFoundException) org.assertj.core.api.Assertions.catchThrowable(
+            () -> imagingOrderService.updateOrderStatus(orderId, new ImagingOrderStatusUpdateRequestDTO())))
+            .getMessageKey();
+        assertThat(missingKey).isEqualTo("Imaging order not found with ID: " + orderId);
+
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(orderAt(hospital)));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        ImagingOrderRequestDTO update = new ImagingOrderRequestDTO();
+        ImagingOrderStatusUpdateRequestDTO status = new ImagingOrderStatusUpdateRequestDTO();
+        status.setStatus(ImagingOrderStatus.CANCELLED);
+        ImagingOrderSignatureRequestDTO signature = new ImagingOrderSignatureRequestDTO();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrder(orderId, update))
+            .isInstanceOfSatisfying(ResourceNotFoundException.class, e -> assertThat(e.getMessageKey()).isEqualTo(missingKey));
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrderStatus(orderId, status))
+            .isInstanceOfSatisfying(ResourceNotFoundException.class, e -> assertThat(e.getMessageKey()).isEqualTo(missingKey));
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.captureProviderSignature(orderId, signature))
+            .isInstanceOfSatisfying(ResourceNotFoundException.class, e -> assertThat(e.getMessageKey()).isEqualTo(missingKey));
+        org.mockito.Mockito.verify(imagingOrderRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void updateOrder_refusesToMoveTheOrderAwayFromTheActingHospital() {
+        UUID elsewhereId = UUID.randomUUID();
+        Hospital elsewhere = new Hospital();
+        elsewhere.setId(elsewhereId);
+        ImagingOrder order = orderAt(hospital);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(hospitalRepository.findById(elsewhereId)).thenReturn(Optional.of(elsewhere));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        ImagingOrderRequestDTO request = new ImagingOrderRequestDTO();
+        request.setHospitalId(elsewhereId);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrder(orderId, request))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThat(order.getHospital()).isSameAs(hospital);
+        org.mockito.Mockito.verify(imagingOrderRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void createOrder_refusesAHospitalOtherThanTheActingOne() {
+        UUID elsewhereId = UUID.randomUUID();
+        Hospital elsewhere = new Hospital();
+        elsewhere.setId(elsewhereId);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(elsewhereId)).thenReturn(Optional.of(elsewhere));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        ImagingOrderRequestDTO request = new ImagingOrderRequestDTO();
+        request.setPatientId(patientId);
+        request.setHospitalId(elsewhereId);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.createOrder(request, null))
+            .isInstanceOf(ResourceNotFoundException.class);
+        org.mockito.Mockito.verify(imagingOrderRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void superAdminInGlobalView_keepsWritingAndMovingAnyOrder() {
+        UUID elsewhereId = UUID.randomUUID();
+        Hospital elsewhere = new Hospital();
+        elsewhere.setId(elsewhereId);
+        ImagingOrder order = orderAt(hospital);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(hospitalRepository.findById(elsewhereId)).thenReturn(Optional.of(elsewhere));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+
+        ImagingOrderRequestDTO request = new ImagingOrderRequestDTO();
+        request.setHospitalId(elsewhereId);
+        imagingOrderService.updateOrder(orderId, request);
+        assertThat(order.getHospital()).isSameAs(elsewhere);
+
+        ImagingOrderStatusUpdateRequestDTO status = new ImagingOrderStatusUpdateRequestDTO();
+        status.setStatus(ImagingOrderStatus.SCHEDULED);
+        imagingOrderService.updateOrderStatus(orderId, status);
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.SCHEDULED);
+
+        ImagingOrderSignatureRequestDTO signature = new ImagingOrderSignatureRequestDTO();
+        signature.setProviderName("Admin");
+        imagingOrderService.captureProviderSignature(orderId, signature);
+        assertThat(order.getProviderSignedAt()).isNotNull();
+    }
+
+    @Test
+    void patientRegisteredOnlyElsewhere_answersExactlyAsAMissingPatient() {
+        UUID foreignPatientId = UUID.randomUUID();
+        Patient foreign = new Patient();
+        foreign.setId(foreignPatientId);
+        when(patientRepository.findById(foreignPatientId)).thenReturn(Optional.of(foreign));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(registrationRepository.existsByPatientIdAndHospitalId(foreignPatientId, hospitalId)).thenReturn(false);
+
+        ImagingOrderRequestDTO create = new ImagingOrderRequestDTO();
+        create.setPatientId(foreignPatientId);
+        create.setHospitalId(hospitalId);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.createOrder(create, null))
+            .isInstanceOfSatisfying(ResourceNotFoundException.class,
+                e -> assertThat(e.getMessageKey()).isEqualTo("patient.notFound"));
+
+        ImagingOrder order = orderAt(hospital);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        ImagingOrderRequestDTO repoint = new ImagingOrderRequestDTO();
+        repoint.setPatientId(foreignPatientId);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrder(orderId, repoint))
+            .isInstanceOfSatisfying(ResourceNotFoundException.class,
+                e -> assertThat(e.getMessageKey()).isEqualTo("patient.notFound"));
+        assertThat(order.getPatient()).isSameAs(patient);
+        org.mockito.Mockito.verify(imagingOrderRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void patientRegisteredAtTheActingHospital_isAccepted() {
+        UUID otherPatientId = UUID.randomUUID();
+        Patient other = new Patient();
+        other.setId(otherPatientId);
+        ImagingOrder order = orderAt(hospital);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(patientRepository.findById(otherPatientId)).thenReturn(Optional.of(other));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(registrationRepository.existsByPatientIdAndHospitalId(otherPatientId, hospitalId)).thenReturn(true);
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+
+        ImagingOrderRequestDTO repoint = new ImagingOrderRequestDTO();
+        repoint.setPatientId(otherPatientId);
+        imagingOrderService.updateOrder(orderId, repoint);
+        assertThat(order.getPatient()).isSameAs(other);
+    }
+
+    @Test
+    void superAdminInGlobalView_isNotHeldToARegistration() {
+        UUID anyPatientId = UUID.randomUUID();
+        Patient any = new Patient();
+        any.setId(anyPatientId);
+        ImagingOrder order = orderAt(hospital);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(patientRepository.findById(anyPatientId)).thenReturn(Optional.of(any));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+
+        ImagingOrderRequestDTO repoint = new ImagingOrderRequestDTO();
+        repoint.setPatientId(anyPatientId);
+        imagingOrderService.updateOrder(orderId, repoint);
+        assertThat(order.getPatient()).isSameAs(any);
+        org.mockito.Mockito.verifyNoInteractions(registrationRepository);
     }
 }
