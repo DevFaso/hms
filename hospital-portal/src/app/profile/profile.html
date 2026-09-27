@@ -413,9 +413,10 @@
                         name="email"
                         [placeholder]="'PROFILE.ENTER_EMAIL' | translate"
                         [disabled]="ssoSession()"
+                        [attr.aria-describedby]="ssoSession() ? 'editEmailHint' : null"
                       />
                       @if (ssoSession()) {
-                        <span class="form-hint">{{
+                        <span class="form-hint" id="editEmailHint">{{
                           'PROFILE.EMAIL_MANAGED_BY_SSO' | translate
                         }}</span>
                       }

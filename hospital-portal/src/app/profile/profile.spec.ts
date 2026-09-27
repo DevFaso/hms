@@ -107,6 +107,8 @@ describe('ProfileComponent — editing the profile', () => {
 
   it('asks for the current password only once the email is really changed', () => {
     expect(byId('editEmailPassword')).toBeNull();
+    expect(byId('editEmail')?.disabled).withContext('editable outside single sign-on').toBeFalse();
+    expect(fixture.nativeElement.querySelector('#editEmailHint')).toBeNull();
 
     component.updateField('email', '   ');
     fixture.detectChanges();
@@ -304,7 +306,7 @@ describe('ProfileComponent — editing the profile', () => {
     expect(component.editForm().email).toBe('old@example.test');
   });
 
-  it('a single sign-on session cannot edit the email: the field is locked and no change is sent', () => {
+  it('a single sign-on session cannot edit the email: the field is locked and no change is sent', async () => {
     ssoAuthenticated.set(true);
     fixture.detectChanges();
     component.updateField('email', 'new@example.test');
@@ -313,6 +315,13 @@ describe('ProfileComponent — editing the profile', () => {
 
     expect(component.emailChanged()).toBeFalse();
     expect(byId('editEmailPassword')).toBeNull();
+    // NgModel applies [disabled] asynchronously.
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(byId('editEmail')?.disabled).toBeTrue();
+    expect(
+      (fixture.nativeElement.querySelector('#editEmailHint') as HTMLElement).textContent?.trim(),
+    ).toBe('PROFILE.EMAIL_MANAGED_BY_SSO');
     component.saveProfile();
     expect(profiles.changeOwnEmail).not.toHaveBeenCalled();
     expect(profiles.updateProfile).toHaveBeenCalledWith(

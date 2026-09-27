@@ -270,6 +270,21 @@ public class ImagingReport extends BaseEntity implements TenantScoped {
         return signedAt != null;
     }
 
+    /**
+     * May the patient themselves read this report? Only once it is signed —
+     * the one ceremony that makes a read available at all ({@code signReport}
+     * promotes the order to RESULTS_AVAILABLE for the ordering clinician) — and
+     * not after it was voided or rejected. A DRAFT or PRELIMINARY read, which
+     * can carry an unconfirmed critical finding nobody has told the patient
+     * about yet, is the care team's until it is signed. The lab counterpart
+     * is {@code LabResult.isReleased}.
+     */
+    public boolean isReleasedToPatient() {
+        return isSigned()
+            && reportStatus != ImagingReportStatus.CANCELLED
+            && reportStatus != ImagingReportStatus.ERROR;
+    }
+
     public boolean isCriticalFlagged() {
         return criticalResultFlaggedAt != null;
     }

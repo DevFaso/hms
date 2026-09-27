@@ -34,24 +34,20 @@ import java.util.Set;
  * each compiled annotation and fails on drift in either direction.
  *
  * <p>That is why {@code ROLE_PHYSICIAN} and {@code ROLE_SURGEON} are absent,
- * and the usual reason for naming them is what makes it wrong. On a set that
- * GRANTS access, naming them matters, because
+ * and they are not needed:
  * {@link com.example.hms.security.RoleExpansion} maps them to
- * {@code ROLE_DOCTOR} on the password path and
- * {@code KeycloakJwtAuthenticationConverter} does not. These sets REMOVE
- * subject status, so naming them inverts into an escalation: none of the
- * three annotations admits a surgeon, so over Keycloak a
- * {@code ROLE_SURGEON} + {@code ROLE_PATIENT} principal passes
- * {@code @PreAuthorize} through the patient door alone — and would then be
+ * {@code ROLE_DOCTOR} on both auth paths ({@code JwtTokenProvider} and
+ * {@code KeycloakJwtAuthenticationConverter}), so a surgeon already reads as
+ * a doctor here. The rule matters for any role the annotation does not admit:
+ * these sets REMOVE subject status, so naming such a role inverts into an
+ * escalation. A principal holding it plus {@code ROLE_PATIENT} passes
+ * {@code @PreAuthorize} through the patient door alone, and would then be
  * reclassified here as a clinician and read every record at the hospital.
- * Over the password path the same principal already holds {@code ROLE_DOCTOR}
- * by expansion, so nothing legitimate is lost: what is lost is exactly the
- * escalation.
  *
  * <p>{@code ROLE_SUPER_ADMIN} is in all three because all three annotations
  * admit it, and it must win over the {@code ROLE_PATIENT} that
- * {@code RoleExpansion.SUPER_ADMIN_INHERITS} grants every super-admin on the
- * password path.
+ * {@code RoleExpansion.SUPER_ADMIN_INHERITS} grants every super-admin on both
+ * auth paths.
  *
  * <p>Not to be confused with {@code RoleValidator.isPatientOnlyFromAuth()},
  * which answers a similar-sounding question against a fixed staff set that

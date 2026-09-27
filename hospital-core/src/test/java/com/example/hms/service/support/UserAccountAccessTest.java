@@ -299,6 +299,61 @@ class UserAccountAccessTest {
         }
 
         @Test
+        @DisplayName("the super-admin's directory is every account")
+        void superAdminSeesEveryone() {
+            signIn(true, "ROLE_SUPER_ADMIN");
+
+            UserAccountAccess.DirectoryScope scope = access.requireDirectoryAccess();
+
+            assertThat(scope.everyone()).isTrue();
+        }
+
+        @Test
+        @DisplayName("an inflated ROLE_SUPER_ADMIN authority without the context flag is scoped like any staff member")
+        void inflatedSuperAdminAuthorityIsScoped() {
+            signIn(false, "ROLE_SUPER_ADMIN", "ROLE_NURSE");
+            callerHolds(assignment("ROLE_NURSE", hospitalA, true));
+
+            UserAccountAccess.DirectoryScope scope = access.requireDirectoryAccess();
+
+            assertThat(scope.everyone()).isFalse();
+            assertThat(scope.hospitalIds()).containsExactly(hospitalA.getId());
+        }
+
+        @Test
+        @DisplayName("anyone else's directory is the hospitals where they actively hold a staff role")
+        void scopeIsTheCallersStaffHospitals() {
+            signIn(false, "ROLE_NURSE", "ROLE_DOCTOR");
+            callerHolds(assignment("ROLE_NURSE", hospitalA, true), assignment("ROLE_DOCTOR", hospitalB, true));
+
+            UserAccountAccess.DirectoryScope scope = access.requireDirectoryAccess();
+
+            assertThat(scope.everyone()).isFalse();
+            assertThat(scope.hospitalIds()).containsExactlyInAnyOrder(hospitalA.getId(), hospitalB.getId());
+        }
+
+        @Test
+        @DisplayName("the caller's own PATIENT assignment elsewhere does not widen it")
+        void patientAssignmentDoesNotWiden() {
+            signIn(false, "ROLE_NURSE", "ROLE_PATIENT");
+            callerHolds(assignment("ROLE_NURSE", hospitalA, true), assignment("ROLE_PATIENT", hospitalB, true));
+
+            assertThat(access.requireDirectoryAccess().hospitalIds()).containsExactly(hospitalA.getId());
+        }
+
+        @Test
+        @DisplayName("a global staff assignment (no hospital) is admitted with an empty scope: nobody")
+        void globalStaffAssignmentSeesNobody() {
+            signIn(false, "ROLE_ADMIN");
+            callerHolds(assignment("ROLE_ADMIN", null, true));
+
+            UserAccountAccess.DirectoryScope scope = access.requireDirectoryAccess();
+
+            assertThat(scope.everyone()).isFalse();
+            assertThat(scope.hospitalIds()).isEmpty();
+        }
+
+        @Test
         @DisplayName("a staff token whose only staff assignment is inactive is refused")
         void inactiveStaffIsRefused() {
             signIn(false, "ROLE_NURSE");

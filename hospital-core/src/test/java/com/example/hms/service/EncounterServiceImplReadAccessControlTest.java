@@ -10,6 +10,8 @@ import com.example.hms.payload.dto.EncounterResponseDTO;
 import com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.security.RoleExpansion;
+import com.example.hms.security.oidc.KeycloakJwtAuthenticationConverter;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,11 +30,11 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -163,23 +165,41 @@ class EncounterServiceImplReadAccessControlTest {
     }
 
     /**
-     * An OIDC principal: a {@code JwtAuthenticationToken} whose HMS user id is
-     * the {@code appUserId} claim, as
-     * {@code KeycloakJwtAuthenticationConverter} produces. There is no
-     * {@code CustomUserDetails} on this shape, so
-     * {@code RoleValidator.getCurrentUserId()} returns null for it — which is
+     * An OIDC principal, built by the REAL {@code KeycloakJwtAuthenticationConverter}
+     * from a token carrying the roles as realm roles, so it has exactly the
+     * authorities production gives it (normalised and widened by
+     * {@code RoleExpansion}). The HMS user id is the {@code appUserId} claim.
+     * There is no {@code CustomUserDetails} on this shape, so
+     * {@code RoleValidator.getCurrentUserId()} returns null for it, which is
      * why the guard resolves through {@code ControllerAuthUtils}.
      */
     private void authenticateViaOidcAs(String... roles) {
-        List<SimpleGrantedAuthority> authorities = List.of(roles).stream()
-            .map(SimpleGrantedAuthority::new).toList();
         Jwt jwt = Jwt.withTokenValue("t")
             .header("alg", "RS256")
             .claim("sub", "keycloak-subject")
             .claim("appUserId", callerUserId.toString())
+            .claim("realm_access", Map.of("roles", List.of(roles)))
             .build();
-        SecurityContextHolder.getContext().setAuthentication(
-            new JwtAuthenticationToken(jwt, authorities));
+        SecurityContextHolder.getContext().setAuthentication(new KeycloakJwtAuthenticationConverter().convert(jwt));
+    }
+
+    /**
+     * A password-path principal with the authorities
+     * {@code JwtTokenProvider.getAuthenticationFromJwt} gives the same role
+     * list: widened by {@code RoleExpansion}.
+     */
+    private void authenticateViaPasswordPathAs(String... roles) {
+        authenticateAs(RoleExpansion.expand(List.of(roles)).toArray(new String[0]));
+    }
+
+    /** "read" when the call returns, otherwise the refusal's type and message. */
+    private String outcomeOf(UUID encounterId) {
+        try {
+            service.getEncounterById(encounterId, locale);
+            return "read";
+        } catch (RuntimeException e) {
+            return e.getClass().getSimpleName() + ": " + e.getMessage();
+        }
     }
 
     private Encounter encounterAt(Hospital where, Patient subject, boolean checkedOut) {
@@ -685,24 +705,38 @@ class EncounterServiceImplReadAccessControlTest {
         }
 
         @Test
-        @DisplayName("a surgeon who is also a patient, over OIDC, is a patient here — the role is not admitted")
-        void surgeonWhoIsAlsoAPatientOverOidcIsStillJustAPatient() {
-            // The detail annotation admits ROLE_DOCTOR, not ROLE_SURGEON, and
-            // KeycloakJwtAuthenticationConverter does not run RoleExpansion —
-            // so over OIDC this principal reaches the handler through the
-            // patient door alone. Naming ROLE_SURGEON in the non-subject set
-            // (the usual fix for the missing expansion, and the right one for
-            // a set that GRANTS access) would reclassify them as a clinician
-            // and hand them every encounter at the hospital.
+        @DisplayName("a surgeon who is also a patient, over OIDC, reads as a clinician - RoleExpansion made them a doctor")
+        void surgeonWhoIsAlsoAPatientOverOidcReadsAsAClinician() {
+            // The detail annotation admits ROLE_DOCTOR, not ROLE_SURGEON. The
+            // Keycloak converter now runs RoleExpansion, so this principal
+            // holds ROLE_DOCTOR and reaches the handler as a clinician, exactly
+            // as on the password path. ROLE_SURGEON is still absent from the
+            // non-subject set: naming it there would be the escalation
+            // EncounterReaderRoles describes, and it is not needed.
             authenticateViaOidcAs("ROLE_PATIENT", "ROLE_SURGEON");
             Encounter strangers = encounterAt(hospital, strangerPatient, false);
-            UUID missing = missingEncounterId();
 
-            ResourceNotFoundException refusal =
-                captureNotFound(() -> service.getEncounterById(strangers.getId(), locale));
-            ResourceNotFoundException absent = captureNotFound(() -> service.getEncounterById(missing, locale));
+            assertThat(service.getEncounterById(strangers.getId(), locale)).isNotNull();
+        }
 
-            assertIndistinguishable(refusal, strangers.getId(), absent, missing);
+        @Test
+        @DisplayName("a surgeon who is also a patient gets the same answer over OIDC and over a password login")
+        void surgeonWhoIsAlsoAPatientGetsTheSameAnswerOnBothPaths() {
+            Encounter strangersHere = encounterAt(hospital, strangerPatient, false);
+            Encounter strangersElsewhere = encounterAt(otherHospital, strangerPatient, false);
+            Encounter mine = encounterAt(hospital, callerPatient, false);
+
+            for (Encounter encounter : List.of(strangersHere, strangersElsewhere, mine)) {
+                authenticateViaOidcAs("ROLE_SURGEON", "ROLE_PATIENT");
+                String overOidc = outcomeOf(encounter.getId());
+                authenticateViaPasswordPathAs("ROLE_SURGEON", "ROLE_PATIENT");
+                String overPassword = outcomeOf(encounter.getId());
+
+                assertThat(overOidc).isEqualTo(overPassword);
+            }
+            // And the answers are the clinician's: read here, refused elsewhere.
+            assertThat(outcomeOf(strangersHere.getId())).isEqualTo("read");
+            assertThat(outcomeOf(strangersElsewhere.getId())).isNotEqualTo("read");
         }
 
         @Test
@@ -720,7 +754,7 @@ class EncounterServiceImplReadAccessControlTest {
             // RoleExpansion has already given them ROLE_DOCTOR by the time any
             // guard runs, so dropping ROLE_SURGEON from the set costs a real
             // surgeon nothing on the login the annotation actually admits.
-            authenticateAs("ROLE_PATIENT", "ROLE_SURGEON", "ROLE_DOCTOR");
+            authenticateViaPasswordPathAs("ROLE_PATIENT", "ROLE_SURGEON");
             Encounter strangers = encounterAt(hospital, strangerPatient, false);
 
             assertThat(service.getEncounterById(strangers.getId(), locale)).isNotNull();
