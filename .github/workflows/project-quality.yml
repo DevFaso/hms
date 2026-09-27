@@ -30,6 +30,93 @@ jobs:
       contents: read
     secrets: inherit
 
+  # SonarCloud analysis, fed by the backend job's own coverage. This replaced
+  # the standalone SonarQube workflow (build.yml), which ran
+  # `:hospital-core:build :hospital-core:jacocoTestReport` a second time on
+  # every PR and push — the whole backend suite twice per change. The
+  # analysis needs bytecode (sonar.gradle.skipCompile=true in build.gradle),
+  # so it compiles, but it never runs a test: coverage and test results come
+  # from the artifact backend-ci.yml uploads after the suite AND the coverage
+  # gate passed. Same two analyses as before: a branch analysis on push to
+  # main/develop and a PR analysis (with GitHub decoration) on pull requests.
+  # Without SONAR_TOKEN (fork PRs) the analysis steps skip, as before.
+  sonar-analysis:
+    name: SonarQube analysis
+    needs: backend-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # Sonar blame / new-code detection needs full history
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Cache SonarQube packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
+
+      - name: Download the backend job's coverage and test results
+        uses: actions/download-artifact@v8
+        with:
+          name: sonar-inputs
+          path: hospital-core/build
+
+      - name: Check the coverage report arrived
+        run: test -s hospital-core/build/reports/jacoco/test/jacocoTestReport.xml
+
+      - name: Grant execute permission
+        run: chmod +x gradlew
+
+      - name: Compile main and test sources (no tests run)
+        run: ./gradlew :hospital-core:classes :hospital-core:testClasses
+
+      - name: SonarQube analysis (branch push)
+        if: github.event_name == 'push' && env.SONAR_TOKEN != ''
+        env:
+          BRANCH_NAME: ${{ github.ref_name }}
+        run: |
+          ./gradlew sonar -x test -x jacocoTestReport \
+            -Dsonar.token="${SONAR_TOKEN}" \
+            -Dsonar.branch.name="${BRANCH_NAME}"
+
+      - name: SonarQube analysis (pull request)
+        if: github.event_name == 'pull_request' && env.SONAR_TOKEN != ''
+        env:
+          PR_KEY: ${{ github.event.pull_request.number }}
+          PR_BRANCH: ${{ github.head_ref }}
+          PR_BASE: ${{ github.base_ref }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ./gradlew sonar -x test -x jacocoTestReport \
+            -Dsonar.token="${SONAR_TOKEN}" \
+            -Dsonar.pullrequest.key="${PR_KEY}" \
+            -Dsonar.pullrequest.branch="${PR_BRANCH}" \
+            -Dsonar.pullrequest.base="${PR_BASE}" \
+            -Dsonar.pullrequest.github.repository="${GH_REPO}" \
+            -Dsonar.pullrequest.provider=github
+
   frontend-tests:
     name: Frontend (Jest, Playwright)
     uses: ./.github/workflows/frontend-ci.yml
