@@ -5934,6 +5934,8 @@
     "UP_TO_DATE": "Actualizado",
     "USERNAME": "Username",
     "USERNAME_HINT": "Su nombre de usuario no se puede cambiar",
+    "EMAIL_CHANGED_BY_ADMIN": "Póngase en contacto con un administrador para cambiar su dirección de correo.",
+    "EMAIL_MANAGED_BY_SSO": "Su dirección de correo la gestiona el inicio de sesión único.",
     "USER_ID": "ID de usuario",
     "VERIFICATION_CODE": "Código de verificación",
     "VERIFICATION_CODE_SENT": "Código de verificación enviado a {{contact}}",

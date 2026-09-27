@@ -12,6 +12,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { MfaService, MfaEnrollmentResponse } from '../auth/mfa.service';
+import { OidcAuthService } from '../auth/oidc-auth.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
@@ -45,6 +46,7 @@ export class ProfileComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly translate = inject(TranslateService);
+  private readonly oidcAuth = inject(OidcAuthService);
 
   private static readonly VALID_TABS: readonly ProfileTab[] = [
     'overview',
@@ -68,6 +70,14 @@ export class ProfileComponent implements OnInit {
   /* ── Edit form model ── */
   editForm = signal<ProfileUpdateRequest>({});
   formDirty = signal(false);
+
+  /**
+   * A single sign-on session: Keycloak owns the email on that path. Either
+   * way the email is read-only here: the server refuses a self-service
+   * change (it is where a password reset goes), and an administrator of the
+   * account changes it. The hint says which of the two applies.
+   */
+  ssoSession = computed(() => this.oidcAuth.authenticated());
 
   /* ── Computed ── */
   userInitials = computed(() => {
@@ -574,7 +584,9 @@ export class ProfileComponent implements OnInit {
     this.saving.set(true);
     const data = this.editForm();
 
-    this.profileService.updateProfile(u.id, data).subscribe({
+    // The email goes back as the account has it: the field is read-only and
+    // the server refuses a self-service change.
+    this.profileService.updateProfile(u.id, { ...data, email: u.email }).subscribe({
       next: (updated) => {
         this.user.set(updated);
         this.resetEditForm(updated);

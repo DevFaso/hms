@@ -406,11 +406,18 @@
                       type="email"
                       id="editEmail"
                       [ngModel]="editForm().email"
-                      (ngModelChange)="updateField('email', $event)"
                       name="email"
                       [placeholder]="'PROFILE.ENTER_EMAIL' | translate"
-                      required
+                      aria-describedby="editEmailHint"
+                      readonly
+                      disabled
                     />
+                    <span class="form-hint" id="editEmailHint">{{
+                      (ssoSession()
+                        ? 'PROFILE.EMAIL_MANAGED_BY_SSO'
+                        : 'PROFILE.EMAIL_CHANGED_BY_ADMIN'
+                      ) | translate
+                    }}</span>
                   </div>
                   <div class="form-group">
                     <label for="editPhone">{{ 'PROFILE.PHONE_NUMBER' | translate }}</label>

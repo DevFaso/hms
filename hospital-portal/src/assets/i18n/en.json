@@ -5934,6 +5934,8 @@
     "UP_TO_DATE": "Up to date",
     "USERNAME": "Username",
     "USERNAME_HINT": "Your username cannot be changed",
+    "EMAIL_CHANGED_BY_ADMIN": "Contact an administrator to change your email address.",
+    "EMAIL_MANAGED_BY_SSO": "Your email address is managed by single sign-on.",
     "USER_ID": "User ID",
     "VERIFICATION_CODE": "Verification Code",
     "VERIFICATION_CODE_SENT": "Verification code sent to {{contact}}",
