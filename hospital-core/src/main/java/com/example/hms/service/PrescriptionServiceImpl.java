@@ -914,7 +914,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // ensureContextConsistency (encounter ↔ patient ↔ staff ↔ hospital).
         if (request.getPatientId() != null) {
             return patientRepository.findByIdUnscoped(request.getPatientId())
-                .orElseThrow(() -> new ResourceNotFoundException("patient.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", request.getPatientId()));
         }
         if (StringUtils.hasText(request.getPatientIdentifier())) {
             String identifier = request.getPatientIdentifier().trim();
@@ -931,12 +931,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             try {
                 UUID parsed = UUID.fromString(identifier);
                 return patientRepository.findByIdUnscoped(parsed)
-                    .orElseThrow(() -> new ResourceNotFoundException("patient.notfound"));
+                    .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", parsed));
             } catch (IllegalArgumentException ignore) {
                 // not a UUID, fall through
             }
 
-            throw new ResourceNotFoundException("patient.notfound");
+            throw new ResourceNotFoundException("patient.notFoundByIdentifier", identifier);
         }
         throw new BusinessException("prescription.patient.required");
     }
@@ -971,7 +971,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private Staff resolveStaffContext(PrescriptionRequestDTO request, UUID currentUserId) {
         if (request.getStaffId() != null) {
             return staffRepository.findById(request.getStaffId())
-                .orElseThrow(() -> new ResourceNotFoundException("staff.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException("staff.notfound", request.getStaffId()));
         }
         if (currentUserId == null) {
             throw new BusinessException("prescription.staff.context.missing");
@@ -985,7 +985,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                                               Staff staff) {
         if (request.getEncounterId() != null) {
             return encounterRepository.findById(request.getEncounterId())
-                .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", request.getEncounterId()));
         }
 
         UUID hospitalId = determineHospitalId(staff, patient);

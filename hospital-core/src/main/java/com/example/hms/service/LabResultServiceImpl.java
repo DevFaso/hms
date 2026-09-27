@@ -1048,7 +1048,7 @@ public class LabResultServiceImpl implements LabResultService {
         } else if (labOrder.getPatient().getPrimaryHospital() != null) {
             return labOrder.getPatient().getPrimaryHospital();
         } else {
-            throw new ResourceNotFoundException("hospital.notfound");
+            throw new ResourceNotFoundException("labOrder.hospitalUnresolved", labOrder.getId());
         }
     }
 

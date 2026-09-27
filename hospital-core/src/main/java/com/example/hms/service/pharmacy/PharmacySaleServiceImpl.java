@@ -71,7 +71,7 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
         }
 
         Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", dto.getHospitalId()));
 
         Pharmacy pharmacy = pharmacyRepository.findByIdAndHospital_Id(dto.getPharmacyId(), activeHospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notfound"));

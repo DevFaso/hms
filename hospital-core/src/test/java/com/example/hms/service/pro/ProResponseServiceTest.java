@@ -300,9 +300,11 @@ class ProResponseServiceTest {
             assertThat(foreign).isInstanceOf(ResourceNotFoundException.class);
             assertThat(((ResourceNotFoundException) foreign).getMessageKey())
                 .isEqualTo("patient.notfound");
-            // An attacker probing ids must not be able to tell "exists elsewhere" from "does not exist".
+            // An attacker probing ids must not be able to tell "exists elsewhere" from "does not exist":
+            // the same key, and the same sentence once each renders the id the caller asked for.
             assertThat(absent).isInstanceOf(ResourceNotFoundException.class)
-                .hasMessage(foreign.getMessage());
+                .hasMessage(foreign.getMessage().replace(patientId.toString(), missing.toString()));
+            assertThat(((ResourceNotFoundException) absent).getMessageKey()).isEqualTo("patient.notfound");
             verify(responseRepository, never()).saveAndFlush(any());
         }
     }

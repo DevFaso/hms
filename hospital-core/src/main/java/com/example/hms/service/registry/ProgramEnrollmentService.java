@@ -267,7 +267,7 @@ public class ProgramEnrollmentService {
     private Patient requirePatientInTenant(UUID patientId, UUID hospitalId) {
         return patientRepository.findById(patientId)
             .filter(p -> p.isRegisteredInHospital(hospitalId))
-            .orElseThrow(() -> new ResourceNotFoundException("patient.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", patientId));
     }
 
     private ProgramEnrollment requireEnrollmentInTenant(UUID enrollmentId, UUID patientId,

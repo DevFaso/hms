@@ -682,7 +682,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         }
 
         return hospitalRepository.findByNameIgnoreCase(dto.getHospitalName())
-            .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", dto.getHospitalName()));
     }
 
     private String normalizeDepartmentCode(String code) {

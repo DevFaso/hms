@@ -306,7 +306,7 @@ public class ProResponseService {
 
     private Patient requirePatient(UUID patientId) {
         return patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND, patientId));
     }
 
     /**
@@ -334,7 +334,7 @@ public class ProResponseService {
     /** Same not-found as a nonexistent patient: a foreign chart is not a chart. */
     private static void requireInTenant(Patient patient, UUID hospitalId) {
         if (!isRegistered(patient, hospitalId)) {
-            throw new ResourceNotFoundException(PATIENT_NOT_FOUND);
+            throw new ResourceNotFoundException(PATIENT_NOT_FOUND, patient.getId());
         }
     }
 

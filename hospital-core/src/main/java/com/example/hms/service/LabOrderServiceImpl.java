@@ -170,7 +170,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             performing = current;
         } else {
             performing = hospitalRepository.findById(requested)
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", requested));
             if (!isRoutableLab(performing)) {
                 throw new BusinessException("The performing laboratory must be an active hospital.");
             }
@@ -273,16 +273,16 @@ public class LabOrderServiceImpl implements LabOrderService {
         String notes = normalizeOptionalText(request.getNotes());
 
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException("patient.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", request.getPatientId()));
 
         Staff staff = staffRepository.findById(request.getOrderingStaffId())
-            .orElseThrow(() -> new ResourceNotFoundException("staff.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notfound", request.getOrderingStaffId()));
 
         UUID requestedHospitalId = request.getHospitalId();
         Encounter encounter = null;
         if (request.getEncounterId() != null) {
             encounter = encounterRepository.findById(request.getEncounterId())
-                .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", request.getEncounterId()));
         }
 
         Hospital hospital = encounter != null ? encounter.getHospital() : null;
@@ -292,7 +292,7 @@ public class LabOrderServiceImpl implements LabOrderService {
 
         if (hospital == null && requestedHospitalId != null) {
             hospital = hospitalRepository.findById(requestedHospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", requestedHospitalId));
         }
 
         if (hospital == null) {
