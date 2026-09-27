@@ -53,6 +53,8 @@ class UserRoleHospitalAssignmentServiceImplTest {
     @Mock private MessageSource messageSource;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
     @Mock private com.example.hms.security.LoginAttemptService loginAttemptService;
+    @Mock private com.example.hms.repository.StaffRepository staffRepository;
+    @Mock private com.example.hms.repository.EncounterRepository encounterRepository;
 
     @InjectMocks
     private UserRoleHospitalAssignmentServiceImpl service;
@@ -200,7 +202,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
         // confirming this code is the expected mistake — and those refusals
         // count toward the login lockout. Without clearing the counter here
         // the holder is locked out at the moment activation succeeds.
-        verify(loginAttemptService).resetAttempts(assignee.getUsername());
+        verify(loginAttemptService).resetAttempts(assignee.getId());
     }
 
     // -----------------------------------------------------------------------
@@ -302,6 +304,25 @@ class UserRoleHospitalAssignmentServiceImplTest {
                 .as("targets are masked, never the raw address/number")
                 .extracting(com.example.hms.payload.dto.NotificationDeliveryStatusDTO::getTarget)
                 .containsExactlyInAnyOrder("j***@hospital.com", "+226*****56");
+        } finally {
+            com.example.hms.utility.ActivationDeliveryTracker.close();
+        }
+    }
+
+    @Test
+    void sendNotifications_reportsTheActivationMailAsQueuedNotSent() {
+        // The mail goes to the outbox (V173): a normal return means QUEUED,
+        // and the report must not claim the SMTP server has it yet.
+        when(assignmentRepository.findById(assignment.getId()))
+            .thenReturn(Optional.of(assignment));
+
+        com.example.hms.utility.ActivationDeliveryTracker.open();
+        try {
+            service.sendNotifications(assignment.getId());
+            assertThat(com.example.hms.utility.ActivationDeliveryTracker.close())
+                .filteredOn(r -> "EMAIL".equals(r.getChannel()))
+                .singleElement()
+                .satisfies(r -> assertThat(r.getOutcome()).isEqualTo("QUEUED"));
         } finally {
             com.example.hms.utility.ActivationDeliveryTracker.close();
         }
@@ -434,5 +455,50 @@ class UserRoleHospitalAssignmentServiceImplTest {
         service.getAllAssignments(org.springframework.data.domain.PageRequest.of(0, 10), null);
 
         verify(assignmentRepository).findAll(any(org.springframework.data.domain.Pageable.class));
+    }
+
+    // -- Assignments are soft-deleted (V175): clinical history keeps its assignment --
+
+    @Test
+    void removingAUsersAssignmentsDeactivatesThemAndDeletesNothing() {
+        UserRoleHospitalAssignment active = UserRoleHospitalAssignment.builder().active(true).build();
+        active.setId(UUID.randomUUID());
+        UserRoleHospitalAssignment alreadyInactive = UserRoleHospitalAssignment.builder().active(false).build();
+        alreadyInactive.setId(UUID.randomUUID());
+        when(assignmentRepository.findByUserId(assignee.getId()))
+            .thenReturn(java.util.List.of(active, alreadyInactive));
+
+        service.deleteAllAssignmentsForUser(assignee.getId());
+
+        assertThat(active.getActive()).isFalse();
+        assertThat(alreadyInactive.getActive()).isFalse();
+        verify(assignmentRepository).saveAll(java.util.List.of(active));
+        verify(assignmentRepository, never()).deleteAll(any());
+        verify(assignmentRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void anAssignmentAnEncounterWasRecordedUnderCannotBeHardDeleted() {
+        UUID id = UUID.randomUUID();
+        when(assignmentRepository.existsById(id)).thenReturn(true);
+        when(staffRepository.existsByAssignment_Id(id)).thenReturn(false);
+        when(encounterRepository.existsByAssignment_Id(id)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.deleteAssignment(id))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("encounters were recorded under it");
+        verify(assignmentRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void anUnreferencedAssignmentIsStillHardDeleted() {
+        UUID id = UUID.randomUUID();
+        when(assignmentRepository.existsById(id)).thenReturn(true);
+        when(staffRepository.existsByAssignment_Id(id)).thenReturn(false);
+        when(encounterRepository.existsByAssignment_Id(id)).thenReturn(false);
+
+        service.deleteAssignment(id);
+
+        verify(assignmentRepository).deleteById(id);
     }
 }

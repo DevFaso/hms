@@ -105,6 +105,11 @@ app:
     # EncryptedStringConverter applied to PHI columns on Patient, Prescription,
     # and Dispense. NEVER use this key in any non-test environment.
     key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+  mail:
+    outbox:
+      # The scheduled sweep is a no-op in tests: MailOutboxIT drives a
+      # dispatcher of its own, and nothing should race it for rows.
+      enabled: false
   # Splunk HEC stays explicitly disabled in tests so the appender's send path is
   # exercised only by SplunkHecAppenderTest (against a stubbed HttpClient).
   observability:

@@ -23,7 +23,10 @@ const profile = (email: string, firstName = 'Awa'): UserProfile => ({
 
 const codeSent: EmailChangeResponse = {
   message: 'sent',
-  delivery: [{ channel: 'EMAIL', purpose: 'EMAIL_CHANGE_CODE', outcome: 'SENT', target: 'n***@x' }],
+  // QUEUED is what the server answers: the code mail leaves from its outbox.
+  delivery: [
+    { channel: 'EMAIL', purpose: 'EMAIL_CHANGE_CODE', outcome: 'QUEUED', target: 'n***@x' },
+  ],
 };
 
 describe('ProfileComponent — editing the profile', () => {

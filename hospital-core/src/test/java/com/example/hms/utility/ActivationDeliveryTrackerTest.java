@@ -51,7 +51,7 @@ class ActivationDeliveryTrackerTest {
     }
 
     @Test
-    void sendEmailAndReportSaysSentFailedOrNotConfigured() {
+    void sendEmailAndReportSaysQueuedFailedOrNotConfigured() {
         ActivationDeliveryTracker.open();
         assertThat(ActivationDeliveryTracker.sendEmailAndReport("P", "jdoe@hospital.com", () -> { }, () -> true))
             .isTrue();
@@ -64,8 +64,9 @@ class ActivationDeliveryTrackerTest {
             .isFalse();
 
         var reported = ActivationDeliveryTracker.close();
+        // QUEUED, not SENT: a send that returned only reached the outbox (V173).
         assertThat(reported).extracting(NotificationDeliveryStatusDTO::getOutcome).containsExactly(
-            NotificationDeliveryStatusDTO.OUTCOME_SENT,
+            NotificationDeliveryStatusDTO.OUTCOME_QUEUED,
             NotificationDeliveryStatusDTO.OUTCOME_FAILED,
             NotificationDeliveryStatusDTO.OUTCOME_NOT_CONFIGURED);
         assertThat(reported).allSatisfy(d -> {

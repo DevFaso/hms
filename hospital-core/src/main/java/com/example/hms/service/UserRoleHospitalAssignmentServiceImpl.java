@@ -183,6 +183,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final OrganizationRepository organizationRepository;
     private final StaffRepository staffRepository;
+    private final com.example.hms.repository.EncounterRepository encounterRepository;
     private final PatientRepository patientRepository;
     private final UserRoleHospitalAssignmentMapper mapper;
     private final MessageSource messageSource;
@@ -808,9 +809,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             // After commit: confirmAssignment is @Transactional and records an
             // audit event after this point, so a rollback would otherwise
             // leave the user inactive with the counter already cleared.
-            final String activatedUsername = user.getUsername();
+            final UUID activatedId = user.getId();
             TransactionCallbacks.afterCommit(
-                () -> loginAttemptService.resetAttempts(activatedUsername));
+                () -> loginAttemptService.resetAttempts(activatedId));
             log.info("✅ User '{}' activated after first assignment verification.", user.getUsername());
         }
 
@@ -918,6 +919,15 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 "Cannot delete assignment: one or more Staff records still reference it. " +
                 "Reassign or remove the linked staff first.");
         }
+        // The same for the encounters it attended: they are clinical history,
+        // and an encounter pointing at a deleted assignment could not be edited
+        // by anyone (dev, 2026-09-13). V175 makes the database refuse it too;
+        // this says why in words. Deactivate instead - it keeps the history.
+        if (encounterRepository.existsByAssignment_Id(id)) {
+            throw new ConflictException(
+                "Cannot delete assignment: encounters were recorded under it. " +
+                "Deactivate it instead to keep that history.");
+        }
         assignmentRepository.deleteById(id);
         log.info("🗑️ Deleted assignment ID '{}'", id);
     }
@@ -940,11 +950,29 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         log.info("🔒 Deactivated assignment ID '{}' (soft — history preserved).", id);
     }
 
+    /**
+     * Retires every assignment a user holds - by deactivating it, not by
+     * deleting the row.
+     *
+     * <p>Removing a user is a soft delete, and this used to hard-delete their
+     * assignments underneath it. Encounters, staff rows and a dozen other
+     * clinical tables keep the assignment id they were recorded under, so a
+     * departed clinician's history was left pointing at nothing: on dev four
+     * encounters could no longer be edited by anyone (2026-09-13). Deactivated,
+     * the row still says who acted in which role at which hospital, the user's
+     * restore finds it, and V175's foreign keys can hold. Already-inactive rows
+     * are left as they are.
+     */
     @Override
     public void deleteAllAssignmentsForUser(UUID userId) {
         List<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUserId(userId);
-        assignmentRepository.deleteAll(assignments);
-        log.info("🗑️ Deleted {} assignments for user ID '{}'", assignments.size(), userId);
+        List<UserRoleHospitalAssignment> deactivated = assignments.stream()
+            .filter(a -> !Boolean.FALSE.equals(a.getActive()))
+            .toList();
+        deactivated.forEach(a -> a.setActive(false));
+        assignmentRepository.saveAll(deactivated);
+        log.info("🔒 Deactivated {} of {} assignment(s) for user ID '{}' (soft — history preserved).",
+            deactivated.size(), assignments.size(), userId);
     }
 
     @Override
@@ -1757,9 +1785,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 assignment.getTempPlainPassword() != null ? user.getUsername() : null,
                 assignment.getTempPlainPassword()
             );
+            // QUEUED: the mail is in the outbox, not yet at the SMTP server.
             recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_EMAIL,
                 NotificationDeliveryStatusDTO.PURPOSE_ACTIVATION,
-                NotificationDeliveryStatusDTO.OUTCOME_SENT,
+                NotificationDeliveryStatusDTO.OUTCOME_QUEUED,
                 ActivationDeliveryTracker.maskEmail(email), null);
         } catch (RuntimeException ex) {
             log.warn("⚠️ Failed to send assignment confirmation email for assignment '{}': {}", assignment.getId(), ex.getMessage());

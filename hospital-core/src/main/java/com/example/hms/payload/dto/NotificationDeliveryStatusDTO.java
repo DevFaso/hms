@@ -37,7 +37,15 @@ public class NotificationDeliveryStatusDTO {
     /** The notice to the previous address that the account's email changed. */
     public static final String PURPOSE_EMAIL_CHANGE_NOTICE = "EMAIL_CHANGE_NOTICE";
 
+    /** Handed to the transport and accepted: SMS today (mail is never sent on the request). */
     public static final String OUTCOME_SENT = "SENT";
+    /**
+     * Mail accepted into the outbox (V173) for the dispatch sweep, which sends
+     * it within seconds and retries a failed send. Not SENT: nothing has
+     * reached the SMTP server when the report is written, and a send that
+     * later fails for good is visible in {@code platform.mail_outbox}, not here.
+     */
+    public static final String OUTCOME_QUEUED = "QUEUED";
     public static final String OUTCOME_FAILED = "FAILED";
     /** The transport itself is absent/disabled on this deployment. */
     public static final String OUTCOME_NOT_CONFIGURED = "NOT_CONFIGURED";

@@ -13,6 +13,13 @@ describe('deliveryWarningKeys', () => {
     expect(deliveryWarningKeys([row({})])).toEqual([]);
   });
 
+  it('treats a queued activation email as on its way: no warning, and it counts as sent', () => {
+    // The server queues every mail in its outbox and answers QUEUED, never SENT.
+    const report = [row({ outcome: 'QUEUED' })];
+    expect(deliveryWarningKeys(report)).toEqual([]);
+    expect(hasActivationSent(report, 'EMAIL')).toBeTrue();
+  });
+
   it('reports a dead SMS transport', () => {
     expect(deliveryWarningKeys([row({ channel: 'SMS', outcome: 'NOT_CONFIGURED' })])).toEqual([
       'DELIVERY.SMS_NOT_CONFIGURED',

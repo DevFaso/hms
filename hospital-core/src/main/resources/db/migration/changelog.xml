@@ -2573,4 +2573,41 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V173 — the outbound mail outbox (platform.mail_outbox).
+         Mail was sent to SMTP on the request thread, from an after-commit
+         callback that still holds the request's JDBC connection, so a
+         stalled mail host pinned a Hikari connection and a request thread.
+         Requests now queue the composed mail here and a ShedLock'd sweep
+         claims each row with a conditional UPDATE and sends it with no
+         transaction open (the V152 webhook-outbox mechanics). Recipients,
+         subject and body are encrypted by the app; subject and body are
+         nulled once a row is terminal. created_at/updated_at are NOT NULL
+         (BaseEntity, the V153 lesson). Numbered after V167-V172, which
+         the same release takes above; V174 is unused.
+         Additive: one new table and one index, IF NOT EXISTS.
+         ================================================================= -->
+    <changeSet id="V173-mail-outbox" author="hms-team" runOnChange="false">
+        <sqlFile path="V173__mail_outbox.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V175 — fk_encounter_assignment + fk_staff_assignment, which the
+         entities have always declared and no migration ever created.
+         Records the decision that assignments are soft-deleted (a user's
+         removal now deactivates them; the deprecated hard delete refuses
+         one an encounter or staff row references). NO ACTION, NOT VALID:
+         rows already dangling are counted, not rewritten. V173 is the
+         mail outbox above; V174 is unused.
+         ================================================================= -->
+    <changeSet id="V175-encounter-staff-assignment-fk" author="hms-team" runOnChange="false">
+        <sqlFile path="V175__encounter_staff_assignment_fk.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

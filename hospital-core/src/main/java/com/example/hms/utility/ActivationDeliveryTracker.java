@@ -57,11 +57,13 @@ public final class ActivationDeliveryTracker {
     }
 
     /**
-     * Send one email and report its outcome: SENT, or, when the send throws,
-     * FAILED on a deployment with a mail transport and NOT_CONFIGURED on one
-     * without. The address is reported masked, and the details are fixed text:
-     * a transport exception's message can embed the raw address, so only its
-     * class is logged.
+     * Queue one email and report its outcome: QUEUED (the {@code EmailService}
+     * mails go to the outbox, never to SMTP on the request; see
+     * {@code EmailService#sendHtml}), or, when the send throws, FAILED on a
+     * deployment with a mail transport and NOT_CONFIGURED on one without. The
+     * address is reported masked, and the details are fixed text: a transport
+     * exception's message can embed the raw address, so only its class is
+     * logged.
      *
      * @param transportConfigured {@code EmailService::deliversRealEmail}
      * @return true when the send did not throw
@@ -73,7 +75,7 @@ public final class ActivationDeliveryTracker {
         boolean sent;
         try {
             send.run();
-            outcome = NotificationDeliveryStatusDTO.OUTCOME_SENT;
+            outcome = NotificationDeliveryStatusDTO.OUTCOME_QUEUED;
             sent = true;
         } catch (RuntimeException ex) {
             LOG.warn("⚠️ {} email not sent: {}", purpose, ex.getClass().getSimpleName());
