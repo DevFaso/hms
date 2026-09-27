@@ -53,7 +53,10 @@ interface ApiService {
     @POST("auth/logout")
     suspend fun logout(
         @Header("Authorization") bearer: String,
-        @Body request: LogoutRequest
+        @Body request: LogoutRequest,
+        /** The ended session's XSRF pair, captured with the tokens (the jar skips this path). */
+        @Header("X-XSRF-TOKEN") xsrfHeader: String? = null,
+        @Header("Cookie") xsrfCookie: String? = null
     ): Response<Unit>
 
     // ── Push devices (idempotent; 204). The backend may not expose them yet:

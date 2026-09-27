@@ -113,9 +113,13 @@ class ProfileViewModel @Inject constructor(
     /** The backend composes notifications in the registered locale, so a language change re-registers. */
     fun onLanguageChanged() = pushRegistrar.registerAsync()
 
+    /** Set with [loggedOut] for an SSO session: the Keycloak end-session page to open first. */
+    private val _keycloakEndSession = MutableStateFlow<android.content.Intent?>(null)
+    val keycloakEndSession: StateFlow<android.content.Intent?> = _keycloakEndSession
+
     fun logout() {
         viewModelScope.launch {
-            authRepository.logout()
+            _keycloakEndSession.value = authRepository.logout().keycloakEndSession
             _loggedOut.value = true
         }
     }

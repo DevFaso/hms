@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import okhttp3.FormBody
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
@@ -47,8 +48,13 @@ class LogoutTest {
     private val api = mockk<ApiService>()
     private val keycloak = mockk<KeycloakAuthService>(relaxed = true)
     private val push = mockk<com.bitnesttechs.hms.patient.core.push.PushRegistrar>(relaxed = true)
+    private val jar = com.bitnesttechs.hms.patient.core.network.SessionCookieJar()
+    private val apiUrl = (com.bitnesttechs.hms.patient.BuildConfig.API_BASE_URL + "/auth/logout").toHttpUrl()
 
-    private fun TestScope.repo(storage: TokenStorage) = AuthRepository(api, storage, keycloak, push, this)
+    private fun cookie(name: String, value: String) =
+        okhttp3.Cookie.Builder().name(name).value(value).domain(apiUrl.host).path("/").build()
+
+    private fun TestScope.repo(storage: TokenStorage) = AuthRepository(api, storage, keycloak, push, this, jar)
 
     @Test
     fun `password session - one logout with the captured bearer and refresh token, then local state is gone`() = runTest {
@@ -123,6 +129,60 @@ class LogoutTest {
         // The registrar is silent by contract; even if it threw, the session is still revoked.
         assertNull(session.access)
         coVerify(exactly = 1) { api.logout("Bearer access-jwt", LogoutRequest("refresh-jwt")) }
+    }
+
+    @Test
+    fun `sign-out empties the cookie jar and the late logout carries only the old session's XSRF pair`() = runTest {
+        val session = Session(access = "access-jwt", refresh = "refresh-jwt")
+        val base = (com.bitnesttechs.hms.patient.BuildConfig.API_BASE_URL + "/me/patient/profile").toHttpUrl()
+        jar.saveFromResponse(base, listOf(cookie("XSRF-TOKEN", "old-xsrf")))
+        coEvery { api.logout(any(), any(), any(), any()) } returns Response.success(Unit)
+
+        repo(storage(session)).logout()
+        // The next patient signs in before the background logout runs.
+        jar.saveFromResponse(base, listOf(cookie("XSRF-TOKEN", "new-xsrf"), cookie("refresh_token", "new-refresh")))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            api.logout("Bearer access-jwt", LogoutRequest("refresh-jwt"), "old-xsrf", "XSRF-TOKEN=old-xsrf")
+        }
+        // And the jar never hands the logout the new session's cookies.
+        assertEquals(emptyList<okhttp3.Cookie>(), jar.loadForRequest(apiUrl))
+    }
+
+    @Test
+    fun `sign-out clears the old session's cookies`() = runTest {
+        val base = (com.bitnesttechs.hms.patient.BuildConfig.API_BASE_URL + "/x").toHttpUrl()
+        jar.saveFromResponse(base, listOf(cookie("XSRF-TOKEN", "old-xsrf")))
+        coEvery { api.logout(any(), any(), any(), any()) } returns Response.success(Unit)
+        repo(storage(Session(access = "a", refresh = "r"))).logout()
+        assertEquals(emptyList<okhttp3.Cookie>(), jar.loadForRequest(base))
+    }
+
+    @Test
+    fun `an SSO sign-out hands back Keycloak's end-session request, built before the state is cleared`() = runTest {
+        val session = Session(oidcAccess = "kc-access")
+        val storage = storage(session).also { every { it.hasOidcSession } answers { session.oidcAccess != null } }
+        val endSession = mockk<android.content.Intent>()
+        every { keycloak.buildEndSessionIntent(any()) } answers {
+            // Must still see the session: AuthState is read from storage.
+            assertEquals("kc-access", session.oidcAccess)
+            endSession
+        }
+        coEvery { api.logout(any(), any(), any(), any()) } returns Response.success(Unit)
+
+        val signOut = repo(storage).logout()
+
+        assertEquals(endSession, signOut.keycloakEndSession)
+        verify(exactly = 1) { keycloak.buildEndSessionIntent(any()) }
+    }
+
+    @Test
+    fun `a password sign-out never touches Keycloak's end-session`() = runTest {
+        coEvery { api.logout(any(), any(), any(), any()) } returns Response.success(Unit)
+        val signOut = repo(storage(Session(access = "a", refresh = "r"))).logout()
+        assertNull(signOut.keycloakEndSession)
+        verify(exactly = 0) { keycloak.buildEndSessionIntent(any()) }
     }
 
     @Test

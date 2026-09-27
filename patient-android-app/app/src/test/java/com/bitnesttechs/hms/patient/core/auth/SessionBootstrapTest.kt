@@ -29,7 +29,7 @@ class SessionBootstrapTest {
 
     private val tokenStorage = mockk<TokenStorage>(relaxed = true)
     private val api = mockk<ApiService>()
-    private val repo = AuthRepository(api, tokenStorage, mockk(relaxed = true), mockk(relaxed = true), kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined))
+    private val repo = AuthRepository(api, tokenStorage, mockk(relaxed = true), mockk(relaxed = true), kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined), com.bitnesttechs.hms.patient.core.network.SessionCookieJar())
 
     private val hmsUserId = "0b6d8c0e-0000-4000-8000-00000000abcd"
 

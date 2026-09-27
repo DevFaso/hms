@@ -74,7 +74,17 @@ fun ProfileScreen(
         saveResult?.let { snackbar.showSnackbar(it); viewModel.clearSaveResult() }
     }
 
-    LaunchedEffect(loggedOut) { if (loggedOut) onLogout() }
+    // An SSO sign-out also ends the Keycloak browser session (end-session
+    // endpoint), then leaves whatever it returned with; a password one leaves at once.
+    val keycloakEndSession by viewModel.keycloakEndSession.collectAsState()
+    val endSessionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { onLogout() }
+    LaunchedEffect(loggedOut) {
+        if (!loggedOut) return@LaunchedEffect
+        val endSession = keycloakEndSession
+        if (endSession == null || runCatching { endSessionLauncher.launch(endSession) }.isFailure) onLogout()
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },

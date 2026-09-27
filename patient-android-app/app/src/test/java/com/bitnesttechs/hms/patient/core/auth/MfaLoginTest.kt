@@ -28,7 +28,7 @@ class MfaLoginTest {
 
     private val tokenStorage = mockk<TokenStorage>(relaxed = true)
     private val api = mockk<ApiService>()
-    private val repo = AuthRepository(api, tokenStorage, mockk(relaxed = true), mockk(relaxed = true), CoroutineScope(Dispatchers.Unconfined))
+    private val repo = AuthRepository(api, tokenStorage, mockk(relaxed = true), mockk(relaxed = true), CoroutineScope(Dispatchers.Unconfined), com.bitnesttechs.hms.patient.core.network.SessionCookieJar())
 
     private val challenge = LoginResponse(mfaRequired = true, mfaEnrolled = true, mfaToken = "mfa-jwt", username = "awa")
     private val tokens = LoginResponse(accessToken = "access", refreshToken = "refresh", id = "u1", roles = listOf("ROLE_PATIENT"))

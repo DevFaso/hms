@@ -6,6 +6,9 @@ import com.bitnesttechs.hms.patient.core.models.*
 import com.bitnesttechs.hms.patient.core.di.ApplicationScope
 import com.bitnesttechs.hms.patient.core.network.ApiService
 import com.bitnesttechs.hms.patient.core.network.ServerMessage
+import com.bitnesttechs.hms.patient.core.network.SessionCookieJar
+import com.bitnesttechs.hms.patient.BuildConfig
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import com.bitnesttechs.hms.patient.core.push.PushRegistrar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -49,7 +52,8 @@ class AuthRepository @Inject constructor(
     private val tokenStorage: TokenStorage,
     private val keycloak: KeycloakAuthService,
     private val pushRegistrar: PushRegistrar,
-    @ApplicationScope private val appScope: CoroutineScope
+    @ApplicationScope private val appScope: CoroutineScope,
+    private val cookieJar: SessionCookieJar
 ) {
     private val _currentUser = MutableStateFlow<UserDto?>(null)
     val currentUser: StateFlow<UserDto?> = _currentUser.asStateFlow()
@@ -221,19 +225,35 @@ class AuthRepository @Inject constructor(
      * revocation runs on the application scope so an unreachable server
      * never holds the patient on the sign-out screen.
      */
-    suspend fun logout() {
+    suspend fun logout(): SignOut {
         val ending = captureSessionEnd()
+        // Keycloak's end-session request is built from the stored AuthState,
+        // so it has to be read before that state is cleared.
+        val endSessionIntent = if (tokenStorage.hasOidcSession) {
+            runCatching { keycloak.buildEndSessionIntent() }.getOrNull()
+        } else null
         tokenStorage.clearAll()
+        cookieJar.clear()
         _currentUser.value = null
         if (ending != null) appScope.launch { endSessionOnServer(ending) }
+        return SignOut(endSessionIntent)
     }
+
+    /**
+     * What is left for the screen after sign-out: for an SSO session, the
+     * Keycloak end-session request to open (otherwise the browser keeps the
+     * Keycloak login and the next person on a shared phone walks straight in).
+     */
+    data class SignOut(val keycloakEndSession: android.content.Intent?)
 
     /** What the server needs to revoke the session, read while it still exists. */
     internal data class SessionEnd(
         val bearer: String,
         /** The HMS refresh token; null for an SSO session, whose token HMS cannot revoke. */
         val hmsRefreshToken: String?,
-        val keycloakRevocation: KeycloakAuthService.Revocation?
+        val keycloakRevocation: KeycloakAuthService.Revocation?,
+        /** This session's XSRF-TOKEN, if the backend issued one: the logout sends it itself. */
+        val xsrfToken: String? = null
     )
 
     internal fun captureSessionEnd(): SessionEnd? {
@@ -242,7 +262,8 @@ class AuthRepository @Inject constructor(
         return SessionEnd(
             bearer = "Bearer $accessToken",
             hmsRefreshToken = if (oidcToken == null) tokenStorage.refreshToken else null,
-            keycloakRevocation = if (oidcToken != null) keycloak.pendingRevocation() else null
+            keycloakRevocation = if (oidcToken != null) keycloak.pendingRevocation() else null,
+            xsrfToken = runCatching { cookieJar.xsrfToken(apiUrl) }.getOrNull()
         )
     }
 
@@ -256,7 +277,17 @@ class AuthRepository @Inject constructor(
         // authenticates (the contract's order); silent, whatever happens.
         withTimeoutOrNull(SERVER_SIGN_OUT_TIMEOUT_MS) { runCatching { pushRegistrar.unregister(ending.bearer) } }
         withTimeoutOrNull(SERVER_SIGN_OUT_TIMEOUT_MS) {
-            runCatching { api.logout(ending.bearer, LogoutRequest(ending.hmsRefreshToken)) }
+            runCatching {
+                // Only what was captured: the cookie jar skips this path, so a
+                // logout that lands after the next sign-in can neither send nor
+                // clear the new session's cookies.
+                api.logout(
+                    ending.bearer,
+                    LogoutRequest(ending.hmsRefreshToken),
+                    ending.xsrfToken,
+                    ending.xsrfToken?.let { "${SessionCookieJar.XSRF_COOKIE}=$it" }
+                )
+            }
         }
         ending.keycloakRevocation?.let { revocation ->
             withTimeoutOrNull(SERVER_SIGN_OUT_TIMEOUT_MS) { runCatching { keycloak.revoke(revocation) } }
@@ -283,6 +314,7 @@ class AuthRepository @Inject constructor(
 
     private companion object {
         const val SERVER_SIGN_OUT_TIMEOUT_MS = 15_000L
+        val apiUrl = (BuildConfig.API_BASE_URL + "/").toHttpUrl()
     }
 
     private fun isPatient(roles: List<String>?): Boolean =
