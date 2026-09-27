@@ -28,7 +28,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -1187,6 +1190,83 @@ class EmpiServiceImplTest {
         verify(mergeEventRepository, never()).save(any());
         verify(kafkaTemplate, never()).send(anyString(), anyString(), any(EmpiEventPayload.class));
         verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    /* ── Opposite-direction merges: both rows locked, in one order ── */
+
+    private static final UUID LOWER_ID = new UUID(0L, 1L);
+    private static final UUID HIGHER_ID = new UUID(0L, 2L);
+
+    /** Two ACTIVE identities at one hospital, ids fixed so their order is known. */
+    private EmpiMasterIdentity[] lockablePair() {
+        UUID hospital = UUID.randomUUID();
+        EmpiMasterIdentity lower = activeIdentity("EMP-LOWER", hospital);
+        lower.setId(LOWER_ID);
+        EmpiMasterIdentity higher = activeIdentity("EMP-HIGHER", hospital);
+        higher.setId(HIGHER_ID);
+        when(masterIdentityRepository.findById(LOWER_ID)).thenReturn(Optional.of(lower));
+        when(masterIdentityRepository.findById(HIGHER_ID)).thenReturn(Optional.of(higher));
+        when(mergeEventRepository.save(any(EmpiMergeEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(masterIdentityRepository.save(any(EmpiMasterIdentity.class))).thenAnswer(inv -> inv.getArgument(0));
+        return new EmpiMasterIdentity[] {lower, higher};
+    }
+
+    private EmpiMergeEventResponseDTO merge(UUID survivorId, UUID retireeId) {
+        EmpiMergeRequestDTO request = new EmpiMergeRequestDTO();
+        request.setSecondaryIdentityId(retireeId);
+        request.setMergeType(EmpiMergeType.MANUAL);
+        return empiService.mergeIdentities(survivorId, request);
+    }
+
+    @ParameterizedTest(name = "survivor is the {0} id")
+    @ValueSource(strings = {"lower", "higher"})
+    void mergeIdentities_locksBothIdentitiesInAscendingIdOrderWhicheverWayItRuns(String survivor) {
+        lockablePair();
+        UUID survivorId = "lower".equals(survivor) ? LOWER_ID : HIGHER_ID;
+        UUID retireeId = "lower".equals(survivor) ? HIGHER_ID : LOWER_ID;
+
+        merge(survivorId, retireeId);
+
+        // A<-B and B<-A take the same row first, so the second queues behind
+        // the first instead of each holding the row the other waits for; and
+        // both locks are held before the survivor is judged or the retiree
+        // claimed.
+        InOrder order = Mockito.inOrder(masterIdentityRepository);
+        order.verify(masterIdentityRepository).findWithLockById(LOWER_ID);
+        order.verify(masterIdentityRepository).findWithLockById(HIGHER_ID);
+        order.verify(masterIdentityRepository).findStatusById(survivorId);
+        order.verify(masterIdentityRepository).claimForMerge(retireeId, EmpiIdentityStatus.MERGED);
+        verify(masterIdentityRepository, times(2)).findWithLockById(any());
+        verify(mergeEventRepository).save(any(EmpiMergeEvent.class));
+    }
+
+    @Test
+    void mergeIdentities_aSurvivorFoundMergedUnderTheLockIsRefusedExactlyLikeASequentialRepeat() {
+        renderMessagesWithArguments();
+        EmpiMasterIdentity[] pair = lockablePair();
+        EmpiMasterIdentity lower = pair[0];
+        EmpiMasterIdentity higher = pair[1];
+
+        // lower<-higher committed while higher<-lower waited on the lock. The
+        // loser loaded higher BEFORE that commit, so its instance still says
+        // ACTIVE; only the read under the lock sees MERGED.
+        when(masterIdentityRepository.findStatusById(HIGHER_ID)).thenReturn(EmpiIdentityStatus.MERGED);
+        Throwable lost = catchThrowable(() -> merge(HIGHER_ID, LOWER_ID));
+        assertThat(higher.getStatus()).as("the loser's loaded survivor is stale").isEqualTo(EmpiIdentityStatus.ACTIVE);
+
+        verify(masterIdentityRepository, never()).claimForMerge(any(), any());
+        verify(mergeEventRepository, never()).save(any());
+        verify(auditEventLogService, never()).logEvent(any());
+        assertThat(lower.getStatus()).as("the loser merged nothing away").isEqualTo(EmpiIdentityStatus.ACTIVE);
+
+        // The reference: the winner's merge (lower<-higher) repeated after it
+        // committed, which finds higher already merged.
+        higher.setStatus(EmpiIdentityStatus.MERGED);
+        Throwable repeated = catchThrowable(() -> merge(LOWER_ID, HIGHER_ID));
+
+        assertIdenticalRefusal(lost, repeated);
+        assertThat(lost).isExactlyInstanceOf(BusinessException.class)
+            .hasMessageContaining("empi.merge.alreadyMerged").hasMessageContaining("EMP-HIGHER");
     }
 
     @Test
