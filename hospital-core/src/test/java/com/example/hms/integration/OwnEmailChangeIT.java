@@ -11,7 +11,10 @@ import com.example.hms.model.Role;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.AuditEventLogRepository;
+import com.example.hms.model.PasswordResetToken;
 import com.example.hms.repository.EmailChangeRequestRepository;
+import com.example.hms.repository.EmailChangeSendRepository;
+import com.example.hms.repository.PasswordResetTokenRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.repository.RoleRepository;
@@ -77,6 +80,8 @@ class OwnEmailChangeIT extends BaseIT {
     @Autowired private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Autowired private AuditEventLogRepository auditEventLogRepository;
     @Autowired private EmailChangeRequestRepository emailChangeRequestRepository;
+    @Autowired private EmailChangeSendRepository emailChangeSendRepository;
+    @Autowired private PasswordResetTokenRepository resetTokenRepository;
     @Autowired private LoginAttemptService loginAttemptService;
     @Autowired private PasswordEncoder passwordEncoder;
 
@@ -116,6 +121,10 @@ class OwnEmailChangeIT extends BaseIT {
     @AfterEach
     void tearDown() {
         auditEventLogRepository.deleteAllInBatch();
+        emailChangeSendRepository.deleteAllInBatch();
+        for (UUID userId : createdUsers) {
+            resetTokenRepository.deleteByUser_IdAndConsumedAtIsNull(userId);
+        }
         emailChangeRequestRepository.deleteAll(emailChangeRequestRepository.findAll().stream()
             .filter(r -> createdUsers.contains(r.getUserId())).toList());
         for (UUID userId : createdUsers) {
@@ -250,7 +259,74 @@ class OwnEmailChangeIT extends BaseIT {
         assertThat(status(post("/auth/me/change-email/confirm"), kc, Map.of("code", "424242"))).isEqualTo(400);
     }
 
+    @Test
+    @DisplayName("a password-reset link mailed to the old address before the change is refused after it")
+    void resetLinkIssuedBeforeTheChangeIsRefusedAfter() throws Exception {
+        String rawToken = "reset-link-" + UUID.randomUUID();
+        resetTokenRepository.save(PasswordResetToken.builder()
+            .user(userRepository.findById(patient.getId()).orElseThrow())
+            .tokenHash(sha256Hex(rawToken))
+            .expiration(LocalDateTime.now().plusHours(2))
+            .build());
+        String token = hms(patient, "ROLE_PATIENT");
+        String wanted = "moved" + next() + "@self.test";
+
+        assertThat(status(post("/auth/me/change-email"), token,
+            Map.of("currentPassword", PASSWORD, "newEmail", wanted))).isEqualTo(200);
+        EmailChangeRequest pending = rowOf(patient);
+        pending.setCodeHash(passwordEncoder.encode("424242"));
+        emailChangeRequestRepository.save(pending);
+        assertThat(status(post("/auth/me/change-email/confirm"), token, Map.of("code", "424242"))).isEqualTo(200);
+        assertThat(emailOf(patient)).isEqualTo(wanted);
+        assertThat(resetTokenRepository.findByTokenHash(sha256Hex(rawToken)))
+            .as("the unconsumed reset token is deleted with the change").isEmpty();
+
+        MvcResult reset = mockMvc.perform(post("/auth/password/confirm").with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(
+                    Map.of("token", rawToken, "newPassword", "Old-Mailbox-Pass-1"))))
+            .andReturn();
+        // The confirm endpoint answers 204 whatever the token (it never reveals
+        // validity), so the proof is that the password did NOT change.
+        assertThat(reset.getResponse().getStatus()).isEqualTo(204);
+        String hashAfter = userRepository.findById(patient.getId()).orElseThrow().getPasswordHash();
+        assertThat(passwordEncoder.matches("Old-Mailbox-Pass-1", hashAfter))
+            .as("the old mailbox's reset link must not work after the move").isFalse();
+        assertThat(passwordEncoder.matches(PASSWORD, hashAfter)).isTrue();
+    }
+
+    @Test
+    @DisplayName("the per-address limit counts mails sent, so an account re-targeting does not free a slot")
+    void retargetingDoesNotResetTheAddressCount() throws Exception {
+        String victim = "inbox" + next() + "@victim.test";
+        User third = account("ecthr", "ROLE_NURSE");
+        User fourth = account("ecfou", "ROLE_NURSE");
+
+        // Three mails to the victim, from three accounts...
+        for (User sender : List.of(nurse, other, third)) {
+            assertThat(status(post("/auth/me/change-email"), hms(sender, "ROLE_NURSE"),
+                Map.of("currentPassword", PASSWORD, "newEmail", victim))).isEqualTo(200);
+        }
+        // ...then the first two move their pending change elsewhere.
+        for (User sender : List.of(nurse, other)) {
+            assertThat(status(post("/auth/me/change-email"), hms(sender, "ROLE_NURSE"),
+                Map.of("currentPassword", PASSWORD, "newEmail", "elsewhere" + next() + "@self.test")))
+                .isEqualTo(200);
+        }
+        // Only one pending change still targets the victim, yet three mails went there this hour.
+        MvcResult fourthMail = perform(post("/auth/me/change-email").header(HttpHeaders.ACCEPT_LANGUAGE, "en"),
+            hms(fourth, "ROLE_NURSE"), Map.of("currentPassword", PASSWORD, "newEmail", victim));
+        assertThat(fourthMail.getResponse().getStatus()).isEqualTo(400);
+        assertThat(message(fourthMail)).isEqualTo(MessageUtil.resolve("user.email.change.ratelimited"));
+    }
+
     // -------------------------------------------------------------- helpers
+
+    private static String sha256Hex(String raw) throws Exception {
+        byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return java.util.HexFormat.of().formatHex(digest);
+    }
 
     private String next() {
         return String.format("%05d", SEQUENCE.incrementAndGet());

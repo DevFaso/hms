@@ -28,4 +28,12 @@ class EmailAddressesTest {
         assertThat(EmailAddresses.normalize("   ")).isNull();
         assertThat(EmailAddresses.normalize(null)).isNull();
     }
+
+    @Test
+    void hashesTheNormalisedAddressWithoutKeepingIt() {
+        String h = EmailAddresses.hash("  Victim@Example.COM ");
+        assertThat(h).hasSize(64).matches("[0-9a-f]+").doesNotContain("victim");
+        assertThat(EmailAddresses.hash("victim@example.com")).isEqualTo(h);
+        assertThat(EmailAddresses.hash("other@example.com")).isNotEqualTo(h);
+    }
 }

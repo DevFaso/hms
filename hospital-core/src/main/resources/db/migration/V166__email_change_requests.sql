@@ -19,8 +19,6 @@
 --   * pending_email, code_hash, code_expires_at, code_attempts: the
 --     change waiting for its code. The code is a password-encoder hash,
 --     never clear text, and dies after 15 minutes or 5 wrong tries.
---   * code_sent_at: when the pending address was mailed; the per-address
---     request limit counts other accounts' recent rows by it.
 --   * request_count, request_window_started_at: requests that passed the
 --     password check, per user, so the endpoint cannot mail an inbox in a
 --     loop.
@@ -31,10 +29,17 @@
 --     hold across instances and restarts.
 --
 -- pending_email is stored normalised (trimmed, lower case) as
--- users.email is. It is not indexed: the per-address count reads few rows,
--- and the table has at most one row per user.
+-- users.email is; it is not a lookup key, so it is not indexed.
 --
--- Strictly additive: CREATE TABLE IF NOT EXISTS only. created_at and
+-- security.email_change_sends logs every mail this flow sends to a new
+-- address (the code, or the in-use notice), so that one inbox cannot be
+-- mailed past the per-address limit by several accounts, or by one account
+-- re-targeting: the count is of sends, whatever each account's pending
+-- change says now. It stores only a SHA-256 hash of the normalised address,
+-- never the address itself, and rows older than the counting window are
+-- purged as new ones are written.
+--
+-- Strictly additive: CREATE TABLE / CREATE INDEX IF NOT EXISTS only. created_at and
 -- updated_at are NOT NULL because the entity extends BaseEntity (the V153
 -- lesson). The FK cascades, so a hard-deleted account takes its row with
 -- it. No automated rollback is declared.
@@ -47,7 +52,6 @@ CREATE TABLE IF NOT EXISTS security.email_change_requests (
     code_hash VARCHAR(255),
     code_expires_at TIMESTAMP,
     code_attempts INTEGER NOT NULL DEFAULT 0,
-    code_sent_at TIMESTAMP,
     request_count INTEGER NOT NULL DEFAULT 0,
     request_window_started_at TIMESTAMP,
     password_failures INTEGER NOT NULL DEFAULT 0,
@@ -59,3 +63,14 @@ CREATE TABLE IF NOT EXISTS security.email_change_requests (
     CONSTRAINT fk_email_change_user FOREIGN KEY (user_id)
         REFERENCES security.users (id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS security.email_change_sends (
+    id UUID PRIMARY KEY,
+    address_hash VARCHAR(64) NOT NULL,
+    sent_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_change_sends_address
+    ON security.email_change_sends (address_hash, sent_at);

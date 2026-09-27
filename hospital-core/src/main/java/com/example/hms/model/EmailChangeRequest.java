@@ -57,10 +57,6 @@ public class EmailChangeRequest extends BaseEntity {
     @Column(name = "code_attempts", nullable = false)
     private int codeAttempts = 0;
 
-    /** When the pending address was last mailed; the per-address request limit counts these. */
-    @Column(name = "code_sent_at")
-    private LocalDateTime codeSentAt;
-
     /** Requests that passed the password check in the current window (per-user request limit). */
     @Builder.Default
     @Column(name = "request_count", nullable = false)

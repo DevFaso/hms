@@ -6,7 +6,10 @@ import com.example.hms.model.EmailChangeRequest;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.NotificationDeliveryStatusDTO;
+import com.example.hms.model.EmailChangeSend;
 import com.example.hms.repository.EmailChangeRequestRepository;
+import com.example.hms.repository.EmailChangeSendRepository;
+import com.example.hms.utility.EmailAddresses;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.utility.ActivationDeliveryTracker;
 import com.example.hms.utility.MessageUtil;
@@ -55,6 +58,7 @@ class OwnEmailChangeServiceTest {
 
     @Mock private UserRepository userRepository;
     @Mock private EmailChangeRequestRepository requestRepository;
+    @Mock private EmailChangeSendRepository sendRepository;
     @Mock private EmailChangeWrites writes;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private EmailService emailService;
@@ -124,7 +128,13 @@ class OwnEmailChangeServiceTest {
             // Normalised as registration does, so the unique index backs the rule.
             assertThat(state.getPendingEmail()).isEqualTo("new@example.com");
             assertThat(state.getCodeHash()).isEqualTo(CODE_HASH);
-            assertThat(state.getCodeSentAt()).isNotNull();
+            // The send is logged by a hash of the address, never the address itself.
+            ArgumentCaptor<EmailChangeSend> logged = ArgumentCaptor.forClass(EmailChangeSend.class);
+            verify(sendRepository).save(logged.capture());
+            assertThat(logged.getValue().getAddressHash())
+                .isEqualTo(EmailAddresses.hash("new@example.com"))
+                .hasSize(64)
+                .doesNotContain("example");
             assertThat(state.getCodeExpiresAt()).isAfter(LocalDateTime.now().plusMinutes(14));
             ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
             verify(emailService).sendEmailChangeVerificationEmail(eq("new@example.com"), code.capture(), any());
@@ -164,6 +174,8 @@ class OwnEmailChangeServiceTest {
             verify(passwordEncoder).encode(hashed.capture());
             assertThat(hashed.getValue()).doesNotMatch("\\d{6}");
             assertOneFailureRow("superadmin", "SuperAdmin");
+            // The in-use notice is a mail to that address, and counts like a code.
+            verify(sendRepository).save(any(EmailChangeSend.class));
         }
 
         @Test
@@ -240,10 +252,10 @@ class OwnEmailChangeServiceTest {
         }
 
         @Test
-        @DisplayName("an address other accounts asked for three times this hour is refused, and nothing is mailed")
+        @DisplayName("an address already mailed three times this hour, by any accounts, is refused, and nothing is mailed")
         void perAddressRequestLimit() {
-            when(requestRepository.countOtherRequestsForAddressSince(eq("victim@example.com"), eq(userId), any()))
-                .thenReturn((long) OwnEmailChangeService.MAX_OTHER_REQUESTS_PER_ADDRESS);
+            when(sendRepository.countByAddressHashAndSentAtAfter(eq(EmailAddresses.hash("victim@example.com")), any()))
+                .thenReturn((long) OwnEmailChangeService.MAX_SENDS_PER_ADDRESS);
 
             assertThatThrownBy(() -> service.requestChange(userId, "Right-Pass-1", "victim@example.com"))
                 .hasMessage(MessageUtil.resolve("user.email.change.ratelimited"));

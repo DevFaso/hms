@@ -5940,7 +5940,6 @@
     "EMAIL_CODE_SENT": "Se envió un código de verificación a {{email}}. Su dirección de correo solo cambiará cuando lo introduzca.",
     "EMAIL_CHANGE_PENDING_TITLE": "Confirme su nueva dirección de correo",
     "EMAIL_CHANGED": "Su dirección de correo ha cambiado.",
-    "EMAIL_CHANGED_BY_ADMIN": "Póngase en contacto con un administrador para cambiar su dirección de correo.",
     "USER_ID": "ID de usuario",
     "VERIFICATION_CODE": "Código de verificación",
     "VERIFICATION_CODE_SENT": "Código de verificación enviado a {{contact}}",

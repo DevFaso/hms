@@ -4,6 +4,7 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.EmailChangeRequest;
 import com.example.hms.model.User;
 import com.example.hms.repository.EmailChangeRequestRepository;
+import com.example.hms.repository.PasswordResetTokenRepository;
 import com.example.hms.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -28,6 +29,7 @@ public class EmailChangeWrites {
 
     private final EmailChangeRequestRepository requestRepository;
     private final UserRepository userRepository;
+    private final PasswordResetTokenRepository resetTokenRepository;
 
     /**
      * Insert the user's row. Two first requests racing both try; the loser
@@ -40,8 +42,13 @@ public class EmailChangeWrites {
     }
 
     /**
-     * Apply the confirmed address. Flushed here, so a unique violation (another
-     * account took the address after the last check) surfaces now, to the caller.
+     * Apply the confirmed address, and delete the account's unconsumed
+     * password-reset tokens in the same transaction: a reset link already
+     * mailed to the OLD address would otherwise stay valid for its two hours,
+     * and whoever holds the old mailbox could still reset the password after
+     * the move. Flushed here, so a unique violation (another account took the
+     * address after the last check) surfaces now, to the caller, and nothing
+     * of this write survives it.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void applyEmail(UUID userId, String email) {
@@ -49,5 +56,6 @@ public class EmailChangeWrites {
             .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
         user.setEmail(email);
         userRepository.saveAndFlush(user);
+        resetTokenRepository.deleteByUser_IdAndConsumedAtIsNull(userId);
     }
 }

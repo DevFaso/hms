@@ -5,10 +5,12 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.EmailChangeRequest;
+import com.example.hms.model.EmailChangeSend;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.NotificationDeliveryStatusDTO;
 import com.example.hms.repository.EmailChangeRequestRepository;
+import com.example.hms.repository.EmailChangeSendRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.utility.ActivationDeliveryTracker;
 import com.example.hms.utility.EmailAddresses;
@@ -57,9 +59,14 @@ import java.util.UUID;
  * minutes lock THIS endpoint for {@value #PASSWORD_LOCK_MINUTES} minutes, so a
  * stolen session cannot lock the owner out of signing in. Requests that pass
  * the password are limited too, so the endpoint cannot be used to mail an
- * inbox in a loop: {@value #MAX_REQUESTS_PER_USER} per user and
- * {@value #MAX_OTHER_REQUESTS_PER_ADDRESS} other accounts per address, each per
- * {@value #WINDOW_MINUTES} minutes.
+ * inbox in a loop: {@value #MAX_REQUESTS_PER_USER} per user, and
+ * {@value #MAX_SENDS_PER_ADDRESS} mails per address by any accounts, each per
+ * {@value #WINDOW_MINUTES} minutes. The address count is of mails actually
+ * sent ({@link EmailChangeSend}, keyed by a hash of the address), not of
+ * pending changes, so an account that re-targets or drops its change still
+ * counts. The code for a confirmed change also ends every unconsumed
+ * password-reset link: one mailed to the old address must not outlive the
+ * move.
  *
  * <p>The code follows the recovery-contact verification: 6 digits from a
  * {@link SecureRandom}, stored as a password-encoder hash, dead after
@@ -87,12 +94,13 @@ public class OwnEmailChangeService {
     static final int PASSWORD_LOCK_MINUTES = 15;
     static final int WINDOW_MINUTES = 60;
     static final int MAX_REQUESTS_PER_USER = 5;
-    static final int MAX_OTHER_REQUESTS_PER_ADDRESS = 3;
+    static final int MAX_SENDS_PER_ADDRESS = 3;
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final UserRepository userRepository;
     private final EmailChangeRequestRepository requestRepository;
+    private final EmailChangeSendRepository sendRepository;
     private final EmailChangeWrites writes;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
@@ -133,9 +141,10 @@ public class OwnEmailChangeService {
         if (email.equalsIgnoreCase(user.getEmail())) {
             throw refused(userId, "the new address is the current one", "user.email.change.same");
         }
-        if (requestRepository.countOtherRequestsForAddressSince(email, userId,
-                now.minusMinutes(WINDOW_MINUTES)) >= MAX_OTHER_REQUESTS_PER_ADDRESS) {
-            throw refused(userId, "too many recent requests for this address", "user.email.change.ratelimited");
+        String addressHash = EmailAddresses.hash(email);
+        LocalDateTime windowStart = now.minusMinutes(WINDOW_MINUTES);
+        if (sendRepository.countByAddressHashAndSentAtAfter(addressHash, windowStart) >= MAX_SENDS_PER_ADDRESS) {
+            throw refused(userId, "too many recent mails to this address", "user.email.change.ratelimited");
         }
 
         boolean taken = userRepository.existsEmailOnOtherAccount(email, userId);
@@ -146,8 +155,10 @@ public class OwnEmailChangeService {
         state.setCodeHash(passwordEncoder.encode(taken ? code + ":" + UUID.randomUUID() : code));
         state.setCodeExpiresAt(now.plusMinutes(CODE_EXPIRY_MINUTES));
         state.setCodeAttempts(0);
-        state.setCodeSentAt(now);
         requestRepository.save(state);
+        // Every mail to the address counts, a code or an in-use notice alike.
+        sendRepository.deleteSentBefore(windowStart);
+        sendRepository.save(EmailChangeSend.builder().addressHash(addressHash).sentAt(now).build());
 
         Locale locale = LocaleContextHolder.getLocale();
         Runnable send;

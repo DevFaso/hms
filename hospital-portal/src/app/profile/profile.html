@@ -458,49 +458,6 @@
                   </div>
                 }
 
-                @if (pendingEmail(); as pending) {
-                  <div class="verification-form" role="group" aria-labelledby="emailCodeTitle">
-                    <h4 id="emailCodeTitle">
-                      {{ 'PROFILE.EMAIL_CHANGE_PENDING_TITLE' | translate }}
-                    </h4>
-                    <p class="verification-hint">
-                      {{ 'PROFILE.ENTER_CODE_SENT_TO' | translate: { contact: pending } }}
-                    </p>
-                    <div class="form-row">
-                      <div class="form-group">
-                        <label for="emailChangeCode">{{
-                          'PROFILE.VERIFICATION_CODE' | translate
-                        }}</label>
-                        <input
-                          id="emailChangeCode"
-                          class="verification-input"
-                          type="text"
-                          inputmode="numeric"
-                          autocomplete="one-time-code"
-                          maxlength="6"
-                          placeholder="000000"
-                          name="emailChangeCode"
-                          [ngModel]="emailCode()"
-                          (ngModelChange)="emailCode.set($event)"
-                        />
-                      </div>
-                    </div>
-                    <div class="form-actions">
-                      <button type="button" class="btn btn-secondary" (click)="cancelEmailChange()">
-                        {{ 'COMMON.CANCEL' | translate }}
-                      </button>
-                      <button
-                        type="button"
-                        class="btn btn-primary"
-                        (click)="confirmEmailChange()"
-                        [disabled]="confirmingEmail() || emailCode().trim().length < 6"
-                      >
-                        {{ 'PROFILE.VERIFY' | translate }}
-                      </button>
-                    </div>
-                  </div>
-                }
-
                 <div class="form-row">
                   <div class="form-group">
                     <label for="editUsername">{{ 'PROFILE.USERNAME' | translate }}</label>
@@ -524,7 +481,7 @@
                   <button
                     type="submit"
                     class="btn btn-primary"
-                    [disabled]="!formDirty() || saving()"
+                    [disabled]="!formDirty() || saving() || !!pendingEmail()"
                   >
                     @if (saving()) {
                       <span class="material-symbols-outlined spinning">progress_activity</span>
@@ -536,6 +493,54 @@
                   </button>
                 </div>
               </form>
+
+              @if (pendingEmail(); as pending) {
+                <!-- Its own form, outside the profile form: Enter in the code box verifies
+                       the code instead of submitting the profile (which would ask for the password). -->
+                <form
+                  class="verification-form"
+                  aria-labelledby="emailCodeTitle"
+                  (ngSubmit)="confirmEmailChange()"
+                >
+                  <h4 id="emailCodeTitle">
+                    {{ 'PROFILE.EMAIL_CHANGE_PENDING_TITLE' | translate }}
+                  </h4>
+                  <p class="verification-hint">
+                    {{ 'PROFILE.ENTER_CODE_SENT_TO' | translate: { contact: pending } }}
+                  </p>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="emailChangeCode">{{
+                        'PROFILE.VERIFICATION_CODE' | translate
+                      }}</label>
+                      <input
+                        id="emailChangeCode"
+                        class="verification-input"
+                        type="text"
+                        inputmode="numeric"
+                        autocomplete="one-time-code"
+                        maxlength="6"
+                        placeholder="000000"
+                        name="emailChangeCode"
+                        [ngModel]="emailCode()"
+                        (ngModelChange)="emailCode.set($event)"
+                      />
+                    </div>
+                  </div>
+                  <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" (click)="cancelEmailChange()">
+                      {{ 'COMMON.CANCEL' | translate }}
+                    </button>
+                    <button
+                      type="submit"
+                      class="btn btn-primary"
+                      [disabled]="confirmingEmail() || emailCode().trim().length < 6"
+                    >
+                      {{ 'PROFILE.VERIFY' | translate }}
+                    </button>
+                  </div>
+                </form>
+              }
             </div>
           </div>
         </div>

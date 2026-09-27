@@ -247,6 +247,43 @@ describe('ProfileComponent — editing the profile', () => {
     expect(component.user()?.email).toBe('old@example.test');
   });
 
+  it('Enter in the code box verifies the code, and does not submit the profile', () => {
+    profiles.changeOwnEmail.and.returnValue(of(codeSent));
+    profiles.confirmOwnEmailChange.and.returnValue(of({ message: 'done' }));
+    component.updateField('email', 'new@example.test');
+    component.emailChangePassword.set('Current-Pass-1');
+    component.saveProfile();
+    fixture.detectChanges();
+    profiles.changeOwnEmail.calls.reset();
+    toast.error.calls.reset();
+
+    const codeInput = byId('emailChangeCode')!;
+    const codeForm = codeInput.closest('form')!;
+    expect(codeForm.classList.contains('edit-form'))
+      .withContext('not the profile form')
+      .toBeFalse();
+    component.emailCode.set('424242');
+    codeForm.dispatchEvent(new Event('submit'));
+
+    expect(profiles.confirmOwnEmailChange).toHaveBeenCalledOnceWith('424242');
+    expect(profiles.changeOwnEmail).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalledWith('PROFILE.EMAIL_CHANGE_PASSWORD_REQUIRED');
+  });
+
+  it('Save is disabled while a code is pending', () => {
+    profiles.changeOwnEmail.and.returnValue(of(codeSent));
+    component.updateField('email', 'new@example.test');
+    component.emailChangePassword.set('Current-Pass-1');
+    component.saveProfile();
+    component.updateField('firstName', 'Aminata');
+    fixture.detectChanges();
+
+    const save = fixture.nativeElement.querySelector(
+      'form.edit-form button[type="submit"]',
+    ) as HTMLButtonElement;
+    expect(save.disabled).toBeTrue();
+  });
+
   it('a refused profile PUT stops there: no email step is attempted', () => {
     profiles.updateProfile.and.returnValue(throwError(() => ({ status: 500 })));
     component.updateField('firstName', 'Aminata');
