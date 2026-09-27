@@ -2,9 +2,14 @@ import SwiftUI
 
 struct MessagesView: View {
     @StateObject private var vm = MessagesViewModel()
+    /// A tapped chat notification names the thread to open.
+    @ObservedObject private var push = PushManager.shared
+    /// Programmatic so a notification tap can open a thread, and so coming
+    /// back from a thread (path emptied) refreshes the unread badges.
+    @State private var path: [ChatConversationDTO] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Group {
                 if vm.isLoading, vm.conversations.isEmpty {
                     ProgressView("loading".localized)
@@ -23,10 +28,10 @@ struct MessagesView: View {
                         }
                     }
                     .listStyle(.insetGrouped)
-                    .navigationDestination(for: ChatConversationDTO.self) { conversation in
-                        MessageThreadView(conversation: conversation)
-                    }
                 }
+            }
+            .navigationDestination(for: ChatConversationDTO.self) { conversation in
+                MessageThreadView(conversation: conversation)
             }
             .navigationTitle("tab_messages".localized)
             .toolbar {
@@ -42,30 +47,76 @@ struct MessagesView: View {
             }
             .refreshable { await vm.load() }
         }
-        .task { await vm.load() }
+        .task {
+            await vm.load()
+            openRequestedThread()
+            // Asked here, in context, once the inbox is on screen: chat is
+            // what the notifications are for. Never at a cold start.
+            await PushManager.shared.requestAuthorizationIfNeeded()
+        }
+        .onChange(of: path) { _, newPath in
+            // Back from a thread, which was marked read when it opened.
+            if newPath.isEmpty { Task { await vm.load() } }
+        }
+        .onChange(of: push.messagesRequest) { _, request in
+            guard request != nil else { return }
+            Task {
+                await vm.load()
+                openRequestedThread()
+            }
+        }
+    }
+
+    /// Opens the thread a tapped notification points at, when that sender is
+    /// in the inbox. Either way the request is consumed.
+    private func openRequestedThread() {
+        guard let request = push.messagesRequest else { return }
+        push.messagesRequest = nil
+        guard let senderId = request.senderId,
+              let conversation = vm.conversations.first(where: { $0.conversationUserId == senderId })
+        else { return }
+        path = [conversation]
     }
 }
 
 struct ThreadRowView: View {
     let conversation: ChatConversationDTO
+
+    /// An attachment-only message has no text to preview.
+    private var preview: String {
+        if let text = conversation.lastMessageContent?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !text.isEmpty {
+            return text
+        }
+        return "chat_attachment_preview".localized
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "person.crop.circle.fill")
                 .font(.largeTitle).foregroundColor(.accentColor)
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text(conversation.conversationUserName ?? "Unknown").font(.headline)
+                    Text(conversation.conversationUserName ?? "chat_unknown_sender".localized).font(.headline)
+                    Spacer()
+                    // The backend's LocalDateTime, shown as a time, "Yesterday",
+                    // a weekday or a date — never the raw string.
+                    if let when = ChatTimestamp.display(conversation.lastMessageTimestamp) {
+                        Text(when).font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                HStack {
+                    Text(preview).font(.subheadline)
+                        .foregroundColor(.secondary).lineLimit(1)
                     Spacer()
                     if let unread = conversation.unreadCount, unread > 0 {
                         Text("\(unread)")
                             .font(.caption2).bold().foregroundColor(.white)
-                            .padding(6).background(Color.accentColor).clipShape(Circle())
+                            .padding(6).background(Color("BrandPrimary")).clipShape(Circle())
+                            .accessibilityLabel(Text(String(format: "chat_unread_count_a11y".localized, unread)))
                     }
                 }
-                Text(conversation.lastMessageContent ?? "").font(.subheadline)
-                    .foregroundColor(.secondary).lineLimit(1)
-                Text(conversation.lastMessageTimestamp ?? "").font(.caption2)
-                    .foregroundColor(.secondary)
             }
         }
         .padding(.vertical, 4)
@@ -83,7 +134,9 @@ final class MessagesViewModel: ObservableObject {
         errorMessage = nil
         defer { isLoading = false }
 
-        guard let userId = AuthManager.shared.currentUserId else {
+        // Resolved from /auth/session/bootstrap when the session has no id
+        // yet — an SSO session restored from an older build.
+        guard let userId = await AuthManager.shared.ensureUserId() else {
             errorMessage = "error_not_signed_in".localized
             return
         }
@@ -94,9 +147,16 @@ final class MessagesViewModel: ObservableObject {
         } catch {
             // Surfaced rather than swallowed: the previous `try?` turned a
             // 404 into an empty inbox, which is how the broken endpoint went
-            // unnoticed.
+            // unnoticed. Leaving the screen mid-load is not a failure.
+            guard !Self.isCancellation(error) else { return }
             errorMessage = error.localizedDescription
         }
+    }
+
+    static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let url = error as? URLError, url.code == .cancelled { return true }
+        return false
     }
 }
 
@@ -146,18 +206,19 @@ struct MessageThreadView: View {
             Divider()
 
             HStack(spacing: 12) {
-                TextField("Message…", text: $vm.draft)
+                TextField("chat_message_placeholder".localized, text: $vm.draft)
                     .padding(10)
                     .background(Color(.systemGray6))
                     .cornerRadius(20)
                 Button(action: { Task { await vm.send() } }) {
                     Image(systemName: "paperplane.fill").foregroundColor(.accentColor)
                 }
+                .accessibilityLabel(Text("send".localized))
                 .disabled(vm.draft.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .padding()
         }
-        .navigationTitle(conversation.conversationUserName ?? "Message")
+        .navigationTitle(conversation.conversationUserName ?? "message".localized)
         .navigationBarTitleDisplayMode(.inline)
         .task { await vm.load() }
     }
@@ -166,15 +227,26 @@ struct MessageThreadView: View {
 struct MessageBubble: View {
     let message: ChatMessageDTO
     let isOwn: Bool
+
     var body: some View {
         HStack {
-            if isOwn { Spacer() }
-            Text(message.content ?? "")
-                .padding(12)
-                .background(isOwn ? Color.accentColor : Color(.systemGray5))
-                .foregroundColor(isOwn ? .white : .primary)
-                .cornerRadius(16)
-            if !isOwn { Spacer() }
+            if isOwn { Spacer(minLength: 40) }
+            VStack(alignment: isOwn ? .trailing : .leading, spacing: 6) {
+                // A clinician's wound photo or voice note used to render as
+                // an empty bubble: the field was never decoded.
+                ForEach(Array(message.attachmentList.enumerated()), id: \.offset) { _, attachment in
+                    ChatAttachmentView(attachment: attachment)
+                }
+                // Content is null for an attachment-only message; no empty bubble.
+                if let text = message.displayText {
+                    Text(text)
+                        .padding(12)
+                        .background(isOwn ? Color("BrandPrimary") : Color(.systemGray5))
+                        .foregroundColor(isOwn ? .white : .primary)
+                        .cornerRadius(16)
+                }
+            }
+            if !isOwn { Spacer(minLength: 40) }
         }
     }
 }
@@ -203,7 +275,7 @@ final class MessageThreadViewModel: ObservableObject {
         errorMessage = nil
         defer { isLoading = false }
 
-        guard let userId = currentUserId else {
+        guard let userId = await AuthManager.shared.ensureUserId() else {
             errorMessage = "error_not_signed_in".localized
             return
         }
@@ -214,9 +286,22 @@ final class MessageThreadViewModel: ObservableObject {
             // The endpoint returns newest first; the transcript reads oldest
             // first and scrolls to the bottom.
             messages = Array(page.reversed())
+            await markRead(userId: userId)
         } catch {
+            guard !MessagesViewModel.isCancellation(error) else { return }
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// What the other party sent is now read. Without this the unread badge
+    /// never cleared, and `chat/unread-count` — which also feeds the portal
+    /// topbar — stayed inflated for this patient. Best effort: a failure
+    /// leaves the badge, which is all it can cost.
+    private func markRead(userId: String) async {
+        try? await APIClient.shared.sendNoContent(
+            .PUT,
+            path: APIEndpoints.chatMarkRead(senderId: otherUserId, recipientId: userId)
+        )
     }
 
     func send() async {
