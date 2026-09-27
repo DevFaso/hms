@@ -20,12 +20,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * both directions: a role added to the chart and not here is refused its
  * FHIR reads; a role removed from the chart and not here keeps reading it
  * over FHIR. This pins the two together, allowing only the documented
- * difference (PHYSICIAN and SURGEON, named because the Keycloak converter
- * does not run RoleExpansion).
+ * difference (PHYSICIAN and SURGEON, named while the Keycloak converter did
+ * not run RoleExpansion; both paths expand them to DOCTOR now, so the names
+ * are redundant and their removal is a later cleanup).
  */
 class SecurityConfigFhirMatcherTest {
 
-    private static final Set<String> NAMED_FOR_KEYCLOAK = Set.of(RoleExpansion.ROLE_PHYSICIAN, SecurityConstants.ROLE_SURGEON);
+    private static final Set<String> REDUNDANT_DOCTOR_NAMES = Set.of(RoleExpansion.ROLE_PHYSICIAN, SecurityConstants.ROLE_SURGEON);
 
     private static Set<String> rolesIn(String expression) {
         Set<String> roles = new LinkedHashSet<>();
@@ -43,11 +44,11 @@ class SecurityConfigFhirMatcherTest {
     }
 
     @Test
-    @DisplayName("the FHIR reader set is the encounter-list set plus the two Keycloak-named doctors")
+    @DisplayName("the FHIR reader set is the encounter-list set plus the two redundantly named doctor roles")
     void readersMirrorTheEncounterList() throws ReflectiveOperationException {
         Set<String> readers = new LinkedHashSet<>(List.of(SecurityConfig.FHIR_READER_AUTHORITIES));
-        assertThat(readers).containsAll(NAMED_FOR_KEYCLOAK);
-        readers.removeAll(NAMED_FOR_KEYCLOAK);
+        assertThat(readers).containsAll(REDUNDANT_DOCTOR_NAMES);
+        readers.removeAll(REDUNDANT_DOCTOR_NAMES);
         assertThat(readers).containsExactlyInAnyOrderElementsOf(rolesIn(encounterListRoles()));
     }
 

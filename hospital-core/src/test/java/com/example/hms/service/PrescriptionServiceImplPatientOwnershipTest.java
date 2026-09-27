@@ -8,6 +8,8 @@ import com.example.hms.model.Prescription;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.security.RoleExpansion;
+import com.example.hms.security.oidc.KeycloakJwtAuthenticationConverter;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,9 +24,11 @@ import org.mockito.quality.Strictness;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -119,22 +123,40 @@ class PrescriptionServiceImplPatientOwnershipTest {
     }
 
     /**
-     * An OIDC principal: a {@code JwtAuthenticationToken} whose HMS user id is
-     * the {@code appUserId} claim, as {@code KeycloakJwtAuthenticationConverter}
-     * produces. {@code AuthService.getCurrentUserId()} throws on this shape,
-     * which is why the guard resolves through {@code ControllerAuthUtils}.
+     * An OIDC principal, built by the REAL {@code KeycloakJwtAuthenticationConverter}
+     * from a token carrying the roles as realm roles, so it has exactly the
+     * authorities production gives it (normalised and widened by
+     * {@code RoleExpansion}). The HMS user id is the {@code appUserId} claim.
+     * {@code AuthService.getCurrentUserId()} throws on this shape, which is
+     * why the guard resolves through {@code ControllerAuthUtils}.
      */
     private void authenticateViaOidcAs(String... roles) {
-        var authorities = List.of(roles).stream().map(SimpleGrantedAuthority::new).toList();
-        org.springframework.security.oauth2.jwt.Jwt jwt =
-            org.springframework.security.oauth2.jwt.Jwt.withTokenValue("t")
-                .header("alg", "RS256")
-                .claim("sub", "keycloak-subject")
-                .claim("appUserId", callerUserId.toString())
-                .build();
-        SecurityContextHolder.getContext().setAuthentication(
-            new org.springframework.security.oauth2.server.resource.authentication
-                .JwtAuthenticationToken(jwt, authorities));
+        Jwt jwt = Jwt.withTokenValue("t")
+            .header("alg", "RS256")
+            .claim("sub", "keycloak-subject")
+            .claim("appUserId", callerUserId.toString())
+            .claim("realm_access", Map.of("roles", List.of(roles)))
+            .build();
+        SecurityContextHolder.getContext().setAuthentication(new KeycloakJwtAuthenticationConverter().convert(jwt));
+    }
+
+    /**
+     * A password-path principal with the authorities
+     * {@code JwtTokenProvider.getAuthenticationFromJwt} gives the same role
+     * list: widened by {@code RoleExpansion}.
+     */
+    private void authenticateViaPasswordPathAs(String... roles) {
+        authenticateAs(RoleExpansion.expand(List.of(roles)).toArray(new String[0]));
+    }
+
+    /** "read" when the call returns, otherwise the refusal's type and message. */
+    private String outcomeOf(UUID prescriptionId) {
+        try {
+            service.getPrescriptionById(prescriptionId, Locale.ENGLISH);
+            return "read";
+        } catch (RuntimeException e) {
+            return e.getClass().getSimpleName() + ": " + e.getMessage();
+        }
     }
 
     /** A prescription at the caller's hospital, written for {@code subject}. */
@@ -316,42 +338,50 @@ class PrescriptionServiceImplPatientOwnershipTest {
     void surgeonWhoIsAlsoAPatientIsUnaffectedOnThePasswordPath() {
         // RoleExpansion collapses SURGEON to DOCTOR on this path, so the
         // principal that actually reaches the handler is a doctor.
-        authenticateAs(com.example.hms.security.RoleExpansion
-            .expand(List.of("ROLE_SURGEON", "ROLE_PATIENT")).toArray(new String[0]));
+        authenticateViaPasswordPathAs("ROLE_SURGEON", "ROLE_PATIENT");
         UUID id = prescriptionFor(otherPatient());
 
         assertThat(service.getPrescriptionById(id, Locale.ENGLISH).getId()).isEqualTo(id);
     }
 
     @Test
-    @DisplayName("and is refused them over SSO, where the expansion never runs")
-    void surgeonOverOidcIsRefusedBecauseTheExpansionDoesNotRunThere() {
-        // Documented, not desired: KeycloakJwtAuthenticationConverter maps realm
-        // roles straight through, so this principal reaches the handler only via
-        // ROLE_PATIENT and the annotation never saw a clinician. A refusal is the
-        // safe direction; widening the exemption to roles the annotation does not
-        // admit is what round 2 removed. The fix belongs on the OIDC path.
+    @DisplayName("and reads them over SSO too, now that the Keycloak converter expands")
+    void surgeonOverOidcReadsAsADoctor() {
+        // The Keycloak converter runs RoleExpansion, so over SSO this principal
+        // holds ROLE_DOCTOR as well: the annotation admits a doctor and the
+        // reader set, which names ROLE_DOCTOR, waives the ownership check.
         authenticateViaOidcAs("ROLE_SURGEON", "ROLE_PATIENT");
         UUID id = prescriptionFor(otherPatient());
 
-        assertThatThrownBy(() -> service.getPrescriptionById(id, Locale.ENGLISH))
-            .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining(NOT_FOUND_KEY);
+        assertThat(service.getPrescriptionById(id, Locale.ENGLISH).getId()).isEqualTo(id);
     }
 
     @Test
-    @DisplayName("an unexpanded super-admin is refused too, for the same reason")
-    void unexpandedSuperAdminIsRefused() {
-        // Same OIDC gap as the surgeon above, and the same answer: this read does
-        // not admit ROLE_SUPER_ADMIN, so the principal is here on ROLE_PATIENT
-        // alone. The super-admin's own surface is GET /prescriptions, which does
-        // admit the role.
-        authenticateViaOidcAs("ROLE_SUPER_ADMIN", "ROLE_PATIENT");
+    @DisplayName("a surgeon who is also a patient gets the same answer over SSO and over a password login")
+    void surgeonWhoIsAlsoAPatientGetsTheSameAnswerOnBothPaths() {
+        for (Patient subject : List.of(otherPatient(), callerPatient)) {
+            UUID id = prescriptionFor(subject);
+            authenticateViaOidcAs("ROLE_SURGEON", "ROLE_PATIENT");
+            String overOidc = outcomeOf(id);
+            authenticateViaPasswordPathAs("ROLE_SURGEON", "ROLE_PATIENT");
+            String overPassword = outcomeOf(id);
+
+            assertThat(overOidc).as("subject %s", subject.getId()).isEqualTo(overPassword).isEqualTo("read");
+        }
+    }
+
+    @Test
+    @DisplayName("a super-admin who is also a patient reads over SSO, as over a password login")
+    void superAdminOverOidcReadsAsOnThePasswordPath() {
+        // SUPER_ADMIN_INHERITS carries ROLE_DOCTOR alongside ROLE_PATIENT, on
+        // both paths now, and ROLE_DOCTOR is in the reader set.
         UUID id = prescriptionFor(otherPatient());
 
-        assertThatThrownBy(() -> service.getPrescriptionById(id, Locale.ENGLISH))
-            .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining(NOT_FOUND_KEY);
+        authenticateViaOidcAs("ROLE_SUPER_ADMIN");
+        String overOidc = outcomeOf(id);
+        authenticateViaPasswordPathAs("ROLE_SUPER_ADMIN");
+
+        assertThat(overOidc).isEqualTo(outcomeOf(id)).isEqualTo("read");
     }
 
     @Test

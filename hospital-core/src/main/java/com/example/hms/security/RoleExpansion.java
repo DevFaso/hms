@@ -28,8 +28,10 @@ import static com.example.hms.config.SecurityConstants.ROLE_SURGEON;
  * gave a super-admin seven inherited roles on every request, the
  * password-login path ({@code SecurityConfig.authoritiesMapper}) gave
  * fourteen to the login-time authentication, which fed the login role
- * picker. Both now call {@link #expand}; {@link RoleExpansionTest} fails
- * if either grows a list of its own again.
+ * picker. Both now call {@link #expand}, and so does the third, the Keycloak
+ * path ({@code KeycloakJwtAuthenticationConverter}), which skipped the rule
+ * entirely until it did. {@code RoleExpansionTest} fails if any of the three
+ * grows a list of its own or stops calling this one.
  *
  * <p>The list kept is the JWT one: it is what every request already runs
  * under, so nothing widens. The login picker shrinks to match.
