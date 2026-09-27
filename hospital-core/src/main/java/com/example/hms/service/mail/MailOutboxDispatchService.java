@@ -117,12 +117,13 @@ public class MailOutboxDispatchService {
             return false;
         }
 
-        Optional<Work> loaded = Optional.ofNullable(transactionTemplate.execute(status -> load(id)));
-        if (loaded.isEmpty()) {
-            return false;
-        }
-        Work work = loaded.get();
+        // Nothing to send (row gone, or already emptied): not sent.
+        return Optional.ofNullable(transactionTemplate.execute(status -> load(id)))
+            .map(work -> sendAndRecord(id, work))
+            .orElse(false);
+    }
 
+    private boolean sendAndRecord(UUID id, Work work) {
         // No transaction open across the SMTP conversation.
         RuntimeException failure = send(work);
         Boolean sent = transactionTemplate.execute(status -> recordOutcome(id, failure));
