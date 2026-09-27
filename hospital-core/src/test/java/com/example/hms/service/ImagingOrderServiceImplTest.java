@@ -61,6 +61,8 @@ class ImagingOrderServiceImplTest {
     private ImagingOrderMapper imagingOrderMapper;
     @Mock
     private com.example.hms.utility.RoleValidator roleValidator;
+    @Mock
+    private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
 
     @InjectMocks
     private ImagingOrderServiceImpl imagingOrderService;
@@ -704,5 +706,69 @@ class ImagingOrderServiceImplTest {
         signature.setProviderName("Admin");
         imagingOrderService.captureProviderSignature(orderId, signature);
         assertThat(order.getProviderSignedAt()).isNotNull();
+    }
+
+    @Test
+    void patientRegisteredOnlyElsewhere_answersExactlyAsAMissingPatient() {
+        UUID foreignPatientId = UUID.randomUUID();
+        Patient foreign = new Patient();
+        foreign.setId(foreignPatientId);
+        when(patientRepository.findById(foreignPatientId)).thenReturn(Optional.of(foreign));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(registrationRepository.existsByPatientIdAndHospitalId(foreignPatientId, hospitalId)).thenReturn(false);
+
+        ImagingOrderRequestDTO create = new ImagingOrderRequestDTO();
+        create.setPatientId(foreignPatientId);
+        create.setHospitalId(hospitalId);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.createOrder(create, null))
+            .isInstanceOfSatisfying(ResourceNotFoundException.class,
+                e -> assertThat(e.getMessageKey()).isEqualTo("patient.notFound"));
+
+        ImagingOrder order = orderAt(hospital);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        ImagingOrderRequestDTO repoint = new ImagingOrderRequestDTO();
+        repoint.setPatientId(foreignPatientId);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrder(orderId, repoint))
+            .isInstanceOfSatisfying(ResourceNotFoundException.class,
+                e -> assertThat(e.getMessageKey()).isEqualTo("patient.notFound"));
+        assertThat(order.getPatient()).isSameAs(patient);
+        org.mockito.Mockito.verify(imagingOrderRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void patientRegisteredAtTheActingHospital_isAccepted() {
+        UUID otherPatientId = UUID.randomUUID();
+        Patient other = new Patient();
+        other.setId(otherPatientId);
+        ImagingOrder order = orderAt(hospital);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(patientRepository.findById(otherPatientId)).thenReturn(Optional.of(other));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(registrationRepository.existsByPatientIdAndHospitalId(otherPatientId, hospitalId)).thenReturn(true);
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+
+        ImagingOrderRequestDTO repoint = new ImagingOrderRequestDTO();
+        repoint.setPatientId(otherPatientId);
+        imagingOrderService.updateOrder(orderId, repoint);
+        assertThat(order.getPatient()).isSameAs(other);
+    }
+
+    @Test
+    void superAdminInGlobalView_isNotHeldToARegistration() {
+        UUID anyPatientId = UUID.randomUUID();
+        Patient any = new Patient();
+        any.setId(anyPatientId);
+        ImagingOrder order = orderAt(hospital);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(patientRepository.findById(anyPatientId)).thenReturn(Optional.of(any));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+
+        ImagingOrderRequestDTO repoint = new ImagingOrderRequestDTO();
+        repoint.setPatientId(anyPatientId);
+        imagingOrderService.updateOrder(orderId, repoint);
+        assertThat(order.getPatient()).isSameAs(any);
+        org.mockito.Mockito.verifyNoInteractions(registrationRepository);
     }
 }

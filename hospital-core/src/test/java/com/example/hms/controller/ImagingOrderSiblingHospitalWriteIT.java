@@ -97,6 +97,7 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
     private Hospital hospitalA2;
     private User doctorA;
     private Patient patient;
+    private Patient siblingOnlyPatient;
     private ImagingOrder orderAtA;
     private ImagingOrder orderAtA2;
 
@@ -112,7 +113,8 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
         hospitalA = saveHospital("Hospital A");
         hospitalA2 = saveHospital("Sibling Hospital A2");
         doctorA = doctorAt(hospitalA);
-        patient = createPatient();
+        patient = createPatient(hospitalA);
+        siblingOnlyPatient = createPatient(hospitalA2);
         orderAtA = saveOrder(hospitalA);
         orderAtA2 = saveOrder(hospitalA2);
         HospitalContextHolder.clear();
@@ -205,6 +207,41 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isNotFound());
         assertThat(imagingOrderRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("A's doctor cannot order for, or re-point an order at, a patient registered only at A2")
+    void patientRegisteredOnlyAtSiblingAnswersLikeMissing() throws Exception {
+        // Precondition: the organisation disjunct does hand A's doctor that patient.
+        HospitalContextHolder.setContext(contextFor(doctorA, hospitalA));
+        assertThat(patientRepository.findById(siblingOnlyPatient.getId())).isPresent();
+        HospitalContextHolder.clear();
+
+        UUID missingPatient = UUID.randomUUID();
+        for (boolean create : new boolean[] {true, false}) {
+            MvcResult sibling = mockMvc.perform(orderFor(create, siblingOnlyPatient.getId()))
+                .andExpect(status().isNotFound())
+                .andReturn();
+            MvcResult absent = mockMvc.perform(orderFor(create, missingPatient))
+                .andExpect(status().isNotFound())
+                .andReturn();
+            assertThat(message(sibling).replace(siblingOnlyPatient.getId().toString(), "<id>"))
+                .isEqualTo(message(absent).replace(missingPatient.toString(), "<id>"));
+        }
+
+        assertThat(imagingOrderRepository.count()).isEqualTo(2);
+        assertThat(reload(orderAtA).getPatient().getId()).isEqualTo(patient.getId());
+    }
+
+    private MockHttpServletRequestBuilder orderFor(boolean create, UUID patientId) throws Exception {
+        ImagingOrderRequestDTO request = updateRequest(hospitalA.getId(), "Chest PA");
+        request.setPatientId(patientId);
+        MockHttpServletRequestBuilder builder = create
+            ? post(API + "/imaging/orders")
+            : put(API + "/imaging/orders/{id}", orderAtA.getId());
+        return builder.with(acting(doctorA, hospitalA))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request));
     }
 
     @Test
@@ -393,7 +430,7 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
         return user;
     }
 
-    private Patient createPatient() {
+    private Patient createPatient(Hospital registeredAt) {
         String suffix = nextId();
         Patient saved = patientRepository.save(Patient.builder()
             .firstName("Aminata")
@@ -408,7 +445,7 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
             .emergencyContactName("Issa Diallo")
             .emergencyContactPhone("+22679" + suffix)
             .organizationId(organization.getId())
-            .hospitalId(hospitalA.getId())
+            .hospitalId(registeredAt.getId())
             .user(userRepository.save(User.builder()
                 .username("patient" + suffix)
                 .passwordHash("hashed-password")
@@ -421,7 +458,7 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
             .build());
         registrationRepository.save(PatientHospitalRegistration.builder()
             .patient(saved)
-            .hospital(hospitalA)
+            .hospital(registeredAt)
             .mrn("MRN-" + suffix)
             .registrationDate(LocalDate.now())
             .active(true)

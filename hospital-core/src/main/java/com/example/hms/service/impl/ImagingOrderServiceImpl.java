@@ -14,6 +14,7 @@ import com.example.hms.payload.dto.imaging.ImagingOrderSignatureRequestDTO;
 import com.example.hms.payload.dto.imaging.ImagingOrderStatusUpdateRequestDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.ImagingOrderRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.service.ImagingOrderService;
 import com.example.hms.service.PatientSubjectReadGuard;
@@ -63,6 +64,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
     private final PatientSubjectReadGuard subjectReadGuard;
+    private final PatientHospitalRegistrationRepository registrationRepository;
 
     @Override
     public ImagingOrderResponseDTO createOrder(ImagingOrderRequestDTO request, UUID orderingUserId) {
@@ -72,6 +74,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
         requireActingHospital(request.getHospitalId());
+        requirePatientRegisteredAtActingHospital(request.getPatientId());
 
         ImagingOrder imagingOrder = imagingOrderMapper.toEntity(request, patient, hospital);
         imagingOrder.setOrderedAt(LocalDateTime.now());
@@ -99,6 +102,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         if (request.getPatientId() != null && (order.getPatient() == null || !request.getPatientId().equals(order.getPatient().getId()))) {
             Patient patient = patientRepository.findById(request.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
+            requirePatientRegisteredAtActingHospital(request.getPatientId());
             order.setPatient(patient);
         }
 
@@ -295,6 +299,23 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && !activeHospitalId.equals(hospitalId)) {
             throw new ResourceNotFoundException("hospital.notFound", hospitalId);
+        }
+    }
+
+    /**
+     * The patient an order is placed for (or re-pointed at) must be registered
+     * at the hospital the caller acts at — which, after the checks above, is
+     * the order's hospital. The scoped patient {@code findById} is not enough:
+     * the organisation disjunct admits a patient registered only at a sibling
+     * hospital. Any registration counts, active or not, as for lab orders and
+     * consultations. A foreign patient is answered exactly as a missing one; a
+     * verified super-admin in global view is not held to a hospital.
+     */
+    private void requirePatientRegisteredAtActingHospital(UUID patientId) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null
+                && !registrationRepository.existsByPatientIdAndHospitalId(patientId, activeHospitalId)) {
+            throw new ResourceNotFoundException("patient.notFound", patientId);
         }
     }
 
