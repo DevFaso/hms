@@ -22,6 +22,15 @@ public interface TreatmentPlanService {
 
     Page<TreatmentPlanResponseDTO> listByPatient(UUID patientId, Pageable pageable);
 
+    /**
+     * The portal patient's own treatment plans, at every hospital that holds any
+     * (design Q1: a patient is bounded by ownership, not by a hospital). No
+     * hospital scope is read. Callers MUST have bound {{@code patientId}} to the
+     * principal first: PatientPortalServiceImpl resolves it from the caller
+     * (or verifies a proxy grant); nothing else calls this.
+     */
+    Page<TreatmentPlanResponseDTO> listForPortalPatient(UUID patientId, Pageable pageable);
+
     Page<TreatmentPlanResponseDTO> listByHospital(UUID hospitalId, TreatmentPlanStatus status, Pageable pageable);
 
     Page<TreatmentPlanResponseDTO> listAll(TreatmentPlanStatus status, Pageable pageable);

@@ -140,6 +140,25 @@ class RoleValidatorTest {
     }
 
     /**
+     * Design Q1: a patient-only caller is bounded by ownership. Null means an
+     * unscoped super-admin to every caller of this method, so a patient must
+     * never receive it: the answer is a 403 PATIENT_OWNED, and the
+     * patient-reached path takes its hospital from the record instead.
+     */
+    @Test
+    void requireActiveHospitalId_refusesAPatientOwnedScopeInsteadOfAnsweringNull() {
+        HospitalContextHolder.setContext(com.example.hms.security.context.HospitalContext.builder()
+            .principalUserId(UUID.randomUUID())
+            .permittedHospitalIds(java.util.Set.of(UUID.randomUUID(), UUID.randomUUID()))
+            .patientOwned(true)
+            .build());
+        org.assertj.core.api.Assertions.assertThatThrownBy(roleValidator::requireActiveHospitalId)
+            .isInstanceOf(com.example.hms.exception.HospitalScopeRefusedException.class)
+            .extracting(e -> ((com.example.hms.exception.HospitalScopeRefusedException) e).getReason())
+            .isEqualTo(com.example.hms.exception.HospitalScopeRefusedException.PATIENT_OWNED);
+    }
+
+    /**
      * Reproducer for the "click card → no data" cross-tenant bug
      * (commit f7e5a973's runtime symptom): JwtTokenProvider populates
      * {@code HospitalContext.activeHospitalId} from the

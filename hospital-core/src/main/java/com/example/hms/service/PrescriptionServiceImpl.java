@@ -886,6 +886,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
     @Override
     @Transactional
+    public java.util.List<PrescriptionResponseDTO> getPrescriptionsForPortalPatient(UUID patientId, Locale locale) {
+        return prescriptionRepository.findByPatient_Id(patientId, Pageable.unpaged()).stream()
+            .map(prescriptionMapper::toResponseDTO)
+            .toList();
+    }
+
+    @Override
+    @Transactional
     public java.util.List<PrescriptionResponseDTO> getPrescriptionsByStaffId(UUID staffId, Locale locale) {
         return prescriptionRepository.findByStaff_Id(staffId, Pageable.unpaged())
             .getContent().stream()

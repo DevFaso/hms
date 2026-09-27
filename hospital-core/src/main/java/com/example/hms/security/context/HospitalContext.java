@@ -85,6 +85,13 @@ public class HospitalContext {
     private final Set<String> assignedRoles = Collections.emptySet();
 
     /**
+     * The caller holds ROLE_PATIENT and nothing else: their requests are
+     * bounded by ownership of their own records, not by a hospital (design
+     * Q1), so no hospital is pinned for them unless they name one.
+     */
+    private final boolean patientOwned;
+
+    /**
      * The organisation of each hospital the caller holds, from the same live
      * assignments. Read only to keep {@link #activeOrganizationId} the
      * organisation of the hospital the request acts at (organisation policies,
@@ -121,7 +128,7 @@ public class HospitalContext {
      * the repository filter and the FHIR boundary read.
      */
     public UUID pinnedHospitalId() {
-        if ((superAdmin && !headerOverridden) || scopeRefusal != null) {
+        if (((superAdmin || patientOwned) && !headerOverridden) || scopeRefusal != null) {
             return null;
         }
         return activeHospitalId;

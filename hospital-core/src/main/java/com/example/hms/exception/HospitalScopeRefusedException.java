@@ -22,6 +22,12 @@ public class HospitalScopeRefusedException extends AccessDeniedException {
     /** The reason reported for a super-admin in global view on an endpoint that needs one hospital. */
     public static final String GLOBAL_VIEW = "GLOBAL_VIEW";
 
+    /**
+     * The reason reported for a patient-only caller on an endpoint that asks
+     * for one hospital instead of taking it from the record.
+     */
+    public static final String PATIENT_OWNED = "PATIENT_OWNED";
+
     private final String reason;
 
     public HospitalScopeRefusedException(ActingScope.Reason reason, String message) {
@@ -35,7 +41,19 @@ public class HospitalScopeRefusedException extends AccessDeniedException {
         this.reason = GLOBAL_VIEW;
     }
 
-    /** An {@link ActingScope.Reason} name, or {@link #GLOBAL_VIEW}. */
+    private HospitalScopeRefusedException(String reason, String message) {
+        super(message);
+        this.reason = reason;
+    }
+
+    /** A patient-only caller where the endpoint needs one hospital it did not take from the record. */
+    public static HospitalScopeRefusedException patientOwned() {
+        return new HospitalScopeRefusedException(PATIENT_OWNED,
+            "A patient's request is bounded by their own records, not by a hospital; "
+                + "this action needs the hospital of the record it acts on.");
+    }
+
+    /** An {@link ActingScope.Reason} name, {@link #GLOBAL_VIEW} or {@link #PATIENT_OWNED}. */
     public String getReason() {
         return reason;
     }

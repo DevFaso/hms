@@ -22,6 +22,17 @@ public sealed interface ActingScope {
     /** A verified super-admin reading across every hospital. Read-only. */
     record Global(UUID superAdminUserId) implements ActingScope { }
 
+    /**
+     * A patient-only caller (ROLE_PATIENT and nothing else) who named no
+     * hospital: bounded by ownership of their own records, never by a pinned
+     * hospital (design Q1). A patient registered at several hospitals is not
+     * ambiguous: a read returns their own rows wherever they are, and a write
+     * takes its hospital from the record it acts on, or from the hospital the
+     * request names after it is checked against their registrations. A caller
+     * that needs "the" hospital refuses this scope; it never guesses one.
+     */
+    record PatientOwned(UUID patientUserId) implements ActingScope { }
+
     /** No hospital can be acted at; the reason says why. */
     record Refused(Reason reason) implements ActingScope { }
 

@@ -1,6 +1,7 @@
 package com.example.hms.utility;
 
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.HospitalScopeRefusedException;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.PrincipalUserIds;
@@ -154,6 +155,10 @@ public class RoleValidator {
             case ActingScope.Pinned pinned -> pinned.hospitalId();
             case ActingScope.Global global -> null;
             case ActingScope.Refused refused -> throw new BusinessException(HOSPITAL_CONTEXT_REQUIRED);
+            // Never null for a patient: null means an unscoped super-admin to
+            // every caller of this method. A patient-reached path takes its
+            // hospital from the record (design Q1).
+            case ActingScope.PatientOwned owned -> throw HospitalScopeRefusedException.patientOwned();
         };
     }
 

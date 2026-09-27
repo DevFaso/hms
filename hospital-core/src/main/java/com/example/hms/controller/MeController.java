@@ -308,6 +308,7 @@ public class MeController {
             case ActingScope.Global global -> throw new HospitalScopeRefusedException(
                 "Select a hospital: a patient's record is read at one hospital, and this request is in global view.");
             case ActingScope.Refused refused -> null;
+            case ActingScope.PatientOwned owned -> throw HospitalScopeRefusedException.patientOwned();
         };
     }
 

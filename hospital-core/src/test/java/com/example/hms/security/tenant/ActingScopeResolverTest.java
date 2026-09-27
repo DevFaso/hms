@@ -106,6 +106,58 @@ class ActingScopeResolverTest {
     }
 
     @Nested
+    @DisplayName("a patient-only caller is bounded by ownership, never AMBIGUOUS (design Q1)")
+    class PatientOwnership {
+
+        private TenantRoleAssignment patientAt(UUID hospital) {
+            return new TenantRoleAssignment(hospital, ORG, "ROLE_PATIENT", "ROLE_PATIENT", true);
+        }
+
+        @Test
+        @DisplayName("registered at two hospitals, none named: PatientOwned, no pinned hospital, both readable")
+        void twoHospitalsIsNotAmbiguous() {
+            assertThat(produce(null, patientAt(A), patientAt(B))).isEqualTo(new ActingScope.PatientOwned(USER));
+            HospitalContext context = HospitalContextHolder.getContextOrEmpty();
+            assertThat(context.pinnedHospitalId()).isNull();
+            assertThat(context.getScopeRefusal()).isNull();
+            assertThat(ActingScopeResolver.readableHospitalIds(context)).containsExactlyInAnyOrder(A, B);
+        }
+
+        @Test
+        @DisplayName("one hospital too: ownership, not a pin")
+        void oneHospitalIsOwnershipToo() {
+            assertThat(produce(null, patientAt(A))).isEqualTo(new ActingScope.PatientOwned(USER));
+        }
+
+        @Test
+        @DisplayName("a hospital-needing adapter refuses 403 PATIENT_OWNED; it never answers null (unscoped)")
+        void adaptersRefuseInsteadOfNull() {
+            produce(null, patientAt(A), patientAt(B));
+            assertThatThrownBy(() -> resolver.requirePinned())
+                .isInstanceOf(com.example.hms.exception.HospitalScopeRefusedException.class)
+                .extracting(e -> ((com.example.hms.exception.HospitalScopeRefusedException) e).getReason())
+                .isEqualTo("PATIENT_OWNED");
+            assertThat(ActingScopeResolver.pinnedHospitalIdOrNull()).isNull();
+        }
+
+        @Test
+        @DisplayName("a patient who is also staff is not patient-only: several hospitals, none named, stays AMBIGUOUS")
+        void staffWhoIsAlsoAPatient() {
+            assertThat(produce(null, patientAt(A), at(B, "ROLE_NURSE"), at(C, "ROLE_NURSE")))
+                .isEqualTo(new ActingScope.Refused(ActingScope.Reason.AMBIGUOUS));
+        }
+
+        @Test
+        @DisplayName("naming a registered hospital pins it; an unregistered one is refused")
+        void namingAHospital() {
+            assertThat(produce(A.toString(), patientAt(A), patientAt(B)))
+                .isEqualTo(new ActingScope.Pinned(A, ActingScope.Source.HEADER));
+            assertThat(produce(C.toString(), patientAt(A), patientAt(B)))
+                .isEqualTo(new ActingScope.Refused(ActingScope.Reason.NOT_PERMITTED));
+        }
+    }
+
+    @Nested
     @DisplayName("scope-establishing paths ignore a refused header instead of refusing the request")
     class ScopeEstablishing {
 
@@ -225,10 +277,10 @@ class ActingScopeResolverTest {
         }
 
         @Test
-        @DisplayName("(e) patient: NO_HOSPITAL; naming one is refused NOT_PERMITTED")
+        @DisplayName("(e) patient: bounded by ownership, not by a hospital (Q1); naming one they do not hold is refused NOT_PERMITTED")
         void e() {
             TenantRoleAssignment patient = new TenantRoleAssignment(null, null, "ROLE_PATIENT", "ROLE_PATIENT", true);
-            assertThat(produce(null, patient)).isEqualTo(new ActingScope.Refused(ActingScope.Reason.NO_HOSPITAL));
+            assertThat(produce(null, patient)).isEqualTo(new ActingScope.PatientOwned(USER));
             assertThat(produce(A.toString(), patient))
                 .isEqualTo(new ActingScope.Refused(ActingScope.Reason.NOT_PERMITTED));
         }

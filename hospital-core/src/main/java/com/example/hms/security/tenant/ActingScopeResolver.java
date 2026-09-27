@@ -29,6 +29,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static com.example.hms.config.SecurityConstants.ROLE_HOSPITAL_ADMIN;
+import static com.example.hms.config.SecurityConstants.ROLE_PATIENT;
 import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
 
 /**
@@ -135,6 +136,11 @@ public class ActingScopeResolver {
             // Global view until a hospital is named; an incidental clinical
             // assignment does not pin a super-admin (D2, D3).
             return builder.build();
+        }
+        if (roles.equals(Set.of(ROLE_PATIENT))) {
+            // Patient-only: bounded by ownership, however many hospitals
+            // registered them. Never AMBIGUOUS, never a guessed hospital.
+            return builder.patientOwned(true).build();
         }
         if (hospitals.size() == 1) {
             UUID sole = hospitals.iterator().next();
@@ -290,6 +296,9 @@ public class ActingScopeResolver {
         if (context.isSuperAdmin() && !context.isHeaderOverridden()) {
             return new ActingScope.Global(context.getPrincipalUserId());
         }
+        if (context.isPatientOwned() && !context.isHeaderOverridden()) {
+            return new ActingScope.PatientOwned(context.getPrincipalUserId());
+        }
         UUID active = context.getActiveHospitalId();
         if (active == null) {
             return new ActingScope.Refused(ActingScope.Reason.NO_HOSPITAL);
@@ -366,6 +375,7 @@ public class ActingScopeResolver {
                 "Select a hospital: this action needs one hospital and the request is in global view.");
             case ActingScope.Refused(ActingScope.Reason reason) -> throw new HospitalScopeRefusedException(
                 reason, refusalMessage(reason));
+            case ActingScope.PatientOwned owned -> throw HospitalScopeRefusedException.patientOwned();
         };
     }
 

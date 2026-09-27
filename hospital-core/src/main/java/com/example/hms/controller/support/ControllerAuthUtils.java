@@ -106,6 +106,7 @@ public class ControllerAuthUtils {
             case ActingScope.Pinned pinned -> pinned.hospitalId();
             case ActingScope.Global global -> null;
             case ActingScope.Refused(ActingScope.Reason reason) -> refusedScope(auth, reason, requiredForReceptionist);
+            case ActingScope.PatientOwned owned -> throw HospitalScopeRefusedException.patientOwned();
         };
     }
 

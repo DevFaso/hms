@@ -22,7 +22,7 @@ import com.example.hms.repository.ChatMessageRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
-import com.example.hms.security.CustomUserDetails;
+import com.example.hms.security.PrincipalUserIds;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
@@ -361,12 +361,10 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             throw new SecurityException("Unauthorized: No authenticated user found");
         }
 
-        Object principal = authentication.getPrincipal();
-        if (principal instanceof CustomUserDetails userDetails) {
-            return userDetails.getUserId();
-        }
-
-        throw new SecurityException("Invalid principal type in security context");
+        // The one principal -> local user id rule: a password-path principal's
+        // id, or the account the Keycloak filter verified for this request.
+        return PrincipalUserIds.of(authentication)
+            .orElseThrow(() -> new SecurityException("Invalid principal type in security context"));
     }
 
     @Override

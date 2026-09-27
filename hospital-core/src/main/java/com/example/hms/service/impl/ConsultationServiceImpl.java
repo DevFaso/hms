@@ -199,6 +199,14 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<ConsultationResponseDTO> getConsultationsForPortalPatient(UUID patientId) {
+        return consultationRepository.findByPatient_IdOrderByRequestedAtDesc(patientId).stream()
+            .map(this::toResponseDTO)
+            .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<ConsultationResponseDTO> getConsultationsForHospital(UUID hospitalId, ConsultationStatus status) {
         // ── Tenant isolation ──
         // The hospital arrives as a PATH variable, which made it a trusted

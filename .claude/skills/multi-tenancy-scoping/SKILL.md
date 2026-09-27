@@ -105,6 +105,15 @@ answer is an `ActingScope`, never a meaningful `null`:
 - **`Global`** — only a VERIFIED super-admin (a live active SUPER_ADMIN
   assignment) who named no hospital. Read-only: writes call
   `requirePinned()`.
+- **`PatientOwned`** — a patient-only caller (ROLE_PATIENT and nothing
+  else) who named no hospital, however many hospitals registered them.
+  Bounded by ownership, not by a hospital (design Q1): every adapter that
+  needs "the" hospital refuses it (403 `PATIENT_OWNED`), never `null`
+  (null means an unscoped super-admin). A patient-reached read uses an
+  explicit owner variant filtered by the caller's own patient id
+  (`...ForPortalPatient`, `PatientChartAccess` admits the chart's owner);
+  a patient write takes its hospital from the record it acts on, or from
+  the body's hospital checked against the patient's registrations.
 - **`Refused(reason)`** — `AMBIGUOUS` (several hospitals, none named;
   never "the newest"), `NO_HOSPITAL`, `NO_LOCAL_USER`, or, for a hospital
   named explicitly, `NOT_PERMITTED` / `NO_LONGER_PERMITTED` (403 with the
