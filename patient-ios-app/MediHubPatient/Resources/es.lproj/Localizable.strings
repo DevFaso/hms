@@ -238,7 +238,7 @@
 "biometric_reason" = "Iniciar sesión en e-Keneya";
 "to" = "Para";
 "message" = "Mensaje";
-"no_message_recipients" = "Todavía no hay ningún profesional al que enviar mensajes. Se abre una conversación una vez que haya tenido una cita.";
+"no_message_recipients" = "Todavía no hay ningún profesional al que enviar mensajes. Podrá escribir cuando tenga un equipo de atención o una cita.";
 "type_message" = "Escriba un mensaje…";
 "send" = "Enviar";
 "conversations" = "Conversaciones";
@@ -760,6 +760,8 @@
 "current_password" = "Contraseña actual";
 "current_password_incorrect" = "La contraseña actual es incorrecta.";
 "password_changed" = "Contraseña cambiada correctamente.";
+"chat_recipients_load_failed" = "No se pudieron cargar sus profesionales sanitarios. Inténtelo de nuevo.";
+"chat_recipients_partial_load" = "No se pudieron cargar algunos de sus profesionales sanitarios. Es posible que la lista esté incompleta.";
 "chat_message_placeholder" = "Mensaje…";
 "chat_unknown_sender" = "Remitente desconocido";
 "chat_unread_count_a11y" = "%d sin leer";

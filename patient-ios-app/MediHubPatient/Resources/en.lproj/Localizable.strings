@@ -238,7 +238,7 @@
 "biometric_reason" = "Sign in to e-Keneya";
 "to" = "To";
 "message" = "Message";
-"no_message_recipients" = "No clinician to message yet. A conversation opens once you have had an appointment.";
+"no_message_recipients" = "No clinician to message yet. A conversation becomes possible once you have a care team or an appointment.";
 "type_message" = "Type a message…";
 "send" = "Send";
 "conversations" = "Conversations";
@@ -760,6 +760,8 @@
 "current_password" = "Current Password";
 "current_password_incorrect" = "Current password is incorrect.";
 "password_changed" = "Password changed successfully.";
+"chat_recipients_load_failed" = "Your clinicians could not be loaded. Please try again.";
+"chat_recipients_partial_load" = "Some of your clinicians could not be loaded. The list may be incomplete.";
 "chat_message_placeholder" = "Message…";
 "chat_unknown_sender" = "Unknown sender";
 "chat_unread_count_a11y" = "%d unread";
