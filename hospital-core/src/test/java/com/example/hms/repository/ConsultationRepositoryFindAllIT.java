@@ -5,7 +5,6 @@ import com.example.hms.enums.ConsultationType;
 import com.example.hms.enums.ConsultationUrgency;
 import com.example.hms.enums.EmploymentType;
 import com.example.hms.enums.JobTitle;
-import com.example.hms.enums.OrganizationType;
 import com.example.hms.model.Consultation;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Organization;
@@ -14,15 +13,10 @@ import com.example.hms.model.Role;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
-import com.example.hms.security.EncryptionKeyHolder;
-import com.example.hms.security.tenant.TenantContextAccessor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
-import org.springframework.context.annotation.Import;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -51,9 +45,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * This test guards the fix end-to-end so a future regression of either the
  * graph or the query method is caught at build time, not in production.
  */
-@DataJpaTest
-@ActiveProfiles("test")
-@Import({TenantContextAccessor.class, EncryptionKeyHolder.class})
+@TenantScopedDataJpaTest
 class ConsultationRepositoryFindAllIT {
 
     @Autowired private ConsultationRepository consultationRepository;
@@ -65,22 +57,8 @@ class ConsultationRepositoryFindAllIT {
 
     @BeforeEach
     void setUp() {
-        Organization org = Organization.builder()
-            .name("Org One")
-            .code("ORG-T1")
-            .type(OrganizationType.HOSPITAL_CHAIN)
-            .build();
-        org = em.persist(org);
-
-        hospital = Hospital.builder()
-            .name("Test Hospital")
-            .code("HOSP-T1")
-            .address("123 Test St")
-            .city("Ouagadougou")
-            .country("BF")
-            .organization(org)
-            .build();
-        hospital = em.persist(hospital);
+        Organization org = em.persist(HospitalFixtures.organization("Org One", "ORG-T1"));
+        hospital = em.persist(HospitalFixtures.hospital(org, "Test Hospital", "HOSP-T1"));
 
         // ── Patient (with its own User) ──
         User patientUser = User.builder()

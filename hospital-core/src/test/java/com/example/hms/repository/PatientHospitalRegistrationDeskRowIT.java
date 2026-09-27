@@ -1,6 +1,5 @@
 package com.example.hms.repository;
 
-import com.example.hms.enums.OrganizationType;
 import com.example.hms.enums.PatientStayStatus;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Organization;
@@ -8,8 +7,6 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.RegistrationDeskRow;
-import com.example.hms.security.EncryptionKeyHolder;
-import com.example.hms.security.tenant.TenantContextAccessor;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.AfterEach;
@@ -18,8 +15,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
-import org.springframework.context.annotation.Import;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -54,9 +49,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * explicit teardown: without both, the first orphan row leaks into every later
  * test sharing this in-memory database.
  */
-@DataJpaTest
-@ActiveProfiles("test")
-@Import({TenantContextAccessor.class, EncryptionKeyHolder.class})
+@TenantScopedDataJpaTest
 class PatientHospitalRegistrationDeskRowIT {
 
     @Autowired private PatientHospitalRegistrationRepository repository;
@@ -72,20 +65,8 @@ class PatientHospitalRegistrationDeskRowIT {
     void setUp() {
         uid = UUID.randomUUID().toString().substring(0, 8);
 
-        organization = em.persist(Organization.builder()
-            .name("Org " + uid)
-            .code("ORG-" + uid)
-            .type(OrganizationType.HOSPITAL_CHAIN)
-            .build());
-
-        hospital = em.persist(Hospital.builder()
-            .name("Test Hospital")
-            .code("HOSP-" + uid)
-            .address("123 Test St")
-            .city("Ouagadougou")
-            .country("BF")
-            .organization(organization)
-            .build());
+        organization = em.persist(HospitalFixtures.organization("Org " + uid, "ORG-" + uid));
+        hospital = em.persist(HospitalFixtures.hospital(organization, "Test Hospital", "HOSP-" + uid));
 
         patient = em.persist(newPatient("Awa", "Traore", "a" + uid));
 

@@ -1,25 +1,19 @@
 package com.example.hms.repository;
 
-import com.example.hms.enums.OrganizationType;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Organization;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.User;
-import com.example.hms.security.EncryptionKeyHolder;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
-import com.example.hms.security.tenant.TenantContextAccessor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
-import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
 import java.util.Collections;
@@ -28,9 +22,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@DataJpaTest
-@ActiveProfiles("test")
-@Import({TenantContextAccessor.class, EncryptionKeyHolder.class})
+@TenantScopedDataJpaTest
 class PatientRepositoryTenantScopeTest {
 
     @Autowired
@@ -51,32 +43,11 @@ class PatientRepositoryTenantScopeTest {
 
     @Test
     void searchPatientsExtendedIncludesRegistrationHospitalInTenantScope() {
-        Organization organization = Organization.builder()
-            .name("Org One")
-            .code("ORG-ONE")
-            .type(OrganizationType.HOSPITAL_CHAIN)
-            .build();
-        organization = entityManager.persist(organization);
-
-        Hospital primaryHospital = Hospital.builder()
-            .name("Primary Hospital")
-            .code("PRIM-HOSP")
-            .address("123 Primary Way")
-            .city("Ouagadougou")
-            .country("BF")
-            .organization(organization)
-            .build();
-        primaryHospital = entityManager.persist(primaryHospital);
-
-        Hospital scopedHospital = Hospital.builder()
-            .name("Scoped Hospital")
-            .code("SCOP-HOSP")
-            .address("456 Scoped Blvd")
-            .city("Ouagadougou")
-            .country("BF")
-            .organization(organization)
-            .build();
-        scopedHospital = entityManager.persist(scopedHospital);
+        Organization organization = entityManager.persist(HospitalFixtures.organization("Org One", "ORG-ONE"));
+        Hospital primaryHospital = entityManager.persist(
+            HospitalFixtures.hospital(organization, "Primary Hospital", "PRIM-HOSP"));
+        Hospital scopedHospital = entityManager.persist(
+            HospitalFixtures.hospital(organization, "Scoped Hospital", "SCOP-HOSP"));
 
         User user = User.builder()
             .username("patient-user")

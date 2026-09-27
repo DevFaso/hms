@@ -3,21 +3,15 @@ package com.example.hms.repository;
 import com.example.hms.enums.ActorType;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
-import com.example.hms.enums.OrganizationType;
 import com.example.hms.model.AuditEventLog;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Organization;
 import com.example.hms.model.Role;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
-import com.example.hms.security.EncryptionKeyHolder;
-import com.example.hms.security.tenant.TenantContextAccessor;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
-import org.springframework.context.annotation.Import;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDateTime;
 
@@ -31,9 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * null assignment, not a {@code FetchNotFoundException} that takes the whole
  * audit view down.
  */
-@DataJpaTest
-@ActiveProfiles("test")
-@Import({TenantContextAccessor.class, EncryptionKeyHolder.class})
+@TenantScopedDataJpaTest
 class AuditEventLogDanglingAssignmentIT {
 
     @Autowired
@@ -43,11 +35,8 @@ class AuditEventLogDanglingAssignmentIT {
 
     @Test
     void aRowWhoseAssignmentWasHardDeletedStillLoadsWithoutIt() {
-        Organization organization = em.persist(Organization.builder()
-            .name("Dangling Org").code("ORG-DA1").type(OrganizationType.HOSPITAL_CHAIN).build());
-        Hospital hospital = em.persist(Hospital.builder()
-            .name("Dangling Hospital").code("HOSP-DA1").address("1 Rue").city("Ouagadougou").country("BF")
-            .organization(organization).build());
+        Organization organization = em.persist(HospitalFixtures.organization("Dangling Org", "ORG-DA1"));
+        Hospital hospital = em.persist(HospitalFixtures.hospital(organization, "Dangling Hospital", "HOSP-DA1"));
         User user = em.persist(User.builder()
             .username("da_nurse_1").passwordHash("h").email("da_nurse_1@example.com")
             .phoneNumber("+22670000911").firstName("Awa").lastName("Nurse").build());

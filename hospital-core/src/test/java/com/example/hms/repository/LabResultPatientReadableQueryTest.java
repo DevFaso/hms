@@ -12,21 +12,16 @@ import com.example.hms.model.Role;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
-import com.example.hms.security.EncryptionKeyHolder;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
-import com.example.hms.security.tenant.TenantContextAccessor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -50,13 +45,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * pins the three kinds of readable row, the ones that must not come back, and
  * that a page is filled with readable rows rather than cut before filtering.
  */
-@DataJpaTest
-@ActiveProfiles("test")
-// Exactly PatientRepositoryTenantScopeTest's (and LabResultTrendReadableQueryTest's)
-// configuration, so they share one cached context: one more
-// EntityManagerFactory in the test JVM is enough to exhaust the capped heap
-// under the full suite.
-@Import({TenantContextAccessor.class, EncryptionKeyHolder.class})
+@TenantScopedDataJpaTest
 class LabResultPatientReadableQueryTest {
 
     private static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "resultDate");
