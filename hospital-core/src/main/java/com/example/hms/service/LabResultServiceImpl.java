@@ -84,7 +84,7 @@ public class LabResultServiceImpl implements LabResultService {
 
     /** The one description every performing-laboratory result disclosure carries (Sonar S1192). */
     private static final String PERFORMED_HERE_REACH_DESCRIPTION =
-        "Cross-hospital lab result read at the performing laboratory";
+        com.example.hms.service.recordaccess.CrossHospitalReachRecorder.LAB_RESULT_PERFORMED_HERE_DESCRIPTION;
     /** The description PatientLabResultServiceImpl accounts the same kind of read under. */
     private static final String TREATMENT_REACH_DESCRIPTION =
         "Cross-hospital lab result read on the treatment relationship";

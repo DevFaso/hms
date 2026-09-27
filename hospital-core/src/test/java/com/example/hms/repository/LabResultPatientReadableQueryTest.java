@@ -148,8 +148,9 @@ class LabResultPatientReadableQueryTest {
     @Test
     @DisplayName("with no acting hospital the performed clause is off: exactly the orders placed in the set")
     void noActingHospitalMeansNoPerformedClause() {
-        // The timeline's and the doctor record's call: B with no performer
-        // reads what B ordered, and NOT what B's laboratory ran for A.
+        // No performer: B reads what B ordered, and NOT what B's laboratory
+        // ran for A. (The staff lab views pass the acting hospital as the
+        // performer since #751 was applied to them; see the next test.)
         assertThat(labResultRepository.findPatientResultsReadableAt(patient.getId(),
             Set.of(hospitalB.getId()), null, false, Pageable.unpaged()))
             .extracting(LabResult::getId)
@@ -164,6 +165,18 @@ class LabResultPatientReadableQueryTest {
             Set.of(hospitalA.getId()), null, false, Pageable.unpaged()))
             .extracting(LabResult::getId)
             .containsExactlyInAnyOrder(performedAtBForA.getId(), orderedAndRunAtA.getId());
+    }
+
+    @Test
+    @DisplayName("a staff view at T sees its own orders, not what A ordered and B's laboratory ran")
+    void aThirdHospitalDoesNotSeeAnotherPairsOrderAndLaboratory() {
+        // The staff lab views' call: T as its own readable set and performer.
+        // performedAtBForA was ordered at A and run at B, so T neither ordered
+        // it nor ran it; T's own order is all T gets.
+        assertThat(labResultRepository.findPatientResultsReadableAt(patient.getId(),
+            Set.of(hospitalT.getId()), hospitalT.getId(), false, Pageable.unpaged()))
+            .extracting(LabResult::getId)
+            .containsExactly(orderedAtT.getId());
     }
 
     @Test

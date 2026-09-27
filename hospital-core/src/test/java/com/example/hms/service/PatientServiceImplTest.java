@@ -90,6 +90,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -758,7 +759,7 @@ class PatientServiceImplTest {
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(encounter));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(prescription));
-        when(labResultRepository.findPatientResultsReadableAt(patientId, Set.of(hospitalId), null, false,
+        when(labResultRepository.findPatientResultsReadableAt(patientId, Set.of(hospitalId), hospitalId, false,
             Pageable.unpaged())).thenReturn(List.of(labResult));
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(allergy));
         when(auditEventLogService.logEvent(any())).thenReturn(null);
@@ -860,15 +861,18 @@ class PatientServiceImplTest {
     }
 
     @Test
-    void getDoctorTimelineReadsOnlyTheReadableSetsOrdersAtTheDatabase() {
-        // The timeline shows results ORDERED in the readable set (acting
-        // hospital + treatment relationship), and that is now the whole of the
-        // read: the readable set, and no acting hospital, so the query's
-        // performed-here clause is off. A result this hospital's laboratory
-        // only performed for another hospital is not loaded at all
-        // (LabResultPatientReadableQueryTest pins what this call returns), and
-        // nothing is filtered on hospital after the read: a row the query
-        // returns is a row the timeline shows.
+    void getDoctorTimelineShowsWhatThisHospitalsLaboratoryPerformed() {
+        // #751 on the timeline: a result is readable where its order is
+        // handled - ordered in the readable set (acting hospital + treatment
+        // relationship), or performed by the acting hospital's own laboratory
+        // for another hospital. The acting hospital is the query's performer
+        // (LabResultPatientReadableQueryTest pins what that returns, and that
+        // a result ordered and run elsewhere is not among it), and nothing is
+        // filtered on hospital after the read.
+        //
+        // Accounting: the treatment row is the chart read's reach; the
+        // performed-here row is its own reason, counted once there and never
+        // in the chart read's count.
         UUID doctorId = UUID.randomUUID();
         UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
         assignment.setId(UUID.randomUUID());
@@ -876,17 +880,21 @@ class PatientServiceImplTest {
         Hospital treating = new Hospital();
         treating.setId(UUID.randomUUID());
         treating.setName("CHU Yalgado");
+        Hospital orderingElsewhere = new Hospital();
+        orderingElsewhere.setId(UUID.randomUUID());
+        orderingElsewhere.setName("CMA Pissy");
 
         LabResult orderedHere = timelineLabResult(hospital, null, "4.9");
         LabResult orderedAtTreating = timelineLabResult(treating, null, "5.4");
+        LabResult performedHereForOther = timelineLabResult(orderingElsewhere, hospital, "6.3");
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
         when(recordAccessPolicy.readableHospitalIds(doctorId, patientId, hospitalId))
             .thenReturn(Set.of(hospitalId, treating.getId()));
         when(labResultRepository.findPatientResultsReadableAt(patientId, Set.of(hospitalId, treating.getId()),
-            null, false, Pageable.unpaged()))
-            .thenReturn(List.of(orderedHere, orderedAtTreating));
+            hospitalId, false, Pageable.unpaged()))
+            .thenReturn(List.of(orderedHere, orderedAtTreating, performedHereForOther));
         when(auditEventLogService.logEvent(any())).thenReturn(null);
 
         PatientTimelineResponseDTO response = patientService.getDoctorTimeline(
@@ -896,41 +904,103 @@ class PatientServiceImplTest {
         assertThat(response.getEntries())
             .filteredOn(entry -> "LAB_RESULT".equals(entry.getCategory()))
             .extracting(PatientTimelineEntryDTO::getEntryId)
-            .containsExactlyInAnyOrder(orderedHere.getId().toString(), orderedAtTreating.getId().toString());
+            .containsExactlyInAnyOrder(orderedHere.getId().toString(), orderedAtTreating.getId().toString(),
+                performedHereForOther.getId().toString());
+        // The performed-here row is the ordering hospital's record.
+        assertThat(response.getEntries())
+            .filteredOn(entry -> performedHereForOther.getId().toString().equals(entry.getEntryId()))
+            .singleElement()
+            .satisfies(entry -> assertThat(entry.getMetadata())
+                .containsEntry("sourceHospitalId", orderingElsewhere.getId().toString())
+                .containsEntry("foreign", true));
         verify(labResultRepository).findPatientResultsReadableAt(patientId, Set.of(hospitalId, treating.getId()),
-            null, false, Pageable.unpaged());
+            hospitalId, false, Pageable.unpaged());
         verifyNoMoreInteractions(labResultRepository);
+        verify(reachRecorder).recordReach(patientId, hospitalId, doctorId, assignment.getId(),
+            Map.of(treating.getId().toString(), 1L), "Cross-hospital chart read on the treatment relationship");
+        verify(reachRecorder).recordReach(patientId, hospitalId, doctorId, assignment.getId(),
+            Map.of(orderingElsewhere.getId().toString(), 1L),
+            com.example.hms.service.recordaccess.CrossHospitalReachRecorder.LAB_RESULT_PERFORMED_HERE_DESCRIPTION);
     }
 
     @Test
-    void getDoctorRecordReadsTheActingHospitalsOrdersAtTheDatabase() {
-        // The doctor record's lab section has always been acting-hospital only
-        // (unlike its medications and imaging, which read the readable set).
-        // It is read for the acting hospital's orders at the database, with no
-        // performer, so nothing this hospital's laboratory ran for another
-        // hospital is loaded, and nothing is filtered on hospital afterwards.
+    void getDoctorTimelineWithholdsASensitivePerformedHereRowLikeAnyForeignRow() {
+        // The performed-here row keeps the D3 filter every foreign row passes:
+        // in a sensitive category it is withheld without a session, counted as
+        // restricted, and - since it never surfaced - not accounted.
         UUID doctorId = UUID.randomUUID();
         UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
         assignment.setId(UUID.randomUUID());
         assignment.setHospital(hospital);
-        LabResult orderedHere = timelineLabResult(hospital, null, "5.4");
-        LabResultResponseDTO orderedHereResponse = new LabResultResponseDTO();
+        Hospital orderingElsewhere = new Hospital();
+        orderingElsewhere.setId(UUID.randomUUID());
+        orderingElsewhere.setName("CMA Pissy");
+        LabResult performedHereForOther = timelineLabResult(orderingElsewhere, hospital, "Reactive");
+        Encounter sensitiveVisit = Encounter.builder().patient(patient).hospital(orderingElsewhere).build();
+        performedHereForOther.getLabOrder().setEncounter(sensitiveVisit);
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
-        when(labResultRepository.findPatientResultsReadableAt(patientId, Set.of(hospitalId), null, false,
-            Pageable.unpaged())).thenReturn(List.of(orderedHere));
+        when(labResultRepository.findPatientResultsReadableAt(patientId, Set.of(hospitalId), hospitalId, false,
+            Pageable.unpaged())).thenReturn(List.of(performedHereForOther));
+        when(sensitivityClassifier.effectiveCategory(sensitiveVisit))
+            .thenReturn(com.example.hms.enums.SensitivityCategory.HIV);
+        when(auditEventLogService.logEvent(any())).thenReturn(null);
+
+        PatientTimelineResponseDTO response = patientService.getDoctorTimeline(
+            patientId, hospitalId, doctorId, assignment,
+            PatientTimelineAccessRequestDTO.builder().accessReason("Suivi clinique").includeSensitiveData(true).build());
+
+        assertThat(response.getEntries()).noneMatch(entry -> "LAB_RESULT".equals(entry.getCategory()));
+        assertThat(response.getRestrictedRows()).singleElement()
+            .satisfies(r -> assertThat(r.getHospitalId()).isEqualTo(orderingElsewhere.getId()));
+        verify(reachRecorder).recordReach(patientId, hospitalId, doctorId, assignment.getId(),
+            Map.of(), com.example.hms.service.recordaccess.CrossHospitalReachRecorder.LAB_RESULT_PERFORMED_HERE_DESCRIPTION);
+    }
+
+    @Test
+    void getDoctorRecordShowsWhatThisHospitalsLaboratoryPerformed() {
+        // The doctor record's lab section has always been acting-hospital only
+        // (unlike its medications and imaging, which read the readable set),
+        // and the treatment relationship still does not widen it. #751: it is
+        // read for the orders the acting hospital HANDLES - placed here, or
+        // run by this hospital's laboratory for another hospital - with the
+        // acting hospital as the query's performer. The performed-here row is
+        // accounted once, under the performing-laboratory reason, and is not
+        // part of the record's treatment-relationship reach.
+        UUID doctorId = UUID.randomUUID();
+        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
+        assignment.setId(UUID.randomUUID());
+        assignment.setHospital(hospital);
+        Hospital orderingElsewhere = new Hospital();
+        orderingElsewhere.setId(UUID.randomUUID());
+        orderingElsewhere.setName("CMA Pissy");
+        LabResult orderedHere = timelineLabResult(hospital, null, "5.4");
+        LabResult performedHereForOther = timelineLabResult(orderingElsewhere, hospital, "6.3");
+        LabResultResponseDTO orderedHereResponse = new LabResultResponseDTO();
+        LabResultResponseDTO performedHereResponse = new LabResultResponseDTO();
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(labResultRepository.findPatientResultsReadableAt(patientId, Set.of(hospitalId), hospitalId, false,
+            Pageable.unpaged())).thenReturn(List.of(orderedHere, performedHereForOther));
         when(labResultMapper.toResponseDTO(orderedHere)).thenReturn(orderedHereResponse);
+        when(labResultMapper.toResponseDTO(performedHereForOther)).thenReturn(performedHereResponse);
         when(auditEventLogService.logEvent(any())).thenReturn(null);
 
         DoctorPatientRecordDTO response = patientService.getDoctorRecord(patientId, hospitalId, doctorId, assignment,
             DoctorPatientRecordRequestDTO.builder().hospitalId(hospitalId).accessReason("Pre-op review")
                 .includeSensitiveData(true).build());
 
-        assertThat(response.getLabResults()).containsExactly(orderedHereResponse);
-        verify(labResultRepository).findPatientResultsReadableAt(patientId, Set.of(hospitalId), null, false,
+        assertThat(response.getLabResults()).containsExactlyInAnyOrder(orderedHereResponse, performedHereResponse);
+        verify(labResultRepository).findPatientResultsReadableAt(patientId, Set.of(hospitalId), hospitalId, false,
             Pageable.unpaged());
         verifyNoMoreInteractions(labResultRepository);
+        verify(reachRecorder).recordReach(patientId, hospitalId, doctorId, assignment.getId(),
+            Map.of(), "Cross-hospital doctor record read on the treatment relationship");
+        verify(reachRecorder).recordReach(patientId, hospitalId, doctorId, assignment.getId(),
+            Map.of(orderingElsewhere.getId().toString(), 1L),
+            com.example.hms.service.recordaccess.CrossHospitalReachRecorder.LAB_RESULT_PERFORMED_HERE_DESCRIPTION);
     }
 
     private LabResult timelineLabResult(Hospital orderedAt, Hospital performedAt, String value) {
@@ -1131,7 +1201,7 @@ class PatientServiceImplTest {
         when(patientAllergyMapper.toResponseDto(allergy)).thenReturn(allergyResponse);
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(prescription));
         when(prescriptionMapper.toResponseDTO(prescription)).thenReturn(prescriptionResponse);
-        when(labResultRepository.findPatientResultsReadableAt(patientId, Set.of(hospitalId), null, false,
+        when(labResultRepository.findPatientResultsReadableAt(patientId, Set.of(hospitalId), hospitalId, false,
             Pageable.unpaged())).thenReturn(List.of(labResult));
         when(labResultMapper.toResponseDTO(labResult)).thenReturn(labResultResponse);
         when(ultrasoundOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedDateDesc(patientId, Set.of(hospitalId))).thenReturn(List.of(ultrasoundOrder));
