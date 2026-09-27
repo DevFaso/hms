@@ -238,7 +238,7 @@
 "biometric_reason" = "Se connecter à e-Keneya";
 "to" = "À";
 "message" = "Message";
-"no_message_recipients" = "Aucun soignant à contacter pour l’instant. Un échange devient possible après un rendez-vous.";
+"no_message_recipients" = "Aucun soignant à contacter pour l’instant. Un échange devient possible dès que vous avez une équipe de soins ou un rendez-vous.";
 "type_message" = "Saisissez un message…";
 "send" = "Envoyer";
 "conversations" = "Conversations";
@@ -759,6 +759,8 @@
 "current_password" = "Mot de passe actuel";
 "current_password_incorrect" = "Le mot de passe actuel est incorrect.";
 "password_changed" = "Mot de passe modifié avec succès.";
+"chat_recipients_load_failed" = "Impossible de charger vos soignants. Veuillez réessayer.";
+"chat_recipients_partial_load" = "Une partie de vos soignants n’a pas pu être chargée. La liste peut être incomplète.";
 "chat_message_placeholder" = "Message…";
 "chat_unknown_sender" = "Expéditeur inconnu";
 "chat_unread_count_a11y" = "%d non lu(s)";

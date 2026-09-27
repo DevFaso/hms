@@ -342,10 +342,12 @@ struct ChatRecipient: Identifiable, Hashable {
 /// Starting a NEW conversation.
 ///
 /// There is no endpoint that lists "people this patient may message", so the
-/// recipients are derived from recent appointments — the same fallback the
-/// Android app uses. `/me/patient/care-team` is deliberately not used: it
-/// returns primaryCare/primaryCareHistory entries that carry no user id, so
-/// nothing in that payload can address a message.
+/// recipients are assembled the way the web portal's picker does: the care
+/// team (`/me/patient/care-team`, where a clinician is `doctorUserId` — the
+/// entry's own `id` is the care-team link and cannot address a message) plus
+/// the clinicians of the patient's appointments (`staffUserId`). Deduplicated
+/// by user id, without the patient themselves; each source may fail on its
+/// own and the other still shows.
 struct ComposeMessageView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var vm = ComposeMessageViewModel()
@@ -372,6 +374,9 @@ struct ComposeMessageView: View {
                 }
                 Section("message".localized) {
                     TextEditor(text: $messageBody).frame(minHeight: 120)
+                }
+                if let warning = vm.recipientsWarning {
+                    Section { Text(warning).foregroundStyle(.orange) }
                 }
                 if let error = vm.errorMessage {
                     Section { Text(error).foregroundStyle(.red) }
@@ -404,34 +409,101 @@ struct ComposeMessageView: View {
     }
 }
 
+/// A clinician as a possible recipient, before merging.
+struct ClinicianCandidate: Equatable {
+    let userId: String?
+    let name: String?
+    let hospitalName: String?
+}
+
+extension ChatRecipient {
+    /// Care team first, then appointments, as the portal's picker orders
+    /// them. First occurrence of a user id wins; entries without a user id or
+    /// a name are skipped, and so is the patient's own id.
+    static func merge(careTeam: [ClinicianCandidate],
+                      appointments: [ClinicianCandidate],
+                      excluding ownUserId: String?) -> [ChatRecipient] {
+        var seen = Set<String>()
+        if let ownUserId, !ownUserId.isEmpty { seen.insert(ownUserId) }
+        var out: [ChatRecipient] = []
+        for candidate in careTeam + appointments {
+            guard let userId = candidate.userId?.trimmingCharacters(in: .whitespaces), !userId.isEmpty,
+                  let name = candidate.name?.trimmingCharacters(in: .whitespaces), !name.isEmpty,
+                  !seen.contains(userId) else { continue }
+            seen.insert(userId)
+            out.append(ChatRecipient(id: userId, name: name, subtitle: candidate.hospitalName))
+        }
+        return out
+    }
+}
+
+extension CareTeamDTO {
+    /// The current primary-care clinician and the history, as recipients.
+    /// `doctorUserId` is the user id `/chat/send` needs; the entry `id` is
+    /// the care-team link and is never used here.
+    var clinicianCandidates: [ClinicianCandidate] {
+        let entries = (primaryCare.map { [$0] } ?? []) + (primaryCareHistory ?? [])
+        return entries.map {
+            ClinicianCandidate(userId: $0.doctorUserId, name: $0.doctorDisplay, hospitalName: $0.hospitalName)
+        }
+    }
+}
+
 @MainActor
 final class ComposeMessageViewModel: ObservableObject {
     @Published var recipients: [ChatRecipient] = []
     @Published var isLoading = false
     @Published var isSending = false
     @Published var errorMessage: String?
+    /// One source failed: the list may be incomplete.
+    @Published var recipientsWarning: String?
 
     func loadRecipients() async {
         isLoading = true
         errorMessage = nil
+        recipientsWarning = nil
         defer { isLoading = false }
+
+        async let careTeamResult = Self.careTeamClinicians()
+        async let appointmentResult = Self.appointmentClinicians()
+        let (careTeam, appointments) = await (careTeamResult, appointmentResult)
+
+        let ownId = await AuthManager.shared.ensureUserId()
+        recipients = ChatRecipient.merge(careTeam: careTeam ?? [],
+                                         appointments: appointments ?? [],
+                                         excluding: ownId)
+        switch (careTeam == nil, appointments == nil) {
+        case (true, true):
+            errorMessage = "chat_recipients_load_failed".localized
+        case (true, false), (false, true):
+            recipientsWarning = "chat_recipients_partial_load".localized
+        case (false, false):
+            break
+        }
+    }
+
+    /// Nil when the request failed, so the caller can tell "none" from "error".
+    private static func careTeamClinicians() async -> [ClinicianCandidate]? {
+        do {
+            let team: CareTeamDTO = try await APIClient.shared.get(APIEndpoints.careTeam)
+            return team.clinicianCandidates
+        } catch {
+            return nil
+        }
+    }
+
+    private static func appointmentClinicians() async -> [ClinicianCandidate]? {
         do {
             let appointments: [AppointmentDTO] = try await APIClient.shared.get(
                 APIEndpoints.appointments,
                 queryItems: [URLQueryItem(name: "page", value: "0"),
                              URLQueryItem(name: "size", value: "50")]
             )
-            var seen = Set<String>()
-            recipients = appointments.compactMap { (appointment: AppointmentDTO) -> ChatRecipient? in
-                guard let userId = appointment.staffUserId, !userId.isEmpty,
-                      let name = appointment.staffName, !name.isEmpty,
-                      !seen.contains(userId) else { return nil }
-                seen.insert(userId)
-                return ChatRecipient(id: userId, name: name,
-                                     subtitle: appointment.hospitalName)
+            return appointments.map {
+                ClinicianCandidate(userId: $0.staffUserId, name: $0.staffName, hospitalName: $0.hospitalName)
             }
         } catch {
-            errorMessage = error.localizedDescription
+            return nil
         }
     }
 
