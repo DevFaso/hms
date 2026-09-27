@@ -184,6 +184,88 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.message").value("Logged out successfully."));
     }
 
+    // ───────────── logout revokes the refresh token the mobile apps hold ─────────────
+
+    private void givenToken(String token, String username, String jti) {
+        when(jwtTokenProvider.validateToken(token)).thenReturn(true);
+        when(jwtTokenProvider.getUsernameFromJWT(token)).thenReturn(username);
+        when(jwtTokenProvider.getJtiFromToken(token)).thenReturn(jti);
+        when(jwtTokenProvider.getExpiration(token)).thenReturn(new java.util.Date(4_102_444_800_000L));
+    }
+
+    @Test
+    void logout_withBodyRefreshTokenOfTheSameUser_revokesBothTokens() throws Exception {
+        givenToken("access.jwt", "patient1", "jti-access");
+        givenToken("refresh.jwt", "patient1", "jti-refresh");
+
+        mockMvc.perform(post("/auth/logout")
+                        .header("Authorization", "Bearer access.jwt")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"refresh.jwt\"}"))
+                .andExpect(status().isOk());
+
+        verify(tokenBlacklistService).blacklist("jti-access", 4_102_444_800_000L);
+        verify(tokenBlacklistService).blacklist("jti-refresh", 4_102_444_800_000L);
+    }
+
+    @Test
+    void logout_prefersTheRefreshCookieOverTheBody() throws Exception {
+        givenToken("access.jwt", "doctor1", "jti-access");
+        givenToken("cookie.refresh", "doctor1", "jti-cookie");
+        when(refreshTokenCookieService.read(any())).thenReturn("cookie.refresh");
+
+        mockMvc.perform(post("/auth/logout")
+                        .header("Authorization", "Bearer access.jwt")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"body.refresh\"}"))
+                .andExpect(status().isOk());
+
+        verify(tokenBlacklistService).blacklist("jti-cookie", 4_102_444_800_000L);
+        verify(jwtTokenProvider, never()).validateToken("body.refresh");
+    }
+
+    @Test
+    void logout_neverRevokesAnotherUsersRefreshToken() throws Exception {
+        givenToken("access.jwt", "patient1", "jti-access");
+        givenToken("refresh.jwt", "patient2", "jti-other");
+
+        mockMvc.perform(post("/auth/logout")
+                        .header("Authorization", "Bearer access.jwt")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"refresh.jwt\"}"))
+                .andExpect(status().isOk());
+
+        verify(tokenBlacklistService).blacklist("jti-access", 4_102_444_800_000L);
+        verify(tokenBlacklistService, never()).blacklist(eq("jti-other"), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void logout_withoutBearer_revokesNoRefreshToken() throws Exception {
+        givenToken("refresh.jwt", "patient1", "jti-refresh");
+
+        mockMvc.perform(post("/auth/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"refresh.jwt\"}"))
+                .andExpect(status().isOk());
+
+        verify(tokenBlacklistService, never()).blacklist(any(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void logout_withAnExpiredRefreshToken_stillSucceeds() throws Exception {
+        givenToken("access.jwt", "patient1", "jti-access");
+        when(jwtTokenProvider.validateToken("stale.jwt")).thenReturn(false);
+
+        mockMvc.perform(post("/auth/logout")
+                        .header("Authorization", "Bearer access.jwt")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"stale.jwt\"}"))
+                .andExpect(status().isOk());
+
+        verify(tokenBlacklistService).blacklist("jti-access", 4_102_444_800_000L);
+        verify(jwtTokenProvider, never()).getJtiFromToken("stale.jwt");
+    }
+
     @Test
     void login_withBlankUsername_returns400() throws Exception {
         LoginRequest login = new LoginRequest();

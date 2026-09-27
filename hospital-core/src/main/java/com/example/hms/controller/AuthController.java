@@ -559,9 +559,16 @@ public class AuthController {
 
     @WriteAudited(skip = true, reason = "emits LOGOUT / TOKEN_REFRESH itself, or is a check that mutates nothing")
     @PostMapping("/logout")
-    @Operation(summary = "Logout current user", description = "Clears authentication context on the server side (stateless JWT requires client to discard tokens).")
+    @Operation(summary = "Logout current user",
+        description = "Revokes the bearer access token and the refresh token — the HttpOnly cookie "
+            + "(web) or the optional body field {\"refreshToken\": \"...\"} (mobile, which keeps its "
+            + "refresh token itself) — then clears the refresh cookie. A refresh token is revoked "
+            + "only when it belongs to the same user as the bearer.")
     @ApiResponse(responseCode = "200", description = "Logout successful", content = @Content(schema = @Schema(implementation = MessageResponse.class)))
-    public ResponseEntity<Object> logout(HttpServletRequest request, HttpServletResponse response) {
+    public ResponseEntity<Object> logout(
+            @RequestBody(required = false) java.util.Map<String, String> body,
+            HttpServletRequest request,
+            HttpServletResponse response) {
         // Blacklist the current access token so it cannot be reused
         String bearerToken = request.getHeader("Authorization");
         String username = null;
@@ -587,10 +594,58 @@ public class AuthController {
                 log.debug("[LOGOUT] Could not extract jti from token: {}", ex.getMessage());
             }
         }
+        // Revoke the refresh token too. Without this a signed-out session
+        // was only half closed: the access token was blacklisted, but the
+        // refresh token — which the mobile apps hold themselves and send in
+        // the body — could mint a fresh pair until it expired.
+        String refreshToken = refreshTokenCookieService.read(request);
+        if (refreshToken == null && body != null) {
+            refreshToken = body.get("refreshToken");
+        }
+        revokeRefreshTokenOnLogout(refreshToken, username, request.getRemoteAddr());
         // S-01: clear the HttpOnly refresh-token cookie
         refreshTokenCookieService.clear(response);
         SecurityContextHolder.clearContext();
         return ResponseEntity.ok(new MessageResponse("Logged out successfully."));
+    }
+
+    /**
+     * Blacklist a refresh token presented at logout.
+     *
+     * <p>Only when the bearer identified a user and the refresh token is a
+     * valid token for that SAME user: logout must not become a way to revoke
+     * somebody else's session with a token that leaked. An expired or
+     * unparseable refresh token needs no revocation and is ignored.
+     */
+    private void revokeRefreshTokenOnLogout(String refreshToken, String bearerUsername, String ip) {
+        if (refreshToken == null || refreshToken.isBlank() || bearerUsername == null) {
+            return;
+        }
+        try {
+            if (!jwtTokenProvider.validateToken(refreshToken)) {
+                return;
+            }
+            String subject = jwtTokenProvider.getUsernameFromJWT(refreshToken);
+            if (!bearerUsername.equals(subject)) {
+                log.warn("[LOGOUT] Refresh token not revoked: it belongs to a different user than the bearer");
+                return;
+            }
+            String jti = jwtTokenProvider.getJtiFromToken(refreshToken);
+            if (jti == null) {
+                return;
+            }
+            tokenBlacklistService.blacklist(jti, jwtTokenProvider.getExpiration(refreshToken).getTime());
+            log.info("[LOGOUT] Blacklisted refresh token jti={}", jti);
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.TOKEN_REVOKED)
+                    .eventDescription("Refresh token revoked on logout (jti=" + jti + ")")
+                    .ipAddress(ip)
+                    .status(AuditStatus.SUCCESS)
+                    .userName(bearerUsername)
+                    .build());
+        } catch (Exception ex) {
+            log.debug("[LOGOUT] Could not revoke the refresh token: {}", ex.getMessage());
+        }
     }
 
     /**
