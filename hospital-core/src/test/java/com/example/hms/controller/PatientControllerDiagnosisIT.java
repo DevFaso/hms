@@ -43,6 +43,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -88,6 +89,9 @@ class PatientControllerDiagnosisIT extends BaseIT {
 
 	/** Problems this class created, so the teardown removes exactly those. */
 	private final List<java.util.UUID> createdProblemIds = new ArrayList<>();
+
+	@Autowired
+	private ApplicationContext applicationContext;
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -138,17 +142,7 @@ class PatientControllerDiagnosisIT extends BaseIT {
 	void setUp() {
 		// Hospital-scoped writes are audited with the actor's assignment id
 		// (fk_audit_assignment): clear the audit rows before the rows they point at.
-		auditEventLogRepository.deleteAllInBatch();
-		patientProblemHistoryRepository.deleteAll();
-		patientProblemRepository.deleteAll();
-		registrationRepository.deleteAll();
-		patientRepository.deleteAll();
-		staffRepository.deleteAll();
-		assignmentRepository.deleteAll();
-		userRepository.deleteAll();
-		roleRepository.deleteAll();
-		hospitalRepository.deleteAll();
-		organizationRepository.deleteAll();
+		SharedClinicalRowsCleanup.deleteAll(applicationContext);
 
 		organization = organizationRepository.save(Organization.builder()
 			.name("Test Health Network")
