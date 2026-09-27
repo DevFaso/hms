@@ -106,6 +106,53 @@ class ActingScopeResolverTest {
     }
 
     @Nested
+    @DisplayName("the active organisation follows the acting hospital (policies, plan gating; never a read scope)")
+    class ActiveOrganization {
+
+        private final UUID orgA = UUID.randomUUID();
+        private final UUID orgB = UUID.randomUUID();
+
+        private TenantRoleAssignment in(UUID organization, UUID hospital) {
+            return new TenantRoleAssignment(hospital, organization, "ROLE_DOCTOR", "ROLE_DOCTOR", true);
+        }
+
+        @Test
+        @DisplayName("several hospitals of two organisations: none until one is named; the header sets its organisation")
+        void headerSetsTheNamedHospitalsOrganization() {
+            produce(null, in(orgA, A), in(orgB, B));
+            assertThat(HospitalContextHolder.getContextOrEmpty().getActiveOrganizationId()).isNull();
+
+            produce(B.toString(), in(orgA, A), in(orgB, B));
+            assertThat(HospitalContextHolder.getContextOrEmpty().getActiveOrganizationId()).isEqualTo(orgB);
+        }
+
+        @Test
+        @DisplayName("a ?hospitalId= narrow sets the named hospital's organisation too")
+        void narrowSetsTheNamedHospitalsOrganization() {
+            produce(null, in(orgA, A), in(orgB, B));
+            resolver.narrowTo(A);
+            assertThat(HospitalContextHolder.getContextOrEmpty().getActiveOrganizationId()).isEqualTo(orgA);
+        }
+
+        @Test
+        @DisplayName("several hospitals of one organisation, or an organisation-level assignment only: that organisation")
+        void aSingleOrganizationIsActiveWithoutAPick() {
+            produce(null, in(orgA, A), in(orgA, B));
+            assertThat(HospitalContextHolder.getContextOrEmpty().getActiveOrganizationId()).isEqualTo(orgA);
+
+            produce(null, in(orgA, null));
+            assertThat(HospitalContextHolder.getContextOrEmpty().getActiveOrganizationId()).isEqualTo(orgA);
+        }
+
+        @Test
+        @DisplayName("a super-admin naming a hospital they hold no assignment at has no organisation, not a stale one")
+        void superAdminNamingAnotherTenantHasNoOrganization() {
+            produce(C.toString(), superAdmin(), in(orgA, A));
+            assertThat(HospitalContextHolder.getContextOrEmpty().getActiveOrganizationId()).isNull();
+        }
+    }
+
+    @Nested
     @DisplayName("the §1.4 matrix, target answers")
     class Matrix {
 

@@ -1,10 +1,10 @@
 package com.example.hms.security;
 
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-
-import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -15,22 +15,18 @@ import java.util.UUID;
  *
  * <ul>
  *   <li>Password path: the {@link HospitalUserDetails} principal's id.</li>
- *   <li>Keycloak path: the {@code appUserId} claim, which
- *       {@code keycloak/realm-export.json} maps from the {@code app_user_id}
- *       attribute, then the legacy {@code uid} / {@code userId} / {@code id}
- *       claims. The Keycloak {@code sub} is NOT a local id and is never
- *       read.</li>
+ *   <li>Keycloak path: the id {@code KeycloakHospitalContextResolver} linked
+ *       for this request — the {@code appUserId} claim, accepted only when
+ *       that account carries the token's username or email. A claim is never
+ *       read here directly: an ownership guard must not act as an account the
+ *       scope resolver refused to link. The Keycloak {@code sub} is not a
+ *       local id.</li>
  * </ul>
  *
  * <p>It lives in {@code security} so services stop importing the controller
- * helper {@code ControllerAuthUtils} for it, and it never throws — unlike
- * {@code AuthService.getCurrentUserId()}, which refuses every principal that
- * is not a {@link CustomUserDetails}.
+ * helper {@code ControllerAuthUtils} for it, and it never throws.
  */
 public final class PrincipalUserIds {
-
-    /** Claim names that carry the local user id on a bearer token, in order. */
-    static final List<String> USER_ID_CLAIMS = List.of("appUserId", "uid", "userId", "id");
 
     private PrincipalUserIds() {
     }
@@ -43,22 +39,18 @@ public final class PrincipalUserIds {
             return Optional.ofNullable(details.getUserId());
         }
         if (auth instanceof JwtAuthenticationToken token) {
-            return ofJwt(token.getToken());
+            return linkedByTheFilter(token);
         }
         return Optional.empty();
     }
 
-    private static Optional<UUID> ofJwt(Jwt jwt) {
-        for (String claim : USER_ID_CLAIMS) {
-            String raw = jwt.getClaimAsString(claim);
-            if (raw != null && !raw.isBlank()) {
-                try {
-                    return Optional.of(UUID.fromString(raw.trim()));
-                } catch (IllegalArgumentException ignored) {
-                    // not a UUID — try the next claim
-                }
-            }
+    /** The verified link of this request's context, when it was built for this token's principal. */
+    private static Optional<UUID> linkedByTheFilter(JwtAuthenticationToken token) {
+        HospitalContext context = HospitalContextHolder.getContextOrEmpty();
+        if (context.getPrincipalUserId() == null
+            || !Objects.equals(context.getPrincipalUsername(), token.getName())) {
+            return Optional.empty();
         }
-        return Optional.empty();
+        return Optional.of(context.getPrincipalUserId());
     }
 }

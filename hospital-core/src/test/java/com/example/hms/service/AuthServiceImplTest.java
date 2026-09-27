@@ -2,6 +2,8 @@ package com.example.hms.service;
 
 import com.example.hms.exception.UnauthorizedException;
 import com.example.hms.security.CustomUserDetails;
+import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -24,6 +26,7 @@ class AuthServiceImplTest {
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
+        HospitalContextHolder.clear();
     }
 
     @Test
@@ -45,9 +48,10 @@ class AuthServiceImplTest {
         UUID userId = UUID.randomUUID();
         org.springframework.security.oauth2.jwt.Jwt jwt = org.springframework.security.oauth2.jwt.Jwt
             .withTokenValue("t").header("alg", "none").claim("appUserId", userId.toString()).build();
-        SecurityContextHolder.getContext().setAuthentication(
+        // As the Keycloak filter leaves it: the appUserId it verified is on the context.
+        ActingScopeTestSupport.signInLinked(
             new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(
-                jwt, List.of(new SimpleGrantedAuthority("ROLE_PATIENT"))));
+                jwt, List.of(new SimpleGrantedAuthority("ROLE_PATIENT"))), userId);
 
         assertThat(authService.getCurrentUserId()).isEqualTo(userId);
     }

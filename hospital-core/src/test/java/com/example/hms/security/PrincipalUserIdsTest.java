@@ -1,5 +1,8 @@
 package com.example.hms.security;
 
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -16,9 +19,15 @@ import static org.mockito.Mockito.when;
 
 /**
  * {@link PrincipalUserIds}: the one rule turning a principal into a local user
- * id (design D10), and never the Keycloak subject.
+ * id (design D10). A Keycloak principal's id is the link the context filter
+ * verified, never a claim read on its own and never the subject.
  */
 class PrincipalUserIdsTest {
+
+    @AfterEach
+    void clear() {
+        HospitalContextHolder.clear();
+    }
 
     @Test
     @DisplayName("password path: the principal's user id")
@@ -31,25 +40,44 @@ class PrincipalUserIdsTest {
     }
 
     @Test
-    @DisplayName("Keycloak: appUserId first; a malformed value falls through to the legacy claims")
-    void keycloakAppUserId() {
+    @DisplayName("Keycloak: the id the filter linked for this principal")
+    void keycloakLinkedId() {
         UUID id = UUID.randomUUID();
-        assertThat(PrincipalUserIds.of(jwt("appUserId", id.toString()))).contains(id);
-        UUID legacy = UUID.randomUUID();
-        Jwt both = Jwt.withTokenValue("t").header("alg", "none")
-            .claim("appUserId", "not-a-uuid").claim("uid", legacy.toString()).build();
-        assertThat(PrincipalUserIds.of(new JwtAuthenticationToken(both))).contains(legacy);
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(id).principalUsername("dr.a").build());
+        assertThat(PrincipalUserIds.of(jwt("dr.a", "appUserId", id.toString()))).contains(id);
     }
 
     @Test
-    @DisplayName("the Keycloak subject is never a local id; no principal, no id")
-    void neverTheSubject() {
-        assertThat(PrincipalUserIds.of(jwt("sub", UUID.randomUUID().toString()))).isEmpty();
+    @DisplayName("Keycloak: an appUserId claim the filter did not link is no id (a mis-set attribute borrows nothing)")
+    void keycloakUnlinkedClaimIsNoId() {
+        UUID claimed = UUID.randomUUID();
+        HospitalContextHolder.setContext(HospitalContext.builder().principalUsername("dr.a").build());
+        assertThat(PrincipalUserIds.of(jwt("dr.a", "appUserId", claimed.toString()))).isEmpty();
+        HospitalContextHolder.clear();
+        assertThat(PrincipalUserIds.of(jwt("dr.a", "appUserId", claimed.toString())))
+            .as("no context at all").isEmpty();
+        assertThat(PrincipalUserIds.of(jwt("dr.a", "uid", claimed.toString())))
+            .as("the legacy claims are not read").isEmpty();
+    }
+
+    @Test
+    @DisplayName("Keycloak: a context built for another principal is not this token's link")
+    void keycloakContextOfAnotherPrincipal() {
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(UUID.randomUUID()).principalUsername("someone.else").build());
+        assertThat(PrincipalUserIds.of(jwt("dr.a", "appUserId", UUID.randomUUID().toString()))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("no principal, or an unknown principal type, has no id")
+    void noPrincipal() {
         assertThat(PrincipalUserIds.of(null)).isEqualTo(Optional.empty());
         assertThat(PrincipalUserIds.of(new UsernamePasswordAuthenticationToken("name", null))).isEmpty();
     }
 
-    private static JwtAuthenticationToken jwt(String claim, String value) {
-        return new JwtAuthenticationToken(Jwt.withTokenValue("t").header("alg", "none").claim(claim, value).build());
+    private static JwtAuthenticationToken jwt(String subject, String claim, String value) {
+        Jwt token = Jwt.withTokenValue("t").header("alg", "none").subject(subject).claim(claim, value).build();
+        return new JwtAuthenticationToken(token, List.of(), subject);
     }
 }

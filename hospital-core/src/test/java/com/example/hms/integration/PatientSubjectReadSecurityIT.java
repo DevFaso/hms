@@ -1,7 +1,5 @@
 package com.example.hms.integration;
 
-import com.example.hms.security.tenant.ActingScopeResolver;
-import com.example.hms.security.TenantLifecycleGate;
 import com.example.hms.BaseIT;
 import com.example.hms.model.Consultation;
 import com.example.hms.model.Hospital;
@@ -12,9 +10,11 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UltrasoundOrderRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.security.IdleSessionGate;
+import com.example.hms.security.TenantLifecycleGate;
 import com.example.hms.security.oidc.IssuerAwareBearerTokenResolver;
 import com.example.hms.security.oidc.KeycloakHospitalContextFilter;
 import com.example.hms.security.oidc.KeycloakHospitalContextResolver;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -99,7 +99,9 @@ class PatientSubjectReadSecurityIT extends BaseIT {
     private com.example.hms.security.tenant.LinkedTestAccounts accounts;
     @Autowired private com.example.hms.security.IdleSessionTracker idleSessionTracker;
 
-    private final UUID patientUserId = UUID.randomUUID();
+    /** The patient's real local account: a Keycloak id is only ever the one the filter linked. */
+    private UUID patientUserId;
+    private String patientUsername;
     private final UUID ownPatientId = UUID.randomUUID();
     private final UUID otherPatientId = UUID.randomUUID();
     private final UUID unknownPatientId = UUID.randomUUID();
@@ -111,6 +113,10 @@ class PatientSubjectReadSecurityIT extends BaseIT {
             hospitalRepository, userRepository, roleRepository, assignmentRepository, auditEventLogRepository);
         hospitalA = accounts.hospital("Subject A").getId();
         hospitalB = accounts.hospital("Subject B").getId();
+        com.example.hms.model.User patientAccount = accounts.userAt("patient001", null);
+        patientUserId = patientAccount.getId();
+        patientUsername = patientAccount.getUsername();
+        idleSessionTracker.touch(patientUserId);
         when(patientRepository.existsByIdAndUserId(ownPatientId, patientUserId)).thenReturn(true);
     }
 
@@ -151,7 +157,7 @@ class PatientSubjectReadSecurityIT extends BaseIT {
     @Test
     @DisplayName("a Keycloak patient reads their own ultrasound order and list, resolved from appUserId")
     void patientReadsOwn() throws Exception {
-        String patient = token("patient001", patientUserId, "PATIENT");
+        String patient = token(patientUsername, patientUserId, "PATIENT");
         when(ultrasoundOrderRepository.findById(orderId)).thenReturn(Optional.of(ultrasoundOrderOf(ownPatientId)));
         when(ultrasoundOrderRepository.findAllByPatientId(ownPatientId)).thenReturn(List.of(ultrasoundOrderOf(ownPatientId)));
 
@@ -168,7 +174,7 @@ class PatientSubjectReadSecurityIT extends BaseIT {
     @Test
     @DisplayName("another patient's ultrasound order answers exactly as a missing one")
     void foreignOrderAnswersAsMissing() throws Exception {
-        String patient = token("patient001", patientUserId, "PATIENT");
+        String patient = token(patientUsername, patientUserId, "PATIENT");
         when(ultrasoundOrderRepository.findById(orderId)).thenReturn(Optional.of(ultrasoundOrderOf(otherPatientId)));
         MvcResult foreign = getAs(patient, "/ultrasound/orders/{id}", orderId);
 
@@ -182,7 +188,7 @@ class PatientSubjectReadSecurityIT extends BaseIT {
     @Test
     @DisplayName("another patient's lists answer exactly as an unknown patient's, and the rows are never asked for")
     void foreignListsAnswerAsUnknown() throws Exception {
-        String patient = token("patient001", patientUserId, "PATIENT");
+        String patient = token(patientUsername, patientUserId, "PATIENT");
         when(ultrasoundOrderRepository.findAllByPatientId(otherPatientId)).thenReturn(List.of(ultrasoundOrderOf(otherPatientId)));
         when(consultationRepository.findByPatient_IdOrderByRequestedAtDesc(otherPatientId)).thenReturn(List.of(new Consultation()));
 

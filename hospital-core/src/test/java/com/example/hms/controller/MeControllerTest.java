@@ -1,6 +1,7 @@
 package com.example.hms.controller;
 
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.HospitalScopeRefusedException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
@@ -22,6 +23,10 @@ import com.example.hms.payload.dto.clinical.RoomedPatientDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import com.example.hms.service.ClinicalDashboardService;
 import com.example.hms.service.DashboardConfigService;
 import com.example.hms.service.DoctorWorklistService;
@@ -38,11 +43,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import com.example.hms.exception.HospitalScopeRefusedException;
-import com.example.hms.security.tenant.ActingScope;
-import com.example.hms.security.tenant.ActingScopeTestSupport;
-import com.example.hms.security.context.HospitalContext;
-import com.example.hms.security.context.HospitalContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
@@ -148,6 +148,22 @@ class MeControllerTest {
                 .claim("appUserId", testUserId.toString())
                 .build();
         midwifeAuth = new JwtAuthenticationToken(midwifeJwt, List.of(new SimpleGrantedAuthority(ROLE_MIDWIFE)));
+        // As KeycloakHospitalContextFilter leaves it: the appUserId it verified
+        // for this principal is on the context (both tokens name testUserId).
+        linkTestUser();
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearHospitalContext() {
+        HospitalContextHolder.clear();
+    }
+
+    /** Merge the filter's verified link for the test tokens into the current context. */
+    private void linkTestUser() {
+        HospitalContextHolder.setContext(HospitalContextHolder.getContextOrEmpty().toBuilder()
+                .principalUserId(testUserId)
+                .principalUsername(testUserId.toString())
+                .build());
     }
 
     private static <T> T requireBody(ResponseEntity<T> response) {
@@ -716,6 +732,7 @@ class MeControllerTest {
         // assignment and told the patient does not exist (D3).
         UUID patientId = UUID.randomUUID();
         ActingScopeTestSupport.globalSuperAdmin(testUserId);
+        linkTestUser();
         try {
             assertThrows(HospitalScopeRefusedException.class,
                 () -> controller.getPatientSnapshot(patientId, doctorAuth));
@@ -826,6 +843,7 @@ class MeControllerTest {
                 .activeHospitalId(testHospitalId)
                 .permittedHospitalIds(Set.of(testHospitalId))
                 .build());
+        linkTestUser();
         ResponseEntity<ApiResponseWrapper<List<DoctorResultQueueItemDTO>>> response;
         try {
             response = controller.getResultReviewQueue(doctorAuth);

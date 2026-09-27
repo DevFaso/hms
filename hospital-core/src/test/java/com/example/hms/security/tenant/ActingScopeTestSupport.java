@@ -6,7 +6,8 @@ import com.example.hms.security.auth.TenantRoleAssignmentAccessor;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import org.springframework.beans.factory.ObjectProvider;
-
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import java.util.Set;
 import java.util.UUID;
 
@@ -70,6 +71,21 @@ public final class ActingScopeTestSupport {
             .build();
         HospitalContextHolder.setContext(context);
         return context;
+    }
+
+    /**
+     * A Keycloak caller as {@code KeycloakHospitalContextFilter} leaves it:
+     * signed in, and the local account it verified ({@code appUserId} naming
+     * an account that carries the token's name) recorded on the context,
+     * which is the only place {@code PrincipalUserIds} reads a Keycloak id.
+     * Merged into the current context; callers clear the holder afterwards.
+     */
+    public static void signInLinked(Authentication keycloakAuth, UUID localUserId) {
+        SecurityContextHolder.getContext().setAuthentication(keycloakAuth);
+        HospitalContextHolder.setContext(HospitalContextHolder.getContextOrEmpty().toBuilder()
+            .principalUserId(localUserId)
+            .principalUsername(keycloakAuth.getName())
+            .build());
     }
 
     public static void clear() {

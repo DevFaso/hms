@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.util.Collections;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -82,6 +83,30 @@ public class HospitalContext {
      */
     @Builder.Default
     private final Set<String> assignedRoles = Collections.emptySet();
+
+    /**
+     * The organisation of each hospital the caller holds, from the same live
+     * assignments. Read only to keep {@link #activeOrganizationId} the
+     * organisation of the hospital the request acts at (organisation policies,
+     * plan gating); never a read scope (design Q6, option A).
+     */
+    @Builder.Default
+    private final Map<UUID, UUID> hospitalOrganizations = Collections.emptyMap();
+
+    /**
+     * This context acting at {@code hospitalId}, named explicitly: the active
+     * organisation follows the hospital (null when the caller holds no
+     * assignment there, e.g. a super-admin naming another tenant).
+     */
+    public HospitalContext actingAt(UUID hospitalId) {
+        return toBuilder()
+            .activeHospitalId(hospitalId)
+            .activeOrganizationId(hospitalId == null ? null : hospitalOrganizations.get(hospitalId))
+            .headerOverridden(true)
+            .scopeRefusal(null)
+            .refusedHospitalId(null)
+            .build();
+    }
 
     /**
      * The hospital this request is pinned to, or {@code null} when it is not

@@ -2,13 +2,13 @@ package com.example.hms.security.tenant;
 
 import com.example.hms.exception.HospitalScopeRefusedException;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.HospitalUserDetails;
 import com.example.hms.security.audit.CrossTenantReadAudit;
 import com.example.hms.security.auth.TenantRoleAssignment;
 import com.example.hms.security.auth.TenantRoleAssignmentAccessor;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.security.context.HospitalContextRequestOverrides;
-import com.example.hms.security.HospitalUserDetails;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.core.Authentication;
@@ -19,9 +19,11 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -105,7 +107,7 @@ public class ActingScopeResolver {
         Set<UUID> hospitals = new LinkedHashSet<>();
         Set<UUID> organizations = new LinkedHashSet<>();
         Set<String> roles = new LinkedHashSet<>();
-        UUID soleOrganization = null;
+        Map<UUID, UUID> hospitalOrganizations = new LinkedHashMap<>();
         for (TenantRoleAssignment assignment : assignments == null ? List.<TenantRoleAssignment>of() : assignments) {
             if (!assignment.active()) {
                 continue;
@@ -114,8 +116,9 @@ public class ActingScopeResolver {
             if (role != null) {
                 roles.add(role);
             }
-            if (assignment.hospitalId() != null && hospitals.add(assignment.hospitalId())) {
-                soleOrganization = assignment.organizationId();
+            if (assignment.hospitalId() != null && hospitals.add(assignment.hospitalId())
+                && assignment.organizationId() != null) {
+                hospitalOrganizations.put(assignment.hospitalId(), assignment.organizationId());
             }
             if (assignment.organizationId() != null) {
                 organizations.add(assignment.organizationId());
@@ -131,6 +134,11 @@ public class ActingScopeResolver {
             // are not a read scope (Q6, option A).
             .permittedOrganizationIds(Collections.unmodifiableSet(organizations))
             .assignedRoles(Collections.unmodifiableSet(roles))
+            .hospitalOrganizations(Collections.unmodifiableMap(hospitalOrganizations))
+            // The organisation policies and plan gating read: the acting
+            // hospital's (set again when a hospital is named), else the only
+            // organisation held. Not a read scope.
+            .activeOrganizationId(organizations.size() == 1 ? organizations.iterator().next() : null)
             .superAdmin(superAdmin)
             .hospitalAdmin(roles.contains(ROLE_HOSPITAL_ADMIN));
 
@@ -140,10 +148,12 @@ public class ActingScopeResolver {
             return builder.build();
         }
         if (hospitals.size() == 1) {
-            return builder
-                .activeHospitalId(hospitals.iterator().next())
-                .activeOrganizationId(soleOrganization)
-                .build();
+            UUID sole = hospitals.iterator().next();
+            UUID organization = hospitalOrganizations.get(sole);
+            if (organization != null) {
+                builder.activeOrganizationId(organization);
+            }
+            return builder.activeHospitalId(sole).build();
         }
         return builder
             .scopeRefusal(hospitals.isEmpty() ? ActingScope.Reason.NO_HOSPITAL : ActingScope.Reason.AMBIGUOUS)
@@ -295,12 +305,7 @@ public class ActingScopeResolver {
                 + (HospitalContextHolder.isNarrowed() ? "narrowed" : "read")
                 + " and cannot change: narrowTo must run once, before any other scope consumer");
         }
-        HospitalContext narrowed = context.toBuilder()
-            .activeHospitalId(requestedHospitalId)
-            .headerOverridden(true)
-            .scopeRefusal(null)
-            .refusedHospitalId(null)
-            .build();
+        HospitalContext narrowed = context.actingAt(requestedHospitalId);
         HospitalContextHolder.narrow(narrowed);
         return new ActingScope.Pinned(requestedHospitalId, ActingScope.Source.REQUESTED);
     }

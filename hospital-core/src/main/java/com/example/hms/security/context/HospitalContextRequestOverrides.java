@@ -84,14 +84,9 @@ public final class HospitalContextRequestOverrides {
             return refused(effective, requestedHospital);
         }
 
-        return effective.toBuilder()
-            .activeHospitalId(requestedHospital)
-            // Explicit: a super-admin is pinned by it, and the provisional
-            // refusal of a multi-hospital caller is settled by it.
-            .headerOverridden(true)
-            .scopeRefusal(null)
-            .refusedHospitalId(null)
-            .build();
+        // Explicit: a super-admin is pinned by it, and the provisional
+        // refusal of a multi-hospital caller is settled by it.
+        return effective.actingAt(requestedHospital);
     }
 
     private static HospitalContext refused(HospitalContext context, UUID requestedHospital) {

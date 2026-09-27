@@ -1,6 +1,5 @@
 package com.example.hms.service;
 
-import com.example.hms.security.tenant.ActingScopeTestSupport;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.ImagingReportStatus;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -33,6 +32,8 @@ import com.example.hms.repository.UltrasoundReportRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.CustomUserDetails;
+import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import com.example.hms.service.impl.ConsultationServiceImpl;
 import com.example.hms.service.impl.ImagingOrderServiceImpl;
 import com.example.hms.service.impl.ImagingReportServiceImpl;
@@ -110,6 +111,7 @@ class PatientSubjectReadOwnershipTest {
     @AfterEach
     void clear() {
         SecurityContextHolder.clearContext();
+        HospitalContextHolder.clear();
     }
 
     private void passwordLogin(String... roles) {
@@ -127,7 +129,7 @@ class PatientSubjectReadOwnershipTest {
             .claim("sub", "keycloak-subject")
             .claim("appUserId", callerUserId.toString())
             .build();
-        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt, authorities));
+        ActingScopeTestSupport.signInLinked(new JwtAuthenticationToken(jwt, authorities), callerUserId);
     }
 
     private static Patient patient(UUID id) {
