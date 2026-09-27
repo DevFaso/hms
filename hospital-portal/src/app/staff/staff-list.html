@@ -84,7 +84,7 @@
         >
           <option value="">{{ 'STAFF.ALL_TYPES' | translate }}</option>
           @for (et of employmentTypes; track et) {
-            <option [value]="et">{{ et.replaceAll('_', ' ') }}</option>
+            <option [value]="et">{{ et | enumLabel: 'employmentType' }}</option>
           }
         </select>
       </div>
@@ -127,7 +127,7 @@
       }
       @if (employmentTypeFilter) {
         <span class="filter-chip">
-          {{ employmentTypeFilter.replace('_', ' ') }}
+          {{ employmentTypeFilter | enumLabel: 'employmentType' }}
           <button class="chip-remove" (click)="employmentTypeFilter = ''; applyFilter()">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -292,7 +292,7 @@
                 <select id="sEmployment" [(ngModel)]="form.employmentType" name="employmentType">
                   <option value="">{{ 'STAFF.SELECT_TYPE' | translate }}</option>
                   @for (et of employmentTypes; track et) {
-                    <option [value]="et">{{ et.replaceAll('_', ' ') }}</option>
+                    <option [value]="et">{{ et | enumLabel: 'employmentType' }}</option>
                   }
                 </select>
               </div>

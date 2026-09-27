@@ -281,6 +281,23 @@ describe('SchedulingComponent', () => {
     expect(chip()).toBe('Médecin');
   });
 
+  it('labels leave requests by translated leave type', () => {
+    // formatLeaveType() capitalised the token — "Vacation" on a French screen.
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PORTAL: { ENUM: { LEAVE_TYPE: { VACATION: 'Congés payés' } } },
+    });
+    translate.use('fr');
+    fixture.detectChanges();
+    component.activeView.set('leaves');
+    fixture.detectChanges();
+
+    const labels = Array.from(
+      fixture.nativeElement.querySelectorAll('.leave-type-label') as NodeListOf<HTMLElement>,
+    ).map((el) => (el.textContent ?? '').trim());
+    expect(labels).toEqual(['Congés payés', 'Congés payés']);
+  });
+
   it('formats times, ranges, and enum labels', () => {
     expect(component.formatTime('08:30')).toBe('8:30 AM');
     expect(component.formatTime('16:05')).toBe('4:05 PM');
@@ -291,7 +308,6 @@ describe('SchedulingComponent', () => {
         mockShift({ startTime: '18:00', endTime: '01:00', crossMidnight: true }),
       ),
     ).toContain('(+1)');
-    expect(component.formatShiftType('NIGHT')).toBe('Night');
     expect(component.getInitials('Ama Owusu')).toBe('AO');
     expect(component.getInitials('Cher')).toBe('CH');
     expect(component.getInitials('')).toBe('??');

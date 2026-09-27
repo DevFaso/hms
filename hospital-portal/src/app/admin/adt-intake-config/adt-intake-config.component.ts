@@ -9,6 +9,7 @@ import {
 
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { Subject, Subscription, debounceTime, distinctUntilChanged, of, switchMap } from 'rxjs';
 
 import {
@@ -102,7 +103,7 @@ const EMPTY_FORM: IntakeFormState = {
 @Component({
   selector: 'app-adt-intake-config',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule, EnumLabelPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="adt-intake" data-testid="adt-intake-admin">
@@ -141,7 +142,7 @@ const EMPTY_FORM: IntakeFormState = {
                 <td>{{ cfg.hospitalName || cfg.hospitalId }}</td>
                 <td>{{ cfg.defaultAdmissionType }}</td>
                 <td>{{ cfg.defaultAcuityLevel }}</td>
-                <td>{{ cfg.defaultEncounterType }}</td>
+                <td>{{ cfg.defaultEncounterType | enumLabel: 'encounterType' }}</td>
                 <td>
                   <span
                     class="adt-intake__pill"

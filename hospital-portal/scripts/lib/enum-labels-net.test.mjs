@@ -93,6 +93,9 @@ test('a new LABELS group keys nothing its locale group does not', () => {
     'postpartumAlertType',
     'procedureOrderStatus',
     'vitalTaskType',
+    'shiftType',
+    'leaveType',
+    'employmentType',
   ]) {
     const localeKeys = Object.keys(en[toUpperSnake(domain)] ?? {});
     assert.deepEqual(groups.get(domain), localeKeys, domain);

@@ -407,14 +407,6 @@ export class SchedulingComponent implements OnInit {
     });
   }
 
-  formatShiftType(type: string): string {
-    return type.charAt(0) + type.slice(1).toLowerCase();
-  }
-
-  formatLeaveType(type: string): string {
-    return type.charAt(0) + type.slice(1).toLowerCase();
-  }
-
   shiftTypeIcon(type: string): string {
     const map: Record<string, string> = {
       MORNING: 'wb_sunny',

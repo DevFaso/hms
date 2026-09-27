@@ -768,6 +768,31 @@ export class EnumLabelService implements OnDestroy {
       FULL_SET: 'Full Set',
       ROUTINE: 'Routine',
     },
+
+    /* ── Staff scheduling and employment ──────────────────── */
+    shiftType: {
+      MORNING: 'Morning',
+      AFTERNOON: 'Afternoon',
+      EVENING: 'Evening',
+      NIGHT: 'Night',
+      ON_CALL: 'On-Call',
+      FLEX: 'Flex',
+    },
+    leaveType: {
+      VACATION: 'Vacation',
+      SICK: 'Sick Leave',
+      EMERGENCY: 'Emergency',
+      TRAINING: 'Training',
+      UNPAID: 'Unpaid Leave',
+      OTHER: 'Other',
+    },
+    employmentType: {
+      FULL_TIME: 'Full-Time',
+      PART_TIME: 'Part-Time',
+      CONTRACT: 'Contract',
+      LOCUM: 'Locum',
+      INTERN: 'Intern',
+    },
   };
 
   /** The locale-aware label for one raw enum value, or `''` for a blank one. */

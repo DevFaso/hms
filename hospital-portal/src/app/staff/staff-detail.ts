@@ -238,14 +238,6 @@ export class StaffDetailComponent implements OnInit {
     return name.substring(0, 2).toUpperCase();
   }
 
-  formatEmploymentType(type?: string): string {
-    if (!type) return '—';
-    return type
-      .replaceAll('_', ' ')
-      .toLowerCase()
-      .replaceAll(/\b\w/g, (c) => c.toUpperCase());
-  }
-
   formatDate(date?: string): string {
     if (!date) return '—';
     return new Date(date).toLocaleDateString(currentLocale(), {
@@ -280,14 +272,6 @@ export class StaffDetailComponent implements OnInit {
     const start = this.formatTime(shift.startTime);
     const end = this.formatTime(shift.endTime);
     return shift.crossMidnight ? `${start} – ${end} (+1)` : `${start} – ${end}`;
-  }
-
-  formatShiftType(type: string): string {
-    return type.charAt(0) + type.slice(1).toLowerCase();
-  }
-
-  formatLeaveType(type: string): string {
-    return type.charAt(0) + type.slice(1).toLowerCase();
   }
 
   shiftTypeIcon(type: string): string {

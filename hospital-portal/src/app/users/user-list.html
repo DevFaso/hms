@@ -467,7 +467,7 @@
                 >
                   <option value="">— {{ 'COMMON.SELECT' | translate }} —</option>
                   @for (et of employmentTypes; track et) {
-                    <option [value]="et">{{ formatEnumLabel(et) }}</option>
+                    <option [value]="et">{{ et | enumLabel: 'employmentType' }}</option>
                   }
                 </select>
               </div>

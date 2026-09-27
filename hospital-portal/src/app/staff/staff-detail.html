@@ -156,7 +156,9 @@
             </div>
             <div class="info-row">
               <span class="label">{{ 'STAFF.EMPLOYMENT_TYPE' | translate }}</span>
-              <span class="value">{{ formatEmploymentType(s.employmentType) }}</span>
+              <span class="value">{{
+                (s.employmentType | enumLabel: 'employmentType') || '—'
+              }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'STAFF.SPECIALIZATION' | translate }}</span>
@@ -342,7 +344,9 @@
                             'STAFF.SHIFT_CONTINUED_BADGE' | translate
                           }}</span>
                         }
-                        <span class="shift-meta">{{ formatShiftType(shift.shiftType) }}</span>
+                        <span class="shift-meta">{{
+                          shift.shiftType | enumLabel: 'shiftType'
+                        }}</span>
                       </div>
                       <span
                         class="shift-status-dot"
@@ -390,7 +394,9 @@
                 </div>
                 <div class="leave-details">
                   <div class="leave-title">
-                    <span class="leave-type-label">{{ formatLeaveType(leave.leaveType) }}</span>
+                    <span class="leave-type-label">{{
+                      leave.leaveType | enumLabel: 'leaveType'
+                    }}</span>
                     <span class="leave-status-badge" [attr.data-status]="leave.status">
                       {{ leave.status | enumLabel: 'leaveStatus' }}
                     </span>

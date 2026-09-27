@@ -5493,6 +5493,29 @@
         "LAB": "Laboratorio",
         "PROCEDURE": "Procedimiento",
         "VITALS": "Constantes vitales"
+      },
+      "SHIFT_TYPE": {
+        "MORNING": "Mañana",
+        "AFTERNOON": "Tarde",
+        "EVENING": "Noche",
+        "NIGHT": "Nocturno",
+        "ON_CALL": "De guardia",
+        "FLEX": "Flexible"
+      },
+      "LEAVE_TYPE": {
+        "VACATION": "Vacaciones",
+        "SICK": "Baja por enfermedad",
+        "EMERGENCY": "Emergencia",
+        "TRAINING": "Formación",
+        "UNPAID": "Permiso sin sueldo",
+        "OTHER": "Otro"
+      },
+      "EMPLOYMENT_TYPE": {
+        "FULL_TIME": "Tiempo completo",
+        "PART_TIME": "Tiempo parcial",
+        "CONTRACT": "Contrato",
+        "LOCUM": "Suplente",
+        "INTERN": "Interno"
       }
     },
     "DOCUMENTS": {

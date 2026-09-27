@@ -20,6 +20,7 @@ import {
 import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { currentLocale } from '../../shared/i18n/app-locale';
 
 interface QcPoint {
@@ -57,7 +58,7 @@ interface QcChartGroup {
 @Component({
   selector: 'app-lab-approval-queue',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './lab-approval-queue.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-approval-queue.scss',

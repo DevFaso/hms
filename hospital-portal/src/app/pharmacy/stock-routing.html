@@ -273,7 +273,7 @@
             <tr>
               <td>
                 <span class="badge" [ngClass]="routingTypeBadgeClass(d.routingType)">
-                  {{ d.routingType }}
+                  {{ d.routingType | enumLabel: 'routingType' }}
                 </span>
               </td>
               <td>{{ d.targetPharmacyName || '—' }}</td>

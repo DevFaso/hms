@@ -162,7 +162,7 @@
                         <span class="material-symbols-outlined">{{
                           shiftTypeIcon(shift.shiftType)
                         }}</span>
-                        {{ formatShiftType(shift.shiftType) }}
+                        {{ shift.shiftType | enumLabel: 'shiftType' }}
                       </span>
                     </div>
                     <span class="shift-status-badge" [attr.data-status]="shift.status">
@@ -241,7 +241,7 @@
             <div class="leave-details">
               <div class="leave-title-row">
                 <span class="leave-staff-name">{{ leave.staffName }}</span>
-                <span class="leave-type-label">{{ formatLeaveType(leave.leaveType) }}</span>
+                <span class="leave-type-label">{{ leave.leaveType | enumLabel: 'leaveType' }}</span>
                 <span class="leave-status-badge" [attr.data-status]="leave.status">{{
                   leave.status | enumLabel: 'leaveStatus'
                 }}</span>

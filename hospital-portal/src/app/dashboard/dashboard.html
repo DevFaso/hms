@@ -1064,7 +1064,7 @@
                     <td style="padding: 8px 12px">
                       <div>{{ row.wardName }}</div>
                       <div style="font-size: 11px; color: #64748b">
-                        {{ row.wardType | titlecase }}
+                        {{ row.wardType | enumLabel: 'wardType' }}
                       </div>
                     </td>
                     <td style="padding: 8px 12px; text-align: center">{{ row.totalBeds }}</td>

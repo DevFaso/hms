@@ -192,6 +192,21 @@ describe('StaffDetailComponent — credentialing entry point', () => {
       expect(root().textContent).not.toContain('NURSE_PRACTITIONER');
     });
 
+    it('renders the employment type in the current language', async () => {
+      // formatEmploymentType() Title-Cased the token: "Locum" to a French admin.
+      await setup(staff({ employmentType: 'LOCUM' }));
+      useFrench();
+      TestBed.inject(TranslateService).setTranslation(
+        'fr',
+        { PORTAL: { ENUM: { EMPLOYMENT_TYPE: { LOCUM: 'Remplaçant' } } } },
+        true,
+      );
+      openEmploymentTab();
+
+      expect(root().textContent).toContain('Remplaçant');
+      expect(root().textContent).not.toContain('Locum');
+    });
+
     it('falls back to the translated generic title when there is none', async () => {
       await setup(staff({ jobTitle: undefined }));
       useFrench();

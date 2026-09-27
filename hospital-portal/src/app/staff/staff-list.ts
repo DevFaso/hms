@@ -62,7 +62,8 @@ export class StaffListComponent implements OnInit {
   deletingStaff = signal<StaffResponse | null>(null);
   deleting = signal(false);
 
-  readonly employmentTypes = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'VOLUNTEER', 'INTERN'];
+  /** EmploymentType's constants. VOLUNTEER was listed here and is not one — picking it failed the save. */
+  readonly employmentTypes = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'LOCUM', 'INTERN'];
 
   /**
    * Exact values from the backend JobTitle enum.

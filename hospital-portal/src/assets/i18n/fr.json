@@ -5459,6 +5459,29 @@
         "LAB": "Laboratoire",
         "PROCEDURE": "Intervention",
         "VITALS": "Constantes"
+      },
+      "SHIFT_TYPE": {
+        "MORNING": "Matin",
+        "AFTERNOON": "Après-midi",
+        "EVENING": "Soir",
+        "NIGHT": "Nuit",
+        "ON_CALL": "De garde",
+        "FLEX": "Flexible"
+      },
+      "LEAVE_TYPE": {
+        "VACATION": "Congés payés",
+        "SICK": "Arrêt maladie",
+        "EMERGENCY": "Urgence",
+        "TRAINING": "Formation",
+        "UNPAID": "Congé sans solde",
+        "OTHER": "Autre"
+      },
+      "EMPLOYMENT_TYPE": {
+        "FULL_TIME": "Temps plein",
+        "PART_TIME": "Temps partiel",
+        "CONTRACT": "Contrat",
+        "LOCUM": "Remplaçant",
+        "INTERN": "Interne"
       }
     },
     "DOCUMENTS": {

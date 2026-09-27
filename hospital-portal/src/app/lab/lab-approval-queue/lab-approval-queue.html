@@ -250,7 +250,9 @@
             @for (study of validationStudies(); track study.id) {
               <div class="study-card">
                 <div class="study-card-header">
-                  <span class="study-type">{{ study.studyType }}</span>
+                  <span class="study-type">{{
+                    study.studyType | enumLabel: 'validationStudyType'
+                  }}</span>
                   <span class="status-badge" [class]="studyPassedClass(study.passed)">
                     {{
                       (study.passed ? 'LAB_APPROVAL.STUDIES.PASSED' : 'LAB_APPROVAL.STUDIES.FAILED')
@@ -540,7 +542,7 @@
             <label for="study-type">{{ 'LAB_APPROVAL.STUDY_FORM.STUDY_TYPE' | translate }}</label>
             <select id="study-type" [(ngModel)]="studyForm.studyType" required>
               @for (t of studyTypes; track t) {
-                <option [value]="t">{{ t | titlecase }}</option>
+                <option [value]="t">{{ t | enumLabel: 'validationStudyType' }}</option>
               }
             </select>
           </div>

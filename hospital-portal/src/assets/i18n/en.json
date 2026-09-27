@@ -5493,6 +5493,29 @@
         "LAB": "Lab",
         "PROCEDURE": "Procedure",
         "VITALS": "Vitals"
+      },
+      "SHIFT_TYPE": {
+        "MORNING": "Morning",
+        "AFTERNOON": "Afternoon",
+        "EVENING": "Evening",
+        "NIGHT": "Night",
+        "ON_CALL": "On-Call",
+        "FLEX": "Flex"
+      },
+      "LEAVE_TYPE": {
+        "VACATION": "Vacation",
+        "SICK": "Sick Leave",
+        "EMERGENCY": "Emergency",
+        "TRAINING": "Training",
+        "UNPAID": "Unpaid Leave",
+        "OTHER": "Other"
+      },
+      "EMPLOYMENT_TYPE": {
+        "FULL_TIME": "Full-Time",
+        "PART_TIME": "Part-Time",
+        "CONTRACT": "Contract",
+        "LOCUM": "Locum",
+        "INTERN": "Intern"
       }
     },
     "DOCUMENTS": {
