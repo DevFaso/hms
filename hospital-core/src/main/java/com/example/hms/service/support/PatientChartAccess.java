@@ -117,4 +117,34 @@ public class PatientChartAccess {
         }
         throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
     }
+
+    /**
+     * Resolve the patient for a read of their OWN record — the patient portal
+     * and the proxy views, whose caller has already established whose record
+     * it is ({@code PatientPortalServiceImpl} derives the patient from the
+     * authenticated principal, or verifies the proxy grant, before calling).
+     *
+     * <p>Deliberately NOT {@link #require}. That is the staff chart gate: it
+     * asks whether a hospital's staff may open this chart, which is the wrong
+     * question for the patient themselves, and it answered it wrongly in both
+     * of the portal's cases. With no hospital scope (a patient with no primary
+     * hospital and no active registration) it denies every principal that is
+     * not a super-admin — every patient — so the portal branches written for
+     * that case never ran, and the health summary swallowed the 404 into an
+     * empty list. With a scope, it runs the record-access policy for a patient
+     * actor, so a patient whose chart is restricted was refused their own
+     * results.
+     *
+     * <p>Never call this with a patient id that came from a request: it
+     * authorizes nothing, it only resolves.
+     *
+     * @throws ResourceNotFoundException if no such patient
+     */
+    public Patient requireOwnRecord(UUID patientId) {
+        if (patientId == null) {
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, "<null>");
+        }
+        return patientRepository.findByIdUnscoped(patientId)
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
+    }
 }

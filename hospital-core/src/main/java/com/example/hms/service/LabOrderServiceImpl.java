@@ -27,6 +27,7 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.utility.DiagnosisCodeValidator;
 import com.example.hms.utility.RoleValidator;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.core.context.SecurityContextHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -60,6 +61,9 @@ public class LabOrderServiceImpl implements LabOrderService {
     // One constant, one source of truth.
     private static final String LAB_ORDER_NOT_FOUND = "laborder.notfound";
 
+    /** The key an unknown staff id gets; every ordering-staff refusal reuses it. */
+    private static final String STAFF_NOT_FOUND = "staff.notfound";
+
     /**
      * Resolvable message key, not a sentence, and the same one
      * {@code PatientChartAccess} and {@code PatientLabResultServiceImpl} throw:
@@ -87,6 +91,8 @@ public class LabOrderServiceImpl implements LabOrderService {
     private final LabTestDefinitionRepository labTestDefinitionRepository;
     private final LabOrderMapper labOrderMapper;
     private final RoleValidator roleValidator;
+    /** Caller identity on both auth paths (RoleValidator.getCurrentUserId is null under OIDC). */
+    private final com.example.hms.controller.support.ControllerAuthUtils authUtils;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final HospitalRepository hospitalRepository;
     private final PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
@@ -275,9 +281,6 @@ public class LabOrderServiceImpl implements LabOrderService {
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notfound"));
 
-        Staff staff = staffRepository.findById(request.getOrderingStaffId())
-            .orElseThrow(() -> new ResourceNotFoundException("staff.notfound"));
-
         UUID requestedHospitalId = request.getHospitalId();
         Encounter encounter = null;
         if (request.getEncounterId() != null) {
@@ -306,6 +309,8 @@ public class LabOrderServiceImpl implements LabOrderService {
         if (!patientRegistered) {
             throw new BusinessException("Patient is not registered with the specified hospital.");
         }
+
+        Staff staff = resolveOrderingStaff(request.getOrderingStaffId(), hospital);
 
         // Role check based on assignment, not JWT
         UUID userId = staff.getUser().getId();
@@ -357,6 +362,63 @@ public class LabOrderServiceImpl implements LabOrderService {
         applyStandingOrderMetadata(labOrder, request, base, labOrder.getOrderDatetime());
 
         return labOrder;
+    }
+
+    /**
+     * The ordering clinician's staff row AT the order's hospital.
+     *
+     * <p>This used to be {@code staffRepository.findById(orderingStaffId)} and
+     * nothing more. The order's hospital comes from the encounter or the
+     * requested id, the staff row was looked up independently, and the
+     * authorization ({@code canOrderLabTests}) is on the USER, who may hold
+     * assignments at several hospitals — so one staff id came to own orders at
+     * several hospitals, and every read filtered to "this staff member's
+     * orders" unioned tenants (the review queue, {@code getLabOrdersByStaffId}).
+     * A staff row is pinned to one hospital ({@code uq_staff_user_hospital}),
+     * so binding the order to the row at its own hospital closes that at the
+     * source.
+     *
+     * <p>Two rules, both checked before anything is written:
+     * <ul>
+     *   <li>The named clinician is the CALLER. A clinician places orders in
+     *       their own name; only a super-admin (the discrete claim, never the
+     *       authorities an impersonation context can inflate) may name another
+     *       — the super-admin order console does, and binds its staff to the
+     *       hospital itself.</li>
+     *   <li>The row is that person's row at the order's hospital. The portal
+     *       sends the profile's staff id, which for a clinician working at two
+     *       hospitals is one row of two; the same person's row at the order's
+     *       hospital is the one the order belongs to. A person with no active
+     *       staff row there cannot order there.</li>
+     * </ul>
+     *
+     * <p>Every refusal is {@code staff.notfound}, the key an unknown staff id
+     * already gets, so naming someone else's id, or a row with nothing at this
+     * hospital, reads exactly like naming no one.
+     */
+    private Staff resolveOrderingStaff(UUID requestedStaffId, Hospital hospital) {
+        Staff named = requestedStaffId == null ? null : staffRepository.findById(requestedStaffId).orElse(null);
+        UUID personId = named != null && named.getUser() != null ? named.getUser().getId() : null;
+        if (personId == null) {
+            throw new ResourceNotFoundException(STAFF_NOT_FOUND);
+        }
+        if (!roleValidator.isSuperAdminFromJwtClaim()) {
+            UUID callerId = authUtils.resolveUserId(SecurityContextHolder.getContext().getAuthentication())
+                .orElse(null);
+            if (!personId.equals(callerId)) {
+                log.warn("Lab order refused: the ordering staff named is not the caller");
+                throw new ResourceNotFoundException(STAFF_NOT_FOUND);
+            }
+        }
+        if (named.isActive() && named.getHospital() != null && hospital.getId().equals(named.getHospital().getId())) {
+            return named;
+        }
+        return staffRepository.findByUserIdAndHospitalId(personId, hospital.getId())
+            .filter(Staff::isActive)
+            .orElseThrow(() -> {
+                log.warn("Lab order refused: ordering staff has no active staff row at hospital {}", hospital.getId());
+                return new ResourceNotFoundException(STAFF_NOT_FOUND);
+            });
     }
 
     /**
@@ -629,7 +691,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         //
         // staff.notfound, the key this class already throws for a staff id it
         // will not resolve, so the refusal is indistinguishable from one.
-        throw new ResourceNotFoundException("staff.notfound", staffId);
+        throw new ResourceNotFoundException(STAFF_NOT_FOUND, staffId);
     }
 
     @Override

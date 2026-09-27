@@ -321,4 +321,49 @@ class PatientMedicationServiceImplTest {
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
+
+    // -- No hospital scope: the staff path refuses, the portal path reads the patient's own rows --
+
+    @Test
+    void staffRead_withNoHospitalScope_refusesInsteadOfReadingEveryHospital() {
+        Prescription foreign = new Prescription(); foreign.setId(UUID.randomUUID());
+        when(patientChartAccess.require(eq(patientId), isNull())).thenReturn(patient);
+        // Stubbed so the test would SEE the leak if the fallback ever ran again.
+        lenient().when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(foreign)));
+
+        assertThatThrownBy(() -> service.getMedicationsForPatient(patientId, null, 10))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
+            .isEqualTo("patient.notFound");
+
+        verify(prescriptionRepository, org.mockito.Mockito.never()).findByPatient_Id(any(), any());
+        org.mockito.Mockito.verifyNoInteractions(reachRecorder);
+    }
+
+    @Test
+    void portalRead_withNoHospitalScope_returnsThePatientsOwnRows_withoutTheStaffGate() {
+        Prescription own = new Prescription(); own.setId(UUID.randomUUID());
+        own.setCreatedAt(LocalDateTime.now()); own.setMedicationName("Amlodipine");
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(own)));
+
+        List<PatientMedicationResponseDTO> result = service.getMedicationsForPatientPortal(patientId, null, 10);
+
+        assertThat(result).extracting(PatientMedicationResponseDTO::getMedicationName).containsExactly("Amlodipine");
+        verify(patientChartAccess, org.mockito.Mockito.never()).require(any(), any());
+        org.mockito.Mockito.verifyNoInteractions(reachRecorder);
+    }
+
+    @Test
+    void staffRead_neverTakesTheOwnRecordResolver() {
+        when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of());
+
+        service.getMedicationsForPatient(patientId, hospitalId, 10);
+
+        verify(patientChartAccess, org.mockito.Mockito.never()).requireOwnRecord(any());
+    }
 }

@@ -222,6 +222,21 @@ describe('PatientDetailComponent', () => {
     expect(vitalServiceSpy.getRecent).toHaveBeenCalledWith('p1');
   });
 
+  it('does not read vitals without a hospital scope, and says why', () => {
+    // A super-admin in global view: the staff vitals read now refuses an
+    // unscoped request instead of answering across every tenant.
+    roleContextSpy.hasAnyActiveRole.and.returnValue(true);
+    roleContextSpy.effectiveHospitalIdForRequest.and.returnValue(null);
+    fixture.detectChanges();
+
+    component.setTab('vitals');
+    fixture.detectChanges();
+
+    expect(vitalServiceSpy.getRecent).not.toHaveBeenCalled();
+    const hint = fixture.nativeElement.querySelector('[data-testid="vitals-no-hospital"]');
+    expect(hint).not.toBeNull();
+  });
+
   // ── Read tabs must not be gated on write permissions (audit D5/D6/D7) ──
 
   it('shows vitals to a read-only role the backend admits', () => {

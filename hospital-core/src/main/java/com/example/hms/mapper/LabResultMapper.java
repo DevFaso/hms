@@ -91,6 +91,8 @@ public class LabResultMapper {
         .signatureNotes(result.getSignatureNotes())
             .createdAt(result.getCreatedAt())
             .updatedAt(result.getUpdatedAt())
+            .sourceMessageControlId(result.getSourceMessageControlId())
+            .observationResultStatus(result.getObservationResultStatus())
             .build();
     }
 

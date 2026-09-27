@@ -9,12 +9,12 @@ import {
  * decision C2, mirrored by JwtTokenProvider / SecurityConfig's authorities
  * mapper): a physician and a surgeon are doctors to every endpoint below.
  *
- * Spelled out in the lists rather than left to `roleSatisfies`, because these
- * lists are read through `RoleContextService.hasAnyActiveRole`, which compares
- * raw strings and does NOT expand — so a list naming only ROLE_DOCTOR is
- * narrower than the endpoint it claims to mirror, and hides the chart from a
- * surgeon the backend admits. B7's in-basket category routes exactly that
- * surgeon here.
+ * Spelled out in the lists as well: they were written when
+ * `RoleContextService.hasAnyActiveRole` compared raw strings and did not
+ * expand, so a list naming only ROLE_DOCTOR hid the chart from a surgeon the
+ * backend admits (B7's in-basket category routes exactly that surgeon here).
+ * The service now applies the equivalence itself; the explicit names are
+ * harmless and keep each list a literal mirror of its endpoint.
  */
 const DOCTOR_ROLES: string[] = ['ROLE_DOCTOR', ...DOCTOR_EQUIVALENT_ROLES];
 

@@ -78,7 +78,7 @@ class PatientLabResultReferenceRangeTest {
         result.setReleased(true);
         result.setResultDate(LocalDateTime.now());
 
-        when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId))).thenReturn(Set.of(hospitalId));
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)),

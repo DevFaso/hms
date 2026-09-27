@@ -99,9 +99,15 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
                                                             boolean portalView) {
         log.info("Fetching lab results for patient {} in hospital {}", patientId, hospitalId);
 
-        // See PatientChartAccess — cross-hospital safe, and adds the hospital
-        // authorization this read previously relied on the finder for.
-        Patient patient = patientChartAccess.require(patientId, hospitalId);
+        // Staff: the chart gate — cross-hospital safe, and the hospital
+        // authorization this read previously relied on the finder for. Portal:
+        // the caller already established whose record it is, and the staff
+        // gate is the wrong question for the patient themselves (with no scope
+        // it refused every patient, which left the null branch of fetchRows
+        // unreachable) — see PatientChartAccess.requireOwnRecord.
+        Patient patient = portalView
+            ? patientChartAccess.requireOwnRecord(patientId)
+            : patientChartAccess.require(patientId, hospitalId);
 
         int effectiveLimit = limit > 0 ? Math.min(limit, MAX_LIMIT) : DEFAULT_LIMIT;
         // Read the caller's limit first. If the pairing then removes rows —

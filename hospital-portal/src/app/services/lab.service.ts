@@ -68,6 +68,16 @@ export interface LabResultResponse {
   signatureNotes: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * MSH-10 of the HL7 v2 message that produced the row; null for a result a
+   * person entered. Non-null is what "came from an instrument" means.
+   */
+  sourceMessageControlId?: string | null;
+  /**
+   * OBX-11 as the analyzer sent it (F final, P preliminary, C corrected, …,
+   * HL7 table 0085); null when it did not say, and always for a typed row.
+   */
+  observationResultStatus?: string | null;
 }
 
 export interface LabResultReferenceRange {

@@ -342,7 +342,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public List<PatientMedicationResponseDTO> getMyMedications(Authentication auth, int limit) {
         Patient patient = findPatient(auth);
         UUID hospitalId = resolvePatientHospitalId(patient);
-        return medicationService.getMedicationsForPatient(patient.getId(), hospitalId, limit);
+        return medicationService.getMedicationsForPatientPortal(patient.getId(), hospitalId, limit);
     }
 
     // ── Prescriptions ────────────────────────────────────────────────────
@@ -364,7 +364,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<PatientVitalSignResponseDTO> getMyVitals(Authentication auth, int limit) {
         UUID patientId = resolvePatientId(auth);
-        return vitalSignService.getRecentVitals(patientId, null, limit);
+        return vitalSignService.getRecentVitalsForPatientPortal(patientId, limit);
     }
 
     // ── Encounters / visit history ───────────────────────────────────────
@@ -958,7 +958,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     private List<PatientMedicationResponseDTO> safeMedications(UUID patientId, UUID hospitalId) {
         try {
-            return medicationService.getMedicationsForPatient(patientId, hospitalId, 10);
+            return medicationService.getMedicationsForPatientPortal(patientId, hospitalId, 10);
         } catch (Exception e) {
             log.warn("Failed to fetch medications for health summary: {}", e.getMessage());
             return Collections.emptyList();
@@ -967,7 +967,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     private List<PatientVitalSignResponseDTO> safeVitals(UUID patientId) {
         try {
-            return vitalSignService.getRecentVitals(patientId, null, 5);
+            return vitalSignService.getRecentVitalsForPatientPortal(patientId, 5);
         } catch (Exception e) {
             log.warn("Failed to fetch vitals for health summary: {}", e.getMessage());
             return Collections.emptyList();
@@ -1337,7 +1337,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public List<PatientMedicationResponseDTO> getProxyMedications(Authentication auth, UUID patientId, int limit) {
         Patient patient = verifyProxyAccess(auth, patientId, "VIEW_MEDICATIONS");
         UUID hospitalId = resolvePatientHospitalId(patient);
-        return medicationService.getMedicationsForPatient(patient.getId(), hospitalId, limit);
+        return medicationService.getMedicationsForPatientPortal(patient.getId(), hospitalId, limit);
     }
 
     @Override

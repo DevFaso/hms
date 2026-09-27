@@ -280,7 +280,8 @@ class PrescriptionClarificationServiceTest {
                     .thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.resolveClarification(prescriptionId, "ok"))
-                    .isInstanceOf(AccessDeniedException.class);
+                    .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+                    .hasMessageContaining("staff profile at the prescribing hospital");
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PENDING_CLARIFICATION);
         }
 

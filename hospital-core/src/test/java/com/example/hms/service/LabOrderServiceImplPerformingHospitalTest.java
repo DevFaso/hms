@@ -79,6 +79,7 @@ class LabOrderServiceImplPerformingHospitalTest {
     @Mock private RecordAccessPolicy recordAccessPolicy;
     @Mock private CrossHospitalReachRecorder reachRecorder;
     @Mock private LabOrderRoutingNotifier routingNotifier;
+    @Mock private com.example.hms.controller.support.ControllerAuthUtils authUtils;
     @Mock private com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
     @Mock private com.example.hms.repository.LabResultRepository labResultRepository;
 
@@ -724,6 +725,7 @@ class LabOrderServiceImplPerformingHospitalTest {
     private void mockOrderLookups() {
         when(patientRepository.findByIdUnscoped(patient.getId())).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staff.getId())).thenReturn(Optional.of(staff));
+        lenient().when(authUtils.resolveUserId(any())).thenReturn(Optional.of(staff.getUser().getId()));
         when(hospitalRepository.findById(ordering.getId())).thenReturn(Optional.of(ordering));
         when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patient.getId(), ordering.getId()))
             .thenReturn(true);

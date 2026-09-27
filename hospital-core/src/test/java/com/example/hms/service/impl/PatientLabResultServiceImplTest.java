@@ -142,8 +142,10 @@ class PatientLabResultServiceImplTest {
         return lr;
     }
 
+    /** Shared by the staff and the portal tests; each path takes its own resolver. */
     private void givenTheOnlyRowIs(LabResult lr) {
-        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
+        lenient().when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
+        lenient().when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
             .thenReturn(List.of(lr));
@@ -240,7 +242,7 @@ class PatientLabResultServiceImplTest {
         lenient().when(labResultMapper.toResponseDTO(preliminary)).thenReturn(null);
         when(labResultMapper.toResponseDTO(finalResult)).thenReturn(new LabResultResponseDTO());
 
-        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
             .thenReturn(List.of(preliminary, finalResult));
@@ -284,7 +286,7 @@ class PatientLabResultServiceImplTest {
         another.setSourceObservationSetId("2");
         when(labResultMapper.toResponseDTO(any(LabResult.class))).thenReturn(new LabResultResponseDTO());
 
-        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         ArgumentCaptor<Pageable> pageCaptor = ArgumentCaptor.forClass(Pageable.class);
         // Honour the page size, or the mock hands back every row whatever was
@@ -618,21 +620,19 @@ class PatientLabResultServiceImplTest {
      * The patient reading their own results: no hospital scope is legitimate,
      * and refusing the staff case must not take this branch with it.
      *
-     * <p>NOT end-to-end portal coverage, deliberately. {@code patientChartAccess}
-     * is stubbed to admit the null scope, but the real
-     * {@code PatientChartAccess.require} throws on a null scope for any
-     * principal the context does not mark a super-admin — a patient included —
-     * so a portal caller with no resolvable hospital is refused one frame
-     * earlier than this, and has been since before this change. That is a
-     * separate defect in the portal's use of the STAFF chart-access gate; what
-     * this test pins is the branch inside this service.
+     * <p>The portal resolves the patient through
+     * {@code PatientChartAccess.requireOwnRecord}, never the staff gate: the
+     * real {@code require} refuses a null scope for every principal that is
+     * not a super-admin — every patient — which is what used to make this
+     * branch dead code. {@code PatientChartAccessTest} pins the resolver
+     * itself against a real, unscoped patient context.
      */
     @Test void portalView_withNoHospitalScope_stillReturnsThePatientsOwnResults() {
         UUID otherHospitalId = UUID.randomUUID();
         Hospital other = new Hospital(); other.setId(otherHospitalId); other.setName("Hopital B");
         LabOrder order = new LabOrder(); order.setHospital(other);
         LabResult own = buildLabResult("5.1", "mmol/L", true, false); own.setLabOrder(order);
-        when(patientChartAccess.require(eq(patientId), isNull())).thenReturn(patient);
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
         ArgumentCaptor<Pageable> page = ArgumentCaptor.forClass(Pageable.class);
         when(labResultRepository.findAllPatientResults(eq(patientId), page.capture())).thenReturn(List.of(own));
 
@@ -650,5 +650,27 @@ class PatientLabResultServiceImplTest {
             .containsExactly(otherHospitalId);
         // Nothing to disclose against: there is no acting hospital.
         verifyNoInteractions(reachRecorder);
+    }
+
+    /** The portal is the patient's own record: it never goes through the staff chart gate. */
+    @Test void portalView_neverAsksTheStaffChartGate() {
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(labResultRepository.findAllPatientResults(eq(patientId), any(Pageable.class))).thenReturn(List.of());
+
+        service.getLabResultsForPatientPortal(patientId, null, 10);
+
+        verify(patientChartAccess, never()).require(any(), any());
+    }
+
+    /** And a staff read never takes the portal's resolver, which authorizes nothing. */
+    @Test void staffView_neverTakesTheOwnRecordResolver() {
+        when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
+            .thenReturn(List.of());
+
+        service.getLabResultsForPatient(patientId, hospitalId, 10);
+
+        verify(patientChartAccess, never()).requireOwnRecord(any());
     }
 }
