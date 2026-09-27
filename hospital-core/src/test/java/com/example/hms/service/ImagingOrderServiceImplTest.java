@@ -625,7 +625,7 @@ class ImagingOrderServiceImplTest {
         String missingKey = ((ResourceNotFoundException) org.assertj.core.api.Assertions.catchThrowable(
             () -> imagingOrderService.updateOrderStatus(orderId, new ImagingOrderStatusUpdateRequestDTO())))
             .getMessageKey();
-        assertThat(missingKey).isEqualTo("Imaging order not found with ID: " + orderId);
+        assertThat(missingKey).isEqualTo("imaging.order.notFound");
 
         when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(orderAt(hospital)));
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
