@@ -81,7 +81,24 @@ dependencies {
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
 
     // Test
-    testImplementation 'org.springframework.boot:spring-boot-starter-test-classic'
+    // Boot 4's per-technology test starters, one per main starter above,
+    // instead of spring-boot-starter-test-classic (the pre-4.0 all-in-one
+    // bundle kept only for migration). Each pulls spring-boot-starter-test
+    // (JUnit, AssertJ, Mockito, spring-test) plus that technology's test
+    // auto-configuration and slices (@WebMvcTest, @DataJpaTest, ...).
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-restclient-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-mail-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-websocket-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-liquibase-test'
+    // TestRestTemplate (@AutoConfigureTestRestTemplate) lives in its own module.
+    testImplementation 'org.springframework.boot:spring-boot-resttestclient'
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.springframework.kafka:spring-kafka-test'
 
