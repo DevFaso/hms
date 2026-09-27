@@ -1,5 +1,6 @@
 package com.bitnesttechs.hms.patient.core.auth
 
+import com.bitnesttechs.hms.patient.core.network.AcceptLanguageInterceptor
 import com.squareup.moshi.Moshi
 import io.mockk.every
 import io.mockk.mockk
@@ -30,7 +31,7 @@ class AuthInterceptorTest {
         every { storage.accessToken } returns "legacy-abc"
         every { storage.refreshToken } returns null
 
-        val interceptor = AuthInterceptor(storage, moshi, keycloakProvider)
+        val interceptor = AuthInterceptor(storage, moshi, keycloakProvider, AcceptLanguageInterceptor { "en" })
         val header = captureAuthHeader(interceptor)
 
         assertEquals("Bearer oidc-xyz", header)
@@ -43,7 +44,7 @@ class AuthInterceptorTest {
         every { storage.accessToken } returns "legacy-abc"
         every { storage.refreshToken } returns null
 
-        val interceptor = AuthInterceptor(storage, moshi, keycloakProvider)
+        val interceptor = AuthInterceptor(storage, moshi, keycloakProvider, AcceptLanguageInterceptor { "en" })
         val header = captureAuthHeader(interceptor)
 
         assertEquals("Bearer legacy-abc", header)
@@ -56,7 +57,7 @@ class AuthInterceptorTest {
         every { storage.accessToken } returns null
         every { storage.refreshToken } returns null
 
-        val interceptor = AuthInterceptor(storage, moshi, keycloakProvider)
+        val interceptor = AuthInterceptor(storage, moshi, keycloakProvider, AcceptLanguageInterceptor { "en" })
         val header = captureAuthHeader(interceptor)
 
         assertEquals(null, header)

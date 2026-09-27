@@ -15,7 +15,17 @@ object LocaleHelper {
 
     fun getLanguage(context: Context): String {
         val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-        return prefs.getString(KEY_LANGUAGE, "en") ?: "en"
+        return normalize(prefs.getString(KEY_LANGUAGE, "en"))
+    }
+
+    /**
+     * One of [supportedLanguages]: a stored value from an older build, or
+     * anything else unexpected, reads as English rather than reaching a
+     * request header or a resource lookup unvalidated.
+     */
+    fun normalize(languageCode: String?): String {
+        val code = languageCode?.trim()?.lowercase(Locale.ROOT).orEmpty()
+        return if (code in supportedLanguages) code else "en"
     }
 
     fun setLanguage(context: Context, languageCode: String) {

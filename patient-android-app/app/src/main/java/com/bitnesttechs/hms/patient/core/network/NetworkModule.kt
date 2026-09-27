@@ -1,12 +1,15 @@
 package com.bitnesttechs.hms.patient.core.network
 
 import com.bitnesttechs.hms.patient.BuildConfig
+import android.content.Context
 import com.bitnesttechs.hms.patient.core.auth.AuthInterceptor
+import com.bitnesttechs.hms.patient.core.locale.LocaleHelper
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import okhttp3.Cookie
 import okhttp3.CookieJar
@@ -41,8 +44,15 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    fun provideAcceptLanguageInterceptor(
+        @ApplicationContext context: Context
+    ): AcceptLanguageInterceptor = AcceptLanguageInterceptor { LocaleHelper.getLanguage(context) }
+
+    @Provides
+    @Singleton
     fun provideOkHttpClient(
         authInterceptor: AuthInterceptor,
+        acceptLanguage: AcceptLanguageInterceptor,
         logging: HttpLoggingInterceptor
     ): OkHttpClient {
         // Simple in-memory cookie jar so OkHttp stores the XSRF-TOKEN cookie
@@ -76,6 +86,7 @@ object NetworkModule {
 
         return OkHttpClient.Builder()
             .cookieJar(cookieJar)
+            .addInterceptor(acceptLanguage)
             .addInterceptor(authInterceptor)
             .addInterceptor(csrfInterceptor)
             .addInterceptor(logging)
