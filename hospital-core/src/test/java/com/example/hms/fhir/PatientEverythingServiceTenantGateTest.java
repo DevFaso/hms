@@ -96,7 +96,11 @@ class PatientEverythingServiceTenantGateTest {
         reachRecorder = mock(com.example.hms.service.recordaccess.CrossHospitalReachRecorder.class);
         sensitivityClassifier = mock(com.example.hms.service.recordaccess.SensitivityClassifier.class);
         breakGlassGate = mock(com.example.hms.service.recordaccess.BreakGlassGate.class);
-        service = new PatientEverythingService(
+        service = newService(patientMapper);
+    }
+
+    private PatientEverythingService newService(PatientFhirMapper mapper) {
+        return new PatientEverythingService(
             properties,
             patientRepository,
             registrationRepository,
@@ -108,7 +112,7 @@ class PatientEverythingServiceTenantGateTest {
             uploadedDocumentRepository,
             mock(com.example.hms.repository.DischargeSummaryRepository.class),
             userRepository,
-            patientMapper,
+            mapper,
             encounterMapper,
             mock(ObservationFhirMapper.class),
             mock(ConditionFhirMapper.class),
@@ -178,6 +182,7 @@ class PatientEverythingServiceTenantGateTest {
         // closes. If this verify fails, name / DOB / address /
         // phone / email crossed the tenant boundary.
         verify(patientMapper, never()).toFhir(any(Patient.class));
+        verify(patientMapper, never()).toFhir(any(Patient.class), any());
     }
 
     @Test
@@ -226,6 +231,7 @@ class PatientEverythingServiceTenantGateTest {
         assertThatThrownBy(() -> service.fullRecordForDownload(patientId))
             .isInstanceOf(ResourceNotFoundException.class);
         verify(patientMapper, never()).toFhir(any(Patient.class));
+        verify(patientMapper, never()).toFhir(any(Patient.class), any());
     }
 
     @Test
@@ -320,7 +326,7 @@ class PatientEverythingServiceTenantGateTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findByPatientIdAndHospitalId(patientId, activeHospitalId))
             .thenReturn(Optional.of(new com.example.hms.model.PatientHospitalRegistration()));
-        when(patientMapper.toFhir(any(Patient.class))).thenReturn(new org.hl7.fhir.r4.model.Patient());
+        when(patientMapper.toFhir(any(Patient.class), eq(activeHospitalId))).thenReturn(new org.hl7.fhir.r4.model.Patient());
         when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(activeHospitalId)))
             .thenReturn(Set.of(activeHospitalId, otherHospitalId));
         when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(eq(patientId), eq(Set.of(activeHospitalId, otherHospitalId)), any()))
@@ -361,7 +367,7 @@ class PatientEverythingServiceTenantGateTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findByPatientIdAndHospitalId(patientId, activeHospitalId))
             .thenReturn(Optional.of(new com.example.hms.model.PatientHospitalRegistration()));
-        when(patientMapper.toFhir(any(Patient.class))).thenReturn(new org.hl7.fhir.r4.model.Patient());
+        when(patientMapper.toFhir(any(Patient.class), eq(activeHospitalId))).thenReturn(new org.hl7.fhir.r4.model.Patient());
         when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(activeHospitalId)))
             .thenReturn(Set.of(activeHospitalId, otherHospitalId));
         when(breakGlassGate.isUnlocked(any(), eq(patientId), eq(activeHospitalId))).thenReturn(true);
@@ -381,5 +387,67 @@ class PatientEverythingServiceTenantGateTest {
         service.everythingForPatient(patientId);
 
         verify(encounterMapper).toFhir(awaySensitive);
+    }
+
+    @Test
+    @DisplayName("the Patient entry carries the acting hospital's MRN only, even when the sections follow the patient elsewhere")
+    void thePatientCarriesOnlyTheActingHospitalsMrn() {
+        properties.getEverything().setEnabled(true);
+        setActiveHospital();
+        UUID otherHospitalId = UUID.randomUUID();
+        Patient patient = new Patient();
+        patient.setId(patientId);
+        registerAt(patient, activeHospitalId, "MRN-HERE");
+        registerAt(patient, otherHospitalId, "MRN-ELSEWHERE");
+        PatientFhirMapper realMapper = org.mockito.Mockito.spy(new PatientFhirMapper());
+        PatientEverythingService scoped = newService(realMapper);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.findByPatientIdAndHospitalId(patientId, activeHospitalId))
+            .thenReturn(Optional.of(new com.example.hms.model.PatientHospitalRegistration()));
+        // The treatment relationship reaches the other hospital: its rows may
+        // follow the patient, its record number may not.
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(activeHospitalId)))
+            .thenReturn(Set.of(activeHospitalId, otherHospitalId));
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(any(), any(), any()))
+            .thenReturn(new PageImpl<>(List.of()));
+        when(vitalSignRepository.findPageByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(any(), any(), any()))
+            .thenReturn(new PageImpl<>(List.of()));
+        when(labResultRepository.findPageByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(any(), any(), any()))
+            .thenReturn(new PageImpl<>(List.of()));
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(any(), any(), any(org.springframework.data.domain.Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of()));
+        when(uploadedDocumentRepository.findByPatient_IdAndDeletedAtIsNullOrderByCreatedAtDesc(any(), any()))
+            .thenReturn(new PageImpl<>(List.of()));
+
+        org.hl7.fhir.r4.model.Bundle bundle = scoped.everythingForPatient(patientId);
+
+        org.hl7.fhir.r4.model.Patient out = bundle.getEntry().stream()
+            .map(org.hl7.fhir.r4.model.Bundle.BundleEntryComponent::getResource)
+            .filter(org.hl7.fhir.r4.model.Patient.class::isInstance)
+            .map(org.hl7.fhir.r4.model.Patient.class::cast)
+            .findFirst().orElseThrow();
+        List<String> identifiers = out.getIdentifier().stream()
+            .map(i -> i.getSystem() + "|" + i.getValue()).toList();
+        assertThat(identifiers)
+            .filteredOn(i -> i.contains(":mrn|"))
+            .containsExactly("urn:hms:hospital:" + activeHospitalId + ":mrn|MRN-HERE");
+        assertThat(identifiers)
+            .noneMatch(i -> i.contains(otherHospitalId.toString()) || i.contains("MRN-ELSEWHERE"));
+        // The unscoped, every-MRN form is for the global view, which this
+        // operation refuses (403) before it maps anything.
+        verify(realMapper, never()).toFhir(any(Patient.class));
+    }
+
+    private static void registerAt(Patient patient, UUID hospitalId, String mrn) {
+        com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+        hospital.setId(hospitalId);
+        com.example.hms.model.PatientHospitalRegistration registration =
+            new com.example.hms.model.PatientHospitalRegistration();
+        // Entities compare by id: without one the set keeps a single registration.
+        registration.setId(UUID.randomUUID());
+        registration.setHospital(hospital);
+        registration.setMrn(mrn);
+        registration.setPatient(patient);
+        patient.getHospitalRegistrations().add(registration);
     }
 }
