@@ -2480,4 +2480,97 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V167 — the partner no-show becomes a column of its own.
+         The fact "the partner accepted and never delivered" lived inside
+         prescription_routing_decisions.reason, a free-text column, first as
+         an English literal ("Partner no-show: ", pre-#740), then as a
+         [PARTNER_NO_SHOW] marker (#740). Adds partner_no_show (boolean,
+         NOT NULL DEFAULT false) + no_show_reason (VARCHAR 1024) and moves
+         both encodings onto them: marker rows directly, literal rows only
+         when the no-show endpoint's own audit row corroborates them (the
+         literal alone is ambiguous against typed prose). PL/pgSQL helpers
+         in pg_temp, dropped at the end — hence splitStatements="false".
+         V165 is reserved elsewhere; V166 shipped with #784.
+         ================================================================= -->
+    <changeSet id="V167-routing-decision-partner-no-show" author="hms-team" runOnChange="false">
+        <sqlFile path="V167__routing_decision_partner_no_show.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V168 — one spelling per HL7 sender on rows written before the
+         normalisation. The allowlist matches MSH-3/MSH-4 case-insensitively
+         and the code now files a sender upper-case (#738 integration ids,
+         this release the ORU replay key), so legacy rows split one sender's
+         history in two. Upper-cases integration_message_event.integration_id
+         (MLLP rows) and lab_results.source_sending_* — ASCII only, and a
+         lab row only when its upper-cased replay key is free (V131 unique
+         index); collisions are counted and left. DO block.
+         ================================================================= -->
+    <changeSet id="V168-hl7-sender-casing-backfill" author="hms-team" runOnChange="false">
+        <sqlFile path="V168__hl7_sender_casing_backfill.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V169 — the patient foreign key on the 31 tables V156 left open.
+         NO ACTION, NOT VALID (V156 precedent), one FK per table, named as
+         the entity's @ForeignKey; orphans counted per table as WARNINGs,
+         nothing deleted (docs/runbooks/patient-fk-orphans.sql lists them).
+         Excluded by recorded decision: audit_event_logs (V141),
+         roi_requests (V151), empi.master_identities, the *_v2 tables.
+         ================================================================= -->
+    <changeSet id="V169-patient-fk-integrity-remaining" author="hms-team" runOnChange="false">
+        <sqlFile path="V169__patient_fk_integrity_remaining.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V170 — drop the orphan patients_v2 stack, only where empty.
+         Its one reader, the unguarded /patients-v2 controller, went in
+         #785 and its entities in this release. A table that still holds
+         rows is kept and named in a WARNING for a human to review.
+         ================================================================= -->
+    <changeSet id="V170-drop-patients-v2-orphan-tables" author="hms-team" runOnChange="false">
+        <sqlFile path="V170__drop_patients_v2_orphan_tables.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V171 — clinical.patient_diagnoses gets hospital_id (nullable, FK
+         to hospital.hospitals, index on patient_id + hospital_id) so the
+         snapshot drawer's read can be scoped. No backfill: pre-V171 rows
+         stay NULL and are shown only to a verified super-admin (and the
+         patient on the portal); new rows must carry one.
+         ================================================================= -->
+    <changeSet id="V171-patient-diagnoses-hospital" author="hms-team" runOnChange="false">
+        <sqlFile path="V171__patient_diagnoses_hospital.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V172 — case-insensitive unique username, fail-safe. Reports every
+         group of accounts whose usernames differ only in case (ids only)
+         and creates uq_users_username_lower ON security.users
+         (lower(username)) only when there are none. Never merges or
+         renames an account.
+         ================================================================= -->
+    <changeSet id="V172-username-case-insensitive-unique" author="hms-team" runOnChange="false">
+        <sqlFile path="V172__username_case_insensitive_unique.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

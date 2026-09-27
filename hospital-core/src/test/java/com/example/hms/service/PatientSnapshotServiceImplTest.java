@@ -26,6 +26,8 @@ import com.example.hms.repository.PatientVitalSignRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -114,7 +116,7 @@ class PatientSnapshotServiceImplTest {
 
     private void stubEmptySubQueries(UUID patientId) {
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusAndHospital_IdInOrderByDiagnosedAtDesc(patientId, "ACTIVE", READABLE))
                 .thenReturn(Collections.emptyList());
         when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
@@ -829,7 +831,7 @@ class PatientSnapshotServiceImplTest {
         when(dx.getIcdCode()).thenReturn("E11.9");
         when(dx.getDescription()).thenReturn("Type 2 Diabetes");
 
-        when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusAndHospital_IdInOrderByDiagnosedAtDesc(patientId, "ACTIVE", READABLE))
                 .thenReturn(List.of(dx));
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
         when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
@@ -870,7 +872,7 @@ class PatientSnapshotServiceImplTest {
         when(patientProblemRepository
                 .findByPatient_IdAndHospital_IdIn(patientId, READABLE))
                 .thenReturn(List.of(problem));
-        when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusAndHospital_IdInOrderByDiagnosedAtDesc(patientId, "ACTIVE", READABLE))
                 .thenReturn(Collections.emptyList());
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
         when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
@@ -904,7 +906,7 @@ class PatientSnapshotServiceImplTest {
         when(dx.getIcdCode()).thenReturn(null);
         when(dx.getDescription()).thenReturn("Hypertension");
 
-        when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusAndHospital_IdInOrderByDiagnosedAtDesc(patientId, "ACTIVE", READABLE))
                 .thenReturn(List.of(dx));
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
         when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
@@ -946,7 +948,7 @@ class PatientSnapshotServiceImplTest {
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(READABLE), any())).thenReturn(Collections.emptyList());
-        when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusAndHospital_IdInOrderByDiagnosedAtDesc(patientId, "ACTIVE", READABLE))
                 .thenReturn(Collections.emptyList());
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
@@ -979,7 +981,7 @@ class PatientSnapshotServiceImplTest {
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(READABLE), any())).thenReturn(Collections.emptyList());
-        when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusAndHospital_IdInOrderByDiagnosedAtDesc(patientId, "ACTIVE", READABLE))
                 .thenReturn(Collections.emptyList());
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
@@ -1149,5 +1151,74 @@ class PatientSnapshotServiceImplTest {
 
         verify(reachRecorder).recordReach(eq(patientId), eq(HOSPITAL_ID), any(), isNull(),
                 eq(Map.of()), anyString());
+    }
+
+    // -- V171: clinical.patient_diagnoses has a hospital_id --
+
+    @Test
+    void legacyDiagnosesAreScopedToTheReadableSetAndAccounted() {
+        // The patient-wide read of clinical.patient_diagnoses is gone: a row
+        // recorded at a readable foreign hospital is shown and accounted like
+        // any other cross-hospital row.
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        Patient patient = mock(Patient.class);
+        lenient().when(patient.getId()).thenReturn(patientId);
+        when(patientChartAccess.require(eq(patientId), eq(hospitalId))).thenReturn(patient);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+                .thenReturn(Set.of(hospitalId, otherHospitalId));
+        PatientDiagnosis dx = PatientDiagnosis.builder()
+                .icdCode("E11.9").description("Type 2 Diabetes").hospital(other).build();
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusAndHospital_IdInOrderByDiagnosedAtDesc(
+                patientId, "ACTIVE", Set.of(hospitalId, otherHospitalId)))
+                .thenReturn(List.of(dx));
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId, hospitalId);
+
+        assertEquals(List.of("E11.9 – Type 2 Diabetes"), result.getActiveDiagnoses());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+                eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    @Test
+    void aDiagnosisWrittenBeforeItHadAHospitalIsNotShownToAClinician() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+        HospitalContextHolder.setContext(HospitalContext.builder()
+                .activeHospitalId(HOSPITAL_ID).superAdmin(false).build());
+        try {
+            PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
+
+            assertTrue(result.getActiveDiagnoses().isEmpty());
+            verify(patientDiagnosisRepository, never())
+                    .findByPatient_IdAndStatusAndHospitalIsNullOrderByDiagnosedAtDesc(any(), any());
+        } finally {
+            HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
+    void aDiagnosisWrittenBeforeItHadAHospitalIsShownToAVerifiedSuperAdmin() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = mock(Patient.class);
+        lenient().when(patient.getId()).thenReturn(patientId);
+        givenPatient(patientId, patient);
+        PatientDiagnosis unscoped = PatientDiagnosis.builder()
+                .icdCode("I10").description("Hypertension").build();
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusAndHospitalIsNullOrderByDiagnosedAtDesc(
+                patientId, "ACTIVE")).thenReturn(List.of(unscoped));
+        HospitalContextHolder.setContext(HospitalContext.builder()
+                .activeHospitalId(HOSPITAL_ID).superAdmin(true).build());
+        try {
+            PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
+
+            assertEquals(List.of("I10 – Hypertension"), result.getActiveDiagnoses());
+        } finally {
+            HospitalContextHolder.clear();
+        }
     }
 }

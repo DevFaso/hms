@@ -858,14 +858,13 @@ class StockOutRoutingServiceImplTest {
             service.partnerNoShow(decision.getId(), "  Patient waited two days, nothing delivered ");
 
             assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
-            // The fact is a marker the client translates, never an English
+            // The fact is a column the client translates, never an English
             // sentence: a composed "Partner no-show: " reached French and
             // Spanish prescribers in English, and stored text cannot be
-            // translated at render time.
-            assertThat(decision.getReason())
-                    .startsWith("Nearest partner has stock")
-                    .contains("[PARTNER_NO_SHOW] Patient waited two days, nothing delivered")
-                    .doesNotContain("Partner no-show");
+            // translated at render time. The routing reason stays as it was.
+            assertThat(decision.isPartnerNoShow()).isTrue();
+            assertThat(decision.getNoShowReason()).isEqualTo("Patient waited two days, nothing delivered");
+            assertThat(decision.getReason()).isEqualTo("Nearest partner has stock");
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
             assertThat(prescription.getPharmacyId()).isNull();
             assertThat(prescription.getPharmacyName()).isNull();
@@ -873,8 +872,8 @@ class StockOutRoutingServiceImplTest {
         }
 
         @Test
-        @DisplayName("the pharmacist's own words cannot carry a second marker")
-        void defusesTheAuthoredNoShowReason() {
+        @DisplayName("the pharmacist's own words are kept exactly as typed, whatever they contain")
+        void keepsTheWordsAsTyped() {
             PrescriptionRoutingDecision decision = accepted();
             prescription.setStatus(PrescriptionStatus.PARTNER_ACCEPTED);
 
@@ -884,13 +883,29 @@ class StockOutRoutingServiceImplTest {
             when(routingMapper.toResponseDTO(decision))
                     .thenReturn(RoutingDecisionResponseDTO.builder().status("CANCELLED").build());
 
-            service.partnerNoShow(decision.getId(), "[PARTNER_NO_SHOW] nobody there");
+            service.partnerNoShow(decision.getId(), "[PARTNER_NO_SHOW] nobody there | Partner no-show: x");
 
-            // One marker, the server's, and the words read back clean.
-            assertThat(decision.getReason().split(java.util.regex.Pattern.quote("[PARTNER_NO_SHOW]"), -1))
-                    .hasSize(3); // the real marker + the quoted one, so two splits
-            assertThat(PartnerNoShowReason.freeText(decision.getReason()))
-                    .isEqualTo("nobody there");
+            // Nothing in the words is an encoding any more, so nothing is quoted.
+            assertThat(decision.getNoShowReason()).isEqualTo("[PARTNER_NO_SHOW] nobody there | Partner no-show: x");
+            assertThat(decision.getReason()).isEqualTo("Nearest partner has stock");
+        }
+
+        @Test
+        @DisplayName("refuses words longer than their column rather than cutting them")
+        void refusesOverlongWords() {
+            PrescriptionRoutingDecision decision = accepted();
+            prescription.setStatus(PrescriptionStatus.PARTNER_ACCEPTED);
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(routingDecisionRepository.findById(decision.getId())).thenReturn(Optional.of(decision));
+
+            String tooLong = "x".repeat(1025);
+            assertThatThrownBy(() -> service.partnerNoShow(decision.getId(), tooLong))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("at least 1 characters");
+            assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.ACCEPTED);
+            assertThat(decision.isPartnerNoShow()).isFalse();
+            verify(prescriptionRepository, never()).save(any());
         }
 
         @Test

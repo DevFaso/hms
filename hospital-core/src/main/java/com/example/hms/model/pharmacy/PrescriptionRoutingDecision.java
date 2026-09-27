@@ -101,4 +101,21 @@ public class PrescriptionRoutingDecision extends BaseEntity {
     @NotNull
     @Column(name = "decided_at", nullable = false)
     private LocalDateTime decidedAt;
+
+    /**
+     * The partner accepted this order and never delivered it (V167).
+     *
+     * <p>A fact of its own rather than a phrase in {@link #reason}: that column
+     * is free text a pharmacist types into, so a phrase stored there could not
+     * be told apart from somebody's sentence, and an English phrase reached
+     * French and Spanish prescribers untranslated. The client renders the fact
+     * in the reader's language from this flag.
+     */
+    @Column(name = "partner_no_show", nullable = false)
+    @Builder.Default
+    private boolean partnerNoShow = false;
+
+    /** The pharmacist's own words when recording the no-show, exactly as typed. */
+    @Column(name = "no_show_reason", length = 1024)
+    private String noShowReason;
 }
