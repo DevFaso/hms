@@ -26,6 +26,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -53,12 +54,18 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
     private final PatientRepository patientRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final RoleValidator roleValidator;
+    /**
+     * The slot clock: it writes {@code heldUntil} and every availability check,
+     * the hold-reclaim sweep and the open-slot search read it back.
+     * {@code SlotFhirMapper} already reads {@code heldUntil} with the same bean.
+     */
+    private final Clock clock;
 
     @Override
     @Transactional
     public SlotGenerationResultDTO generate(LocalDate from, LocalDate to) {
         UUID hospitalId = requireHospital();
-        LocalDate start = from != null ? from : LocalDate.now();
+        LocalDate start = from != null ? from : LocalDate.now(clock);
         LocalDate end = to != null ? to : start.plusWeeks(4);
 
         if (end.isBefore(start)) {
@@ -131,8 +138,8 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
     public List<AppointmentSlotDTO> searchOpen(UUID departmentId, UUID staffId, UUID visitTypeId,
                                                LocalDate from, LocalDate to, int limit) {
         UUID hospitalId = requireHospital();
-        LocalDateTime now = LocalDateTime.now();
-        LocalDate start = from != null ? from : LocalDate.now();
+        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDate start = from != null ? from : LocalDate.now(clock);
         LocalDate end = to != null ? to : start.plusWeeks(2);
         int capped = limit <= 0 ? 50 : Math.min(limit, MAX_SEARCH_RESULTS);
 
@@ -149,7 +156,7 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
     @Transactional
     public AppointmentSlotDTO hold(UUID slotId, int holdMinutes) {
         AppointmentSlot slot = loadScoped(slotId);
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
 
         if (!slot.isOfferable(now)) {
             throw new BusinessException("That slot is no longer available.");
@@ -198,7 +205,7 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
     @Transactional
     public int reclaimExpiredHolds() {
         List<AppointmentSlot> expired =
-            slotRepository.findByStatusAndHeldUntilBefore(SlotStatus.HELD, LocalDateTime.now());
+            slotRepository.findByStatusAndHeldUntilBefore(SlotStatus.HELD, LocalDateTime.now(clock));
         for (AppointmentSlot slot : expired) {
             clearHold(slot);
             slot.setStatus(SlotStatus.OPEN);
@@ -214,7 +221,7 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
     @Transactional
     public AppointmentSlotDTO book(UUID slotId, UUID patientId, String reason) {
         AppointmentSlot slot = loadScoped(slotId);
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         UUID currentUserId = roleValidator.getCurrentUserId();
 
         // A live hold placed by the caller is exactly the state booking is
@@ -286,7 +293,7 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
                 clearHold(slot);
                 // A slot whose time has passed must not re-enter circulation:
                 // searchOpen would never return it, but OPEN would misstate it.
-                slot.setStatus(slot.getStartAt().isBefore(LocalDateTime.now())
+                slot.setStatus(slot.getStartAt().isBefore(LocalDateTime.now(clock))
                     ? SlotStatus.BLOCKED : SlotStatus.OPEN);
                 if (slot.getStatus() == SlotStatus.BLOCKED) {
                     slot.setBlockedReason("Appointment cancelled after the slot time passed");
