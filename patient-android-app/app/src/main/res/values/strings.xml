@@ -700,4 +700,7 @@
     <string name="login_error_session">Your account could not be loaded. Please sign in again.</string>
     <string name="sso_start_failed">Single sign-on could not be started. Please try again.</string>
     <string name="sso_failed">Single sign-on failed. Please try again.</string>
+
+    <!-- Chat times -->
+    <string name="chat_yesterday">Yesterday</string>
 </resources>

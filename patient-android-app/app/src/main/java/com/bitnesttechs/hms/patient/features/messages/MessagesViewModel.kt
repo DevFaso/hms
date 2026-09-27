@@ -20,11 +20,13 @@ class MessagesViewModel @Inject constructor(
     val isLoading = MutableStateFlow(true)
     val isLoadingCareTeam = MutableStateFlow(false)
 
-    init { load() }
+    // Loaded by the screen each time it is shown (see MessagesScreen), so the
+    // unread badges reflect a thread just read when the patient comes back.
 
     fun load() {
         viewModelScope.launch {
-            isLoading.value = true
+            // The spinner is for the first load; a refresh keeps the rows.
+            isLoading.value = conversations.value.isEmpty()
             try {
                 val userId = tokenStorage.userId ?: return@launch
                 val resp = api.getChatConversations(userId)
@@ -88,10 +90,21 @@ class MessageThreadViewModel @Inject constructor(
             isLoading.value = true
             try {
                 val resp = api.getChatHistory(userId, otherUserId, size = 100)
-                messages.value = (resp.body() ?: emptyList()).sortedBy { it.timestamp }
+                messages.value = (resp.body() ?: emptyList()).sortedBy { it.timestamp.orEmpty() }
             } catch (_: Exception) {}
             finally { isLoading.value = false }
+            markRead(otherUserId, userId)
         }
+    }
+
+    /**
+     * Opening the thread reads everything the other party sent: without this
+     * the inbox badge never cleared and `chat/unread-count` (which also feeds
+     * the portal's topbar badge) stayed inflated for this patient. Best
+     * effort — a failure only leaves the badge as it was.
+     */
+    private suspend fun markRead(otherUserId: String, userId: String) {
+        runCatching { api.markChatRead(senderId = otherUserId, recipientId = userId) }
     }
 
     fun sendMessage(content: String) {

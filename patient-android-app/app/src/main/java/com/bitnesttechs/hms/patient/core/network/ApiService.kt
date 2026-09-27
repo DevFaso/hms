@@ -324,6 +324,17 @@ interface ApiService {
         @Query("size") size: Int = 50
     ): Response<List<ChatMessageDto>>
 
+    /**
+     * Marks every message from [senderId] to [recipientId] read; 204 No Content
+     * (Retrofit's Unit converter takes the empty body). Feeds
+     * `ChatConversationSummaryDTO.unreadCount` and the portal's unread badge.
+     */
+    @PUT("chat/mark-read/{senderId}/{recipientId}")
+    suspend fun markChatRead(
+        @Path("senderId") senderId: String,
+        @Path("recipientId") recipientId: String
+    ): Response<Unit>
+
     @POST("chat/send")
     suspend fun sendChatMessage(
         @Body request: SendChatMessageRequest

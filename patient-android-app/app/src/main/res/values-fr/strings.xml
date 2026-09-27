@@ -700,4 +700,7 @@
     <string name="login_error_session">Votre compte n\'a pas pu être chargé. Veuillez vous reconnecter.</string>
     <string name="sso_start_failed">L\'authentification unique n\'a pas pu démarrer. Veuillez réessayer.</string>
     <string name="sso_failed">Échec de l\'authentification unique. Veuillez réessayer.</string>
+
+    <!-- Chat times -->
+    <string name="chat_yesterday">Hier</string>
 </resources>

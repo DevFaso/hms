@@ -154,7 +154,8 @@ data class ChatConversationDto(
 @JsonClass(generateAdapter = true)
 data class ChatMessageDto(
     @Json(name = "id") val id: String = "",
-    @Json(name = "timestamp") val timestamp: String = "",
+    /** ISO local date-time, no offset; null on a message with no send time. */
+    @Json(name = "timestamp") val timestamp: String? = null,
     @Json(name = "senderId") val senderId: String = "",
     @Json(name = "senderName") val senderName: String? = null,
     @Json(name = "senderRole") val senderRole: String? = null,

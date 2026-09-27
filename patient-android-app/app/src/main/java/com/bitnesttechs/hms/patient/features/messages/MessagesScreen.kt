@@ -25,6 +25,10 @@ import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.locale.LocaleHelper
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
 import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.core.os.ConfigurationCompat
+import java.time.LocalDateTime
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,6 +42,12 @@ fun MessagesScreen(
     val isLoadingCareTeam by viewModel.isLoadingCareTeam.collectAsState()
     var showProviderPicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val locale = currentLocale()
+    val yesterday = stringResource(R.string.chat_yesterday)
+
+    // Every time the inbox is shown, not once per ViewModel: coming back from
+    // a thread must clear the badge that opening it marked read.
+    LaunchedEffect(Unit) { viewModel.load() }
 
     Scaffold(
         topBar = {
@@ -103,8 +113,8 @@ fun MessagesScreen(
                         },
                         trailingContent = {
                             Column(horizontalAlignment = Alignment.End) {
-                                convo.lastMessageTimestamp?.let {
-                                    Text(it.take(10), style = MaterialTheme.typography.labelSmall,
+                                ChatTime.inboxLabel(convo.lastMessageTimestamp, LocalDateTime.now(), locale, yesterday)?.let {
+                                    Text(it, style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 if (convo.unreadCount > 0) {
@@ -187,6 +197,7 @@ fun MessageThreadScreen(
     val isSending by viewModel.isSending.collectAsState()
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+    val locale = currentLocale()
 
     LaunchedEffect(threadId) { viewModel.loadThread(threadId) }
     LaunchedEffect(messages.size) {
@@ -273,13 +284,13 @@ fun MessageThreadScreen(
                                 color = if (isMine) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodyMedium
                             )
-                            Text(
-                                msg.timestamp.take(16),
+                            ChatTime.bubbleLabel(msg.timestamp, LocalDateTime.now(), locale)?.let { sentAt -> Text(
+                                sentAt,
                                 color = if (isMine) Color.White.copy(alpha = 0.7f)
                                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                 style = MaterialTheme.typography.labelSmall,
                                 modifier = Modifier.align(Alignment.End)
-                            )
+                            ) }
                         }
                     }
                 }
@@ -287,3 +298,8 @@ fun MessageThreadScreen(
         }
     }
 }
+
+/** The app language's locale, as applied to this activity's configuration. */
+@Composable
+private fun currentLocale(): Locale =
+    ConfigurationCompat.getLocales(LocalConfiguration.current)[0] ?: Locale.getDefault()
