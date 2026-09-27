@@ -111,6 +111,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.context.MessageSource;
 import com.example.hms.service.i18n.NotificationLocales;
+import com.example.hms.utility.RoleNames;
 
 /**
  * Patient-portal service — resolves the authenticated user's Patient record
@@ -599,7 +600,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                         m.put("fullName", fullName.trim());
                     }
                     if (s.getAssignment() != null && s.getAssignment().getRole() != null) {
-                        m.put("role", s.getAssignment().getRole().getName());
+                        // Bare token (DOCTOR, not ROLE_DOCTOR) or null, as every read path sends it.
+                        m.put("role", RoleNames.bareRole(s.getAssignment().getRole().getName()));
                     }
                     return m;
                 })

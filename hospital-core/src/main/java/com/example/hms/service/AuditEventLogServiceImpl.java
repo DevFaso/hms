@@ -28,6 +28,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import com.example.hms.enums.AuditStatus;
+import com.example.hms.utility.RoleNames;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -330,7 +331,7 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
             roleName = user.getUserRoles().iterator().next().getRole().getName();
         }
         if (roleName == null || roleName.isBlank()) {
-            roleName = "Unknown Role";
+            roleName = RoleNames.UNKNOWN_ROLE;
         }
         return roleName;
     }

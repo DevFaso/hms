@@ -1643,7 +1643,7 @@ class PatientPortalServiceImplPhase2Test {
         }
 
         @Test
-        @DisplayName("getProvidersForDepartment — should map provider fields with fullName and role")
+        @DisplayName("getProvidersForDepartment — should map provider fields with fullName and a bare role token")
         void getProviders_mapsProviderFields() {
             UUID hospId = UUID.randomUUID();
             UUID deptId = UUID.randomUUID();
@@ -1652,8 +1652,9 @@ class PatientPortalServiceImplPhase2Test {
             staffUser.setFirstName("Jane");
             staffUser.setLastName("Doe");
 
+            // security.roles.name carries the prefix; the picker keys on the bare token.
             Role role = new Role();
-            role.setName("Doctor");
+            role.setName("ROLE_DOCTOR");
 
             UserRoleHospitalAssignment assign = new UserRoleHospitalAssignment();
             assign.setRole(role);
@@ -1674,7 +1675,7 @@ class PatientPortalServiceImplPhase2Test {
             assertThat(result.get(0)).containsEntry("id", s.getId());
             assertThat(result.get(0)).containsEntry("name", "Dr. Doe");
             assertThat(result.get(0)).containsEntry("fullName", "Jane Doe");
-            assertThat(result.get(0)).containsEntry("role", "Doctor");
+            assertThat(result.get(0)).containsEntry("role", "DOCTOR");
         }
 
         @Test

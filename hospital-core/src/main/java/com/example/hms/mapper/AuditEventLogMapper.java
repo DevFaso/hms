@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.utility.RoleNames;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -110,10 +111,9 @@ public class AuditEventLogMapper {
         if ((roleName == null || roleName.isBlank()) && user != null && user.getUserRoles() != null && !user.getUserRoles().isEmpty()) {
             roleName = user.getUserRoles().iterator().next().getRole().getName();
         }
-        if (roleName == null || roleName.isBlank()) {
-            roleName = "Unknown Role";
-        }
-        return roleName;
+        // Bare token or null: a legacy row's "ROLE_X" and "Unknown Role" are
+        // normalised here, on the way out, since no write can reach them.
+        return RoleNames.bareRole(roleName);
     }
 
     private String getUserFullName(User user) {
