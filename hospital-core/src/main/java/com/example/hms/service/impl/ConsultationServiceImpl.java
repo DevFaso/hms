@@ -26,6 +26,8 @@ import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.ConsultationService;
 import com.example.hms.service.NotificationService;
+import com.example.hms.service.PatientSubjectReadGuard;
+import com.example.hms.service.PatientSubjectReaderRoles;
 import com.example.hms.utility.ElapsedTime;
 import com.example.hms.utility.RoleValidator;
 import jakarta.persistence.EntityNotFoundException;
@@ -91,6 +93,7 @@ public class ConsultationServiceImpl implements ConsultationService {
     private final Clock clock;
     private final NotificationService notificationService;
     private final MessageSource messageSource;
+    private final PatientSubjectReadGuard subjectReadGuard;
 
     @Override
     public ConsultationResponseDTO createConsultation(ConsultationRequestDTO request, UUID requestingProviderId) {
@@ -161,6 +164,12 @@ public class ConsultationServiceImpl implements ConsultationService {
     @Override
     @Transactional(readOnly = true)
     public List<ConsultationResponseDTO> getConsultationsForPatient(UUID patientId) {
+        // A patient caller reads only their own. Another patient's id answers
+        // exactly as an id that matches no row does -- an empty list -- and
+        // before the hospital lookup below, which can answer differently.
+        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.CONSULTATIONS_BY_PATIENT, patientId)) {
+            return List.of();
+        }
         // ── Tenant isolation ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId == null) {

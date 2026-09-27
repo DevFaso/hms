@@ -17,6 +17,8 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.ProcedureOrderRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.ProcedureOrderService;
+import com.example.hms.service.PatientSubjectReadGuard;
+import com.example.hms.service.PatientSubjectReaderRoles;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,6 +46,7 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
     private final RoleValidator roleValidator;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    private final PatientSubjectReadGuard subjectReadGuard;
 
     @Override
     public ProcedureOrderResponseDTO createProcedureOrder(ProcedureOrderRequestDTO request, UUID orderingProviderId) {
@@ -103,13 +106,26 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
     @Override
     @Transactional(readOnly = true)
     public ProcedureOrderResponseDTO getProcedureOrder(UUID orderId) {
-        ProcedureOrder procedureOrder = getProcedureOrderEntity(orderId);
-        return toResponseDTO(procedureOrder);
+        ProcedureOrder order = procedureOrderRepository.findById(orderId)
+            .orElseThrow(() -> procedureOrderNotFound(orderId));
+        // A patient caller reads only their own: another patient's order
+        // answers exactly as a missing id does, and before the hospital check
+        // in requireInScope, which can answer differently.
+        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.PROCEDURE_ORDER_READS, order.getPatient())) {
+            throw procedureOrderNotFound(orderId);
+        }
+        return toResponseDTO(requireInScope(order));
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ProcedureOrderResponseDTO> getProcedureOrdersForPatient(UUID patientId) {
+        // A patient caller reads only their own. Another patient's id answers
+        // exactly as an id that matches no row does -- an empty list -- and
+        // before the hospital lookup below, which can answer differently.
+        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.PROCEDURE_ORDER_READS, patientId)) {
+            return List.of();
+        }
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         List<ProcedureOrder> orders;
         if (activeHospitalId != null) {
@@ -246,13 +262,22 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
 
     private ProcedureOrder getProcedureOrderEntity(UUID orderId) {
         ProcedureOrder order = procedureOrderRepository.findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException("Procedure order not found with ID: " + orderId));
+            .orElseThrow(() -> procedureOrderNotFound(orderId));
+        return requireInScope(order);
+    }
+
+    /** A procedure order outside the caller's active hospital answers as a missing one. */
+    private ProcedureOrder requireInScope(ProcedureOrder order) {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && order.getHospital() != null
                 && !activeHospitalId.equals(order.getHospital().getId())) {
-            throw new ResourceNotFoundException("Procedure order not found with ID: " + orderId);
+            throw procedureOrderNotFound(order.getId());
         }
         return order;
+    }
+
+    private static ResourceNotFoundException procedureOrderNotFound(UUID orderId) {
+        return new ResourceNotFoundException("Procedure order not found with ID: " + orderId);
     }
 
     private ProcedureOrderResponseDTO toResponseDTO(ProcedureOrder order) {

@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.ImagingModality;
 import com.example.hms.enums.ImagingOrderStatus;
 import com.example.hms.enums.ImagingReportStatus;
@@ -19,6 +20,7 @@ import com.example.hms.payload.dto.imaging.ImagingReportUpsertRequestDTO;
 import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.ImagingOrderRepository;
 import com.example.hms.repository.ImagingReportRepository;
+import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.impl.ImagingReportServiceImpl;
 import com.example.hms.utility.RoleValidator;
@@ -45,6 +47,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -81,6 +84,16 @@ class ImagingReportServiceImplTest {
 
     @InjectMocks
     private ImagingReportServiceImpl imagingReportService;
+
+    /**
+     * The real subject guard. These tests set no authentication, so it waves
+     * every read through, as it does for any caller that is not patient-only;
+     * the patient cases are in PatientSubjectReadGuardTest and the
+     * per-service ownership tests.
+     */
+    @Spy
+    private PatientSubjectReadGuard subjectReadGuard =
+        new PatientSubjectReadGuard(mock(ControllerAuthUtils.class), mock(PatientRepository.class));
 
     private UUID hospitalId;
     private UUID orderId;
