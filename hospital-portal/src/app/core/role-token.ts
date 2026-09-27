@@ -1,6 +1,10 @@
 /**
- * The literal `AuditEventLogServiceImpl` stamps when it cannot resolve a role.
- * It is a sentence, not a token, so no key can cover it.
+ * The literal `AuditEventLogServiceImpl` stamps when it cannot resolve a role
+ * (AuditEventLogMapper and DashboardConfigurationServiceImpl spell it too).
+ * It is a sentence, not a token, so no key can cover it. Rows already written
+ * keep it forever, so this stays even if the writers stop stamping it;
+ * scripts/lib/unknown-role.test.mjs fails if any Java spelling of the sentence
+ * drifts from this one.
  */
 const UNKNOWN_ROLE = 'Unknown Role';
 const ROLE_PREFIX = 'ROLE_';

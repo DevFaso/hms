@@ -27,12 +27,18 @@
  *     what the portal pipes. `security.roles.name` carries the prefix, the
  *     write-audit interceptor strips it, and `AuditEventLogServiceImpl` does
  *     not — so the column holds both spellings of one role. The portal
- *     normalises to the bare form at the service boundary (`bareRole` in
- *     patient-portal.service.ts) and the bundle keys that.
+ *     normalises to the bare form (`bareRole` in core/role-token.ts, wrapped by
+ *     the `roleLabel` pipe) and the bundle keys that.
  *
- * Pure function on text, like {@link javaEnumConstants}, so the gate stays the
- * only thing that touches the filesystem.
+ * The parse ({@link roleNamesFrom}) is a pure function on text, like
+ * {@link javaEnumConstants}. Gathering the text is {@link roleSourcesFrom}, the
+ * one filesystem walk the gate and role-registry.test.mjs share — the test
+ * used to re-implement it, and the two had already drifted once.
  */
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+import { walk } from './walk.mjs';
 
 /**
  * An `INSERT INTO "security".roles ...;` statement.
@@ -115,13 +121,22 @@ function dollarTagAt(source, i) {
   return match ? match[0] : null;
 }
 
-export function sqlViews(source, ext) {
+/**
+ * Module-private: roleNamesFrom is the contract, and every case in
+ * role-registry.test.mjs reaches this through it.
+ *
+ * `withScanned: false` skips the second view. A Java seeder never reads it —
+ * it matches literals in `noComments` and has no statements to bound — so
+ * building a character array the size of the file for it was pure waste.
+ */
+function sqlViews(source, ext, { withScanned = true } = {}) {
   const syntax = SYNTAX[ext];
   const noComments = source.split('');
-  const scanned = source.split('');
+  const scanned = withScanned ? source.split('') : null;
   /** Ranges of dollar-quoted bodies, for roleNamesFrom to parse on their own. */
   const dollarBodies = [];
   const blank = (out, from, to) => {
+    if (!out) return;
     for (let k = from; k < to && k < out.length; k += 1) {
       if (out[k] !== '\n') out[k] = ' ';
     }
@@ -215,8 +230,18 @@ export function sqlViews(source, ext) {
   };
 
   scanRange(0, source.length);
-  return { noComments: noComments.join(''), scanned: scanned.join(''), dollarBodies };
+  return { noComments: noComments.join(''), scanned: scanned?.join('') ?? null, dollarBodies };
 }
+
+/**
+ * Whether a source can contribute anything at all, before paying for its
+ * views. Exact rather than heuristic: a name is only ever read from a
+ * `'ROLE_X'` literal inside an `INSERT INTO` (SQL) or a `"ROLE_X"` literal
+ * (Java), so a file with neither cannot yield one. Of ~165 migrations, a
+ * handful pass.
+ */
+const maySeed = (text, ext) =>
+  ext === '.sql' ? text.includes("'ROLE_") && /INSERT\s+INTO/i.test(text) : text.includes('"ROLE_');
 
 /**
  * Bare role names from a set of `{ path, text }` sources, sorted and deduped.
@@ -229,7 +254,10 @@ export function sqlViews(source, ext) {
 export function roleNamesFrom(sources) {
   const names = new Set();
   const addFrom = (text, ext) => {
-    const { noComments, scanned, dollarBodies } = sqlViews(text, ext);
+    if (!maySeed(text, ext)) return;
+    const { noComments, scanned, dollarBodies } = sqlViews(text, ext, {
+      withScanned: ext === '.sql',
+    });
     if (ext === '.sql') {
       for (const match of scanned.matchAll(ROLES_INSERT)) {
         const statement = noComments.slice(match.index, match.index + match[0].length);
@@ -249,6 +277,46 @@ export function roleNamesFrom(sources) {
     if (ext) addFrom(text, ext);
   }
   return [...names].sort();
+}
+
+/**
+ * The text of every file a `roles` declaration names, grouped by the declared
+ * path it came from, resolved against `repoDir`.
+ *
+ * Grouped because each declared path has to be accounted for on its own: a
+ * declared folder that holds no `.sql`/`.java`, or a seeder whose literals
+ * moved, contributes zero — and a check on the grand total cannot see that,
+ * because 160 migrations keep the total far above zero forever. The gate
+ * fails a group that parses to nothing; role-registry.test.mjs reads through
+ * the same function so the two cannot drift.
+ *
+ * @returns {{ groups: { path: string, sources: { path: string, text: string }[] }[],
+ *             errors: string[] }} an error per path that is missing, or is a
+ *   regular file the parser cannot read (an extensionless file passes the
+ *   declaration check as though it were a folder, then falls out of the
+ *   parser's extension switch in silence).
+ */
+export function roleSourcesFrom(paths, repoDir) {
+  const groups = [];
+  const errors = [];
+  for (const path of paths) {
+    const full = resolve(repoDir, path);
+    if (!existsSync(full)) {
+      errors.push(`MISSING ROLE SOURCE ${path} does not exist.`);
+      continue;
+    }
+    const isDir = statSync(full).isDirectory();
+    if (!isDir && !READABLE.some((ext) => full.endsWith(ext))) {
+      errors.push(
+        `UNREADABLE ROLE SOURCE ${path} is a file the registry parser cannot read ` +
+          `(${READABLE.join(', ')}).`,
+      );
+      continue;
+    }
+    const files = isDir ? walk(full, READABLE) : [full];
+    groups.push({ path, sources: files.map((f) => ({ path: f, text: readFileSync(f, 'utf8') })) });
+  }
+  return { groups, errors };
 }
 
 /** `ROLE_DOCTOR` -> `DOCTOR`; anything without the prefix is already bare. */

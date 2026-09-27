@@ -55,15 +55,14 @@
  *   node scripts/check-i18n-enum-coverage.mjs
  *   node scripts/check-i18n-enum-coverage.mjs --report-only   # never exit non-zero
  */
-import { readFileSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { walk } from './lib/walk.mjs';
 import { templatesIn } from './lib/inline-templates.mjs';
 import { javaEnumConstants, groupOf } from './lib/java-enum.mjs';
 import { validateDeclaration, enumNameOf } from './lib/enum-domains.mjs';
-import { roleNamesFrom, READABLE } from './lib/role-registry.mjs';
+import { roleNamesFrom, roleSourcesFrom } from './lib/role-registry.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const PORTAL_DIR = resolve(SCRIPT_DIR, '..');
@@ -141,37 +140,20 @@ function main() {
       // Not a Java type: the vocabulary is `security.roles`, read out of the
       // migrations that create it. See lib/role-registry.mjs for why DELETEs
       // are not subtracted and why the names come back bare.
-      const sources = [];
-      for (const path of entry.roles) {
-        const full = resolve(REPO_DIR, path);
-        if (!existsSync(full)) {
-          errors.push(`MISSING ROLE SOURCE ${domain} -> ${path} does not exist.`);
-          broken = true;
-          continue;
-        }
-        const isDir = statSync(full).isDirectory();
-        // An extensionless regular file passes the declaration check as though
-        // it were a folder, reaches the parser and falls out of its extension
-        // switch with no message — and UNPARSEABLE ROLE REGISTRY only fires on
-        // a grand total of zero, which 160 migrations prevent forever.
-        if (!isDir && !READABLE.some((ext) => full.endsWith(ext))) {
-          errors.push(
-            `UNREADABLE ROLE SOURCE ${domain} -> ${path} is a file the registry ` +
-              `parser cannot read (${READABLE.join(', ')}).`,
-          );
-          broken = true;
-          continue;
-        }
-        for (const file of isDir ? walk(full, READABLE) : [full]) {
-          sources.push({ path: file, text: readFileSync(file, 'utf8') });
-        }
-      }
-      if (!broken) {
+      const { groups, errors: sourceErrors } = roleSourcesFrom(entry.roles, REPO_DIR);
+      for (const message of sourceErrors) errors.push(`${domain}: ${message}`);
+      broken = sourceErrors.length > 0;
+      // Every declared path accounts for itself. A check on the grand total
+      // only fires at zero, which 160 migrations prevent forever — so a
+      // declared folder holding no .sql/.java, or a seeder whose literals
+      // moved, would drop out in silence.
+      for (const { path, sources } of broken ? [] : groups) {
         const found = roleNamesFrom(sources);
         if (found.length === 0) {
           errors.push(
-            `UNPARSEABLE ROLE REGISTRY ${domain} -> ${entry.roles.join(', ')} ` +
-              `produced no role names; the INSERTs moved or the parser broke.`,
+            `UNPARSEABLE ROLE SOURCE ${domain} -> ${path} (${sources.length} file(s)) ` +
+              `produced no role names; the INSERTs moved, the path is wrong, or the ` +
+              `parser broke.`,
           );
           broken = true;
         }
