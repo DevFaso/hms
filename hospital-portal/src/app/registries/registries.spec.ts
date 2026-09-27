@@ -13,7 +13,7 @@ import {
 } from '../services/program-registry.service';
 import { PatientService } from '../services/patient.service';
 import { RoleContextService } from '../core/role-context.service';
-import { RoleContextStubState, roleContextStub } from '../testing/role-context.stub';
+import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
 import { ToastService } from '../core/toast.service';
 
 function enrollment(overrides: Partial<ProgramEnrollment> = {}): ProgramEnrollment {
@@ -57,7 +57,7 @@ describe('RegistriesComponent', () => {
   let component: RegistriesComponent;
   let registryService: jasmine.SpyObj<ProgramRegistryService>;
   let toast: jasmine.SpyObj<ToastService>;
-  let scope: RoleContextStubState;
+  let scope: RoleContextStub;
 
   beforeEach(async () => {
     registryService = jasmine.createSpyObj<ProgramRegistryService>('ProgramRegistryService', [
@@ -75,7 +75,7 @@ describe('RegistriesComponent', () => {
     registryService.recordVisit.and.returnValue(of(enrollment()));
 
     toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
-    scope = { superAdmin: false, hospitalId: 'h1', roles: ['ROLE_DOCTOR'] };
+    scope = roleContextStub({ superAdmin: false, hospitalId: 'h1', roles: ['ROLE_DOCTOR'] });
 
     await TestBed.configureTestingModule({
       imports: [RegistriesComponent, TranslateModule.forRoot()],
@@ -90,7 +90,7 @@ describe('RegistriesComponent', () => {
         },
         {
           provide: RoleContextService,
-          useValue: roleContextStub(scope),
+          useValue: scope,
         },
         { provide: ToastService, useValue: toast },
       ],
@@ -105,8 +105,7 @@ describe('RegistriesComponent', () => {
   }
 
   it('a super-admin in global view sees the pick-a-hospital hint and no cohort is requested', () => {
-    scope.superAdmin = true;
-    scope.hospitalId = null;
+    scope.set({ superAdmin: true, hospitalId: null });
     fixture.detectChanges();
     expect(registryService.registry).not.toHaveBeenCalled();
     expect(registryService.counts).not.toHaveBeenCalled();

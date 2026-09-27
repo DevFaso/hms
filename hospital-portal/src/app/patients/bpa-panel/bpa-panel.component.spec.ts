@@ -7,16 +7,16 @@ import { BpaService } from '../../services/bpa.service';
 import { CdsAcknowledgementService } from '../../services/cds-acknowledgement.service';
 import { CdsCard } from '../../shared/cds-card/cds-card.model';
 import { RoleContextService } from '../../core/role-context.service';
-import { RoleContextStubState, roleContextStub } from '../../testing/role-context.stub';
+import { RoleContextStub, roleContextStub } from '../../testing/role-context.stub';
 
 describe('BpaPanelComponent', () => {
   let fixture: ComponentFixture<BpaPanelComponent>;
   let bpaSpy: jasmine.SpyObj<BpaService>;
   let ackSpy: jasmine.SpyObj<CdsAcknowledgementService>;
-  let roles: RoleContextStubState;
+  let roles: RoleContextStub;
 
   beforeEach(async () => {
-    roles = { superAdmin: false, hospitalId: 'h1', roles: ['ROLE_DOCTOR'] };
+    roles = roleContextStub({ superAdmin: false, hospitalId: 'h1', roles: ['ROLE_DOCTOR'] });
     bpaSpy = jasmine.createSpyObj<BpaService>('BpaService', ['evaluate']);
     ackSpy = jasmine.createSpyObj<CdsAcknowledgementService>('CdsAcknowledgementService', [
       'record',
@@ -28,7 +28,7 @@ describe('BpaPanelComponent', () => {
       providers: [
         { provide: BpaService, useValue: bpaSpy },
         { provide: CdsAcknowledgementService, useValue: ackSpy },
-        { provide: RoleContextService, useValue: roleContextStub(roles) },
+        { provide: RoleContextService, useValue: roles },
       ],
     }).compileComponents();
 
@@ -56,7 +56,7 @@ describe('BpaPanelComponent', () => {
       'ROLE_LAB_SCIENTIST',
       'ROLE_RADIOLOGIST',
     ]) {
-      roles.roles = [role];
+      roles.set({ roles: [role] });
       setPatient(`p-${role}`);
       expect(fixture.nativeElement.querySelector('[data-testid="bpa-panel"]'))
         .withContext(role)
@@ -66,7 +66,7 @@ describe('BpaPanelComponent', () => {
   });
 
   it('admits a surgeon, whom the backend expands to ROLE_DOCTOR', () => {
-    roles.roles = ['ROLE_SURGEON'];
+    roles.set({ roles: ['ROLE_SURGEON'] });
     bpaSpy.evaluate.and.returnValue(of([]));
     setPatient('p-9');
     expect(bpaSpy.evaluate).toHaveBeenCalledOnceWith('p-9', undefined);

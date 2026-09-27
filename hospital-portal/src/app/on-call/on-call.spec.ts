@@ -10,7 +10,7 @@ import { OnCallService, OnCallScheduleResponse } from '../services/on-call.servi
 import { StaffResponse, StaffService } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { roleContextStub } from '../testing/role-context.stub';
+import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
 import { AuthService } from '../auth/auth.service';
 
 /**
@@ -23,6 +23,7 @@ describe('OnCallComponent', () => {
   let component: OnCallComponent;
   let onCallService: jasmine.SpyObj<OnCallService>;
   let toast: jasmine.SpyObj<ToastService>;
+  let roleCtx: RoleContextStub;
 
   function entry(overrides: Partial<OnCallScheduleResponse>): OnCallScheduleResponse {
     return {
@@ -36,7 +37,7 @@ describe('OnCallComponent', () => {
     };
   }
 
-  function setup(activeRoles: string[], entries: OnCallScheduleResponse[]) {
+  function setup(activeRoles: string[], entries: OnCallScheduleResponse[], activeRole?: string) {
     onCallService = jasmine.createSpyObj<OnCallService>('OnCallService', [
       'list',
       'listForStaff',
@@ -55,6 +56,12 @@ describe('OnCallComponent', () => {
     auth.getHospitalId.and.returnValue('h-1');
 
     toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
+    roleCtx = roleContextStub({
+      superAdmin: false,
+      hospitalId: 'h-1',
+      roles: activeRoles,
+      activeRole,
+    });
 
     TestBed.configureTestingModule({
       imports: [OnCallComponent, TranslateModule.forRoot()],
@@ -66,10 +73,7 @@ describe('OnCallComponent', () => {
         { provide: StaffService, useValue: staffService },
         { provide: AuthService, useValue: auth },
         { provide: ToastService, useValue: toast },
-        {
-          provide: RoleContextService,
-          useValue: roleContextStub({ superAdmin: false, hospitalId: 'h-1', roles: activeRoles }),
-        },
+        { provide: RoleContextService, useValue: roleCtx },
       ],
     });
 
@@ -124,6 +128,24 @@ describe('OnCallComponent', () => {
     expect(options).toContain('Dr. Awa Traoré — Sage-femme');
     expect(options).toContain('Kofi Mensah');
     expect(options.join(' ')).not.toContain('MIDWIFE');
+  });
+
+  it('gates on the role picked at login, and re-renders when it changes', () => {
+    // A hospital admin who is also a doctor and signed in as the doctor must
+    // not see the admin's write controls: only the picked role counts. The
+    // stub is signal-backed, so moving the role after the first render must
+    // move the computed gate and the template with it — a plain-value stub
+    // would leave canManage() cached on its first read.
+    setup(['ROLE_HOSPITAL_ADMIN', 'ROLE_DOCTOR'], [entry({})], 'ROLE_DOCTOR');
+    expect(fixture.nativeElement.querySelector('[data-testid="oncall-add"]')).toBeNull();
+
+    roleCtx.set({ activeRole: 'ROLE_HOSPITAL_ADMIN' });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="oncall-add"]')).not.toBeNull();
+
+    roleCtx.set({ activeRole: 'ROLE_DOCTOR' });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="oncall-add"]')).toBeNull();
   });
 
   it('refuses a shift that ends before it starts, before any request is made', () => {

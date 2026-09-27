@@ -16,7 +16,7 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { roleContextStub } from '../testing/role-context.stub';
+import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 
 function mockConsult(overrides: Partial<ConsultationResponse> = {}): ConsultationResponse {
@@ -40,7 +40,7 @@ describe('ConsultationsComponent', () => {
   let consultSpy: jasmine.SpyObj<ConsultationService>;
   let staffSpy: jasmine.SpyObj<StaffService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
-  let activeRoles: string[];
+  let roleCtx: RoleContextStub;
 
   beforeEach(async () => {
     consultSpy = jasmine.createSpyObj('ConsultationService', [
@@ -86,15 +86,14 @@ describe('ConsultationsComponent', () => {
     const patientSpy = jasmine.createSpyObj('PatientService', ['list']);
     patientSpy.list.and.returnValue(of([]));
     const scopeUrlSpy = jasmine.createSpyObj('HospitalScopeUrlService', ['applyUrlScopeSync']);
-    // The shared stub, not a hand-rolled object: it reads `state` live, so a
-    // test can flip roles before the first read, and it carries the scope
+    // The shared stub, not a hand-rolled object: it is signal-backed, so a
+    // test can move the roles with `set()`, and it carries the scope
     // accessors (hasHospitalScope, effectiveHospitalIdForRequest) this page
-    // will need when it picks up the #566 scope-hint pattern.
-    activeRoles = ['ROLE_DOCTOR'];
-    const roleCtx = roleContextStub({
+    // reads.
+    roleCtx = roleContextStub({
       superAdmin: false,
       hospitalId: 'h1',
-      roles: activeRoles,
+      roles: ['ROLE_DOCTOR'],
     });
 
     await TestBed.configureTestingModule({
@@ -139,11 +138,8 @@ describe('ConsultationsComponent', () => {
     expect(consultSpy.getOverdue).toHaveBeenCalledWith('h1');
   });
 
-  /** Replace the roles the stub reads. In place: the stub holds the array. */
-  const setRoles = (...roles: string[]): void => {
-    activeRoles.length = 0;
-    activeRoles.push(...roles);
-  };
+  /** Replace the roles the stub holds (its signal, not a shared array). */
+  const setRoles = (...roles: string[]): void => roleCtx.set({ roles });
 
   it('hides the "mine" tab from a nurse — they are never the consultant', () => {
     setRoles('ROLE_NURSE');
@@ -167,10 +163,8 @@ describe('ConsultationsComponent', () => {
   });
 
   it('still lets a doctor open the "mine" tab', () => {
-    // Mutated in place, like the two tests above. Reassigning `activeRoles`
-    // here rebound the local while the stub kept its reference to the array
-    // beforeEach created — so this asserted the beforeEach default and would
-    // have passed with any value on that line, doctor or not.
+    // Set explicitly rather than trusting the beforeEach default, so the
+    // assertion depends on this line.
     setRoles('ROLE_DOCTOR');
 
     expect(component.canSeeMyConsultations()).toBeTrue();

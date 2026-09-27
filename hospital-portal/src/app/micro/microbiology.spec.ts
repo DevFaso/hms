@@ -9,7 +9,7 @@ import { MicroCultureResponse, MicroService } from '../services/micro.service';
 import { LabService } from '../services/lab.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { RoleContextStubState, roleContextStub } from '../testing/role-context.stub';
+import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
 
 describe('MicrobiologyComponent', () => {
   const EVERY_ROLE = [
@@ -28,7 +28,7 @@ describe('MicrobiologyComponent', () => {
   let microServiceSpy: jasmine.SpyObj<MicroService>;
   let labServiceSpy: jasmine.SpyObj<LabService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
-  let scope: RoleContextStubState;
+  let scope: RoleContextStub;
 
   const culture = (overrides: Partial<MicroCultureResponse>): MicroCultureResponse => ({
     id: 'c1',
@@ -80,7 +80,7 @@ describe('MicrobiologyComponent', () => {
     labServiceSpy = jasmine.createSpyObj('LabService', ['listOrders']);
     labServiceSpy.listOrders.and.returnValue(of([]));
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'info']);
-    scope = { superAdmin: false, hospitalId: 'h1', roles: [...EVERY_ROLE] };
+    scope = roleContextStub({ superAdmin: false, hospitalId: 'h1', roles: EVERY_ROLE });
 
     await TestBed.configureTestingModule({
       imports: [MicrobiologyComponent, TranslateModule.forRoot()],
@@ -91,7 +91,7 @@ describe('MicrobiologyComponent', () => {
         { provide: MicroService, useValue: microServiceSpy },
         { provide: LabService, useValue: labServiceSpy },
         { provide: ToastService, useValue: toastSpy },
-        { provide: RoleContextService, useValue: roleContextStub(scope) },
+        { provide: RoleContextService, useValue: scope },
       ],
     }).compileComponents();
 
@@ -112,7 +112,7 @@ describe('MicrobiologyComponent', () => {
   });
 
   it('hides the resulting controls without a backend-authorized role', () => {
-    scope.roles = [];
+    scope.set({ roles: [] });
     microServiceSpy.list.and.returnValue(of(page([culture({})])));
     fixture.detectChanges();
 
@@ -121,7 +121,7 @@ describe('MicrobiologyComponent', () => {
 
   it('shows finalize only on preliminary reports and only to the finalize tier', () => {
     // Finalize tier excludes LAB_TECHNICIAN: mirror by refusing its role list.
-    scope.roles = ['ROLE_LAB_TECHNICIAN'];
+    scope.set({ roles: ['ROLE_LAB_TECHNICIAN'] });
     microServiceSpy.list.and.returnValue(of(page([culture({})])));
     fixture.detectChanges();
     component.select(component.cultures()[0]);
