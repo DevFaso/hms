@@ -10,7 +10,9 @@
 // does not resolve. Slashes are escaped because xcconfig treats `//` as
 // a comment.
 MEDIHUB_API_BASE_URL = https:/$()/dev.e-keneya.com/api
-MEDIHUB_KEYCLOAK_ISSUER = https://hms-keycloak-dev.up.railway.app/realms/hms
+// Escaped like the API URL: an unescaped `//` starts an xcconfig comment,
+// which left the issuer as just "https:".
+MEDIHUB_KEYCLOAK_ISSUER = https:/$()/hms-keycloak-dev.up.railway.app/realms/hms
 // Was 1, turned off because an SSO session had no HMS user id and the
 // Messages tab reported "not signed in". The app side is fixed: every login
 // path, SSO included, now resolves and persists the id from
