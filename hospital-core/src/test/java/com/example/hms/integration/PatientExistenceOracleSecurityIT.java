@@ -297,7 +297,7 @@ class PatientExistenceOracleSecurityIT extends BaseIT {
     }
 
     private String next() {
-        return String.format("%05d", sequence.incrementAndGet() + (int) (Math.random() * 90000));
+        return String.format("%05d", sequence.incrementAndGet() + java.util.concurrent.ThreadLocalRandom.current().nextInt(90000));
     }
 
     private static String token(String username, UUID appUserId, UUID hospitalId) {

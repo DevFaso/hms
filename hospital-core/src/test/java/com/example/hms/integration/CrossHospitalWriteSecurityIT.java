@@ -130,7 +130,7 @@ class CrossHospitalWriteSecurityIT extends BaseIT {
 
     @BeforeEach
     void realHospitalsAndPatient() {
-        String n = String.format("%05d", (int) (Math.random() * 90000) + 10000);
+        String n = String.format("%05d", java.util.concurrent.ThreadLocalRandom.current().nextInt(10000, 100000));
         Hospital a = hospitalRepository.save(hospitalRow("Write Scope A " + n, "WSA" + n, n));
         Hospital b = hospitalRepository.save(hospitalRow("Write Scope B " + n, "WSB" + n, n + "1"));
         hospitalA = a.getId();

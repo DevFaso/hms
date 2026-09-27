@@ -209,9 +209,9 @@ class UserEndpointAuthorizationIT extends BaseIT {
         // team and the appointments instead of the directory (#776 closed it).
         // Registered, as every portal patient is: without a registration row
         // /me/patient/appointments answered 404 "Patient not found" here.
-        Patient record = patientRow(patientA);
+        Patient patientRecord = patientRow(patientA);
         registrationRepository.save(PatientHospitalRegistration.builder()
-            .patient(record)
+            .patient(patientRecord)
             .hospital(hospitalA)
             .mrn("MRN-A-" + next())
             .registrationDate(LocalDate.now())
@@ -219,7 +219,7 @@ class UserEndpointAuthorizationIT extends BaseIT {
             .build());
         User doctorA = account("docA", "ROLE_DOCTOR", hospitalA);
         primaryCareRepository.save(PatientPrimaryCare.builder()
-            .patient(record)
+            .patient(patientRecord)
             .hospital(hospitalA)
             .assignment(assignmentRepository.findByUserId(doctorA.getId()).get(0))
             .startDate(LocalDate.now())

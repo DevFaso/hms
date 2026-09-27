@@ -450,17 +450,17 @@ class ConsultationServiceImplTest {
         @Test
         @DisplayName("every write answers exactly as a missing id and changes nothing")
         void everyWriteAnswersAsMissing() {
-            UUID consultantId = UUID.randomUUID();
+            UUID otherConsultantId = UUID.randomUUID();
             List<Runnable> writes = List.of(
-                () -> service.acknowledgeConsultation(consultationId, consultantId),
+                () -> service.acknowledgeConsultation(consultationId, otherConsultantId),
                 () -> service.updateConsultation(consultationId, new ConsultationUpdateDTO()),
                 () -> service.completeConsultation(consultationId, new CompleteConsultationRequestDTO()),
                 () -> service.cancelConsultation(consultationId, "x"),
                 () -> service.scheduleConsultation(consultationId, LocalDateTime.now(), null),
                 () -> service.startConsultation(consultationId),
                 () -> service.declineConsultation(consultationId, "x"),
-                () -> service.assignConsultation(consultationId, consultantId, consultantId, null),
-                () -> service.reassignConsultation(consultationId, consultantId, consultantId, null));
+                () -> service.assignConsultation(consultationId, otherConsultantId, otherConsultantId, null),
+                () -> service.reassignConsultation(consultationId, otherConsultantId, otherConsultantId, null));
             for (Runnable write : writes) {
                 assertThat(catchNotFound(write)).isEqualTo(missingMessage);
             }

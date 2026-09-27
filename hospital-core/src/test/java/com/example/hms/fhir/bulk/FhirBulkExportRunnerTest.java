@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -177,7 +178,7 @@ class FhirBulkExportRunnerTest {
         UUID otherHospitalId = UUID.randomUUID();
         registerAt(patient, hospitalId, "MRN-JOB");
         registerAt(patient, otherHospitalId, "MRN-ELSEWHERE");
-        PatientFhirMapper realMapper = org.mockito.Mockito.spy(new PatientFhirMapper());
+        PatientFhirMapper realMapper = spy(new PatientFhirMapper());
 
         newRunner(realMapper).processJob(jobId);
 

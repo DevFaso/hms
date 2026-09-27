@@ -318,7 +318,7 @@ class HighRiskPregnancyCarePlanServiceImplTest {
         assertThat(notFoundMessage(() -> service.addBloodPressureLog(planId, bp, USERNAME))).isEqualTo(missing);
         assertThat(notFoundMessage(() -> service.addMedicationLog(planId, med, USERNAME))).isEqualTo(missing);
         assertThat(notFoundMessage(() -> service.addCareTeamNote(planId, note, USERNAME))).isEqualTo(missing);
-        verify(carePlanRepository, org.mockito.Mockito.never()).save(any());
+        verify(carePlanRepository, never()).save(any());
     }
 
     @Test
@@ -332,8 +332,8 @@ class HighRiskPregnancyCarePlanServiceImplTest {
         String unknown = notFoundMessage(() -> service.getPlansForPatient(unknownPatientId, USERNAME));
         assertThat(foreign).isEqualTo(unknown);
         assertThat(notFoundMessage(() -> service.getActivePlan(otherPatientId, USERNAME))).isEqualTo(unknown);
-        verify(patientRepository, org.mockito.Mockito.never()).findById(any());
-        verify(carePlanRepository, org.mockito.Mockito.never()).findByPatient_IdOrderByCreatedAtDesc(any());
+        verify(patientRepository, never()).findById(any());
+        verify(carePlanRepository, never()).findByPatient_IdOrderByCreatedAtDesc(any());
     }
 
     @Test
@@ -357,8 +357,8 @@ class HighRiskPregnancyCarePlanServiceImplTest {
             () -> service.getPlan(planId, USERNAME));
         org.junit.jupiter.api.Assertions.assertThrows(com.example.hms.exception.BusinessException.class,
             () -> service.getPlansForPatient(UUID.randomUUID(), USERNAME));
-        verify(carePlanRepository, org.mockito.Mockito.never()).findById(any());
-        verify(patientRepository, org.mockito.Mockito.never()).findById(any());
+        verify(carePlanRepository, never()).findById(any());
+        verify(patientRepository, never()).findById(any());
     }
 
     @Test
@@ -368,7 +368,7 @@ class HighRiskPregnancyCarePlanServiceImplTest {
         when(carePlanRepository.findById(planId)).thenReturn(Optional.of(basePlan(planId)));
 
         assertThat(service.getPlan(planId, USERNAME)).isNotNull();
-        verify(patientRepository, org.mockito.Mockito.never()).existsByIdAndUserId(any(), any());
+        verify(patientRepository, never()).existsByIdAndUserId(any(), any());
     }
 
     // ── A provider reaches a plan only at the hospital they act at ─────────
@@ -391,7 +391,7 @@ class HighRiskPregnancyCarePlanServiceImplTest {
         assertThat(notFoundMessage(() -> service.updatePlan(planId, update, USERNAME))).isEqualTo(missing);
         assertThat(notFoundMessage(() -> service.addBloodPressureLog(planId, bp, USERNAME))).isEqualTo(missing);
         assertThat(notFoundMessage(() -> service.markMilestoneComplete(planId, milestoneId, null, USERNAME))).isEqualTo(missing);
-        verify(carePlanRepository, org.mockito.Mockito.never()).save(any());
+        verify(carePlanRepository, never()).save(any());
     }
 
     @Test
@@ -415,6 +415,6 @@ class HighRiskPregnancyCarePlanServiceImplTest {
         when(patientRepository.existsByIdAndUserId(own.getPatient().getId(), patientUser.getId())).thenReturn(true);
 
         assertThat(service.getPlan(planId, USERNAME)).isNotNull();
-        verify(roleValidator, org.mockito.Mockito.never()).requireActiveHospitalId();
+        verify(roleValidator, never()).requireActiveHospitalId();
     }
 }

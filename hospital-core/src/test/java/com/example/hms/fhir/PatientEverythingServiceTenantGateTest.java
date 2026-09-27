@@ -34,6 +34,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -399,7 +400,7 @@ class PatientEverythingServiceTenantGateTest {
         patient.setId(patientId);
         registerAt(patient, activeHospitalId, "MRN-HERE");
         registerAt(patient, otherHospitalId, "MRN-ELSEWHERE");
-        PatientFhirMapper realMapper = org.mockito.Mockito.spy(new PatientFhirMapper());
+        PatientFhirMapper realMapper = spy(new PatientFhirMapper());
         PatientEverythingService scoped = newService(realMapper);
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findByPatientIdAndHospitalId(patientId, activeHospitalId))
