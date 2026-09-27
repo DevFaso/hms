@@ -16,7 +16,6 @@
       type="text"
       [placeholder]="'ORGANIZATIONS.SEARCH_PLACEHOLDER' | translate"
       [(ngModel)]="searchTerm"
-      (ngModelChange)="applyFilter()"
     />
   </div>
 
@@ -160,7 +159,7 @@
       <h3>{{ 'ORGANIZATIONS.NO_ORGANIZATIONS_FOUND' | translate }}</h3>
       <p>
         {{
-          searchTerm
+          searchTerm()
             ? ('COMMON.TRY_ADJUSTING' | translate)
             : ('ORGANIZATIONS.CREATE_FIRST' | translate)
         }}
