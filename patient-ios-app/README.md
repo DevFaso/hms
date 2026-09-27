@@ -1,115 +1,93 @@
-# MediHub Patient — Native iOS App
+# e-Keneya Patient — Native iOS App
 
-Pure SwiftUI native iOS app for the MediHub Hospital Management System patient portal.
+Pure SwiftUI native iOS app for the e-Keneya (HMS) patient portal. The
+display name under the icon is **e-Keneya**; the bundle identifier is
+`com.bitnesttechs.hms.patient.native`. Neither ever changes.
 
 ## Tech Stack
 
-- **Language**: Swift 5.9+
+- **Language**: Swift 5.9 language mode, built by Xcode 26 on CI
 - **UI**: SwiftUI
 - **Networking**: URLSession + async/await
+- **Auth**: username/password JWT or Keycloak SSO (AppAuth, pinned exactly in `project.yml`)
 - **Auth Storage**: iOS Keychain
-- **Min iOS**: 15.0
-- **Xcode**: 16.4+
+- **Min iOS**: 17.0
+- **Languages**: English (base), French, Spanish — `Resources/{en,fr,es}.lproj`
 
-## Project Structure
+## The project is generated, not committed
 
-```
-MediHubPatient/
-├── App/
-│   ├── MediHubPatientApp.swift    ← @main entry point
-│   └── ContentView.swift          ← auth gate (Login vs MainTabView)
-├── Core/
-│   ├── Network/
-│   │   ├── APIClient.swift        ← URLSession wrapper + auto token refresh
-│   │   └── APIEndpoints.swift     ← all /me/patient/* endpoint constants
-│   ├── Auth/
-│   │   ├── AuthManager.swift      ← login/logout/refresh, @ObservableObject
-│   │   └── KeychainHelper.swift   ← secure JWT token storage
-│   └── Models/
-│       ├── PatientModels.swift    ← UserDTO, PatientProfileDTO, HealthSummaryDTO
-│       ├── AppointmentModels.swift
-│       ├── LabModels.swift
-│       ├── MedicationModels.swift
-│       ├── BillingModels.swift
-│       ├── VitalsModels.swift
-│       └── ClinicalModels.swift   ← Encounters, CareTeam, Documents, Notifications, Chat...
-├── Features/
-│   ├── Login/                     ← LoginView + LoginViewModel (Face ID / Touch ID)
-│   ├── Navigation/                ← MainTabView (Dashboard, Appointments, Messages, Profile)
-│   ├── Dashboard/                 ← DashboardView + DashboardViewModel
-│   ├── Appointments/              ← AppointmentsView
-│   ├── LabResults/                ← LabResultsView
-│   ├── Medications/               ← MedicationsView (Medications + Prescriptions tabs)
-│   ├── Billing/                   ← BillingView (invoices + balance due)
-│   ├── Messages/                  ← MessagesView, MessageThreadView, ComposeMessageView
-│   ├── Vitals/                    ← VitalsView + RecordVitalSheet
-│   ├── CareTeam/                  ← CareTeamView
-│   ├── Visits/                    ← VisitHistoryView + AfterVisitSummaryView
-│   ├── Profile/                   ← ProfileView (full patient profile + logout)
-│   └── Misc/                      ← NotificationsView, DocumentsView, HealthRecordsView,
-│                                       SharingPrivacyView
-└── Resources/
-    ├── Info.plist
-    └── Assets.xcassets
-```
+`project.yml` is the source of truth. [XcodeGen](https://github.com/yonaskolb/XcodeGen)
+generates `MediHubPatient.xcodeproj` **and** `MediHubPatient/Resources/Info.plist`
+from it; both are git-ignored. Never create the project by hand in Xcode and
+never add an Info.plist key by hand — put it under
+`targets.MediHubPatient.info.properties` in `project.yml`, or the next
+`xcodegen generate` drops it. (A hand-built project also misses the
+per-configuration settings below, such as `MEDIHUB_API_BASE_URL`, and the
+Face ID purpose string, without which iOS terminates the app.)
 
 ## Setup
 
-### 1. Create Xcode project
+```sh
+brew install xcodegen
+cd patient-ios-app
+xcodegen generate
+open MediHubPatient.xcodeproj
+```
 
-Open Xcode → **File → New → Project** → **iOS App**
+Run `xcodegen generate` again after pulling a change to `project.yml` or after
+adding or removing a source file.
 
-| Field | Value |
-|---|---|
-| Product Name | MediHubPatient |
-| Bundle Identifier | com.bitnesttechs.hms.patient.native |
-| Interface | SwiftUI |
-| Language | Swift |
-| Min Deployment | iOS 15.0 |
+### Configurations
 
-Save into this folder: `patient-ios-app/`
+| Configuration | Used for | Per-environment values |
+|---|---|---|
+| Debug | Running from Xcode, CI tests | scheme environment variables |
+| Release-Dev | TestFlight builds against dev | `Config/Dev.xcconfig` |
+| Release-Prod | App Store builds | `Config/Prod.xcconfig` |
 
-### 2. Add all Swift files
-
-Drag all files from this repository into the Xcode project navigator, making sure **"Copy items if needed"** is **unchecked** (files are already here).
-
-### 3. Set API URL for local dev
-
-In Xcode scheme → **Edit Scheme → Run → Arguments → Environment Variables**:
+See `Config/README.md` for the `MEDIHUB_*` settings. For local development
+against a backend on your machine, set in the Xcode scheme (Run → Arguments →
+Environment Variables):
 
 ```
 MEDIHUB_API_BASE_URL = http://localhost:8081/api
 ```
 
-For production builds, update `AppEnvironment.baseURL` in `APIClient.swift`.
+### Localised purpose strings
 
-### 4. Build & Run
+The text of a system permission prompt comes from
+`Resources/<lang>.lproj/InfoPlist.strings`; the English base value is in
+`project.yml`. A purpose string added to `project.yml` needs a line in all
+three `InfoPlist.strings` files.
 
-`Cmd + R` — runs on simulator or device.
+## CI
 
-## Screens
+`.github/workflows/mobile-ios.yml` is the only place the app is compiled from a
+clean checkout: it runs `xcodegen generate`, checks the generated Info.plist
+carries every key the app needs, builds for the simulator and runs the
+`MediHubPatientTests` unit tests. A `workflow_dispatch` with
+`release_action=upload_to_testflight` also archives and uploads to TestFlight.
 
-| Screen | Status |
-|---|---|
-| Login (username + Face ID / Touch ID) | ✅ Built |
-| Dashboard | ✅ Built |
-| Appointments | ✅ Built |
-| Lab Results | ✅ Built |
-| Medications + Prescriptions | ✅ Built |
-| Billing / Invoices | ✅ Built |
-| Messages + Thread + Compose | ✅ Built |
-| Vitals + Record Vital | ✅ Built |
-| Care Team | ✅ Built |
-| Visit History + After Visit Summary | ✅ Built |
-| Profile | ✅ Built |
-| Notifications | ✅ Built |
-| Documents | ✅ Built |
-| Health Records | ✅ Built |
-| Sharing & Privacy + Consents | ✅ Built |
+## Project Structure
+
+```
+MediHubPatient/
+├── App/                ← @main entry point, auth gate
+├── Core/
+│   ├── Auth/           ← AuthManager, KeychainHelper, Keycloak, sign-out revocation
+│   ├── Chat/           ← attachment cache, inbox timestamps
+│   ├── Config/         ← feature flags, Keycloak configuration
+│   ├── Locale/         ← LocalizationManager, wire-enum labels
+│   ├── Models/         ← DTOs mirroring the backend
+│   ├── Network/        ← APIClient (Accept-Language, token refresh), APIEndpoints
+│   └── Push/           ← APNs registration and notification taps
+├── Features/           ← one folder per screen family
+└── Resources/          ← Assets.xcassets, {en,fr,es}.lproj
+```
 
 ## API
 
-All endpoints connect to the Spring Boot backend.  
-Base path: `/me/patient/*`  
-Auth: `Authorization: Bearer <JWT>`  
-Token refresh: automatic on 401 via `AuthManager.refreshTokens()`
+All endpoints connect to the Spring Boot backend (`/api`). Patient data lives
+under `/me/patient/*`; every request carries `Authorization: Bearer <token>`
+and `Accept-Language: <app language>`. A 401 triggers one token refresh and
+one retry.
