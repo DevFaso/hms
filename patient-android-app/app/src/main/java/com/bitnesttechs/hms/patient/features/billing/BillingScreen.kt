@@ -224,11 +224,9 @@ private fun AmountRow(label: String, value: String, color: Color = Color.Unspeci
 /**
  * Records a payment made outside the app (mobile money, cash at the desk,
  * a card terminal, a transfer). There is no gateway here. The form matches
- * the web's, but the backend persists only the amount today: method,
- * reference and notes are accepted and dropped (PatientPortalController
- * .payMyInvoice forwards dto.getAmount() alone). The hint says so rather
- * than promising the cashier a reference they will never see; the backend
- * gap is recorded in tasklist.md.
+ * the web's, and the backend stores the method, the transaction reference
+ * and the notes with the amount, so the hint no longer warns that only the
+ * amount is kept.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

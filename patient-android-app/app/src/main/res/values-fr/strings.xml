@@ -304,7 +304,7 @@
     <string name="invoice_paid">Payé</string>
     <string name="balance_due">Reste à payer</string>
     <string name="pay_invoice">Payer la facture</string>
-    <string name="payment_sheet_hint">Enregistrer un paiement pour la facture %1$s. Reste à payer : %2$s. Conservez votre reçu : seul le montant est enregistré pour le moment.</string>
+    <string name="payment_sheet_hint">Enregistrer un paiement pour la facture %1$s. Reste à payer : %2$s. Conservez votre reçu.</string>
     <string name="payment_amount">Montant (FCFA)</string>
     <string name="payment_amount_invalid">Saisissez un montant entre 0 et le reste à payer</string>
     <string name="payment_method">Mode de paiement</string>
