@@ -36,6 +36,17 @@ data class ChangePasswordRequest(
     @Json(name = "newPassword") val newPassword: String
 )
 
+/** Body of PUT /me/push-devices/{installationId}. */
+@JsonClass(generateAdapter = true)
+data class PushDeviceRequest(
+    /** The FCM registration token. */
+    @Json(name = "token") val token: String,
+    @Json(name = "platform") val platform: String,
+    /** en, fr or es: the backend composes the notification text in it. */
+    @Json(name = "locale") val locale: String,
+    @Json(name = "appVersion") val appVersion: String
+)
+
 /** Body of POST /auth/logout; a null token is omitted (Moshi skips nulls). */
 @JsonClass(generateAdapter = true)
 data class LogoutRequest(

@@ -1007,4 +1007,10 @@
     <!-- Medications and vitals text that was hard-coded English -->
     <string name="preferred_pharmacy_placeholder">e.g. the pharmacy near your home</string>
     <string name="vitals_on_date">Vital signs — %1$s</string>
+
+    <!-- Push notifications (the text itself is composed server side; these are the channel and the fallbacks) -->
+    <string name="push_channel_messages_name">Messages</string>
+    <string name="push_channel_messages_description">New messages from your care team</string>
+    <string name="push_new_message_title">New message</string>
+    <string name="push_new_message_body">You have a new message from your care team.</string>
 </resources>

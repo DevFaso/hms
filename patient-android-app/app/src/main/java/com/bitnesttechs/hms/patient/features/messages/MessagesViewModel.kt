@@ -8,6 +8,7 @@ import com.bitnesttechs.hms.patient.core.network.ApiService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import com.bitnesttechs.hms.patient.core.push.PushRegistrar
 import android.media.MediaPlayer
 import java.io.File
 import javax.inject.Inject
@@ -15,8 +16,14 @@ import javax.inject.Inject
 @HiltViewModel
 class MessagesViewModel @Inject constructor(
     private val api: ApiService,
-    private val tokenStorage: TokenStorage
+    private val tokenStorage: TokenStorage,
+    private val pushRegistrar: PushRegistrar
 ) : ViewModel() {
+    /** POST_NOTIFICATIONS is asked for once, here, where a message notification makes sense. */
+    fun shouldAskNotificationPermission(): Boolean = pushRegistrar.shouldAskNotificationPermission()
+
+    fun markNotificationPermissionAsked() = pushRegistrar.markNotificationPermissionAsked()
+
     val conversations = MutableStateFlow<List<ChatConversationDto>>(emptyList())
     val careTeamMembers = MutableStateFlow<List<CareTeamMemberDto>>(emptyList())
     val isLoading = MutableStateFlow(true)

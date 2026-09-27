@@ -56,6 +56,21 @@ interface ApiService {
         @Body request: LogoutRequest
     ): Response<Unit>
 
+    // ── Push devices (idempotent; 204). The backend may not expose them yet:
+    // PushRegistrar treats every failure, 404/405 included, as silent. ──
+    @PUT("me/push-devices/{installationId}")
+    suspend fun registerPushDevice(
+        @Path("installationId") installationId: String,
+        @Body request: PushDeviceRequest
+    ): Response<Unit>
+
+    /** Sent at sign-out with the captured bearer, before /auth/logout. */
+    @DELETE("me/push-devices/{installationId}")
+    suspend fun unregisterPushDevice(
+        @Header("Authorization") bearer: String,
+        @Path("installationId") installationId: String
+    ): Response<Unit>
+
     // ── Patient Profile ───────────────────────────────────────────────────────
     @GET("me/patient/profile")
     suspend fun getProfile(): Response<ApiResponse<PatientProfileDto>>

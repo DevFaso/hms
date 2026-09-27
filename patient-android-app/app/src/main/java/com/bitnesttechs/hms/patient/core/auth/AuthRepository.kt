@@ -6,6 +6,7 @@ import com.bitnesttechs.hms.patient.core.models.*
 import com.bitnesttechs.hms.patient.core.di.ApplicationScope
 import com.bitnesttechs.hms.patient.core.network.ApiService
 import com.bitnesttechs.hms.patient.core.network.ServerMessage
+import com.bitnesttechs.hms.patient.core.push.PushRegistrar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -47,6 +48,7 @@ class AuthRepository @Inject constructor(
     private val api: ApiService,
     private val tokenStorage: TokenStorage,
     private val keycloak: KeycloakAuthService,
+    private val pushRegistrar: PushRegistrar,
     @ApplicationScope private val appScope: CoroutineScope
 ) {
     private val _currentUser = MutableStateFlow<UserDto?>(null)
@@ -179,6 +181,8 @@ class AuthRepository @Inject constructor(
             lastName = boot?.lastName.orEmpty(),
             roles = boot?.roles.orEmpty()
         )
+        // Bind this installation's push token to the patient (silent, one attempt).
+        pushRegistrar.registerAsync()
         return AuthResult.Success
     }
 
@@ -248,6 +252,9 @@ class AuthRepository @Inject constructor(
      * Keycloak's revocation endpoint. Every step is best effort and bounded.
      */
     internal suspend fun endSessionOnServer(ending: SessionEnd) {
+        // Unbind the push token first, while the captured token still
+        // authenticates (the contract's order); silent, whatever happens.
+        withTimeoutOrNull(SERVER_SIGN_OUT_TIMEOUT_MS) { runCatching { pushRegistrar.unregister(ending.bearer) } }
         withTimeoutOrNull(SERVER_SIGN_OUT_TIMEOUT_MS) {
             runCatching { api.logout(ending.bearer, LogoutRequest(ending.hmsRefreshToken)) }
         }

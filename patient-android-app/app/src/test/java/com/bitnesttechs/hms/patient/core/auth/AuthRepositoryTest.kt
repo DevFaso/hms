@@ -28,7 +28,7 @@ class AuthRepositoryTest {
 
     private val tokenStorage = mockk<TokenStorage>(relaxed = true)
     private val api = mockk<ApiService>()
-    private val repo = AuthRepository(api, tokenStorage, mockk(relaxed = true), kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined))
+    private val repo = AuthRepository(api, tokenStorage, mockk(relaxed = true), mockk(relaxed = true), kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined))
 
     private val legacyDisabledMessage =
         "Legacy username/password login is disabled. Sign in via Single Sign-On."

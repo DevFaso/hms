@@ -46,8 +46,9 @@ class LogoutTest {
 
     private val api = mockk<ApiService>()
     private val keycloak = mockk<KeycloakAuthService>(relaxed = true)
+    private val push = mockk<com.bitnesttechs.hms.patient.core.push.PushRegistrar>(relaxed = true)
 
-    private fun TestScope.repo(storage: TokenStorage) = AuthRepository(api, storage, keycloak, this)
+    private fun TestScope.repo(storage: TokenStorage) = AuthRepository(api, storage, keycloak, push, this)
 
     @Test
     fun `password session - one logout with the captured bearer and refresh token, then local state is gone`() = runTest {
@@ -96,6 +97,32 @@ class LogoutTest {
         repo(storage(offline)).logout()
         advanceUntilIdle()
         assertNull(offline.access)
+    }
+
+    @Test
+    fun `the push device is unbound first, with the same captured bearer, then the session is revoked`() = runTest {
+        val session = Session(access = "access-jwt", refresh = "refresh-jwt")
+        coEvery { api.logout(any(), any()) } returns Response.success(Unit)
+
+        repo(storage(session)).logout()
+        advanceUntilIdle()
+
+        io.mockk.coVerifyOrder {
+            push.unregister("Bearer access-jwt")
+            api.logout("Bearer access-jwt", LogoutRequest("refresh-jwt"))
+        }
+    }
+
+    @Test
+    fun `a push unbind that fails never stops the logout`() = runTest {
+        val session = Session(access = "access-jwt", refresh = "refresh-jwt")
+        coEvery { push.unregister(any()) } throws IllegalStateException("boom")
+        coEvery { api.logout(any(), any()) } returns Response.success(Unit)
+        repo(storage(session)).logout()
+        advanceUntilIdle()
+        // The registrar is silent by contract; even if it threw, the session is still revoked.
+        assertNull(session.access)
+        coVerify(exactly = 1) { api.logout("Bearer access-jwt", LogoutRequest("refresh-jwt")) }
     }
 
     @Test

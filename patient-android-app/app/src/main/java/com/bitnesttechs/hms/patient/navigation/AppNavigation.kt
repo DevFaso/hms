@@ -11,6 +11,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.bitnesttechs.hms.patient.core.auth.AuthRepository
 import com.bitnesttechs.hms.patient.core.auth.TokenStorage
+import com.bitnesttechs.hms.patient.core.push.PushRegistrar
 import com.bitnesttechs.hms.patient.features.account.ActivationScreen
 import com.bitnesttechs.hms.patient.features.account.ForgotPasswordScreen
 import com.bitnesttechs.hms.patient.features.login.LoginScreen
@@ -34,6 +35,7 @@ sealed class Screen(val route: String) {
 interface TokenStorageEntryPoint {
     fun tokenStorage(): TokenStorage
     fun authRepository(): AuthRepository
+    fun pushRegistrar(): PushRegistrar
 }
 
 @Composable
@@ -56,7 +58,12 @@ fun AppNavigation() {
         // A session from a build that never stored the HMS user id (every SSO
         // session did so) resolves it now, so chat and notes work without a
         // fresh sign-in.
-        if (startDest == Screen.Main.route) entryPoint.authRepository().ensureUserId()
+        if (startDest == Screen.Main.route) {
+            entryPoint.authRepository().ensureUserId()
+            // Once per cold start: a session from an older build never
+            // registered, and a token can rotate while the app is dead.
+            entryPoint.pushRegistrar().registerAsync()
+        }
     }
 
     if (startDest == null) {

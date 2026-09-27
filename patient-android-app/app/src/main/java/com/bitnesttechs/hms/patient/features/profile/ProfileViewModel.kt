@@ -11,6 +11,7 @@ import com.bitnesttechs.hms.patient.core.auth.AuthRepository
 import com.bitnesttechs.hms.patient.core.models.PatientProfileDto
 import com.bitnesttechs.hms.patient.core.models.PatientProfileUpdateDto
 import com.bitnesttechs.hms.patient.core.network.ApiService
+import com.bitnesttechs.hms.patient.core.push.PushRegistrar
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +24,8 @@ import javax.inject.Inject
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val api: ApiService,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val pushRegistrar: PushRegistrar
 ) : ViewModel() {
 
     private val _profile = MutableStateFlow<PatientProfileDto?>(null)
@@ -107,6 +109,9 @@ class ProfileViewModel @Inject constructor(
     }
 
     fun clearSaveResult() { _saveResult.value = null }
+
+    /** The backend composes notifications in the registered locale, so a language change re-registers. */
+    fun onLanguageChanged() = pushRegistrar.registerAsync()
 
     fun logout() {
         viewModelScope.launch {

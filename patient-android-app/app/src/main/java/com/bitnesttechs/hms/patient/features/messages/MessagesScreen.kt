@@ -27,6 +27,12 @@ import com.bitnesttechs.hms.patient.ui.theme.OnBrandMuted
 import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
 import com.bitnesttechs.hms.patient.ui.theme.BrandSoft
 import androidx.compose.ui.platform.LocalConfiguration
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.core.os.ConfigurationCompat
 import java.time.LocalDateTime
 import java.util.Locale
@@ -49,6 +55,19 @@ fun MessagesScreen(
     // Every time the inbox is shown, not once per ViewModel: coming back from
     // a thread must clear the badge that opening it marked read.
     LaunchedEffect(Unit) { viewModel.load() }
+
+    // Android 13+: the notification permission is asked for once, on the first
+    // visit to Messages (not at cold start), and only when push is configured.
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            viewModel.shouldAskNotificationPermission() &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            viewModel.markNotificationPermissionAsked()
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     Scaffold(
         topBar = {

@@ -51,6 +51,7 @@ import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.ui.theme.OnBrandMuted
 import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
 import kotlinx.coroutines.launch
+import com.bitnesttechs.hms.patient.core.push.PushNavigation
 
 sealed class Tab(val route: String, @StringRes val labelRes: Int, val icon: ImageVector) {
     object Dashboard : Tab("tab_dashboard", R.string.dashboard, Icons.Default.Home)
@@ -93,6 +94,18 @@ fun MainScreen(onLogout: () -> Unit) {
     val currentDestination = navBackStackEntry?.destination
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+
+    // A tapped chat notification: open Messages, then the thread when the
+    // sender is known. Waits here while the patient is still signing in.
+    val pushTarget by PushNavigation.pending.collectAsState()
+    LaunchedEffect(pushTarget) {
+        val target = PushNavigation.consume() ?: return@LaunchedEffect
+        navController.navigate(Tab.Messages.route) {
+            popUpTo(navController.graph.findStartDestination().id) { inclusive = false }
+            launchSingleTop = true
+        }
+        target.senderId?.let { navController.navigate("thread/$it") }
+    }
 
     // Show bottom bar on tab routes AND drawer sub-screens
     // Full-screen routes: no bottom bar and no drawer swipe, so a tab tap cannot

@@ -444,6 +444,7 @@ fun ProfileScreen(
                                 .fillMaxWidth()
                                 .clickable {
                                     LocaleHelper.setLanguage(context, langCode)
+                                    viewModel.onLanguageChanged()
                                     showLanguageDialog = false
                                     // Recreate activity to apply locale
                                     (context as? android.app.Activity)?.recreate()
