@@ -22,6 +22,7 @@ import com.example.hms.repository.empi.EmpiMasterIdentityRepository;
 import com.example.hms.repository.empi.EmpiMergeEventRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.TransactionCallbacks;
 import lombok.RequiredArgsConstructor;
@@ -150,15 +151,14 @@ public class EmpiServiceImpl implements EmpiService, EmpiAuthorisedMergePort {
     }
 
     /**
-     * {@code requireActiveHospitalId()}, without the road that lets an
-     * unverified principal read a null scope as "unscoped".
+     * {@code requireActiveHospitalId()}, read as a reach over identities.
      *
-     * <p>{@code requireActiveHospitalId()} returns null two ways: step 1, a real
-     * super-admin in global view ({@code HospitalContext.isSuperAdmin()}, which
-     * is what {@code isSuperAdminFromJwtClaim()} reads), and step 4, a safety
-     * net keyed on the AUTHORITIES collection, which the RoleValidator javadoc
-     * warns can be inflated. Only the verified flag makes a null scope global
-     * view — the stance of #746, #750 and #751.
+     * <p>Since the one tenant resolver, {@code requireActiveHospitalId()} returns
+     * null for exactly one caller: a VERIFIED super-admin (a live SUPER_ADMIN
+     * assignment) in global view; the authorities-based "step 4" that let an
+     * unverified principal reach null is gone. The {@code isSuperAdminFromJwtClaim()}
+     * conjunct therefore no longer decides anything in production; it is kept
+     * so a null from anywhere else still reads as no reach, never as global.
      */
     private CallerScope callerScope() {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
@@ -621,7 +621,7 @@ public class EmpiServiceImpl implements EmpiService, EmpiAuthorisedMergePort {
             .orElse(context.getActiveOrganizationId());
         UUID hospitalId = Optional.ofNullable(primary.getHospitalId())
             .or(() -> Optional.ofNullable(secondary.getHospitalId()))
-            .orElse(context.getActiveHospitalId());
+            .orElse(ActingScopeResolver.pinnedHospitalIdOf(context));
         UUID departmentId = Optional.ofNullable(primary.getDepartmentId())
             .or(() -> Optional.ofNullable(secondary.getDepartmentId()))
             .orElseGet(() -> context.getPermittedDepartmentIds().stream().min(Comparator.naturalOrder()).orElse(null));
@@ -689,7 +689,7 @@ public class EmpiServiceImpl implements EmpiService, EmpiAuthorisedMergePort {
             .patientId(identity.getPatientId())
             .occurredAt(OffsetDateTime.now())
             .organizationId(Optional.ofNullable(identity.getOrganizationId()).orElse(context.getActiveOrganizationId()))
-            .hospitalId(Optional.ofNullable(identity.getHospitalId()).orElse(context.getActiveHospitalId()))
+            .hospitalId(Optional.ofNullable(identity.getHospitalId()).orElse(ActingScopeResolver.pinnedHospitalIdOf(context)))
             .departmentId(Optional.ofNullable(identity.getDepartmentId()).orElseGet(() -> context.getPermittedDepartmentIds().stream().findFirst().orElse(null)))
             .build();
     }

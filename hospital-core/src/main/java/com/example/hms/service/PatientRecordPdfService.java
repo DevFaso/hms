@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -12,7 +13,6 @@ import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.security.SecurityUtils;
-import com.example.hms.security.context.HospitalContextHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -75,7 +75,7 @@ public class PatientRecordPdfService {
 
     public byte[] render(UUID patientId) {
         PdfLabels labels = PdfLabels.ofRequest(messageSource);
-        UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
+        UUID hospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
         if (hospitalId == null) {
             throw new AccessDeniedException(
                 "A patient record download requires an active hospital scope; supply X-Hospital-Id or scope the session.");

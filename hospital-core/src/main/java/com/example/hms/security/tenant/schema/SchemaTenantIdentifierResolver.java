@@ -1,5 +1,6 @@
 package com.example.hms.security.tenant.schema;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import org.hibernate.context.spi.CurrentTenantIdentifierResolver;
@@ -50,7 +51,10 @@ public class SchemaTenantIdentifierResolver implements CurrentTenantIdentifierRe
     @Override
     public String resolveCurrentTenantIdentifier() {
         HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
-        UUID active = ctx.getActiveHospitalId();
+        // Not sealing: Hibernate asks when a session opens, which may precede
+        // the controller's narrowTo. A super-admin in global view (no pin)
+        // stays on the default schema, not an incidental assignment's.
+        UUID active = ActingScopeResolver.pinnedHospitalIdOf(ctx);
         if (active == null) {
             return DEFAULT_TENANT;
         }

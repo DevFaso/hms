@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.enums.ImagingModality;
 import com.example.hms.enums.ImagingReportStatus;
 import com.example.hms.security.context.HospitalContext;
@@ -316,12 +317,12 @@ public class ImagingReport extends BaseEntity implements TenantScoped {
 
     @Override
     public void applyTenantScope(HospitalContext context) {
-        if (context == null || context.getActiveHospitalId() == null) {
+        if (context == null || ActingScopeResolver.pinnedHospitalIdOf(context) == null) {
             return;
         }
         if (hospital == null) {
             hospital = new Hospital();
-            hospital.setId(context.getActiveHospitalId());
+            hospital.setId(ActingScopeResolver.pinnedHospitalIdOf(context));
         }
         if (organization == null && context.getActiveOrganizationId() != null) {
             organization = new Organization();
