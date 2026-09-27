@@ -542,8 +542,7 @@ public class AuthController {
         user.setActivationTokenExpiresAt(LocalDateTime.now().plusDays(1));
         userRepository.save(user);
 
-        String activationLink = String.format(
-                "%s/verify?email=%s&token=%s",
+        String activationLink = com.example.hms.utility.ActivationLinks.build(
                 authProps.frontendBaseUrl(), user.getEmail(), user.getActivationToken());
         try {
             authNotification.email().sendActivationEmail(user.getEmail(), activationLink);

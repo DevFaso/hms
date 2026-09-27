@@ -148,8 +148,7 @@ public class UserServiceImpl implements UserService {
             createAssignmentIfAbsent(saved.getId(), patient.getId(), targetHospitalId);
         }
 
-        final String activationLink = String.format(
-                "%s/verify?email=%s&token=%s",
+        final String activationLink = com.example.hms.utility.ActivationLinks.build(
                 frontendBaseUrl, saved.getEmail(), saved.getActivationToken());
         try {
             emailService.sendActivationEmail(saved.getEmail(), activationLink);
