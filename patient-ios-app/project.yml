@@ -5,6 +5,9 @@ options:
     iOS: "17.0"
   xcodeVersion: "16.4"
   generateEmptyDirectories: true
+  # English is the base language, matching LocalizationManager's default and
+  # CFBundleDevelopmentRegion; fr.lproj and es.lproj are the translations.
+  developmentLanguage: en
   groupSortPosition: top
 
 # Phase 2.8.B: per-env release configurations for the Keycloak cutover.
@@ -94,7 +97,13 @@ targets:
         # .deviceOwnerAuthenticationWithBiometrics: iOS TERMINATES an app
         # that reaches Face ID without a purpose string, and App Review
         # rejects for its absence.
-        NSFaceIDUsageDescription: Utiliser Face ID pour vous connecter à e-Keneya sans saisir votre mot de passe.
+        #
+        # This is the BASE (English) value, matching CFBundleDevelopmentRegion.
+        # iOS shows a purpose string in the device language only through
+        # InfoPlist.strings, so each of Resources/{en,fr,es}.lproj carries one;
+        # a purpose string added here must be added to all three.
+        NSFaceIDUsageDescription: Use Face ID to sign in to e-Keneya without typing your password.
+        CFBundleDevelopmentRegion: en
 
         # Without this, every upload lands in TestFlight as "Missing
         # Compliance" and reaches nobody until a human answers the export
