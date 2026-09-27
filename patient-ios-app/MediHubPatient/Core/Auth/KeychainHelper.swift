@@ -91,6 +91,14 @@ final class KeychainHelper {
         clearOidc()
     }
 
+    /// The username and password Face ID replays. After a password reset
+    /// they may be stale, and replaying a wrong password counts toward the
+    /// account lockout.
+    func clearSavedCredentials() {
+        delete(key: Keys.username)
+        delete(key: Keys.password)
+    }
+
     func clearAll() {
         clearHistoryNotes()
         delete(key: Keys.accessToken)

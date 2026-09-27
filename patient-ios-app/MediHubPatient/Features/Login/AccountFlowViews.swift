@@ -131,13 +131,8 @@ struct ForgotPasswordView: View {
         defer { isResetting = false }
         do {
             // The e-mailed link or the code alone: both carry the token.
-            try await APIClient.shared.sendNoContent(
-                .POST,
-                path: APIEndpoints.confirmPasswordReset,
-                body: PasswordResetConfirmRequest(token: AccountLinkParser.token(from: code),
-                                                  newPassword: newPassword),
-                auth: .none
-            )
+            // Also forgets the Face ID password, which may now be stale.
+            try await AccountService.confirmPasswordReset(tokenText: code, newPassword: newPassword)
             // The server answers 204 for a bad code too, so this cannot claim
             // success; it says what to do next.
             resetSubmitted = true
@@ -227,15 +222,23 @@ struct AccountActivationView: View {
 
     private func resend() async {
         isSending = true
+        errorText = nil
+        linkSent = false
         defer { isSending = false }
-        // One answer whatever the backend said, as on the portal.
-        try? await APIClient.shared.sendNoContent(
-            .POST,
-            path: APIEndpoints.resendVerification,
-            queryItems: [URLQueryItem(name: "email", value: email.trimmingCharacters(in: .whitespacesAndNewlines))],
-            auth: .none
-        )
-        linkSent = true
+        do {
+            // The server's answer is already neutral (same text whether or
+            // not the address exists), so a failure here is a real one — a
+            // network error or a rejected address — and is shown.
+            try await APIClient.shared.sendNoContent(
+                .POST,
+                path: APIEndpoints.resendVerification,
+                queryItems: [URLQueryItem(name: "email", value: email.trimmingCharacters(in: .whitespacesAndNewlines))],
+                auth: .none
+            )
+            linkSent = true
+        } catch {
+            errorText = error.localizedDescription
+        }
     }
 
     private func activate() async {
@@ -394,16 +397,8 @@ struct ChangePasswordView: View {
             return
         }
         do {
-            try await APIClient.shared.sendNoContent(
-                .POST,
-                path: APIEndpoints.changePassword,
-                body: ChangePasswordRequest(currentPassword: currentPassword, newPassword: newPassword),
-                auth: .bearer(bearer)
-            )
-            // Face ID signs in with the saved password; keep it working.
-            if KeychainHelper.shared.savedPassword != nil {
-                KeychainHelper.shared.savedPassword = newPassword
-            }
+            // Also updates the password Face ID signs in with.
+            try await AccountService.changePassword(current: currentPassword, new: newPassword, bearer: bearer)
             changed = true
             currentPassword = ""
             newPassword = ""
