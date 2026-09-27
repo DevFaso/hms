@@ -98,8 +98,9 @@ fun MainScreen(onLogout: () -> Unit) {
     // A tapped chat notification: open Messages, then the thread when the
     // sender is known. Waits here while the patient is still signing in.
     val pushTarget by PushNavigation.pending.collectAsState()
-    LaunchedEffect(pushTarget) {
-        val target = PushNavigation.consume() ?: return@LaunchedEffect
+    val graphReady = navBackStackEntry != null
+    LaunchedEffect(pushTarget, graphReady) {
+        val target = PushNavigation.consumeWhenReady(graphReady) ?: return@LaunchedEffect
         navController.navigate(Tab.Messages.route) {
             popUpTo(navController.graph.findStartDestination().id) { inclusive = false }
             launchSingleTop = true

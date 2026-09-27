@@ -123,8 +123,20 @@ object PushNavigation {
         PushTarget.fromExtras(
             intent.getStringExtra(PushTarget.EXTRA_TYPE),
             intent.getStringExtra(PushTarget.EXTRA_SENDER_ID)
-        )?.let { _pending.value = it }
+        )?.let { offer(it) }
+    }
+
+    fun offer(target: PushTarget) {
+        _pending.value = target
     }
 
     fun consume(): PushTarget? = _pending.value.also { _pending.value = null }
+
+    /**
+     * The tap, but only once the NavHost has a graph ([graphReady]: it has a
+     * back-stack entry). Navigating earlier throws; the NavHost sits in the
+     * Scaffold's content, which is composed after the screen's own effects
+     * start. Not ready = left pending for the next call.
+     */
+    fun consumeWhenReady(graphReady: Boolean): PushTarget? = if (graphReady) consume() else null
 }
