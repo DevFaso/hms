@@ -116,6 +116,13 @@ struct ProfileView: View {
                             NavigationLink { HealthRecordsView() } label: {
                                 Label("health_records".localized, systemImage: "heart.text.square")
                             }
+                            // My Medical History (#709) was built with no way
+                            // to reach it: the only screen that shows the
+                            // recorded medical, surgical, family and social
+                            // history, and the device-only notes on each.
+                            NavigationLink { MedicalHistoryView() } label: {
+                                Label("history_title".localized, systemImage: "clock.arrow.circlepath")
+                            }
                             NavigationLink { DocumentsView() } label: {
                                 Label("documents".localized, systemImage: "doc.fill")
                             }
