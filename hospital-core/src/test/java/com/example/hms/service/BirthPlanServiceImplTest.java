@@ -79,6 +79,10 @@ class BirthPlanServiceImplTest {
     @Mock
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
+    /** Unstubbed: a null scope (global view), so the existing cases read any hospital. */
+    @Mock
+    private com.example.hms.utility.RoleValidator roleValidator;
+
     @InjectMocks
     private BirthPlanServiceImpl birthPlanService;
 
@@ -585,8 +589,7 @@ class BirthPlanServiceImplTest {
 
         when(userRepository.findByUsername(nurseUser.getUsername()))
             .thenReturn(Optional.of(nurseUser));
-        when(birthPlanRepository.findById(birthPlan.getId()))
-            .thenReturn(Optional.of(birthPlan));
+        // Refused before the plan is looked up.
 
         // When & Then
         UUID birthPlanId = birthPlan.getId();
@@ -719,5 +722,39 @@ class BirthPlanServiceImplTest {
         verify(birthPlanRepository, never()).findActiveBirthPlanByPatientId(any());
         verify(reachRecorder).recordReach(eq(patient.getId()), eq(hospital.getId()), eq(doctorUser.getId()), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    @Test
+    void aProviderReachingAnotherHospitalsPlanIsAnsweredAsAMissingPlan() {
+        when(userRepository.findByUsername(doctorUser.getUsername())).thenReturn(Optional.of(doctorUser));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        UUID planId = birthPlan.getId();
+        String username = doctorUser.getUsername();
+        when(birthPlanRepository.findById(planId)).thenReturn(Optional.empty());
+        String missing = assertThrows(ResourceNotFoundException.class,
+            () -> birthPlanService.getBirthPlanById(planId, username)).getMessage();
+
+        when(birthPlanRepository.findById(planId)).thenReturn(Optional.of(birthPlan));
+        BirthPlanProviderReviewRequestDTO review = new BirthPlanProviderReviewRequestDTO();
+        assertEquals(missing, assertThrows(ResourceNotFoundException.class,
+            () -> birthPlanService.getBirthPlanById(planId, username)).getMessage());
+        assertEquals(missing, assertThrows(ResourceNotFoundException.class,
+            () -> birthPlanService.updateBirthPlan(planId, requestDTO, username)).getMessage());
+        assertEquals(missing, assertThrows(ResourceNotFoundException.class,
+            () -> birthPlanService.deleteBirthPlan(planId, username)).getMessage());
+        assertEquals(missing, assertThrows(ResourceNotFoundException.class,
+            () -> birthPlanService.providerReview(planId, review, username)).getMessage());
+        verify(birthPlanRepository, never()).save(any());
+        verify(birthPlanRepository, never()).delete(any());
+    }
+
+    @Test
+    void aProviderReadsAPlanAtTheHospitalTheyActAt() {
+        when(userRepository.findByUsername(doctorUser.getUsername())).thenReturn(Optional.of(doctorUser));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(birthPlan.getHospital().getId());
+        when(birthPlanRepository.findById(birthPlan.getId())).thenReturn(Optional.of(birthPlan));
+        when(birthPlanMapper.toResponseDTO(birthPlan)).thenReturn(responseDTO);
+
+        assertEquals(responseDTO.getId(), birthPlanService.getBirthPlanById(birthPlan.getId(), doctorUser.getUsername()).getId());
     }
 }

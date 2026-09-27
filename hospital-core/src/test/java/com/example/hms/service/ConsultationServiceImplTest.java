@@ -72,6 +72,7 @@ class ConsultationServiceImplTest {
     @Mock private EncounterRepository encounterRepository;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
     @Mock private NotificationService notificationService;
+    @Mock private org.springframework.context.MessageSource messageSource;
     @Mock private com.example.hms.security.audit.CrossTenantReadAudit crossTenantReadAudit;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
@@ -79,6 +80,8 @@ class ConsultationServiceImplTest {
     @Mock private com.example.hms.service.recordaccess.BreakGlassGate breakGlassGate;
     /** Real system clock — the production bean is Clock.systemDefaultZone(). */
     @Spy private Clock clock = Clock.systemDefaultZone();
+
+    @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
 
     @InjectMocks
     private ConsultationServiceImpl service;
@@ -108,6 +111,11 @@ class ConsultationServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // Consultants in these fixtures hold an active assignment at the
+        // consultation's hospital unless a test says otherwise.
+        org.mockito.Mockito.lenient().when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+            .thenReturn(java.util.Optional.of(new com.example.hms.model.UserRoleHospitalAssignment()));
         // HospitalContextHolder is a ThreadLocal and JUnit reuses the thread.
         // Several tests here read it without setting it, so a context left
         // behind by a sibling silently flips isSuperAdmin and changes the scope
@@ -651,6 +659,8 @@ class ConsultationServiceImplTest {
             UUID newConsultantId = UUID.randomUUID();
             Staff newConsultant = new Staff();
             newConsultant.setId(newConsultantId);
+            newConsultant.setUser(new com.example.hms.model.User());
+            newConsultant.getUser().setId(UUID.randomUUID());
 
             when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
             when(staffRepository.findById(newConsultantId)).thenReturn(Optional.of(newConsultant));
@@ -1087,6 +1097,7 @@ class ConsultationServiceImplTest {
             Consultation consultation = buildConsultation(ConsultationStatus.REQUESTED);
             consultation.setConsultant(null);
             com.example.hms.model.User consultantUser = new com.example.hms.model.User();
+            consultantUser.setId(UUID.randomUUID());
             consultantUser.setUsername("dr.smith");
             consultant.setUser(consultantUser);
 
@@ -1126,6 +1137,51 @@ class ConsultationServiceImplTest {
         }
     }
 
+    // ── the consultant must work at the consultation's hospital ─────────────
+
+    @Nested
+    @DisplayName("a consultant from another hospital")
+    class ConsultantAtAnotherHospital {
+
+        private Staff elsewhere;
+
+        @BeforeEach
+        void consultantWithoutAnAssignmentHere() {
+            com.example.hms.model.User user = new com.example.hms.model.User();
+            user.setId(UUID.randomUUID());
+            elsewhere = new Staff();
+            elsewhere.setId(UUID.randomUUID());
+            elsewhere.setUser(user);
+            when(staffRepository.findById(elsewhere.getId())).thenReturn(Optional.of(elsewhere));
+            when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(user.getId(), hospitalId))
+                .thenReturn(Optional.empty());
+            when(messageSource.getMessage(eq("consultation.consultant.notAtHospital"), isNull(), any(java.util.Locale.class)))
+                .thenReturn("The consultant must hold an active assignment at the consultation's hospital.");
+        }
+
+        @Test
+        @DisplayName("is refused on assign, reassign and update with a 400, and nothing is saved")
+        void isRefusedEverywhere() {
+            Consultation requested = buildConsultation(ConsultationStatus.REQUESTED);
+            requested.setConsultant(null);
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(requested));
+            UUID assigner = UUID.randomUUID();
+            ConsultationUpdateDTO update = new ConsultationUpdateDTO();
+            update.setConsultantId(elsewhere.getId());
+
+            for (Runnable call : List.<Runnable>of(
+                    () -> service.assignConsultation(consultationId, elsewhere.getId(), assigner, null),
+                    () -> service.reassignConsultation(consultationId, elsewhere.getId(), assigner, "reason"),
+                    () -> service.updateConsultation(consultationId, update))) {
+                assertThatThrownBy(call::run)
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage("The consultant must hold an active assignment at the consultation's hospital.");
+            }
+            assertThat(requested.getConsultant()).isNull();
+            verify(consultationRepository, never()).save(any());
+        }
+    }
+
     // ── reassignConsultation ─────────────────────────────────────────────────
 
     @Nested
@@ -1139,6 +1195,8 @@ class ConsultationServiceImplTest {
             UUID newConsultantId = UUID.randomUUID();
             Staff newConsultant = new Staff();
             newConsultant.setId(newConsultantId);
+            newConsultant.setUser(new com.example.hms.model.User());
+            newConsultant.getUser().setId(UUID.randomUUID());
 
             when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
             when(staffRepository.findById(newConsultantId)).thenReturn(Optional.of(newConsultant));

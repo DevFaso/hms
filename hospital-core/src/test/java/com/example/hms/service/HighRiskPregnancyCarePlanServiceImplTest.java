@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.payload.dto.highrisk.HighRiskPregnancyCarePlanRequestDTO;
 import com.example.hms.payload.dto.highrisk.HighRiskCareTeamNoteRequestDTO;
 import com.example.hms.payload.dto.highrisk.HighRiskMedicationLogRequestDTO;
 import com.example.hms.enums.HighRiskMilestoneType;
@@ -73,6 +74,10 @@ class HighRiskPregnancyCarePlanServiceImplTest {
     @Mock
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
+    /** Unstubbed: a null scope (global view), so the existing cases read any hospital. */
+    @Mock
+    private com.example.hms.utility.RoleValidator roleValidator;
+
     private Clock fixedClock;
 
     private HighRiskPregnancyCarePlanServiceImpl service;
@@ -89,7 +94,8 @@ class HighRiskPregnancyCarePlanServiceImplTest {
             mapper,
             fixedClock,
             recordAccessPolicy,
-            reachRecorder
+            reachRecorder,
+            roleValidator
         );
     }
 
@@ -363,5 +369,52 @@ class HighRiskPregnancyCarePlanServiceImplTest {
 
         assertThat(service.getPlan(planId, USERNAME)).isNotNull();
         verify(patientRepository, org.mockito.Mockito.never()).existsByIdAndUserId(any(), any());
+    }
+
+    // ── A provider reaches a plan only at the hospital they act at ─────────
+
+    @Test
+    void aProviderReachingAnotherHospitalsPlanIsAnsweredAsAMissingPlan() {
+        UUID planId = UUID.randomUUID();
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(providerUser()));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        when(carePlanRepository.findById(planId)).thenReturn(Optional.empty());
+        String missing = notFoundMessage(() -> service.getPlan(planId, USERNAME));
+
+        HighRiskPregnancyCarePlan foreign = basePlan(planId);
+        when(carePlanRepository.findById(planId)).thenReturn(Optional.of(foreign));
+        HighRiskPregnancyCarePlanRequestDTO update = new HighRiskPregnancyCarePlanRequestDTO();
+        HighRiskBloodPressureLogRequestDTO bp = new HighRiskBloodPressureLogRequestDTO();
+        UUID milestoneId = UUID.randomUUID();
+        assertThat(notFoundMessage(() -> service.getPlan(planId, USERNAME))).isEqualTo(missing);
+        assertThat(notFoundMessage(() -> service.updatePlan(planId, update, USERNAME))).isEqualTo(missing);
+        assertThat(notFoundMessage(() -> service.addBloodPressureLog(planId, bp, USERNAME))).isEqualTo(missing);
+        assertThat(notFoundMessage(() -> service.markMilestoneComplete(planId, milestoneId, null, USERNAME))).isEqualTo(missing);
+        verify(carePlanRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void aProviderReadsAPlanAtTheHospitalTheyActAt() {
+        UUID planId = UUID.randomUUID();
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(providerUser()));
+        HighRiskPregnancyCarePlan own = basePlan(planId);
+        when(carePlanRepository.findById(planId)).thenReturn(Optional.of(own));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(own.getHospital().getId());
+
+        assertThat(service.getPlan(planId, USERNAME)).isNotNull();
+    }
+
+    @Test
+    void aPatientsOwnPlanIsNotHeldToAHospital() {
+        UUID planId = UUID.randomUUID();
+        User patientUser = userWithRoles("ROLE_PATIENT");
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(patientUser));
+        HighRiskPregnancyCarePlan own = basePlan(planId);
+        when(carePlanRepository.findById(planId)).thenReturn(Optional.of(own));
+        when(patientRepository.existsByIdAndUserId(own.getPatient().getId(), patientUser.getId())).thenReturn(true);
+
+        assertThat(service.getPlan(planId, USERNAME)).isNotNull();
+        verify(roleValidator, org.mockito.Mockito.never()).requireActiveHospitalId();
     }
 }

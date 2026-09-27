@@ -94,6 +94,7 @@ public class ConsultationServiceImpl implements ConsultationService {
     private final NotificationService notificationService;
     private final MessageSource messageSource;
     private final PatientSubjectReadGuard subjectReadGuard;
+    private final com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
 
     @Override
     public ConsultationResponseDTO createConsultation(ConsultationRequestDTO request, UUID requestingProviderId) {
@@ -380,6 +381,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         if (updateDTO.getConsultantId() != null && !updateDTO.getConsultantId().equals(consultation.getConsultant() != null ? consultation.getConsultant().getId() : null)) {
             Staff consultant = staffRepository.findById(updateDTO.getConsultantId())
                 .orElseThrow(() -> new ResourceNotFoundException(MSG_CONSULTANT_NOT_FOUND + updateDTO.getConsultantId()));
+            requireConsultantAtHospital(consultant, consultation);
             consultation.setConsultant(consultant);
         }
 
@@ -561,6 +563,7 @@ public class ConsultationServiceImpl implements ConsultationService {
 
         Staff consultant = staffRepository.findById(consultantId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_CONSULTANT_NOT_FOUND + consultantId));
+        requireConsultantAtHospital(consultant, consultation);
 
         consultation.setConsultant(consultant);
         consultation.setStatus(ConsultationStatus.ASSIGNED);
@@ -605,6 +608,7 @@ public class ConsultationServiceImpl implements ConsultationService {
 
         Staff consultant = staffRepository.findById(consultantId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_CONSULTANT_NOT_FOUND + consultantId));
+        requireConsultantAtHospital(consultant, consultation);
 
         UUID previousConsultantId = consultation.getConsultant() != null ? consultation.getConsultant().getId() : null;
         consultation.setConsultant(consultant);
@@ -763,6 +767,24 @@ public class ConsultationServiceImpl implements ConsultationService {
             throw new ResourceNotFoundException("Consultation not found with ID: " + consultationId);
         }
         return consultation;
+    }
+
+    /**
+     * The consultant a consultation is given to must hold an active assignment
+     * at the consultation's hospital: the consultation is acted on there (see
+     * {@link #getConsultationInScope}), so a consultant from elsewhere could
+     * never see it in their worklist or act on it. Input validation, answered
+     * 400 with a translated message — the consultant id was the caller's own
+     * pick from that hospital's staff list, so nothing is disclosed.
+     */
+    private void requireConsultantAtHospital(Staff consultant, Consultation consultation) {
+        UUID hospitalId = consultation.getHospital() != null ? consultation.getHospital().getId() : null;
+        UUID userId = consultant.getUser() != null ? consultant.getUser().getId() : null;
+        if (hospitalId == null || userId == null
+                || assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId).isEmpty()) {
+            throw new BusinessException(messageSource.getMessage("consultation.consultant.notAtHospital", null,
+                org.springframework.context.i18n.LocaleContextHolder.getLocale()));
+        }
     }
 
     private LocalDateTime calculateSlaDueBy(ConsultationUrgency urgency) {

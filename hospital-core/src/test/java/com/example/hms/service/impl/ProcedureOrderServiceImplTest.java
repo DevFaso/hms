@@ -196,6 +196,23 @@ class ProcedureOrderServiceImplTest {
         assertThat(saved.getValue().getEncounter()).isSameAs(own);
     }
 
+    @Test void createProcedureOrder_resolvesTheOrderingClinicianFromTheirUserId() {
+        ProcedureOrderRequestDTO r = new ProcedureOrderRequestDTO();
+        r.setPatientId(patientId); r.setHospitalId(hospitalId); r.setProcedureName("Appendectomy");
+        UUID callerUserId = UUID.randomUUID();
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(callerUserId)).thenReturn(Optional.empty());
+        when(staffRepository.findByUserIdAndHospitalId(callerUserId, hospitalId)).thenReturn(Optional.of(staff));
+        when(procedureOrderRepository.save(any())).thenAnswer(i -> { ProcedureOrder o = i.getArgument(0); o.setId(orderId); return o; });
+
+        service.createProcedureOrder(r, callerUserId);
+
+        org.mockito.ArgumentCaptor<ProcedureOrder> saved = org.mockito.ArgumentCaptor.forClass(ProcedureOrder.class);
+        verify(procedureOrderRepository).save(saved.capture());
+        assertThat(saved.getValue().getOrderingProvider()).isSameAs(staff);
+    }
+
     @Test void getProcedureOrder_success() {
         when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(buildOrder(ProcedureOrderStatus.ORDERED)));
         ProcedureOrderResponseDTO result = service.getProcedureOrder(orderId);

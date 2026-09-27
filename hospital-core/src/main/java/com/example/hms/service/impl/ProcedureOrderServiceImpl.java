@@ -72,7 +72,12 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
+        // The controller hands over the caller's USER id; a staff id is still
+        // accepted. One staff row per user (uq_staff_user), so the user's row
+        // is found wherever it is filed.
         Staff orderingProvider = staffRepository.findById(orderingProviderId)
+            .or(() -> staffRepository.findByUserIdAndHospitalId(orderingProviderId, hospital.getId()))
+            .or(() -> staffRepository.findFirstByUserIdOrderByCreatedAtAsc(orderingProviderId))
             .orElseThrow(() -> new ResourceNotFoundException("Ordering provider not found with ID: " + orderingProviderId));
 
         Encounter encounter = null;

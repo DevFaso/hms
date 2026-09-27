@@ -49,6 +49,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
     private final BirthPlanMapper birthPlanMapper;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    private final com.example.hms.utility.RoleValidator roleValidator;
 
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
     private static final String ROLE_DOCTOR = "ROLE_DOCTOR";
@@ -213,10 +214,10 @@ public class BirthPlanServiceImpl implements BirthPlanService {
     @Transactional
     public BirthPlanResponseDTO providerReview(UUID id, BirthPlanProviderReviewRequestDTO review, String username) {
         User user = getUserOrThrow(username);
-        BirthPlan birthPlan = getBirthPlanByIdOrThrow(id);
 
-        // Only providers can review
+        // Only providers can review, and only at the hospital they act at
         checkProviderReviewAccess(user);
+        BirthPlan birthPlan = requireAtActingHospital(getBirthPlanByIdOrThrow(id));
 
         // Update review fields
         birthPlan.setProviderReviewed(review.getReviewed());
@@ -321,6 +322,19 @@ public class BirthPlanServiceImpl implements BirthPlanService {
         BirthPlan birthPlan = getBirthPlanByIdOrThrow(id);
         if (patientOnly && !ownsPatient(user, birthPlan.getPatient() != null ? birthPlan.getPatient().getId() : null)) {
             throw new ResourceNotFoundException(BIRTH_PLAN_NOT_FOUND_PREFIX + id);
+        }
+        return patientOnly ? birthPlan : requireAtActingHospital(birthPlan);
+    }
+
+    /**
+     * A provider reaches a birth plan only at the hospital they act at;
+     * another hospital's plan answers exactly as a missing one. A null scope
+     * (a super-admin in global view) reaches any.
+     */
+    private BirthPlan requireAtActingHospital(BirthPlan birthPlan) {
+        UUID scope = roleValidator.requireActiveHospitalId();
+        if (scope != null && (birthPlan.getHospital() == null || !scope.equals(birthPlan.getHospital().getId()))) {
+            throw new ResourceNotFoundException(BIRTH_PLAN_NOT_FOUND_PREFIX + birthPlan.getId());
         }
         return birthPlan;
     }

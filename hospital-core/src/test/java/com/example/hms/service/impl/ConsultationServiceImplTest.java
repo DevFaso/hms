@@ -66,6 +66,8 @@ class ConsultationServiceImplTest {
     /** Real system clock — the production bean is Clock.systemDefaultZone(). */
     @Spy private Clock clock = Clock.systemDefaultZone();
 
+    @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
+
     @InjectMocks private ConsultationServiceImpl service;
 
     /**
@@ -85,6 +87,11 @@ class ConsultationServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // Consultants in these fixtures hold an active assignment at the
+        // consultation's hospital unless a test says otherwise.
+        org.mockito.Mockito.lenient().when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+            .thenReturn(java.util.Optional.of(new com.example.hms.model.UserRoleHospitalAssignment()));
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
         staffId = UUID.randomUUID();

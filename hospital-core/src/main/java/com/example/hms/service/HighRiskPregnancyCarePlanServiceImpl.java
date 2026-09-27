@@ -79,6 +79,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
     private final Clock clock;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    private final com.example.hms.utility.RoleValidator roleValidator;
 
     @Override
     public HighRiskPregnancyCarePlanResponseDTO createPlan(HighRiskPregnancyCarePlanRequestDTO request, String username) {
@@ -112,7 +113,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
         User user = getUserOrThrow(username);
         assertProviderAccess(user);
 
-        HighRiskPregnancyCarePlan plan = findPlanOrThrow(planId);
+        HighRiskPregnancyCarePlan plan = findPlanInActingHospital(planId);
         ensurePatientBelongsToHospital(plan.getPatient(), plan.getHospital().getId());
 
         mapper.updateEntityFromRequest(plan, request, false);
@@ -260,7 +261,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
         User user = getUserOrThrow(username);
         assertProviderAccess(user);
 
-        HighRiskPregnancyCarePlan plan = findPlanOrThrow(planId);
+        HighRiskPregnancyCarePlan plan = findPlanInActingHospital(planId);
         HighRiskMonitoringMilestone milestone = plan.getMonitoringMilestones().stream()
             .filter(item -> item.getMilestoneId().equals(milestoneId))
             .findFirst()
@@ -321,6 +322,21 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
         return aDate.compareTo(bDate);
     }
 
+    /**
+     * A provider reaches a plan only at the hospital they act at, as every
+     * other clinical write and by-id read does; another hospital's plan
+     * answers exactly as a missing one. A null scope (a super-admin in global
+     * view) reaches any. Not asked of a patient, whose boundary is ownership.
+     */
+    private HighRiskPregnancyCarePlan findPlanInActingHospital(UUID planId) {
+        HighRiskPregnancyCarePlan plan = findPlanOrThrow(planId);
+        UUID scope = roleValidator.requireActiveHospitalId();
+        if (scope != null && (plan.getHospital() == null || !scope.equals(plan.getHospital().getId()))) {
+            throw new ResourceNotFoundException(MSG_PLAN_NOT_FOUND);
+        }
+        return plan;
+    }
+
     private HighRiskPregnancyCarePlan findPlanOrThrow(UUID planId) {
         return carePlanRepository.findById(planId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PLAN_NOT_FOUND));
@@ -357,7 +373,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
         if (!provider && !isPatient(user)) {
             throw new BusinessException(deniedMessage);
         }
-        HighRiskPregnancyCarePlan plan = findPlanOrThrow(planId);
+        HighRiskPregnancyCarePlan plan = provider ? findPlanInActingHospital(planId) : findPlanOrThrow(planId);
         if (!provider && !ownsPatient(user, plan.getPatient() != null ? plan.getPatient().getId() : null)) {
             throw new ResourceNotFoundException(MSG_PLAN_NOT_FOUND);
         }
