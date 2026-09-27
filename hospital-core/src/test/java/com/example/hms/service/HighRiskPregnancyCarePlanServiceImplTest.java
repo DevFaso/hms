@@ -1,5 +1,7 @@
 package com.example.hms.service;
 
+import com.example.hms.payload.dto.highrisk.HighRiskCareTeamNoteRequestDTO;
+import com.example.hms.payload.dto.highrisk.HighRiskMedicationLogRequestDTO;
 import com.example.hms.enums.HighRiskMilestoneType;
 import com.example.hms.mapper.HighRiskPregnancyCarePlanMapper;
 import com.example.hms.model.Hospital;
@@ -261,5 +263,105 @@ class HighRiskPregnancyCarePlanServiceImplTest {
         assertThat(service.getPlansForPatient(patientId, user.getUsername())).isEmpty();
         verify(carePlanRepository, never()).findByPatient_IdOrderByCreatedAtDesc(any());
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(user.getId()), isNull(), eq(Map.of()), anyString());
+    }
+
+    // ── A patient's refusals answer exactly like a miss ────────────────────
+
+    private User userWithRoles(String... codes) {
+        User user = new User();
+        user.setId(UUID.randomUUID());
+        user.setUsername(USERNAME);
+        for (String code : codes) {
+            Role role = new Role();
+            role.setId(UUID.randomUUID());
+            role.setCode(code);
+            UserRole link = new UserRole();
+            link.setId(new UserRoleId(user.getId(), role.getId()));
+            link.setUser(user);
+            link.setRole(role);
+            user.getUserRoles().add(link);
+        }
+        return user;
+    }
+
+    private static String notFoundMessage(Runnable call) {
+        try {
+            call.run();
+        } catch (com.example.hms.exception.ResourceNotFoundException e) {
+            return e.getMessage();
+        }
+        throw new AssertionError("expected a ResourceNotFoundException");
+    }
+
+    @Test
+    void aPatientReachingAnotherPatientsPlanIsAnsweredAsAMissingPlan() {
+        UUID planId = UUID.randomUUID();
+        User patientUser = userWithRoles("ROLE_PATIENT");
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(patientUser));
+        HighRiskPregnancyCarePlan foreign = basePlan(planId);
+        when(patientRepository.existsByIdAndUserId(foreign.getPatient().getId(), patientUser.getId())).thenReturn(false);
+
+        when(carePlanRepository.findById(planId)).thenReturn(Optional.empty());
+        String missing = notFoundMessage(() -> service.getPlan(planId, USERNAME));
+
+        when(carePlanRepository.findById(planId)).thenReturn(Optional.of(foreign));
+        HighRiskBloodPressureLogRequestDTO bp = new HighRiskBloodPressureLogRequestDTO();
+        HighRiskMedicationLogRequestDTO med = new HighRiskMedicationLogRequestDTO();
+        HighRiskCareTeamNoteRequestDTO note = new HighRiskCareTeamNoteRequestDTO();
+        assertThat(notFoundMessage(() -> service.getPlan(planId, USERNAME))).isEqualTo(missing);
+        assertThat(notFoundMessage(() -> service.addBloodPressureLog(planId, bp, USERNAME))).isEqualTo(missing);
+        assertThat(notFoundMessage(() -> service.addMedicationLog(planId, med, USERNAME))).isEqualTo(missing);
+        assertThat(notFoundMessage(() -> service.addCareTeamNote(planId, note, USERNAME))).isEqualTo(missing);
+        verify(carePlanRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void aPatientNamingAnotherPatientIsAnsweredAsAnUnknownPatient_beforeAnyLookup() {
+        User patientUser = userWithRoles("ROLE_PATIENT");
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(patientUser));
+        UUID otherPatientId = UUID.randomUUID();
+        UUID unknownPatientId = UUID.randomUUID();
+
+        String foreign = notFoundMessage(() -> service.getPlansForPatient(otherPatientId, USERNAME));
+        String unknown = notFoundMessage(() -> service.getPlansForPatient(unknownPatientId, USERNAME));
+        assertThat(foreign).isEqualTo(unknown);
+        assertThat(notFoundMessage(() -> service.getActivePlan(otherPatientId, USERNAME))).isEqualTo(unknown);
+        verify(patientRepository, org.mockito.Mockito.never()).findById(any());
+        verify(carePlanRepository, org.mockito.Mockito.never()).findByPatient_IdOrderByCreatedAtDesc(any());
+    }
+
+    @Test
+    void aPatientReadsTheirOwnPlan() {
+        UUID planId = UUID.randomUUID();
+        User patientUser = userWithRoles("ROLE_PATIENT");
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(patientUser));
+        HighRiskPregnancyCarePlan own = basePlan(planId);
+        when(carePlanRepository.findById(planId)).thenReturn(Optional.of(own));
+        when(patientRepository.existsByIdAndUserId(own.getPatient().getId(), patientUser.getId())).thenReturn(true);
+
+        assertThat(service.getPlan(planId, USERNAME)).isNotNull();
+    }
+
+    @Test
+    void aCallerWhoIsNeitherProviderNorPatientIsRefusedBeforeTheLookup() {
+        UUID planId = UUID.randomUUID();
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(userWithRoles("ROLE_RECEPTIONIST")));
+
+        org.junit.jupiter.api.Assertions.assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> service.getPlan(planId, USERNAME));
+        org.junit.jupiter.api.Assertions.assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> service.getPlansForPatient(UUID.randomUUID(), USERNAME));
+        verify(carePlanRepository, org.mockito.Mockito.never()).findById(any());
+        verify(patientRepository, org.mockito.Mockito.never()).findById(any());
+    }
+
+    @Test
+    void aClinicianWhoIsAlsoAPatientIsStillAClinician() {
+        UUID planId = UUID.randomUUID();
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(userWithRoles("ROLE_NURSE", "ROLE_PATIENT")));
+        when(carePlanRepository.findById(planId)).thenReturn(Optional.of(basePlan(planId)));
+
+        assertThat(service.getPlan(planId, USERNAME)).isNotNull();
+        verify(patientRepository, org.mockito.Mockito.never()).existsByIdAndUserId(any(), any());
     }
 }

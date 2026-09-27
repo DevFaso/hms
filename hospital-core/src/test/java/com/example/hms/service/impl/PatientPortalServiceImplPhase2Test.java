@@ -68,7 +68,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 
 import java.time.LocalDate;
@@ -81,6 +80,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -302,9 +302,13 @@ class PatientPortalServiceImplPhase2Test {
             CancelAppointmentRequestDTO dto = CancelAppointmentRequestDTO.builder()
                     .appointmentId(apptId).build();
 
-            assertThatThrownBy(() -> service.cancelMyAppointment(auth, dto, Locale.ENGLISH))
-                    .isInstanceOf(AccessDeniedException.class)
-                    .hasMessageContaining("does not belong to you");
+            // Another patient's appointment answers exactly as a missing one.
+            String refused = catchThrowableOfType(ResourceNotFoundException.class,
+                    () -> service.cancelMyAppointment(auth, dto, Locale.ENGLISH)).getMessage();
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.empty());
+            String missing = catchThrowableOfType(ResourceNotFoundException.class,
+                    () -> service.cancelMyAppointment(auth, dto, Locale.ENGLISH)).getMessage();
+            assertThat(refused).isEqualTo(missing);
         }
 
         @Test
@@ -470,8 +474,12 @@ class PatientPortalServiceImplPhase2Test {
                     .newEndTime(LocalTime.of(14, 30))
                     .build();
 
-            assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH))
-                    .isInstanceOf(AccessDeniedException.class);
+            String refused = catchThrowableOfType(ResourceNotFoundException.class,
+                    () -> service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH)).getMessage();
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.empty());
+            String missing = catchThrowableOfType(ResourceNotFoundException.class,
+                    () -> service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH)).getMessage();
+            assertThat(refused).isEqualTo(missing);
         }
 
         @Test
@@ -921,9 +929,12 @@ class PatientPortalServiceImplPhase2Test {
             MedicationRefillRequestDTO dto = MedicationRefillRequestDTO.builder()
                     .prescriptionId(rxId).build();
 
-            assertThatThrownBy(() -> service.requestMedicationRefill(auth, dto))
-                    .isInstanceOf(AccessDeniedException.class)
-                    .hasMessageContaining("do not have access to this prescription");
+            String refused = catchThrowableOfType(ResourceNotFoundException.class,
+                    () -> service.requestMedicationRefill(auth, dto)).getMessage();
+            when(prescriptionRepository.findById(rxId)).thenReturn(Optional.empty());
+            String missing = catchThrowableOfType(ResourceNotFoundException.class,
+                    () -> service.requestMedicationRefill(auth, dto)).getMessage();
+            assertThat(refused).isEqualTo(missing);
         }
 
         @Test
@@ -985,8 +996,13 @@ class PatientPortalServiceImplPhase2Test {
 
             when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(refill));
 
-            assertThatThrownBy(() -> service.cancelMyRefill(auth, refillId))
-                    .isInstanceOf(AccessDeniedException.class);
+            String refused = catchThrowableOfType(ResourceNotFoundException.class,
+                    () -> service.cancelMyRefill(auth, refillId)).getMessage();
+            when(refillRequestRepository.findById(refillId)).thenReturn(Optional.empty());
+            String missing = catchThrowableOfType(ResourceNotFoundException.class,
+                    () -> service.cancelMyRefill(auth, refillId)).getMessage();
+            assertThat(refused).isEqualTo(missing);
+            assertThat(refill.getStatus()).isEqualTo(RefillStatus.REQUESTED);
         }
 
         @Test
