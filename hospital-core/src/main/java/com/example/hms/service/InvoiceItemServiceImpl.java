@@ -54,7 +54,8 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
 
         // Ensure assignment hospital matches invoice hospital
         if (!assignment.getHospital().getId().equals(invoice.getHospital().getId())) {
-            throw new BusinessException("assignment.hospital.mismatch");
+            throw new BusinessException("assignment.hospital.mismatch",
+                assignment.getHospital().getId(), invoice.getHospital().getId());
         }
 
         Treatment related = null;
@@ -117,7 +118,8 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
             .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
 
         if (!assignment.getHospital().getId().equals(invoice.getHospital().getId())) {
-            throw new BusinessException("assignment.hospital.mismatch");
+            throw new BusinessException("assignment.hospital.mismatch",
+                assignment.getHospital().getId(), invoice.getHospital().getId());
         }
 
         Treatment related = null;

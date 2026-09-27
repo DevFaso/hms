@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
@@ -42,13 +43,16 @@ class MessageBundleParityTest {
     private static final Path RESOURCES = Paths.get("src/main/resources");
     private static final Path MAIN_JAVA = Paths.get("src/main/java");
 
+    /** Exceptions whose keyed sites must name a key the base bundle defines. */
+    private static final Set<String> KEYS_MUST_EXIST = Set.of("BusinessException");
+
     /** MessageFormat argument references: {@code {0}}, {@code {1,number}}, ... */
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{(\\d+)[^}]*}");
 
     private static final Pattern KEY = Pattern.compile("[A-Za-z][A-Za-z0-9_-]*(?:\\.[A-Za-z0-9_-]+)+");
 
     private static final Pattern KEYED_EXCEPTION =
-        Pattern.compile("new\\s+ResourceNotFoundException\\s*\\(");
+        Pattern.compile("new\\s+(ResourceNotFoundException|BusinessException)\\s*\\(");
 
     /** The names this codebase gives a caught exception it passes on as a cause. */
     private static final Pattern CAUSE = Pattern.compile("e|ex|exc|exception|cause|err|\\w+Exception");
@@ -95,8 +99,8 @@ class MessageBundleParityTest {
         List<String> wrong = new ArrayList<>();
         for (String site : sites) {
             String[] parts = site.split("\\|", -1);
-            String key = parts[1];
-            int passed = Integer.parseInt(parts[2]);
+            String key = parts[2];
+            int passed = Integer.parseInt(parts[3]);
             String value = base.getProperty(key);
             if (value == null) {
                 continue;
@@ -112,6 +116,27 @@ class MessageBundleParityTest {
             .as("Keyed exceptions whose arguments disagree with the bundle — too few render a "
                     + "literal {0} to the user, too many are silently dropped:%n%s",
                 String.join(System.lineSeparator(), wrong))
+            .isEmpty();
+    }
+
+    @Test
+    @DisplayName("every key a keyed exception throws is in the base bundle")
+    void thrownKeysExist() throws IOException {
+        Properties base = load("");
+
+        List<String> missing = keyedExceptionSites().stream()
+            .map(site -> site.split("\\|", -1))
+            .filter(parts -> KEYS_MUST_EXIST.contains(parts[1]))
+            .filter(parts -> base.getProperty(parts[2]) == null)
+            .map(parts -> parts[0] + " :: " + parts[2])
+            .toList();
+
+        // BusinessException passes an unknown key through as raw text, so a
+        // key missing from every bundle reaches the client as
+        // "prescription.patient.required" — no marker, no failure, no log.
+        assertThat(missing)
+            .as("Keys thrown by a keyed exception that no bundle defines:%n%s",
+                String.join(System.lineSeparator(), missing))
             .isEmpty();
     }
 
@@ -134,7 +159,8 @@ class MessageBundleParityTest {
     }
 
     /**
-     * {@code file:line|key|argumentCount} for every {@code new ResourceNotFoundException(...)}
+     * {@code file:line|exception|key|argumentCount} for every
+     * {@code new ResourceNotFoundException(...)} and {@code new BusinessException(...)}
      * whose first argument is a key literal or a
      * same-file {@code static final String} constant holding one. Sites that pass prose or a
      * computed string are not keyed and are skipped here.
@@ -164,7 +190,7 @@ class MessageBundleParityTest {
                         continue;
                     }
                     int line = 1 + (int) source.substring(0, m.start()).chars().filter(ch -> ch == '\n').count();
-                    out.add(file.getFileName() + ":" + line + "|" + key + "|" + argumentCount(args));
+                    out.add(file.getFileName() + ":" + line + "|" + m.group(1) + "|" + key + "|" + argumentCount(args));
                 }
             }
         }

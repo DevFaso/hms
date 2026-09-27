@@ -236,7 +236,7 @@ public class EmpiServiceImpl implements EmpiService, EmpiAuthorisedMergePort {
             .orElseThrow(() -> new ResourceNotFoundException(MSG_IDENTITY_NOT_FOUND, identityId));
 
         if (aliasRepository.existsByAliasTypeAndAliasValueIgnoreCase(request.getAliasType(), request.getAliasValue())) {
-            throw new BusinessException(MessageUtil.resolve(MSG_ALIAS_EXISTS, request.getAliasValue()));
+            throw new BusinessException(MSG_ALIAS_EXISTS, request.getAliasValue());
         }
 
         EmpiIdentityAlias alias = empiMapper.createAliasFromRequest(request);
@@ -301,7 +301,7 @@ public class EmpiServiceImpl implements EmpiService, EmpiAuthorisedMergePort {
         EmpiMasterIdentity secondary = secondaryLookup.get();
 
         if (primary.getId().equals(secondary.getId())) {
-            throw new BusinessException(MessageUtil.resolve(MSG_MERGE_SAME_IDENTITY));
+            throw new BusinessException(MSG_MERGE_SAME_IDENTITY);
         }
         if (secondary.getStatus() == EmpiIdentityStatus.MERGED) {
             throw alreadyMerged(secondary);
@@ -310,7 +310,7 @@ public class EmpiServiceImpl implements EmpiService, EmpiAuthorisedMergePort {
         // Identities with no hospital stamp (legacy/system rows) are exempt. ──
         if (primary.getHospitalId() != null && secondary.getHospitalId() != null
             && !primary.getHospitalId().equals(secondary.getHospitalId())) {
-            throw new BusinessException(MessageUtil.resolve(MSG_MERGE_CROSS_TENANT));
+            throw new BusinessException(MSG_MERGE_CROSS_TENANT);
         }
 
         // ── The transition itself, decided by the database. The status read
@@ -396,10 +396,10 @@ public class EmpiServiceImpl implements EmpiService, EmpiAuthorisedMergePort {
 
     private static void requireTwoDistinctPatients(UUID primaryPatientId, UUID secondaryPatientId) {
         if (primaryPatientId == null || secondaryPatientId == null) {
-            throw new BusinessException(MessageUtil.resolve(MSG_LINK_MISSING_PATIENT));
+            throw new BusinessException(MSG_LINK_MISSING_PATIENT);
         }
         if (primaryPatientId.equals(secondaryPatientId)) {
-            throw new BusinessException(MessageUtil.resolve(MSG_MERGE_SAME_PATIENT));
+            throw new BusinessException(MSG_MERGE_SAME_PATIENT);
         }
     }
 
@@ -476,7 +476,7 @@ public class EmpiServiceImpl implements EmpiService, EmpiAuthorisedMergePort {
     }
 
     private static BusinessException alreadyMerged(EmpiMasterIdentity secondary) {
-        return new BusinessException(MessageUtil.resolve(MSG_MERGE_ALREADY_MERGED, secondary.getEmpiNumber()));
+        return new BusinessException(MSG_MERGE_ALREADY_MERGED, secondary.getEmpiNumber());
     }
 
     /**
@@ -505,12 +505,12 @@ public class EmpiServiceImpl implements EmpiService, EmpiAuthorisedMergePort {
             throw new BusinessException("EMPI link request is required");
         }
         if (request.getPatientId() == null) {
-            throw new BusinessException(MessageUtil.resolve(MSG_LINK_MISSING_PATIENT));
+            throw new BusinessException(MSG_LINK_MISSING_PATIENT);
         }
         boolean hasAliasType = request.getAliasType() != null;
         boolean hasAliasValue = StringUtils.hasText(request.getAliasValue());
         if (hasAliasType != hasAliasValue) {
-            throw new BusinessException(MessageUtil.resolve(MSG_LINK_ALIAS_INCOMPLETE));
+            throw new BusinessException(MSG_LINK_ALIAS_INCOMPLETE);
         }
     }
 
@@ -519,7 +519,7 @@ public class EmpiServiceImpl implements EmpiService, EmpiAuthorisedMergePort {
             throw new BusinessException("Alias request is required");
         }
         if (request.getAliasType() == null || !StringUtils.hasText(request.getAliasValue())) {
-            throw new BusinessException(MessageUtil.resolve(MSG_ALIAS_INVALID));
+            throw new BusinessException(MSG_ALIAS_INVALID);
         }
     }
 
@@ -534,7 +534,7 @@ public class EmpiServiceImpl implements EmpiService, EmpiAuthorisedMergePort {
             String aliasValue = StringUtils.hasText(request.getAliasValue())
                 ? request.getAliasValue().trim()
                 : identity.getEmpiNumber();
-            throw new BusinessException(MessageUtil.resolve(MSG_ALIAS_EXISTS, aliasValue));
+            throw new BusinessException(MSG_ALIAS_EXISTS, aliasValue);
         }
         return identity;
     }
@@ -551,7 +551,7 @@ public class EmpiServiceImpl implements EmpiService, EmpiAuthorisedMergePort {
             .map(alias -> {
                 EmpiMasterIdentity master = alias.getMasterIdentity();
                 if (master == null) {
-                    throw new BusinessException(MessageUtil.resolve(MSG_ALIAS_ORPHANED));
+                    throw new BusinessException(MSG_ALIAS_ORPHANED);
                 }
                 return master;
             });
@@ -598,7 +598,7 @@ public class EmpiServiceImpl implements EmpiService, EmpiAuthorisedMergePort {
         }
 
         if (aliasRepository.existsByAliasTypeAndAliasValueIgnoreCase(request.getAliasType(), normalizedValue)) {
-            throw new BusinessException(MessageUtil.resolve(MSG_ALIAS_EXISTS, normalizedValue));
+            throw new BusinessException(MSG_ALIAS_EXISTS, normalizedValue);
         }
 
         EmpiAliasRequestDTO aliasDto = new EmpiAliasRequestDTO();
@@ -723,7 +723,7 @@ public class EmpiServiceImpl implements EmpiService, EmpiAuthorisedMergePort {
 
     private String normalizeEmpiNumber(String empiNumber) {
         if (!StringUtils.hasText(empiNumber)) {
-            throw new BusinessException(MessageUtil.resolve(MSG_LOOKUP_INVALID_EMPI));
+            throw new BusinessException(MSG_LOOKUP_INVALID_EMPI);
         }
         return empiNumber.trim();
     }

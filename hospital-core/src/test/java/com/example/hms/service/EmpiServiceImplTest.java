@@ -23,6 +23,7 @@ import com.example.hms.repository.empi.EmpiMergeEventRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.empi.EmpiServiceImpl;
+import com.example.hms.i18n.TestMessageSources;
 import com.example.hms.utility.MessageUtil;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +37,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.access.AccessDeniedException;
@@ -47,6 +49,7 @@ import org.springframework.web.context.request.WebRequest;
 
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -155,6 +158,13 @@ class EmpiServiceImplTest {
     @AfterEach
     void clearContext() {
         HospitalContextHolder.clear();
+        LocaleContextHolder.resetLocaleContext();
+    }
+
+    /** BusinessException resolves its key through MessageUtil: assert the words, not the key. */
+    private static void useRealBundles() {
+        MessageUtil.setMessageSource(TestMessageSources.bundles());
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
     }
 
     @Test
@@ -223,6 +233,7 @@ class EmpiServiceImplTest {
 
     @Test
     void linkIdentity_withOrphanedAliasThrowsBusinessException() {
+        useRealBundles();
         UUID patientId = UUID.randomUUID();
         EmpiIdentityLinkRequestDTO request = new EmpiIdentityLinkRequestDTO();
         request.setPatientId(patientId);
@@ -241,7 +252,7 @@ class EmpiServiceImplTest {
 
         assertThatThrownBy(() -> empiService.linkIdentity(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("empi.alias.orphaned");
+            .hasMessage("This alias is not linked to any master identity.");
     }
 
     @Test
@@ -561,9 +572,10 @@ class EmpiServiceImplTest {
 
     @Test
     void getIdentityByEmpiNumber_withBlankInputThrowsBusinessException() {
+        useRealBundles();
         assertThatThrownBy(() -> empiService.getIdentityByEmpiNumber("  "))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("empi.lookup.invalidEmpi");
+            .hasMessage("An EMPI number is required.");
     }
 
     @Test
