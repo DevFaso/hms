@@ -13,9 +13,9 @@ struct LoginView: View {
             // Layered gradient background
             LinearGradient(
                 stops: [
-                    .init(color: Color("BrandBlue"), location: 0),
-                    .init(color: Color("BrandDarkBlue"), location: 0.6),
-                    .init(color: Color("BrandDarkBlue").opacity(0.95), location: 1),
+                    .init(color: Color("BrandPrimary"), location: 0),
+                    .init(color: Color("BrandPrimaryDark"), location: 0.6),
+                    .init(color: Color("BrandPrimaryDark").opacity(0.95), location: 1),
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -93,11 +93,11 @@ struct LoginView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
                                 .background(Color.white.opacity(0.9))
-                                .foregroundStyle(Color("BrandDarkBlue"))
+                                .foregroundStyle(Color("BrandPrimaryDark"))
                                 .clipShape(RoundedRectangle(cornerRadius: 14))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 14)
-                                        .stroke(Color("BrandBlue"), lineWidth: 1)
+                                        .stroke(Color("BrandPrimary"), lineWidth: 1)
                                 )
                             }
                             .disabled(vm.isLoading)
@@ -115,12 +115,12 @@ struct LoginView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 16)
                                 .background(
-                                    LinearGradient(colors: [Color("BrandBlue"), Color("BrandDarkBlue")],
+                                    LinearGradient(colors: [Color("BrandPrimary"), Color("BrandPrimaryDark")],
                                                    startPoint: .leading, endPoint: .trailing)
                                 )
                                 .foregroundStyle(.white)
                                 .clipShape(RoundedRectangle(cornerRadius: 14))
-                                .shadow(color: Color("BrandBlue").opacity(0.3), radius: 8, y: 4)
+                                .shadow(color: Color("BrandPrimary").opacity(0.3), radius: 8, y: 4)
                             }
                             .disabled(vm.isLoading)
 
@@ -150,7 +150,7 @@ struct LoginView: View {
                                         .clipShape(RoundedRectangle(cornerRadius: 12))
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 12)
-                                                .stroke(focusedField == .username ? Color("BrandBlue") : .clear, lineWidth: 2)
+                                                .stroke(focusedField == .username ? Color("BrandPrimary") : .clear, lineWidth: 2)
                                         )
                                 }
 
@@ -169,7 +169,7 @@ struct LoginView: View {
                                         .clipShape(RoundedRectangle(cornerRadius: 12))
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 12)
-                                                .stroke(focusedField == .password ? Color("BrandBlue") : .clear, lineWidth: 2)
+                                                .stroke(focusedField == .password ? Color("BrandPrimary") : .clear, lineWidth: 2)
                                         )
                                 }
 
@@ -187,12 +187,12 @@ struct LoginView: View {
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 16)
                                     .background(
-                                        LinearGradient(colors: [Color("BrandBlue"), Color("BrandDarkBlue")],
+                                        LinearGradient(colors: [Color("BrandPrimary"), Color("BrandPrimaryDark")],
                                                        startPoint: .leading, endPoint: .trailing)
                                     )
                                     .foregroundStyle(.white)
                                     .clipShape(RoundedRectangle(cornerRadius: 14))
-                                    .shadow(color: Color("BrandBlue").opacity(0.3), radius: 8, y: 4)
+                                    .shadow(color: Color("BrandPrimary").opacity(0.3), radius: 8, y: 4)
                                 }
                                 .disabled(vm.isLoading)
 
@@ -217,7 +217,7 @@ struct LoginView: View {
                             // TODO: navigate to password reset
                         }
                         .font(.footnote.weight(.medium))
-                        .foregroundStyle(Color("BrandBlue"))
+                        .foregroundStyle(Color("BrandPrimaryText"))
                     }
                     .padding(28)
                     .background(.regularMaterial)

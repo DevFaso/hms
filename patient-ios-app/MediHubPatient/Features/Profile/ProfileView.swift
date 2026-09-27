@@ -33,7 +33,7 @@ struct ProfileView: View {
                                             .scaledToFill()
                                             .frame(width: 76, height: 76)
                                             .clipShape(Circle())
-                                            .overlay(Circle().stroke(Color("BrandBlue").opacity(0.2), lineWidth: 2))
+                                            .overlay(Circle().stroke(Color("BrandPrimary").opacity(0.2), lineWidth: 2))
                                     } else if let url = profile.profileImageUrl, !url.isEmpty {
                                         AsyncImage(url: URL(string: url.hasPrefix("http") ? url : AppEnvironment.assetOrigin + url)) { phase in
                                             if let img = phase.image {
@@ -41,16 +41,16 @@ struct ProfileView: View {
                                             } else {
                                                 Image(systemName: "person.crop.circle.fill")
                                                     .font(.system(size: 64))
-                                                    .foregroundStyle(Color("BrandBlue").opacity(0.6))
+                                                    .foregroundStyle(Color("BrandPrimary").opacity(0.6))
                                             }
                                         }
                                         .frame(width: 76, height: 76)
                                         .clipShape(Circle())
-                                        .overlay(Circle().stroke(Color("BrandBlue").opacity(0.2), lineWidth: 2))
+                                        .overlay(Circle().stroke(Color("BrandPrimary").opacity(0.2), lineWidth: 2))
                                     } else {
                                         Image(systemName: "person.crop.circle.fill")
                                             .font(.system(size: 64))
-                                            .foregroundStyle(Color("BrandBlue").opacity(0.6))
+                                            .foregroundStyle(Color("BrandPrimary").opacity(0.6))
                                     }
 
                                     Button { showPhotoPicker = true } label: {
@@ -58,7 +58,7 @@ struct ProfileView: View {
                                             .font(.system(size: 10, weight: .semibold))
                                             .foregroundStyle(.white)
                                             .padding(7)
-                                            .background(Color("BrandBlue"))
+                                            .background(Color("BrandPrimary"))
                                             .clipShape(Circle())
                                             .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
                                     }
@@ -314,7 +314,7 @@ struct LanguagePickerSheet: View {
                             Spacer()
                             if localization.currentLanguage == lang.code {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(Color("BrandBlue"))
+                                    .foregroundStyle(Color("BrandPrimary"))
                                     .font(.title3)
                             }
                         }

@@ -95,11 +95,11 @@ private struct PharmacySummaryTile: View {
                 .foregroundStyle(.secondary)
             Text("\(amount, specifier: "%.0f") \(currency)")
                 .font(.headline)
-                .foregroundStyle(Color("BrandBlue"))
+                .foregroundStyle(Color("BrandPrimaryText"))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(Color("BrandBlue").opacity(0.08))
+        .background(Color("BrandPrimary").opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }

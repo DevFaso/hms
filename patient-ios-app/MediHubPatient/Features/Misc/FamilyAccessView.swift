@@ -130,8 +130,8 @@ struct ProxyCard: View {
                             Text(perm.replacingOccurrences(of: "_", with: " ").capitalized)
                                 .font(.caption2).bold()
                                 .padding(.horizontal, 8).padding(.vertical, 4)
-                                .background(Color.accentColor.opacity(0.12))
-                                .foregroundColor(.accentColor)
+                                .background(Color("BrandPrimary").opacity(0.12))
+                                .foregroundColor(Color("BrandPrimaryText"))
                                 .cornerRadius(8)
                         }
                     }
