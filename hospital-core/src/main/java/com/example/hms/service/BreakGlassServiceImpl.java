@@ -27,8 +27,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -80,6 +80,12 @@ public class BreakGlassServiceImpl implements BreakGlassService {
     private final HospitalRepository hospitalRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final AuditEventLogService auditService;
+    /**
+     * The session clock. It writes {@code startedAt}/{@code expiresAt} and every
+     * live-session lookup reads them back; {@code BreakGlassGate} already reads
+     * with the same injected bean, so writer and readers share one time source.
+     */
+    private final Clock clock;
 
     // ---------------------------------------------------------------------
     // Declare
@@ -99,7 +105,7 @@ public class BreakGlassServiceImpl implements BreakGlassService {
         ensurePrivilegedAtHospital(caller, hospital.getId(), DECLARE_ROLES);
 
         int ttl = clampTtl(request.getTtlMinutes());
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         BreakGlassSession session = BreakGlassSession.builder()
             .user(caller)
             .patient(patient)
@@ -142,8 +148,8 @@ public class BreakGlassServiceImpl implements BreakGlassService {
                 "Only the declaring user or a HOSPITAL_ADMIN/SUPER_ADMIN may revoke this session.");
         }
 
-        if (session.getRevokedAt() == null && session.getExpiresAt().isAfter(LocalDateTime.now())) {
-            session.setRevokedAt(LocalDateTime.now());
+        if (session.getRevokedAt() == null && session.getExpiresAt().isAfter(LocalDateTime.now(clock))) {
+            session.setRevokedAt(LocalDateTime.now(clock));
             session.setRevokedBy(caller);
             session.setRevokeReason(request != null ? request.getReason() : null);
             sessionRepository.save(session);
@@ -173,7 +179,7 @@ public class BreakGlassServiceImpl implements BreakGlassService {
             throw new UnauthorizedAccessException(
                 "Only a HOSPITAL_ADMIN of the session's hospital or a SUPER_ADMIN may review it.");
         }
-        session.setReviewedAt(LocalDateTime.now(ZoneId.systemDefault()));
+        session.setReviewedAt(LocalDateTime.now(clock));
         session.setReviewedByUserId(caller.getId());
         session.setReviewOutcome(request.getOutcome());
         session.setReviewNote(request.getNote());
@@ -200,7 +206,7 @@ public class BreakGlassServiceImpl implements BreakGlassService {
         // Filter the row set to those hospitals before returning.
         User caller = currentUserOrThrow();
         boolean superAdmin = isSuperAdmin(caller);
-        return sessionRepository.findLiveForPatient(patientId, LocalDateTime.now())
+        return sessionRepository.findLiveForPatient(patientId, LocalDateTime.now(clock))
             .stream()
             .filter(s -> superAdmin
                 || hasAnyRoleAtHospital(caller, s.getHospital().getId(), DECLARE_ROLES))
@@ -254,7 +260,7 @@ public class BreakGlassServiceImpl implements BreakGlassService {
         if (caller == null) {
             return Optional.empty();
         }
-        return sessionRepository.findLiveForUserAndPatient(caller.getId(), patientId, LocalDateTime.now())
+        return sessionRepository.findLiveForUserAndPatient(caller.getId(), patientId, LocalDateTime.now(clock))
             .stream()
             .findFirst()
             .map(this::toDto);
@@ -275,7 +281,7 @@ public class BreakGlassServiceImpl implements BreakGlassService {
             userId = caller.getId();
         }
         Optional<BreakGlassSession> maybe = sessionRepository
-            .findLiveForUserAndPatient(userId, patientId, LocalDateTime.now())
+            .findLiveForUserAndPatient(userId, patientId, LocalDateTime.now(clock))
             .stream()
             .findFirst();
         if (maybe.isEmpty()) {
@@ -390,7 +396,7 @@ public class BreakGlassServiceImpl implements BreakGlassService {
             .revokedByUserId(s.getRevokedBy() != null ? s.getRevokedBy().getId() : null)
             .revokeReason(s.getRevokeReason())
             .auditCount(s.getAuditCount())
-            .live(s.isLive())
+            .live(s.isLiveAt(LocalDateTime.now(clock)))
             .reviewedAt(s.getReviewedAt())
             .reviewedByUserId(s.getReviewedByUserId())
             .reviewedByUserName(s.getReviewedByUserId() == null ? null
