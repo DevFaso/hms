@@ -36,7 +36,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { walk } from './lib/walk.mjs';
+import { templatesIn } from './lib/inline-templates.mjs';
 import { rawEnumRenders } from './lib/raw-enum-scan.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -52,12 +52,15 @@ const WRITE_BASELINE = process.argv.includes('--write-baseline');
 // piped or deleted.
 const seen = new Map();
 const files = new Set();
-for (const file of walk(SRC)) {
+// Every `.html` template, and the inline `template:` of each `@Component`
+// (lib/inline-templates.mjs); an inline template's sites are pinned against its
+// `.ts` file.
+for (const { file, text, lineOffset } of templatesIn(SRC)) {
   const rel = relative(PORTAL_DIR, file).replaceAll('\\', '/');
-  for (const hit of rawEnumRenders(readFileSync(file, 'utf8'))) {
+  for (const hit of rawEnumRenders(text)) {
     files.add(rel);
     const id = `${rel}::${hit.expr}`;
-    if (!seen.has(id)) seen.set(id, { ...hit, file: rel, id });
+    if (!seen.has(id)) seen.set(id, { ...hit, line: hit.line + lineOffset, file: rel, id });
   }
 }
 

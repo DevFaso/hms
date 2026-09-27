@@ -213,3 +213,15 @@ test('a comment keeps the lines below it honest', () => {
   const html = ['<!--', '  {{ ignored.status }}', '-->', '{{ real.status }}'].join('\n');
   assert.deepEqual(rawEnumRenders(html), [{ expr: 'real.status', line: 4 }]);
 });
+
+test('a property read OFF an enum-named field is not that field', () => {
+  // `card.source.label` renders the CDS card's source LABEL, free text the
+  // service sends; matching `card.source` inside it pinned a site that was
+  // never an enum render.
+  assert.deepEqual(exprs('<span>{{ card.source.label }}</span>'), []);
+  assert.deepEqual(exprs('<span>{{ card.source?.label }}</span>'), []);
+  assert.deepEqual(exprs('<span>{{ card.source!.label }}</span>'), []);
+  // …while the field itself, and a method called on it, still are.
+  assert.deepEqual(exprs('<span>{{ card.source }}</span>'), ['card.source']);
+  assert.deepEqual(exprs('<span>{{ card?.source ?? "-" }}</span>'), ['card?.source']);
+});

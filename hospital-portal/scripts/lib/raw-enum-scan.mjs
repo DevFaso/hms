@@ -80,7 +80,7 @@ export const ENUM_WORDS = [
 /** `a.b?.c.encounterType` — any number of optional-chain steps. */
 const FIELD = new RegExp(
   String.raw`\b[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)*` +
-    String.raw`\??\.\w*?(?:${ENUM_WORDS.join('|')})\b`,
+    String.raw`\??\.\w*?(?:${ENUM_WORDS.join('|')})\b(?![?!]?\.[A-Za-z_$])`,
   'gi',
 );
 

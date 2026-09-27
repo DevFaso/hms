@@ -46,10 +46,10 @@
  *     ACTIVE / COMPLETED / DISCONTINUED / ON_HOLD from a PrescriptionStatus, so
  *     no enum holds that vocabulary. Those domains carry a `reason` naming the
  *     deriving method.
- *   - a field rendered RAW, with no pipe at all. See the standing-debt bullet
- *     in tasklist.md; this gate checks piped domains, not unpiped fields.
+ *   - a field rendered RAW, with no pipe at all. check-i18n-raw-enums.mjs
+ *     covers that half; this gate checks piped domains, not unpiped fields.
  *
- * Pure Node, no dependencies — same shape as the sibling gates.
+ * Node plus the `typescript` devDependency, which reads inline templates.
  *
  * Usage:
  *   node scripts/check-i18n-enum-coverage.mjs
@@ -60,6 +60,7 @@ import { resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { walk } from './lib/walk.mjs';
+import { templatesIn } from './lib/inline-templates.mjs';
 import { javaEnumConstants, groupOf } from './lib/java-enum.mjs';
 import { validateDeclaration, enumNameOf } from './lib/enum-domains.mjs';
 import { roleNamesFrom, READABLE } from './lib/role-registry.mjs';
@@ -88,14 +89,12 @@ function main() {
 
   /** domain -> the templates that pipe it, so a failure names somewhere to go. */
   const used = new Map();
-  // .html only. Scanning .ts for an inline `template:` was tried twice and
-  // withdrawn: raw, it recorded the pipe's own TSDoc examples as call sites;
-  // blanked, it erased the single-quoted domain argument the regex needs and
-  // matched nothing at all. No component in src/app carries an `enumLabel:` in
-  // an inline template today, so the blind spot is real but empty — it is
-  // recorded in tasklist.md rather than guarded by a check that does not work.
-  for (const file of walk(SRC)) {
-    const text = readFileSync(file, 'utf8');
+  // Every `.html` template and every inline `template:` of a `@Component`,
+  // the latter found by the TypeScript parser (lib/inline-templates.mjs) — a
+  // regex over the whole `.ts` file counted the pipe's own TSDoc examples as
+  // call sites, and blanking comments by hand lost its place at the first
+  // apostrophe in French markup.
+  for (const { file, text } of templatesIn(SRC)) {
     for (const [, domain] of text.matchAll(PIPE_CALL)) {
       if (!used.has(domain)) used.set(domain, new Set());
       used.get(domain).add(relative(PORTAL_DIR, file).replaceAll('\\', '/'));
