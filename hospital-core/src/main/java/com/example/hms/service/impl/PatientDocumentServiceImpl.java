@@ -183,7 +183,8 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
                             + "the patient is registered at. Select a hospital first.");
         }
         if (patientId == null) {
-            throw new ResourceNotFoundException("patient.notFound", patientId);
+            // No id to name: "Patient not found with ID: null" helped nobody.
+            throw new ResourceNotFoundException("patient.notFoundUnspecified");
         }
         return registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));

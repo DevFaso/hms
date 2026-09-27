@@ -426,12 +426,12 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
 
     private StaffShift loadShift(UUID id, Locale locale) {
         return shiftRepository.findDetailedById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("schedule.shift.notFound"));
+            .orElseThrow(() -> ResourceNotFoundException.inLocale(locale, "schedule.shift.notFound"));
     }
 
     private StaffLeaveRequest loadLeave(UUID id, Locale locale) {
         return leaveRepository.findDetailedById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("schedule.leave.notFound"));
+            .orElseThrow(() -> ResourceNotFoundException.inLocale(locale, "schedule.leave.notFound"));
     }
 
     private void ensureShiftMutable(StaffShift shift, Locale locale) {
@@ -640,12 +640,12 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
 
     private Staff findStaff(UUID staffId, Locale locale) {
         return staffRepository.findById(staffId)
-            .orElseThrow(() -> new ResourceNotFoundException("schedule.staff.notFound"));
+            .orElseThrow(() -> ResourceNotFoundException.inLocale(locale, "schedule.staff.notFound"));
     }
 
     private Hospital findHospital(UUID hospitalId, Locale locale) {
         return hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("schedule.hospital.notFound"));
+            .orElseThrow(() -> ResourceNotFoundException.inLocale(locale, "schedule.hospital.notFound"));
     }
 
     private Department resolveDepartment(UUID departmentId,

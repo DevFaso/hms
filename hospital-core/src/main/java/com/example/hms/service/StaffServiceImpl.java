@@ -168,7 +168,7 @@ public class StaffServiceImpl implements StaffService {
         validateBaseStaffRequirements(dto, locale);
 
         User user = userRepository.findByEmail(dto.getUserEmail())
-            .orElseThrow(() -> new ResourceNotFoundException("user.notFound", dto.getUserEmail()));
+            .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByEmail", dto.getUserEmail()));
 
         Hospital hospital = hospitalRepository.findByName(dto.getHospitalName())
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, dto.getHospitalName()));
@@ -219,7 +219,7 @@ public class StaffServiceImpl implements StaffService {
         validateBaseStaffRequirements(dto, locale);
 
         User user = userRepository.findByEmail(dto.getUserEmail())
-            .orElseThrow(() -> new ResourceNotFoundException("user.notFound", dto.getUserEmail()));
+            .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByEmail", dto.getUserEmail()));
 
         Hospital hospital = hospitalRepository.findByName(dto.getHospitalName())
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, dto.getHospitalName()));

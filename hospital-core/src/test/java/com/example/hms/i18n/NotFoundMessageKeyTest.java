@@ -60,14 +60,11 @@ class NotFoundMessageKeyTest {
      * tree, per file. 319 literal ones before the first conversion, 219 after
      * it, and ~170 more the old line scan never saw (a prose constant, or a
      * message already resolved by {@code messageSource.getMessage} and then
-     * looked up a second time as a key). What is left is owned by another
-     * change in flight: both files are reworked by PR 4's upload-limit and
-     * patient-education fixes, so they are converted there rather than edited
-     * twice. Lower a count, never raise one; a file not listed must have none.
+     * looked up a second time as a key). The last 26 (PatientEducationServiceImpl,
+     * FileUploadService) were converted in #791, so none is left: a file listed
+     * here would have to name the reason it cannot pass a key.
      */
-    private static final Map<String, Integer> PROSE_RESIDUE = Map.of(
-        "FileUploadService.java", 2,
-        "PatientEducationServiceImpl.java", 24);
+    private static final Map<String, Integer> PROSE_RESIDUE = Map.of();
 
     private static final Pattern STRING_CONSTANT =
         Pattern.compile("static\\s+final\\s+String\\s+(\\w+)\\s*=\\s*\"((?:[^\"\\\\]|\\\\.)*)\"\\s*;");

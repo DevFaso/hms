@@ -254,14 +254,13 @@ public class FileUploadService {
         String marker = "/uploads/" + requiredSubdirectory + "/";
         int idx = storageKey == null ? -1 : storageKey.indexOf(marker);
         if (idx < 0) {
-            throw new ResourceNotFoundException(
-                "File is not stored under " + requiredSubdirectory + ".");
+            throw new ResourceNotFoundException("file.notStoredUnder", requiredSubdirectory);
         }
         String filename = storageKey.substring(idx + marker.length());
         Path base = Paths.get(uploadDir, requiredSubdirectory).toAbsolutePath().normalize();
         Path path = base.resolve(filename).normalize();
         if (!path.startsWith(base) || !Files.exists(path)) {
-            throw new ResourceNotFoundException("The stored file is no longer available.");
+            throw new ResourceNotFoundException("file.noLongerAvailable");
         }
         return path;
     }

@@ -289,7 +289,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
 
     private User getUserOrThrow(String username) {
         return userRepository.findByUsername(username)
-            .orElseThrow(() -> new ResourceNotFoundException("user.notFound", username));
+            .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByUsername", username));
     }
 
     private Patient getPatientByIdOrThrow(UUID patientId) {

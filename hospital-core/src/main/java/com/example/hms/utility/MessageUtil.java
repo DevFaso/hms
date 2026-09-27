@@ -19,8 +19,13 @@ public class MessageUtil {
     }
 
     public static String resolve(String key, Object... args) {
+        return resolve(LocaleContextHolder.getLocale(), key, args);
+    }
+
+    /** {@link #resolve(String, Object...)} in an explicit locale (the request's when null). */
+    public static String resolve(java.util.Locale locale, String key, Object... args) {
         try {
-            return messageSource.getMessage(key, args, LocaleContextHolder.getLocale());
+            return messageSource.getMessage(key, args, locale != null ? locale : LocaleContextHolder.getLocale());
         } catch (RuntimeException e) {
             // Graceful fallback
             return "[Missing translation] " + key + (args.length > 0 ? " - " + args[0] : "");
