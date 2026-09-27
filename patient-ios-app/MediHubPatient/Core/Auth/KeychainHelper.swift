@@ -115,23 +115,29 @@ final class KeychainHelper {
     /// Keychain is the device-only store, one bucket per patient so a
     /// relative sharing the phone never reads another patient's notes.
     ///
-    /// The bucket is the patient's identity on whichever path signed them
-    /// in: the `sub` of the stored Keycloak ID token, else the user id the
-    /// password login persisted. Without either there is no bucket and the
-    /// notes feature is hidden for the session; a shared fallback would
-    /// pool every SSO patient's notes together.
+    /// The bucket is the HMS user id, on BOTH login paths: the password
+    /// login and the SSO login each resolve it from `/auth/session/bootstrap`
+    /// and persist it as `savedUserId`. (Earlier builds keyed an SSO session
+    /// by the Keycloak `sub`, a different UUID, so the notes vanished and
+    /// reappeared as the patient switched buttons; `migrateHistoryNotes`
+    /// moves those.) Without an id there is no bucket and the notes feature
+    /// is hidden for the session; a shared fallback would pool every
+    /// patient's notes together.
     static let historyNoteSections = ["medical", "surgical", "family", "social"]
     private static let historyNotePrefix = "com.bitnesttechs.hms.patient.historyNote."
 
     var historyNoteOwner: String? {
-        if let subject = Self.jwtSubject(oidcIdToken), !subject.isEmpty { return subject }
         if let id = savedUserId, !id.isEmpty { return id }
         return nil
     }
 
+    static func historyNoteKey(owner: String, section: String) -> String {
+        historyNotePrefix + owner + "." + section
+    }
+
     private func historyNoteKey(_ section: String) -> String? {
         guard let owner = historyNoteOwner else { return nil }
-        return Self.historyNotePrefix + owner + "." + section
+        return Self.historyNoteKey(owner: owner, section: section)
     }
 
     func historyNote(section: String) -> String? {
@@ -139,16 +145,56 @@ final class KeychainHelper {
         return read(key: key)
     }
 
+    func historyNote(section: String, owner: String) -> String? {
+        read(key: Self.historyNoteKey(owner: owner, section: section))
+    }
+
     /// An empty or blank note is removed, as the web does. Nothing is
     /// written without an owner.
     func setHistoryNote(_ value: String?, section: String) {
-        guard let key = historyNoteKey(section) else { return }
+        guard let owner = historyNoteOwner else { return }
+        setHistoryNote(value, section: section, owner: owner)
+    }
+
+    func setHistoryNote(_ value: String?, section: String, owner: String) {
+        let key = Self.historyNoteKey(owner: owner, section: section)
         let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if trimmed.isEmpty {
             delete(key: key)
         } else {
             save(trimmed, key: key)
         }
+    }
+
+    /// One-time move of the notes an earlier build filed under `oldOwner`
+    /// (the Keycloak `sub`) to `newOwner` (the HMS user id).
+    ///
+    /// Only when the destination holds no note at all: two non-empty buckets
+    /// may belong to different sessions, and merging them could show one
+    /// patient another's words. Returns whether anything moved.
+    @discardableResult
+    func migrateHistoryNotes(from oldOwner: String, to newOwner: String) -> Bool {
+        guard !oldOwner.isEmpty, !newOwner.isEmpty, oldOwner != newOwner else { return false }
+        let sections = Self.historyNoteSections
+        let destinationEmpty = sections.allSatisfy { historyNote(section: $0, owner: newOwner) == nil }
+        guard destinationEmpty else { return false }
+        var moved = false
+        for section in sections {
+            let from = Self.historyNoteKey(owner: oldOwner, section: section)
+            if let note = read(key: from) {
+                save(note, key: Self.historyNoteKey(owner: newOwner, section: section))
+                delete(key: from)
+                moved = true
+            }
+        }
+        return moved
+    }
+
+    /// The migration for the CURRENT SSO session only: its own `sub`, read
+    /// from its own ID token, never another bucket found on the device.
+    func migrateHistoryNotesFromCurrentSubject(toUserId userId: String) {
+        guard let subject = Self.jwtSubject(oidcIdToken), !subject.isEmpty else { return }
+        migrateHistoryNotes(from: subject, to: userId)
     }
 
     /// Every patient's notes on this device, not only the current one:
@@ -172,7 +218,7 @@ final class KeychainHelper {
 
     /// The `sub` claim of a JWT, read locally: the payload is base64url
     /// JSON. No signature check is needed for a bucket name.
-    private static func jwtSubject(_ token: String?) -> String? {
+    static func jwtSubject(_ token: String?) -> String? {
         guard let token else { return nil }
         let parts = token.split(separator: ".")
         guard parts.count >= 2 else { return nil }
