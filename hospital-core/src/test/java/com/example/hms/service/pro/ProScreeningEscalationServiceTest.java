@@ -29,7 +29,9 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.pro.ProResponseRepository;
 import com.example.hms.service.NotificationService;
 import com.example.hms.service.SmsService;
+import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -56,6 +58,10 @@ class ProScreeningEscalationServiceTest {
     @Mock private UserRepository userRepository;
 
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
+
+    /** Fixed instant: the stamps and the sweep cutoff come from the injected clock. */
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 3, 1, 2, 0);
+    @Spy private Clock clock = Clock.fixed(NOW.atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
 
     @InjectMocks private ProScreeningEscalationService service;
 
@@ -87,7 +93,7 @@ class ProScreeningEscalationServiceTest {
             .patient(patient)
             .hospital(hospital)
             .recordedByUserId(recorderId)
-            .administeredAt(LocalDateTime.now())
+            .administeredAt(NOW)
             .answers("{}")
             .build();
         response.setId(UUID.randomUUID());
@@ -251,6 +257,18 @@ class ProScreeningEscalationServiceTest {
         assertThat(response.getEscalationLevel()).isEqualTo((short) 1);
         assertThat(response.getLastEscalationAt()).isNotNull();
         verify(responseRepository).save(response);
+    }
+
+    @Test
+    void sweepCutoffAndRoundStampComeFromTheInjectedClock() {
+        response.setCriticalItemPositive(true);
+        when(responseRepository.findCriticalAwaitingEscalation(NOW.minusMinutes(30)))
+            .thenReturn(List.of(response));
+
+        assertThat(service.escalateOverdue()).isEqualTo(1);
+
+        assertThat(response.getLastEscalationAt()).isEqualTo(NOW);
+        assertThat(response.getNotifiedAt()).isEqualTo(NOW);
     }
 
     @Test

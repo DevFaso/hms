@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
@@ -74,6 +75,15 @@ public class ProScreeningEscalationService {
     private final StaffRepository staffRepository;
     private final UserRepository userRepository;
     private final MessageSource messageSource;
+    /**
+     * The escalation clock: it writes {@code notifiedAt}/{@code lastEscalationAt}
+     * and computes the sweep cutoff that {@code findCriticalAwaitingEscalation}
+     * compares them against; {@code ProResponseService} stamps
+     * {@code acknowledgedAt} with the same bean. The query's fallback onto
+     * {@code createdAt} (BaseEntity {@code @PrePersist}, system default zone) is
+     * the same zone {@code TimeConfig}'s bean uses.
+     */
+    private final Clock clock;
 
     @Value("${hms.pro.critical-escalation.escalate-after-minutes:30}")
     private long escalateAfterMinutes;
@@ -118,7 +128,7 @@ public class ProScreeningEscalationService {
                 return;
             }
             if (!recipients.isEmpty()) {
-                response.setNotifiedAt(LocalDateTime.now());
+                response.setNotifiedAt(LocalDateTime.now(clock));
                 responseRepository.save(response);
             }
         } catch (RuntimeException ex) {
@@ -136,7 +146,7 @@ public class ProScreeningEscalationService {
      */
     @Transactional
     public int escalateOverdue() {
-        LocalDateTime cutoff = LocalDateTime.now().minus(Duration.ofMinutes(escalateAfterMinutes));
+        LocalDateTime cutoff = LocalDateTime.now(clock).minus(Duration.ofMinutes(escalateAfterMinutes));
         List<ProResponse> overdue = responseRepository.findCriticalAwaitingEscalation(cutoff);
         int escalated = 0;
         for (ProResponse response : overdue) {
@@ -164,7 +174,7 @@ public class ProScreeningEscalationService {
         // Stamp the round even with no resolvable recipient so the interval
         // advances and the sweep does not reconsider the row every pass —
         // but "somebody was told" only when somebody was.
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         response.setEscalationLevel((short) Math.min(round, Short.MAX_VALUE));
         response.setLastEscalationAt(now);
         if (response.getNotifiedAt() == null && !recipients.isEmpty()) {
