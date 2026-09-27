@@ -78,6 +78,7 @@ import com.bitnesttechs.hms.patient.core.models.CurrentMedicationDto
 import com.bitnesttechs.hms.patient.core.models.HealthSummaryDto
 import com.bitnesttechs.hms.patient.core.models.ImmunizationDto
 import com.bitnesttechs.hms.patient.core.models.LabResultDto
+import com.bitnesttechs.hms.patient.core.models.PatientGender
 import com.bitnesttechs.hms.patient.core.models.ReferralDto
 import com.bitnesttechs.hms.patient.core.models.TreatmentPlanDto
 import com.bitnesttechs.hms.patient.core.models.VitalSignDto
@@ -168,7 +169,10 @@ private fun PatientIdentityHeader(summary: HealthSummaryDto?) {
             if (!mrn.isNullOrBlank()) {
                 Text(stringResource(R.string.mrn_prefix, mrn), style = MaterialTheme.typography.bodySmall)
             }
-            val details = listOfNotNull(profile?.dateOfBirth?.let { stringResource(R.string.dob_prefix, it.take(10)) }, profile?.gender, profile?.bloodType)
+            val gender = profile?.gender?.takeIf { it.isNotBlank() }?.let { raw ->
+                PatientGender.fromWire(raw)?.let { stringResource(it.labelRes) } ?: raw
+            }
+            val details = listOfNotNull(profile?.dateOfBirth?.let { stringResource(R.string.dob_prefix, it.take(10)) }, gender, profile?.bloodType)
             if (details.isNotEmpty()) {
                 Text(details.joinToString("  |  "), style = MaterialTheme.typography.bodySmall)
             }
@@ -342,25 +346,32 @@ private fun TreatmentPlansTab(treatmentPlans: List<TreatmentPlanDto>) {
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         lazyItems(treatmentPlans, key = { it.id }) { plan ->
+            val status = stringResource(plan.statusEnum.labelRes)
             ExpandableClinicalCard(
                 icon = Icons.Default.Assignment,
-                sourceParts = listOfNotNull(plan.createdBy?.let { stringResource(R.string.created_by_with_value, it) }),
+                sourceParts = listOfNotNull(
+                    plan.authorStaffName?.let { stringResource(R.string.created_by_with_value, it) },
+                    plan.hospitalName
+                ),
                 details = {
                     DetailGrid(
-                        DetailItem(stringResource(R.string.status), plan.status, Icons.Default.Warning),
-                        DetailItem(stringResource(R.string.start), plan.startDate?.take(10), Icons.Default.CalendarMonth),
-                        DetailItem(stringResource(R.string.end), plan.endDate?.take(10), Icons.Default.CalendarMonth),
-                        DetailItem(stringResource(R.string.created_by), plan.createdBy, Icons.Default.Person)
+                        DetailItem(stringResource(R.string.status), status, Icons.Default.Warning),
+                        DetailItem(stringResource(R.string.start), plan.timelineStartDate?.take(10), Icons.Default.CalendarMonth),
+                        DetailItem(stringResource(R.string.treatment_plan_review_date), plan.timelineReviewDate?.take(10), Icons.Default.CalendarMonth),
+                        DetailItem(stringResource(R.string.created_by), plan.authorStaffName, Icons.Default.Person)
                     )
-                    DetailNote(stringResource(R.string.description), plan.description)
-                    plan.goals?.takeIf { it.isNotEmpty() }?.let { goals ->
+                    plan.therapeuticGoals?.takeIf { it.isNotEmpty() }?.let { goals ->
                         DetailNote(stringResource(R.string.goals), goals.joinToString("\n"))
                     }
+                    DetailNote(stringResource(R.string.treatment_plan_timeline), plan.timelineSummary)
+                    DetailNote(stringResource(R.string.treatment_plan_follow_up), plan.followUpSummary)
                 }
             ) {
-                Text(plan.title ?: stringResource(R.string.treatment_plan), fontWeight = FontWeight.SemiBold)
-                plan.description?.let { SecondaryText(it) }
-                FlowText(listOfNotNull(plan.status, plan.startDate?.take(10), plan.endDate?.take(10)))
+                Text(
+                    plan.problemStatement?.takeIf { it.isNotBlank() } ?: stringResource(R.string.treatment_plan),
+                    fontWeight = FontWeight.SemiBold
+                )
+                FlowText(listOfNotNull(status, plan.timelineStartDate?.take(10), plan.timelineReviewDate?.take(10)))
             }
         }
         item { Spacer(Modifier.height(16.dp)) }
@@ -373,30 +384,37 @@ private fun ReferralsTab(referrals: List<ReferralDto>) {
         EmptyState(stringResource(R.string.no_referrals))
         return
     }
-    val context = LocalContext.current
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         lazyItems(referrals, key = { it.id }) { referral ->
-            val specialty = LocaleHelper.translateProviderDescriptor(context, referral.specialty)
+            val status = stringResource(referral.statusEnum.labelRes)
+            val type = referral.typeEnum?.let { stringResource(it.labelRes) }
+            val specialty = referral.specialtyEnum?.let { stringResource(it.labelRes) }
+            val urgency = referral.urgencyEnum?.let { stringResource(it.labelRes) }
             ExpandableClinicalCard(
                 icon = Icons.Default.Description,
-                sourceParts = listOfNotNull(referral.referredTo?.let { context.getString(R.string.referred_to) + " " + it }, referral.specialistName),
+                sourceParts = listOfNotNull(
+                    referral.destination?.let { stringResource(R.string.referred_to) + " " + it },
+                    referral.referringProviderName?.let { stringResource(R.string.referred_by_with_value, it) }
+                ),
                 details = {
                     DetailGrid(
-                        DetailItem(stringResource(R.string.type_label), referral.referralType, Icons.Default.Description),
-                        DetailItem(stringResource(R.string.status), referral.status, Icons.Default.Warning),
-                        DetailItem(stringResource(R.string.specialist), referral.specialistName, Icons.Default.Person),
+                        DetailItem(stringResource(R.string.type_label), type, Icons.Default.Description),
+                        DetailItem(stringResource(R.string.status), status, Icons.Default.Warning),
+                        DetailItem(stringResource(R.string.referral_urgency), urgency, Icons.Default.Warning),
+                        DetailItem(stringResource(R.string.specialist), referral.receivingProviderName, Icons.Default.Person),
                         DetailItem(stringResource(R.string.specialty), specialty, Icons.Default.MedicalInformation),
-                        DetailItem(stringResource(R.string.referred_to), referral.referredTo, Icons.Default.LocalHospital),
-                        DetailItem(stringResource(R.string.date_label), referral.referralDate?.take(10), Icons.Default.CalendarMonth)
+                        DetailItem(stringResource(R.string.referred_to), referral.destination, Icons.Default.LocalHospital),
+                        DetailItem(stringResource(R.string.date_label), referral.submittedAt?.take(10), Icons.Default.CalendarMonth),
+                        DetailItem(stringResource(R.string.referral_appointment), referral.scheduledAppointmentAt?.take(10), Icons.Default.CalendarMonth)
                     )
-                    DetailNote(stringResource(R.string.reason), referral.reason)
-                    DetailNote(stringResource(R.string.notes), referral.notes)
+                    DetailNote(stringResource(R.string.reason), referral.referralReason)
+                    DetailNote(stringResource(R.string.referral_appointment_location), referral.appointmentLocation)
                 }
             ) {
-                Text(referral.referralType ?: stringResource(R.string.referral), fontWeight = FontWeight.SemiBold)
-                FlowText(listOfNotNull(referral.specialistName, specialty, referral.status))
-                referral.reason?.let { SecondaryText(it) }
-                referral.referralDate?.let { SecondaryText(it.take(10)) }
+                Text(type ?: stringResource(R.string.referral), fontWeight = FontWeight.SemiBold)
+                FlowText(listOfNotNull(referral.receivingProviderName, specialty, status))
+                referral.referralReason?.let { SecondaryText(it) }
+                referral.submittedAt?.let { SecondaryText(it.take(10)) }
             }
         }
         item { Spacer(Modifier.height(16.dp)) }

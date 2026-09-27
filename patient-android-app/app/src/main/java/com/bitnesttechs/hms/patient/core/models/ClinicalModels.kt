@@ -213,30 +213,61 @@ data class SendChatMessageRequest(
     @Json(name = "content") val content: String
 )
 
+/**
+ * `GeneralReferralResponseDTO`, as `GET /me/patient/referrals` returns it. The
+ * previous model read `referralDate`, `referredTo`, `specialistName`,
+ * `specialty`, `reason` and `notes` — names the API never sent — so every
+ * referral showed only its raw type and status.
+ */
 @JsonClass(generateAdapter = true)
 data class ReferralDto(
     @Json(name = "id") val id: String = "",
-    @Json(name = "referralDate") val referralDate: String? = null,
     @Json(name = "referralType") val referralType: String? = null,
-    @Json(name = "referredTo") val referredTo: String? = null,
-    @Json(name = "specialistName") val specialistName: String? = null,
-    @Json(name = "specialty") val specialty: String? = null,
-    @Json(name = "reason") val reason: String? = null,
     @Json(name = "status") val status: String = "",
-    @Json(name = "notes") val notes: String? = null
-)
+    @Json(name = "urgency") val urgency: String? = null,
+    @Json(name = "targetSpecialty") val targetSpecialty: String? = null,
+    @Json(name = "referringProviderName") val referringProviderName: String? = null,
+    @Json(name = "receivingProviderName") val receivingProviderName: String? = null,
+    @Json(name = "targetFacilityName") val targetFacilityName: String? = null,
+    @Json(name = "receivingHospitalName") val receivingHospitalName: String? = null,
+    @Json(name = "targetDepartmentName") val targetDepartmentName: String? = null,
+    @Json(name = "referralReason") val referralReason: String? = null,
+    @Json(name = "submittedAt") val submittedAt: String? = null,
+    @Json(name = "scheduledAppointmentAt") val scheduledAppointmentAt: String? = null,
+    @Json(name = "appointmentLocation") val appointmentLocation: String? = null
+) {
+    val statusEnum: ReferralStatus get() = ReferralStatus.fromWire(status)
+    val typeEnum: ReferralType? get() = referralType?.let { ReferralType.fromWire(it) }
+    val urgencyEnum: ReferralUrgency? get() = urgency?.let { ReferralUrgency.fromWire(it) }
+    val specialtyEnum: ReferralSpecialty? get() = targetSpecialty?.let { ReferralSpecialty.fromWire(it) }
 
+    /** Where the patient is referred: the named facility, else the receiving hospital, else the department. */
+    val destination: String?
+        get() = listOf(targetFacilityName, receivingHospitalName, targetDepartmentName)
+            .firstOrNull { !it.isNullOrBlank() }
+}
+
+/**
+ * `TreatmentPlanResponseDTO`, as `GET /me/patient/treatment-plans` returns
+ * it. The previous model read `title`, `description`, `startDate`,
+ * `endDate`, `goals` and `createdBy`, none of which the API sends, so every
+ * plan was a bare "Treatment plan" and a raw status.
+ */
 @JsonClass(generateAdapter = true)
 data class TreatmentPlanDto(
     @Json(name = "id") val id: String = "",
-    @Json(name = "title") val title: String = "",
-    @Json(name = "description") val description: String? = null,
-    @Json(name = "startDate") val startDate: String? = null,
-    @Json(name = "endDate") val endDate: String? = null,
     @Json(name = "status") val status: String = "",
-    @Json(name = "goals") val goals: List<String>? = null,
-    @Json(name = "createdBy") val createdBy: String? = null
-)
+    @Json(name = "problemStatement") val problemStatement: String? = null,
+    @Json(name = "therapeuticGoals") val therapeuticGoals: List<String>? = null,
+    @Json(name = "timelineSummary") val timelineSummary: String? = null,
+    @Json(name = "followUpSummary") val followUpSummary: String? = null,
+    @Json(name = "timelineStartDate") val timelineStartDate: String? = null,
+    @Json(name = "timelineReviewDate") val timelineReviewDate: String? = null,
+    @Json(name = "authorStaffName") val authorStaffName: String? = null,
+    @Json(name = "hospitalName") val hospitalName: String? = null
+) {
+    val statusEnum: TreatmentPlanStatus get() = TreatmentPlanStatus.fromWire(status)
+}
 
 @JsonClass(generateAdapter = true)
 data class ImmunizationDto(
