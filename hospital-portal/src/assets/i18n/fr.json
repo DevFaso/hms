@@ -1780,9 +1780,11 @@
     "LAB_MODULE": "Module de Laboratoire",
     "LAB_MODULE_DESC": "Accéder aux demandes de labo, soumettre les résultats et suivre les échantillons.",
     "LAB_ORDERS": "Demandes Labo",
+    "LAB_ORDER": "Demande de laboratoire",
     "LAB_ORDERS_TODAY": "Commandes Labo Aujourd'hui",
     "LAB_WORK_QUEUE": "File de Travail Labo",
     "LATEST_LABS": "Derniers Résultats Labo",
+    "LAB_TEST": "Test de laboratoire",
     "LICENSE_ALERTS": "Alertes Licence",
     "LICENSE_EXPIRY_ALERTS": "Alertes d'Expiration de Licence",
     "LOW": "Faible",
@@ -9966,8 +9968,5 @@
     "STATUS_PIPELINE": "Suivi des statuts des demandes",
     "THROUGHPUT": "Débit",
     "TITLE": "Tableau de bord des opérations du laboratoire"
-  },
-  "SNAPSHOT": {
-    "ORDER": "Prescription"
   }
 }

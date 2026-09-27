@@ -119,8 +119,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private static final int DEFAULT_LIMIT = 6;
     private static final int MAX_LIMIT = 20;
 
-    private static final String TYPE_ROUTINE = "ROUTINE";
-    private static final String TYPE_FULL_SET = "FULL_SET";
+    // The vitals-round type (vitalTaskType on the portal), not an order priority:
+    // PRIORITY_ROUTINE below holds the same wire value for a different vocabulary.
+    private static final String VITALS_ROUND_ROUTINE = "ROUTINE";
+    private static final String VITALS_ROUND_FULL_SET = "FULL_SET";
     private static final String ORDER_TYPE_LAB = "LAB";
     private static final String ORDER_TYPE_IMAGING = "IMAGING";
     private static final String ORDER_TYPE_PROCEDURE = "PROCEDURE";
@@ -231,7 +233,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                     .id(UUID.nameUUIDFromBytes((ctx.patientId() + ":VITAL:" + hospitalId).getBytes()))
                     .patientId(ctx.patientId())
                     .patientName(ctx.displayName())
-                    .type(overdue ? TYPE_FULL_SET : TYPE_ROUTINE)
+                    .type(overdue ? VITALS_ROUND_FULL_SET : VITALS_ROUND_ROUTINE)
                     .dueTime(dueTime)
                     .overdue(overdue)
                     .build());

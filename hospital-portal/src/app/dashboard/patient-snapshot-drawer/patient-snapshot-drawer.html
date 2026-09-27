@@ -158,9 +158,9 @@
             @if (pt.latestLabs.length === 0) {
               <span class="no-data">{{ 'DASHBOARD.NO_RECENT_LABS' | translate }}</span>
             } @else {
-              @for (lab of pt.latestLabs; track lab.test + lab.date) {
+              @for (lab of pt.latestLabs; track $index) {
                 <div class="lab-row">
-                  <span class="lab-test">{{ lab.test }}</span>
+                  <span class="lab-test">{{ lab.test || ('DASHBOARD.LAB_TEST' | translate) }}</span>
                   <span
                     class="lab-value"
                     [class.lab-abnormal]="lab.flag === 'ABNORMAL' || lab.flag === 'CRITICAL'"
@@ -194,7 +194,7 @@
                 <div class="order-row">
                   <span class="order-type-badge">{{ o.type | enumLabel: 'orderSourceType' }}</span>
                   <span class="order-desc">{{
-                    o.description || ('SNAPSHOT.ORDER' | translate)
+                    o.description || ('DASHBOARD.LAB_ORDER' | translate)
                   }}</span>
                 </div>
               }

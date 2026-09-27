@@ -1780,9 +1780,11 @@
     "LAB_MODULE": "Lab Module",
     "LAB_MODULE_DESC": "Access lab orders, submit results, and track specimens from the lab module.",
     "LAB_ORDERS": "Lab Orders",
+    "LAB_ORDER": "Lab Order",
     "LAB_ORDERS_TODAY": "Lab Orders Today",
     "LAB_WORK_QUEUE": "Lab Work Queue",
     "LATEST_LABS": "Latest Labs",
+    "LAB_TEST": "Lab Test",
     "LICENSE_ALERTS": "License Alerts",
     "LICENSE_EXPIRY_ALERTS": "License Expiry Alerts",
     "LOW": "Low",
@@ -9966,8 +9968,5 @@
     "STATUS_PIPELINE": "Order Status Pipeline",
     "THROUGHPUT": "Throughput",
     "TITLE": "Lab Operations Dashboard"
-  },
-  "SNAPSHOT": {
-    "ORDER": "Order"
   }
 }

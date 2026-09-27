@@ -37,6 +37,8 @@ describe('PatientSnapshotDrawerComponent — server-stamped type badges', () => 
     };
   }
 
+  const translate = () => TestBed.inject(TranslateService);
+
   function textOf(selector: string): string[] {
     return Array.from(fixture.nativeElement.querySelectorAll(selector) as NodeListOf<HTMLElement>)
       .map((el) => (el.textContent ?? '').trim())
@@ -105,6 +107,52 @@ describe('PatientSnapshotDrawerComponent — server-stamped type badges', () => 
     fixture.detectChanges();
 
     expect(textOf('.note-type')).toEqual(['—']);
+  });
+
+  it('names a pending lab order whose test definition is gone', () => {
+    // The service sends a null description rather than the word "Lab Order"
+    // (a lab order whose test definition was deleted). The fallback is the
+    // drawer's own key — « Demande de laboratoire », not « Prescription »,
+    // which reads as a medication order under a « Laboratoire » badge.
+    translate().setTranslation('fr', { DASHBOARD: { LAB_ORDER: 'Demande de laboratoire' } }, true);
+    fixture.componentRef.setInput(
+      'snapshot',
+      snapshot({ pendingOrders: [{ type: 'LAB', description: null, orderedAt: '2026-09-14' }] }),
+    );
+    fixture.detectChanges();
+
+    expect(textOf('.order-desc')).toEqual(['Demande de laboratoire']);
+  });
+
+  it('names a lab result whose test definition is gone', () => {
+    // Same shape one section up: the service used to stamp "Lab Test".
+    translate().setTranslation('fr', { DASHBOARD: { LAB_TEST: 'Test de laboratoire' } }, true);
+    fixture.componentRef.setInput(
+      'snapshot',
+      snapshot({
+        latestLabs: [
+          { test: null, value: '5.0', flag: 'REVIEW', date: '' },
+          { test: 'HbA1c', value: '6.1', flag: 'NORMAL', date: '' },
+        ],
+      }),
+    );
+    fixture.detectChanges();
+
+    expect(textOf('.lab-test')).toEqual(['Test de laboratoire', 'HbA1c']);
+  });
+
+  it('falls back to — when the note author is gone', () => {
+    // A note whose staff row was deleted: the service sends null, not a word.
+    fixture.componentRef.setInput(
+      'snapshot',
+      snapshot({
+        recentNotes: [{ author: null, type: 'INPATIENT', date: '2026-09-14', snippet: 'Stable.' }],
+      }),
+    );
+    fixture.componentInstance.notesOpen.set(true);
+    fixture.detectChanges();
+
+    expect(textOf('.note-author')).toEqual(['—']);
   });
 
   it('translates a care-team job title', () => {
