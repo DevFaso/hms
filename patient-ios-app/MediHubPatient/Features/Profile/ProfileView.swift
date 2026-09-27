@@ -459,7 +459,7 @@ final class ProfileViewModel: ObservableObject {
         guard let image = UIImage(data: data),
               let jpegData = image.jpegData(compressionQuality: 0.8)
         else {
-            errorMessage = "Could not process the selected image."
+            errorMessage = "photo_process_failed".localized
             return
         }
         profileImage = image
