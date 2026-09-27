@@ -224,7 +224,7 @@ final class APIClient {
         language: String = APIClient.currentLanguage
     ) throws -> URLRequest {
         var components = URLComponents(string: AppEnvironment.baseURL + path)
-        if let queryItems { components?.queryItems = queryItems }
+        if let queryItems { components?.percentEncodedQueryItems = Self.percentEncoded(queryItems) }
         guard let url = components?.url else { throw APIError.invalidURL }
 
         var request = URLRequest(url: url)
@@ -236,6 +236,19 @@ final class APIClient {
             request.httpBody = try JSONEncoder().encode(body)
         }
         return request
+    }
+
+    /// `URLQueryItem` leaves `+` as is, and the server's form decoding reads
+    /// it as a space: `a+b@x.com` arrived as `a b@x.com`, so activation and
+    /// resend failed for such an address. Every query value is encoded here
+    /// with `+` (and the other sub-delimiters) escaped.
+    static func percentEncoded(_ items: [URLQueryItem]) -> [URLQueryItem] {
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "+&=;")
+        func encode(_ text: String) -> String {
+            text.addingPercentEncoding(withAllowedCharacters: allowed) ?? text
+        }
+        return items.map { URLQueryItem(name: encode($0.name), value: $0.value.map(encode)) }
     }
 
     // MARK: - Executing a request

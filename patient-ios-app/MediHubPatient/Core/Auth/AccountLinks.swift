@@ -46,3 +46,40 @@ enum PasswordRules {
         return nil
     }
 }
+
+/// The account calls whose side effects on this device matter: what happens
+/// to the password Face ID signs in with.
+enum AccountService {
+    /// `POST /auth/me/change-password` with an explicit bearer (no refresh:
+    /// a wrong current password is a 401, which on the refreshing path would
+    /// sign the patient out). On success the password Face ID replays is
+    /// updated, so biometric sign-in keeps working.
+    static func changePassword(current: String, new: String, bearer: String,
+                               client: APIClient = .shared) async throws {
+        try await client.sendNoContent(
+            .POST,
+            path: APIEndpoints.changePassword,
+            body: ChangePasswordRequest(currentPassword: current, newPassword: new),
+            auth: .bearer(bearer)
+        )
+        if KeychainHelper.shared.savedPassword != nil {
+            KeychainHelper.shared.savedPassword = new
+        }
+    }
+
+    /// `POST /auth/password/confirm`. The server answers 204 even for a bad
+    /// token, so the app cannot know whether the password changed — and if it
+    /// did, Face ID would keep replaying the old one until the lockout. The
+    /// saved credentials are cleared on any 2xx; the next sign-in is typed.
+    static func confirmPasswordReset(tokenText: String, newPassword: String,
+                                     client: APIClient = .shared) async throws {
+        try await client.sendNoContent(
+            .POST,
+            path: APIEndpoints.confirmPasswordReset,
+            body: PasswordResetConfirmRequest(token: AccountLinkParser.token(from: tokenText),
+                                              newPassword: newPassword),
+            auth: .none
+        )
+        KeychainHelper.shared.clearSavedCredentials()
+    }
+}
