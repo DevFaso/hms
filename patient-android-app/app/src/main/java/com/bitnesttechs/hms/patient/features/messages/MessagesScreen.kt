@@ -22,7 +22,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bitnesttechs.hms.patient.R
-import com.bitnesttechs.hms.patient.core.locale.LocaleHelper
 import com.bitnesttechs.hms.patient.ui.theme.OnBrandMuted
 import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
 import com.bitnesttechs.hms.patient.ui.theme.BrandSoft
@@ -173,16 +172,10 @@ fun MessagesScreen(
                 } else {
                     careTeamMembers.forEach { member ->
                         ListItem(
-                            headlineContent = { Text(member.name, fontWeight = FontWeight.Medium) },
-                            supportingContent = {
-                                val info = listOfNotNull(
-                                    LocaleHelper.translateProviderDescriptor(context, member.role),
-                                    LocaleHelper.translateProviderDescriptor(context, member.specialty),
-                                    LocaleHelper.translateProviderDescriptor(context, member.department)
-                                )
-                                    .joinToString(" · ")
-                                if (info.isNotEmpty()) Text(info)
+                            headlineContent = {
+                                Text(member.name.ifBlank { stringResource(R.string.provider_fallback) }, fontWeight = FontWeight.Medium)
                             },
+                            supportingContent = member.hospitalName?.takeIf { it.isNotBlank() }?.let { { Text(it) } },
                             leadingContent = {
                                 Box(
                                     Modifier.size(40.dp).clip(CircleShape).background(BrandSoft),
@@ -193,7 +186,7 @@ fun MessagesScreen(
                             },
                             modifier = Modifier.clickable {
                                 showProviderPicker = false
-                                onThreadClick(member.id)
+                                onThreadClick(member.userId)
                             }
                         )
                         HorizontalDivider()

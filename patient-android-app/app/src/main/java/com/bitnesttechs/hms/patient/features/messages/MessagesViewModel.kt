@@ -25,7 +25,7 @@ class MessagesViewModel @Inject constructor(
     fun markNotificationPermissionAsked() = pushRegistrar.markNotificationPermissionAsked()
 
     val conversations = MutableStateFlow<List<ChatConversationDto>>(emptyList())
-    val careTeamMembers = MutableStateFlow<List<CareTeamMemberDto>>(emptyList())
+    val careTeamMembers = MutableStateFlow<List<ChatRecipient>>(emptyList())
     val isLoading = MutableStateFlow(true)
     val isLoadingCareTeam = MutableStateFlow(false)
 
@@ -45,37 +45,22 @@ class MessagesViewModel @Inject constructor(
         }
     }
 
+    /**
+     * The picker's list: care team and appointment clinicians, each request
+     * failing on its own (see [ChatRecipients.merge]).
+     */
     fun loadCareTeam() {
         viewModelScope.launch {
             isLoadingCareTeam.value = true
             try {
-                val resp = api.getCareTeam()
-                val team = resp.body()?.data
-                val members = mutableListOf<CareTeamMemberDto>()
-                team?.primaryPhysician?.let { members.add(it) }
-                team?.members?.let { members.addAll(it) }
-                val distinct = members.distinctBy { it.id }
-                if (distinct.isNotEmpty()) {
-                    careTeamMembers.value = distinct
-                } else {
-                    // Fallback: derive providers from appointment history
-                    val apptResp = api.getAppointments(size = 50)
-                    val appointments = apptResp.body()?.data ?: emptyList()
-                    val fromAppointments = appointments
-                        .filter { !it.staffUserId.isNullOrBlank() && !it.staffName.isNullOrBlank() }
-                        .distinctBy { it.staffUserId }
-                        .map {
-                            CareTeamMemberDto(
-                                id = it.staffUserId!!,
-                                name = it.staffName!!,
-                                role = "Provider",
-                                department = it.hospitalName
-                            )
-                        }
-                    careTeamMembers.value = fromAppointments
-                }
-            } catch (_: Exception) {}
-            finally { isLoadingCareTeam.value = false }
+                val team = runCatching { api.getCareTeam() }.getOrNull()
+                    ?.takeIf { it.isSuccessful }?.body()?.data
+                val appointments = runCatching { api.getAppointments(size = 50) }.getOrNull()
+                    ?.takeIf { it.isSuccessful }?.body()?.data
+                careTeamMembers.value = ChatRecipients.merge(team, appointments, tokenStorage.userId)
+            } finally {
+                isLoadingCareTeam.value = false
+            }
         }
     }
 }

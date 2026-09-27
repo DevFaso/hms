@@ -80,7 +80,10 @@ data class CareTeamDto(
 
 @JsonClass(generateAdapter = true)
 data class CareTeamMemberDto(
+    /** `CareTeamDTO.PrimaryCareEntry.id`: the primary-care LINK id, not a user. */
     @Json(name = "id") val id: String = "",
+    /** The clinician's HMS user id: the chat recipient. Null for an unlinked entry. */
+    @Json(name = "doctorUserId") val doctorUserId: String? = null,
     @Json(name = "name") val name: String = "",
     @Json(name = "doctorDisplay") val doctorDisplay: String? = null,
     @Json(name = "role") val role: String? = null,
