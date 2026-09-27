@@ -2460,4 +2460,24 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V166 — a pending, verified change of a user's own email address.
+         The self-service change used to go through PUT /users/{id} with no
+         re-authentication and took effect at once. POST
+         /auth/me/change-email now needs the current password and only
+         parks the change; the code sent to the NEW address applies it.
+         One row per user also holds the endpoint's own wrong-password and
+         request counters, kept apart from the login throttle. V165 is
+         reserved elsewhere and is intentionally skipped here.
+         A second table logs each mail sent to a new address (a hash of the
+         address, never the address) for the per-address send limit.
+         Additive: two new tables and an index, IF NOT EXISTS.
+         ================================================================= -->
+    <changeSet id="V166-email-change-requests" author="hms-team" runOnChange="false">
+        <sqlFile path="V166__email_change_requests.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

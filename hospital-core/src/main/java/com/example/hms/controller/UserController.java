@@ -191,7 +191,8 @@ public class UserController {
     @Operation(summary = "Update user by ID (partial update — only send fields you want to change)",
         description = "Your own account: names and phone only. The password and username have "
             + "their own endpoints (POST /auth/me/change-password, /auth/me/change-username); "
-            + "your email is changed by an administrator (400 on a self change), and nobody "
+            + "your email goes through POST /auth/me/change-email and its code (400 on a self "
+            + "change here), and nobody "
             + "switches their own account on or off. Another account: super-admin, or a hospital admin when "
             + "every one of its assignments is at a hospital they administer and it is not a "
             + "super-admin. Anything else answers 404.")

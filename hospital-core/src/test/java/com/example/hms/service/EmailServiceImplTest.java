@@ -652,6 +652,64 @@ class EmailServiceImplTest {
     }
 
     // =========================================================================
+    // the self-service email change mails
+    // =========================================================================
+
+    @Nested
+    @DisplayName("the self-service email change mails")
+    class SendEmailChange {
+
+        @Test
+        @DisplayName("the code goes to the new address, in the code template")
+        void sendsTheCode() {
+            stubMailSender();
+            emailService.sendEmailChangeVerificationEmail("new@example.com", "482913", java.util.Locale.ENGLISH);
+            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            assertThat(renderedHtml())
+                .startsWith("email.change.code.subject")
+                .contains("482913")
+                .contains("email.change.code.body.expiry")
+                .contains("email.change.code.body.unexpected");
+        }
+
+        @Test
+        @DisplayName("the notice to the old address names the new one masked only")
+        void noticeCarriesOnlyTheMaskedAddress() {
+            stubMailSender();
+            emailService.sendEmailChangedNoticeEmail("old@example.com", "John Doe", "n***@example.com", null);
+            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            assertThat(renderedHtml())
+                .startsWith("email.change.notice.subject")
+                .contains("email.common.greeting.hi[John Doe]")
+                .contains("n***@example.com")
+                .contains("email.change.notice.body.unexpected");
+        }
+
+        @Test
+        @DisplayName("the in-use notice names no account and carries no code")
+        void inUseNotice() {
+            stubMailSender();
+            emailService.sendEmailAddressInUseNoticeEmail("holder@example.com", null);
+            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            assertThat(renderedHtml())
+                .startsWith("email.change.inuse.subject")
+                .contains("email.change.inuse.body.intro")
+                .doesNotContain("email.change.code");
+        }
+
+        @Test
+        @DisplayName("all three refuse a null or undeliverable recipient, by the shared rule")
+        void rejectBadRecipients() {
+            assertThatThrownBy(() -> emailService.sendEmailChangeVerificationEmail(null, "1", null))
+                .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> emailService.sendEmailChangedNoticeEmail("not-an-email", "x", "y", null))
+                .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> emailService.sendEmailAddressInUseNoticeEmail("someone@example.c", null))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    // =========================================================================
     // sendRecoveryContactVerificationEmail
     // =========================================================================
 
