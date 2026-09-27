@@ -1465,9 +1465,10 @@ public class EncounterServiceImpl implements EncounterService {
     /**
      * The one hospital-boundary predicate, shared by every encounter read
      * ({@link #requireEncounterReadable}) and every scoped encounter write
-     * ({@link #requireEncounterInScope}) so the two cannot drift. Not every
-     * write is scoped: {@code updateEncounter} and {@code deleteEncounter}
-     * still bypass {@code requireEncounterInScope} (tracked in tasklist.md). A NULL on
+     * ({@link #requireEncounterInScope}) so the two cannot drift. Every
+     * mutating path but {@code deleteEncounter} goes through
+     * {@code requireEncounterInScope}; delete is {@code ROLE_SUPER_ADMIN}-only
+     * and global by design. A NULL on
      * either side is outside: an encounter we cannot place is exactly the one
      * not to hand out or write to, and a caller with no hospital has none to
      * be inside. {@code Encounter.hospital} is {@code nullable = false}, so no
