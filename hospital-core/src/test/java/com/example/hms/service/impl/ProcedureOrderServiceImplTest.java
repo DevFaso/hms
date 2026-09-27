@@ -153,6 +153,49 @@ class ProcedureOrderServiceImplTest {
         assertThat(service.createProcedureOrder(r, staffId).getHospitalId()).isEqualTo(hospitalId);
     }
 
+    @Test void createProcedureOrder_againstAnotherHospitalsEncounter_answersAsAMissingEncounter() {
+        ProcedureOrderRequestDTO r = new ProcedureOrderRequestDTO();
+        r.setPatientId(patientId); r.setHospitalId(hospitalId); r.setProcedureName("Appendectomy");
+        UUID encounterId = UUID.randomUUID();
+        r.setEncounterId(encounterId);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        com.example.hms.model.Hospital elsewhere = new com.example.hms.model.Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        com.example.hms.model.Encounter foreign = new com.example.hms.model.Encounter();
+        foreign.setId(encounterId); foreign.setHospital(elsewhere); foreign.setPatient(patient);
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.empty());
+        String missing = org.assertj.core.api.Assertions.catchThrowableOfType(ResourceNotFoundException.class,
+            () -> service.createProcedureOrder(r, staffId)).getMessage();
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(foreign));
+        String refused = org.assertj.core.api.Assertions.catchThrowableOfType(ResourceNotFoundException.class,
+            () -> service.createProcedureOrder(r, staffId)).getMessage();
+
+        assertThat(refused).isEqualTo(missing);
+        verify(procedureOrderRepository, never()).save(any());
+    }
+
+    @Test void createProcedureOrder_againstThePatientsOwnEncounterHere_attachesIt() {
+        ProcedureOrderRequestDTO r = new ProcedureOrderRequestDTO();
+        r.setPatientId(patientId); r.setHospitalId(hospitalId); r.setProcedureName("Appendectomy");
+        UUID encounterId = UUID.randomUUID();
+        r.setEncounterId(encounterId);
+        com.example.hms.model.Encounter own = new com.example.hms.model.Encounter();
+        own.setId(encounterId); own.setHospital(hospital); own.setPatient(patient);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(own));
+        when(procedureOrderRepository.save(any())).thenAnswer(i -> { ProcedureOrder o = i.getArgument(0); o.setId(orderId); return o; });
+
+        service.createProcedureOrder(r, staffId);
+        org.mockito.ArgumentCaptor<ProcedureOrder> saved = org.mockito.ArgumentCaptor.forClass(ProcedureOrder.class);
+        verify(procedureOrderRepository).save(saved.capture());
+        assertThat(saved.getValue().getEncounter()).isSameAs(own);
+    }
+
     @Test void getProcedureOrder_success() {
         when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(buildOrder(ProcedureOrderStatus.ORDERED)));
         ProcedureOrderResponseDTO result = service.getProcedureOrder(orderId);

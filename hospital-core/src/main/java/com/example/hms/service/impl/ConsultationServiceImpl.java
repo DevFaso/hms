@@ -123,6 +123,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         Encounter encounter = null;
         if (request.getEncounterId() != null) {
             encounter = encounterRepository.findById(request.getEncounterId())
+                .filter(e -> belongsTo(e, patient, hospital))
                 .orElseThrow(() -> new ResourceNotFoundException("Encounter not found with ID: " + request.getEncounterId()));
         }
 
@@ -941,5 +942,17 @@ public class ConsultationServiceImpl implements ConsultationService {
                      parentEntity, parentId, association);
             return null;
         }
+    }
+
+    /**
+     * The encounter an order or consultation is filed against must be this
+     * patient's, at this hospital. The lookup is a bare {@code findById}, so
+     * another hospital's (or another patient's) encounter used to be attached;
+     * it now answers exactly as an encounter id that matches no row.
+     */
+    private static boolean belongsTo(Encounter encounter, Patient patient, Hospital hospital) {
+        return encounter.getHospital() != null && encounter.getPatient() != null
+            && encounter.getHospital().getId().equals(hospital.getId())
+            && encounter.getPatient().getId().equals(patient.getId());
     }
 }

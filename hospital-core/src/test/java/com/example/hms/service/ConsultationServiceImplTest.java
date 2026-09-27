@@ -131,6 +131,8 @@ class ConsultationServiceImplTest {
 
         encounter = new Encounter();
         encounter.setId(encounterId);
+        encounter.setHospital(hospital);
+        encounter.setPatient(patient);
     }
 
     private ConsultationRequestDTO buildRequest() {
@@ -379,6 +381,33 @@ class ConsultationServiceImplTest {
             verifyNoInteractions(patientHospitalRegistrationRepository);
             verify(consultationRepository, never()).save(any());
         }
+        @Test
+        @DisplayName("a consultation cannot be filed against another hospital's (or patient's) encounter: answered as a missing encounter")
+        void foreignEncounterAnswersAsMissing() {
+            ConsultationRequestDTO request = buildRequest();
+            request.setEncounterId(encounterId);
+            when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+            Hospital elsewhere = new Hospital();
+            elsewhere.setId(UUID.randomUUID());
+            Encounter foreign = new Encounter();
+            foreign.setId(encounterId);
+            foreign.setHospital(elsewhere);
+            foreign.setPatient(patient);
+
+            when(encounterRepository.findById(encounterId)).thenReturn(Optional.empty());
+            String missing = org.assertj.core.api.Assertions.catchThrowableOfType(ResourceNotFoundException.class,
+                () -> service.createConsultation(request, staffId)).getMessage();
+            when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(foreign));
+            String refused = org.assertj.core.api.Assertions.catchThrowableOfType(ResourceNotFoundException.class,
+                () -> service.createConsultation(request, staffId)).getMessage();
+
+            assertThat(refused).isEqualTo(missing);
+            verify(consultationRepository, never()).save(any());
+        }
+
     }
 
     // ── writes are held to the acting hospital ──────────────────────────────

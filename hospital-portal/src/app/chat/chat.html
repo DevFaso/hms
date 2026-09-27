@@ -130,6 +130,8 @@
                       <span class="user-item-role">
                         @if (user.roleName) {
                           {{ user.roleName | roleLabel }}
+                        } @else if (user.profileType) {
+                          {{ user.profileType }}
                         } @else {
                           {{ user.subtitle }}
                         }

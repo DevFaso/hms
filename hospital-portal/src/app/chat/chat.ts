@@ -118,6 +118,13 @@ export interface ChatTarget {
   name: string;
   /** Staff directory rows carry a role; a patient's clinicians do not. */
   roleName?: string;
+  /**
+   * Staff directory rows without a role fall back to the raw account type, as
+   * before (a pinned raw-enum render); kept apart from `subtitle` so the
+   * raw-enum gate still sees it.
+   */
+  profileType?: string;
+  /** A patient's clinicians: the hospital they were seen at. Free text, not an enum. */
   subtitle?: string;
   /** Values the picker's search box matches against. */
   searchFields: (string | null | undefined)[];
@@ -128,7 +135,7 @@ function staffTarget(u: UserSummary): ChatTarget {
     id: u.id,
     name: `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim() || u.username,
     roleName: u.roleName || undefined,
-    subtitle: u.profileType,
+    profileType: u.profileType,
     searchFields: [u.firstName, u.lastName, u.username, u.email],
   };
 }
