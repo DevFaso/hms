@@ -1,6 +1,6 @@
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   PatientPortalService,
   MedicationSummary,
@@ -22,6 +22,7 @@ import { ToastService } from '../../core/toast.service';
 export class MyMedicationsComponent implements OnInit {
   private readonly portal = inject(PatientPortalService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   medications = signal<MedicationSummary[]>([]);
   prescriptions = signal<PortalPrescription[]>([]);
@@ -90,14 +91,16 @@ export class MyMedicationsComponent implements OnInit {
                 : m,
             ),
           );
-          this.toast.success('PORTAL.MEDICATIONS.REFILL_REQUESTED');
+          this.toast.success(this.translate.instant('PORTAL.MEDICATIONS.REFILL_REQUESTED'));
           this.requestingRefill.set(null);
         },
         error: (err: { error?: { message?: string } }) => {
           // The backend refuses a duplicate or an un-refillable prescription
           // with a message written for the patient — show it rather than a
           // generic failure.
-          this.toast.error(err?.error?.message ?? 'PORTAL.MEDICATIONS.REFILL_FAILED');
+          this.toast.error(
+            err?.error?.message ?? this.translate.instant('PORTAL.MEDICATIONS.REFILL_FAILED'),
+          );
           this.requestingRefill.set(null);
         },
       });
