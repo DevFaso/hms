@@ -306,7 +306,6 @@
     "STAT": {
       "ORGANIZATIONS": "Organizations",
       "HOSPITALS": "Hospitals",
-      "USERS": "Users",
       "PATIENTS": "Patients",
       "TODAY_APPOINTMENTS": "Today's appointments",
       "DEPARTMENTS": "Departments",
@@ -316,7 +315,6 @@
       "ENCOUNTERS": "Encounters",
       "CONSULTATIONS": "Consultations",
       "ADMISSIONS": "Admissions",
-      "PRESCRIPTIONS": "Prescriptions",
       "LAB_ORDERS": "Lab orders",
       "LAB_RESULTS": "Lab results",
       "LAB_TEST_DEFINITIONS": "Lab test catalogue",
@@ -332,7 +330,6 @@
     "LINK": {
       "ORGANIZATIONS_TITLE": "Organizations",
       "ORGANIZATIONS_DESC": "Tenants, hospital assignments, contact info",
-      "USERS_TITLE": "Users",
       "USERS_DESC": "Cross-tenant user governance and provisioning",
       "ROLES_TITLE": "Roles",
       "ROLES_DESC": "Role catalogue and permission matrix",
@@ -1179,8 +1176,6 @@
       "TOTAL_PATIENTS": "Total Patients",
       "INVOICES": "Invoices",
       "LAB_ORDERS": "Lab Orders",
-      "PRESCRIPTIONS": "Prescriptions",
-      "USERS": "Users",
       "ACTIVE_HOSPITALS": "Active Hospitals"
     },
     "TREND_BAR_TITLE": "{{count}} appointments"
@@ -1566,7 +1561,11 @@
     "UPLOAD": "Upload",
     "VIEW": "View",
     "VIEW_ALL": "View All",
-    "YES": "Yes"
+    "YES": "Yes",
+    "LABEL": {
+      "PRESCRIPTIONS": "Prescriptions",
+      "USERS": "Users"
+    }
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acknowledge",
@@ -1864,7 +1863,6 @@
     "PHARMACY_CLARIFICATIONS": "Pharmacy Clarifications",
     "PHARMACY_MODULE": "Pharmacy Module",
     "PHARMACY_MODULE_DESC": "Manage all prescriptions and dispense medications from the pharmacy module.",
-    "PRESCRIPTIONS": "Prescriptions",
     "PRESCRIPTION_QUEUE": "Prescription Queue",
     "PROGRESS": "Progress",
     "PROVIDER": "Provider",
@@ -2020,7 +2018,6 @@
     "UPCOMING_APPOINTMENTS": "Upcoming Appointments",
     "URGENT": "Urgent",
     "USER": "User",
-    "USERS": "Users",
     "VALIDATION_STUDIES": "Validation Studies",
     "VALIDATION_STUDIES_30D": "Studies (Last 30d)",
     "VALIDATION_STUDIES_PENDING": "Pending Approval",

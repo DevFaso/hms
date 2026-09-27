@@ -306,7 +306,6 @@
     "STAT": {
       "ORGANIZATIONS": "Organizaciones",
       "HOSPITALS": "Hospitales",
-      "USERS": "Usuarios",
       "PATIENTS": "Pacientes",
       "TODAY_APPOINTMENTS": "Citas de hoy",
       "DEPARTMENTS": "Departamentos",
@@ -316,7 +315,6 @@
       "ENCOUNTERS": "Encuentros",
       "CONSULTATIONS": "Consultas",
       "ADMISSIONS": "Ingresos",
-      "PRESCRIPTIONS": "Prescripciones",
       "LAB_ORDERS": "Solicitudes de laboratorio",
       "LAB_RESULTS": "Resultados de laboratorio",
       "LAB_TEST_DEFINITIONS": "Catálogo de pruebas",
@@ -332,7 +330,6 @@
     "LINK": {
       "ORGANIZATIONS_TITLE": "Organizaciones",
       "ORGANIZATIONS_DESC": "Inquilinos, asignaciones de hospitales, contactos",
-      "USERS_TITLE": "Usuarios",
       "USERS_DESC": "Gobernanza y aprovisionamiento multi-inquilino",
       "ROLES_TITLE": "Roles",
       "ROLES_DESC": "Catálogo de roles y matriz de permisos",
@@ -1179,8 +1176,6 @@
       "TOTAL_PATIENTS": "Total de pacientes",
       "INVOICES": "Facturas",
       "LAB_ORDERS": "Solicitudes de laboratorio",
-      "PRESCRIPTIONS": "Prescripciones",
-      "USERS": "Usuarios",
       "ACTIVE_HOSPITALS": "Hospitales activos"
     },
     "TREND_BAR_TITLE": "{{count}} citas"
@@ -1566,7 +1561,11 @@
     "UPLOAD": "Subir",
     "VIEW": "Ver",
     "VIEW_ALL": "View All",
-    "YES": "Sí"
+    "YES": "Sí",
+    "LABEL": {
+      "PRESCRIPTIONS": "Prescripciones",
+      "USERS": "Usuarios"
+    }
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acknowledge",
@@ -1864,7 +1863,6 @@
     "PHARMACY_CLARIFICATIONS": "Aclaraciones de Farmacia",
     "PHARMACY_MODULE": "Pharmacy Module",
     "PHARMACY_MODULE_DESC": "Manage all prescriptions and dispense medications from the pharmacy module.",
-    "PRESCRIPTIONS": "Prescripciones",
     "PRESCRIPTION_QUEUE": "Prescription Queue",
     "PROGRESS": "Progress",
     "PROVIDER": "Provider",
@@ -2020,7 +2018,6 @@
     "UPCOMING_APPOINTMENTS": "Próximas Citas",
     "URGENT": "Urgent",
     "USER": "User",
-    "USERS": "Usuarios",
     "VALIDATION_STUDIES": "Estudios de Validación",
     "VALIDATION_STUDIES_30D": "Estudios (Últimos 30 Días)",
     "VALIDATION_STUDIES_PENDING": "Pendiente de Aprobación",
