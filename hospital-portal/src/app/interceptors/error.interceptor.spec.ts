@@ -102,6 +102,23 @@ describe('errorInterceptor', () => {
     expect(error?.status).toBe(401);
   });
 
+  it('never refreshes or logs out again on the 401 of the logout call itself', () => {
+    // AuthService.logout() fires POST /auth/logout; an expired bearer answers
+    // 401. A refresh here would mint a new session mid-logout, and a second
+    // logout() would fire a second POST - the loop this guards.
+    auth.getRefreshToken.and.returnValue('r1');
+    auth.getUserProfile.and.returnValue({ id: 'u1' } as never);
+
+    let error: HttpErrorResponse | undefined;
+    http.post('/api/auth/logout', {}).subscribe({ error: (e) => (error = e) });
+    httpMock.expectOne('/api/auth/logout').flush(null, { status: 401, statusText: 'Unauthorized' });
+
+    expect(auth.refreshTokenRequest).not.toHaveBeenCalled();
+    expect(auth.logout).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(error?.status).toBe(401);
+  });
+
   it('on 401 during impersonation, ends the session instead of refreshing', () => {
     impersonation.isActive.and.returnValue(true);
     auth.getRefreshToken.and.returnValue('r1');
