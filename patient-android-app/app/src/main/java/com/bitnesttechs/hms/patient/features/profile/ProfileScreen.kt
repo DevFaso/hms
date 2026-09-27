@@ -155,7 +155,7 @@ fun ProfileScreen(
                                         .data(fullUrl)
                                         .crossfade(true)
                                         .build(),
-                                    contentDescription = "Profile photo",
+                                    contentDescription = stringResource(R.string.profile_photo),
                                     modifier = Modifier
                                         .size(96.dp)
                                         .clip(CircleShape)
@@ -189,7 +189,7 @@ fun ProfileScreen(
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
-                                        Icons.Default.CameraAlt, "Change photo",
+                                        Icons.Default.CameraAlt, stringResource(R.string.change_photo),
                                         tint = Color.White,
                                         modifier = Modifier.size(16.dp)
                                     )

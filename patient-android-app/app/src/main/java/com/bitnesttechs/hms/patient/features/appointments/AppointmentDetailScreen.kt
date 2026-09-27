@@ -91,7 +91,7 @@ fun AppointmentDetailScreen(
                     Spacer(Modifier.width(16.dp))
                     Column {
                         Text(
-                            appointment.statusDisplay,
+                            stringResource(appointment.statusEnum.labelRes),
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                             color = statusColor

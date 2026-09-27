@@ -43,6 +43,20 @@ class HealthRecordEnumLabelsTest {
     }
 
     @Test
+    fun `visit, family access, appointment and invoice enums are labelled too`() {
+        assertEveryConstantLabelled(EncounterType.entries, "encounter_type") { it.labelRes }
+        assertEveryConstantLabelled(EncounterStatus.entries, "encounter_status") { it.labelRes }
+        assertEveryConstantLabelled(DischargeDisposition.entries, "discharge_disposition") { it.labelRes }
+        assertEveryConstantLabelled(ProxyPermission.entries, "proxy_permission") { it.labelRes }
+        assertEveryConstantLabelled(ProxyStatus.entries, "proxy_status") { it.labelRes }
+        assertEveryConstantLabelled(AppointmentStatus.entries, "appointment_status") { it.labelRes }
+        assertEveryConstantLabelled(InvoiceStatus.entries, "invoice_status") { it.labelRes }
+        assertEquals(AppointmentStatus.NO_SHOW, AppointmentStatus.fromWire("NO_SHOW"))
+        assertEquals("Absent", strings.getValue("values-fr")["appointment_status_no_show"])
+        assertEquals("Partiellement payée", strings.getValue("values-fr")["invoice_status_partially_paid"])
+    }
+
+    @Test
     fun `the two values the tasklist caught read as the portal words them`() {
         val en = strings.getValue("values")
         val fr = strings.getValue("values-fr")

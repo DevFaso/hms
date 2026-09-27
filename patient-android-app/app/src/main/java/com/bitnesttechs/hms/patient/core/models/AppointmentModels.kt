@@ -25,8 +25,7 @@ data class AppointmentDto(
     @Json(name = "preCheckedIn") val preCheckedIn: Boolean? = null,
     @Json(name = "preCheckinTimestamp") val preCheckinTimestamp: String? = null
 ) : java.io.Serializable {
-    val statusDisplay: String get() = status.replace("_", " ").lowercase()
-        .replaceFirstChar { it.uppercase() }
+    val statusEnum: AppointmentStatus get() = AppointmentStatus.fromWire(status)
     /** Display time range like "10:00 - 10:30" */
     /** Length of the booked slot; 30 minutes when the record carries no times. */
     val durationMinutes: Long get() {

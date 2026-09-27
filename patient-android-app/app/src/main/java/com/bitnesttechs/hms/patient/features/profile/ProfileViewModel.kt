@@ -1,5 +1,8 @@
 package com.bitnesttechs.hms.patient.features.profile
 
+import com.bitnesttechs.hms.patient.core.network.FailureText
+import com.bitnesttechs.hms.patient.core.network.AppText
+import com.bitnesttechs.hms.patient.R
 import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
@@ -65,14 +68,14 @@ class ProfileViewModel @Inject constructor(
             try {
                 val resp = api.updateProfile(update)
                 if (resp.isSuccessful) {
-                    _saveResult.value = "Profile updated successfully"
+                    _saveResult.value = AppText.get(R.string.profile_updated)
                     // Re-fetch the full profile to ensure all fields are in sync
                     load()
                 } else {
-                    _saveResult.value = "Update failed: ${resp.code()}"
+                    _saveResult.value = AppText.get(R.string.profile_update_failed, FailureText.http(resp.code()))
                 }
             } catch (e: Exception) {
-                _saveResult.value = "Error: ${e.message}"
+                _saveResult.value = AppText.get(R.string.profile_update_failed, FailureText.of(e))
             }
         }
     }
@@ -93,12 +96,12 @@ class ProfileViewModel @Inject constructor(
                 if (resp.isSuccessful) {
                     val imageUrl = resp.body()?.imageUrl
                     _profileImageUrl.value = imageUrl
-                    _saveResult.value = "Profile photo updated"
+                    _saveResult.value = AppText.get(R.string.profile_photo_updated)
                 } else {
-                    _saveResult.value = "Photo upload failed: ${resp.code()}"
+                    _saveResult.value = AppText.get(R.string.profile_photo_failed, FailureText.http(resp.code()))
                 }
             } catch (e: Exception) {
-                _saveResult.value = "Error: ${e.message}"
+                _saveResult.value = AppText.get(R.string.profile_photo_failed, FailureText.of(e))
             }
         }
     }

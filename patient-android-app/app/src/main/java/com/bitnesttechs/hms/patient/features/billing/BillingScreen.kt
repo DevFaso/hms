@@ -169,7 +169,7 @@ private fun InvoiceCard(invoice: InvoiceDto, payEnabled: Boolean, onPay: () -> U
                 verticalAlignment = Alignment.CenterVertically) {
                 Text(invoice.invoiceNumber, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 StatusBadge(
-                    text = invoice.statusDisplay,
+                    text = stringResource(invoice.statusEnum.labelRes),
                     color = when {
                         invoice.isPaid -> SuccessGreen
                         invoice.isCancelled -> NeutralGrey

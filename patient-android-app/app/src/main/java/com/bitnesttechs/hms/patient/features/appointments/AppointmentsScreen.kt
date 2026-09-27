@@ -179,7 +179,7 @@ fun AppointmentsScreen(
                                 }
                             }
                             StatusBadge(
-                                text = appt.statusDisplay,
+                                text = stringResource(appt.statusEnum.labelRes),
                                 color = when (appt.status.uppercase()) {
                                     "SCHEDULED" -> BrandPrimary
                                     "COMPLETED" -> SuccessGreen

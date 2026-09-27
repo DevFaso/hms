@@ -1,5 +1,8 @@
 package com.bitnesttechs.hms.patient.features.familyaccess
 
+import com.bitnesttechs.hms.patient.ui.theme.StatusNegativeOnLight
+import com.bitnesttechs.hms.patient.core.network.FailureText
+import com.bitnesttechs.hms.patient.core.network.AppText
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -70,10 +73,10 @@ class ProxyDataViewModel @Inject constructor(
                         val resp = api.getProxyRecords(patientId)
                         healthSummary.value = resp.body()?.data
                     }
-                    else -> error.value = "Unsupported permission: $permission"
+                    else -> error.value = AppText.get(R.string.proxy_data_unsupported)
                 }
             } catch (e: Exception) {
-                error.value = e.message ?: "Failed to load data"
+                error.value = AppText.get(R.string.proxy_data_load_failed, FailureText.of(e))
             } finally {
                 isLoading.value = false
             }
@@ -98,12 +101,12 @@ fun ProxyDataScreen(
     }
 
     val title = when (permission.uppercase()) {
-        "VIEW_APPOINTMENTS" -> "Appointments"
-        "VIEW_MEDICATIONS" -> "Medications"
-        "VIEW_LAB_RESULTS" -> "Lab Results"
-        "VIEW_BILLING" -> "Billing"
-        "VIEW_RECORDS" -> "Health Records"
-        else -> "Data"
+        "VIEW_APPOINTMENTS" -> stringResource(R.string.appointments)
+        "VIEW_MEDICATIONS" -> stringResource(R.string.medications)
+        "VIEW_LAB_RESULTS" -> stringResource(R.string.lab_results)
+        "VIEW_BILLING" -> stringResource(R.string.billing)
+        "VIEW_RECORDS" -> stringResource(R.string.health_records)
+        else -> stringResource(R.string.proxy_data_title)
     }
 
     Scaffold(
@@ -121,7 +124,7 @@ fun ProxyDataScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -141,7 +144,7 @@ fun ProxyDataScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.ErrorOutline, null, Modifier.size(48.dp), tint = ErrorRed)
                         Spacer(Modifier.height(8.dp))
-                        Text(error ?: "Error", color = ErrorRed)
+                        Text(error ?: stringResource(R.string.error_generic), color = StatusNegativeOnLight)
                     }
                 }
             }
@@ -153,7 +156,7 @@ fun ProxyDataScreen(
                     "VIEW_BILLING" -> BillingList(viewModel, padding)
                     "VIEW_RECORDS" -> RecordsSummary(viewModel, padding)
                     else -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                        Text("Unsupported view")
+                        Text(stringResource(R.string.proxy_data_unsupported))
                     }
                 }
             }
@@ -165,7 +168,7 @@ fun ProxyDataScreen(
 private fun AppointmentsList(viewModel: ProxyDataViewModel, padding: PaddingValues) {
     val appointments by viewModel.appointments.collectAsState()
     if (appointments.isEmpty()) {
-        EmptyState("No appointments found", Icons.Default.CalendarMonth, padding)
+        EmptyState(stringResource(R.string.proxy_no_appointments), Icons.Default.CalendarMonth, padding)
         return
     }
     LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -182,8 +185,8 @@ private fun AppointmentsList(viewModel: ProxyDataViewModel, padding: PaddingValu
                         }
                     }
                     Spacer(Modifier.height(4.dp))
-                    appt.staffName?.let { Text("Dr. $it", style = MaterialTheme.typography.bodyMedium) }
-                    Text(appt.statusDisplay, style = MaterialTheme.typography.labelSmall, color = statusColor(appt.status))
+                    appt.staffName?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                    Text(stringResource(appt.statusEnum.labelRes), style = MaterialTheme.typography.labelSmall, color = statusColor(appt.status))
                     appt.reason?.let {
                         Spacer(Modifier.height(4.dp))
                         Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -198,7 +201,7 @@ private fun AppointmentsList(viewModel: ProxyDataViewModel, padding: PaddingValu
 private fun MedicationsList(viewModel: ProxyDataViewModel, padding: PaddingValues) {
     val medications by viewModel.medications.collectAsState()
     if (medications.isEmpty()) {
-        EmptyState("No medications found", Icons.Default.Medication, padding)
+        EmptyState(stringResource(R.string.proxy_no_medications), Icons.Default.Medication, padding)
         return
     }
     LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -222,7 +225,7 @@ private fun MedicationsList(viewModel: ProxyDataViewModel, padding: PaddingValue
 private fun LabResultsList(viewModel: ProxyDataViewModel, padding: PaddingValues) {
     val results by viewModel.labResults.collectAsState()
     if (results.isEmpty()) {
-        EmptyState("No lab results found", Icons.Default.Science, padding)
+        EmptyState(stringResource(R.string.proxy_no_lab_results), Icons.Default.Science, padding)
         return
     }
     LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -253,7 +256,7 @@ private fun LabResultsList(viewModel: ProxyDataViewModel, padding: PaddingValues
 private fun BillingList(viewModel: ProxyDataViewModel, padding: PaddingValues) {
     val invoices by viewModel.invoices.collectAsState()
     if (invoices.isEmpty()) {
-        EmptyState("No billing records found", Icons.Default.Receipt, padding)
+        EmptyState(stringResource(R.string.proxy_no_billing), Icons.Default.Receipt, padding)
         return
     }
     LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -265,13 +268,13 @@ private fun BillingList(viewModel: ProxyDataViewModel, padding: PaddingValues) {
                         Spacer(Modifier.width(8.dp))
                         Text(inv.invoiceNumber, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.weight(1f))
-                        Text(inv.status, style = MaterialTheme.typography.labelSmall, color = statusColor(inv.status))
+                        Text(stringResource(inv.statusEnum.labelRes), style = MaterialTheme.typography.labelSmall, color = statusColor(inv.status))
                     }
                     Spacer(Modifier.height(4.dp))
                     Row {
-                        Text("Total: $${inv.totalAmount}", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.proxy_invoice_total, money(inv.totalAmount)), style = MaterialTheme.typography.bodyMedium)
                         Spacer(Modifier.width(16.dp))
-                        Text("Balance: $${inv.balanceDue}", style = MaterialTheme.typography.bodyMedium, color = if (inv.balanceDue > 0) ErrorRed else SuccessGreen)
+                        Text(stringResource(R.string.proxy_invoice_balance, money(inv.balanceDue)), style = MaterialTheme.typography.bodyMedium, color = if (inv.balanceDue > 0) ErrorRed else SuccessGreen)
                     }
                     inv.invoiceDate?.let {
                         Text(it.take(10), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -286,7 +289,7 @@ private fun BillingList(viewModel: ProxyDataViewModel, padding: PaddingValues) {
 private fun RecordsSummary(viewModel: ProxyDataViewModel, padding: PaddingValues) {
     val summary by viewModel.healthSummary.collectAsState()
     if (summary == null) {
-        EmptyState("No records available", Icons.Default.Visibility, padding)
+        EmptyState(stringResource(R.string.proxy_no_records), Icons.Default.Visibility, padding)
         return
     }
     val s = summary!!
@@ -294,7 +297,7 @@ private fun RecordsSummary(viewModel: ProxyDataViewModel, padding: PaddingValues
         // Allergies
         if (!s.allergies.isNullOrEmpty()) {
             item {
-                SectionCard("Allergies", Icons.Default.Warning) {
+                SectionCard(stringResource(R.string.allergies), Icons.Default.Warning) {
                     s.allergies!!.forEach { allergy ->
                         Text("• $allergy", style = MaterialTheme.typography.bodyMedium, color = ErrorRed)
                     }
@@ -304,7 +307,7 @@ private fun RecordsSummary(viewModel: ProxyDataViewModel, padding: PaddingValues
         // Chronic conditions
         if (!s.chronicConditions.isNullOrEmpty()) {
             item {
-                SectionCard("Chronic Conditions", Icons.Default.MonitorHeart) {
+                SectionCard(stringResource(R.string.chronic_conditions), Icons.Default.MonitorHeart) {
                     s.chronicConditions!!.forEach { condition ->
                         Text("• $condition", style = MaterialTheme.typography.bodyMedium)
                     }
@@ -314,7 +317,7 @@ private fun RecordsSummary(viewModel: ProxyDataViewModel, padding: PaddingValues
         // Active diagnoses
         if (!s.activeDiagnoses.isNullOrEmpty()) {
             item {
-                SectionCard("Active Diagnoses", Icons.Default.MedicalInformation) {
+                SectionCard(stringResource(R.string.active_diagnoses), Icons.Default.MedicalInformation) {
                     s.activeDiagnoses!!.forEach { dx ->
                         Text("• $dx", style = MaterialTheme.typography.bodyMedium)
                     }
@@ -325,10 +328,10 @@ private fun RecordsSummary(viewModel: ProxyDataViewModel, padding: PaddingValues
         item {
             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("Summary", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.proxy_summary), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(8.dp))
-                    Text("Medications: ${s.medicationCount}", style = MaterialTheme.typography.bodyMedium)
-                    Text("Lab Results: ${s.labResultCount}", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.proxy_medication_count, s.medicationCount), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.proxy_lab_result_count, s.labResultCount), style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }
@@ -360,6 +363,9 @@ private fun EmptyState(message: String, icon: androidx.compose.ui.graphics.vecto
         }
     }
 }
+
+/** The same amount format as the Billing screen (the proxy view printed "$"). */
+private fun money(amount: Double): String = String.format(java.util.Locale.getDefault(), "%,.0f FCFA", amount)
 
 private fun statusColor(status: String): Color {
     return when (status.uppercase()) {

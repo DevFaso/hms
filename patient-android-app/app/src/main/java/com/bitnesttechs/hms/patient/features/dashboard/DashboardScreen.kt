@@ -357,7 +357,7 @@ fun AppointmentRow(appt: AppointmentDto) {
             Text(appt.departmentName ?: "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("${appt.appointmentDate} ${appt.timeDisplay ?: ""}".trim(), style = MaterialTheme.typography.bodySmall)
         }
-        StatusBadge(appt.statusDisplay)
+        StatusBadge(stringResource(appt.statusEnum.labelRes))
     }
     HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
 }
