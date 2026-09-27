@@ -212,9 +212,18 @@ struct LoginView: View {
                             .frame(height: 0.5)
                             .padding(.horizontal, 20)
 
-                        // Forgot password
+                        // Forgot password — was a button with an empty action.
                         Button("forgot_password".localized) {
-                            // TODO: navigate to password reset
+                            vm.showForgotPassword = true
+                        }
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(Color("BrandPrimaryText"))
+
+                        // The portal offers this on its sign-in page too: a
+                        // login refused because the account is not active yet
+                        // has nowhere else to go.
+                        Button("resend_activation".localized) {
+                            vm.showActivation = true
                         }
                         .font(.footnote.weight(.medium))
                         .foregroundStyle(Color("BrandPrimaryText"))
@@ -230,6 +239,15 @@ struct LoginView: View {
             }
         }
         .onTapGesture { focusedField = nil }
+        .sheet(isPresented: $vm.showForgotPassword) {
+            ForgotPasswordView()
+        }
+        .sheet(isPresented: $vm.showActivation) {
+            AccountActivationView()
+        }
+        .sheet(item: $vm.mfaChallenge, onDismiss: { vm.cancelMfa() }) { challenge in
+            MfaChallengeView(vm: vm, challenge: challenge)
+        }
     }
 
     /// Returns the currently presented top `UIViewController` for AppAuth to

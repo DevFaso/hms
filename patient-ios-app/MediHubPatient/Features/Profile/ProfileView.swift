@@ -12,6 +12,10 @@ struct ProfileView: View {
     @State private var showError = false
     @State private var showLanguagePicker = false
 
+    private var isPasswordSession: Bool {
+        KeychainHelper.shared.oidcAccessToken == nil && KeychainHelper.shared.accessToken != nil
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -126,6 +130,16 @@ struct ProfileView: View {
                             }
                             NavigationLink { FamilyAccessView() } label: {
                                 Label("family_access".localized, systemImage: "person.2.circle")
+                            }
+                        }
+
+                        // Security — a password session only: an SSO
+                        // patient's password is Keycloak's, not ours.
+                        if isPasswordSession {
+                            Section("security".localized) {
+                                NavigationLink { ChangePasswordView() } label: {
+                                    Label("change_password".localized, systemImage: "key")
+                                }
                             }
                         }
 
