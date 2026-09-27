@@ -55,7 +55,7 @@ describe('PatientSnapshotDrawerComponent — server-stamped type badges', () => 
     translate.setTranslation('fr', {
       PORTAL: {
         ENUM: {
-          SNAPSHOT_ITEM_TYPE: { VITALS: 'Constantes', LAB: 'Laboratoire' },
+          ORDER_SOURCE_TYPE: { VITALS: 'Constantes', LAB: 'Laboratoire' },
           ENCOUNTER_TYPE: { INPATIENT: 'Hospitalisation' },
           JOB_TITLE: { MIDWIFE: 'Sage-femme' },
         },

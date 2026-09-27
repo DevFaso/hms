@@ -5421,18 +5421,9 @@
         "PAIN": "Pain",
         "PSYCHOSOCIAL": "Psychosocial"
       },
-      "SNAPSHOT_ITEM_TYPE": {
-        "LAB": "Lab",
-        "VITALS": "Vitals"
-      },
       "VITAL_TASK_TYPE": {
         "FULL_SET": "Full Set",
         "ROUTINE": "Routine"
-      },
-      "ORDER_TASK_TYPE": {
-        "IMAGING": "Imaging",
-        "LAB": "Lab",
-        "PROCEDURE": "Procedure"
       },
       "NEWBORN_ALERT_TYPE": {
         "APGAR": "Apgar",
@@ -5494,6 +5485,12 @@
       "PRESCRIPTION_DISPATCH_STATUS": {
         "SENT": "Sent",
         "FAILED": "Failed"
+      },
+      "ORDER_SOURCE_TYPE": {
+        "IMAGING": "Imaging",
+        "LAB": "Lab",
+        "PROCEDURE": "Procedure",
+        "VITALS": "Vitals"
       }
     },
     "DOCUMENTS": {

@@ -101,8 +101,8 @@
   "notificationType": {
     "reason": "NOT the NotificationType enum, which governs notification PREFERENCES. The field the portal pipes is Notification.type, a free String column (length 40, nullable) that NotificationServiceImpl.createNotification writes from whatever literal its caller passes, across 13 call sites: APPOINTMENT_REMINDER, CRITICAL_IMAGING_FINDING, CRITICAL_IMAGING_FINDING_ESCALATION, CRITICAL_LAB_RESULT, CRITICAL_LAB_RESULT_ESCALATION, DISCHARGE_SUMMARY, LICENSE_EXPIRY, MEDICATION_REFILL, POSITIVE_CULTURE_RESULT, PRO_CRITICAL_ITEM, PRO_CRITICAL_ITEM_ESCALATION, PRO_SCREEN_POSITIVE, REORDER_ALERT — and null, which the two-argument overload passes. Ten of those are not enum constants, so declaring the enum here made the coverage gate certify eight values the column may never hold while the ten it does hold went unkeyed."
   },
-  "orderTaskType": {
-    "reason": "no enum holds it: NurseTaskServiceImpl stamps a fixed token per order source on the nurse station board — LAB, IMAGING, PROCEDURE. All three were the English words Lab, Imaging and Procedure until the tranche that keyed them."
+  "orderSourceType": {
+    "reason": "no enum holds it: a fixed token per source, stamped by two services onto one badge vocabulary — PatientSnapshotServiceImpl writes VITALS on every recent-vital row and LAB on every pending-order row of the snapshot drawer (only lab orders are collected there), and NurseTaskServiceImpl writes LAB, IMAGING or PROCEDURE per order source on the nurse station board. These were two groups (snapshotItemType, orderTaskType) keying LAB twice until #664 round 3 merged them. Every value was an English word (Vitals, Lab, Imaging, Procedure) until the tranche that tokenized them; a wire value the portal must render has to be a token, not a word the server already chose the language for."
   },
   "organizationType": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/OrganizationType.java"
@@ -156,9 +156,6 @@
   },
   "signatureStatus": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/SignatureStatus.java"
-  },
-  "snapshotItemType": {
-    "reason": "no enum holds it: PatientSnapshotServiceImpl stamps a fixed token per section of the drawer — VITALS on every recent-vital row and LAB on every pending-order row, because only lab orders are collected. Both were the English words Vitals and Lab until the tranche that keyed them; a wire value the portal must render has to be a token, not a word the server already chose the language for."
   },
   "status": {
     "reason": "a deliberate shared pool across 13 call sites whose DTOs disagree, plus two vocabularies a service INVENTS and no enum holds: PatientMedicationServiceImpl.resolveStatus (ACTIVE / COMPLETED / DISCONTINUED / ON_HOLD) and PatientLabResultServiceImpl.resolveStatus (PENDING / NORMAL / CRITICAL / ABNORMAL_HIGH / ABNORMAL_LOW). A 14th caller was added deliberately: the chart-review TIMELINE pill, whose one badge carries all six ChartReviewServiceImpl sections — Encounter status, a note's SIGNED/DRAFT, AbnormalFlag, Prescription status, imaging report-status-or-order-status, and ProcedureOrder status — so the pool now holds every value those six can emit, each copied from the group that owns it. Every OTHER site whose field really carries one enum has been pointed at that enum's own domain instead — if you are about to add another `status` call, check first whether yours is one of those."

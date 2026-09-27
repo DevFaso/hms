@@ -75,6 +75,16 @@ describe('EnumLabelService', () => {
     expect(service.transform('BLOOD_BANK_OFFICER', 'role')).toBe('Blood Bank Officer');
   });
 
+  it('an unported key in a #663 domain gets the curated English, not the prettifier', () => {
+    // No bundle loaded: tier 1 misses, so this is the LABELS net. Without a
+    // procedureOrderStatus group the value fell to Title Case — "Pre Op
+    // Clearance Pending", hyphen lost.
+    expect(service.transform('PRE_OP_CLEARANCE_PENDING', 'procedureOrderStatus')).toBe(
+      'Pre-Op Clearance Pending',
+    );
+    expect(service.transform('ENTERED_IN_ERROR', 'immunizationStatus')).toBe('Entered in Error');
+  });
+
   it("returns '' for a blank value so a template fallback can take over", () => {
     expect(service.transform(null, 'role')).toBe('');
     expect(service.transform(undefined, 'role')).toBe('');

@@ -5421,18 +5421,9 @@
         "PAIN": "Dolor",
         "PSYCHOSOCIAL": "Psicosocial"
       },
-      "SNAPSHOT_ITEM_TYPE": {
-        "LAB": "Laboratorio",
-        "VITALS": "Constantes vitales"
-      },
       "VITAL_TASK_TYPE": {
         "FULL_SET": "Conjunto completo",
         "ROUTINE": "Rutina"
-      },
-      "ORDER_TASK_TYPE": {
-        "IMAGING": "Imagenología",
-        "LAB": "Laboratorio",
-        "PROCEDURE": "Procedimiento"
       },
       "NEWBORN_ALERT_TYPE": {
         "APGAR": "Apgar",
@@ -5494,6 +5485,12 @@
       "PRESCRIPTION_DISPATCH_STATUS": {
         "SENT": "Enviada",
         "FAILED": "Fallida"
+      },
+      "ORDER_SOURCE_TYPE": {
+        "IMAGING": "Imagenología",
+        "LAB": "Laboratorio",
+        "PROCEDURE": "Procedimiento",
+        "VITALS": "Constantes vitales"
       }
     },
     "DOCUMENTS": {
