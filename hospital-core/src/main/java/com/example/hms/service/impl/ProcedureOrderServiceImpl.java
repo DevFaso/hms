@@ -124,13 +124,22 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
     public ProcedureOrderResponseDTO getProcedureOrder(UUID orderId) {
         ProcedureOrder order = procedureOrderRepository.findById(orderId)
             .orElseThrow(() -> procedureOrderNotFound(orderId));
-        // A patient caller reads only their own: another patient's order
-        // answers exactly as a missing id does, and before the hospital check
-        // in requireInScope, which can answer differently.
-        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.PROCEDURE_ORDER_READS, order.getPatient())) {
+        // A patient caller is bounded by ownership, not by a hospital, as on
+        // the encounter, prescription and ultrasound reads: their own order
+        // wherever it was written, another patient's exactly as a missing id,
+        // and before the hospital check, which can answer differently. Staff
+        // are held to their hospital — and, staff who are also patients
+        // (#754's rule), read their own order elsewhere as its patient.
+        if (subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.PROCEDURE_ORDER_READS)) {
+            if (!subjectReadGuard.callerOwns(order.getPatient())) {
+                throw procedureOrderNotFound(orderId);
+            }
+            return toResponseDTO(order);
+        }
+        if (!inScope(order) && !subjectReadGuard.ownsAsItsPatient(order.getPatient())) {
             throw procedureOrderNotFound(orderId);
         }
-        return toResponseDTO(requireInScope(order));
+        return toResponseDTO(order);
     }
 
     @Override
@@ -141,6 +150,14 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         // before the hospital lookup below, which can answer differently.
         if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.PROCEDURE_ORDER_READS, patientId)) {
             return List.of();
+        }
+        if (subjectReadGuard.ownsAsItsPatient(patientId)) {
+            // Their own record, read as its patient wherever it was written
+            // (a patient, or staff who are also this patient, #754's rule).
+            // Reading one's own record is not a disclosure: no reach recorded.
+            return procedureOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId).stream()
+                .map(this::toResponseDTO)
+                .toList();
         }
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         List<ProcedureOrder> orders;
@@ -284,12 +301,17 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
 
     /** A procedure order outside the caller's active hospital answers as a missing one. */
     private ProcedureOrder requireInScope(ProcedureOrder order) {
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        if (activeHospitalId != null && order.getHospital() != null
-                && !activeHospitalId.equals(order.getHospital().getId())) {
+        if (!inScope(order)) {
             throw procedureOrderNotFound(order.getId());
         }
         return order;
+    }
+
+    /** Is the order at the caller's active hospital (a null scope reaches every hospital)? */
+    private boolean inScope(ProcedureOrder order) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        return activeHospitalId == null || order.getHospital() == null
+            || activeHospitalId.equals(order.getHospital().getId());
     }
 
     private static ResourceNotFoundException procedureOrderNotFound(UUID orderId) {

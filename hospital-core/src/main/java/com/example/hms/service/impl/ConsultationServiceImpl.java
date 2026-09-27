@@ -174,6 +174,16 @@ public class ConsultationServiceImpl implements ConsultationService {
         if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.CONSULTATIONS_BY_PATIENT, patientId)) {
             return List.of();
         }
+        if (subjectReadGuard.ownsAsItsPatient(patientId)) {
+            // Their own record, read as its patient wherever it was written: a
+            // patient, or staff who are also this patient (#754's rule) — which
+            // is what /me/patient/consultations serves a nurse who was a
+            // patient at another hospital; the staff branch below held her to
+            // the hospital she works at. Not a disclosure: no reach recorded.
+            return consultationRepository.findByPatient_IdOrderByRequestedAtDesc(patientId).stream()
+                .map(this::toResponseDTO)
+                .toList();
+        }
         // ── Tenant isolation ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId == null) {

@@ -148,15 +148,23 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         UltrasoundOrder order = orderRepository.findById(orderId)
             .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_PREFIX + orderId));
         // A patient caller reads only their own; staff read their active
-        // hospital's. Either refusal answers exactly as a missing id does.
-        boolean patientOnly = subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.ULTRASOUND_READS);
-        boolean readable = patientOnly
-            ? subjectReadGuard.callerOwns(order.getPatient())
-            : inStaffScope(order.getHospital());
+        // hospital's, and — staff who are also patients (#754's rule) — their
+        // own order elsewhere, as its patient. Every refusal answers exactly
+        // as a missing id does.
+        boolean asPatient = subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.ULTRASOUND_READS);
+        boolean readable;
+        if (asPatient) {
+            readable = subjectReadGuard.callerOwns(order.getPatient());
+        } else if (inStaffScope(order.getHospital())) {
+            readable = true;
+        } else {
+            asPatient = subjectReadGuard.ownsAsItsPatient(order.getPatient());
+            readable = asPatient;
+        }
         if (!readable) {
             throw new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_PREFIX + orderId);
         }
-        return toOrderResponseDTO(order, patientOnly);
+        return toOrderResponseDTO(order, asPatient);
     }
 
     @Override
@@ -182,6 +190,16 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         // before any lookup that could answer differently.
         if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.ULTRASOUND_READS, patientId)) {
             return List.of();
+        }
+        if (subjectReadGuard.ownsAsItsPatient(patientId)) {
+            // Their own record, read as its patient wherever it was written —
+            // a patient, or staff who are also this patient (#754's rule), whom
+            // the staff branch below would hold to the hospital they work at.
+            // Not a disclosure, so no reach is recorded; released reports only.
+            List<UltrasoundOrder> own = status == null
+                ? orderRepository.findAllByPatientId(patientId)
+                : orderRepository.findByPatientIdAndStatus(patientId, status);
+            return own.stream().map(order -> toOrderResponseDTO(order, true)).toList();
         }
         boolean patientOnly = subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.ULTRASOUND_READS);
         HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
@@ -356,7 +374,11 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             return report.isReleasedToPatient()
                 && subjectReadGuard.callerOwns(report.getUltrasoundOrder().getPatient());
         }
-        return inStaffScope(report.getHospital());
+        // Staff who are also patients read their own released report outside
+        // their hospital, as its patient (#754's rule).
+        return inStaffScope(report.getHospital())
+            || (report.isReleasedToPatient()
+                && subjectReadGuard.ownsAsItsPatient(report.getUltrasoundOrder().getPatient()));
     }
 
     /**

@@ -129,6 +129,11 @@ class EncounterServiceImplTest {
 
     @BeforeEach
     void setUpCheckoutDefaults() {
+        // The services ask the one PatientSubjectReadGuard; it is built here over
+        // this class's authUtils and patientRepository so ownership is decided
+        // exactly as before, by those two.
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "subjectReadGuard",
+            new PatientSubjectReadGuard(authUtils, patientRepository));
         lenient().when(dischargeSummaryRepository.findByEncounter_Id(any(UUID.class))).thenReturn(Optional.empty());
         lenient().when(dischargeSummaryRepository.save(any(DischargeSummary.class))).thenAnswer(inv -> inv.getArgument(0));
     }

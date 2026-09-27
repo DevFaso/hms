@@ -15,12 +15,13 @@ import java.util.UUID;
  * "A patient caller only reads their own", for the reads that take a patient
  * id or the id of a row a patient owns.
  *
- * <p>The encounter and prescription reads carry this rule inline
+ * <p>The one ownership check for every patient-subject read: the reads listed
+ * on {@link PatientSubjectReaderRoles}, which had none (a patient could pass
+ * any other patient's id and be served), and the encounter and prescription
+ * reads, which used to carry their own copies of it
  * ({@code EncounterServiceImpl.requireEncounterReadable},
- * {@code PrescriptionServiceImpl}); the reads listed on
- * {@link PatientSubjectReaderRoles} had none, so a patient could pass any other
- * patient's id and be served. This is the same test, written once so those
- * endpoints do not each grow a copy:
+ * {@code PrescriptionServiceImpl.getPrescriptionById}). Written once so no
+ * endpoint grows a copy:
  * <ul>
  *   <li><b>who is a patient here</b> is {@link ReaderRolePredicates#isPatientOnly}
  *       against the endpoint's own set — never a union, and never
@@ -102,6 +103,41 @@ public class PatientSubjectReadGuard {
      */
     public boolean callerOwns(Patient subject) {
         return subject != null && ownsPatientId(subject.getId());
+    }
+
+    /**
+     * #754's rule for staff who are also patients: may a caller who is NOT
+     * patient-only on this endpoint read this row as its patient anyway?
+     * Only when they hold {@code ROLE_PATIENT} AND own the row. A link to a
+     * patient record is a fact about the account, not a grant: a nurse linked
+     * to a patient row whose {@code ROLE_PATIENT} was never granted, or was
+     * revoked, must not read that row across hospitals through her clinical
+     * role.
+     *
+     * <p>Ask it only on an endpoint whose annotation admits
+     * {@code ROLE_PATIENT} — every set on {@link PatientSubjectReaderRoles}
+     * is one — and only after the staff boundary has refused, so a clinician
+     * reading inside their hospital never pays the ownership query. A caller
+     * admitted this way reads as the patient: the caller serves the patient
+     * copy (released reports only, no clinician-only fields).
+     *
+     * <p>{@code RoleExpansion.SUPER_ADMIN_INHERITS} gives every password-path
+     * super-admin {@code ROLE_PATIENT}; through this they gain only rows their
+     * own account owns, as {@link ReaderRolePredicates#holdsPatientRole}
+     * records.
+     */
+    public boolean ownsAsItsPatient(Patient subject) {
+        return holdsPatientRole() && callerOwns(subject);
+    }
+
+    /** {@link #ownsAsItsPatient(Patient)} for a read handed a patient id. */
+    public boolean ownsAsItsPatient(UUID subjectPatientId) {
+        return holdsPatientRole() && ownsPatientId(subjectPatientId);
+    }
+
+    /** Does the caller hold {@code ROLE_PATIENT} at all (patient-only or not)? */
+    public boolean holdsPatientRole() {
+        return ReaderRolePredicates.holdsPatientRole(SecurityContextHolder.getContext().getAuthentication());
     }
 
     private boolean ownsPatientId(UUID subjectPatientId) {
