@@ -39,6 +39,7 @@ import java.util.Set;
 public class ImagingOrderServiceImpl implements ImagingOrderService {
 
     private static final int DEFAULT_DUPLICATE_LOOKBACK_DAYS = 30;
+    private static final String ORDER_NOT_FOUND = "Imaging order not found with ID: ";
 
     /**
      * Self-reference for proxy-routed internal calls
@@ -70,6 +71,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
+        requireActingHospital(request.getHospitalId());
 
         ImagingOrder imagingOrder = imagingOrderMapper.toEntity(request, patient, hospital);
         imagingOrder.setOrderedAt(LocalDateTime.now());
@@ -92,7 +94,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
     @Override
     public ImagingOrderResponseDTO updateOrder(UUID orderId, ImagingOrderRequestDTO request) {
-        ImagingOrder order = getOrderEntity(orderId);
+        ImagingOrder order = getOrderInScope(orderId);
 
         if (request.getPatientId() != null && (order.getPatient() == null || !request.getPatientId().equals(order.getPatient().getId()))) {
             Patient patient = patientRepository.findById(request.getPatientId())
@@ -101,8 +103,13 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         }
 
         if (request.getHospitalId() != null && (order.getHospital() == null || !request.getHospitalId().equals(order.getHospital().getId()))) {
+            // An order is never moved away from the hospital the caller acts
+            // at: the portal only echoes the order's own hospital back, so a
+            // different one is refused exactly as a missing hospital. A
+            // verified super-admin in global view keeps the old behaviour.
             Hospital hospital = hospitalRepository.findById(request.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
+            requireActingHospital(request.getHospitalId());
             order.setHospital(hospital);
         }
 
@@ -128,7 +135,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
     @Override
     public ImagingOrderResponseDTO updateOrderStatus(UUID orderId, ImagingOrderStatusUpdateRequestDTO request) {
-        ImagingOrder order = getOrderEntity(orderId);
+        ImagingOrder order = getOrderInScope(orderId);
 
         order.setStatus(request.getStatus());
         order.setScheduledDate(request.getScheduledDate());
@@ -153,7 +160,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
     @Override
     public ImagingOrderResponseDTO captureProviderSignature(UUID orderId, ImagingOrderSignatureRequestDTO request) {
-        ImagingOrder order = getOrderEntity(orderId);
+        ImagingOrder order = getOrderInScope(orderId);
         order.setOrderingProviderName(request.getProviderName());
         order.setOrderingProviderNpi(request.getProviderNpi());
         order.setOrderingProviderUserId(request.getProviderUserId());
@@ -171,14 +178,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     @Override
     @Transactional(readOnly = true)
     public ImagingOrderResponseDTO getOrder(UUID orderId) {
-        ImagingOrder order = getOrderEntity(orderId);
-        // ── Tenant isolation ──
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        if (activeHospitalId != null && order.getHospital() != null
-                && !activeHospitalId.equals(order.getHospital().getId())) {
-            throw new ResourceNotFoundException("Imaging order not found with ID: " + orderId);
-        }
-        return imagingOrderMapper.toResponseDTO(order);
+        return imagingOrderMapper.toResponseDTO(getOrderInScope(orderId));
     }
 
     @Override
@@ -265,7 +265,37 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
     private ImagingOrder getOrderEntity(UUID orderId) {
         return imagingOrderRepository.findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException("Imaging order not found with ID: " + orderId));
+            .orElseThrow(() -> new ResourceNotFoundException(ORDER_NOT_FOUND + orderId));
+    }
+
+    /**
+     * ── Tenant isolation ── the order, only when it belongs to the hospital
+     * the caller acts at. The scoped {@code findById} is not enough on its
+     * own: on the password login path the repository filter ORs in every
+     * organisation the caller holds an assignment under, so a sibling
+     * hospital's order loads. A foreign order is answered exactly as a
+     * missing one. {@code requireActiveHospitalId} is null only for a
+     * verified super-admin in global view, who keeps unrestricted access.
+     */
+    private ImagingOrder getOrderInScope(UUID orderId) {
+        ImagingOrder order = getOrderEntity(orderId);
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && order.getHospital() != null
+                && !activeHospitalId.equals(order.getHospital().getId())) {
+            throw new ResourceNotFoundException(ORDER_NOT_FOUND + orderId);
+        }
+        return order;
+    }
+
+    /**
+     * A write may only place an order at the hospital the caller acts at; any
+     * other hospital is answered exactly as a missing one.
+     */
+    private void requireActingHospital(UUID hospitalId) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && !activeHospitalId.equals(hospitalId)) {
+            throw new ResourceNotFoundException("hospital.notFound", hospitalId);
+        }
     }
 
     private List<ImagingOrder> loadDuplicateMatches(UUID patientId, ImagingModality modality, String bodyRegion, Integer lookbackDays) {
