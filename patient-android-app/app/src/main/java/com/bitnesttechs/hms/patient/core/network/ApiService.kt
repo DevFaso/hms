@@ -21,8 +21,16 @@ interface ApiService {
     @GET("auth/session/bootstrap")
     suspend fun getSessionBootstrap(): Response<SessionBootstrapDto>
 
+    /**
+     * Sent with the bearer captured BEFORE the session was cleared: an
+     * explicit Authorization header makes AuthInterceptor pass the request
+     * through untouched and skip its refresh-on-401 path.
+     */
     @POST("auth/logout")
-    suspend fun logout(): Response<ApiResponse<Unit>>
+    suspend fun logout(
+        @Header("Authorization") bearer: String,
+        @Body request: LogoutRequest
+    ): Response<Unit>
 
     // ── Patient Profile ───────────────────────────────────────────────────────
     @GET("me/patient/profile")

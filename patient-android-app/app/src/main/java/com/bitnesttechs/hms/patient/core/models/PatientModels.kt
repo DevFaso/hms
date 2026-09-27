@@ -11,6 +11,12 @@ data class LoginRequest(
     @Json(name = "password") val password: String
 )
 
+/** Body of POST /auth/logout; a null token is omitted (Moshi skips nulls). */
+@JsonClass(generateAdapter = true)
+data class LogoutRequest(
+    @Json(name = "refreshToken") val refreshToken: String? = null
+)
+
 @JsonClass(generateAdapter = true)
 data class RefreshTokenRequest(
     @Json(name = "refreshToken") val refreshToken: String

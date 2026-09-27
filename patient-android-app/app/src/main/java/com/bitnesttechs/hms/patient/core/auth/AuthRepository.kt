@@ -3,7 +3,11 @@ package com.bitnesttechs.hms.patient.core.auth
 import androidx.annotation.StringRes
 import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.models.*
+import com.bitnesttechs.hms.patient.core.di.ApplicationScope
 import com.bitnesttechs.hms.patient.core.network.ApiService
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,7 +28,9 @@ sealed class AuthResult {
 @Singleton
 class AuthRepository @Inject constructor(
     private val api: ApiService,
-    private val tokenStorage: TokenStorage
+    private val tokenStorage: TokenStorage,
+    private val keycloak: KeycloakAuthService,
+    @ApplicationScope private val appScope: CoroutineScope
 ) {
     private val _currentUser = MutableStateFlow<UserDto?>(null)
     val currentUser: StateFlow<UserDto?> = _currentUser.asStateFlow()
@@ -135,10 +141,55 @@ class AuthRepository @Inject constructor(
         }
     }
 
+    /**
+     * Ends the session on the device at once and on the server as far as it
+     * can be reached.
+     *
+     * The tokens are captured BEFORE the local state is cleared and the
+     * server calls carry them explicitly (see [AuthInterceptor]: a request
+     * that brings its own Authorization header never enters the
+     * refresh-on-401 path, so a 401 on the way out cannot loop or resurrect
+     * the session). Local state is cleared whatever the outcome, and the
+     * revocation runs on the application scope so an unreachable server
+     * never holds the patient on the sign-out screen.
+     */
     suspend fun logout() {
-        try { api.logout() } catch (_: Exception) {}
+        val ending = captureSessionEnd()
         tokenStorage.clearAll()
         _currentUser.value = null
+        if (ending != null) appScope.launch { endSessionOnServer(ending) }
+    }
+
+    /** What the server needs to revoke the session, read while it still exists. */
+    internal data class SessionEnd(
+        val bearer: String,
+        /** The HMS refresh token; null for an SSO session, whose token HMS cannot revoke. */
+        val hmsRefreshToken: String?,
+        val keycloakRevocation: KeycloakAuthService.Revocation?
+    )
+
+    internal fun captureSessionEnd(): SessionEnd? {
+        val oidcToken = tokenStorage.oidcAccessToken
+        val accessToken = oidcToken ?: tokenStorage.accessToken ?: return null
+        return SessionEnd(
+            bearer = "Bearer $accessToken",
+            hmsRefreshToken = if (oidcToken == null) tokenStorage.refreshToken else null,
+            keycloakRevocation = if (oidcToken != null) keycloak.pendingRevocation() else null
+        )
+    }
+
+    /**
+     * POST /auth/logout with the captured bearer and refresh token (the server
+     * blacklists both jtis), then, for an SSO session, the refresh token to
+     * Keycloak's revocation endpoint. Every step is best effort and bounded.
+     */
+    internal suspend fun endSessionOnServer(ending: SessionEnd) {
+        withTimeoutOrNull(SERVER_SIGN_OUT_TIMEOUT_MS) {
+            runCatching { api.logout(ending.bearer, LogoutRequest(ending.hmsRefreshToken)) }
+        }
+        ending.keycloakRevocation?.let { revocation ->
+            withTimeoutOrNull(SERVER_SIGN_OUT_TIMEOUT_MS) { runCatching { keycloak.revoke(revocation) } }
+        }
     }
 
     suspend fun loadCurrentUser(): UserDto? {
@@ -157,6 +208,10 @@ class AuthRepository @Inject constructor(
                 user
             } else null
         } catch (_: Exception) { null }
+    }
+
+    private companion object {
+        const val SERVER_SIGN_OUT_TIMEOUT_MS = 15_000L
     }
 
     private fun isPatient(roles: List<String>?): Boolean =

@@ -48,6 +48,14 @@ class AuthInterceptor @Inject constructor(
     }
 
     override fun intercept(chain: Interceptor.Chain): Response {
+        // A request that carries its own bearer (sign-out, which captured the
+        // token before clearing the session) goes out exactly as built: no
+        // token from storage, and no refresh on a 401 — a refresh there would
+        // loop or bring the session it is ending back to life.
+        if (chain.request().header("Authorization") != null) {
+            return chain.proceed(chain.request())
+        }
+
         // Prefer the Keycloak OIDC access token when a Keycloak session is active
         // (KC-3). Falls back to the legacy username/password access token otherwise.
         val oidcToken = tokenStorage.oidcAccessToken
