@@ -25,7 +25,9 @@ Each xcconfig sets five build settings:
   `Release-Dev` uses `https://dev.e-keneya.com/api` (the dev API is served
   same-origin by the portal host; `api.dev.e-keneya.com` has no DNS record),
   `Release-Prod` uses `https://api.e-keneya.com/api`.
-- `MEDIHUB_KEYCLOAK_ISSUER` — full OIDC issuer URL.
+- `MEDIHUB_KEYCLOAK_ISSUER` — full OIDC issuer URL. Written `https:/$()/host/...`:
+  xcconfig treats `//` as the start of a comment, so an unescaped URL is
+  silently cut to `https:` (`XcconfigValueTests` fails the build on one).
 - `MEDIHUB_KEYCLOAK_SSO_ENABLED` — `0` or `1`.
 - `MEDIHUB_KEYCLOAK_CLIENT_ID` — shared across envs (`hms-patient-ios`).
 - `MEDIHUB_KEYCLOAK_REDIRECT_URI` — shared (`com.bitnesttechs.hms.patient.native:/oauth2redirect`).

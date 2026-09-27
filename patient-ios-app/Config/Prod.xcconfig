@@ -6,7 +6,9 @@
 // pre-staged so the cutover flip is one xcconfig line, not a code edit.
 
 MEDIHUB_API_BASE_URL = https:/$()/api.e-keneya.com/api
-MEDIHUB_KEYCLOAK_ISSUER = https://hms-keycloak-prod.up.railway.app/realms/hms
+// Escaped like the API URL: an unescaped `//` starts an xcconfig comment,
+// which left the issuer as just "https:".
+MEDIHUB_KEYCLOAK_ISSUER = https:/$()/hms-keycloak-prod.up.railway.app/realms/hms
 MEDIHUB_KEYCLOAK_SSO_ENABLED = 0
 MEDIHUB_KEYCLOAK_CLIENT_ID = hms-patient-ios
 MEDIHUB_KEYCLOAK_REDIRECT_URI = com.bitnesttechs.hms.patient.native:/oauth2redirect
