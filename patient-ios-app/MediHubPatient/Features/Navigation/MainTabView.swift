@@ -4,6 +4,8 @@ struct MainTabView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var localization: LocalizationManager
     @ObservedObject private var profileImageManager = ProfileImageManager.shared
+    /// A tapped chat notification opens Messages.
+    @ObservedObject private var push = PushManager.shared
     @State private var selectedTab: Tab = .dashboard
     @State private var showMenu = false
     /// Destination pushed on the Dashboard stack by the side menu.
@@ -61,6 +63,18 @@ struct MainTabView: View {
             }
         }
         .animation(.spring(response: 0.3), value: showMenu)
+        .onChange(of: push.messagesRequest) { _, request in
+            if request != nil { openMessagesForNotification() }
+        }
+        .onAppear {
+            // A tap that cold-started the app arrived before this view existed.
+            if push.messagesRequest != nil { openMessagesForNotification() }
+        }
+    }
+
+    private func openMessagesForNotification() {
+        showMenu = false
+        selectedTab = .messages
     }
 
     private func tabButton(icon: String, titleKey: String, tab: Tab) -> some View {
