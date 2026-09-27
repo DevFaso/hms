@@ -45,6 +45,25 @@ data class LoginResponse(
     )
 }
 
+/**
+ * `GET /auth/session/bootstrap` (bare, not wrapped). It resolves the HMS
+ * `users.id` for WHATEVER token signed the request — the password JWT or a
+ * Keycloak access token, whose `sub` is the Keycloak id and not the HMS one.
+ * Chat (`/chat/conversations/{userId}`, `/chat/history/{u1}/{u2}`) and the
+ * device-only history notes are keyed by [userId], so both sign-in paths
+ * persist it from here.
+ */
+@JsonClass(generateAdapter = true)
+data class SessionBootstrapDto(
+    @Json(name = "userId") val userId: String? = null,
+    @Json(name = "patientId") val patientId: String? = null,
+    @Json(name = "username") val username: String? = null,
+    @Json(name = "email") val email: String? = null,
+    @Json(name = "firstName") val firstName: String? = null,
+    @Json(name = "lastName") val lastName: String? = null,
+    @Json(name = "roles") val roles: List<String>? = null
+)
+
 // ── User / Patient ────────────────────────────────────────────────────────────
 
 @JsonClass(generateAdapter = true)

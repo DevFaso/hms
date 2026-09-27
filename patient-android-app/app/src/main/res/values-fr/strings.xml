@@ -688,4 +688,16 @@
     <string name="start_date">Date de début</string>
     <string name="end_date">Date de fin</string>
     <string name="refreshing">Actualisation…</string>
+
+    <!-- Sign-in refusals (both sign-in paths) -->
+    <string name="login_error_patients_only">Cette application est réservée aux patients. Veuillez vous connecter sur le portail web.</string>
+    <string name="login_error_invalid_credentials">Nom d\'utilisateur ou mot de passe invalide</string>
+    <string name="login_error_locked">Compte verrouillé ou désactivé</string>
+    <string name="login_error_unreachable">Impossible de joindre le serveur. Vérifiez votre connexion et réessayez.</string>
+    <string name="login_error_sso_required">L\'authentification unique est requise. Veuillez utiliser le bouton SSO.</string>
+    <string name="login_error_failed">Échec de la connexion. Veuillez réessayer.</string>
+    <string name="login_error_no_saved_credentials">Aucun identifiant enregistré pour la connexion biométrique</string>
+    <string name="login_error_session">Votre compte n\'a pas pu être chargé. Veuillez vous reconnecter.</string>
+    <string name="sso_start_failed">L\'authentification unique n\'a pas pu démarrer. Veuillez réessayer.</string>
+    <string name="sso_failed">Échec de l\'authentification unique. Veuillez réessayer.</string>
 </resources>

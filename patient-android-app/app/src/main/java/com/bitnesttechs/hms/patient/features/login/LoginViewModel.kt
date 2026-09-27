@@ -3,6 +3,7 @@ package com.bitnesttechs.hms.patient.features.login
 import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.auth.AuthRepository
 import com.bitnesttechs.hms.patient.core.auth.AuthResult
 import com.bitnesttechs.hms.patient.core.auth.KeycloakAuthService
@@ -19,7 +20,7 @@ import javax.inject.Inject
 
 data class LoginUiState(
     val isLoading: Boolean = false,
-    val error: String? = null,
+    val error: AuthResult.Error? = null,
     val isSuccess: Boolean = false,
     val hasSavedCredentials: Boolean = false
 )
@@ -49,7 +50,7 @@ class LoginViewModel @Inject constructor(
             val result = authRepository.login(username, password, saveCredentials)
             _uiState.value = when (result) {
                 is AuthResult.Success -> _uiState.value.copy(isLoading = false, isSuccess = true)
-                is AuthResult.Error -> _uiState.value.copy(isLoading = false, error = result.message)
+                is AuthResult.Error -> _uiState.value.copy(isLoading = false, error = result)
             }
         }
     }
@@ -60,7 +61,7 @@ class LoginViewModel @Inject constructor(
             val result = authRepository.biometricLogin()
             _uiState.value = when (result) {
                 is AuthResult.Success -> _uiState.value.copy(isLoading = false, isSuccess = true)
-                is AuthResult.Error -> _uiState.value.copy(isLoading = false, error = result.message)
+                is AuthResult.Error -> _uiState.value.copy(isLoading = false, error = result)
             }
         }
     }
@@ -78,10 +79,10 @@ class LoginViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(isLoading = false)
                     onIntent(intent)
                 }
-                .onFailure { ex ->
+                .onFailure {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        error = ex.message ?: "Unable to start SSO login"
+                        error = AuthResult.Error(R.string.sso_start_failed)
                     )
                 }
         }
@@ -91,16 +92,17 @@ class LoginViewModel @Inject constructor(
     fun completeSsoLogin(data: Intent) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-            runCatching { keycloakAuthService.handleAuthorizationResponse(data) }
-                .onSuccess {
-                    _uiState.value = _uiState.value.copy(isLoading = false, isSuccess = true)
-                }
-                .onFailure { ex ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = ex.message ?: "SSO login failed"
-                    )
-                }
+            val exchanged = runCatching { keycloakAuthService.handleAuthorizationResponse(data) }.isSuccess
+            if (!exchanged) {
+                _uiState.value = _uiState.value.copy(isLoading = false, error = AuthResult.Error(R.string.sso_failed))
+                return@launch
+            }
+            // The Keycloak token's `sub` is not the HMS user id; chat and the
+            // device-only notes need that one, so resolve it before entering.
+            _uiState.value = when (val result = authRepository.completeSignIn(sso = true)) {
+                is AuthResult.Success -> _uiState.value.copy(isLoading = false, isSuccess = true)
+                is AuthResult.Error -> _uiState.value.copy(isLoading = false, error = result)
+            }
         }
     }
 

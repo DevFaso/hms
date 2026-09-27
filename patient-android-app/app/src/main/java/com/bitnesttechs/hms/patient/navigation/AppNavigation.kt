@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.bitnesttechs.hms.patient.core.auth.AuthRepository
 import com.bitnesttechs.hms.patient.core.auth.TokenStorage
 import com.bitnesttechs.hms.patient.features.login.LoginScreen
 import dagger.hilt.android.EntryPointAccessors
@@ -28,17 +29,19 @@ sealed class Screen(val route: String) {
 @InstallIn(ActivityComponent::class)
 interface TokenStorageEntryPoint {
     fun tokenStorage(): TokenStorage
+    fun authRepository(): AuthRepository
 }
 
 @Composable
 fun AppNavigation() {
     val context = LocalContext.current
-    val tokenStorage = remember {
+    val entryPoint = remember {
         EntryPointAccessors.fromActivity(
             context as android.app.Activity,
             TokenStorageEntryPoint::class.java
-        ).tokenStorage()
+        )
     }
+    val tokenStorage = remember { entryPoint.tokenStorage() }
 
     // Check login state off the main thread to avoid blocking on EncryptedSharedPreferences
     var startDest by remember { mutableStateOf<String?>(null) }
@@ -46,6 +49,10 @@ fun AppNavigation() {
         startDest = withContext(Dispatchers.IO) {
             if (tokenStorage.isLoggedIn) Screen.Main.route else Screen.Login.route
         }
+        // A session from a build that never stored the HMS user id (every SSO
+        // session did so) resolves it now, so chat and notes work without a
+        // fresh sign-in.
+        if (startDest == Screen.Main.route) entryPoint.authRepository().ensureUserId()
     }
 
     if (startDest == null) {

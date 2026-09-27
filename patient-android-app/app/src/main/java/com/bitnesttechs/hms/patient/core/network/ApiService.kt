@@ -17,6 +17,10 @@ interface ApiService {
     @POST("auth/token/refresh")
     suspend fun refreshToken(@Body request: RefreshTokenRequest): Response<LoginResponse>
 
+    /** The HMS identity of the current token, for either sign-in path. */
+    @GET("auth/session/bootstrap")
+    suspend fun getSessionBootstrap(): Response<SessionBootstrapDto>
+
     @POST("auth/logout")
     suspend fun logout(): Response<ApiResponse<Unit>>
 

@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.bitnesttechs.hms.patient.core.auth.AuthResult
 import com.bitnesttechs.hms.patient.core.auth.TokenStorage
 import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
@@ -82,8 +83,8 @@ fun LoginScreen(
 
     // Show error toast
     LaunchedEffect(uiState.error) {
-        uiState.error?.let {
-            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+        uiState.error?.let { error ->
+            Toast.makeText(context, error.text(context), Toast.LENGTH_LONG).show()
             viewModel.clearError()
         }
     }
@@ -286,7 +287,7 @@ private fun launchBiometric(context: android.content.Context, viewModel: LoginVi
         BiometricManager.Authenticators.DEVICE_CREDENTIAL
     )
     if (canAuthenticate != BiometricManager.BIOMETRIC_SUCCESS) {
-        Toast.makeText(context, "Biometric not available", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.biometric_not_available), Toast.LENGTH_SHORT).show()
         return
     }
 
@@ -312,4 +313,10 @@ private fun launchBiometric(context: android.content.Context, viewModel: LoginVi
         )
         .build()
     prompt.authenticate(promptInfo)
+}
+
+/** The app's own headline, then the server's sentence when it sent one. */
+internal fun AuthResult.Error.text(context: android.content.Context): String {
+    val headline = context.getString(messageRes)
+    return detail?.takeIf { it.isNotBlank() }?.let { "$headline\n$it" } ?: headline
 }

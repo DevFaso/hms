@@ -688,4 +688,16 @@
     <string name="start_date">Start date</string>
     <string name="end_date">End date</string>
     <string name="refreshing">Refreshing…</string>
+
+    <!-- Sign-in refusals (both sign-in paths) -->
+    <string name="login_error_patients_only">This app is for patients only. Please use the web portal to sign in.</string>
+    <string name="login_error_invalid_credentials">Invalid username or password</string>
+    <string name="login_error_locked">Account locked or disabled</string>
+    <string name="login_error_unreachable">Unable to reach the server. Check your connection and try again.</string>
+    <string name="login_error_sso_required">Single sign-on is required. Please use the SSO button.</string>
+    <string name="login_error_failed">Sign-in failed. Please try again.</string>
+    <string name="login_error_no_saved_credentials">No saved credentials for biometric sign-in</string>
+    <string name="login_error_session">Your account could not be loaded. Please sign in again.</string>
+    <string name="sso_start_failed">Single sign-on could not be started. Please try again.</string>
+    <string name="sso_failed">Single sign-on failed. Please try again.</string>
 </resources>
