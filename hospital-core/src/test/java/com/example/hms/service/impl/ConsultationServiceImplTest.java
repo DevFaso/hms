@@ -128,6 +128,7 @@ class ConsultationServiceImplTest {
     @Test void createConsultation_patientNotFound() {
         ConsultationRequestDTO r = new ConsultationRequestDTO();
         r.setPatientId(patientId); r.setHospitalId(hospitalId); r.setUrgency(ConsultationUrgency.URGENT);
+        when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.createConsultation(r, staffId)).isInstanceOf(ResourceNotFoundException.class);
     }

@@ -39,6 +39,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.as;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.assertj.core.api.InstanceOfAssertFactories;
@@ -1291,6 +1292,85 @@ class PrescriptionServiceImplTest {
         // staff hospital null → createEncounterSnapshot throws
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class);
+    }
+
+    // ═══════════════ updatePrescription is held to the acting hospital ═══════════════
+
+    @Test
+    void updateOfAnotherHospitalsPrescriptionAnswersExactlyAsAMissingOne() {
+        UUID prescriptionId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        PrescriptionRequestDTO request = buildRequest();
+
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.empty());
+        ResourceNotFoundException missing = catchThrowableOfType(ResourceNotFoundException.class,
+            () -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH));
+
+        Prescription foreign = new Prescription();
+        foreign.setId(prescriptionId);
+        foreign.setHospital(encounter.getHospital());
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(foreign));
+        ResourceNotFoundException refused = catchThrowableOfType(ResourceNotFoundException.class,
+            () -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH));
+
+        assertThat(refused.getMessageKey()).isEqualTo(missing.getMessageKey());
+        assertThat(refused.getMessage()).isEqualTo(missing.getMessage());
+        verify(prescriptionRepository, never()).save(any());
+        verifyNoInteractions(prescriptionMapper);
+    }
+
+    @Test
+    void updateCannotMoveAPrescriptionOntoAnotherHospitalsEncounter() {
+        UUID prescriptionId = UUID.randomUUID();
+        UUID actingHospitalId = UUID.randomUUID();
+        Hospital acting = new Hospital();
+        acting.setId(actingHospitalId);
+        Prescription own = new Prescription();
+        own.setId(prescriptionId);
+        own.setHospital(acting);
+        PrescriptionRequestDTO request = buildRequest();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(actingHospitalId);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(own));
+        when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        // The request's encounter belongs to another hospital, not the acting one.
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH))
+            .isInstanceOfSatisfying(ResourceNotFoundException.class,
+                e -> assertThat(e.getMessageKey()).isEqualTo("encounter.notfound"));
+        assertThat(own.getHospital().getId()).isEqualTo(actingHospitalId);
+        verify(prescriptionRepository, never()).save(any());
+        verify(roleValidator, never()).canCreatePrescription(any(), any());
+    }
+
+    @Test
+    void updateAtTheActingHospitalStillWorks() {
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription own = new Prescription();
+        own.setId(prescriptionId);
+        own.setHospital(encounter.getHospital());
+        PrescriptionRequestDTO request = buildRequest();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(own));
+        when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(roleValidator.canCreatePrescription(any(), eq(hospitalId))).thenReturn(true);
+        when(urhaRepository.findByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(
+            any(), eq(hospitalId), eq("DOCTOR")))
+            .thenReturn(Optional.of(assignment));
+        when(prescriptionRepository.save(any())).thenReturn(own);
+        when(prescriptionMapper.toResponseDTO(any())).thenReturn(
+            PrescriptionResponseDTO.builder().id(prescriptionId).build());
+
+        assertThat(prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH).getId())
+            .isEqualTo(prescriptionId);
+        verify(prescriptionRepository).save(own);
     }
 
     // ═══════════════ updatePrescription full path ═══════════════

@@ -55,6 +55,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.ArgumentMatchers.anyString;
 import java.util.Map;
 import java.util.Set;
@@ -240,6 +241,7 @@ class ConsultationServiceImplTest {
         @DisplayName("throws when patient not found")
         void throwsWhenPatientNotFound() {
             ConsultationRequestDTO request = buildRequest();
+            when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.createConsultation(request, staffId))
@@ -250,6 +252,7 @@ class ConsultationServiceImplTest {
         @DisplayName("throws when hospital not found")
         void throwsWhenHospitalNotFound() {
             ConsultationRequestDTO request = buildRequest();
+            when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
 
@@ -346,17 +349,87 @@ class ConsultationServiceImplTest {
         }
 
         @Test
-        @DisplayName("throws clear scope error when patient is not registered at hospital")
-        void throwsWhenPatientIsNotRegisteredAtHospital() {
+        @DisplayName("a patient not registered at the hospital answers exactly as a missing patient, before any load")
+        void patientNotRegisteredAtHospitalAnswersAsMissing() {
             ConsultationRequestDTO request = buildRequest();
-
-            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
             when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
 
             assertThatThrownBy(() -> service.createConsultation(request, staffId))
-                .isInstanceOf(BusinessException.class)
-                .hasMessage("Patient is not registered with the specified hospital.");
+                .isInstanceOfSatisfying(ResourceNotFoundException.class, e -> {
+                    assertThat(e.getMessageKey()).isEqualTo("patient.notFound");
+                    assertThat(e.getMessage()).isEqualTo(
+                        new ResourceNotFoundException("patient.notFound", patientId).getMessage());
+                });
+            verify(patientRepository, never()).findByIdUnscoped(any());
+            verify(consultationRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a consultation cannot be requested at a hospital other than the acting one: answered as a missing hospital")
+        void createAtAnotherHospitalAnswersAsMissingHospital() {
+            ConsultationRequestDTO request = buildRequest();
+            when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+            assertThatThrownBy(() -> service.createConsultation(request, staffId))
+                .isInstanceOfSatisfying(ResourceNotFoundException.class, e -> {
+                    assertThat(e.getMessageKey()).isEqualTo("hospital.notFound");
+                    assertThat(e.getMessage()).isEqualTo(
+                        new ResourceNotFoundException("hospital.notFound", hospitalId).getMessage());
+                });
+            verifyNoInteractions(patientHospitalRegistrationRepository);
+            verify(consultationRepository, never()).save(any());
+        }
+    }
+
+    // ── writes are held to the acting hospital ──────────────────────────────
+
+    @Nested
+    @DisplayName("writes on another hospital's consultation")
+    class ForeignConsultationWrites {
+
+        private String missingMessage;
+        private Consultation foreign;
+
+        @BeforeEach
+        void foreignConsultation() {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.empty());
+            missingMessage = catchNotFound(() -> service.startConsultation(consultationId));
+            foreign = Consultation.builder().hospital(hospital).patient(patient)
+                .status(ConsultationStatus.REQUESTED).build();
+            foreign.setId(consultationId);
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(foreign));
+        }
+
+        private String catchNotFound(Runnable call) {
+            try {
+                call.run();
+            } catch (ResourceNotFoundException e) {
+                return e.getMessage();
+            }
+            throw new AssertionError("expected a ResourceNotFoundException");
+        }
+
+        @Test
+        @DisplayName("every write answers exactly as a missing id and changes nothing")
+        void everyWriteAnswersAsMissing() {
+            UUID consultantId = UUID.randomUUID();
+            List<Runnable> writes = List.of(
+                () -> service.acknowledgeConsultation(consultationId, consultantId),
+                () -> service.updateConsultation(consultationId, new ConsultationUpdateDTO()),
+                () -> service.completeConsultation(consultationId, new CompleteConsultationRequestDTO()),
+                () -> service.cancelConsultation(consultationId, "x"),
+                () -> service.scheduleConsultation(consultationId, LocalDateTime.now(), null),
+                () -> service.startConsultation(consultationId),
+                () -> service.declineConsultation(consultationId, "x"),
+                () -> service.assignConsultation(consultationId, consultantId, consultantId, null),
+                () -> service.reassignConsultation(consultationId, consultantId, consultantId, null));
+            for (Runnable write : writes) {
+                assertThat(catchNotFound(write)).isEqualTo(missingMessage);
+            }
+            assertThat(foreign.getStatus()).isEqualTo(ConsultationStatus.REQUESTED);
+            verify(consultationRepository, never()).save(any());
+            verifyNoInteractions(staffRepository, notificationService);
         }
     }
 

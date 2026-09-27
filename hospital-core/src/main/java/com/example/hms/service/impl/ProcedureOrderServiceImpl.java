@@ -13,6 +13,7 @@ import com.example.hms.payload.dto.procedure.ProcedureOrderResponseDTO;
 import com.example.hms.payload.dto.procedure.ProcedureOrderUpdateDTO;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.ProcedureOrderRepository;
 import com.example.hms.repository.StaffRepository;
@@ -47,9 +48,24 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
     private final PatientSubjectReadGuard subjectReadGuard;
+    private final PatientHospitalRegistrationRepository registrationRepository;
 
     @Override
     public ProcedureOrderResponseDTO createProcedureOrder(ProcedureOrderRequestDTO request, UUID orderingProviderId) {
+        // Placed only at the hospital the caller acts at (update and cancel are
+        // already held there by requireInScope), for a patient registered
+        // there. Either refusal answers exactly as the missing row does, and
+        // both come before the patient is loaded.
+        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+        if (actingHospitalId != null) {
+            if (!actingHospitalId.equals(request.getHospitalId())) {
+                throw new ResourceNotFoundException("hospital.notFound", request.getHospitalId());
+            }
+            if (request.getPatientId() == null
+                    || !registrationRepository.existsByPatientIdAndHospitalId(request.getPatientId(), actingHospitalId)) {
+                throw new ResourceNotFoundException("patient.notFound", request.getPatientId());
+            }
+        }
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 

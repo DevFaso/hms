@@ -799,6 +799,16 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     public PrescriptionResponseDTO updatePrescription(UUID id, PrescriptionRequestDTO request, Locale locale) {
         Prescription existing = prescriptionRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
+        // ── Hospital scope enforcement ── the row's own hospital, as on
+        // sign/co-sign/delete, and BEFORE the status checks below, which
+        // answer 400 and would otherwise tell a real id from a missing one.
+        // Authority used to be judged only at the REQUEST's encounter
+        // hospital, so another hospital's prescription could be rewritten.
+        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+        if (actingHospitalId != null
+                && (existing.getHospital() == null || !actingHospitalId.equals(existing.getHospital().getId()))) {
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
+        }
         rejectStatusChangeOnUpdate(existing, request);
         rejectSafeguardWithdrawal(existing, request);
 
@@ -814,6 +824,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         UUID hospitalId = encounter.getHospital() != null ? encounter.getHospital().getId() : null;
         if (hospitalId == null) {
             throw new BusinessException("prescription.hospital.context.missing");
+        }
+        // Never moved onto another hospital's encounter: the row stays where
+        // the caller acts. An encounter elsewhere answers exactly as a missing
+        // one. A super-admin in global view keeps the old behaviour.
+        if (actingHospitalId != null && !actingHospitalId.equals(hospitalId)) {
+            throw new ResourceNotFoundException("encounter.notfound");
         }
 
         if (!roleValidator.canCreatePrescription(currentUserId, hospitalId)) {
