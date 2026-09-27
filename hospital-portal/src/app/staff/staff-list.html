@@ -100,7 +100,7 @@
         >
           <option value="">{{ 'STAFF.ALL_TITLES' | translate }}</option>
           @for (jt of jobTitles; track jt) {
-            <option [value]="jt">{{ jt.replaceAll('_', ' ') }}</option>
+            <option [value]="jt">{{ jt | enumLabel: 'jobTitle' }}</option>
           }
         </select>
       </div>
@@ -135,7 +135,7 @@
       }
       @if (jobTitleFilter) {
         <span class="filter-chip">
-          {{ jobTitleFilter.replaceAll('_', ' ') }}
+          {{ jobTitleFilter | enumLabel: 'jobTitle' }}
           <button class="chip-remove" (click)="jobTitleFilter = ''; applyFilter()">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -160,7 +160,9 @@
           </div>
           <div class="staff-info">
             <h4>{{ member.name }}</h4>
-            <p class="staff-role">{{ formatJobTitle(member.jobTitle) }}</p>
+            <p class="staff-role">
+              {{ (member.jobTitle | enumLabel: 'jobTitle') || ('STAFF.TITLE' | translate) }}
+            </p>
             @if (member.departmentName) {
               <p class="staff-dept">
                 <span class="material-symbols-outlined dept-icon">domain</span>
@@ -281,7 +283,7 @@
                 <select id="sJobTitle" [(ngModel)]="form.jobTitle" name="jobTitle">
                   <option value="">{{ 'STAFF.SELECT_TITLE' | translate }}</option>
                   @for (jt of jobTitles; track jt) {
-                    <option [value]="jt">{{ jt.replaceAll('_', ' ') }}</option>
+                    <option [value]="jt">{{ jt | enumLabel: 'jobTitle' }}</option>
                   }
                 </select>
               </div>

@@ -906,7 +906,7 @@
                 <div class="sched-info" style="flex: 1">
                   <span class="sched-name">{{ alert.staffName }}</span>
                   <span class="sched-reason"
-                    >{{ alert.jobTitle | titlecase }} — {{ alert.departmentName }}</span
+                    >{{ alert.jobTitle | enumLabel: 'jobTitle' }} — {{ alert.departmentName }}</span
                   >
                   <span class="sched-reason"
                     >{{ 'CREDENTIALING.LICENSE_NUMBER' | translate }}: {{ alert.licenseNumber }} —

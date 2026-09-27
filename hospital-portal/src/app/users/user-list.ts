@@ -20,6 +20,7 @@ import { ImpersonationService } from '../services/impersonation.service';
 import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 const MEDICAL_ROLE_CODES = new Set([
   'ROLE_DOCTOR',
@@ -82,7 +83,7 @@ const SPECIALIZATIONS = [
 @Component({
   selector: 'app-user-list',
   standalone: true,
-  imports: [FormsModule, TranslateModule, RoleLabelPipe],
+  imports: [FormsModule, TranslateModule, RoleLabelPipe, EnumLabelPipe],
   templateUrl: './user-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './user-list.scss',

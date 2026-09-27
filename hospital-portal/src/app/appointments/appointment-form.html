@@ -132,7 +132,7 @@
               <div class="chip-info">
                 <span class="chip-name">{{ selectedStaff()!.name }}</span>
                 <span class="chip-sub"
-                  >{{ selectedStaff()!.jobTitle
+                  >{{ selectedStaff()!.jobTitle | enumLabel: 'jobTitle'
                   }}{{
                     selectedStaff()!.hospitalName ? ' · ' + selectedStaff()!.hospitalName : ''
                   }}</span
@@ -173,7 +173,8 @@
                       <div class="opt-info">
                         <span class="opt-name">{{ s.name }}</span>
                         <span class="opt-meta"
-                          >{{ s.jobTitle }}{{ s.hospitalName ? ' · ' + s.hospitalName : '' }}</span
+                          >{{ s.jobTitle | enumLabel: 'jobTitle'
+                          }}{{ s.hospitalName ? ' · ' + s.hospitalName : '' }}</span
                         >
                       </div>
                     </li>

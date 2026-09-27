@@ -15,11 +15,12 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { PermissionService } from '../core/permission.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 @Component({
   selector: 'app-staff-list',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './staff-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './staff-list.scss',
@@ -385,14 +386,6 @@ export class StaffListComponent implements OnInit {
     const parts = name.trim().split(/\s+/);
     if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
     return name.substring(0, 2).toUpperCase();
-  }
-
-  formatJobTitle(jobTitle?: string): string {
-    if (!jobTitle) return this.translate.instant('STAFF.TITLE');
-    return jobTitle
-      .replaceAll('_', ' ')
-      .toLowerCase()
-      .replaceAll(/\b\w/g, (c) => c.toUpperCase());
   }
 
   private emptyForm(): StaffUpsertRequest {

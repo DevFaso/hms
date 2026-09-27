@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
 import { SchedulingComponent } from './scheduling';
@@ -245,6 +245,40 @@ describe('SchedulingComponent', () => {
     component.clearStaff();
     expect(component.bulk.staffId).toBe('');
     expect(component.selectedStaff()).toBeNull();
+  });
+
+  it('shows the picked staff member by translated job title, else by role', () => {
+    // The chip rendered `jobTitle ?? roleName ?? fallback` raw — MIDWIFE, or
+    // ROLE_DOCTOR for a member with no title — while the fallback beside
+    // them was translated, and the raw-enum gate excused the whole binding
+    // because a `translate` pipe appeared in it.
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PORTAL: { ENUM: { JOB_TITLE: { MIDWIFE: 'Sage-femme' }, ROLE: { DOCTOR: 'Médecin' } } },
+    });
+    translate.use('fr');
+    fixture.detectChanges();
+    component.openBulkModal();
+    const chip = () =>
+      (fixture.nativeElement.querySelector('.selected-chip .chip-sub')?.textContent ?? '').trim();
+
+    component.selectStaff({
+      id: 'st1',
+      name: 'Ama Owusu',
+      hospitalId: 'h1',
+      jobTitle: 'MIDWIFE',
+    } as StaffResponse);
+    fixture.detectChanges();
+    expect(chip()).toBe('Sage-femme');
+
+    component.selectStaff({
+      id: 'st2',
+      name: 'Kofi Mensah',
+      hospitalId: 'h1',
+      roleName: 'ROLE_DOCTOR',
+    } as StaffResponse);
+    fixture.detectChanges();
+    expect(chip()).toBe('Médecin');
   });
 
   it('formats times, ranges, and enum labels', () => {

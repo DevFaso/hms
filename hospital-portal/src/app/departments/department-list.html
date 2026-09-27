@@ -209,7 +209,8 @@
                     <option value="">— {{ 'COMMON.NONE' | translate }} —</option>
                     @for (s of staffForHospital(); track s.id) {
                       <option [value]="s.email">
-                        {{ s.name }}{{ s.jobTitle ? ' · ' + s.jobTitle : '' }}
+                        {{ s.name
+                        }}{{ s.jobTitle ? ' · ' + (s.jobTitle | enumLabel: 'jobTitle') : '' }}
                       </option>
                     }
                   </select>

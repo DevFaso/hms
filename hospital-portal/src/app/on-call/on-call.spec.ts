@@ -2,12 +2,12 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
 import { OnCallComponent } from './on-call';
 import { OnCallService, OnCallScheduleResponse } from '../services/on-call.service';
-import { StaffService } from '../services/staff.service';
+import { StaffResponse, StaffService } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { roleContextStub } from '../testing/role-context.stub';
@@ -99,6 +99,31 @@ describe('OnCallComponent', () => {
     setup(['ROLE_HOSPITAL_ADMIN'], [entry({})]);
     expect(fixture.nativeElement.querySelector('[data-testid="oncall-add"]')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('[data-testid="oncall-edit-oc-1"]')).not.toBeNull();
+  });
+
+  it('labels each staff option with the translated job title', () => {
+    // `{{ s.name }}{{ s.jobTitle ? ' — ' + s.jobTitle : '' }}` put the JobTitle
+    // token in the picker verbatim: "Dr. Awa Traoré — MIDWIFE".
+    setup(['ROLE_HOSPITAL_ADMIN'], []);
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', { PORTAL: { ENUM: { JOB_TITLE: { MIDWIFE: 'Sage-femme' } } } });
+    translate.use('fr');
+    (TestBed.inject(StaffService) as jasmine.SpyObj<StaffService>).list.and.returnValue(
+      of([
+        { id: 's-1', name: 'Dr. Awa Traoré', jobTitle: 'MIDWIFE' } as StaffResponse,
+        { id: 's-2', name: 'Kofi Mensah' } as StaffResponse,
+      ]),
+    );
+
+    component.openCreate();
+    fixture.detectChanges();
+
+    const options = Array.from(
+      fixture.nativeElement.querySelectorAll('#oncall-staff option') as NodeListOf<HTMLElement>,
+    ).map((o) => (o.textContent ?? '').trim());
+    expect(options).toContain('Dr. Awa Traoré — Sage-femme');
+    expect(options).toContain('Kofi Mensah');
+    expect(options.join(' ')).not.toContain('MIDWIFE');
   });
 
   it('refuses a shift that ends before it starts, before any request is made', () => {

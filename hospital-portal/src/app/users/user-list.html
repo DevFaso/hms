@@ -454,7 +454,7 @@
                 <select id="jobTitle" [(ngModel)]="createForm.jobTitle" name="jobTitle">
                   <option value="">— {{ 'COMMON.SELECT' | translate }} —</option>
                   @for (jt of jobTitles; track jt) {
-                    <option [value]="jt">{{ formatEnumLabel(jt) }}</option>
+                    <option [value]="jt">{{ jt | enumLabel: 'jobTitle' }}</option>
                   }
                 </select>
               </div>

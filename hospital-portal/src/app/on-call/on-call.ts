@@ -9,6 +9,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 import {
   DepartmentOption,
@@ -50,6 +51,7 @@ interface OnCallFormModel {
     CommonModule,
     FormsModule,
     TranslateModule,
+    EnumLabelPipe,
     HospitalScopeChipComponent,
     HospitalScopeHintComponent,
   ],

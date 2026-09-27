@@ -28,7 +28,9 @@
       <div class="header-info">
         <h1>{{ s.name }}</h1>
         <div class="header-meta">
-          <span class="role-badge">{{ formatJobTitle(s.jobTitle) }}</span>
+          <span class="role-badge">{{
+            (s.jobTitle | enumLabel: 'jobTitle') || ('STAFF.TITLE' | translate)
+          }}</span>
           <span class="status-badge" [class.active]="s.active" [class.inactive]="!s.active">
             {{ s.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate) }}
           </span>
@@ -148,7 +150,9 @@
           <div class="info-rows">
             <div class="info-row">
               <span class="label">{{ 'STAFF.JOB_TITLE' | translate }}</span>
-              <span class="value">{{ formatJobTitle(s.jobTitle) }}</span>
+              <span class="value">{{
+                (s.jobTitle | enumLabel: 'jobTitle') || ('STAFF.TITLE' | translate)
+              }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'STAFF.EMPLOYMENT_TYPE' | translate }}</span>

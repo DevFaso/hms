@@ -238,14 +238,6 @@ export class StaffDetailComponent implements OnInit {
     return name.substring(0, 2).toUpperCase();
   }
 
-  formatJobTitle(jobTitle?: string): string {
-    if (!jobTitle) return this.translate.instant('STAFF.TITLE');
-    return jobTitle
-      .replaceAll('_', ' ')
-      .toLowerCase()
-      .replaceAll(/\b\w/g, (c) => c.toUpperCase());
-  }
-
   formatEmploymentType(type?: string): string {
     if (!type) return '—';
     return type
