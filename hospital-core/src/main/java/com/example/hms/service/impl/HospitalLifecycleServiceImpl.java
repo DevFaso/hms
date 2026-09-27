@@ -23,6 +23,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.EnumSet;
@@ -72,6 +73,8 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
     private final AuditEventLogService auditEventLogService;
     private final HospitalLifecycleStatusService lifecycleStatusService;
     private final MfaService mfaService;
+    /** Same tenant-lifecycle clock as {@code OrganizationLifecycleServiceImpl} (TimeConfig). */
+    private final Clock clock;
 
     @Value("${hms.hospital-lifecycle.require-mfa:true}")
     private boolean requireMfa;
@@ -96,7 +99,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
         // Mirror onto legacy `active` so default-visibility queries hide
         // suspended hospitals immediately, not only via JWT login block.
         hospital.setActive(false);
-        hospital.setSuspendedAt(Instant.now());
+        hospital.setSuspendedAt(Instant.now(clock));
         hospital.setSuspendedBy(currentActorId());
         hospital.setSuspensionReason(reason);
         hospitalRepository.save(hospital);
@@ -132,7 +135,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
         hospital.setLifecycleState(HospitalLifecycleState.ARCHIVED);
         hospital.setActive(false);
-        hospital.setArchivedAt(Instant.now());
+        hospital.setArchivedAt(Instant.now(clock));
         hospital.setArchivedBy(currentActorId());
         hospital.setArchiveReason(reason);
         hospitalRepository.save(hospital);
@@ -151,9 +154,9 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
         Instant scheduledFor = request.getPurgeScheduledFor() != null
             ? request.getPurgeScheduledFor()
-            : Instant.now().plus(DEFAULT_PURGE_GRACE_DAYS, ChronoUnit.DAYS);
+            : Instant.now(clock).plus(DEFAULT_PURGE_GRACE_DAYS, ChronoUnit.DAYS);
 
-        if (scheduledFor.isBefore(Instant.now())) {
+        if (scheduledFor.isBefore(Instant.now(clock))) {
             throw new BusinessRuleException("Purge cannot be scheduled in the past.");
         }
 

@@ -22,7 +22,10 @@ import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.HospitalLifecycleStatusService;
 import com.example.hms.service.MfaService;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -33,6 +36,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -43,6 +47,13 @@ class HospitalLifecycleServiceImplTest {
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private HospitalLifecycleStatusService lifecycleStatusService;
     @Mock private MfaService mfaService;
+
+    /**
+     * Fixed instant, deliberately in the future: a time that is past on the
+     * injected clock but not on the system clock proves which one is read.
+     */
+    private static final Instant NOW = Instant.parse("2099-03-01T03:00:00Z");
+    @Spy private Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
 
     @InjectMocks private HospitalLifecycleServiceImpl service;
 
@@ -126,7 +137,7 @@ class HospitalLifecycleServiceImplTest {
     void restoreTransitionsSuspendedToActive() {
         hospital.setLifecycleState(HospitalLifecycleState.SUSPENDED);
         hospital.setActive(false);
-        hospital.setSuspendedAt(Instant.now());
+        hospital.setSuspendedAt(NOW);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -148,7 +159,7 @@ class HospitalLifecycleServiceImplTest {
         HospitalLifecycleResponseDTO result = service.schedulePurge(
             hospitalId, withReason("retention expired"), null);
         assertThat(result.getLifecycleState()).isEqualTo(HospitalLifecycleState.PENDING_PURGE);
-        assertThat(result.getPurgeScheduledFor()).isAfter(Instant.now());
+        assertThat(result.getPurgeScheduledFor()).isAfter(NOW);
         assertThat(result.getPurgeReason()).isEqualTo("retention expired");
     }
 
@@ -165,7 +176,7 @@ class HospitalLifecycleServiceImplTest {
     @Test
     void cancelPurgeRevertsToArchived() {
         hospital.setLifecycleState(HospitalLifecycleState.PENDING_PURGE);
-        hospital.setPurgeScheduledFor(Instant.now().plusSeconds(3600));
+        hospital.setPurgeScheduledFor(NOW.plusSeconds(3600));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -265,5 +276,17 @@ class HospitalLifecycleServiceImplTest {
         assertThatThrownBy(() -> service.suspend(hospitalId, withReason("ops"), "123456"))
             .isInstanceOf(com.example.hms.exception.UnauthorizedException.class)
             .hasMessageContaining("enrollment lookup unavailable");
+    }
+
+    @Test
+    void archiveAndDefaultPurgeDateComeFromTheInjectedClock() {
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.archive(hospitalId, withReason("offboarded"), null);
+        assertThat(hospital.getArchivedAt()).isEqualTo(NOW);
+
+        HospitalLifecycleResponseDTO result = service.schedulePurge(hospitalId, withReason("retention"), null);
+        assertThat(result.getPurgeScheduledFor()).isEqualTo(NOW.plus(30, ChronoUnit.DAYS));
     }
 }

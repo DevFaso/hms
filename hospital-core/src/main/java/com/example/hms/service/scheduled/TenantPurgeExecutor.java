@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Clock;
 import java.time.Instant;
 
 /**
@@ -42,6 +43,8 @@ public class TenantPurgeExecutor {
     private final AuditEventLogService auditEventLogService;
     private final TenantExportPackager exportPackager;
     private final TenantArchiveEncryptionService archiveEncryption;
+    /** Stamps {@code purgedAt} on the tenant-lifecycle clock (TimeConfig). */
+    private final Clock clock;
 
     @Value("${hms.tenant-archive.output-dir:#{systemProperties['java.io.tmpdir']}/hms-tenant-archives}")
     private String outputDir;
@@ -49,11 +52,13 @@ public class TenantPurgeExecutor {
     public TenantPurgeExecutor(OrganizationRepository organizationRepository,
                                AuditEventLogService auditEventLogService,
                                TenantExportPackager exportPackager,
-                               TenantArchiveEncryptionService archiveEncryption) {
+                               TenantArchiveEncryptionService archiveEncryption,
+                               Clock clock) {
         this.organizationRepository = organizationRepository;
         this.auditEventLogService = auditEventLogService;
         this.exportPackager = exportPackager;
         this.archiveEncryption = archiveEncryption;
+        this.clock = clock;
     }
 
     /**
@@ -86,7 +91,7 @@ public class TenantPurgeExecutor {
 
         org.setLifecycleState(OrganizationLifecycleState.PURGED);
         org.setActive(false);
-        org.setPurgedAt(Instant.now());
+        org.setPurgedAt(Instant.now(clock));
         organizationRepository.save(org);
 
         recordAuditPackaged(org, encryptedArchive);
@@ -96,7 +101,7 @@ public class TenantPurgeExecutor {
     }
 
     private TenantArchiveEncryptionService.EncryptionResult packageAndEncrypt(Organization org) throws IOException {
-        String stem = "org-" + org.getId() + "-" + Instant.now().toEpochMilli();
+        String stem = "org-" + org.getId() + "-" + Instant.now(clock).toEpochMilli();
         Path plaintext = Paths.get(outputDir, stem + ".zip");
         Path encrypted = Paths.get(outputDir, stem + ".zip.enc");
 

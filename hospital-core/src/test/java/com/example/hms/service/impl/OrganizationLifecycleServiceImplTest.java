@@ -22,7 +22,9 @@ import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.MfaService;
 import com.example.hms.service.OrganizationLifecycleStatusService;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.Set;
@@ -34,6 +36,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -51,6 +54,13 @@ class OrganizationLifecycleServiceImplTest {
 
     @Mock
     private MfaService mfaService;
+
+    /**
+     * Fixed instant, deliberately in the future: a time that is past on the
+     * injected clock but not on the system clock proves which one is read.
+     */
+    private static final Instant NOW = Instant.parse("2099-03-01T03:00:00Z");
+    @Spy private Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
 
     @InjectMocks
     private OrganizationLifecycleServiceImpl service;
@@ -134,7 +144,7 @@ class OrganizationLifecycleServiceImplTest {
     @Test
     void restoreSuspendedOrgReturnsToActive() {
         org.setLifecycleState(OrganizationLifecycleState.SUSPENDED);
-        org.setSuspendedAt(Instant.now());
+        org.setSuspendedAt(NOW);
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
         when(organizationRepository.save(any(Organization.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -208,7 +218,7 @@ class OrganizationLifecycleServiceImplTest {
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
         when(organizationRepository.save(any(Organization.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        Instant before = Instant.now();
+        Instant before = NOW;
         TenantLifecycleResponseDTO result = service.schedulePurge(orgId, withReason("retention policy"), null);
 
         assertThat(result.getLifecycleState()).isEqualTo(OrganizationLifecycleState.PENDING_PURGE);
@@ -222,7 +232,7 @@ class OrganizationLifecycleServiceImplTest {
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
         when(organizationRepository.save(any(Organization.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        Instant explicit = Instant.now().plus(7, ChronoUnit.DAYS);
+        Instant explicit = NOW.plus(7, ChronoUnit.DAYS);
         TenantLifecycleActionRequestDTO req = TenantLifecycleActionRequestDTO.builder()
             .reason("custom window").purgeScheduledFor(explicit).build();
 
@@ -237,7 +247,7 @@ class OrganizationLifecycleServiceImplTest {
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
 
         TenantLifecycleActionRequestDTO req = TenantLifecycleActionRequestDTO.builder()
-            .reason("oops").purgeScheduledFor(Instant.now().minus(1, ChronoUnit.DAYS)).build();
+            .reason("oops").purgeScheduledFor(NOW.minus(1, ChronoUnit.DAYS)).build();
 
         assertThatThrownBy(() -> service.schedulePurge(orgId, req, null))
             .isInstanceOf(BusinessRuleException.class)
@@ -258,7 +268,7 @@ class OrganizationLifecycleServiceImplTest {
     @Test
     void cancelPurgeReturnsToArchivedAndClearsScheduling() {
         org.setLifecycleState(OrganizationLifecycleState.PENDING_PURGE);
-        org.setPurgeScheduledFor(Instant.now().plus(10, ChronoUnit.DAYS));
+        org.setPurgeScheduledFor(NOW.plus(10, ChronoUnit.DAYS));
         org.setPurgeReason("scheduled");
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
         when(organizationRepository.save(any(Organization.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -393,5 +403,27 @@ class OrganizationLifecycleServiceImplTest {
         // Crucially, MfaService is never consulted on a non-destructive path.
         verify(mfaService, never()).isMfaEnabled(any());
         verify(mfaService, never()).verifyCode(any(), any());
+    }
+
+    @Test
+    void schedulePurgeMeasuresTheGraceWindowAndThePastFromTheInjectedClock() {
+        org.setLifecycleState(OrganizationLifecycleState.ARCHIVED);
+        when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
+        when(organizationRepository.save(any(Organization.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(service.schedulePurge(orgId, withReason("retention policy"), null).getPurgeScheduledFor())
+            .isEqualTo(NOW.plus(30, ChronoUnit.DAYS));
+
+        org.setLifecycleState(OrganizationLifecycleState.ARCHIVED);
+        TenantLifecycleActionRequestDTO atNow = TenantLifecycleActionRequestDTO.builder()
+            .reason("exactly now").purgeScheduledFor(NOW).build();
+        assertThat(service.schedulePurge(orgId, atNow, null).getPurgeScheduledFor()).isEqualTo(NOW);
+
+        org.setLifecycleState(OrganizationLifecycleState.ARCHIVED);
+        TenantLifecycleActionRequestDTO justPast = TenantLifecycleActionRequestDTO.builder()
+            .reason("a nanosecond ago").purgeScheduledFor(NOW.minusNanos(1)).build();
+        assertThatThrownBy(() -> service.schedulePurge(orgId, justPast, null))
+            .isInstanceOf(BusinessRuleException.class)
+            .hasMessageContaining("past");
     }
 }
