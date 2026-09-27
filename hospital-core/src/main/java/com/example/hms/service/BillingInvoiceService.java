@@ -40,6 +40,10 @@ public interface BillingInvoiceService {
     BillingInvoiceResponseDTO recordPatientPayment(UUID invoiceId, UUID patientId, UUID recordedBy,
             com.example.hms.payload.dto.portal.PatientPaymentRequestDTO payment, Locale locale);
 
-    /** Staff shortcut: record a payment without requiring the patientId (resolved from invoice). */
-    BillingInvoiceResponseDTO recordStaffPayment(UUID invoiceId, java.math.BigDecimal amount, Locale locale);
+    /**
+     * Staff shortcut: record a payment (patient resolved from the invoice) and
+     * write its payment row; a missing method is recorded as OTHER.
+     */
+    BillingInvoiceResponseDTO recordStaffPayment(UUID invoiceId,
+            com.example.hms.payload.dto.StaffPaymentRequestDTO payment, UUID recordedBy, Locale locale);
 }

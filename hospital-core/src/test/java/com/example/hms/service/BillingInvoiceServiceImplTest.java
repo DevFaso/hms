@@ -62,8 +62,6 @@ class BillingInvoiceServiceImplTest {
     private com.example.hms.utility.RoleValidator roleValidator;
 
     @Mock
-    private BillingInvoiceService self;
-    @Mock
     private com.example.hms.repository.PaymentTransactionRepository paymentTransactionRepository;
 
     private BillingInvoiceServiceImpl billingInvoiceService;
@@ -83,8 +81,7 @@ class BillingInvoiceServiceImplTest {
             pdfInvoiceService,
             invoiceMapper,
             roleValidator,
-            paymentTransactionRepository,
-            self
+            paymentTransactionRepository
         );
     }
 
@@ -394,5 +391,43 @@ class BillingInvoiceServiceImplTest {
         billingInvoiceService.deleteInvoice(invoice.getId(), Locale.ENGLISH);
 
         verify(invoiceRepository).deleteById(invoice.getId());
+    }
+    @Test
+    void recordStaffPayment_writesThePaymentRowWithTheStatedMethod() {
+        UUID patientId = UUID.randomUUID();
+        UUID cashier = UUID.randomUUID();
+        BillingInvoice invoice = payableInvoice(patientId);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.save(any(BillingInvoice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        billingInvoiceService.recordStaffPayment(invoice.getId(),
+            new com.example.hms.payload.dto.StaffPaymentRequestDTO(new BigDecimal("25.00"), "cash", "R-9", "front desk"),
+            cashier, Locale.ENGLISH);
+
+        ArgumentCaptor<com.example.hms.model.PaymentTransaction> row =
+            ArgumentCaptor.forClass(com.example.hms.model.PaymentTransaction.class);
+        verify(paymentTransactionRepository).save(row.capture());
+        assertEquals(com.example.hms.enums.PaymentMethod.CASH, row.getValue().getPaymentMethod());
+        assertEquals("R-9", row.getValue().getReferenceNumber());
+        assertEquals("front desk", row.getValue().getNotes());
+        assertEquals(cashier, row.getValue().getRecordedBy());
+        assertEquals(new BigDecimal("25.00"), invoice.getAmountPaid());
+    }
+
+    @Test
+    void recordStaffPayment_withNoMethodRecordsOther() {
+        UUID patientId = UUID.randomUUID();
+        BillingInvoice invoice = payableInvoice(patientId);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.save(any(BillingInvoice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        billingInvoiceService.recordStaffPayment(invoice.getId(),
+            new com.example.hms.payload.dto.StaffPaymentRequestDTO(new BigDecimal("10.00"), null, null, null),
+            null, Locale.ENGLISH);
+
+        ArgumentCaptor<com.example.hms.model.PaymentTransaction> row =
+            ArgumentCaptor.forClass(com.example.hms.model.PaymentTransaction.class);
+        verify(paymentTransactionRepository).save(row.capture());
+        assertEquals(com.example.hms.enums.PaymentMethod.OTHER, row.getValue().getPaymentMethod());
     }
 }

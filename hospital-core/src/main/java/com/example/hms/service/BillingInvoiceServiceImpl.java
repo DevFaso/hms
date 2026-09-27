@@ -23,7 +23,6 @@ import com.example.hms.enums.PaymentMethod;
 import com.example.hms.model.PaymentTransaction;
 import com.example.hms.payload.dto.portal.PatientPaymentRequestDTO;
 import com.example.hms.utility.RoleValidator;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -50,7 +49,6 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     private final BillingInvoiceMapper invoiceMapper;
     private final RoleValidator roleValidator;
     private final PaymentTransactionRepository paymentTransactionRepository;
-    private final BillingInvoiceService self;
 
     public BillingInvoiceServiceImpl(
             BillingInvoiceRepository invoiceRepository,
@@ -61,8 +59,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             PdfInvoiceService pdfInvoiceService,
             BillingInvoiceMapper invoiceMapper,
             RoleValidator roleValidator,
-            PaymentTransactionRepository paymentTransactionRepository,
-            @Lazy BillingInvoiceService self) {
+            PaymentTransactionRepository paymentTransactionRepository) {
         this.invoiceRepository = invoiceRepository;
         this.patientRepository = patientRepository;
         this.hospitalRepository = hospitalRepository;
@@ -72,7 +69,6 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         this.invoiceMapper = invoiceMapper;
         this.roleValidator = roleValidator;
         this.paymentTransactionRepository = paymentTransactionRepository;
-        this.self = self;
     }
 
     @Override
@@ -287,16 +283,23 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // before the invoice total moves.
         PaymentMethod method = parsePaymentMethod(payment.getPaymentMethod());
         BillingInvoice saved = applyPayment(invoiceId, patientId, payment.getAmount());
+        savePaymentRow(saved, payment.getAmount(), method,
+            payment.getTransactionReference(), payment.getNotes(), recordedBy);
+        return invoiceMapper.toBillingInvoiceResponseDTO(saved);
+    }
+
+    /** The ledger row a cashier reconciles against: one per recorded payment, patient or staff. */
+    private void savePaymentRow(BillingInvoice invoice, BigDecimal amount, PaymentMethod method,
+            String reference, String notes, UUID recordedBy) {
         paymentTransactionRepository.save(PaymentTransaction.builder()
-            .invoice(saved)
-            .amount(payment.getAmount())
+            .invoice(invoice)
+            .amount(amount)
             .paymentDate(LocalDate.now(java.time.ZoneId.systemDefault()))
             .paymentMethod(method)
-            .referenceNumber(blankToNull(payment.getTransactionReference()))
-            .notes(blankToNull(payment.getNotes()))
+            .referenceNumber(blankToNull(reference))
+            .notes(blankToNull(notes))
             .recordedBy(recordedBy)
             .build());
-        return invoiceMapper.toBillingInvoiceResponseDTO(saved);
     }
 
     private static PaymentMethod parsePaymentMethod(String raw) {
@@ -357,9 +360,17 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
     @Override
     @Transactional
-    public BillingInvoiceResponseDTO recordStaffPayment(UUID invoiceId, BigDecimal amount, Locale locale) {
+    public BillingInvoiceResponseDTO recordStaffPayment(UUID invoiceId,
+            com.example.hms.payload.dto.StaffPaymentRequestDTO payment, UUID recordedBy, Locale locale) {
         BillingInvoice invoice = invoiceRepository.findById(invoiceId)
             .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId));
-        return self.recordPayment(invoiceId, invoice.getPatient().getId(), amount, locale);
+        // The staff form may omit the method (the portal sends the amount
+        // only): OTHER says "not stated" rather than guessing cash.
+        PaymentMethod method = payment.getMethod() == null || payment.getMethod().isBlank()
+            ? PaymentMethod.OTHER
+            : parsePaymentMethod(payment.getMethod());
+        BillingInvoice saved = applyPayment(invoiceId, invoice.getPatient().getId(), payment.getAmount());
+        savePaymentRow(saved, payment.getAmount(), method, payment.getReference(), payment.getNotes(), recordedBy);
+        return invoiceMapper.toBillingInvoiceResponseDTO(saved);
     }
 }
