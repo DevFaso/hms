@@ -18,6 +18,10 @@ import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.InvoiceItemRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.PaymentTransactionRepository;
+import com.example.hms.enums.PaymentMethod;
+import com.example.hms.model.PaymentTransaction;
+import com.example.hms.payload.dto.portal.PatientPaymentRequestDTO;
 import com.example.hms.utility.RoleValidator;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
@@ -45,6 +49,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     private final PdfInvoiceService pdfInvoiceService;
     private final BillingInvoiceMapper invoiceMapper;
     private final RoleValidator roleValidator;
+    private final PaymentTransactionRepository paymentTransactionRepository;
     private final BillingInvoiceService self;
 
     public BillingInvoiceServiceImpl(
@@ -56,6 +61,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             PdfInvoiceService pdfInvoiceService,
             BillingInvoiceMapper invoiceMapper,
             RoleValidator roleValidator,
+            PaymentTransactionRepository paymentTransactionRepository,
             @Lazy BillingInvoiceService self) {
         this.invoiceRepository = invoiceRepository;
         this.patientRepository = patientRepository;
@@ -65,6 +71,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         this.pdfInvoiceService = pdfInvoiceService;
         this.invoiceMapper = invoiceMapper;
         this.roleValidator = roleValidator;
+        this.paymentTransactionRepository = paymentTransactionRepository;
         this.self = self;
     }
 
@@ -263,6 +270,46 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Override
     @Transactional
     public BillingInvoiceResponseDTO recordPayment(UUID invoiceId, UUID patientId, BigDecimal amount, Locale locale) {
+        return invoiceMapper.toBillingInvoiceResponseDTO(applyPayment(invoiceId, patientId, amount));
+    }
+
+    @Override
+    @Transactional
+    public BillingInvoiceResponseDTO recordPatientPayment(UUID invoiceId, UUID patientId, UUID recordedBy,
+            PatientPaymentRequestDTO payment, Locale locale) {
+        // Parse the method first: an unknown one must refuse the payment
+        // before the invoice total moves.
+        PaymentMethod method = parsePaymentMethod(payment.getPaymentMethod());
+        BillingInvoice saved = applyPayment(invoiceId, patientId, payment.getAmount());
+        paymentTransactionRepository.save(PaymentTransaction.builder()
+            .invoice(saved)
+            .amount(payment.getAmount())
+            .paymentDate(LocalDate.now(java.time.ZoneId.systemDefault()))
+            .paymentMethod(method)
+            .referenceNumber(blankToNull(payment.getTransactionReference()))
+            .notes(blankToNull(payment.getNotes()))
+            .recordedBy(recordedBy)
+            .build());
+        return invoiceMapper.toBillingInvoiceResponseDTO(saved);
+    }
+
+    private static PaymentMethod parsePaymentMethod(String raw) {
+        if (raw != null) {
+            for (PaymentMethod candidate : PaymentMethod.values()) {
+                if (candidate.name().equalsIgnoreCase(raw.trim())) {
+                    return candidate;
+                }
+            }
+        }
+        throw new BusinessException("Unsupported payment method.");
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    /** Validate the invoice is this patient's and payable, then add the amount and settle the status. */
+    private BillingInvoice applyPayment(UUID invoiceId, UUID patientId, BigDecimal amount) {
         BillingInvoice invoice = invoiceRepository.findById(invoiceId)
             .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND));
 
@@ -299,8 +346,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             invoice.setStatus(InvoiceStatus.PARTIALLY_PAID);
         }
 
-        BillingInvoice saved = invoiceRepository.save(invoice);
-        return invoiceMapper.toBillingInvoiceResponseDTO(saved);
+        return invoiceRepository.save(invoice);
     }
 
     @Override

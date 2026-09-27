@@ -399,9 +399,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     @Override
     @Transactional
-    public BillingInvoiceResponseDTO recordMyPayment(Authentication auth, UUID invoiceId, java.math.BigDecimal amount, Locale locale) {
+    public BillingInvoiceResponseDTO recordMyPayment(Authentication auth, UUID invoiceId,
+            com.example.hms.payload.dto.portal.PatientPaymentRequestDTO payment, Locale locale) {
+        UUID userId = authUtils.resolveUserId(auth)
+                .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
         UUID patientId = resolvePatientId(auth);
-        return billingInvoiceService.recordPayment(invoiceId, patientId, amount, locale);
+        return billingInvoiceService.recordPatientPayment(invoiceId, patientId, userId, payment, locale);
     }
 
     // ── Consents ─────────────────────────────────────────────────────────

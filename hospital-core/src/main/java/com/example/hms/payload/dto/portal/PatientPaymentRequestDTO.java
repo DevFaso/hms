@@ -32,7 +32,8 @@ public class PatientPaymentRequestDTO {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private String paymentMethod;
 
-    @Size(max = 500)
+    /** {@code billing.payment_transactions.reference_number} is VARCHAR(120). */
+    @Size(max = 120)
     @Schema(description = "Optional reference or transaction ID from external payment provider",
             example = "TXN-20260308-ABC123")
     private String transactionReference;

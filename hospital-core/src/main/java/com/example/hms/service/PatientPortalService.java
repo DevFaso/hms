@@ -103,7 +103,8 @@ public interface PatientPortalService {
     Page<BillingInvoiceResponseDTO> getMyInvoices(Authentication auth, Pageable pageable, Locale locale);
 
     // ── Pay an invoice ───────────────────────────────────────────────────
-    BillingInvoiceResponseDTO recordMyPayment(Authentication auth, UUID invoiceId, java.math.BigDecimal amount, Locale locale);
+    BillingInvoiceResponseDTO recordMyPayment(Authentication auth, UUID invoiceId,
+            com.example.hms.payload.dto.portal.PatientPaymentRequestDTO payment, Locale locale);
 
     // ── Consents ─────────────────────────────────────────────────────────
     Page<PatientConsentResponseDTO> getMyConsents(Authentication auth, Pageable pageable);

@@ -231,7 +231,7 @@ public class PatientPortalController {
             @PathVariable UUID invoiceId,
             @Valid @RequestBody PatientPaymentRequestDTO dto) {
         Locale locale = LocaleContextHolder.getLocale();
-        BillingInvoiceResponseDTO result = portalService.recordMyPayment(auth, invoiceId, dto.getAmount(), locale);
+        BillingInvoiceResponseDTO result = portalService.recordMyPayment(auth, invoiceId, dto, locale);
         return ResponseEntity.ok(ApiResponseWrapper.success(result));
     }
 
