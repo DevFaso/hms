@@ -43,8 +43,7 @@
  * ships unkeyed and nothing notices, because only a grand total of zero is an
  * error and the other thirty names make that impossible.
  */
-const ROLES_INSERT =
-  /INSERT\s+INTO\s+(?:"?[A-Za-z_]\w*"?\s*\.\s*)?"?roles"?[\s(][\s\S]*?(?:;|$)/gi;
+const ROLES_INSERT = /INSERT\s+INTO\s+(?:"?[A-Za-z_]\w*"?\s*\.\s*)?"?roles"?[\s(][\s\S]*?(?:;|$)/gi;
 /** A seeded name inside one of those. */
 const ROLE_LITERAL = /'(ROLE_[A-Z0-9_]+)'/g;
 /**

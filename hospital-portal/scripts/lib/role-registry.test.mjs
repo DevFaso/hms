@@ -123,7 +123,9 @@ test('punctuation inside a dollar-quoted VALUE does not end the statement', () =
     ['A', 'B', 'C'],
   );
   assert.deepEqual(
-    roleNamesFrom(sql(`INSERT INTO roles (description, code) VALUES (${D}Covid--19 lead${D}, 'ROLE_T');`)),
+    roleNamesFrom(
+      sql(`INSERT INTO roles (description, code) VALUES (${D}Covid--19 lead${D}, 'ROLE_T');`),
+    ),
     ['T'],
   );
 });
