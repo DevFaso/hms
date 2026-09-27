@@ -29,7 +29,14 @@ configs:
 packages:
   AppAuth:
     url: https://github.com/openid/AppAuth-iOS.git
-    from: "1.7.5"
+    # EXACT, not `from:`. ITSAppUsesNonExemptEncryption: false below was
+    # audited against what AppAuth contains at THIS version (PKCE's SHA-256
+    # and SecRandomCopyBytes, nothing of its own). A floating range let every
+    # CI checkout re-resolve to whatever 1.x was newest, so a release adding a
+    # cipher would have made the declaration untrue with no diff to review.
+    # 1.7.6 is what `from: "1.7.5"` was resolving to on CI (run 36234083516).
+    # Bumping this line means re-checking that declaration in the same PR.
+    exactVersion: "1.7.6"
 
 settings:
   base:
