@@ -5535,6 +5535,7 @@
       "UPLOAD_FAILED": "Failed to upload document",
       "LOAD_FAILED": "Failed to load documents",
       "FILE_REQUIRED": "Please select a file to upload",
+      "FILE_TOO_LARGE": "The file must be 10 MB or smaller.",
       "DELETE": "Delete",
       "DELETE_CONFIRM": "Are you sure you want to delete this document?",
       "DELETE_SUCCESS": "Document deleted",

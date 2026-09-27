@@ -5501,6 +5501,7 @@
       "UPLOAD_FAILED": "Échec du téléversement",
       "LOAD_FAILED": "Impossible de charger les documents",
       "FILE_REQUIRED": "Veuillez sélectionner un fichier",
+      "FILE_TOO_LARGE": "Le fichier ne doit pas dépasser 10 Mo.",
       "DELETE": "Supprimer",
       "DELETE_CONFIRM": "Êtes-vous sûr de vouloir supprimer ce document ?",
       "DELETE_SUCCESS": "Document supprimé",

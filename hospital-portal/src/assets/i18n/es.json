@@ -5535,6 +5535,7 @@
       "UPLOAD_FAILED": "Error al subir el documento",
       "LOAD_FAILED": "Error al cargar los documentos",
       "FILE_REQUIRED": "Por favor seleccione un archivo",
+      "FILE_TOO_LARGE": "El archivo no puede superar 10 MB.",
       "DELETE": "Eliminar",
       "DELETE_CONFIRM": "¿Está seguro de que desea eliminar este documento?",
       "DELETE_SUCCESS": "Documento eliminado",
