@@ -211,6 +211,8 @@ final class AuthManager: ObservableObject {
         // `KeycloakAuthService.clear()` also clears the OIDC keychain entries;
         // keep logout delegating through the service so the two paths cannot drift.
         KeycloakAuthService.shared.clear()
+        // Photos and voice notes a clinician sent do not outlive the session.
+        ChatAttachmentCache.shared.clear()
         currentUser = nil
         isAuthenticated = false
 
