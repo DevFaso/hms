@@ -40,7 +40,7 @@ class MessageThreadMarkReadTest {
         coEvery { api.getChatHistory(me, clinician, any(), any()) } returns Response.success(emptyList())
         coEvery { api.markChatRead(any(), any()) } returns Response.success(204, Unit)
 
-        val vm = MessageThreadViewModel(api, tokenStorage)
+        val vm = MessageThreadViewModel(api, tokenStorage, mockk(relaxed = true))
         vm.loadThread(clinician)
 
         coVerify(exactly = 1) { api.markChatRead(senderId = clinician, recipientId = me) }
@@ -54,7 +54,7 @@ class MessageThreadMarkReadTest {
             500, "{}".toResponseBody("application/json".toMediaType())
         )
 
-        val vm = MessageThreadViewModel(api, tokenStorage)
+        val vm = MessageThreadViewModel(api, tokenStorage, mockk(relaxed = true))
         vm.loadThread(clinician)
 
         assertFalse(vm.isLoading.value)
@@ -64,7 +64,7 @@ class MessageThreadMarkReadTest {
     @Test
     fun `no signed-in user id means no mark-read call`() = runTest {
         every { tokenStorage.userId } returns null
-        val vm = MessageThreadViewModel(api, tokenStorage)
+        val vm = MessageThreadViewModel(api, tokenStorage, mockk(relaxed = true))
         vm.loadThread(clinician)
         coVerify(exactly = 0) { api.markChatRead(any(), any()) }
     }

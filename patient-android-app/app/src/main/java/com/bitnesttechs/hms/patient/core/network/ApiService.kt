@@ -335,6 +335,11 @@ interface ApiService {
         @Path("recipientId") recipientId: String
     ): Response<Unit>
 
+    /** Participant-checked stream of a chat attachment's bytes (no public URL). */
+    @Streaming
+    @GET("chat/attachments/{attachmentId}/download")
+    suspend fun downloadChatAttachment(@Path("attachmentId") attachmentId: String): Response<ResponseBody>
+
     @POST("chat/send")
     suspend fun sendChatMessage(
         @Body request: SendChatMessageRequest

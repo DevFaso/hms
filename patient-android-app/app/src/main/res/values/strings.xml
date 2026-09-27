@@ -703,4 +703,15 @@
 
     <!-- Chat times -->
     <string name="chat_yesterday">Yesterday</string>
+
+    <!-- Chat attachments -->
+    <string name="chat_attachment_photo">Photo</string>
+    <string name="chat_attachment_view_photo">View the photo</string>
+    <string name="chat_attachment_voice">Voice message</string>
+    <string name="chat_attachment_voice_duration">Voice message · %1$s</string>
+    <string name="chat_attachment_play">Play the voice message</string>
+    <string name="chat_attachment_stop">Stop the voice message</string>
+    <string name="chat_attachment_file">Attachment</string>
+    <string name="chat_attachment_unavailable">This attachment could not be downloaded. Tap to try again.</string>
+    <string name="chat_attachment_no_viewer">No app on this phone can open this file</string>
 </resources>

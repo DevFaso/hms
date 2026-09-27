@@ -198,6 +198,15 @@ fun MessageThreadScreen(
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val locale = currentLocale()
+    val context = LocalContext.current
+    val attachmentFiles by viewModel.attachmentFiles.collectAsState()
+    val failedAttachments by viewModel.failedAttachments.collectAsState()
+    val playingAudioId by viewModel.playingAudioId.collectAsState()
+    var fullScreenPhoto by remember { mutableStateOf<java.io.File?>(null) }
+
+    fullScreenPhoto?.let { photo -> FullScreenPhoto(photo) { fullScreenPhoto = null } }
+    // A voice note stops when the thread is left, not when it ends on its own.
+    DisposableEffect(Unit) { onDispose { viewModel.stopAudio() } }
 
     LaunchedEffect(threadId) { viewModel.loadThread(threadId) }
     LaunchedEffect(messages.size) {
@@ -278,12 +287,29 @@ fun MessageThreadScreen(
                         color = if (isMine) BrandBlue else MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier.widthIn(max = 280.dp)
                     ) {
-                        Column(Modifier.padding(10.dp)) {
-                            Text(
-                                msg.content,
-                                color = if (isMine) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
+                        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            // Attachment-only messages are legal: a wound photo or a
+                            // voice note may come with no text at all.
+                            msg.attachmentList.forEach { attachment ->
+                                ChatAttachmentView(
+                                    attachment = attachment,
+                                    isMine = isMine,
+                                    file = attachmentFiles[attachment.id],
+                                    failed = attachment.id in failedAttachments,
+                                    playing = playingAudioId == attachment.id,
+                                    onFetch = { viewModel.fetchAttachment(attachment) },
+                                    onToggleAudio = { viewModel.toggleAudio(attachment) },
+                                    onOpenPhoto = { fullScreenPhoto = it },
+                                    onOpenFile = { viewModel.fetchAttachment(attachment) { file -> openAttachmentFile(context, file, attachment) } }
+                                )
+                            }
+                            msg.text?.let { text ->
+                                Text(
+                                    text,
+                                    color = if (isMine) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
                             ChatTime.bubbleLabel(msg.timestamp, LocalDateTime.now(), locale)?.let { sentAt -> Text(
                                 sentAt,
                                 color = if (isMine) Color.White.copy(alpha = 0.7f)

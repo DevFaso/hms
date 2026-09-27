@@ -74,6 +74,8 @@ class TokenStorage @Inject constructor(
         // Downloaded documents are PHI and outlive the session otherwise;
         // every path that ends a session goes through here.
         java.io.File(context.cacheDir, "documents").deleteRecursively()
+        // Chat photos and voice notes (ChatAttachmentCache.DIR), likewise PHI.
+        java.io.File(context.cacheDir, "chat_attachments").deleteRecursively()
         prefs.edit()
             .remove(KEY_ACCESS_TOKEN)
             .remove(KEY_REFRESH_TOKEN)

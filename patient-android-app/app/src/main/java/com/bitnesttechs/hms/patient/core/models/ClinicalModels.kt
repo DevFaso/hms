@@ -161,9 +161,51 @@ data class ChatMessageDto(
     @Json(name = "senderRole") val senderRole: String? = null,
     @Json(name = "recipientId") val recipientId: String = "",
     @Json(name = "recipientName") val recipientName: String? = null,
-    @Json(name = "content") val content: String = "",
-    @Json(name = "read") val read: Boolean = false
-)
+    /** Null (or blank) on an attachment-only message, which the backend allows. */
+    @Json(name = "content") val content: String? = null,
+    @Json(name = "read") val read: Boolean = false,
+    /**
+     * `ChatMessageResponseDTO.attachments`. Nullable on the wire so an
+     * explicit `null` cannot fail the whole history decode; read through
+     * [attachmentList].
+     */
+    @Json(name = "attachments") val attachments: List<ChatAttachmentDto>? = null
+) {
+    val attachmentList: List<ChatAttachmentDto> get() = attachments.orEmpty()
+
+    /** The text to draw, or null for a message that is only attachments. */
+    val text: String? get() = content?.takeIf { it.isNotBlank() }
+}
+
+/**
+ * `ChatAttachmentDTO` as the history returns it. The bytes have no public
+ * URL: they are streamed to the message's sender or recipient only, by
+ * `GET /chat/attachments/{id}/download`.
+ */
+@JsonClass(generateAdapter = true)
+data class ChatAttachmentDto(
+    @Json(name = "id") val id: String = "",
+    @Json(name = "displayName") val displayName: String? = null,
+    @Json(name = "contentType") val contentType: String? = null,
+    @Json(name = "sizeBytes") val sizeBytes: Long = 0,
+    @Json(name = "kind") val kind: String? = null,
+    /** Audio length in seconds (1..90); null for a photo. */
+    @Json(name = "durationSeconds") val durationSeconds: Int? = null
+) {
+    val kindEnum: ChatAttachmentKind get() = ChatAttachmentKind.fromWire(kind)
+}
+
+/** `ChatAttachmentKind` (PHOTO, AUDIO); anything newer is [OTHER] and offered as a file. */
+enum class ChatAttachmentKind {
+    PHOTO,
+    AUDIO,
+    OTHER;
+
+    companion object {
+        fun fromWire(raw: String?): ChatAttachmentKind =
+            entries.firstOrNull { it != OTHER && it.name.equals(raw?.trim(), ignoreCase = true) } ?: OTHER
+    }
+}
 
 @JsonClass(generateAdapter = true)
 data class SendChatMessageRequest(

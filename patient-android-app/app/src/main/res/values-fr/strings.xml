@@ -703,4 +703,15 @@
 
     <!-- Chat times -->
     <string name="chat_yesterday">Hier</string>
+
+    <!-- Chat attachments -->
+    <string name="chat_attachment_photo">Photo</string>
+    <string name="chat_attachment_view_photo">Voir la photo</string>
+    <string name="chat_attachment_voice">Message vocal</string>
+    <string name="chat_attachment_voice_duration">Message vocal · %1$s</string>
+    <string name="chat_attachment_play">Écouter le message vocal</string>
+    <string name="chat_attachment_stop">Arrêter le message vocal</string>
+    <string name="chat_attachment_file">Pièce jointe</string>
+    <string name="chat_attachment_unavailable">Cette pièce jointe n\'a pas pu être téléchargée. Touchez pour réessayer.</string>
+    <string name="chat_attachment_no_viewer">Aucune application de ce téléphone ne peut ouvrir ce fichier</string>
 </resources>
