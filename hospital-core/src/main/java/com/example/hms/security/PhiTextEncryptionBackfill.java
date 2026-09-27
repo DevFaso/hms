@@ -6,7 +6,10 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -28,11 +31,18 @@ import java.util.List;
  * nothing, and a row the application re-wrote in between (already through the
  * converter) is never overwritten with an older value.
  *
- * <p>Paged, and not one transaction: {@code integration_message_event.payload}
- * holds up to 64 KB per row, so the whole backlog is never loaded at once, and
- * each UPDATE commits on its own so progress survives a restart. A page in
- * which nothing could be updated ends that column's pass rather than looping
- * on the same rows.
+ * <p><b>Off the readiness path.</b> The listener only starts a background
+ * thread and returns, so a large {@code integration_message_event} backlog on
+ * prod never holds the application's readiness: Spring Boot publishes
+ * ACCEPTING_TRAFFIC after the ApplicationReadyEvent listeners return, and this
+ * one returns at once.
+ *
+ * <p>Batched: up to {@value #BATCH_SIZE} rows per transaction (one SELECT page,
+ * one JDBC batch of conditional UPDATEs, one commit), so progress survives a
+ * restart, {@code payload}'s up-to-64-KB rows are never loaded all at once, and
+ * a batch in which nothing could be updated ends that column's pass rather
+ * than looping on the same rows. Progress is logged as counts only - never a
+ * value, an id or anything read from a row.
  *
  * <p>Every SQL statement is a full constant literal - known tables, no dynamic
  * identifiers, values bound as parameters.
@@ -57,20 +67,32 @@ public class PhiTextEncryptionBackfill {
     private static final List<Target> TARGETS = List.of(
         new Target("empi.merge_events.notes",
             "SELECT id, notes AS val FROM empi.merge_events"
-                + " WHERE notes IS NOT NULL AND notes <> '' AND notes NOT LIKE 'gcm1:%' LIMIT 200",
+                + " WHERE notes IS NOT NULL AND notes <> '' AND notes NOT LIKE 'gcm1:%' LIMIT 500",
             "UPDATE empi.merge_events SET notes = ?"
                 + " WHERE id = ? AND notes NOT LIKE 'gcm1:%'"),
         new Target("clinical.integration_message_event.payload",
             "SELECT id, payload AS val FROM clinical.integration_message_event"
-                + " WHERE payload IS NOT NULL AND payload <> '' AND payload NOT LIKE 'gcm1:%' LIMIT 200",
+                + " WHERE payload IS NOT NULL AND payload <> '' AND payload NOT LIKE 'gcm1:%' LIMIT 500",
             "UPDATE clinical.integration_message_event SET payload = ?"
                 + " WHERE id = ? AND payload NOT LIKE 'gcm1:%'"));
 
+    /** Rows per transaction; the SELECTs' literal LIMIT says the same. */
+    static final int BATCH_SIZE = 500;
+
     private final JdbcTemplate jdbcTemplate;
+    private final PlatformTransactionManager transactionManager;
 
     private final EncryptedStringConverter converter = new EncryptedStringConverter();
 
+    /** Starts the backfill on its own thread and returns: never on the readiness path. */
     @EventListener(ApplicationReadyEvent.class)
+    public void startAfterReady() {
+        Thread worker = new Thread(this::backfill, "phi-text-encryption-backfill");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    /** The whole pass, synchronously, on the calling thread. */
     public void backfill() {
         if (EncryptionKeyHolder.getKey() == null) {
             log.info("PHI text encryption backfill skipped: no encryption key configured");
@@ -90,23 +112,42 @@ public class PhiTextEncryptionBackfill {
     }
 
     /** One legacy row: its id and its plaintext, read as a String (a TEXT column may be a CLOB). */
-    private record LegacyValue(Object id, String value) {
+    record LegacyValue(Object id, String value) {
     }
 
     private int backfillTarget(Target target) {
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
         int total = 0;
+        int batches = 0;
         while (true) {
-            List<LegacyValue> rows = jdbcTemplate.query(target.selectSql(),
-                (rs, rowNum) -> new LegacyValue(rs.getObject("id"), rs.getString("val")));
-            int updated = 0;
-            for (LegacyValue row : rows) {
-                String cipherText = converter.convertToDatabaseColumn(row.value());
-                updated += jdbcTemplate.update(target.updateSql(), cipherText, row.id());
-            }
-            total += updated;
-            if (rows.isEmpty() || updated == 0) {
+            Integer updated = tx.execute(status -> encryptOneBatch(target));
+            int done = updated == null ? 0 : updated;
+            if (done == 0) {
                 return total;
             }
+            total += done;
+            batches++;
+            log.info("PHI text encryption backfill: {} batch {} done, {} value(s) encrypted so far",
+                target.label(), batches, total);
         }
+    }
+
+    /** One page, encrypted and written back in one transaction; the number of rows actually updated. */
+    private int encryptOneBatch(Target target) {
+        List<LegacyValue> rows = jdbcTemplate.query(target.selectSql(),
+            (rs, rowNum) -> new LegacyValue(rs.getObject("id"), rs.getString("val")));
+        if (rows.isEmpty()) {
+            return 0;
+        }
+        List<Object[]> args = new ArrayList<>(rows.size());
+        for (LegacyValue row : rows) {
+            args.add(new Object[] {converter.convertToDatabaseColumn(row.value()), row.id()});
+        }
+        int updated = 0;
+        for (int count : jdbcTemplate.batchUpdate(target.updateSql(), args)) {
+            // A driver may report SUCCESS_NO_INFO (-2) for a batched row.
+            updated += count == java.sql.Statement.SUCCESS_NO_INFO ? 1 : Math.max(count, 0);
+        }
+        return updated;
     }
 }

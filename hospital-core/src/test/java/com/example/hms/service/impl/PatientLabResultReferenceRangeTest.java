@@ -79,10 +79,8 @@ class PatientLabResultReferenceRangeTest {
         result.setResultDate(LocalDateTime.now());
 
         when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId))).thenReturn(Set.of(hospitalId));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)),
-            any(Pageable.class))).thenReturn(List.of(result));
+        // The portal reads the patient's own rows, every hospital.
+        when(labResultRepository.findAllPatientResults(eq(patientId), any(Pageable.class))).thenReturn(List.of(result));
 
         return service.getLabResultsForPatientPortal(patientId, hospitalId, 10).get(0);
     }
@@ -117,6 +115,18 @@ class PatientLabResultReferenceRangeTest {
         assertThat(row.getReferenceRange())
             .as("the limits are real; a unit nobody configured is not")
             .isEqualTo("3.9 - 6.1");
+        assertThat(row.getUnit()).isEqualTo("mmol/L");
+    }
+
+    @Test
+    void noRangeInTheResultsUnit_noRangeIsShown() {
+        // Grading still falls back to the first range (an open clinical
+        // decision); the display must not show limits in another unit.
+        PatientLabResultResponseDTO row = readOnly("5.4", "mmol/L", range(70, 110, "mg/dL"));
+
+        assertThat(row.getReferenceRange())
+            .as("5.4 mmol/L is never shown beside 70 - 110 mg/dL")
+            .isNull();
         assertThat(row.getUnit()).isEqualTo("mmol/L");
     }
 }

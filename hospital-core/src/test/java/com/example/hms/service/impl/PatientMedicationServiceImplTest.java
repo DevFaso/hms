@@ -358,6 +358,30 @@ class PatientMedicationServiceImplTest {
     }
 
     @Test
+    void portalRead_withAHospitalId_showsEveryHospitalsRows_andDisclosesNothing() {
+        // A patient registered at two hospitals, the portal passing one of
+        // them: the patient is not a staff reader of their own chart, so both
+        // hospitals' prescriptions come back, the record policy is never asked
+        // and no cross-hospital disclosure is written.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = Hospital.builder().name("Hôpital B").build(); other.setId(otherHospitalId);
+        Prescription local = new Prescription(); local.setId(UUID.randomUUID()); local.setHospital(hospital);
+        local.setCreatedAt(LocalDateTime.now()); local.setMedicationName("Amlodipine");
+        Prescription foreign = new Prescription(); foreign.setId(UUID.randomUUID()); foreign.setHospital(other);
+        foreign.setCreatedAt(LocalDateTime.now().minusDays(1)); foreign.setMedicationName("Metformin");
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(local, foreign)));
+
+        List<PatientMedicationResponseDTO> result = service.getMedicationsForPatientPortal(patientId, hospitalId, 10);
+
+        assertThat(result).extracting(PatientMedicationResponseDTO::getHospitalId)
+            .containsExactly(hospitalId, otherHospitalId);
+        verify(recordAccessPolicy, never()).readableHospitalIds(any(), any(), any());
+        org.mockito.Mockito.verifyNoInteractions(reachRecorder);
+    }
+
+    @Test
     void staffRead_neverTakesTheOwnRecordResolver() {
         when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));

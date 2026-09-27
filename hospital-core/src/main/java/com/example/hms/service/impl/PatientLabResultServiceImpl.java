@@ -131,9 +131,10 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             visible = resolvePairs(results, portalView, effectiveLimit);
         }
 
-        if (hospitalId != null) {
-            // Accounted on what the patient is actually shown, not on the wider
-            // window the pairing needed.
+        if (!portalView && hospitalId != null) {
+            // Accounted on what the staff caller is actually shown, not on the
+            // wider window the pairing needed. Never on the portal: the patient
+            // reading their own results discloses nothing to anyone.
             UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
             reachRecorder.recordReach(patient.getId(), hospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(
@@ -150,16 +151,24 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
      * The newest {@code window} rows for this patient, within the readable
      * hospitals when a hospital scope is in play.
      *
-     * <p>With no hospital scope there are exactly two cases and they are not
-     * the same: the portal, where the patient owns every row and the
-     * patient-only query is correct, and a staff read whose scope failed to
-     * resolve, which is refused.
+     * <p>The portal (the patient's own record) always reads every row of the
+     * patient, whatever hospital id it passes. A staff read is scoped to the
+     * readable hospitals, and a staff read with no scope is refused.
      */
     private List<LabResult> fetchRows(Patient patient, UUID hospitalId, int window, boolean portalView) {
         // id breaks resultDate ties: the second, wider read must put the same
         // rows first, or a tie at the boundary could swap between the two.
         Pageable pageable = PageRequest.of(0, window, Sort.by(Sort.Direction.DESC, "resultDate", "id"));
         List<LabResult> results;
+        if (portalView) {
+            // Patient portal: the caller IS the patient (or a proxy the portal
+            // already authorized) and every row belongs to them, from every
+            // hospital. The hospital id the portal resolved is deliberately NOT
+            // a scope: scoping it made the patient a staff reader of their own
+            // chart (foreign rows dropped by consent or restriction). Newest
+            // first, limited at the database; resultDate is NOT NULL.
+            return labResultRepository.findAllPatientResults(patient.getId(), pageable);
+        }
         if (hospitalId != null) {
             Hospital hospital = hospitalRepository.findById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
@@ -170,7 +179,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patient.getId(), hospital.getId());
             results = labResultRepository
                 .findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(patient.getId(), readable, pageable);
-        } else if (!portalView) {
+        } else {
             // A staff read with no hospital scope. This used to fall through to
             // the patient-only query below, which returns EVERY hospital's rows
             // for the patient: RecordAccessPolicy.readableHospitalIds never ran,
@@ -210,15 +219,6 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             log.warn("Staff lab-result read refused: no hospital scope resolved for patient {}",
                 patient.getId());
             throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patient.getId());
-        } else {
-            // Patient portal only: the caller IS the patient (or a proxy the
-            // portal already authorized), the portal has no hospital scope to
-            // offer, and every row belongs to them. Every hospital's rows,
-            // newest first and limited at the database: this used to load the
-            // patient's whole result history, fully hydrated, to sort it and
-            // keep the window. resultDate is NOT NULL, so the in-memory
-            // nulls-last ordering this replaced has nothing to reorder.
-            results = labResultRepository.findAllPatientResults(patient.getId(), pageable);
         }
         return results;
     }

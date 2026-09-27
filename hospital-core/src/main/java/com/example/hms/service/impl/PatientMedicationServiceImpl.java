@@ -81,7 +81,16 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             : patientChartAccess.require(patientId, hospitalId);
 
         List<Prescription> prescriptions;
-        if (hospitalId != null) {
+        if (portalView) {
+            // The patient's own record (or a verified proxy's view of it):
+            // every row, from every hospital, whatever hospital the portal
+            // resolved. The hospital id is NOT a scope here - scoping it made
+            // the patient a staff reader of their own chart (foreign rows
+            // dropped by consent/restriction) and logged their own read as a
+            // cross-hospital disclosure. No reach is recorded: nothing is
+            // disclosed to anyone but the owner.
+            prescriptions = prescriptionRepository.findByPatient_Id(patient.getId(), Pageable.unpaged()).getContent();
+        } else if (hospitalId != null) {
             Hospital hospital = hospitalRepository.findById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
             // E9 #59c — medications follow the patient across the readable
@@ -92,7 +101,7 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             reachRecorder.recordReach(patient.getId(), hospital.getId(), requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(prescriptions.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospital.getId()),
                 "Cross-hospital medication read on the treatment relationship");
-        } else if (!portalView) {
+        } else {
             // A staff read with no hospital scope used to fall through to the
             // patient-only query below: every hospital's prescriptions, with
             // RecordAccessPolicy never consulted and no disclosure row (there
@@ -104,10 +113,6 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             // throws, so the refusal reads as "no such patient".
             log.warn("Staff medication read refused: no hospital scope resolved for patient {}", patient.getId());
             throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patient.getId());
-        } else {
-            // Patient portal only: the caller IS the patient (or a verified
-            // proxy) and every row belongs to them.
-            prescriptions = prescriptionRepository.findByPatient_Id(patient.getId(), Pageable.unpaged()).getContent();
         }
 
         int limitToApply = limit > 0 ? limit : DEFAULT_LIMIT;
