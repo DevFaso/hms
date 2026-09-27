@@ -11,6 +11,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.bitnesttechs.hms.patient.core.auth.AuthRepository
 import com.bitnesttechs.hms.patient.core.auth.TokenStorage
+import com.bitnesttechs.hms.patient.features.account.ActivationScreen
+import com.bitnesttechs.hms.patient.features.account.ForgotPasswordScreen
 import com.bitnesttechs.hms.patient.features.login.LoginScreen
 import dagger.hilt.android.EntryPointAccessors
 import androidx.compose.ui.platform.LocalContext
@@ -23,6 +25,8 @@ import kotlinx.coroutines.withContext
 sealed class Screen(val route: String) {
     object Login : Screen("login")
     object Main : Screen("main")
+    object ForgotPassword : Screen("forgot_password")
+    object Activation : Screen("activation")
 }
 
 @EntryPoint
@@ -73,8 +77,18 @@ fun AppNavigation() {
                     navController.navigate(Screen.Main.route) {
                         popUpTo(Screen.Login.route) { inclusive = true }
                     }
-                }
+                },
+                onForgotPassword = { navController.navigate(Screen.ForgotPassword.route) },
+                onActivateAccount = { navController.navigate(Screen.Activation.route) }
             )
+        }
+
+        composable(Screen.ForgotPassword.route) {
+            ForgotPasswordScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Activation.route) {
+            ActivationScreen(onBack = { navController.popBackStack() })
         }
 
         composable(Screen.Main.route) {

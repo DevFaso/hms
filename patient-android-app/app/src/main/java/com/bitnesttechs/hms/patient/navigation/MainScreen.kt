@@ -97,7 +97,7 @@ fun MainScreen(onLogout: () -> Unit) {
     // Show bottom bar on tab routes AND drawer sub-screens
     // Full-screen routes: no bottom bar and no drawer swipe, so a tab tap cannot
     // pop a form with a request in flight (see pre_checkin in #703).
-    val hideBottomBarRoutes = setOf("thread/{threadId}", "appointment_detail", "pre_checkin", "screenings")
+    val hideBottomBarRoutes = setOf("thread/{threadId}", "appointment_detail", "pre_checkin", "screenings", "change_password")
     val showBottomBar = currentDestination?.route !in hideBottomBarRoutes
 
     ModalNavigationDrawer(
@@ -213,6 +213,12 @@ fun MainScreen(onLogout: () -> Unit) {
                     ProfileScreen(
                         navController = navController,
                         onLogout = onLogout
+                    )
+                }
+
+                composable("change_password") {
+                    com.bitnesttechs.hms.patient.features.account.ChangePasswordScreen(
+                        onBack = { navController.popBackStack() }
                     )
                 }
 

@@ -53,6 +53,16 @@ android {
             ?: "https://api.e-keneya.com/api"
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
 
+        // The web portal, for the account steps the app hands over to it
+        // (MFA enrolment, and a fallback for password reset). Derived from
+        // the API URL so a build pointed at dev (-PapiBaseUrl) opens the dev
+        // portal: https://dev.e-keneya.com/api -> https://dev.e-keneya.com,
+        // https://api.e-keneya.com/api -> https://e-keneya.com.
+        // -PwebPortalUrl overrides it.
+        val webPortalUrl = (project.findProperty("webPortalUrl") as String?)
+            ?: apiBaseUrl.removeSuffix("/").removeSuffix("/api").replace("://api.", "://")
+        buildConfigField("String", "WEB_PORTAL_URL", "\"$webPortalUrl\"")
+
         // Keycloak / OIDC config (KC-3). SSO is OFF by default until prod Keycloak is
         // provisioned (tasks-keycloak.md P-2). Override via local.properties or CI env.
         val keycloakIssuer = localProps.getProperty("KEYCLOAK_ISSUER", "")
@@ -103,6 +113,7 @@ android {
             // The dev API is served same-origin by the portal host; the
             // `api.dev.` subdomain was never provisioned.
             buildConfigField("String", "API_BASE_URL", "\"https://dev.e-keneya.com/api\"")
+            buildConfigField("String", "WEB_PORTAL_URL", "\"https://dev.e-keneya.com\"")
         }
         release {
             isMinifyEnabled = true

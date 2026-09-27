@@ -17,6 +17,30 @@ interface ApiService {
     @POST("auth/token/refresh")
     suspend fun refreshToken(@Body request: RefreshTokenRequest): Response<LoginResponse>
 
+    /** Second step of a sign-in that answered `mfaRequired`; success is a normal login body. */
+    @POST("auth/mfa/verify")
+    suspend fun verifyMfa(@Body request: MfaVerifyRequest): Response<LoginResponse>
+
+    /** 204 whether or not the address exists: the backend does not disclose it. */
+    @POST("auth/password/request")
+    suspend fun requestPasswordReset(@Body request: PasswordResetRequest): Response<Unit>
+
+    /** 204 whatever the token's validity (not disclosed either). */
+    @POST("auth/password/confirm")
+    suspend fun confirmPasswordReset(@Body request: PasswordResetConfirm): Response<Unit>
+
+    /** 200 with the same neutral message whatever the address. */
+    @POST("auth/resend-verification")
+    suspend fun resendVerification(@Query("email") email: String): Response<Unit>
+
+    /** 200 activates the account; 400 when the link is invalid or expired. */
+    @GET("auth/verify-email")
+    suspend fun verifyEmail(@Query("email") email: String, @Query("token") token: String): Response<Unit>
+
+    /** 200; 401 when the current password is wrong; 400 with a message for a refused new one. */
+    @POST("auth/me/change-password")
+    suspend fun changePassword(@Body request: ChangePasswordRequest): Response<Unit>
+
     /** The HMS identity of the current token, for either sign-in path. */
     @GET("auth/session/bootstrap")
     suspend fun getSessionBootstrap(): Response<SessionBootstrapDto>

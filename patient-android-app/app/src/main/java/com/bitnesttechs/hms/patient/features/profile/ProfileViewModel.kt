@@ -38,6 +38,9 @@ class ProfileViewModel @Inject constructor(
     private val _profileImageUrl = MutableStateFlow<String?>(null)
     val profileImageUrl: StateFlow<String?> = _profileImageUrl
 
+    /** Only a password (HMS) session can change its password here; SSO passwords live in Keycloak. */
+    val canChangePassword: Boolean get() = !authRepository.isSsoSession
+
     init { load() }
 
     fun load() {

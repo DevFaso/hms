@@ -360,6 +360,39 @@ fun ProfileScreen(
                 }
             }
 
+            // Password (an SSO account's password lives in Keycloak, not here)
+            if (viewModel.canChangePassword) {
+                item { ProfileSection(stringResource(R.string.password_label)) }
+                item {
+                    ProfileCard {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { navController?.navigate("change_password") }
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = BrandSoft,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.Lock, null, tint = BrandPrimary, modifier = Modifier.size(18.dp))
+                                }
+                            }
+                            Text(
+                                stringResource(R.string.change_password_title),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+
             // Logout
             item {
                 Spacer(Modifier.height(8.dp))

@@ -50,6 +50,8 @@ import javax.inject.Inject
 fun LoginScreen(
     tokenStorage: TokenStorage,
     onLoginSuccess: () -> Unit,
+    onForgotPassword: () -> Unit = {},
+    onActivateAccount: () -> Unit = {},
     viewModel: LoginViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -137,6 +139,17 @@ fun LoginScreen(
                     modifier = Modifier.padding(24.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    val mfa = uiState.mfa
+                    if (mfa != null) {
+                        MfaStep(
+                            challenge = mfa,
+                            error = uiState.mfaError,
+                            busy = uiState.isLoading,
+                            onVerify = viewModel::verifyMfa,
+                            onCancel = viewModel::cancelMfa
+                        )
+                        return@Column
+                    }
                     Text(
                         stringResource(R.string.sign_in),
                         style = MaterialTheme.typography.headlineSmall,
@@ -256,13 +269,35 @@ fun LoginScreen(
                         }
                     }
 
+                    // The backend answers 401 for an inactive account as for a
+                    // wrong password, so after one the activation flow is named.
+                    if (uiState.showActivationHint) {
+                        Text(
+                            stringResource(R.string.login_inactive_hint),
+                            color = Color(0xFF1C1B1F),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+
                     // Forgot password
                     TextButton(
-                        onClick = { /* TODO: forgot password flow */ },
+                        onClick = onForgotPassword,
                         modifier = Modifier.align(Alignment.CenterHorizontally)
                     ) {
                         Text(
                             stringResource(R.string.forgot_password),
+                            color = BrandPrimaryDark,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+
+                    // Activation (resend the e-mail, or activate with its link)
+                    TextButton(
+                        onClick = onActivateAccount,
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    ) {
+                        Text(
+                            stringResource(R.string.resend_activation),
                             color = BrandPrimaryDark,
                             style = MaterialTheme.typography.bodyMedium
                         )
@@ -320,4 +355,69 @@ private fun launchBiometric(context: android.content.Context, viewModel: LoginVi
 internal fun AuthResult.Error.text(context: android.content.Context): String {
     val headline = context.getString(messageRes)
     return detail?.takeIf { it.isNotBlank() }?.let { "$headline\n$it" } ?: headline
+}
+
+/**
+ * The MFA challenge, inside the sign-in card. A code from an authenticator or
+ * a backup code; an account with no factor yet is sent to the web portal,
+ * where enrolment lives.
+ */
+@Composable
+private fun MfaStep(
+    challenge: AuthResult.MfaRequired,
+    error: AuthResult.Error?,
+    busy: Boolean,
+    onVerify: (String) -> Unit,
+    onCancel: () -> Unit
+) {
+    val context = LocalContext.current
+    var code by remember { mutableStateOf("") }
+    val dark = Color(0xFF1C1B1F)
+    Text(
+        stringResource(R.string.mfa_title),
+        style = MaterialTheme.typography.headlineSmall,
+        fontWeight = FontWeight.Bold,
+        color = dark
+    )
+    if (!challenge.enrolled) {
+        Text(stringResource(R.string.mfa_not_enrolled), color = dark, style = MaterialTheme.typography.bodyMedium)
+        Button(
+            onClick = { com.bitnesttechs.hms.patient.features.account.openWebPortal(context, "/login") },
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
+        ) { Text(stringResource(R.string.open_web_portal)) }
+    } else {
+        Text(stringResource(R.string.mfa_instruction), color = dark, style = MaterialTheme.typography.bodyMedium)
+        OutlinedTextField(
+            value = code,
+            onValueChange = { code = it.take(8) },
+            label = { Text(stringResource(R.string.mfa_code_label)) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { onVerify(code) }),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = dark,
+                unfocusedTextColor = dark,
+                focusedBorderColor = BrandPrimary,
+                focusedLabelColor = BrandPrimary,
+                cursorColor = BrandPrimary
+            ),
+            modifier = Modifier.fillMaxWidth()
+        )
+        error?.let {
+            Text(it.text(context), color = com.bitnesttechs.hms.patient.ui.theme.StatusNegativeOnLight, style = MaterialTheme.typography.bodyMedium)
+        }
+        Button(
+            onClick = { onVerify(code) },
+            enabled = code.isNotBlank() && !busy,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
+        ) {
+            if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+            else Text(stringResource(R.string.mfa_verify), fontSize = 16.sp)
+        }
+    }
+    TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.account_back_to_sign_in), color = BrandPrimaryDark)
+    }
 }

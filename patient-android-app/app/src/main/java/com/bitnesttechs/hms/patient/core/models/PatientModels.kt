@@ -11,6 +11,31 @@ data class LoginRequest(
     @Json(name = "password") val password: String
 )
 
+/** `MfaController.MfaLoginVerifyRequest`: the challenge token and a TOTP or backup code (6-8 chars). */
+@JsonClass(generateAdapter = true)
+data class MfaVerifyRequest(
+    @Json(name = "mfaToken") val mfaToken: String,
+    @Json(name = "code") val code: String
+)
+
+/** `PasswordResetRequestDTO`. */
+@JsonClass(generateAdapter = true)
+data class PasswordResetRequest(@Json(name = "email") val email: String)
+
+/** `PasswordResetConfirmDTO`: the raw token from the e-mailed link. */
+@JsonClass(generateAdapter = true)
+data class PasswordResetConfirm(
+    @Json(name = "token") val token: String,
+    @Json(name = "newPassword") val newPassword: String
+)
+
+/** `AuthController.ChangePasswordRequest`. */
+@JsonClass(generateAdapter = true)
+data class ChangePasswordRequest(
+    @Json(name = "currentPassword") val currentPassword: String,
+    @Json(name = "newPassword") val newPassword: String
+)
+
 /** Body of POST /auth/logout; a null token is omitted (Moshi skips nulls). */
 @JsonClass(generateAdapter = true)
 data class LogoutRequest(
@@ -27,7 +52,8 @@ data class RefreshTokenRequest(
  */
 @JsonClass(generateAdapter = true)
 data class LoginResponse(
-    @Json(name = "accessToken") val accessToken: String,
+    /** Absent on an MFA challenge ([mfaRequired]); the tokens come from /auth/mfa/verify then. */
+    @Json(name = "accessToken") val accessToken: String? = null,
     @Json(name = "refreshToken") val refreshToken: String? = null,
     @Json(name = "id") val id: String? = null,
     @Json(name = "username") val username: String? = null,
@@ -38,7 +64,12 @@ data class LoginResponse(
     @Json(name = "patientId") val patientId: String? = null,
     @Json(name = "profileType") val profileType: String? = null,
     @Json(name = "primaryHospitalId") val primaryHospitalId: String? = null,
-    @Json(name = "primaryHospitalName") val primaryHospitalName: String? = null
+    @Json(name = "primaryHospitalName") val primaryHospitalName: String? = null,
+    /** A second factor is required: submit [mfaToken] with a code to /auth/mfa/verify. */
+    @Json(name = "mfaRequired") val mfaRequired: Boolean = false,
+    /** False when the account must first enrol a second factor (done on the web portal). */
+    @Json(name = "mfaEnrolled") val mfaEnrolled: Boolean = false,
+    @Json(name = "mfaToken") val mfaToken: String? = null
 ) {
     /** Build a UserDto from the flat fields for backward compat. */
     val user: UserDto get() = UserDto(

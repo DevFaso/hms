@@ -807,4 +807,56 @@
     <string name="gender_non_binary">Non binaire</string>
     <string name="gender_other">Autre</string>
     <string name="gender_prefer_not_to_say">Préfère ne pas répondre</string>
+
+    <!-- Account flows: forgot password, activation, MFA challenge, change password (wording from the portal LOGIN.*, VERIFY.*, MFA.*, PROFILE.*) -->
+    <string name="account_back_to_sign_in">Retour à la connexion</string>
+    <string name="email_address">Adresse e-mail</string>
+    <string name="enter_email">Veuillez saisir votre adresse e-mail.</string>
+    <string name="open_web_portal">Utiliser plutôt le portail web</string>
+    <string name="new_password">Nouveau mot de passe</string>
+    <string name="confirm_password">Confirmer le mot de passe</string>
+    <string name="password_min_length">Le mot de passe doit contenir au moins 8 caractères.</string>
+    <string name="passwords_mismatch">Les mots de passe ne correspondent pas.</string>
+    <string name="reset_title">Réinitialiser le mot de passe</string>
+    <string name="reset_instruction">Saisissez l\'adresse e-mail associée à votre compte et nous vous enverrons un lien pour réinitialiser votre mot de passe.</string>
+    <string name="reset_send_link">Envoyer le lien de réinitialisation</string>
+    <string name="reset_link_sent">Si cette adresse e-mail est enregistrée, un lien de réinitialisation a été envoyé. Veuillez vérifier votre boîte de réception.</string>
+    <string name="reset_code_title">Définir un nouveau mot de passe</string>
+    <string name="reset_code_instruction">Collez le lien reçu par e-mail, ou le code à la fin de ce lien. Ce même lien ouvre aussi la page de réinitialisation dans votre navigateur.</string>
+    <string name="reset_code_label">Lien ou code reçu par e-mail</string>
+    <string name="reset_code_missing">Collez le lien ou le code reçu par e-mail.</string>
+    <string name="reset_submit">Réinitialiser le mot de passe</string>
+    <string name="reset_done">Si le code était valide, votre mot de passe a été modifié. Vous pouvez maintenant vous connecter.</string>
+    <string name="reset_failed">Votre mot de passe n\'a pas pu être réinitialisé.</string>
+    <string name="resend_activation">Renvoyer l\'e-mail d\'activation</string>
+    <string name="login_inactive_hint">Compte pas encore actif ? Activez-le avec le lien reçu par e-mail, ou demandez-en un nouveau.</string>
+    <string name="activation_title">Activer votre compte</string>
+    <string name="activation_instruction">Saisissez l\'adresse e-mail de votre compte et nous enverrons un nouveau lien d\'activation, valable 24 heures.</string>
+    <string name="activation_send_link">Envoyer le lien d\'activation</string>
+    <string name="activation_link_sent">Si cette adresse correspond à un compte non encore activé, un nouveau lien d\'activation est en route. Il est valable 24 heures.</string>
+    <string name="activation_have_link_title">Vous avez déjà l\'e-mail d\'activation ?</string>
+    <string name="activation_link_instruction">Collez ici le lien d\'activation reçu par e-mail. Un code seul fonctionne aussi avec votre adresse e-mail ci-dessus.</string>
+    <string name="activation_link_label">Lien ou code d\'activation</string>
+    <string name="activation_link_missing">Collez le lien d\'activation, ou le code avec votre adresse e-mail.</string>
+    <string name="activation_submit">Activer mon compte</string>
+    <string name="activation_done_title">Votre compte est actif</string>
+    <string name="activation_done_message">Votre adresse e-mail est confirmée. Vous pouvez vous connecter.</string>
+    <string name="activation_failed">Le lien est invalide ou a expiré. Saisissez votre adresse e-mail pour en recevoir un nouveau.</string>
+    <string name="mfa_title">Vérifiez votre identité</string>
+    <string name="mfa_instruction">Saisissez le code à 6 chiffres de votre application d\'authentification ou un code de secours à 8 caractères.</string>
+    <string name="mfa_code_label">Code de vérification</string>
+    <string name="mfa_verify">Vérifier</string>
+    <string name="mfa_invalid_format">Saisissez un code valide (TOTP à 6 chiffres ou code de secours à 8 caractères).</string>
+    <string name="mfa_error_invalid_code">Code incorrect, ou la connexion a pris trop de temps. Réessayez, ou reconnectez-vous.</string>
+    <string name="mfa_not_enrolled">Votre compte exige la vérification en deux étapes, qui n\'est pas encore configurée. Connectez-vous une fois sur le portail web pour la configurer, puis reconnectez-vous ici.</string>
+    <string name="change_password_title">Changer le mot de passe</string>
+    <string name="current_password">Mot de passe actuel</string>
+    <string name="change_password_submit">Changer le mot de passe</string>
+    <string name="change_password_done">Votre mot de passe a été modifié.</string>
+    <string name="change_password_wrong_current">Le mot de passe actuel est incorrect.</string>
+    <string name="change_password_failed">Votre mot de passe n\'a pas pu être modifié.</string>
+    <string name="change_password_same">Le nouveau mot de passe doit être différent de l\'actuel.</string>
+
+    <!-- Account flows: forgot password, activation, MFA challenge, change password (wording from the portal LOGIN.*, VERIFY.*, MFA.*, PROFILE.*) -->
+    <string name="change_password_current_required">Saisissez votre mot de passe actuel.</string>
 </resources>

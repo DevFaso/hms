@@ -807,4 +807,56 @@
     <string name="gender_non_binary">Non-Binary</string>
     <string name="gender_other">Other</string>
     <string name="gender_prefer_not_to_say">Prefer Not to Say</string>
+
+    <!-- Account flows: forgot password, activation, MFA challenge, change password (wording from the portal LOGIN.*, VERIFY.*, MFA.*, PROFILE.*) -->
+    <string name="account_back_to_sign_in">Back to sign in</string>
+    <string name="email_address">Email address</string>
+    <string name="enter_email">Please enter your email address.</string>
+    <string name="open_web_portal">Use the web portal instead</string>
+    <string name="new_password">New password</string>
+    <string name="confirm_password">Confirm password</string>
+    <string name="password_min_length">Password must be at least 8 characters.</string>
+    <string name="passwords_mismatch">Passwords do not match.</string>
+    <string name="reset_title">Reset password</string>
+    <string name="reset_instruction">Enter the email address associated with your account and we will send you a link to reset your password.</string>
+    <string name="reset_send_link">Send reset link</string>
+    <string name="reset_link_sent">If that email is registered, a password reset link has been sent. Please check your inbox.</string>
+    <string name="reset_code_title">Set a new password</string>
+    <string name="reset_code_instruction">Paste the link from the e-mail, or the code at the end of it. The same link also opens the reset page in your browser.</string>
+    <string name="reset_code_label">Link or code from the e-mail</string>
+    <string name="reset_code_missing">Paste the link or the code from the e-mail.</string>
+    <string name="reset_submit">Reset password</string>
+    <string name="reset_done">If the code was valid, your password has been changed. You can now sign in.</string>
+    <string name="reset_failed">Your password could not be reset.</string>
+    <string name="resend_activation">Resend activation e-mail</string>
+    <string name="login_inactive_hint">Account not active yet? Activate it with the link from your e-mail, or ask for a new one.</string>
+    <string name="activation_title">Activate your account</string>
+    <string name="activation_instruction">Enter the e-mail address of your account and we will send a new activation link. It is valid for 24 hours.</string>
+    <string name="activation_send_link">Send activation link</string>
+    <string name="activation_link_sent">If this address belongs to an account that is not yet active, a new activation link is on its way. It is valid for 24 hours.</string>
+    <string name="activation_have_link_title">Already have the activation e-mail?</string>
+    <string name="activation_link_instruction">Paste the activation link from the e-mail here. A code alone also works with your e-mail address above.</string>
+    <string name="activation_link_label">Activation link or code</string>
+    <string name="activation_link_missing">Paste the activation link, or the code with your e-mail address.</string>
+    <string name="activation_submit">Activate my account</string>
+    <string name="activation_done_title">Your account is active</string>
+    <string name="activation_done_message">Your e-mail address is confirmed. You can sign in now.</string>
+    <string name="activation_failed">The link is invalid or has expired. Enter your e-mail address to receive a new one.</string>
+    <string name="mfa_title">Verify your identity</string>
+    <string name="mfa_instruction">Enter the 6-digit code from your authenticator app, or an 8-character backup code.</string>
+    <string name="mfa_code_label">Verification code</string>
+    <string name="mfa_verify">Verify</string>
+    <string name="mfa_invalid_format">Enter a valid code (6-digit TOTP or 8-character backup code).</string>
+    <string name="mfa_error_invalid_code">Invalid code, or the sign-in took too long. Try again, or sign in again.</string>
+    <string name="mfa_not_enrolled">Your account requires two-step verification, which is not set up yet. Sign in once on the web portal to set it up, then sign in here again.</string>
+    <string name="change_password_title">Change password</string>
+    <string name="current_password">Current password</string>
+    <string name="change_password_submit">Change password</string>
+    <string name="change_password_done">Your password has been changed.</string>
+    <string name="change_password_wrong_current">Current password is incorrect.</string>
+    <string name="change_password_failed">Your password could not be changed.</string>
+    <string name="change_password_same">The new password must differ from the current one.</string>
+
+    <!-- Account flows: forgot password, activation, MFA challenge, change password (wording from the portal LOGIN.*, VERIFY.*, MFA.*, PROFILE.*) -->
+    <string name="change_password_current_required">Enter your current password.</string>
 </resources>
