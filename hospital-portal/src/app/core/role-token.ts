@@ -26,8 +26,11 @@ const ROLE_PREFIX = 'ROLE_';
  * caller can hide the chip instead of rendering an English placeholder.
  *
  * Lives in `core/` rather than beside one feature service because every
- * surface that shows a role needs it: the staff pickers, the user registration
- * form, the shell, the login role cards and the patient's access log.
+ * staff surface that shows a role needs it, through `RoleLabelPipe`: the staff
+ * pickers, the user registration form, the shell and the login role cards. The
+ * two patient surfaces (the access log and the booking provider picker) no
+ * longer call it: their READ paths on the server now send the bare token, or
+ * null for "Unknown Role", legacy rows included.
  */
 export function bareRole(raw: string | null | undefined): string | null {
   const value = raw?.trim();

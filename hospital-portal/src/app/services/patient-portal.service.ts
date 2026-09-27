@@ -2,8 +2,6 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, map, catchError, of } from 'rxjs';
 
-import { bareRole } from '../core/role-token';
-
 /* ── DTOs matching backend PatientPortalController ── */
 
 export interface PatientProfileDTO {
@@ -684,7 +682,8 @@ export interface SchedulingProvider {
   id: string;
   name: string;
   fullName?: string;
-  role?: string;
+  /** Bare role token (DOCTOR), or null/absent when the provider has none. */
+  role?: string | null;
 }
 
 export interface PatientPaymentRequest {
@@ -1136,15 +1135,15 @@ export class PatientPortalService {
         params: { page: 0, size: 50 },
       })
       .pipe(
+        // actorRole arrives bare, or null for an unresolvable role:
+        // DisclosureAccountingServiceImpl.toEntry normalises every row,
+        // legacy spellings included, so the portal no longer maps it.
         map((r) => {
           const d = r.data;
           if (!d) {
             throw new Error('empty disclosure accounting response');
           }
-          return {
-            ...d,
-            entries: (d.entries ?? []).map((e) => ({ ...e, actorRole: bareRole(e.actorRole) })),
-          };
+          return { ...d, entries: d.entries ?? [] };
         }),
       );
   }
@@ -1198,9 +1197,9 @@ export class PatientPortalService {
         `${this.base}/booking/hospitals/${hospitalId}/departments/${departmentId}/providers`,
       )
       .pipe(
-        // getProvidersForDepartment sends assignment.getRole().getName(), so
-        // every row arrives prefixed.
-        map((r) => (r.data ?? []).map((p) => ({ ...p, role: bareRole(p.role) ?? undefined }))),
+        // role arrives bare, or null when the provider has no role:
+        // PatientPortalServiceImpl.getProvidersForDepartment strips the prefix.
+        map((r) => r.data ?? []),
         catchError(() => of([])),
       );
   }
