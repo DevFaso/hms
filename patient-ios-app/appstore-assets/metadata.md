@@ -236,7 +236,7 @@ from the build.
 
 ```text
 Demo account credentials are provided above. The app connects to our
-development backend at https://api.dev.e-keneya.com/api.
+development backend at https://dev.e-keneya.com/api.
 
 After signing in with the demo credentials, the reviewer will land on the
 Dashboard screen showing the patient's health summary, upcoming
