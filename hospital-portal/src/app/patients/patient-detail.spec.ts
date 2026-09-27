@@ -61,6 +61,8 @@ describe('PatientDetailComponent', () => {
       ['isSuperAdmin', 'hasAnyActiveRole', 'effectiveHospitalIdForRequest'],
       {
         activeHospitalId: 'h1',
+        activeRole: null,
+        activeRoles: [] as string[],
       },
     );
     // The scope the page's requests actually carry. On the real service this is
@@ -160,6 +162,48 @@ describe('PatientDetailComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  /** Pin the caller's roles on the spy (a single role becomes the active role, as the real service does). */
+  function holdRoles(roles: string[]): void {
+    (
+      Object.getOwnPropertyDescriptor(roleContextSpy, 'activeRoles')!.get as jasmine.Spy
+    ).and.returnValue(roles);
+    (
+      Object.getOwnPropertyDescriptor(roleContextSpy, 'activeRole')!.get as jasmine.Spy
+    ).and.returnValue(roles.length === 1 ? roles[0] : null);
+  }
+
+  describe('Best-Practice Advisory panel (POST /cds-services is clinicians only)', () => {
+    it('a receptionist opens the chart with no panel and no CDS request', () => {
+      holdRoles(['ROLE_RECEPTIONIST']);
+      fixture.detectChanges();
+
+      expect(component.patient()).toEqual(mockPatient);
+      expect(fixture.nativeElement.querySelector('app-bpa-panel')).toBeNull();
+      expect(bpaServiceSpy.evaluate).not.toHaveBeenCalled();
+    });
+
+    it('a doctor gets the panel, which evaluates the patient', () => {
+      holdRoles(['ROLE_DOCTOR']);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('app-bpa-panel')).not.toBeNull();
+      expect(bpaServiceSpy.evaluate).toHaveBeenCalledOnceWith('p1', undefined);
+    });
+
+    it('a multi-role user pinned to reception gets no panel', () => {
+      (
+        Object.getOwnPropertyDescriptor(roleContextSpy, 'activeRoles')!.get as jasmine.Spy
+      ).and.returnValue(['ROLE_RECEPTIONIST', 'ROLE_NURSE']);
+      (
+        Object.getOwnPropertyDescriptor(roleContextSpy, 'activeRole')!.get as jasmine.Spy
+      ).and.returnValue('ROLE_RECEPTIONIST');
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('app-bpa-panel')).toBeNull();
+      expect(bpaServiceSpy.evaluate).not.toHaveBeenCalled();
+    });
   });
 
   it('should load patient on init', () => {
