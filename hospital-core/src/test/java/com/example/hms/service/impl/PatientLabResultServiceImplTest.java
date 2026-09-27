@@ -196,8 +196,10 @@ class PatientLabResultServiceImplTest {
         lr.setReleased(true);
         LabResultResponseDTO mapped = new LabResultResponseDTO();
         mapped.setSeverityFlag("NORMAL");
-        mapped.setReferenceRanges(List.of(LabResultReferenceRangeDTO.builder().minValue(3.9).maxValue(6.1).unit("mg/dL").build()));
+        LabResultReferenceRangeDTO graded = LabResultReferenceRangeDTO.builder().minValue(3.9).maxValue(6.1).unit("mg/dL").build();
+        mapped.setReferenceRanges(List.of(graded));
         when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
+        when(labResultMapper.gradedReferenceRange(lr)).thenReturn(graded);
         givenTheOnlyRowIs(lr);
 
         PatientLabResultResponseDTO row = service.getLabResultsForPatientPortal(patientId, hospitalId, 10).get(0);
@@ -508,6 +510,7 @@ class PatientLabResultServiceImplTest {
         LabResultResponseDTO mapped = new LabResultResponseDTO();
         mapped.setReferenceRanges(List.of(range));
         when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
+        when(labResultMapper.gradedReferenceRange(lr)).thenReturn(range);
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));

@@ -112,6 +112,26 @@ public class LabResultMapper {
             .build();
     }
 
+    /**
+     * The reference range {@link #toResponseDTO} graded this result against
+     * (its {@code severityFlag}), or null when there was none to grade
+     * against. A reader showing "the" range beside the value must show THIS
+     * one: on a test configured with a range per unit, the first configured
+     * range can be in a unit the value was never expressed in, and a patient
+     * reading 5.4 mmol/L beside 70-110 mg/dL draws the wrong conclusion.
+     *
+     * <p>One selection, {@link #findMatchingRange}, serves both the grading
+     * and this, so the two cannot drift.
+     */
+    public LabResultReferenceRangeDTO gradedReferenceRange(LabResult result) {
+        if (result == null) {
+            return null;
+        }
+        OrderContext context = extractOrderContext(result.getLabOrder());
+        LabTestReferenceRange graded = findMatchingRange(result.getResultUnit(), context.referenceRanges());
+        return graded == null ? null : toReferenceRangeDto(graded);
+    }
+
     public LabResult toEntity(LabResultRequestDTO dto, LabOrder labOrder, UserRoleHospitalAssignment assignment) {
         if (dto == null) return null;
 
@@ -268,16 +288,20 @@ public class LabResultMapper {
         }
         return referenceRanges.stream()
             .filter(Objects::nonNull)
-            .map(range -> LabResultReferenceRangeDTO.builder()
-                .minValue(range.getMinValue())
-                .maxValue(range.getMaxValue())
-                .unit(range.getUnit())
-                .ageMin(range.getAgeMin())
-                .ageMax(range.getAgeMax())
-                .gender(range.getGender())
-                .notes(range.getNotes())
-                .build())
+            .map(LabResultMapper::toReferenceRangeDto)
             .toList();
+    }
+
+    private static LabResultReferenceRangeDTO toReferenceRangeDto(LabTestReferenceRange range) {
+        return LabResultReferenceRangeDTO.builder()
+            .minValue(range.getMinValue())
+            .maxValue(range.getMaxValue())
+            .unit(range.getUnit())
+            .ageMin(range.getAgeMin())
+            .ageMax(range.getAgeMax())
+            .gender(range.getGender())
+            .notes(range.getNotes())
+            .build();
     }
 
     private String determineSeverityFlag(String rawResultValue, String resultUnit, List<LabTestReferenceRange> referenceRanges) {
