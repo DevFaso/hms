@@ -724,7 +724,8 @@ class LabOrderServiceImplPerformingHospitalTest {
 
     private void mockOrderLookups() {
         when(patientRepository.findByIdUnscoped(patient.getId())).thenReturn(Optional.of(patient));
-        when(staffRepository.findById(staff.getId())).thenReturn(Optional.of(staff));
+        // Lenient: an update that keeps the ordering clinician never looks the row up.
+        lenient().when(staffRepository.findById(staff.getId())).thenReturn(Optional.of(staff));
         lenient().when(authUtils.resolveUserId(any())).thenReturn(Optional.of(staff.getUser().getId()));
         when(hospitalRepository.findById(ordering.getId())).thenReturn(Optional.of(ordering));
         when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patient.getId(), ordering.getId()))

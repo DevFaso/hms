@@ -15,6 +15,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -111,19 +112,20 @@ public class MailOutboxDispatchService {
         LocalDateTime leaseUntil = now.plusSeconds(properties.getClaimLeaseSeconds());
         Integer claimed = transactionTemplate.execute(status ->
             repository.claim(id, MailOutboxStatus.PENDING, properties.getMaxAttempts(), now, leaseUntil));
-        if (claimed == null || claimed != 1) {
+        if (!Integer.valueOf(1).equals(claimed)) {
             // Another instance took it, or it was decided since it was listed.
             return false;
         }
 
-        Work work = transactionTemplate.execute(status -> load(id));
-        if (work == null) {
+        Optional<Work> loaded = Optional.ofNullable(transactionTemplate.execute(status -> load(id)));
+        if (loaded.isEmpty()) {
             return false;
         }
+        Work work = loaded.get();
 
         // No transaction open across the SMTP conversation.
         RuntimeException failure = send(work);
-        Boolean sent = transactionTemplate.execute(status -> record(id, failure));
+        Boolean sent = transactionTemplate.execute(status -> recordOutcome(id, failure));
         return Boolean.TRUE.equals(sent);
     }
 
@@ -156,7 +158,7 @@ public class MailOutboxDispatchService {
     }
 
     /** Runs inside a short transaction; the attempt was counted by the claim. */
-    private boolean record(UUID id, RuntimeException failure) {
+    private boolean recordOutcome(UUID id, RuntimeException failure) {
         MailOutboxMessage message = repository.findById(id).orElse(null);
         if (message == null) {
             return false;
@@ -196,7 +198,7 @@ public class MailOutboxDispatchService {
 
     /** Wait after the given (1-based) failed attempt: initial, doubling, capped. */
     long backoffSeconds(int failedAttempts) {
-        int shift = Math.max(0, Math.min(failedAttempts - 1, MAX_BACKOFF_SHIFT));
+        int shift = Math.clamp(failedAttempts - 1L, 0, MAX_BACKOFF_SHIFT);
         long delay = properties.getInitialBackoffSeconds() << shift;
         return Math.min(delay, properties.getMaxBackoffSeconds());
     }

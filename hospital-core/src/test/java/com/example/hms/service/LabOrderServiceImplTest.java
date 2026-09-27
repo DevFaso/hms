@@ -474,8 +474,8 @@ class LabOrderServiceImplTest {
         when(authUtils.resolveUserId(any())).thenReturn(Optional.of(orderingUserId));
         when(staffRepository.findByUserIdAndHospitalId(orderingUserId, hospitalId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> labOrderService.createLabOrder(
-                baseRequestBuilder().orderingStaffId(primaryRowElsewhere.getId()).build(), Locale.ENGLISH))
+        LabOrderRequestDTO request = baseRequestBuilder().orderingStaffId(primaryRowElsewhere.getId()).build();
+        assertThatThrownBy(() -> labOrderService.createLabOrder(request, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class)
             .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
             .isEqualTo("staff.notfound");
@@ -488,7 +488,8 @@ class LabOrderServiceImplTest {
         // Someone else is signed in and names this doctor's staff id.
         when(authUtils.resolveUserId(any())).thenReturn(Optional.of(UUID.randomUUID()));
 
-        assertThatThrownBy(() -> labOrderService.createLabOrder(baseRequestBuilder().build(), Locale.ENGLISH))
+        LabOrderRequestDTO request = baseRequestBuilder().build();
+        assertThatThrownBy(() -> labOrderService.createLabOrder(request, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class)
             .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
             .isEqualTo("staff.notfound");
@@ -503,16 +504,59 @@ class LabOrderServiceImplTest {
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
         when(staffRepository.findByUserIdAndHospitalId(orderingUserId, hospitalId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> labOrderService.createLabOrder(
-                baseRequestBuilder().orderingStaffId(primaryRowElsewhere.getId()).build(), Locale.ENGLISH))
+        LabOrderRequestDTO request = baseRequestBuilder().orderingStaffId(primaryRowElsewhere.getId()).build();
+        assertThatThrownBy(() -> labOrderService.createLabOrder(request, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
         verify(authUtils, never()).resolveUserId(any());
         verify(labOrderRepository, never()).save(any());
     }
 
+    @Test
+    void updateLabOrder_anotherClinicianMayEditWithoutTakingOverTheOrder() {
+        // A nurse corrects a doctor's order and leaves the doctor as the
+        // ordering clinician: the placing rule (the named clinician must be
+        // the caller) is not an edit rule, and it used to answer 404.
+        mockCommonLookups();
+        lenient().when(authUtils.resolveUserId(any())).thenReturn(Optional.of(UUID.randomUUID()));
+        UUID labOrderId = UUID.randomUUID();
+        LabOrder existing = existingLabOrder(labOrderId);
+        when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(existing));
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        labOrderService.updateLabOrder(labOrderId, baseRequestBuilder().id(labOrderId).build(), Locale.ENGLISH);
+
+        ArgumentCaptor<LabOrder> captor = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository).save(captor.capture());
+        assertThat(captor.getValue().getOrderingStaff()).isSameAs(staff);
+    }
+
+    @Test
+    void updateLabOrder_namingSomeoneNewStillFollowsThePlacingRule() {
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        when(authUtils.resolveUserId(any())).thenReturn(Optional.of(UUID.randomUUID()));
+        UUID labOrderId = UUID.randomUUID();
+        LabOrder existing = existingLabOrder(labOrderId);
+        Staff otherDoctor = new Staff();
+        otherDoctor.setId(UUID.randomUUID());
+        User otherUser = new User();
+        otherUser.setId(UUID.randomUUID());
+        otherDoctor.setUser(otherUser);
+        otherDoctor.setHospital(hospital);
+        when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(existing));
+        when(staffRepository.findById(otherDoctor.getId())).thenReturn(Optional.of(otherDoctor));
+
+        LabOrderRequestDTO request = baseRequestBuilder().id(labOrderId).orderingStaffId(otherDoctor.getId()).build();
+        assertThatThrownBy(() -> labOrderService.updateLabOrder(labOrderId, request, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(labOrderRepository, never()).save(any());
+    }
+
     private void mockCommonLookups() {
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        // Lenient: an edit that keeps the ordering clinician never looks the row up.
+        lenient().when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         // The caller is the ordering clinician.
         lenient().when(authUtils.resolveUserId(any())).thenReturn(Optional.of(orderingUserId));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));

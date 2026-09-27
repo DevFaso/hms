@@ -28,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -337,7 +338,7 @@ class PatientMedicationServiceImplTest {
             .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
             .isEqualTo("patient.notFound");
 
-        verify(prescriptionRepository, org.mockito.Mockito.never()).findByPatient_Id(any(), any());
+        verify(prescriptionRepository, never()).findByPatient_Id(any(), any());
         org.mockito.Mockito.verifyNoInteractions(reachRecorder);
     }
 
@@ -352,7 +353,7 @@ class PatientMedicationServiceImplTest {
         List<PatientMedicationResponseDTO> result = service.getMedicationsForPatientPortal(patientId, null, 10);
 
         assertThat(result).extracting(PatientMedicationResponseDTO::getMedicationName).containsExactly("Amlodipine");
-        verify(patientChartAccess, org.mockito.Mockito.never()).require(any(), any());
+        verify(patientChartAccess, never()).require(any(), any());
         org.mockito.Mockito.verifyNoInteractions(reachRecorder);
     }
 
@@ -364,6 +365,6 @@ class PatientMedicationServiceImplTest {
 
         service.getMedicationsForPatient(patientId, hospitalId, 10);
 
-        verify(patientChartAccess, org.mockito.Mockito.never()).requireOwnRecord(any());
+        verify(patientChartAccess, never()).requireOwnRecord(any());
     }
 }

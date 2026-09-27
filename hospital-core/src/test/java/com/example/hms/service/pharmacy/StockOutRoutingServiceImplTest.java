@@ -900,7 +900,8 @@ class StockOutRoutingServiceImplTest {
             when(routingDecisionRepository.findById(decision.getId())).thenReturn(Optional.of(decision));
 
             String tooLong = "x".repeat(1025);
-            assertThatThrownBy(() -> service.partnerNoShow(decision.getId(), tooLong))
+            UUID decisionId = decision.getId();
+            assertThatThrownBy(() -> service.partnerNoShow(decisionId, tooLong))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("at least 1 characters");
             assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.ACCEPTED);

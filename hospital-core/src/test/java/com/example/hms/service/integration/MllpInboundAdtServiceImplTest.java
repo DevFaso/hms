@@ -30,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -209,7 +210,7 @@ class MllpInboundAdtServiceImplTest {
         service.processAdt(adtWith(emoji.repeat(51), "F", "City"), hospital, "REG", "HOSP1", null);
 
         ArgumentCaptor<String> reasons = ArgumentCaptor.forClass(String.class);
-        verify(messageRecorder, org.mockito.Mockito.times(3)).recordMessage(
+        verify(messageRecorder, times(3)).recordMessage(
             any(), any(), any(), any(), any(), any(), reasons.capture(), any());
         assertThat(reasons.getAllValues()).containsExactly(
             "PID-8 exceeds 10 characters",
@@ -332,7 +333,7 @@ class MllpInboundAdtServiceImplTest {
         service.processAdt(adt("MRN-X", "Doe", "Jane", null), hospital, "REG", "HOSP1", "M2");
 
         ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
-        verify(messageRecorder, org.mockito.Mockito.times(2)).recordMessage(
+        verify(messageRecorder, times(2)).recordMessage(
             any(), any(), any(), any(), any(), any(), any(), ids.capture());
         assertThat(ids.getAllValues().get(0))
             .isNotNull()
@@ -356,7 +357,7 @@ class MllpInboundAdtServiceImplTest {
         ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<IntegrationMessageStatus> statuses =
             ArgumentCaptor.forClass(IntegrationMessageStatus.class);
-        verify(messageRecorder, org.mockito.Mockito.times(2)).recordMessage(
+        verify(messageRecorder, times(2)).recordMessage(
             any(), any(), any(), any(), any(), statuses.capture(), any(), ids.capture());
 
         // An unknown identifier and a cross-tenant refusal are both refusals

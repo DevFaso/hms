@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
@@ -360,7 +361,7 @@ class Hl7MessageDispatcherTest {
 
         ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> bodies = ArgumentCaptor.forClass(String.class);
-        verify(messageRecorder, org.mockito.Mockito.times(2)).recordRecurringFailure(
+        verify(messageRecorder, times(2)).recordRecurringFailure(
             any(), any(), any(), any(), bodies.capture(), any(), ids.capture());
 
         assertThat(ids.getAllValues().get(0))
@@ -390,7 +391,7 @@ class Hl7MessageDispatcherTest {
 
         ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> bodies = ArgumentCaptor.forClass(String.class);
-        verify(messageRecorder, org.mockito.Mockito.times(2)).recordRecurringFailure(
+        verify(messageRecorder, times(2)).recordRecurringFailure(
             any(), any(), any(), any(), bodies.capture(), any(), ids.capture());
         assertThat(ids.getAllValues().get(0))
             .isNotNull()
@@ -431,7 +432,7 @@ class Hl7MessageDispatcherTest {
         dispatcher.dispatch(unsupported, "10.0.0.51:1");
 
         ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
-        verify(messageRecorder, org.mockito.Mockito.times(2)).recordRecurringFailure(
+        verify(messageRecorder, times(2)).recordRecurringFailure(
             any(), any(), any(), any(), any(), any(), ids.capture());
         assertThat(ids.getAllValues().get(0)).isNotEqualTo(ids.getAllValues().get(1));
     }
@@ -453,7 +454,7 @@ class Hl7MessageDispatcherTest {
         dispatcher.dispatch(unsupported, "10.0.0.1:1");
 
         ArgumentCaptor<String> reasons = ArgumentCaptor.forClass(String.class);
-        verify(messageRecorder, org.mockito.Mockito.times(2)).recordRecurringFailure(
+        verify(messageRecorder, times(2)).recordRecurringFailure(
             any(), any(), any(), any(), any(), reasons.capture(), any());
         assertThat(reasons.getAllValues()).containsExactly(
             "sender \"RO\\u001b[2J\"/\"UNK) cross-tenant rejection (x\" not allowlisted",

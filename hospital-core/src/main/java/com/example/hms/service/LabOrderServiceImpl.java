@@ -310,7 +310,10 @@ public class LabOrderServiceImpl implements LabOrderService {
             throw new BusinessException("Patient is not registered with the specified hospital.");
         }
 
-        Staff staff = resolveOrderingStaff(request.getOrderingStaffId(), hospital);
+        Staff staff = keptOrderingStaff(base, request.getOrderingStaffId(), hospital);
+        if (staff == null) {
+            staff = resolveOrderingStaff(request.getOrderingStaffId(), hospital);
+        }
 
         // Role check based on assignment, not JWT
         UUID userId = staff.getUser().getId();
@@ -396,6 +399,28 @@ public class LabOrderServiceImpl implements LabOrderService {
      * already gets, so naming someone else's id, or a row with nothing at this
      * hospital, reads exactly like naming no one.
      */
+    /**
+     * On an edit that leaves the ordering clinician as it is, that clinician
+     * stays - whoever is editing. The caller rule in {@link #resolveOrderingStaff}
+     * is about who may PLACE an order in someone's name; applied to edits it
+     * refused a nurse correcting a doctor's order (404) and forced every edit
+     * to re-attribute the order to the editor. Kept only while the existing
+     * row still belongs to the order's hospital; otherwise the edit goes
+     * through the placing rule like a new order. Null when there is nothing
+     * to keep.
+     */
+    private static Staff keptOrderingStaff(LabOrder base, UUID requestedStaffId, Hospital hospital) {
+        if (base == null || requestedStaffId == null) {
+            return null;
+        }
+        Staff current = base.getOrderingStaff();
+        if (current == null || !requestedStaffId.equals(current.getId())
+                || current.getHospital() == null || !hospital.getId().equals(current.getHospital().getId())) {
+            return null;
+        }
+        return current;
+    }
+
     private Staff resolveOrderingStaff(UUID requestedStaffId, Hospital hospital) {
         Staff named = requestedStaffId == null ? null : staffRepository.findById(requestedStaffId).orElse(null);
         UUID personId = named != null && named.getUser() != null ? named.getUser().getId() : null;

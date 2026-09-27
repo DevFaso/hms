@@ -31,6 +31,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -461,7 +462,7 @@ class MllpInboundMergeServiceImplTest {
         // Each one leaves its dead letter, all three under one correlation id:
         // one problem, one counted entry, however often the sender retries.
         ArgumentCaptor<String> correlation = ArgumentCaptor.forClass(String.class);
-        verify(messageRecorder, org.mockito.Mockito.times(3)).recordMessage(
+        verify(messageRecorder, times(3)).recordMessage(
             eq("MLLP:LIS/HOSP1"), any(),
             eq(IntegrationMessageDirection.INBOUND),
             eq("ADT^A40"), isNull(),
@@ -481,7 +482,7 @@ class MllpInboundMergeServiceImplTest {
         service.processMerge(message(), null, "LIS", "HOSP1", "MSG-3");
 
         ArgumentCaptor<String> correlation = ArgumentCaptor.forClass(String.class);
-        verify(messageRecorder, org.mockito.Mockito.times(3)).recordMessage(
+        verify(messageRecorder, times(3)).recordMessage(
             any(), any(), any(), any(), any(), any(), any(), correlation.capture());
         assertThat(correlation.getAllValues().get(0)).isEqualTo(correlation.getAllValues().get(1));
         // A different problem is a different entry.

@@ -1167,7 +1167,7 @@ class PatientSnapshotServiceImplTest {
         other.setId(otherHospitalId);
         Patient patient = mock(Patient.class);
         lenient().when(patient.getId()).thenReturn(patientId);
-        when(patientChartAccess.require(eq(patientId), eq(hospitalId))).thenReturn(patient);
+        when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
         when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
                 .thenReturn(Set.of(hospitalId, otherHospitalId));
         PatientDiagnosis dx = PatientDiagnosis.builder()

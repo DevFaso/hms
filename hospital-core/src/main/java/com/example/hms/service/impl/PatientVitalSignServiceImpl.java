@@ -60,7 +60,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
                                                    PatientVitalSignRequestDTO request,
                                                    UUID recorderUserId) {
         Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
 
         PatientHospitalRegistration registration = resolveRegistration(patient, request.getRegistrationId(), request.getHospitalId());
         Hospital hospital = resolveHospital(request.getHospitalId(), registration, patient);
