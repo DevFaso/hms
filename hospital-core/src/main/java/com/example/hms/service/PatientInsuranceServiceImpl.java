@@ -110,6 +110,11 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     @Transactional
     public PatientInsuranceResponseDTO updatePatientInsurance(UUID insuranceId, PatientInsuranceRequestDTO dto, Locale locale) {
         PatientInsurance existing = getInsuranceOrThrow(insuranceId, locale);
+        // The record's current owner first: a patient naming their own id in
+        // the body must not rewrite, and so take over, another patient's
+        // coverage. (The endpoint admits no patient today; the rule is the
+        // service's, so a future caller cannot skip it.)
+        enforceSelfAccessIfPatient(existing.getPatient(), () -> insuranceNotFound(insuranceId, locale));
 
         Patient targetPatient = (dto.getPatientId() != null)
             ? getPatientOrThrow(dto.getPatientId(), locale)
@@ -248,6 +253,9 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         }
         Patient patient = getPatientOrThrow(req.getPatientId(), locale);
         enforceSelfAccessIfPatient(patient, () -> patientNotFound(req.getPatientId(), locale));
+        // As in linkPatientInsurance: a patient-only caller is held to their own
+        // coverage whatever X-Act-As says, before the staff checks answer.
+        enforceSelfAccessIfPatient(insurance.getPatient(), () -> insuranceNotFound(insuranceId, locale));
 
         boolean actAsPatient = isActingAsPatient(ctx);
         UUID actorUserId = resolveActorUserId(ctx);

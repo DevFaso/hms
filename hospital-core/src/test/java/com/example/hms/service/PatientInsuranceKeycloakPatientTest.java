@@ -152,4 +152,46 @@ class PatientInsuranceKeycloakPatientTest {
         assertThat(saved.getValue().getLinkedByUserId()).isEqualTo(callerUserId);
         assertThat(saved.getValue().getPatient()).isSameAs(own);
     }
+
+    @Test
+    @DisplayName("a patient cannot rewrite another patient's insurance by naming themselves in the body")
+    void updateOfAnotherPatientsInsuranceAnswersAsMissing() {
+        UUID insuranceId = UUID.randomUUID();
+        PatientInsurance foreign = new PatientInsurance();
+        foreign.setPatient(patient(otherPatientId));
+        when(insuranceRepository.findById(insuranceId)).thenReturn(Optional.of(foreign));
+        com.example.hms.payload.dto.PatientInsuranceRequestDTO dto = new com.example.hms.payload.dto.PatientInsuranceRequestDTO();
+        dto.setPatientId(ownPatientId);
+
+        String refused = catchThrowableOfType(ResourceNotFoundException.class,
+            () -> service.updatePatientInsurance(insuranceId, dto, Locale.ENGLISH)).getMessage();
+        when(insuranceRepository.findById(insuranceId)).thenReturn(Optional.empty());
+        String missing = catchThrowableOfType(ResourceNotFoundException.class,
+            () -> service.updatePatientInsurance(insuranceId, dto, Locale.ENGLISH)).getMessage();
+
+        assertThat(refused).isEqualTo(missing);
+        assertThat(foreign.getPatient().getId()).isEqualTo(otherPatientId);
+        verify(insuranceRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("linking another patient's insurance by id in STAFF mode answers as a missing id")
+    void upsertByIdOfAnotherPatientsInsuranceAnswersAsMissing() {
+        UUID insuranceId = UUID.randomUUID();
+        PatientInsurance foreign = new PatientInsurance();
+        foreign.setPatient(patient(otherPatientId));
+        when(insuranceRepository.findById(insuranceId)).thenReturn(Optional.of(foreign));
+        when(patientRepository.findById(ownPatientId)).thenReturn(Optional.of(patient(ownPatientId)));
+        LinkPatientInsuranceRequestDTO req = LinkPatientInsuranceRequestDTO.builder().patientId(ownPatientId).build();
+        ActingContext staffMode = new ActingContext(null, null, ActingMode.STAFF, null);
+
+        String refused = catchThrowableOfType(ResourceNotFoundException.class,
+            () -> service.upsertAndLinkByInsuranceId(insuranceId, req, staffMode, Locale.ENGLISH)).getMessage();
+        when(insuranceRepository.findById(insuranceId)).thenReturn(Optional.empty());
+        String missing = catchThrowableOfType(ResourceNotFoundException.class,
+            () -> service.upsertAndLinkByInsuranceId(insuranceId, req, staffMode, Locale.ENGLISH)).getMessage();
+
+        assertThat(refused).isEqualTo(missing);
+        verify(insuranceRepository, never()).save(any());
+    }
 }
