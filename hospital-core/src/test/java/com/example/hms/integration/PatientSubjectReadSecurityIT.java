@@ -10,9 +10,11 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UltrasoundOrderRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.security.IdleSessionGate;
+import com.example.hms.security.TenantLifecycleGate;
 import com.example.hms.security.oidc.IssuerAwareBearerTokenResolver;
 import com.example.hms.security.oidc.KeycloakHospitalContextFilter;
 import com.example.hms.security.oidc.KeycloakHospitalContextResolver;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -88,8 +90,18 @@ class PatientSubjectReadSecurityIT extends BaseIT {
     @MockitoBean private PatientRepository patientRepository;
     @MockitoBean private UltrasoundOrderRepository ultrasoundOrderRepository;
     @MockitoBean private ConsultationRepository consultationRepository;
+    @Autowired private com.example.hms.repository.HospitalRepository hospitalRepository;
+    @Autowired private com.example.hms.repository.UserRepository userRepository;
+    @Autowired private com.example.hms.repository.RoleRepository roleRepository;
+    @Autowired private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Autowired private com.example.hms.repository.AuditEventLogRepository auditEventLogRepository;
+    /** Real local accounts: the Keycloak path places a caller by the appUserId account's live assignments. */
+    private com.example.hms.security.tenant.LinkedTestAccounts accounts;
+    @Autowired private com.example.hms.security.IdleSessionTracker idleSessionTracker;
 
-    private final UUID patientUserId = UUID.randomUUID();
+    /** The patient's real local account: a Keycloak id is only ever the one the filter linked. */
+    private UUID patientUserId;
+    private String patientUsername;
     private final UUID ownPatientId = UUID.randomUUID();
     private final UUID otherPatientId = UUID.randomUUID();
     private final UUID unknownPatientId = UUID.randomUUID();
@@ -97,11 +109,24 @@ class PatientSubjectReadSecurityIT extends BaseIT {
 
     @BeforeEach
     void linkThePatientAccountToItsRow() {
+        accounts = new com.example.hms.security.tenant.LinkedTestAccounts(
+            hospitalRepository, userRepository, roleRepository, assignmentRepository, auditEventLogRepository);
+        hospitalA = accounts.hospital("Subject A").getId();
+        hospitalB = accounts.hospital("Subject B").getId();
+        com.example.hms.model.User patientAccount = accounts.userAt("patient001", null);
+        patientUserId = patientAccount.getId();
+        patientUsername = patientAccount.getUsername();
+        idleSessionTracker.touch(patientUserId);
         when(patientRepository.existsByIdAndUserId(ownPatientId, patientUserId)).thenReturn(true);
     }
 
-    private final UUID hospitalA = UUID.randomUUID();
-    private final UUID hospitalB = UUID.randomUUID();
+    @org.junit.jupiter.api.AfterEach
+    void removeTheAccounts() {
+        accounts.cleanUp();
+    }
+
+    private UUID hospitalA;
+    private UUID hospitalB;
 
     private UltrasoundOrder ultrasoundOrderOf(UUID patientId) {
         return ultrasoundOrderOf(patientId, hospitalA);
@@ -132,7 +157,7 @@ class PatientSubjectReadSecurityIT extends BaseIT {
     @Test
     @DisplayName("a Keycloak patient reads their own ultrasound order and list, resolved from appUserId")
     void patientReadsOwn() throws Exception {
-        String patient = token("patient001", patientUserId, "PATIENT");
+        String patient = token(patientUsername, patientUserId, "PATIENT");
         when(ultrasoundOrderRepository.findById(orderId)).thenReturn(Optional.of(ultrasoundOrderOf(ownPatientId)));
         when(ultrasoundOrderRepository.findAllByPatientId(ownPatientId)).thenReturn(List.of(ultrasoundOrderOf(ownPatientId)));
 
@@ -149,7 +174,7 @@ class PatientSubjectReadSecurityIT extends BaseIT {
     @Test
     @DisplayName("another patient's ultrasound order answers exactly as a missing one")
     void foreignOrderAnswersAsMissing() throws Exception {
-        String patient = token("patient001", patientUserId, "PATIENT");
+        String patient = token(patientUsername, patientUserId, "PATIENT");
         when(ultrasoundOrderRepository.findById(orderId)).thenReturn(Optional.of(ultrasoundOrderOf(otherPatientId)));
         MvcResult foreign = getAs(patient, "/ultrasound/orders/{id}", orderId);
 
@@ -163,7 +188,7 @@ class PatientSubjectReadSecurityIT extends BaseIT {
     @Test
     @DisplayName("another patient's lists answer exactly as an unknown patient's, and the rows are never asked for")
     void foreignListsAnswerAsUnknown() throws Exception {
-        String patient = token("patient001", patientUserId, "PATIENT");
+        String patient = token(patientUsername, patientUserId, "PATIENT");
         when(ultrasoundOrderRepository.findAllByPatientId(otherPatientId)).thenReturn(List.of(ultrasoundOrderOf(otherPatientId)));
         when(consultationRepository.findByPatient_IdOrderByRequestedAtDesc(otherPatientId)).thenReturn(List.of(new Consultation()));
 
@@ -183,7 +208,7 @@ class PatientSubjectReadSecurityIT extends BaseIT {
     @Test
     @DisplayName("a Keycloak doctor at hospital A still reads another patient's ultrasound order and list there")
     void staffUnchanged() throws Exception {
-        String doctor = token("doctor001", UUID.randomUUID(), hospitalA, "DOCTOR");
+        String doctor = linkedToken("doctor001", hospitalA, "DOCTOR");
         when(ultrasoundOrderRepository.findById(orderId)).thenReturn(Optional.of(ultrasoundOrderOf(otherPatientId)));
         // Acting at hospital A, the list reads the readable hospitals at the database.
         when(ultrasoundOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedDateDesc(eq(otherPatientId), any()))
@@ -198,7 +223,7 @@ class PatientSubjectReadSecurityIT extends BaseIT {
     @Test
     @DisplayName("a Keycloak doctor at hospital A is refused B's ultrasound order by id, exactly as a missing one")
     void staffAtAnotherHospitalAnswersAsMissing() throws Exception {
-        String doctor = token("doctor001", UUID.randomUUID(), hospitalA, "DOCTOR");
+        String doctor = linkedToken("doctor001", hospitalA, "DOCTOR");
         when(ultrasoundOrderRepository.findById(orderId))
             .thenReturn(Optional.of(ultrasoundOrderOf(otherPatientId, hospitalB)));
         MvcResult foreign = getAs(doctor, "/ultrasound/orders/{id}", orderId);
@@ -211,6 +236,18 @@ class PatientSubjectReadSecurityIT extends BaseIT {
     }
 
     // ── token minting ──────────────────────────────────────────────────────
+
+    /**
+     * A token for a real local account holding {@code roles} at {@code hospitalId}: the
+     * appUserId claim names it and preferred_username matches it, as the one tenant resolver
+     * requires; the hospital claims are not read.
+     */
+    private String linkedToken(String username, UUID hospitalId, String... roles) {
+        com.example.hms.model.User user = accounts.userAt(username, hospitalId, roles);
+        // The account is linked, so the idle gate now applies on this path too.
+        idleSessionTracker.touch(user.getId());
+        return token(user.getUsername(), user.getId(), hospitalId, roles);
+    }
 
     /**
      * A token shaped as {@code keycloak/realm-export.json} issues one: realm
@@ -295,9 +332,12 @@ class PatientSubjectReadSecurityIT extends BaseIT {
          */
         @Bean
         KeycloakHospitalContextFilter keycloakHospitalContextFilter(KeycloakHospitalContextResolver resolver,
+                                                                   ActingScopeResolver actingScopeResolver,
                                                                    IdleSessionGate idleSessionGate,
+                                                                   TenantLifecycleGate tenantLifecycleGate,
                                                                    UserRepository userRepository) {
-            return new KeycloakHospitalContextFilter(resolver, idleSessionGate, userRepository);
+            return new KeycloakHospitalContextFilter(resolver, actingScopeResolver, idleSessionGate,
+                tenantLifecycleGate, userRepository);
         }
     }
 }

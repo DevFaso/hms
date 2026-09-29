@@ -730,8 +730,14 @@ rows.
    reason) per hour (Q7). A session holding a revoked chip therefore writes one
    `NO_LONGER_PERMITTED` row, not one per request.
 
-As a portal follow-up, the 403 carries the reason as a code, and the portal
-treats `NO_LONGER_PERMITTED` by re-bootstrapping its scope.
+As a portal follow-up, the 403 carries the reason as a code. A
+`NO_LONGER_PERMITTED` body also names the refused hospital
+(`"hospitalId"`) — the id the caller itself sent, its own former hospital,
+so nothing is disclosed — because the refused hospital is not necessarily
+the selected one: a stale link to B while A is selected used to make the
+portal forget the valid A, re-bootstrap, and repeat the cycle on the next
+click of the same link. The portal forgets exactly the named hospital and
+re-reads its scope only when that hospital was the current selection.
 
 ### 3.7 What the design delivers, and what it does not
 

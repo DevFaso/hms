@@ -1,5 +1,6 @@
 package com.example.hms.config;
 
+import com.example.hms.security.audit.GlobalViewAuditInterceptor;
 import com.example.hms.security.audit.PatientAccessAuditInterceptor;
 import com.example.hms.security.audit.WriteAuditInterceptor;
 import com.example.hms.service.AuditEventLogService;
@@ -43,6 +44,13 @@ class PatientAccessAuditConfigTest {
     }
 
     @SuppressWarnings("unchecked")
+    private ObjectProvider<GlobalViewAuditInterceptor> globalViewProviderOf(GlobalViewAuditInterceptor interceptor) {
+        ObjectProvider<GlobalViewAuditInterceptor> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(interceptor);
+        return provider;
+    }
+
+    @SuppressWarnings("unchecked")
     private WriteAuditInterceptor writeInterceptor() {
         return new WriteAuditInterceptor(mock(ObjectProvider.class), mock(ObjectProvider.class), mock(ObjectProvider.class));
     }
@@ -69,7 +77,7 @@ class PatientAccessAuditConfigTest {
         PatientAccessAuditInterceptor interceptor = interceptor();
         InterceptorRegistry registry = new InterceptorRegistry();
 
-        new PatientAccessAuditConfig(providerOf(interceptor), writeProviderOf(null)).addInterceptors(registry);
+        new PatientAccessAuditConfig(providerOf(interceptor), writeProviderOf(null), globalViewProviderOf(null)).addInterceptors(registry);
 
         assertThat(registeredInterceptors(registry))
             .asInstanceOf(list(Object.class))
@@ -84,7 +92,7 @@ class PatientAccessAuditConfigTest {
         // remember-to-add-it problem the interceptor replaces, one root at a
         // time, and the omission would again be invisible.
         InterceptorRegistry registry = new InterceptorRegistry();
-        new PatientAccessAuditConfig(providerOf(interceptor()), writeProviderOf(null)).addInterceptors(registry);
+        new PatientAccessAuditConfig(providerOf(interceptor()), writeProviderOf(null), globalViewProviderOf(null)).addInterceptors(registry);
 
         List<?> registrations = (List<?>) ReflectionTestUtils.getField(registry, "registrations");
         assertThat(registrations).hasSize(1);
@@ -105,7 +113,7 @@ class PatientAccessAuditConfigTest {
         // NoSuchBeanDefinitionException — this is the tolerance that fixed
         // them, and it needs to keep working or the slices break again.
         InterceptorRegistry registry = new InterceptorRegistry();
-        PatientAccessAuditConfig config = new PatientAccessAuditConfig(providerOf(null), writeProviderOf(null));
+        PatientAccessAuditConfig config = new PatientAccessAuditConfig(providerOf(null), writeProviderOf(null), globalViewProviderOf(null));
 
         assertThatCode(() -> config.addInterceptors(registry)).doesNotThrowAnyException();
         assertThat(registeredInterceptors(registry)).asInstanceOf(list(Object.class)).isEmpty();
@@ -116,7 +124,7 @@ class PatientAccessAuditConfigTest {
     void registersTheWriteInterceptorToo() {
         WriteAuditInterceptor write = writeInterceptor();
         InterceptorRegistry registry = new InterceptorRegistry();
-        new PatientAccessAuditConfig(providerOf(interceptor()), writeProviderOf(write)).addInterceptors(registry);
+        new PatientAccessAuditConfig(providerOf(interceptor()), writeProviderOf(write), globalViewProviderOf(null)).addInterceptors(registry);
         assertThat(registeredInterceptors(registry)).asInstanceOf(list(Object.class)).hasSize(2).contains(write);
         List<?> registrations = (List<?>) ReflectionTestUtils.getField(registry, "registrations");
         assertThat(ReflectionTestUtils.getField(registrations.get(1), "includePatterns"))
@@ -130,7 +138,18 @@ class PatientAccessAuditConfigTest {
     void writeInterceptorDoesNotDependOnTheReadOne() {
         WriteAuditInterceptor write = writeInterceptor();
         InterceptorRegistry registry = new InterceptorRegistry();
-        new PatientAccessAuditConfig(providerOf(null), writeProviderOf(write)).addInterceptors(registry);
+        new PatientAccessAuditConfig(providerOf(null), writeProviderOf(write), globalViewProviderOf(null)).addInterceptors(registry);
         assertThat(registeredInterceptors(registry)).asInstanceOf(list(Object.class)).containsExactly(write);
+    }
+
+    @Test
+    @DisplayName("registers the global-view audit interceptor, without a path list, and tolerates its absence")
+    @SuppressWarnings("unchecked")
+    void registersTheGlobalViewInterceptor() {
+        GlobalViewAuditInterceptor globalView = new GlobalViewAuditInterceptor(mock(ObjectProvider.class));
+        InterceptorRegistry registry = new InterceptorRegistry();
+        new PatientAccessAuditConfig(providerOf(null), writeProviderOf(null), globalViewProviderOf(globalView))
+            .addInterceptors(registry);
+        assertThat(registeredInterceptors(registry)).asInstanceOf(list(Object.class)).containsExactly(globalView);
     }
 }

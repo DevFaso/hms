@@ -1,5 +1,6 @@
 package com.example.hms.service.support;
 
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Role;
 import com.example.hms.model.User;
@@ -62,7 +63,7 @@ class UserAccountAccessTest {
     @BeforeEach
     void setUp() {
         access = new UserAccountAccess(assignmentRepository, patientRepository, registrationRepository,
-            staffRepository, new RoleValidator(assignmentRepository));
+            staffRepository, new RoleValidator(assignmentRepository, ActingScopeTestSupport.resolver()));
     }
 
     @AfterEach

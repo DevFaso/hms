@@ -38,4 +38,10 @@ public class RoiSelfRequestCreateDTO {
 
     /** Optional — defaults to today. */
     private LocalDate requestedOn;
+
+    /**
+     * Optional: the hospital the request is for, one of the patient's
+     * registrations. Omitted, it is filed at their only (or own) hospital.
+     */
+    private java.util.UUID hospitalId;
 }

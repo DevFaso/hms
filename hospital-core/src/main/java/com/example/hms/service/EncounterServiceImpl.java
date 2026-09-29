@@ -1617,6 +1617,14 @@ public class EncounterServiceImpl implements EncounterService {
         return readEncountersForPatient(patientId);
     }
 
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<EncounterResponseDTO> getEncountersForPortalPatient(UUID patientId) {
+        return encounterRepository.findByPatient_Id(patientId).stream()
+            .map(encounterMapper::toEncounterResponseDTO)
+            .toList();
+    }
+
     /**
      * E9 #59e — encounters follow the patient across the readable hospitals
      * when the caller acts in one, read at the database rather than every

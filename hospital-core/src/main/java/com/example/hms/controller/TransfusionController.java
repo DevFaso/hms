@@ -59,9 +59,14 @@ import java.util.UUID;
 @Tag(name = "Transfusion", description = "Type and screen, blood units, crossmatch, administration, reactions")
 public class TransfusionController {
 
-    /** Who may order blood. PHYSICIAN and SURGEON reach this through ROLE_DOCTOR expansion (PR #488). */
-    private static final String PRESCRIBER =
-        "hasAuthority('REQUEST_BLOOD_PRODUCTS') or hasAnyRole('SUPER_ADMIN','DOCTOR','SURGEON','MIDWIFE')";
+    /**
+     * Who may order blood. PHYSICIAN and SURGEON reach this through ROLE_DOCTOR
+     * expansion (PR #488). It once also named the permission
+     * {@code REQUEST_BLOOD_PRODUCTS}, which no authority carries (authorities
+     * are roles only), so that clause never matched; the role list was always
+     * the whole guard.
+     */
+    private static final String PRESCRIBER = "hasAnyRole('SUPER_ADMIN','DOCTOR','SURGEON','MIDWIFE')";
 
     /** Who runs the bench: typing, receiving units, crossmatching, issuing. */
     private static final String LABORATORY =

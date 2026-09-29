@@ -3,16 +3,19 @@ package com.example.hms.service.support;
 import com.example.hms.enums.RecordAccessDenialReason;
 import com.example.hms.exception.ChartRestrictedException;
 import com.example.hms.exception.ResourceNotFoundException;
-import com.example.hms.service.recordaccess.RecordAccessDecision;
 import com.example.hms.model.Patient;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.security.PrincipalUserIds;
 import com.example.hms.security.context.HospitalContext;
-import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.service.recordaccess.RecordAccessDecision;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -93,7 +96,10 @@ public class PatientChartAccess {
             // So null is honoured only for a principal the security layer marks a
             // super-admin. For anyone else it is a failure to establish scope, and
             // a failure to establish scope denies.
-            if (!ctx.isSuperAdmin()) {
+            // The one other caller with no hospital to measure against is the
+            // patient reading their OWN chart (design Q1: a patient is bounded
+            // by ownership, not by a hospital), whatever hospitals hold it.
+            if (!ctx.isSuperAdmin() && !ownedByCaller(patient)) {
                 throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
             }
             return patient;
@@ -116,5 +122,17 @@ public class PatientChartAccess {
             throw new ChartRestrictedException(patientId);
         }
         throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
+    }
+
+    /**
+     * The caller is the patient: the chart is linked to the caller's own
+     * account. Ownership is the whole bound (design Q1); it admits nobody's
+     * chart but their own.
+     */
+    static boolean ownedByCaller(Patient patient) {
+        Optional<UUID> caller = PrincipalUserIds.of(SecurityContextHolder.getContext().getAuthentication());
+        return caller.isPresent()
+            && patient.getUser() != null
+            && caller.get().equals(patient.getUser().getId());
     }
 }

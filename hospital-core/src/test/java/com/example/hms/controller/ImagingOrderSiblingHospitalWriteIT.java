@@ -65,12 +65,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * Imaging-order writes are held to the acting hospital, like the read.
  *
- * <p>On the password login path the repository tenant filter ORs in every
- * organisation the caller has an assignment under, so a doctor at hospital A
- * loads an order that belongs to sibling hospital A2 of the same organisation
- * through the scoped {@code findById}. {@code getOrder} then refuses it; the
- * three writes used to go ahead. Asked of a real database because the leak is
- * the filter's organisation disjunct, which no mock reproduces.
+ * <p>The repository tenant filter used to OR in every organisation the caller
+ * has an assignment under, so a doctor at hospital A loaded an order of
+ * sibling hospital A2 through the scoped {@code findById}, and the three
+ * writes went ahead. The filter is now hospitals only
+ * (docs/security/tenant-resolution.md Q6, option A); the service checks stay
+ * as the second gate, and both are asked of a real database.
  */
 @AutoConfigureMockMvc(addFilters = false)
 class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
@@ -128,13 +128,13 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("the repository filter does hand A's doctor the sibling's order — the service must refuse it")
-    void organisationDisjunctLoadsTheSiblingsOrder() {
-        // Precondition of the defect: with A's context, the scoped findById
-        // answers for A2's order. If this ever fails the filter was tightened
-        // and the service check below is belt-and-braces, not the only gate.
+    @DisplayName("the repository filter no longer hands A's doctor the sibling's order (Q6 A)")
+    void organisationGrantsNoReadOfTheSiblingsOrder() {
+        // The organisation disjunct is gone: with A's context the scoped
+        // findById does not answer for A2's order. The service checks below
+        // remain the second gate.
         HospitalContextHolder.setContext(contextFor(doctorA, hospitalA));
-        assertThat(imagingOrderRepository.findById(orderAtA2.getId())).isPresent();
+        assertThat(imagingOrderRepository.findById(orderAtA2.getId())).isEmpty();
     }
 
     @Test
@@ -212,9 +212,10 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
     @Test
     @DisplayName("A's doctor cannot order for, or re-point an order at, a patient registered only at A2")
     void patientRegisteredOnlyAtSiblingAnswersLikeMissing() throws Exception {
-        // Precondition: the organisation disjunct does hand A's doctor that patient.
+        // The organisation grants no read (Q6 A): the scoped finder does not
+        // hand A's doctor that patient; the service refuses it as well.
         HospitalContextHolder.setContext(contextFor(doctorA, hospitalA));
-        assertThat(patientRepository.findById(siblingOnlyPatient.getId())).isPresent();
+        assertThat(patientRepository.findById(siblingOnlyPatient.getId())).isEmpty();
         HospitalContextHolder.clear();
 
         UUID missingPatient = UUID.randomUUID();

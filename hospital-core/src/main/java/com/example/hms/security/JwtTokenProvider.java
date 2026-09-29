@@ -3,6 +3,7 @@ package com.example.hms.security;
 import com.example.hms.security.auth.TenantRoleAssignment;
 import com.example.hms.security.auth.TenantRoleAssignmentAccessor;
 import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
@@ -522,25 +523,26 @@ public class JwtTokenProvider {
         return value.startsWith(ROLE_PREFIX) ? value : ROLE_PREFIX + value;
     }
 
+    /**
+     * The request's tenant context, computed from the LIVE assignment table by
+     * {@link ActingScopeResolver#liveContext} — the one computation both auth
+     * paths share (docs/security/tenant-resolution.md §3.2). The token is only
+     * checked to be parseable: its hospital, organisation, primary-hospital
+     * and {@code isSuperAdmin} claims are UI hints at most and never an
+     * authorization input, so an assignment granted, revoked or re-scoped
+     * after sign-in counts on the next request, and a demoted super-admin
+     * loses global view on the next request (Q4, option B).
+     */
     public HospitalContext extractHospitalContext(String token, Authentication authentication) {
-        if (!StringUtils.hasText(token)) {
+        if (!StringUtils.hasText(token) || parseClaimsSafely(token).isEmpty()) {
             return HospitalContext.empty();
         }
-
-        Optional<Claims> claimsOptional = parseClaimsSafely(token);
-        if (claimsOptional.isEmpty()) {
-            return HospitalContext.empty();
+        if (authentication != null && authentication.getPrincipal() instanceof HospitalUserDetails details
+            && details.getUserId() != null) {
+            return ActingScopeResolver.liveContext(details.getUserId(), details.getUsername(),
+                tenantRoleAssignmentAccessor.findAssignmentsForUser(details.getUserId()));
         }
-
-        HospitalUserDetails userDetails = (authentication != null && authentication.getPrincipal() instanceof HospitalUserDetails details)
-            ? details
-            : null;
-
-        List<String> authorities = authentication != null
-            ? authentication.getAuthorities().stream().map(GrantedAuthority::getAuthority).toList()
-            : List.of();
-
-        return buildHospitalContext(claimsOptional.get(), userDetails, authorities);
+        return ActingScopeResolver.unlinkedContext(authentication != null ? authentication.getName() : null);
     }
 
     private Optional<Claims> parseClaimsSafely(String token) {
@@ -550,121 +552,6 @@ public class JwtTokenProvider {
             log.warn("Unable to parse JWT claims for tenant context: {}", ex.getMessage());
             return Optional.empty();
         }
-    }
-
-    private HospitalContext buildHospitalContext(Claims claims, HospitalUserDetails userDetails, List<String> authorities) {
-        UUID principalUserId = userDetails != null ? userDetails.getUserId() : null;
-        String principalUsername = userDetails != null ? userDetails.getUsername() : null;
-
-        Set<UUID> organizationIds = extractUuidSet(claims.get(CLAIM_PERMITTED_ORGANIZATION_IDS));
-        Set<UUID> hospitalIds = extractUuidSet(claims.get(CLAIM_PERMITTED_HOSPITAL_IDS));
-        Set<UUID> departmentIds = extractUuidSet(claims.get(CLAIM_PERMITTED_DEPARTMENT_IDS));
-
-        UUID activeOrganization = extractUuid(claims.get(CLAIM_PRIMARY_ORGANIZATION_ID));
-        UUID activeHospital = extractUuid(claims.get(CLAIM_PRIMARY_HOSPITAL_ID));
-
-        boolean superAdminFlag = getBooleanClaim(claims.get(CLAIM_IS_SUPER_ADMIN))
-            || authorities.stream().anyMatch(ROLE_SUPER_ADMIN::equalsIgnoreCase);
-        boolean hospitalAdminFlag = getBooleanClaim(claims.get(CLAIM_IS_HOSPITAL_ADMIN))
-            || authorities.stream().anyMatch(ROLE_HOSPITAL_ADMIN::equalsIgnoreCase);
-
-        if (principalUserId != null) {
-            // E9 #55 — the permitted set is read from the assignment table on
-            // EVERY request, never from the claims baked at login. The claims
-            // are a snapshot: an assignment added, revoked or re-scoped after
-            // sign-in left the token asserting a scope the table no longer
-            // held, and the two resolvers that read scope (this one and the
-            // assignment fallback in ControllerAuthUtils) disagreed until the
-            // user logged out. The token's primary hospital is kept only while
-            // it is still permitted, so the active scope is stable across
-            // requests; otherwise the live primary (the most recently created
-            // active assignment) takes over. An empty live set is an empty
-            // scope — fail closed, not "whatever the token said".
-            Map<String, Object> live = buildTenantClaims(principalUserId, authorities);
-            Set<UUID> liveHospitals = extractUuidSet(live.get(CLAIM_PERMITTED_HOSPITAL_IDS));
-            Set<UUID> liveOrganizations = extractUuidSet(live.get(CLAIM_PERMITTED_ORGANIZATION_IDS));
-            departmentIds = extractUuidSet(live.get(CLAIM_PERMITTED_DEPARTMENT_IDS));
-            activeHospital = activeHospital != null && liveHospitals.contains(activeHospital)
-                ? activeHospital
-                : extractUuid(live.get(CLAIM_PRIMARY_HOSPITAL_ID));
-            activeOrganization = activeOrganization != null && liveOrganizations.contains(activeOrganization)
-                ? activeOrganization
-                : extractUuid(live.get(CLAIM_PRIMARY_ORGANIZATION_ID));
-            hospitalIds = liveHospitals;
-            organizationIds = liveOrganizations;
-        }
-
-        if (activeOrganization == null && !organizationIds.isEmpty()) {
-            activeOrganization = organizationIds.iterator().next();
-        }
-        if (activeHospital == null && !hospitalIds.isEmpty()) {
-            activeHospital = hospitalIds.iterator().next();
-        }
-
-        return HospitalContext.builder()
-            .principalUserId(principalUserId)
-            .principalUsername(principalUsername)
-            .activeOrganizationId(activeOrganization)
-            .activeHospitalId(activeHospital)
-            .permittedOrganizationIds(organizationIds)
-            .permittedHospitalIds(hospitalIds)
-            .permittedDepartmentIds(departmentIds)
-            .superAdmin(superAdminFlag)
-            .hospitalAdmin(hospitalAdminFlag)
-            .build();
-    }
-
-    private static Set<UUID> extractUuidSet(Object value) {
-        if (value == null) {
-            return Collections.emptySet();
-        }
-        if (value instanceof Set<?> set) {
-            return set.stream()
-                .map(JwtTokenProvider::extractUuid)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        }
-        if (value instanceof Collection<?> collection) {
-            return collection.stream()
-                .map(JwtTokenProvider::extractUuid)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        }
-        if (value instanceof String str) {
-            UUID uuid = extractUuid(str);
-            return uuid == null ? Collections.emptySet() : Set.of(uuid);
-        }
-        if (value instanceof UUID uuid) {
-            return Set.of(uuid);
-        }
-        return Collections.emptySet();
-    }
-
-    private static UUID extractUuid(Object value) {
-        if (value == null) {
-            return null;
-        }
-        if (value instanceof UUID uuid) {
-            return uuid;
-        }
-        if (value instanceof String str && StringUtils.hasText(str)) {
-            try {
-                return UUID.fromString(str.trim());
-            } catch (IllegalArgumentException ignored) {
-                return null;
-            }
-        }
-        return null;
-    }
-
-    private static boolean getBooleanClaim(Object value) {
-        if (value instanceof Boolean bool) {
-            return bool;
-        }
-        if (value instanceof String str) {
-            return Boolean.parseBoolean(str);
-        }
-        return false;
     }
 
     public String getUsernameFromJWT(String token) {

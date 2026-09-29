@@ -106,6 +106,36 @@ export class SessionScopeService {
   }
 
   /**
+   * The server refused `hospitalId` as no longer permitted: drop it from the
+   * active selection, the permitted set and the stored profile, so neither the
+   * next request nor a stored-profile fallback sends it again. The next
+   * bootstrap then states the real scope.
+   */
+  forgetHospital(hospitalId: string | null): void {
+    if (!hospitalId) {
+      return;
+    }
+    this.roleContext.setPermittedHospitalIds(
+      this.roleContext.permittedHospitalIds.filter((id) => id !== hospitalId),
+    );
+    if (this.roleContext.activeHospitalId === hospitalId) {
+      this.roleContext.activeHospitalId = null;
+    }
+    if (this.roleContext.selectedHospitalId() === hospitalId) {
+      this.roleContext.enableGlobalView();
+    }
+    const profile = this.auth.getUserProfile();
+    if (profile) {
+      this.auth.setUserProfile({
+        ...profile,
+        hospitalIds: (profile.hospitalIds ?? []).filter((id) => id !== hospitalId),
+        primaryHospitalId:
+          profile.primaryHospitalId === hospitalId ? undefined : profile.primaryHospitalId,
+      });
+    }
+  }
+
+  /**
    * The permitted set and the active hospital, in this order of preference:
    * the only permitted hospital; the primary when it is permitted (or nothing
    * is listed); the current active hospital when still permitted; the first

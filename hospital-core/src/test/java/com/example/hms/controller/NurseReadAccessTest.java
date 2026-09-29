@@ -1,13 +1,16 @@
 package com.example.hms.controller;
 
+import com.example.hms.config.PreAuthorizeMatcherPairingTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -32,18 +35,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DisplayName("Nurse read access")
 class NurseReadAccessTest {
 
-    private static String guardFor(Class<?> controller, String path) {
+    private static final String NURSE = "ROLE_NURSE";
+
+    /**
+     * The roles the GET handler's guard admits. Merged annotations, so
+     * {@code @GetMapping(path = "/x")} and {@code @GetMapping("/x")} are the same
+     * mapping, as they are to Spring; and the admitted ROLES, not a substring,
+     * so {@code !hasRole('NURSE')} can never read as admitting a nurse.
+     */
+    private static Set<String> guardFor(Class<?> controller, String path) {
         Optional<Method> method = Arrays.stream(controller.getDeclaredMethods())
             .filter(m -> {
-                GetMapping mapping = m.getAnnotation(GetMapping.class);
-                return mapping != null && Arrays.asList(mapping.value()).contains(path);
+                GetMapping mapping = AnnotatedElementUtils.findMergedAnnotation(m, GetMapping.class);
+                return mapping != null && Arrays.asList(mapping.path()).contains(path);
             })
             .findFirst();
 
         assertThat(method).as("GET %s on %s", path, controller.getSimpleName()).isPresent();
-        PreAuthorize pre = method.orElseThrow().getAnnotation(PreAuthorize.class);
+        PreAuthorize pre = AnnotatedElementUtils.findMergedAnnotation(method.orElseThrow(), PreAuthorize.class);
         assertThat(pre).as("GET %s must carry @PreAuthorize", path).isNotNull();
-        return pre.value();
+        return PreAuthorizeMatcherPairingTest.rolesAdmittedBy(pre.value());
     }
 
     @Test
@@ -51,7 +62,7 @@ class NurseReadAccessTest {
     void nurseReadsConsultationLists() {
         // /stats has always admitted NURSE. Showing a clinician the number of
         // overdue consults and refusing the list is the drift being closed.
-        assertThat(guardFor(ConsultationController.class, "/stats")).contains("'NURSE'");
+        assertThat(guardFor(ConsultationController.class, "/stats")).contains(NURSE);
 
         // ONLY /overdue. GET /consultations already admitted ROLE_NURSE, and the
         // portal's all/pending/active/completed tabs filter that one response
@@ -60,10 +71,10 @@ class NurseReadAccessTest {
         // hospital as a trusted claim, so they stay closed.
         assertThat(guardFor(ConsultationController.class, "/overdue"))
             .as("ward nurses chase overdue consults and prep the patient")
-            .contains("'NURSE'");
+            .contains(NURSE);
         assertThat(guardFor(ConsultationController.class, "/hospital/{hospitalId}"))
             .as("no portal caller, and the path hospital is an unvalidated claim")
-            .doesNotContain("'NURSE'");
+            .doesNotContain(NURSE);
     }
 
     @Test
@@ -74,22 +85,22 @@ class NurseReadAccessTest {
         // CONSULTANT, so for a nurse it can only ever be empty. The portal
         // hides the tab rather than rendering one that shows nothing.
         assertThat(guardFor(ConsultationController.class, "/mine"))
-            .doesNotContain("'NURSE'");
+            .doesNotContain(NURSE);
     }
 
     @Test
     @DisplayName("a nurse can read imaging report history, where the addenda are")
     void nurseReadsImagingHistory() {
-        String latest = guardFor(ImagingResultController.class, "/order/{orderId}");
-        String history = guardFor(ImagingResultController.class, "/order/{orderId}/all");
+        Set<String> latest = guardFor(ImagingResultController.class, "/order/{orderId}");
+        Set<String> history = guardFor(ImagingResultController.class, "/order/{orderId}/all");
 
         // The two must agree about nurses. Admitting them to the latest report
         // — which may itself be PRELIMINARY — while withholding the history
         // never implemented "no unconfirmed reads for non-physicians"; it only
         // hid the corrections.
-        assertThat(latest).contains("'NURSE'");
+        assertThat(latest).contains(NURSE);
         assertThat(history)
             .as("addenda live in the version history")
-            .contains("'NURSE'");
+            .contains(NURSE);
     }
 }

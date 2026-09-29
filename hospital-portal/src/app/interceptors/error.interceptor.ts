@@ -19,6 +19,8 @@ import {
   throwError,
 } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
+import { RoleContextService } from '../core/role-context.service';
+import { SessionScopeService } from '../core/session-scope.service';
 import { ImpersonationService } from '../services/impersonation.service';
 import { DowntimeService } from '../services/downtime.service';
 
@@ -82,6 +84,67 @@ function reportSilent403(http: HttpClient, req: HttpRequest<unknown>): void {
         // Telemetry is best-effort — never surface its own failures.
       },
     });
+}
+
+/**
+ * The 403 the backend gives a hospital scope it refuses (the one tenant
+ * resolver): `code` is `hospital_scope_refused` and `reason` says why.
+ * `NO_LONGER_PERMITTED` means the scope this session holds names a hospital
+ * the user was revoked at — a stale chip — so the portal re-reads its scope
+ * from the server instead of showing the forbidden page. Every reason is a
+ * scope problem the page itself reports, never a page-level 403.
+ */
+const HOSPITAL_SCOPE_REFUSED = 'hospital_scope_refused';
+
+/**
+ * The hospital a NO_LONGER_PERMITTED refusal names: the one refused, which is
+ * not necessarily the selection (a stale link to B while A is selected).
+ */
+function refusedHospitalId(error: HttpErrorResponse): string | null {
+  const body = error.error as { hospitalId?: unknown } | null;
+  return body && typeof body === 'object' && typeof body.hospitalId === 'string'
+    ? body.hospitalId
+    : null;
+}
+
+function hospitalScopeRefusal(error: HttpErrorResponse): string | null {
+  const body = error.error as { code?: unknown; reason?: unknown } | null;
+  if (body && typeof body === 'object' && body.code === HOSPITAL_SCOPE_REFUSED) {
+    return typeof body.reason === 'string' ? body.reason : '';
+  }
+  return null;
+}
+
+/** One re-bootstrap at a time: every request in flight carries the same stale chip. */
+let rebootstrappingScope = false;
+
+/**
+ * Forget exactly the hospital the server refused. Only when it was the
+ * selection does the session re-read its scope: a stale link to B must not
+ * wipe a valid A, and must not start a bootstrap loop.
+ */
+function forgetRefusedHospital(
+  sessionScope: SessionScopeService,
+  roleContext: RoleContextService,
+  refused: string | null,
+): void {
+  if (!refused) return;
+  const wasSelected = roleContext.effectiveHospitalIdForRequest() === refused;
+  // Forget it first: if the bootstrap cannot be reached the stored profile
+  // stands in, and it must not bring the refused hospital back.
+  sessionScope.forgetHospital(refused);
+  if (wasSelected) {
+    rebootstrapScope(sessionScope);
+  }
+}
+
+function rebootstrapScope(sessionScope: SessionScopeService): void {
+  if (rebootstrappingScope) return;
+  rebootstrappingScope = true;
+  sessionScope.hydrate().subscribe({
+    complete: () => (rebootstrappingScope = false),
+    error: () => (rebootstrappingScope = false),
+  });
 }
 
 let isRefreshing = false;
@@ -150,6 +213,8 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   // Hoisted: inject() is only valid during the synchronous interceptor
   // call, not inside the async catchError callback below.
   const downtime = inject(DowntimeService);
+  const sessionScope = inject(SessionScopeService);
+  const roleContext = inject(RoleContextService);
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
@@ -196,6 +261,12 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         // why their save failed.
         const body = error.error as { message?: string } | null;
         downtime.markReadOnly(body?.message ?? null);
+      } else if (error.status === 403 && hospitalScopeRefusal(error) !== null) {
+        // A refused hospital scope is the page's to report, not a forbidden
+        // page; a stale chip is corrected by re-reading the scope.
+        if (hospitalScopeRefusal(error) === 'NO_LONGER_PERMITTED') {
+          forgetRefusedHospital(sessionScope, roleContext, refusedHospitalId(error));
+        }
       } else if (error.status === 403) {
         // Never redirect (or re-report) when the audit sink itself is forbidden.
         const isAuditCall = req.url.includes('/frontend-audit');
