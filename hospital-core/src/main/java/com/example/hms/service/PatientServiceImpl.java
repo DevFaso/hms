@@ -848,7 +848,12 @@ public class PatientServiceImpl implements PatientService {
         List<PatientTimelineEntryDTO> aggregatedEntries = new ArrayList<>();
         aggregatedEntries.addAll(collectEncounterEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked, withheld));
         aggregatedEntries.addAll(collectPrescriptionEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked, withheld));
-        aggregatedEntries.addAll(collectLabResultEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked, withheld));
+        // #751 - the lab rows that surface only because this hospital's own
+        // laboratory performed them are a disclosure of their own, accounted
+        // apart from the treatment relationship's and never in both.
+        Set<String> performedHereLabEntryIds = new LinkedHashSet<>();
+        aggregatedEntries.addAll(collectLabResultEntries(patientId, readableHospitalIds, hospitalId, categoryFilters,
+            unlocked, withheld, performedHereLabEntryIds));
         // Not widened: allergies attach to patient + hospital with no encounter
         // link, so #51's category cannot be resolved for them. A row whose
         // category nobody can determine must not travel. Tracked as standing
@@ -858,7 +863,8 @@ public class PatientServiceImpl implements PatientService {
         aggregatedEntries.addAll(collectImagingEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked));
         aggregatedEntries.addAll(collectProcedureEntries(patientId, readableHospitalIds, hospitalId, categoryFilters));
 
-        recordCrossHospitalDisclosure(patientId, hospitalId, requesterUserId, assignment, aggregatedEntries);
+        recordCrossHospitalDisclosure(patientId, hospitalId, requesterUserId, assignment, aggregatedEntries,
+            performedHereLabEntryIds);
 
         List<PatientTimelineEntryDTO> entries = aggregatedEntries.stream()
             .filter(entry -> includeSensitive || !entry.isSensitive())
@@ -972,12 +978,16 @@ public class PatientServiceImpl implements PatientService {
             maxItems,
             sensitiveSections
         );
+        // #751 - the lab section's only foreign rows are the ones this
+        // hospital's laboratory performed; they are accounted on their own.
+        Map<String, Long> performedHereLabReach = new HashMap<>();
         List<LabResultResponseDTO> labResults = collectDoctorRecordLabResults(
             patientId,
             resolvedHospitalId,
             includeSensitive,
             maxItems,
-            sensitiveSections
+            sensitiveSections,
+            performedHereLabReach
         );
         ImagingBundle imagingBundle = collectDoctorRecordImaging(
             patientId,
@@ -1059,6 +1069,8 @@ public class PatientServiceImpl implements PatientService {
         CrossHospitalReachRecorder.merge(reach, imagingBundle.reach());
         recordCrossHospitalReach(patientId, resolvedHospitalId, requesterUserId, assignment, reach,
             "Cross-hospital doctor record read on the treatment relationship");
+        recordCrossHospitalReach(patientId, resolvedHospitalId, requesterUserId, assignment, performedHereLabReach,
+            CrossHospitalReachRecorder.LAB_RESULT_PERFORMED_HERE_DESCRIPTION);
         return response;
     }
 
@@ -1809,8 +1821,10 @@ public class PatientServiceImpl implements PatientService {
      */
     private void recordCrossHospitalDisclosure(UUID patientId, UUID actingHospitalId, UUID requesterUserId,
                                                UserRoleHospitalAssignment assignment,
-                                               List<PatientTimelineEntryDTO> entries) {
+                                               List<PatientTimelineEntryDTO> entries,
+                                               Set<String> performedHereLabEntryIds) {
         Map<String, Long> perSource = new HashMap<>();
+        Map<String, Long> performedHere = new HashMap<>();
         for (PatientTimelineEntryDTO entry : entries) {
             Map<String, Object> metadata = entry.getMetadata();
             if (metadata == null || !Boolean.TRUE.equals(metadata.get("foreign"))) {
@@ -1818,11 +1832,15 @@ public class PatientServiceImpl implements PatientService {
             }
             Object source = metadata.get(META_SOURCE_HOSPITAL_ID);
             if (source != null) {
-                perSource.merge(source.toString(), 1L, Long::sum);
+                boolean performedHereRow = CATEGORY_LAB_RESULT.equals(entry.getCategory())
+                    && performedHereLabEntryIds.contains(entry.getEntryId());
+                (performedHereRow ? performedHere : perSource).merge(source.toString(), 1L, Long::sum);
             }
         }
         recordCrossHospitalReach(patientId, actingHospitalId, requesterUserId, assignment, perSource,
             "Cross-hospital chart read on the treatment relationship");
+        recordCrossHospitalReach(patientId, actingHospitalId, requesterUserId, assignment, performedHere,
+            CrossHospitalReachRecorder.LAB_RESULT_PERFORMED_HERE_DESCRIPTION);
     }
 
     /** One RECORD_SHARE per source hospital in {@code perSource} (source hospital id -> rows surfaced). */
@@ -1895,21 +1913,28 @@ public class PatientServiceImpl implements PatientService {
 
     private List<PatientTimelineEntryDTO> collectLabResultEntries(UUID patientId, Set<UUID> readableHospitalIds,
                                                                    UUID actingHospitalId, Set<String> categoryFilters,
-                                                                   boolean unlocked, WithheldRows withheld) {
+                                                                   boolean unlocked, WithheldRows withheld,
+                                                                   Set<String> performedHereEntryIds) {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_LAB_RESULT)) {
             return List.of();
         }
-        // Ordered in the readable set, read at the database — the rows the
-        // timeline has always shown, and no others. No acting hospital, so the
-        // query's performed-here clause is off: a result this hospital's
-        // laboratory only performed for another hospital was never a timeline
-        // row, and it is no longer loaded just to be dropped.
-        return labResultRepository.findPatientResultsReadableAt(patientId, readableHospitalIds, null,
-                false, Pageable.unpaged()).stream()
+        // Readable where the order is handled (#751), read at the database:
+        // ordered in the readable set, or performed by the acting hospital's
+        // own laboratory for another hospital. A performed-here row is still
+        // the ordering hospital's record, so it carries that provenance and
+        // passes the same D3 filter as any other foreign row.
+        List<LabResult> admitted = labResultRepository.findPatientResultsReadableAt(patientId,
+                readableHospitalIds, actingHospitalId, false, Pageable.unpaged()).stream()
             // Same as prescriptions: the category rides on the lab order's encounter.
             .filter(result -> withheld.admit(result.getLabOrder().getHospital(),
                 departmentOf(result.getLabOrder().getEncounter()), actingHospitalId,
                 sensitivityClassifier.effectiveCategory(result.getLabOrder().getEncounter()), unlocked))
+            .toList();
+        admitted.stream()
+            .filter(result -> result.getId() != null
+                && CrossHospitalReachRecorder.isPerformedHere(result, actingHospitalId))
+            .forEach(result -> performedHereEntryIds.add(result.getId().toString()));
+        return admitted.stream()
             .map(result -> {
                 Map<String, Object> metadata = new HashMap<>();
                 putIfNotNull(metadata, "unit", result.getResultUnit());
@@ -2150,22 +2175,30 @@ public class PatientServiceImpl implements PatientService {
         UUID hospitalId,
         boolean includeSensitive,
         int limit,
-        Set<String> sensitiveSections
+        Set<String> sensitiveSections,
+        Map<String, Long> performedHereReach
     ) {
-        // Ordered at the acting hospital, read at the database: this section
-        // has always been acting-hospital only, unlike the medications and
-        // imaging beside it, which read the readable set. No acting hospital
-        // is passed as the performer, so nothing this hospital's laboratory
-        // ran for another hospital is loaded.
+        // Handled by the acting hospital (#751), read at the database: ordered
+        // here, or performed by this hospital's own laboratory for another
+        // hospital. This section has always been acting-hospital only, unlike
+        // the medications and imaging beside it, which read the readable set;
+        // the treatment relationship still does not widen it.
         List<LabResult> results = labResultRepository.findPatientResultsReadableAt(patientId, Set.of(hospitalId),
-                null, false, Pageable.unpaged()).stream()
+                hospitalId, false, Pageable.unpaged()).stream()
             .sorted(Comparator.comparing(LabResult::getResultDate, Comparator.nullsLast(Comparator.reverseOrder())))
             .toList();
         boolean sectionSensitive = results.stream().anyMatch(this::isSensitiveLabResult);
-        List<LabResultResponseDTO> responses = results.stream()
+        List<LabResult> shown = results.stream()
             .filter(result -> includeSensitive || !isSensitiveLabResult(result))
-            .map(labResultMapper::toResponseDTO)
             .limit(limit)
+            .toList();
+        // Accounted on the rows the record shows, as every other section is.
+        CrossHospitalReachRecorder.merge(performedHereReach, CrossHospitalReachRecorder.reachOf(shown.stream()
+            .filter(result -> CrossHospitalReachRecorder.isPerformedHere(result, hospitalId))
+            .map(result -> CrossHospitalReachRecorder.hospitalIdOf(result.getLabOrder().getHospital()))
+            .toList(), hospitalId));
+        List<LabResultResponseDTO> responses = shown.stream()
+            .map(labResultMapper::toResponseDTO)
             .toList();
         if (sectionSensitive) {
             sensitiveSections.add(SECTION_LABS);

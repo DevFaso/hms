@@ -377,7 +377,10 @@ public class PatientEverythingService {
         // iterations.
         if (ctx.includes("Patient") && ctx.isFirstPage()
             && ctx.passesSinceFilter(patient.getUpdatedAt())) {
-            addEntry(bundle, patientMapper.toFhir(patient));
+            // The acting hospital's MRN only: every other identifier system
+            // names a hospital the patient is registered at, and the
+            // sections' treatment-relationship reach does not extend to it.
+            addEntry(bundle, patientMapper.toFhir(patient, ctx.hospitalId()));
         }
     }
 

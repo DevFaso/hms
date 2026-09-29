@@ -108,6 +108,11 @@ class EncounterServiceImplReadAccessControlTest {
 
     @BeforeEach
     void setUp() {
+        // The services ask the one PatientSubjectReadGuard; it is built here over
+        // this class's authUtils and patientRepository so ownership is decided
+        // exactly as before, by those two.
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "subjectReadGuard",
+            new PatientSubjectReadGuard(authUtils, patientRepository));
         hospitalId = UUID.randomUUID();
         otherHospitalId = UUID.randomUUID();
         callerUserId = UUID.randomUUID();

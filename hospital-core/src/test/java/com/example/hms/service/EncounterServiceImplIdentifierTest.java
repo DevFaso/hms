@@ -60,12 +60,28 @@ class EncounterServiceImplIdentifierTest {
     @InjectMocks
     private EncounterServiceImpl encounterService;
 
+    /** MessageUtil's static source before this class replaced it; put back after each test. */
+    private org.springframework.context.MessageSource previousMessageSource;
+
     @BeforeEach
     void setup() {
         LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+        previousMessageSource = (org.springframework.context.MessageSource)
+            org.springframework.test.util.ReflectionTestUtils.getField(MessageUtil.class, "messageSource");
         MessageUtil.setMessageSource(messageSource);
         when(messageSource.getMessage(any(String.class), any(), any(java.util.Locale.class)))
             .thenReturn("Patient not found");
+    }
+
+    /**
+     * The stub above answers "Patient not found" for EVERY key; left installed,
+     * it rewrote the message of every ResourceNotFoundException thrown later in
+     * the same JVM, so a class asserting a message key failed or passed on run
+     * order alone.
+     */
+    @org.junit.jupiter.api.AfterEach
+    void restoreMessageSource() {
+        MessageUtil.setMessageSource(previousMessageSource);
     }
 
     @Test

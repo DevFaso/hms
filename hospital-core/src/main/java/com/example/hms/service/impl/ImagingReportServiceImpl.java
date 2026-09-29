@@ -313,15 +313,21 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     public ImagingReportResponseDTO getReport(UUID reportId) {
         ImagingReport report = imagingReportRepository.findById(reportId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId));
-        // A patient caller reads only their own, released report: another
-        // patient's, or one not yet signed, answers exactly as a missing id
-        // does, and before the hospital check in requireReportInScope, which
-        // can answer differently.
-        if (subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.IMAGING_REPORT_READS)
-                && !releasedToCaller(report)) {
+        // A patient caller reads only their own, released report, wherever it
+        // was written: another patient's, or one not yet signed, answers
+        // exactly as a missing id does, and before the hospital check, which
+        // can answer differently. Staff read their hospital's — and, staff who
+        // are also patients (#754's rule), their own released report elsewhere.
+        if (subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.IMAGING_REPORT_READS)) {
+            if (!releasedToCaller(report)) {
+                throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
+            }
+            return imagingReportMapper.toResponseDTO(report);
+        }
+        if (!reportInScope(report) && !releasedToCallerAsItsPatient(report)) {
             throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
         }
-        return imagingReportMapper.toResponseDTO(requireReportInScope(report));
+        return imagingReportMapper.toResponseDTO(report);
     }
 
     @Override
@@ -331,17 +337,26 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             .orElseThrow(() -> new ResourceNotFoundException(MSG_ORDER_NOT_FOUND, imagingOrderId));
         // A patient caller reads only their own: another patient's order
         // answers exactly as a missing id does, and before the hospital check.
-        boolean patientOnly = subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.IMAGING_REPORT_READS);
-        if (patientOnly && !subjectReadGuard.callerOwns(order.getPatient())) {
-            throw new ResourceNotFoundException(MSG_ORDER_NOT_FOUND, imagingOrderId);
+        boolean asPatient = subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.IMAGING_REPORT_READS);
+        if (asPatient) {
+            // Their own order wherever it was written; another's as missing.
+            if (!subjectReadGuard.callerOwns(order.getPatient())) {
+                throw new ResourceNotFoundException(MSG_ORDER_NOT_FOUND, imagingOrderId);
+            }
+        } else if (!orderInScope(order)) {
+            // Staff who are also patients read their own order elsewhere, as
+            // its patient (#754's rule): released reports only, below.
+            asPatient = subjectReadGuard.ownsAsItsPatient(order.getPatient());
+            if (!asPatient) {
+                throw new ResourceNotFoundException(MSG_ORDER_NOT_FOUND, imagingOrderId);
+            }
         }
-        requireOrderInScope(order);
         ImagingReport report = imagingReportRepository.findFirstByImagingOrder_IdAndLatestVersionIsTrue(imagingOrderId)
             .orElseGet(() -> imagingReportRepository.findTopByImagingOrder_IdOrderByReportVersionDesc(imagingOrderId)
                 .orElseThrow(() -> new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, imagingOrderId)));
         // Their own order, but the latest read is not signed yet: the patient
         // is answered as though the study had no report.
-        if (patientOnly && !report.isReleasedToPatient()) {
+        if (asPatient && !report.isReleasedToPatient()) {
             throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, imagingOrderId);
         }
         return imagingReportMapper.toResponseDTO(report);
@@ -397,13 +412,15 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     }
 
     private ImagingReport requireReportInScope(ImagingReport report) {
-        UUID scope = roleValidator.requireActiveHospitalId();
-        if (scope != null
-            && report.getHospital() != null
-            && !scope.equals(report.getHospital().getId())) {
+        if (!reportInScope(report)) {
             throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, report.getId());
         }
         return report;
+    }
+
+    private boolean reportInScope(ImagingReport report) {
+        UUID scope = roleValidator.requireActiveHospitalId();
+        return scope == null || report.getHospital() == null || scope.equals(report.getHospital().getId());
     }
 
     private ImagingOrder loadOrderScoped(UUID imagingOrderId) {
@@ -413,13 +430,15 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     }
 
     private ImagingOrder requireOrderInScope(ImagingOrder order) {
-        UUID scope = roleValidator.requireActiveHospitalId();
-        if (scope != null
-            && order.getHospital() != null
-            && !scope.equals(order.getHospital().getId())) {
+        if (!orderInScope(order)) {
             throw new ResourceNotFoundException(MSG_ORDER_NOT_FOUND, order.getId());
         }
         return order;
+    }
+
+    private boolean orderInScope(ImagingOrder order) {
+        UUID scope = roleValidator.requireActiveHospitalId();
+        return scope == null || order.getHospital() == null || scope.equals(order.getHospital().getId());
     }
 
     /**
@@ -430,6 +449,12 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     private boolean releasedToCaller(ImagingReport report) {
         return report.isReleasedToPatient()
             && subjectReadGuard.callerOwns(report.getImagingOrder().getPatient());
+    }
+
+    /** The same for staff who are also patients: released, theirs, and they hold ROLE_PATIENT. */
+    private boolean releasedToCallerAsItsPatient(ImagingReport report) {
+        return report.isReleasedToPatient()
+            && subjectReadGuard.ownsAsItsPatient(report.getImagingOrder().getPatient());
     }
 
     /**

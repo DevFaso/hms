@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 @Service
 @RequiredArgsConstructor
@@ -31,8 +32,8 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     private static final String PATIENT_REQUIRED_KEY = "patientinsurance.patient.required";
     private static final String PATIENT_REQUIRED_MSG = "Patient is required for insurance";
     private static final String ROLE_PATIENT = "PATIENT";
-    private static final String ACCESS_DENIED_SELF_KEY = "access.denied.self";
-    private static final String ACCESS_DENIED_SELF_MSG = "You can only access your own insurance details";
+    /** PatientChartAccess's key for a patient id that matches no row (the list read's miss). */
+    private static final String CHART_PATIENT_NOT_FOUND_KEY = "patient.notFound";
     private static final String HOSPITAL_REQUIRED_KEY = "hospital.required";
     private static final String HOSPITAL_REQUIRED_MSG = "Hospital context is required";
     private static final String INSURANCE_LINK_FORBIDDEN_KEY = "insurance.link.forbidden";
@@ -48,6 +49,14 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     private final MessageSource messageSource;
     private final RoleValidator roleValidator;
     private final PatientChartAccess patientChartAccess;
+    /**
+     * Who the caller is and whether a patient row is theirs: the one ownership
+     * check the patient-subject reads share. It resolves the caller through
+     * {@code ControllerAuthUtils} (the {@code appUserId} claim on a Keycloak
+     * token), where {@code RoleValidator.getCurrentUserId()} is null on one and
+     * refused a Keycloak patient their own insurance.
+     */
+    private final PatientSubjectReadGuard subjectReadGuard;
 
     @Override
     @Transactional
@@ -59,7 +68,8 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         }
 
         Patient patient = getPatientOrThrow(dto.getPatientId(), locale);
-        enforceSelfAccessIfPatient(patient, locale); // PATIENT may only act on self
+        // PATIENT may only act on self; another patient answers as a missing one
+        enforceSelfAccessIfPatient(patient, () -> patientNotFound(dto.getPatientId(), locale));
 
         PatientInsurance insurance = patientInsuranceMapper.toPatientInsurance(dto, patient);
 
@@ -74,17 +84,21 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     @Transactional(readOnly = true)
     public PatientInsuranceResponseDTO getPatientInsuranceById(UUID insuranceId, Locale locale) {
         PatientInsurance insurance = getInsuranceOrThrow(insuranceId, locale);
-        if (insurance.getPatient() != null) {
-            enforceSelfAccessIfPatient(insurance.getPatient(), locale);
-        }
+        // Another patient's insurance answers exactly as a missing id does.
+        enforceSelfAccessIfPatient(insurance.getPatient(), () -> insuranceNotFound(insuranceId, locale));
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(insurance);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<PatientInsuranceResponseDTO> getInsurancesByPatientId(UUID patientId, Locale locale) {
-        Patient patient = getPatientScoped(patientId);
-        enforceSelfAccessIfPatient(patient, locale);
+        // A patient-only caller may name only their own row, and is told so
+        // exactly as an unknown id is (PatientChartAccess's answer), BEFORE the
+        // chart lookup, whose answers could otherwise tell the two apart.
+        if (roleValidator.isPatientOnlyFromAuth() && !subjectReadGuard.ownsPatientRow(patientId)) {
+            throw new ResourceNotFoundException(CHART_PATIENT_NOT_FOUND_KEY, patientId);
+        }
+        getPatientScoped(patientId);
 
         return patientInsuranceRepository.findByPatient_Id(patientId)
             .stream()
@@ -96,6 +110,11 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     @Transactional
     public PatientInsuranceResponseDTO updatePatientInsurance(UUID insuranceId, PatientInsuranceRequestDTO dto, Locale locale) {
         PatientInsurance existing = getInsuranceOrThrow(insuranceId, locale);
+        // The record's current owner first: a patient naming their own id in
+        // the body must not rewrite, and so take over, another patient's
+        // coverage. (The endpoint admits no patient today; the rule is the
+        // service's, so a future caller cannot skip it.)
+        enforceSelfAccessIfPatient(existing.getPatient(), () -> insuranceNotFound(insuranceId, locale));
 
         Patient targetPatient = (dto.getPatientId() != null)
             ? getPatientOrThrow(dto.getPatientId(), locale)
@@ -107,7 +126,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
                     null, PATIENT_REQUIRED_MSG, locale));
         }
 
-        enforceSelfAccessIfPatient(targetPatient, locale);
+        enforceSelfAccessIfPatient(targetPatient, () -> patientNotFound(targetPatient.getId(), locale));
 
         // Apply changes (do not touch assignment here)
         patientInsuranceMapper.updateEntityFromDto(existing, dto, targetPatient);
@@ -120,9 +139,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     @Transactional
     public void deletePatientInsurance(UUID insuranceId, Locale locale) {
         PatientInsurance existing = getInsuranceOrThrow(insuranceId, locale);
-        if (existing.getPatient() != null) {
-            enforceSelfAccessIfPatient(existing.getPatient(), locale);
-        }
+        enforceSelfAccessIfPatient(existing.getPatient(), () -> insuranceNotFound(insuranceId, locale));
         patientInsuranceRepository.deleteById(insuranceId);
     }
 
@@ -135,21 +152,32 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         PatientInsurance insurance = getInsuranceOrThrow(insuranceId, locale);
         Patient patient = getPatientOrThrow(req.getPatientId(), locale);
 
-        // Always attach to patient
-        insurance.setPatient(patient);
-
         // Decide acting mode
         boolean actAsPatient = isActingAsPatient(ctx);
         UUID actorUserId = resolveActorUserId(ctx);
 
+        // A patient-only caller is held to their own rows whatever X-Act-As
+        // says, before the staff checks below, whose answers (400/403) would
+        // otherwise differ between a real id and a missing one.
+        enforceSelfAccessIfPatient(patient, () -> patientNotFound(req.getPatientId(), locale));
+        enforceSelfAccessIfPatient(insurance.getPatient(), () -> insuranceNotFound(insuranceId, locale));
+
         if (actAsPatient) {
-            enforcePatientSelfAccess(patient, actorUserId, locale);
+            // A patient links only their own row, and only coverage that is
+            // unowned or already theirs: another patient's insurance record
+            // could otherwise be re-pointed at the caller. Either refusal
+            // answers exactly as the missing id does.
+            enforcePatientSelfAccess(patient, () -> patientNotFound(req.getPatientId(), locale));
+            enforcePatientSelfAccess(insurance.getPatient(), () -> insuranceNotFound(insuranceId, locale));
             rejectHospitalLinkForPatient(req, locale);
         } else {
             UUID hospitalId = resolveHospitalId(req, ctx);
             enforceStaffAuthorization(hospitalId, actorUserId, ctx, locale);
             insurance.setAssignment(resolveStaffAssignment(actorUserId, hospitalId, locale));
         }
+
+        // Always attach to patient
+        insurance.setPatient(patient);
 
         PatientInsurance saved = patientInsuranceRepository.save(insurance);
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
@@ -176,28 +204,36 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     }
 
     private Patient getPatientOrThrow(UUID patientId, Locale locale) {
-        return patientRepository.findById(patientId).orElseThrow(() ->
-            new ResourceNotFoundException(
-                messageSource.getMessage("patient.notfound",
-                    new Object[]{patientId}, "Patient not found", locale)));
+        return patientRepository.findById(patientId).orElseThrow(() -> patientNotFound(patientId, locale));
     }
 
     private PatientInsurance getInsuranceOrThrow(UUID insuranceId, Locale locale) {
-        return patientInsuranceRepository.findById(insuranceId).orElseThrow(() ->
-            new ResourceNotFoundException(
-                messageSource.getMessage("patientinsurance.notfound",
-                    new Object[]{insuranceId}, "Patient insurance not found", locale)));
+        return patientInsuranceRepository.findById(insuranceId).orElseThrow(() -> insuranceNotFound(insuranceId, locale));
     }
 
-    private void enforceSelfAccessIfPatient(Patient patient, Locale locale) {
+    /** The answer for a patient id that matches no row — and for one the caller may not name. */
+    private ResourceNotFoundException patientNotFound(UUID patientId, Locale locale) {
+        return new ResourceNotFoundException(
+            messageSource.getMessage("patient.notfound", new Object[]{patientId}, "Patient not found", locale));
+    }
+
+    /** The answer for an insurance id that matches no row — and for one the caller may not read. */
+    private ResourceNotFoundException insuranceNotFound(UUID insuranceId, Locale locale) {
+        return new ResourceNotFoundException(
+            messageSource.getMessage("patientinsurance.notfound", new Object[]{insuranceId},
+                "Patient insurance not found", locale));
+    }
+
+    /**
+     * A PATIENT may only act on their own row. Another patient's answers
+     * exactly as a missing one ({@code notFound}), not 403: a 403 for a real
+     * id beside a 404 for a made-up one told a patient which ids exist.
+     * Ownership is the shared {@link PatientSubjectReadGuard#callerOwns}, so a
+     * Keycloak patient (no {@code CustomUserDetails}) is recognised too.
+     */
+    private void enforceSelfAccessIfPatient(Patient patient, Supplier<ResourceNotFoundException> notFound) {
         if (roleValidator.isPatientOnlyFromAuth()) {
-            UUID currentUserId = roleValidator.getCurrentUserId();
-            UUID patientUserId = (patient.getUser() != null ? patient.getUser().getId() : null);
-            if (patientUserId == null || !patientUserId.equals(currentUserId)) {
-                throw new AccessDeniedException(
-                    messageSource.getMessage(ACCESS_DENIED_SELF_KEY, null,
-                        ACCESS_DENIED_SELF_MSG, locale));
-            }
+            enforcePatientSelfAccess(patient, notFound);
         }
     }
 
@@ -216,15 +252,20 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
                 PATIENT_REQUIRED_KEY, null, PATIENT_REQUIRED_MSG, locale));
         }
         Patient patient = getPatientOrThrow(req.getPatientId(), locale);
-        enforceSelfAccessIfPatient(patient, locale);
-        insurance.setPatient(patient);
+        enforceSelfAccessIfPatient(patient, () -> patientNotFound(req.getPatientId(), locale));
+        // As in linkPatientInsurance: a patient-only caller is held to their own
+        // coverage whatever X-Act-As says, before the staff checks answer.
+        enforceSelfAccessIfPatient(insurance.getPatient(), () -> insuranceNotFound(insuranceId, locale));
 
         boolean actAsPatient = isActingAsPatient(ctx);
         UUID actorUserId = resolveActorUserId(ctx);
 
         if (actAsPatient) {
-            enforcePatientSelfAccess(patient, actorUserId, locale);
+            enforcePatientSelfAccess(patient, () -> patientNotFound(req.getPatientId(), locale));
+            enforcePatientSelfAccess(insurance.getPatient(), () -> insuranceNotFound(insuranceId, locale));
+            insurance.setPatient(patient);
         } else {
+            insurance.setPatient(patient);
             UUID hospitalId = resolveHospitalId(req, ctx);
             enforceStaffAuthorization(hospitalId, actorUserId, ctx, locale);
             insurance.setAssignment(resolveStaffAssignment(actorUserId, hospitalId, locale));
@@ -248,14 +289,14 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         final String policyNumber = req.getPolicyNumber().trim();
 
         Patient patient = getPatientOrThrow(patientId, locale);
-        enforceSelfAccessIfPatient(patient, locale);
+        enforceSelfAccessIfPatient(patient, () -> patientNotFound(patientId, locale));
 
         final boolean actAsPatient = isActingAsPatient(ctx);
         final UUID actorUserId = resolveActorUserId(ctx);
 
         UUID hospitalIdForStaff = null;
         if (actAsPatient) {
-            enforcePatientSelfAccess(patient, actorUserId, locale);
+            enforcePatientSelfAccess(patient, () -> patientNotFound(patientId, locale));
             rejectHospitalLinkForPatient(req, locale);
         } else {
             hospitalIdForStaff = resolveHospitalId(req, ctx);
@@ -290,15 +331,24 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         return ctx != null && ctx.mode() != null && ROLE_PATIENT.equalsIgnoreCase(ctx.mode().name());
     }
 
+    /**
+     * The acting user. {@code ActingContext.userId} is filled only for a
+     * password-login principal, and {@code RoleValidator.getCurrentUserId()} is
+     * null on a Keycloak token, so the caller is resolved the way every
+     * patient-subject read resolves it (the {@code appUserId} claim).
+     */
     private UUID resolveActorUserId(ActingContext ctx) {
-        return (ctx != null && ctx.userId() != null) ? ctx.userId() : roleValidator.getCurrentUserId();
+        return (ctx != null && ctx.userId() != null) ? ctx.userId() : subjectReadGuard.callerUserId().orElse(null);
     }
 
-    private void enforcePatientSelfAccess(Patient patient, UUID actorUserId, Locale locale) {
-        UUID patientUserId = patient.getUser() != null ? patient.getUser().getId() : null;
-        if (patientUserId == null || !patientUserId.equals(actorUserId)) {
-            throw new AccessDeniedException(
-                messageSource.getMessage(ACCESS_DENIED_SELF_KEY, null, ACCESS_DENIED_SELF_MSG, locale));
+    /**
+     * Acting as PATIENT: the row must be the caller's own. {@code null} (an
+     * insurance record not yet linked to anyone) passes. A foreign row
+     * answers exactly as a missing one.
+     */
+    private void enforcePatientSelfAccess(Patient patient, Supplier<ResourceNotFoundException> notFound) {
+        if (patient != null && !subjectReadGuard.callerOwns(patient)) {
+            throw notFound.get();
         }
     }
 

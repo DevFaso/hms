@@ -15,6 +15,7 @@ import com.example.hms.payload.dto.ultrasound.UltrasoundOrderResponseDTO;
 import com.example.hms.payload.dto.ultrasound.UltrasoundReportRequestDTO;
 import com.example.hms.payload.dto.ultrasound.UltrasoundReportResponseDTO;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UltrasoundOrderRepository;
@@ -54,9 +55,14 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     private final CrossHospitalReachRecorder reachRecorder;
     private final PatientSubjectReadGuard subjectReadGuard;
     private final RoleValidator roleValidator;
+    private final PatientHospitalRegistrationRepository registrationRepository;
 
     @Override
     public UltrasoundOrderResponseDTO createOrder(UltrasoundOrderRequestDTO request, UUID orderedByUserId) {
+        // An order is placed only at the hospital the caller acts at, for a
+        // patient registered there; either refusal answers as the missing row.
+        requireActingHospital(request.getHospitalId());
+        requirePatientRegisteredAtActingHospital(request.getPatientId());
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
@@ -88,8 +94,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
 
     @Override
     public UltrasoundOrderResponseDTO updateOrder(UUID orderId, UltrasoundOrderRequestDTO request) {
-        UltrasoundOrder order = orderRepository.findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_PREFIX + orderId));
+        UltrasoundOrder order = getOrderInScope(orderId);
 
         // Prevent modification of completed orders
         if (order.getStatus() == UltrasoundOrderStatus.COMPLETED) {
@@ -102,6 +107,11 @@ public class UltrasoundServiceImpl implements UltrasoundService {
 
         // Update hospital if changed
         if (request.getHospitalId() != null && !request.getHospitalId().equals(order.getHospital().getId())) {
+            // Never moved away from the hospital the caller acts at: the
+            // portal echoes the acting hospital, so any other one is refused
+            // exactly as a missing hospital. A verified super-admin in global
+            // view keeps the old behaviour.
+            requireActingHospital(request.getHospitalId());
             Hospital newHospital = hospitalRepository.findById(request.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
             order.setHospital(newHospital);
@@ -115,8 +125,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
 
     @Override
     public UltrasoundOrderResponseDTO cancelOrder(UUID orderId, String cancellationReason) {
-        UltrasoundOrder order = orderRepository.findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_PREFIX + orderId));
+        UltrasoundOrder order = getOrderInScope(orderId);
 
         if (order.getStatus() == UltrasoundOrderStatus.CANCELLED) {
             throw new BusinessException("Order is already cancelled");
@@ -139,15 +148,23 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         UltrasoundOrder order = orderRepository.findById(orderId)
             .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_PREFIX + orderId));
         // A patient caller reads only their own; staff read their active
-        // hospital's. Either refusal answers exactly as a missing id does.
-        boolean patientOnly = subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.ULTRASOUND_READS);
-        boolean readable = patientOnly
-            ? subjectReadGuard.callerOwns(order.getPatient())
-            : inStaffScope(order.getHospital());
+        // hospital's, and — staff who are also patients (#754's rule) — their
+        // own order elsewhere, as its patient. Every refusal answers exactly
+        // as a missing id does.
+        boolean asPatient = subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.ULTRASOUND_READS);
+        boolean readable;
+        if (asPatient) {
+            readable = subjectReadGuard.callerOwns(order.getPatient());
+        } else if (inStaffScope(order.getHospital())) {
+            readable = true;
+        } else {
+            asPatient = subjectReadGuard.ownsAsItsPatient(order.getPatient());
+            readable = asPatient;
+        }
         if (!readable) {
             throw new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_PREFIX + orderId);
         }
-        return toOrderResponseDTO(order, patientOnly);
+        return toOrderResponseDTO(order, asPatient);
     }
 
     @Override
@@ -173,6 +190,16 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         // before any lookup that could answer differently.
         if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.ULTRASOUND_READS, patientId)) {
             return List.of();
+        }
+        if (subjectReadGuard.ownsAsItsPatient(patientId)) {
+            // Their own record, read as its patient wherever it was written —
+            // a patient, or staff who are also this patient (#754's rule), whom
+            // the staff branch below would hold to the hospital they work at.
+            // Not a disclosure, so no reach is recorded; released reports only.
+            List<UltrasoundOrder> own = status == null
+                ? orderRepository.findAllByPatientId(patientId)
+                : orderRepository.findByPatientIdAndStatus(patientId, status);
+            return own.stream().map(order -> toOrderResponseDTO(order, true)).toList();
         }
         boolean patientOnly = subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.ULTRASOUND_READS);
         HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
@@ -200,6 +227,9 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     @Transactional(readOnly = true)
     public List<UltrasoundOrderResponseDTO> getOrdersByHospitalId(UUID hospitalId) {
+        if (!isActingHospital(hospitalId)) {
+            return List.of();
+        }
         return orderRepository.findAllByHospitalId(hospitalId).stream()
             .map(ultrasoundMapper::toOrderResponseDTO)
             .toList();
@@ -208,6 +238,9 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     @Transactional(readOnly = true)
     public List<UltrasoundOrderResponseDTO> getPendingOrders(UUID hospitalId) {
+        if (!isActingHospital(hospitalId)) {
+            return List.of();
+        }
         return orderRepository.findPendingOrders(hospitalId).stream()
             .map(ultrasoundMapper::toOrderResponseDTO)
             .toList();
@@ -216,6 +249,9 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     @Transactional(readOnly = true)
     public List<UltrasoundOrderResponseDTO> getHighRiskOrders(UUID hospitalId) {
+        if (!isActingHospital(hospitalId)) {
+            return List.of();
+        }
         return orderRepository.findAllHighRiskOrders(hospitalId).stream()
             .map(ultrasoundMapper::toOrderResponseDTO)
             .toList();
@@ -223,8 +259,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
 
     @Override
     public UltrasoundReportResponseDTO createOrUpdateReport(UUID orderId, UltrasoundReportRequestDTO request, UUID performedByUserId) {
-        UltrasoundOrder order = orderRepository.findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_PREFIX + orderId));
+        UltrasoundOrder order = getOrderInScope(orderId);
 
         if (order.getStatus() == UltrasoundOrderStatus.CANCELLED) {
             throw new BusinessException("Cannot create report for a cancelled order");
@@ -259,8 +294,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
 
     @Override
     public UltrasoundReportResponseDTO markReportReviewed(UUID reportId, UUID reviewedByUserId) {
-        UltrasoundReport report = reportRepository.findById(reportId)
-            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_PREFIX + reportId));
+        UltrasoundReport report = getReportInScope(reportId);
 
         if (report.getReportReviewedByProvider() != null && report.getReportReviewedByProvider()) {
             throw new BusinessException("Report is already reviewed");
@@ -287,8 +321,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
 
     @Override
     public UltrasoundReportResponseDTO markPatientNotified(UUID reportId) {
-        UltrasoundReport report = reportRepository.findById(reportId)
-            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_PREFIX + reportId));
+        UltrasoundReport report = getReportInScope(reportId);
 
         if (report.getPatientNotifiedAt() != null) {
             throw new BusinessException("Patient has already been notified");
@@ -341,7 +374,68 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             return report.isReleasedToPatient()
                 && subjectReadGuard.callerOwns(report.getUltrasoundOrder().getPatient());
         }
-        return inStaffScope(report.getHospital());
+        // Staff who are also patients read their own released report outside
+        // their hospital, as its patient (#754's rule).
+        return inStaffScope(report.getHospital())
+            || (report.isReleasedToPatient()
+                && subjectReadGuard.ownsAsItsPatient(report.getUltrasoundOrder().getPatient()));
+    }
+
+    /**
+     * The order, only when it belongs to the hospital the caller acts at. A
+     * foreign order answers exactly as a missing one; a null scope (a
+     * verified super-admin in global view) reaches any. The same rule as the
+     * imaging-order writes.
+     */
+    private UltrasoundOrder getOrderInScope(UUID orderId) {
+        UltrasoundOrder order = orderRepository.findById(orderId)
+            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_PREFIX + orderId));
+        if (!inStaffScope(order.getHospital())) {
+            throw new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_PREFIX + orderId);
+        }
+        return order;
+    }
+
+    /** The report, only at the hospital the caller acts at; otherwise as missing. */
+    private UltrasoundReport getReportInScope(UUID reportId) {
+        UltrasoundReport report = reportRepository.findById(reportId)
+            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_PREFIX + reportId));
+        if (!inStaffScope(report.getHospital())) {
+            throw new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_PREFIX + reportId);
+        }
+        return report;
+    }
+
+    /**
+     * A write places an order only at the hospital the caller acts at; any
+     * other hospital is answered exactly as a missing one.
+     */
+    private void requireActingHospital(UUID hospitalId) {
+        if (!isActingHospital(hospitalId)) {
+            throw new ResourceNotFoundException("hospital.notFound", hospitalId);
+        }
+    }
+
+    /**
+     * A hospital worklist is the acting hospital's. Another hospital's id
+     * answers as one with no rows, the answer an unknown hospital gets.
+     */
+    private boolean isActingHospital(UUID hospitalId) {
+        UUID scope = roleValidator.requireActiveHospitalId();
+        return scope == null || scope.equals(hospitalId);
+    }
+
+    /**
+     * The patient must be registered at the acting hospital (any
+     * registration, as for lab, imaging and consultation orders). A patient
+     * registered elsewhere answers exactly as a missing one.
+     */
+    private void requirePatientRegisteredAtActingHospital(UUID patientId) {
+        UUID scope = roleValidator.requireActiveHospitalId();
+        if (scope != null && (patientId == null
+                || !registrationRepository.existsByPatientIdAndHospitalId(patientId, scope))) {
+            throw new ResourceNotFoundException("patient.notFound", patientId);
+        }
     }
 
     /**
@@ -375,6 +469,9 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     @Transactional(readOnly = true)
     public List<UltrasoundReportResponseDTO> getReportsRequiringFollowUp(UUID hospitalId) {
+        if (!isActingHospital(hospitalId)) {
+            return List.of();
+        }
         return reportRepository.findReportsRequiringFollowUp(hospitalId).stream()
             .map(ultrasoundMapper::toReportResponseDTO)
             .toList();
@@ -383,6 +480,9 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     @Transactional(readOnly = true)
     public List<UltrasoundReportResponseDTO> getReportsWithAnomalies(UUID hospitalId) {
+        if (!isActingHospital(hospitalId)) {
+            return List.of();
+        }
         return reportRepository.findReportsWithAnomalies(hospitalId).stream()
             .map(ultrasoundMapper::toReportResponseDTO)
             .toList();

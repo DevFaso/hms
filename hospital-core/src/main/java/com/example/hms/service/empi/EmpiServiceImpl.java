@@ -313,6 +313,23 @@ public class EmpiServiceImpl implements EmpiService, EmpiAuthorisedMergePort {
             throw new BusinessException(MessageUtil.resolve(MSG_MERGE_CROSS_TENANT));
         }
 
+        // ── Both rows locked before anything is decided. The claim below
+        // serialises two merges that retire the SAME identity; A<-B racing
+        // B<-A retire different ones, so without this each claimed its own
+        // row and both applied, leaving two MERGED identities pointing at
+        // each other. Locked in ascending id order whichever way the merge
+        // runs, so the two wait on one row instead of each holding the row
+        // the other needs. ──
+        lockBothInIdOrder(primary.getId(), secondary.getId());
+        // The survivor, as the database holds it under that lock: the loaded
+        // instance is the one read before the lock and can be stale. A
+        // survivor merged away — by the opposite merge that just committed,
+        // or by any earlier one — cannot absorb anything, and the refusal is
+        // the one a merge of an already-merged identity gets.
+        if (masterIdentityRepository.findStatusById(primary.getId()) == EmpiIdentityStatus.MERGED) {
+            throw alreadyMerged(primary);
+        }
+
         // ── The transition itself, decided by the database. The status read
         // above is a fast path, not a guarantee: two merges of the same pair
         // running at once both read ACTIVE. Whichever claims the row second
@@ -475,8 +492,21 @@ public class EmpiServiceImpl implements EmpiService, EmpiAuthorisedMergePort {
         }
     }
 
-    private static BusinessException alreadyMerged(EmpiMasterIdentity secondary) {
-        return new BusinessException(MessageUtil.resolve(MSG_MERGE_ALREADY_MERGED, secondary.getEmpiNumber()));
+    /**
+     * Write-lock both identities of a merge, lower id first. Every merge takes
+     * its pair in this one order, so two merges of one pair queue on the same
+     * first row rather than deadlocking. {@link UUID#compareTo} is only a
+     * total order, not the database's uuid order, and needs to be no more:
+     * what matters is that every merge agrees on it.
+     */
+    private void lockBothInIdOrder(UUID oneId, UUID otherId) {
+        boolean oneFirst = oneId.compareTo(otherId) < 0;
+        masterIdentityRepository.findWithLockById(oneFirst ? oneId : otherId);
+        masterIdentityRepository.findWithLockById(oneFirst ? otherId : oneId);
+    }
+
+    private static BusinessException alreadyMerged(EmpiMasterIdentity identity) {
+        return new BusinessException(MessageUtil.resolve(MSG_MERGE_ALREADY_MERGED, identity.getEmpiNumber()));
     }
 
     /**

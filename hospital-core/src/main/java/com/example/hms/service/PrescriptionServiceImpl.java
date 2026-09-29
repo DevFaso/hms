@@ -75,8 +75,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final com.example.hms.service.pharmacy.ControlledSubstanceGuard controlledSubstanceGuard;
     private final com.example.hms.service.pharmacy.PharmacistVerificationService pharmacistVerificationService;
     private final RecordAccessPolicy recordAccessPolicy;
-    /** Resolves a user id from either principal shape; see {@link #callerOwns}. */
-    private final com.example.hms.controller.support.ControllerAuthUtils authUtils;
+    /** Who is a patient on the read, and whether the prescription is theirs; see {@link #readableAsItsPatient}. */
+    private final PatientSubjectReadGuard subjectReadGuard;
     /**
      * From config/TimeConfig, as {@code PrescriptionClarificationService}
      * takes it: the two halves of a clarification are stamped by the same
@@ -130,16 +130,13 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Override
     @Transactional
     public PrescriptionResponseDTO getPrescriptionById(UUID id, Locale locale) {
-        org.springframework.security.core.Authentication auth =
-            org.springframework.security.core.context.SecurityContextHolder
-                .getContext().getAuthentication();
-        if (PrescriptionReaderRoles.isPatientOnly(auth)) {
+        if (subjectReadGuard.isPatientOnly(PrescriptionReaderRoles.CLINICAL_READER_ROLES)) {
             // A patient principal is bounded by ownership, not by a hospital,
             // as the encounter reads are: their own prescriptions follow them
             // across tenants, so no scope is resolved and a patient whose
             // hospital cannot be resolved still reads their own.
             Prescription prescription = findPrescriptionOrNotFound(id);
-            if (!readableAsItsPatient(prescription, auth)) {
+            if (!readableAsItsPatient(prescription)) {
                 throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
             }
             return prescriptionMapper.toResponseDTO(prescription).withoutClarificationExchange();
@@ -152,7 +149,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             // Staff access: the clinical copy, clarification exchange included.
             return prescriptionMapper.toResponseDTO(prescription);
         }
-        if (ReaderRolePredicates.holdsPatientRole(auth) && readableAsItsPatient(prescription, auth)) {
+        if (prescription.getHospital() != null && subjectReadGuard.ownsAsItsPatient(prescription.getPatient())) {
             // Staff who are also patients: the fallback #754 gave the
             // encounter reads. A nurse at hospital A who was a patient at
             // hospital B is a clinical reader, so she is held to A, which
@@ -283,38 +280,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * OIDC path. The write endpoints that admit roles this read does not go
      * through {@link #getPrescriptionAfterWrite} instead.
      */
-    private boolean readableAsItsPatient(Prescription prescription,
-                                         org.springframework.security.core.Authentication auth) {
-        return prescription.getHospital() != null && callerOwns(prescription, auth);
-    }
-
-    /**
-     * Is this prescription's patient row linked to the caller's user account?
-     * Shared by the patient-only check and the staff-owner fallback so the two
-     * cannot disagree about who owns what.
-     */
-    private boolean callerOwns(Prescription prescription,
-                               org.springframework.security.core.Authentication auth) {
-        // authUtils, not authService.getCurrentUserId(): the latter resolves
-        // only a CustomUserDetails principal and throws 401 on a
-        // JwtAuthenticationToken, so on the OIDC path it would refuse the
-        // owner their own prescription. ControllerAuthUtils.resolveUserId
-        // reads the appUserId claim too, and is what
-        // PatientPortalServiceImpl.resolvePatientId already uses.
-        UUID subjectPatientId = prescription.getPatient() != null
-            ? prescription.getPatient().getId()
-            : null;
-        // existsByIdAndUserId, not findByUserId: the single-result finder throws
-        // IncorrectResultSizeDataAccessException on a tenant that still carries
-        // duplicate clinical.patients.user_id rows (V113 falls back to a plain
-        // index rather than failing the deploy), which would answer a 500 where
-        // this method promises a 404 or the record. The membership form cannot,
-        // it stays right however many rows the account owns, and it decides the
-        // question without materialising a Patient and decrypting its PHI.
-        return subjectPatientId != null
-            && authUtils.resolveUserId(auth)
-                .map(userId -> patientRepository.existsByIdAndUserId(subjectPatientId, userId))
-                .orElse(false);
+    private boolean readableAsItsPatient(Prescription prescription) {
+        return prescription.getHospital() != null && subjectReadGuard.callerOwns(prescription.getPatient());
     }
 
     /**
@@ -804,6 +771,16 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     public PrescriptionResponseDTO updatePrescription(UUID id, PrescriptionRequestDTO request, Locale locale) {
         Prescription existing = prescriptionRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
+        // ── Hospital scope enforcement ── the row's own hospital, as on
+        // sign/co-sign/delete, and BEFORE the status checks below, which
+        // answer 400 and would otherwise tell a real id from a missing one.
+        // Authority used to be judged only at the REQUEST's encounter
+        // hospital, so another hospital's prescription could be rewritten.
+        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+        if (actingHospitalId != null
+                && (existing.getHospital() == null || !actingHospitalId.equals(existing.getHospital().getId()))) {
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
+        }
         rejectStatusChangeOnUpdate(existing, request);
         rejectSafeguardWithdrawal(existing, request);
 
@@ -819,6 +796,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         UUID hospitalId = encounter.getHospital() != null ? encounter.getHospital().getId() : null;
         if (hospitalId == null) {
             throw new BusinessException("prescription.hospital.context.missing");
+        }
+        // Never moved onto another hospital's encounter: the row stays where
+        // the caller acts. An encounter elsewhere answers exactly as a missing
+        // one. A super-admin in global view keeps the old behaviour.
+        if (actingHospitalId != null && !actingHospitalId.equals(hospitalId)) {
+            throw new ResourceNotFoundException("encounter.notfound");
         }
 
         if (!roleValidator.canCreatePrescription(currentUserId, hospitalId)) {

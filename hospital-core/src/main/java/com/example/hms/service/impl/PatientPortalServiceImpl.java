@@ -737,9 +737,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         Prescription prescription = prescriptionRepository.findById(dto.getPrescriptionId())
                 .orElseThrow(() -> new ResourceNotFoundException("Prescription not found"));
 
-        // Verify the prescription belongs to this patient
+        // Verify the prescription belongs to this patient. Another patient's
+        // answers exactly as a missing one: a 403 here told a patient which
+        // prescription ids exist.
         if (!prescription.getPatient().getId().equals(patient.getId())) {
-            throw new AccessDeniedException("You do not have access to this prescription");
+            throw new ResourceNotFoundException("Prescription not found");
         }
 
         // Refuse up front what approval would refuse anyway. Without this the
@@ -803,7 +805,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .orElseThrow(() -> new ResourceNotFoundException("Refill request not found"));
 
         if (!refill.getPatient().getId().equals(patientId)) {
-            throw new AccessDeniedException("You do not have access to this refill request");
+            // Another patient's request answers exactly as a missing one.
+            throw new ResourceNotFoundException("Refill request not found");
         }
         // A request the provider has put on hold has not been decided yet, so the
         // patient can still withdraw it.
@@ -993,10 +996,15 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .toList();
     }
 
-    /** Verify that the appointment belongs to the given patient. */
+    /**
+     * Verify that the appointment belongs to the given patient. Another
+     * patient's appointment answers exactly as a missing one (the callers'
+     * "Appointment not found"), not 403: the 403 told a patient which
+     * appointment ids exist.
+     */
     private void requirePatientOwnership(Appointment appointment, UUID patientId) {
         if (!appointment.getPatient().getId().equals(patientId)) {
-            throw new AccessDeniedException("This appointment does not belong to you");
+            throw new ResourceNotFoundException("Appointment not found");
         }
     }
 
@@ -1223,7 +1231,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .orElseThrow(() -> new ResourceNotFoundException("Proxy grant not found"));
 
         if (!proxy.getGrantorPatient().getId().equals(patientId)) {
-            throw new AccessDeniedException("You can only revoke proxies you have granted");
+            // Somebody else's grant answers exactly as a missing one.
+            throw new ResourceNotFoundException("Proxy grant not found");
         }
 
         proxy.setStatus(ProxyStatus.REVOKED);
@@ -1682,9 +1691,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new ResourceNotFoundException("appointment.notfound", appointmentId));
 
-        // Ownership check — patient can only see their own appointment's questionnaires
+        // Ownership check — patient can only see their own appointment's
+        // questionnaires; another's answers exactly as a missing appointment.
         if (!appointment.getPatient().getId().equals(patientId)) {
-            throw new BusinessException("You do not have access to this appointment.");
+            throw new ResourceNotFoundException("appointment.notfound", appointmentId);
         }
 
         // Find active questionnaires for the appointment's hospital + department
@@ -1734,9 +1744,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         Appointment appointment = appointmentRepository.findById(dto.getAppointmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("appointment.notfound", dto.getAppointmentId()));
 
-        // Ownership check
+        // Ownership check: another patient's appointment answers exactly as a
+        // missing one.
         if (!appointment.getPatient().getId().equals(patientId)) {
-            throw new BusinessException("You do not have access to this appointment.");
+            throw new ResourceNotFoundException("appointment.notfound", dto.getAppointmentId());
         }
 
         // Only allow pre-check-in for upcoming SCHEDULED/CONFIRMED appointments
