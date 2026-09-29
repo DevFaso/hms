@@ -13,7 +13,6 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.scheduling.PatientRecall;
 import com.example.hms.repository.scheduling.PatientRecallRepository;
 import java.time.Clock;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;

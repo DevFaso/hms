@@ -34,6 +34,8 @@ import com.example.hms.security.context.HospitalContextHolder;
 @Slf4j
 @Transactional
 public class ImmunizationServiceImpl implements ImmunizationService {
+    private static final String IMMUNIZATION_NOT_FOUND_KEY = "immunization.notFound";
+
 
 
     private final ImmunizationRepository immunizationRepository;
@@ -80,7 +82,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.debug("Fetching immunization with id: {}", id);
         
         PatientImmunization immunization = immunizationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("immunization.notFound", id));
+                .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_KEY, id));
 
         return immunizationMapper.toResponseDTO(immunization);
     }
@@ -201,7 +203,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.info("Marking reminder sent for immunization: {}", immunizationId);
 
         PatientImmunization immunization = immunizationRepository.findById(immunizationId)
-                .orElseThrow(() -> new ResourceNotFoundException("immunization.notFound", immunizationId));
+                .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_KEY, immunizationId));
 
         immunization.setReminderSent(true);
         immunization.setReminderSentDate(LocalDate.now());
@@ -215,7 +217,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.info("Updating immunization with id: {}", id);
 
         PatientImmunization existingImmunization = immunizationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("immunization.notFound", id));
+                .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_KEY, id));
 
         // Update staff if changed
         if (requestDTO.getAdministeredByStaffId() != null && 
@@ -247,7 +249,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.info("Deleting immunization with id: {}", id);
 
         PatientImmunization immunization = immunizationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("immunization.notFound", id));
+                .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_KEY, id));
 
         immunization.setActive(false);
         immunizationRepository.save(immunization);

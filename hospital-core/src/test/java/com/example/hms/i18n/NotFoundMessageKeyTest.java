@@ -49,8 +49,9 @@ class NotFoundMessageKeyTest {
         "user.notFound",
         "department.notFound",
         "organization.notFound",
-        // The lower-case twins. messages_en carried these three without {0}
-        // while base, FR and ES rendered it, so an English 404 dropped the id.
+        // The lower-case twins: messages_en carried these three without the id
+        // placeholder while base, FR and ES rendered it, so an English 404
+        // dropped the id.
         "patient.notfound",
         "staff.notfound",
         "hospital.notfound");

@@ -38,6 +38,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class BedManagementServiceImpl implements BedManagementService {
+    private static final String WARD_NOT_FOUND_KEY = "ward.notFound";
+    private static final String BED_NOT_FOUND_KEY = "bed.notFound";
+
 
 
     private final WardRepository wardRepository;
@@ -93,7 +96,7 @@ public class BedManagementServiceImpl implements BedManagementService {
     public WardResponseDTO updateWard(UUID wardId, WardRequestDTO request) {
         UUID hospitalId = requireWriteScope();
         Ward ward = wardRepository.findByIdAndHospital_Id(wardId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("ward.notFound", wardId));
+            .orElseThrow(() -> new ResourceNotFoundException(WARD_NOT_FOUND_KEY, wardId));
 
         String code = request.getCode().trim();
         if (wardRepository.existsByHospital_IdAndCodeIgnoreCaseAndIdNot(hospitalId, code, wardId)) {
@@ -118,7 +121,7 @@ public class BedManagementServiceImpl implements BedManagementService {
     public void deleteWard(UUID wardId) {
         UUID hospitalId = requireWriteScope();
         Ward ward = wardRepository.findByIdAndHospital_Id(wardId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("ward.notFound", wardId));
+            .orElseThrow(() -> new ResourceNotFoundException(WARD_NOT_FOUND_KEY, wardId));
         if (!bedRepository.findByWard_Id(wardId).isEmpty()) {
             throw new BusinessException(
                 "Ward '" + ward.getCode() + "' still has beds. Delete its beds first or deactivate the ward.");
@@ -155,7 +158,7 @@ public class BedManagementServiceImpl implements BedManagementService {
     public BedResponseDTO createBed(UUID wardId, BedRequestDTO request) {
         UUID hospitalId = requireWriteScope();
         Ward ward = wardRepository.findByIdAndHospital_Id(wardId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("ward.notFound", wardId));
+            .orElseThrow(() -> new ResourceNotFoundException(WARD_NOT_FOUND_KEY, wardId));
 
         String bedNumber = request.getBedNumber().trim();
         if (bedRepository.existsByWard_IdAndBedNumberIgnoreCase(wardId, bedNumber)) {
@@ -182,7 +185,7 @@ public class BedManagementServiceImpl implements BedManagementService {
     public BedResponseDTO updateBed(UUID bedId, BedRequestDTO request) {
         UUID hospitalId = requireWriteScope();
         Bed bed = bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("bed.notFound", bedId));
+            .orElseThrow(() -> new ResourceNotFoundException(BED_NOT_FOUND_KEY, bedId));
 
         String bedNumber = request.getBedNumber().trim();
         if (bedRepository.existsByWard_IdAndBedNumberIgnoreCaseAndIdNot(bed.getWard().getId(), bedNumber, bedId)) {
@@ -209,7 +212,7 @@ public class BedManagementServiceImpl implements BedManagementService {
     public BedResponseDTO updateBedStatus(UUID bedId, BedStatusUpdateRequestDTO request) {
         UUID hospitalId = requireWriteScope();
         Bed bed = bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("bed.notFound", bedId));
+            .orElseThrow(() -> new ResourceNotFoundException(BED_NOT_FOUND_KEY, bedId));
 
         if (request.getStatus() == BedStatus.OCCUPIED) {
             throw new BusinessException("OCCUPIED is set by bed assignment, not manually.");
@@ -229,7 +232,7 @@ public class BedManagementServiceImpl implements BedManagementService {
     public void deleteBed(UUID bedId) {
         UUID hospitalId = requireWriteScope();
         Bed bed = bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("bed.notFound", bedId));
+            .orElseThrow(() -> new ResourceNotFoundException(BED_NOT_FOUND_KEY, bedId));
         if (bed.getStatus() == BedStatus.OCCUPIED) {
             throw new BusinessException("An occupied bed cannot be deleted. Discharge or reassign the patient first.");
         }
@@ -252,7 +255,7 @@ public class BedManagementServiceImpl implements BedManagementService {
         return (scope == null
             ? wardRepository.findById(wardId)
             : wardRepository.findByIdAndHospital_Id(wardId, scope))
-            .orElseThrow(() -> new ResourceNotFoundException("ward.notFound", wardId));
+            .orElseThrow(() -> new ResourceNotFoundException(WARD_NOT_FOUND_KEY, wardId));
     }
 
     private Department resolveDepartment(UUID departmentId, UUID hospitalId) {

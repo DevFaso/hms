@@ -63,12 +63,16 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class AppointmentServiceImpl implements AppointmentService {
+    private static final String USER_NOT_FOUND_BY_USERNAME_KEY = "user.notFoundByUsername";
+    private static final String PATIENT_NOT_FOUND_FOR_USER_KEY = "patient.notFoundForUser";
+    private static final String APPOINTMENT_NOT_FOUND_KEY = "appointment.notFound";
+
     @Override
     @Transactional(readOnly = true)
     public List<AppointmentResponseDTO> getAppointmentsByPatientUsername(String patientUsername, Locale locale, String username) {
         User currentUser = getUserOrThrow(username);
         User patientUser = userRepository.findByUsername(patientUsername)
-            .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByUsername", patientUsername));
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_BY_USERNAME_KEY, patientUsername));
         // A patient caller may name only themselves: another account answers
         // as an unknown username does, before the patient lookup below, which
         // would otherwise tell an account with a patient row from one without.
@@ -76,10 +80,10 @@ public class AppointmentServiceImpl implements AppointmentService {
         // case-insensitively (lower(u.username) = lower(:username)).
         if (subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.APPOINTMENT_READS)
                 && !patientUser.getId().equals(currentUser.getId())) {
-            throw new ResourceNotFoundException("user.notFoundByUsername", patientUsername);
+            throw new ResourceNotFoundException(USER_NOT_FOUND_BY_USERNAME_KEY, patientUsername);
         }
         Patient patient = patientRepository.findByUserId(patientUser.getId())
-            .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundForUser", patientUsername));
+            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USER_KEY, patientUsername));
 
         return getAppointmentsByPatientScoped(patient.getId(), currentUser);
     }
@@ -199,7 +203,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private User getUserOrThrow(String username) {
         return userRepository.findByUsername(username)
-            .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByUsername", username));
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_BY_USERNAME_KEY, username));
     }
 
     /**
@@ -263,7 +267,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         User currentUser = getUserOrThrow(username);
 
         // --- Patient resolution (falls back to authenticated user) ---
-        final Patient patient = resolvePatient(request, locale, username);
+        final Patient patient = resolvePatient(request, username);
 
         // Authorization: Staff/admins can book for any patient; pure patients can only book for themselves
         boolean isStaffOrAdmin = isSuperAdmin(currentUser)
@@ -293,7 +297,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
 
         // --- Hospital resolution (single block) ---
-        final Hospital hospital = resolveHospital(request, locale);
+        final Hospital hospital = resolveHospital(request);
 
         // auth scope
         requireHospitalScope(currentUser, hospital.getId(), locale);
@@ -434,7 +438,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     /* ------- small private helpers to keep createAppointment tidy ------- */
 
-    private Patient resolvePatient(AppointmentRequestDTO request, Locale locale, String authenticatedUsername) {
+    private Patient resolvePatient(AppointmentRequestDTO request, String authenticatedUsername) {
         if (request.getPatientId() != null) {
             // Use unscoped lookup: multi-hospital patients have Patient.hospitalId set
             // to the FIRST hospital, so the tenant-scoped findById misses them when
@@ -443,10 +447,10 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", request.getPatientId()));
         } else if (request.getPatientUsername() != null) {
             UUID userId = userRepository.findByUsername(request.getPatientUsername())
-                .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByUsername", request.getPatientUsername()))
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_BY_USERNAME_KEY, request.getPatientUsername()))
                 .getId();
             return patientRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundForUser", request.getPatientUsername()));
+                .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USER_KEY, request.getPatientUsername()));
         } else if (request.getPatientEmail() != null) {
             return patientRepository.findByEmailContainingIgnoreCase(request.getPatientEmail())
                 .stream().findFirst()
@@ -455,15 +459,15 @@ public class AppointmentServiceImpl implements AppointmentService {
         // Fallback: use the authenticated user's identity (supports mobile/patient-portal clients)
         if (authenticatedUsername != null) {
             UUID userId = userRepository.findByUsername(authenticatedUsername)
-                .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByUsername", authenticatedUsername))
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_BY_USERNAME_KEY, authenticatedUsername))
                 .getId();
             return patientRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundForUser", authenticatedUsername));
+                .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USER_KEY, authenticatedUsername));
         }
         throw new BusinessException("Patient identifier required");
     }
 
-    private Hospital resolveHospital(AppointmentRequestDTO request, Locale locale) {
+    private Hospital resolveHospital(AppointmentRequestDTO request) {
         if (request.getHospitalId() != null) {
             return hospitalRepository.findById(request.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", request.getHospitalId()));
@@ -489,7 +493,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("staff.notFoundByIdentifier", request.getStaffEmail()));
         } else if (request.getStaffUsername() != null) {
             UUID userId = userRepository.findByUsername(request.getStaffUsername())
-                .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByUsername", request.getStaffUsername()))
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_BY_USERNAME_KEY, request.getStaffUsername()))
                 .getId();
             return staffRepository.findByUserId(userId).stream().findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("staff.notFoundByIdentifier", request.getStaffUsername()));
@@ -540,7 +544,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         User currentUser = getUserOrThrow(username);
 
         Appointment existing = appointmentRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", id));
+            .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, id));
 
         // Null checks for required IDs
         if (request.getPatientId() == null) {
@@ -685,7 +689,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     public AppointmentResponseDTO confirmOrCancelAppointment(UUID appointmentId, String action, Locale locale, String username) {
         User currentUser = getUserOrThrow(username);
         Appointment appointment = appointmentRepository.findById(appointmentId)
-            .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", appointmentId));
+            .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, appointmentId));
 
         requireHospitalScope(currentUser, appointment.getHospital().getId(), locale);
 
@@ -801,14 +805,14 @@ public class AppointmentServiceImpl implements AppointmentService {
     public AppointmentResponseDTO getAppointmentById(UUID id, Locale locale, String username) {
         User currentUser = getUserOrThrow(username);
         Appointment appointment = appointmentRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", id));
+            .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, id));
 
         // A patient caller reads only their own: another patient's appointment
         // answers exactly as a missing id does. Without this, the hospital
         // scope below admitted any appointment at a hospital where the patient
         // is registered.
         if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.APPOINTMENT_READS, appointment.getPatient())) {
-            throw new ResourceNotFoundException("appointment.notFound", appointment.getId());
+            throw new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, appointment.getId());
         }
 
         if (!isSuperAdmin(currentUser)) {
@@ -863,7 +867,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     public void deleteAppointment(UUID id, Locale locale, String username) {
         User user = getUserOrThrow(username);
         Appointment appointment = appointmentRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", id));
+            .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, id));
 
         requireHospitalScope(user, appointment.getHospital().getId(), locale);
 

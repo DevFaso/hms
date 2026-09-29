@@ -40,6 +40,9 @@ import com.example.hms.utility.RoleValidator;
 @RequiredArgsConstructor
 @Transactional
 public class UltrasoundServiceImpl implements UltrasoundService {
+    private static final String ULTRASOUND_ORDER_NOT_FOUND_KEY = "ultrasound.order.notFound";
+    private static final String ULTRASOUND_REPORT_NOT_FOUND_KEY = "ultrasound.report.notFound";
+
 
 
     private final UltrasoundOrderRepository orderRepository;
@@ -87,7 +90,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     public UltrasoundOrderResponseDTO updateOrder(UUID orderId, UltrasoundOrderRequestDTO request) {
         UltrasoundOrder order = orderRepository.findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException("ultrasound.order.notFound", orderId));
+            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_KEY, orderId));
 
         // Prevent modification of completed orders
         if (order.getStatus() == UltrasoundOrderStatus.COMPLETED) {
@@ -114,7 +117,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     public UltrasoundOrderResponseDTO cancelOrder(UUID orderId, String cancellationReason) {
         UltrasoundOrder order = orderRepository.findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException("ultrasound.order.notFound", orderId));
+            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_KEY, orderId));
 
         if (order.getStatus() == UltrasoundOrderStatus.CANCELLED) {
             throw new BusinessException("Order is already cancelled");
@@ -135,7 +138,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Transactional(readOnly = true)
     public UltrasoundOrderResponseDTO getOrderById(UUID orderId) {
         UltrasoundOrder order = orderRepository.findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException("ultrasound.order.notFound", orderId));
+            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_KEY, orderId));
         // A patient caller reads only their own; staff read their active
         // hospital's. Either refusal answers exactly as a missing id does.
         boolean patientOnly = subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.ULTRASOUND_READS);
@@ -143,7 +146,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             ? subjectReadGuard.callerOwns(order.getPatient())
             : inStaffScope(order.getHospital());
         if (!readable) {
-            throw new ResourceNotFoundException("ultrasound.order.notFound", orderId);
+            throw new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_KEY, orderId);
         }
         return toOrderResponseDTO(order, patientOnly);
     }
@@ -222,7 +225,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     public UltrasoundReportResponseDTO createOrUpdateReport(UUID orderId, UltrasoundReportRequestDTO request, UUID performedByUserId) {
         UltrasoundOrder order = orderRepository.findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException("ultrasound.order.notFound", orderId));
+            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_KEY, orderId));
 
         if (order.getStatus() == UltrasoundOrderStatus.CANCELLED) {
             throw new BusinessException("Cannot create report for a cancelled order");
@@ -258,7 +261,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     public UltrasoundReportResponseDTO markReportReviewed(UUID reportId, UUID reviewedByUserId) {
         UltrasoundReport report = reportRepository.findById(reportId)
-            .orElseThrow(() -> new ResourceNotFoundException("ultrasound.report.notFound", reportId));
+            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_KEY, reportId));
 
         if (report.getReportReviewedByProvider() != null && report.getReportReviewedByProvider()) {
             throw new BusinessException("Report is already reviewed");
@@ -286,7 +289,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     public UltrasoundReportResponseDTO markPatientNotified(UUID reportId) {
         UltrasoundReport report = reportRepository.findById(reportId)
-            .orElseThrow(() -> new ResourceNotFoundException("ultrasound.report.notFound", reportId));
+            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_KEY, reportId));
 
         if (report.getPatientNotifiedAt() != null) {
             throw new BusinessException("Patient has already been notified");
@@ -302,9 +305,9 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Transactional(readOnly = true)
     public UltrasoundReportResponseDTO getReportById(UUID reportId) {
         UltrasoundReport report = reportRepository.findById(reportId)
-            .orElseThrow(() -> new ResourceNotFoundException("ultrasound.report.notFound", reportId));
+            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_KEY, reportId));
         if (!mayReadReport(report)) {
-            throw new ResourceNotFoundException("ultrasound.report.notFound", reportId);
+            throw new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_KEY, reportId);
         }
         return ultrasoundMapper.toReportResponseDTO(report);
     }

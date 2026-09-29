@@ -86,6 +86,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.doThrow;
 import org.mockito.Spy;
 import org.springframework.context.MessageSource;
@@ -1137,7 +1138,7 @@ class PatientPortalServiceImplPhase2Test {
             assertThat(result.getPrimaryCare().getHospitalName()).isEqualTo("CHU Yalgado");
             assertThat(result.getPrimaryCareHistory().get(0).getHospitalName()).isEqualTo("CHU Yalgado");
             assertThat(result.getPrimaryCareHistory().get(1).getHospitalName()).isNull();
-            verify(hospitalRepository, org.mockito.Mockito.times(1)).findAllById(any());
+            verify(hospitalRepository, times(1)).findAllById(any());
         }
     }
 

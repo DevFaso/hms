@@ -121,6 +121,8 @@ import com.example.hms.utility.RoleNames;
 @RequiredArgsConstructor
 @Slf4j
 public class PatientPortalServiceImpl implements PatientPortalService {
+    private static final String APPOINTMENT_NOT_FOUND_KEY = "appointment.notFound";
+
 
     private static final String MSG_UNABLE_RESOLVE_USER = "Unable to resolve user from authentication";
     private static final String MEDICATION_REFILL_NOTIFICATION_TYPE = "MEDICATION_REFILL";
@@ -617,7 +619,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                                       Locale locale) {
         UUID patientId = resolvePatientId(auth);
         Appointment appointment = appointmentRepository.findById(dto.getAppointmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", dto.getAppointmentId()));
+                .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, dto.getAppointmentId()));
 
         requirePatientOwnership(appointment, patientId);
 
@@ -662,7 +664,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                                           Locale locale) {
         UUID patientId = resolvePatientId(auth);
         Appointment appointment = appointmentRepository.findById(dto.getAppointmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", dto.getAppointmentId()));
+                .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, dto.getAppointmentId()));
 
         requirePatientOwnership(appointment, patientId);
 
@@ -1689,7 +1691,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public List<QuestionnaireDTO> getQuestionnairesForAppointment(Authentication auth, UUID appointmentId) {
         UUID patientId = resolvePatientId(auth);
         Appointment appointment = appointmentRepository.findById(appointmentId)
-                .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", appointmentId));
+                .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, appointmentId));
 
         // Ownership check — patient can only see their own appointment's questionnaires
         if (!appointment.getPatient().getId().equals(patientId)) {
@@ -1741,7 +1743,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", patientId));
 
         Appointment appointment = appointmentRepository.findById(dto.getAppointmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", dto.getAppointmentId()));
+                .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, dto.getAppointmentId()));
 
         // Ownership check
         if (!appointment.getPatient().getId().equals(patientId)) {

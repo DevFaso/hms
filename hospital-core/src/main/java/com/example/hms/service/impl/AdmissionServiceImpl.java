@@ -49,6 +49,9 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
 @Service
 @RequiredArgsConstructor
 public class AdmissionServiceImpl implements AdmissionService {
+    private static final String DEPARTMENT_NOT_FOUND_KEY = "department.notFound";
+    private static final String ADMISSION_NOT_FOUND_KEY = "admission.notFound";
+
 
     /**
      * Self-reference for proxy-routed internal calls
@@ -98,7 +101,7 @@ public class AdmissionServiceImpl implements AdmissionService {
         
         if (request.getDepartmentId() != null) {
             Department department = departmentRepository.findById(request.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", request.getDepartmentId()));
+                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_KEY, request.getDepartmentId()));
             admission.setDepartment(department);
         }
         
@@ -138,12 +141,12 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Transactional(readOnly = true)
     public AdmissionResponseDTO getAdmission(UUID admissionId) {
         Admission admission = admissionRepository.findById(admissionId)
-            .orElseThrow(() -> new ResourceNotFoundException("admission.notFound", admissionId));
+            .orElseThrow(() -> new ResourceNotFoundException(ADMISSION_NOT_FOUND_KEY, admissionId));
         // ── Tenant isolation ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && admission.getHospital() != null
                 && !activeHospitalId.equals(admission.getHospital().getId())) {
-            throw new ResourceNotFoundException("admission.notFound", admissionId);
+            throw new ResourceNotFoundException(ADMISSION_NOT_FOUND_KEY, admissionId);
         }
         return admissionMapper.toResponseDTO(admission);
     }
@@ -152,11 +155,11 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Transactional
     public AdmissionResponseDTO updateAdmission(UUID admissionId, AdmissionUpdateRequestDTO request) {
         Admission admission = admissionRepository.findById(admissionId)
-            .orElseThrow(() -> new ResourceNotFoundException("admission.notFound", admissionId));
+            .orElseThrow(() -> new ResourceNotFoundException(ADMISSION_NOT_FOUND_KEY, admissionId));
 
         if (request.getDepartmentId() != null) {
             Department department = departmentRepository.findById(request.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", request.getDepartmentId()));
+                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_KEY, request.getDepartmentId()));
             admission.setDepartment(department);
         }
 
@@ -187,7 +190,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Transactional
     public AdmissionResponseDTO applyOrderSets(UUID admissionId, AdmissionOrderExecutionRequestDTO request) {
         Admission admission = admissionRepository.findById(admissionId)
-            .orElseThrow(() -> new ResourceNotFoundException("admission.notFound", admissionId));
+            .orElseThrow(() -> new ResourceNotFoundException(ADMISSION_NOT_FOUND_KEY, admissionId));
 
         List<AdmissionOrderSet> orderSets = orderSetRepository.findAllById(request.getOrderSetIds());
         orderSets.forEach(admission::applyOrderSet);
@@ -200,7 +203,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Transactional
     public AdmissionResponseDTO dischargePatient(UUID admissionId, AdmissionDischargeRequestDTO request) {
         Admission admission = admissionRepository.findById(admissionId)
-            .orElseThrow(() -> new ResourceNotFoundException("admission.notFound", admissionId));
+            .orElseThrow(() -> new ResourceNotFoundException(ADMISSION_NOT_FOUND_KEY, admissionId));
 
         Staff dischargingProvider = staffRepository.findById(request.getDischargingProviderId())
             .orElseThrow(() -> new ResourceNotFoundException("admission.dischargingProvider.notFound", request.getDischargingProviderId()));
@@ -243,7 +246,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Transactional
     public void cancelAdmission(UUID admissionId) {
         Admission admission = admissionRepository.findById(admissionId)
-            .orElseThrow(() -> new ResourceNotFoundException("admission.notFound", admissionId));
+            .orElseThrow(() -> new ResourceNotFoundException(ADMISSION_NOT_FOUND_KEY, admissionId));
         admission.cancel();
         // A cancelled admission must not keep its bed occupied
         bedAssignmentService.releaseBed(admission);
@@ -271,12 +274,12 @@ public class AdmissionServiceImpl implements AdmissionService {
     /** Load with the same tenant guard as {@link #getAdmission}. */
     private Admission loadTenantScopedAdmission(UUID admissionId) {
         Admission admission = admissionRepository.findById(admissionId)
-            .orElseThrow(() -> new ResourceNotFoundException("admission.notFound", admissionId));
+            .orElseThrow(() -> new ResourceNotFoundException(ADMISSION_NOT_FOUND_KEY, admissionId));
         // ── Tenant isolation ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && admission.getHospital() != null
                 && !activeHospitalId.equals(admission.getHospital().getId())) {
-            throw new ResourceNotFoundException("admission.notFound", admissionId);
+            throw new ResourceNotFoundException(ADMISSION_NOT_FOUND_KEY, admissionId);
         }
         return admission;
     }
@@ -388,7 +391,7 @@ public class AdmissionServiceImpl implements AdmissionService {
 
         if (request.getDepartmentId() != null) {
             Department department = departmentRepository.findById(request.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", request.getDepartmentId()));
+                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_KEY, request.getDepartmentId()));
             orderSet.setDepartment(department);
         }
 

@@ -44,9 +44,9 @@ class UploadLimitConsistencyTest {
         DataSize maxFile = DataSize.parse(applicationProperties()
                 .getProperty("spring.servlet.multipart.max-file-size"));
 
-        assertThat(FileUploadService.MAX_UPLOAD_BYTES).isEqualTo(maxFile.toBytes());
-        assertThat(FileUploadService.MAX_UPLOAD_LABEL)
-                .isEqualTo(maxFile.toMegabytes() + " MB");
+        assertThat(maxFile.toBytes()).isEqualTo(FileUploadService.MAX_UPLOAD_BYTES);
+        assertThat(maxFile.toMegabytes() + " MB")
+                .isEqualTo(FileUploadService.MAX_UPLOAD_LABEL);
     }
 
     @Test

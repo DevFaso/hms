@@ -24,6 +24,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class SubscriptionServiceImpl implements SubscriptionService {
+    private static final String SUBSCRIPTION_PLAN_NOT_FOUND_KEY = "subscription.plan.notFound";
+
 
     private static final String DEFAULT_CURRENCY = "USD";
 
@@ -61,7 +63,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     @Transactional
     public SubscriptionPlanResponseDTO updatePlan(UUID planId, SubscriptionPlanRequestDTO request) {
         SubscriptionPlan plan = planRepository.findById(planId)
-            .orElseThrow(() -> new ResourceNotFoundException("subscription.plan.notFound", planId));
+            .orElseThrow(() -> new ResourceNotFoundException(SUBSCRIPTION_PLAN_NOT_FOUND_KEY, planId));
         plan.setName(request.getName());
         plan.setTierCode(request.getTierCode());
         plan.setDescription(request.getDescription());
@@ -83,7 +85,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     @Transactional
     public void deactivatePlan(UUID planId) {
         SubscriptionPlan plan = planRepository.findById(planId)
-            .orElseThrow(() -> new ResourceNotFoundException("subscription.plan.notFound", planId));
+            .orElseThrow(() -> new ResourceNotFoundException(SUBSCRIPTION_PLAN_NOT_FOUND_KEY, planId));
         plan.setActive(false);
         planRepository.save(plan);
     }
@@ -96,7 +98,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         Organization organization = organizationRepository.findById(organizationId)
             .orElseThrow(() -> new ResourceNotFoundException("organization.notFound", organizationId));
         SubscriptionPlan plan = planRepository.findById(request.getPlanId())
-            .orElseThrow(() -> new ResourceNotFoundException("subscription.plan.notFound", request.getPlanId()));
+            .orElseThrow(() -> new ResourceNotFoundException(SUBSCRIPTION_PLAN_NOT_FOUND_KEY, request.getPlanId()));
 
         // PR #228 review — refuse to assign a deactivated plan. The
         // controller summary advertises that deactivated plans "reject new

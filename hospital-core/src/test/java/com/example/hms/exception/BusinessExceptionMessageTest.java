@@ -114,8 +114,8 @@ class BusinessExceptionMessageTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         @SuppressWarnings("unchecked")
         Map<String, Object> body = (Map<String, Object>) response.getBody();
-        assertThat(body).containsOnlyKeys("timestamp", "status", "error", "message", "path");
         assertThat(body)
+            .containsOnlyKeys("timestamp", "status", "error", "message", "path")
             .containsEntry("status", 400)
             .containsEntry("error", "Bad Request")
             .containsEntry("message", "Un patient est obligatoire pour créer une ordonnance.")

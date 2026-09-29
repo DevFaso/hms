@@ -36,6 +36,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRegistrationService {
+    private static final String REGISTRATION_NOT_FOUND_KEY = "registration.notFound";
+
 
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final PatientRepository patientRepository;
@@ -155,12 +157,12 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
     @Transactional(readOnly = true)
     public PatientHospitalRegistrationResponseDTO getById(UUID id) {
         PatientHospitalRegistration reg = registrationRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", id));
+            .orElseThrow(() -> new ResourceNotFoundException(REGISTRATION_NOT_FOUND_KEY, id));
         // ── Tenant isolation: cross-hospital rows read as 404, not 403 ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null
             && (reg.getHospital() == null || !activeHospitalId.equals(reg.getHospital().getId()))) {
-            throw new ResourceNotFoundException("registration.notFound", id);
+            throw new ResourceNotFoundException(REGISTRATION_NOT_FOUND_KEY, id);
         }
         return mapper.toResponseDTO(reg);
     }
@@ -281,7 +283,7 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
     public void deregisterPatient(UUID id) {
         log.debug("Deregister by registration UUID={}", id);
         PatientHospitalRegistration registration = registrationRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", id));
+            .orElseThrow(() -> new ResourceNotFoundException(REGISTRATION_NOT_FOUND_KEY, id));
         registrationRepository.delete(registration);
         log.info("🗑️ Deregistered Patient Registration ID '{}'", id);
     }
@@ -292,7 +294,7 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
     public PatientHospitalRegistrationResponseDTO updateRegistration(UUID id, PatientHospitalRegistrationRequestDTO dto) {
         log.debug("Update by registration UUID={}", id);
         PatientHospitalRegistration registration = registrationRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", id));
+            .orElseThrow(() -> new ResourceNotFoundException(REGISTRATION_NOT_FOUND_KEY, id));
         applyEditableFields(registration, dto, false);
         return mapper.toResponseDTO(registrationRepository.save(registration));
     }

@@ -44,6 +44,8 @@ import java.util.Locale;
 @RequiredArgsConstructor
 @Transactional
 public class DigitalSignatureServiceImpl implements DigitalSignatureService {
+    private static final String SIGNATURE_NOT_FOUND_KEY = "signature.notFound";
+
 
     private static final HexFormat HEX_FORMAT = HexFormat.of();
 
@@ -123,7 +125,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
         if (request.getSignatureId() != null) {
             // Verify specific signature
             DigitalSignature signature = signatureRepository.findById(request.getSignatureId())
-                .orElseThrow(() -> new ResourceNotFoundException("signature.notFound", request.getSignatureId()));
+                .orElseThrow(() -> new ResourceNotFoundException(SIGNATURE_NOT_FOUND_KEY, request.getSignatureId()));
             signatures = List.of(signature);
         } else {
             // Find all signatures for report
@@ -188,7 +190,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
         log.debug("Revoking signature: {}", signatureId);
 
         DigitalSignature signature = signatureRepository.findById(signatureId)
-            .orElseThrow(() -> new ResourceNotFoundException("signature.notFound", signatureId));
+            .orElseThrow(() -> new ResourceNotFoundException(SIGNATURE_NOT_FOUND_KEY, signatureId));
 
         if (!signature.canRevoke()) {
             throw new BusinessException("Signature cannot be revoked. Current status: " + signature.getStatus());
@@ -255,7 +257,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
         log.debug("Fetching signature: {}", signatureId);
 
         DigitalSignature signature = signatureRepository.findById(signatureId)
-            .orElseThrow(() -> new ResourceNotFoundException("signature.notFound", signatureId));
+            .orElseThrow(() -> new ResourceNotFoundException(SIGNATURE_NOT_FOUND_KEY, signatureId));
 
         return signatureMapper.toResponseDTO(signature);
     }
@@ -266,7 +268,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
         log.debug("Fetching audit trail for signature: {}", signatureId);
 
         DigitalSignature signature = signatureRepository.findById(signatureId)
-            .orElseThrow(() -> new ResourceNotFoundException("signature.notFound", signatureId));
+            .orElseThrow(() -> new ResourceNotFoundException(SIGNATURE_NOT_FOUND_KEY, signatureId));
 
         return signatureMapper.toAuditEntryDTOs(signature.getAuditLog());
     }

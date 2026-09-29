@@ -67,7 +67,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
                 getLocalizedMessage("instrument.duplicate.serial", new Object[]{dto.getSerialNumber()}, locale));
         }
 
-        Department department = resolveDepartment(dto.getDepartmentId(), locale);
+        Department department = resolveDepartment(dto.getDepartmentId());
         LabInstrument instrument = mapper.toEntity(dto, hospital, department);
         instrument = instrumentRepository.save(instrument);
         return mapper.toDto(instrument);
@@ -89,7 +89,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
                 getLocalizedMessage("instrument.duplicate.serial", new Object[]{dto.getSerialNumber()}, locale));
         }
 
-        Department department = resolveDepartment(dto.getDepartmentId(), locale);
+        Department department = resolveDepartment(dto.getDepartmentId());
         mapper.updateEntity(instrument, dto, department);
         instrument = instrumentRepository.save(instrument);
         return mapper.toDto(instrument);
@@ -107,7 +107,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
 
     // ── helpers ───────────────────────────────────────────────────
 
-    private Department resolveDepartment(String departmentId, Locale locale) {
+    private Department resolveDepartment(String departmentId) {
         if (departmentId == null || departmentId.isBlank()) return null;
         return departmentRepository.findById(UUID.fromString(departmentId))
             .orElseThrow(() -> new ResourceNotFoundException("department.notfound", departmentId));

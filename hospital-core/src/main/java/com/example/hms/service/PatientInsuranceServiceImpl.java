@@ -58,7 +58,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
                     null, PATIENT_REQUIRED_MSG, locale));
         }
 
-        Patient patient = getPatientOrThrow(dto.getPatientId(), locale);
+        Patient patient = getPatientOrThrow(dto.getPatientId());
         enforceSelfAccessIfPatient(patient, locale); // PATIENT may only act on self
 
         PatientInsurance insurance = patientInsuranceMapper.toPatientInsurance(dto, patient);
@@ -73,7 +73,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     @Override
     @Transactional(readOnly = true)
     public PatientInsuranceResponseDTO getPatientInsuranceById(UUID insuranceId, Locale locale) {
-        PatientInsurance insurance = getInsuranceOrThrow(insuranceId, locale);
+        PatientInsurance insurance = getInsuranceOrThrow(insuranceId);
         if (insurance.getPatient() != null) {
             enforceSelfAccessIfPatient(insurance.getPatient(), locale);
         }
@@ -95,10 +95,10 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     @Override
     @Transactional
     public PatientInsuranceResponseDTO updatePatientInsurance(UUID insuranceId, PatientInsuranceRequestDTO dto, Locale locale) {
-        PatientInsurance existing = getInsuranceOrThrow(insuranceId, locale);
+        PatientInsurance existing = getInsuranceOrThrow(insuranceId);
 
         Patient targetPatient = (dto.getPatientId() != null)
-            ? getPatientOrThrow(dto.getPatientId(), locale)
+            ? getPatientOrThrow(dto.getPatientId())
             : existing.getPatient();
 
         if (targetPatient == null) {
@@ -119,7 +119,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     @Override
     @Transactional
     public void deletePatientInsurance(UUID insuranceId, Locale locale) {
-        PatientInsurance existing = getInsuranceOrThrow(insuranceId, locale);
+        PatientInsurance existing = getInsuranceOrThrow(insuranceId);
         if (existing.getPatient() != null) {
             enforceSelfAccessIfPatient(existing.getPatient(), locale);
         }
@@ -132,8 +132,8 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
                                                             LinkPatientInsuranceRequestDTO req,
                                                             ActingContext ctx,
                                                             Locale locale) {
-        PatientInsurance insurance = getInsuranceOrThrow(insuranceId, locale);
-        Patient patient = getPatientOrThrow(req.getPatientId(), locale);
+        PatientInsurance insurance = getInsuranceOrThrow(insuranceId);
+        Patient patient = getPatientOrThrow(req.getPatientId());
 
         // Always attach to patient
         insurance.setPatient(patient);
@@ -175,12 +175,12 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         return patientChartAccess.require(patientId, roleValidator.requireActiveHospitalId());
     }
 
-    private Patient getPatientOrThrow(UUID patientId, Locale locale) {
+    private Patient getPatientOrThrow(UUID patientId) {
         return patientRepository.findById(patientId).orElseThrow(() ->
             new ResourceNotFoundException("patient.notfound", patientId));
     }
 
-    private PatientInsurance getInsuranceOrThrow(UUID insuranceId, Locale locale) {
+    private PatientInsurance getInsuranceOrThrow(UUID insuranceId) {
         return patientInsuranceRepository.findById(insuranceId).orElseThrow(() ->
             new ResourceNotFoundException("patientinsurance.notfound", insuranceId));
     }
@@ -205,13 +205,13 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         ActingContext ctx,
         Locale locale
     ) {
-        PatientInsurance insurance = getInsuranceOrThrow(insuranceId, locale);
+        PatientInsurance insurance = getInsuranceOrThrow(insuranceId);
 
         if (req.getPatientId() == null) {
             throw new BusinessException(messageSource.getMessage(
                 PATIENT_REQUIRED_KEY, null, PATIENT_REQUIRED_MSG, locale));
         }
-        Patient patient = getPatientOrThrow(req.getPatientId(), locale);
+        Patient patient = getPatientOrThrow(req.getPatientId());
         enforceSelfAccessIfPatient(patient, locale);
         insurance.setPatient(patient);
 
@@ -243,7 +243,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         final String payerCode = req.getPayerCode().trim();
         final String policyNumber = req.getPolicyNumber().trim();
 
-        Patient patient = getPatientOrThrow(patientId, locale);
+        Patient patient = getPatientOrThrow(patientId);
         enforceSelfAccessIfPatient(patient, locale);
 
         final boolean actAsPatient = isActingAsPatient(ctx);

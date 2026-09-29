@@ -127,6 +127,9 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
 @RequiredArgsConstructor
 @Slf4j
 public class PatientServiceImpl implements PatientService {
+    private static final String USER_NOT_FOUND_KEY = "user.notFound";
+    private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
+
 
     /**
      * Self-reference injected as a proxy so internal calls
@@ -319,10 +322,10 @@ public class PatientServiceImpl implements PatientService {
     @Transactional
     public PatientResponseDTO createPatient(PatientRequestDTO dto, Locale locale) {
         User user = userRepository.findById(dto.getUserId())
-            .orElseThrow(() -> new ResourceNotFoundException("user.notFound", dto.getUserId()));
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, dto.getUserId()));
 
         Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalId()));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, dto.getHospitalId()));
 
         Optional<Patient> existing = patientRepository.findByUserId(user.getId());
         Patient patient = existing
@@ -389,7 +392,7 @@ public class PatientServiceImpl implements PatientService {
         }
 
         User user = userRepository.findById(dto.getUserId())
-            .orElseThrow(() -> new ResourceNotFoundException("user.notFound", dto.getUserId()));
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, dto.getUserId()));
 
         PatientAddressHistoryRecorder.AddressSnapshot before = addressHistoryRecorder.snapshot(patient);
         patientMapper.updatePatientFromDto(dto, patient, user);
@@ -586,10 +589,10 @@ public class PatientServiceImpl implements PatientService {
             throw new BusinessException("Hospital must be resolved from context for staff-created patients.");
         }
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
         User user = userRepository.findById(dto.getUserId())
-            .orElseThrow(() -> new ResourceNotFoundException("user.notFound", dto.getUserId()));
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, dto.getUserId()));
 
         Optional<Patient> existing = patientRepository.findByUserId(user.getId());
         Patient patient = existing
@@ -1503,7 +1506,7 @@ public class PatientServiceImpl implements PatientService {
             throw new BusinessException("Hospital identifier is required.");
         }
         return hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
     }
 
     private void ensurePatientRegistered(UUID patientId, UUID hospitalId) {

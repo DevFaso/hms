@@ -75,6 +75,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class UserServiceImpl implements UserService {
+    private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
+    private static final String USER_NOT_FOUND_KEY = "user.notFound";
+
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
     private static final String ROLE_PATIENT = "ROLE_PATIENT";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
@@ -550,7 +553,7 @@ public class UserServiceImpl implements UserService {
     private void upsertStaff(User user, UUID hospitalId, String lic,
                          List<UserRoleHospitalAssignment> assignments, AdminSignupRequest request, Set<Role> roles) {
         final Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
         staffRepository.findByUserIdAndHospitalId(user.getId(), hospital.getId())
             .map(Staff::getLicenseNumber)
@@ -749,7 +752,7 @@ public class UserServiceImpl implements UserService {
         if (hospitalId != null) {
             final UUID resolvedHospitalId = hospitalId;
             hospitalRepository.findById(resolvedHospitalId)
-                    .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", resolvedHospitalId));
+                    .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, resolvedHospitalId));
         }
         return hospitalId;
     }
@@ -768,7 +771,7 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException("Hospital must be provided for non-SUPER_ADMIN staff/admin roles.");
         }
         return hospitalRepository.findById(provided)
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", provided))
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, provided))
                 .getId();
     }
 
@@ -1327,7 +1330,7 @@ public class UserServiceImpl implements UserService {
 
     /** The one answer for a missing account and for one the caller may not touch. */
     private static ResourceNotFoundException userNotFound(UUID id) {
-        return new ResourceNotFoundException("user.notFound", id);
+        return new ResourceNotFoundException(USER_NOT_FOUND_KEY, id);
     }
 
     /** True when the string is non-null and non-blank. */
@@ -1462,7 +1465,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void changeOwnPassword(UUID userId, String newPassword) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("user.notFound", userId));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, userId));
         String encodedPassword = passwordEncoder.encode(newPassword);
         user.setPasswordHash(encodedPassword);
         user.setPasswordChangedAt(LocalDateTime.now());
@@ -1481,7 +1484,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void changeOwnUsername(UUID userId, String newUsername) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("user.notFound", userId));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, userId));
         if (userRepository.findByUsername(newUsername).filter(u -> !u.getId().equals(userId)).isPresent()) {
             throw new IllegalArgumentException("Username '" + newUsername + "' is already taken.");
         }
@@ -1495,7 +1498,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void updateProfileImage(UUID userId, String imageUrl) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("user.notFound", userId));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, userId));
 
         String oldImageUrl = user.getProfileImageUrl();
         user.setProfileImageUrl(imageUrl);

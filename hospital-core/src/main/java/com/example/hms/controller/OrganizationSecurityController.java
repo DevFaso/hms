@@ -48,6 +48,8 @@ import java.util.UUID;
 @Tag(name = "Organization Security Management", description = "APIs for managing organization security policies and rules")
 @SecurityRequirement(name = "Bearer Authentication")
 public class OrganizationSecurityController {
+    private static final String ORGANIZATION_NOT_FOUND_KEY = "organization.notFound";
+
 
 
     private final OrganizationRepository organizationRepository;
@@ -67,7 +69,7 @@ public class OrganizationSecurityController {
         
         // Verify organization exists
         var organization = organizationRepository.findById(organizationId)
-            .orElseThrow(() -> new ResourceNotFoundException("organization.notFound", organizationId));
+            .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_KEY, organizationId));
 
         // Get compliance violations
         List<String> violations = organizationSecurityService.validateSecurityCompliance(organizationId);
@@ -119,7 +121,7 @@ public class OrganizationSecurityController {
         
         // Verify organization exists
         organizationRepository.findById(organizationId)
-            .orElseThrow(() -> new ResourceNotFoundException("organization.notFound", organizationId));
+            .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_KEY, organizationId));
 
         List<OrganizationSecurityPolicy> policies = activeOnly
             ? securityPolicyRepository.findByOrganizationIdAndActiveTrue(organizationId)
@@ -148,7 +150,7 @@ public class OrganizationSecurityController {
         
         // Verify organization exists
         organizationRepository.findById(organizationId)
-            .orElseThrow(() -> new ResourceNotFoundException("organization.notFound", organizationId));
+            .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_KEY, organizationId));
 
         // Check if policy with this code already exists
         if (securityPolicyRepository.existsByOrganizationIdAndCode(organizationId, requestDTO.getCode())) {
@@ -207,7 +209,7 @@ public class OrganizationSecurityController {
         
         // Verify organization exists
         organizationRepository.findById(organizationId)
-            .orElseThrow(() -> new ResourceNotFoundException("organization.notFound", organizationId));
+            .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_KEY, organizationId));
 
         List<OrganizationSecurityRule> rules = organizationSecurityService.getActiveSecurityRules(organizationId);
         

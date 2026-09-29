@@ -37,6 +37,8 @@ import java.util.UUID;
 @Service
 @Slf4j
 public class SmartPhraseServiceImpl implements SmartPhraseService {
+    private static final String SMART_PHRASE_NOT_FOUND_KEY = "smartPhrase.notFound";
+
 
     private static final String SUPER_ADMIN_AUTHORITY = "ROLE_SUPER_ADMIN";
 
@@ -92,7 +94,7 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
     public SmartPhraseResponseDTO update(UUID id, SmartPhraseRequestDTO request) {
         validateRequest(request);
         SmartPhrase existing = repository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("smartPhrase.notFound", id));
+            .orElseThrow(() -> new ResourceNotFoundException(SMART_PHRASE_NOT_FOUND_KEY, id));
         User caller = currentUserOrThrow();
 
         // Authorize against the EXISTING macro's scope first — a clinician must not be
@@ -122,7 +124,7 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
     @Transactional
     public void delete(UUID id) {
         SmartPhrase existing = repository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("smartPhrase.notFound", id));
+            .orElseThrow(() -> new ResourceNotFoundException(SMART_PHRASE_NOT_FOUND_KEY, id));
         User caller = currentUserOrThrow();
         UUID hid = existing.getHospital() != null ? existing.getHospital().getId() : null;
         UUID oid = existing.getOwner() != null ? existing.getOwner().getId() : null;
@@ -135,7 +137,7 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
     public SmartPhraseResponseDTO get(UUID id) {
         return repository.findById(id)
             .map(this::toDto)
-            .orElseThrow(() -> new ResourceNotFoundException("smartPhrase.notFound", id));
+            .orElseThrow(() -> new ResourceNotFoundException(SMART_PHRASE_NOT_FOUND_KEY, id));
     }
 
     @Override
@@ -180,7 +182,7 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
     public void recordUsage(UUID id) {
         int updated = repository.incrementUsage(id, LocalDateTime.now(clock));
         if (updated == 0) {
-            throw new ResourceNotFoundException("smartPhrase.notFound", id);
+            throw new ResourceNotFoundException(SMART_PHRASE_NOT_FOUND_KEY, id);
         }
     }
 

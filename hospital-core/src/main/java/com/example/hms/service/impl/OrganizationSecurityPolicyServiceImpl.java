@@ -24,6 +24,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class OrganizationSecurityPolicyServiceImpl implements OrganizationSecurityPolicyService {
+    private static final String SECURITY_POLICY_NOT_FOUND_KEY = "securityPolicy.notFound";
+
 
     /** Resource name reported by the 404s below. */
 
@@ -54,7 +56,7 @@ public class OrganizationSecurityPolicyServiceImpl implements OrganizationSecuri
     @Override
     public void deletePolicy(UUID id) {
         OrganizationSecurityPolicy policy = policyRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("securityPolicy.notFound", id));
+                .orElseThrow(() -> new ResourceNotFoundException(SECURITY_POLICY_NOT_FOUND_KEY, id));
         requireOrganizationScope(policy, id);
         policyRepository.delete(policy);
     }
@@ -87,7 +89,7 @@ public class OrganizationSecurityPolicyServiceImpl implements OrganizationSecuri
     @Transactional(readOnly = true)
     public OrganizationSecurityPolicyResponseDTO getPolicyByIdAsDto(UUID id) {
         OrganizationSecurityPolicy policy = policyRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("securityPolicy.notFound", id));
+                .orElseThrow(() -> new ResourceNotFoundException(SECURITY_POLICY_NOT_FOUND_KEY, id));
         requireOrganizationScope(policy, id);
         return toResponseDto(policy);
     }
@@ -117,7 +119,7 @@ public class OrganizationSecurityPolicyServiceImpl implements OrganizationSecuri
     @Transactional
     public OrganizationSecurityPolicyResponseDTO updatePolicyFromDto(UUID id, OrganizationSecurityPolicyRequestDTO dto) {
         OrganizationSecurityPolicy policy = policyRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("securityPolicy.notFound", id));
+                .orElseThrow(() -> new ResourceNotFoundException(SECURITY_POLICY_NOT_FOUND_KEY, id));
         requireOrganizationScope(policy, id);
         requireTargetOrganization(dto.getOrganizationId());
 
@@ -151,7 +153,7 @@ public class OrganizationSecurityPolicyServiceImpl implements OrganizationSecuri
         if (organizationId == null || !organizationId.equals(policyOrgId)) {
             log.warn("[policy:tenantGuard] User {} attempted cross-organization access to policy {}",
                     ctx.getPrincipalUsername(), id);
-            throw new ResourceNotFoundException("securityPolicy.notFound", id); // 404, not 403
+            throw new ResourceNotFoundException(SECURITY_POLICY_NOT_FOUND_KEY, id); // 404, not 403
         }
     }
 

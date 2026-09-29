@@ -109,7 +109,7 @@ public class TreatmentServiceImpl implements TreatmentService {
     @Transactional
     public void deleteTreatment(UUID id) {
         if (!treatmentRepository.existsById(id)) {
-            throw new ResourceNotFoundException("treatment.notfound", id);
+            throw new ResourceNotFoundException(TREATMENT_NOT_FOUND_KEY, id);
         }
         treatmentRepository.deleteById(id);
     }

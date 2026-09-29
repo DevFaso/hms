@@ -147,23 +147,23 @@ class NurseReadAccessTest {
     static final class Fixture {
         @GetMapping(path = "/by-path")
         @PreAuthorize("hasAnyRole('DOCTOR','NURSE')")
-        void byPath() { }
+        void byPath() { /* fixture only: admittedRoles() reads the annotations via reflection, never invokes this. */ }
 
         @GetMapping(value = "/by-value")
         @PreAuthorize("hasAuthority('ROLE_NURSE')")
-        void byValue() { }
+        void byValue() { /* fixture only: admittedRoles() reads the annotations via reflection, never invokes this. */ }
 
         @RequestMapping(path = "/by-request-mapping", method = RequestMethod.GET)
         @PreAuthorize("hasRole('NURSE')")
-        void byRequestMapping() { }
+        void byRequestMapping() { /* fixture only: admittedRoles() reads the annotations via reflection, never invokes this. */ }
 
         @GetMapping("/negated")
         @PreAuthorize("hasRole('DOCTOR') and !hasRole('NURSE')")
-        void negated() { }
+        void negated() { /* fixture only: admittedRoles() reads the annotations via reflection, never invokes this. */ }
 
         @GetMapping("/not-negated")
         @PreAuthorize("hasAnyRole('DOCTOR') and not hasAnyAuthority('ROLE_NURSE', 'ROLE_MIDWIFE')")
-        void notNegated() { }
+        void notNegated() { /* fixture only: admittedRoles() reads the annotations via reflection, never invokes this. */ }
     }
 
     @Test

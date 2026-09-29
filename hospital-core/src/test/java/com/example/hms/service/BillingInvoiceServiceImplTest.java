@@ -41,6 +41,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -340,7 +342,7 @@ class BillingInvoiceServiceImplTest {
             billingInvoiceService.recordPatientPayment(invoice.getId(), patientId, UUID.randomUUID(),
                 payment(method), Locale.ENGLISH);
         }
-        verify(paymentTransactionRepository, org.mockito.Mockito.times(5)).save(any());
+        verify(paymentTransactionRepository, times(5)).save(any());
     }
 
     @Test
@@ -352,8 +354,8 @@ class BillingInvoiceServiceImplTest {
             billingInvoiceService.recordPatientPayment(invoice.getId(), patientId, UUID.randomUUID(),
                 payment("BITCOIN"), Locale.ENGLISH));
 
-        verify(invoiceRepository, org.mockito.Mockito.never()).save(any());
-        verify(paymentTransactionRepository, org.mockito.Mockito.never()).save(any());
+        verify(invoiceRepository, never()).save(any());
+        verify(paymentTransactionRepository, never()).save(any());
         assertEquals(BigDecimal.ZERO, invoice.getAmountPaid());
     }
 
@@ -361,12 +363,13 @@ class BillingInvoiceServiceImplTest {
     void recordPatientPayment_onSomeoneElsesInvoiceWritesNoPaymentRow() {
         BillingInvoice invoice = payableInvoice(UUID.randomUUID());
         when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        var cashPayment = payment("CASH");
 
         assertThrows(ResourceNotFoundException.class, () ->
             billingInvoiceService.recordPatientPayment(invoice.getId(), UUID.randomUUID(), UUID.randomUUID(),
-                payment("CASH"), Locale.ENGLISH));
+                cashPayment, Locale.ENGLISH));
 
-        verify(paymentTransactionRepository, org.mockito.Mockito.never()).save(any());
+        verify(paymentTransactionRepository, never()).save(any());
     }
     @Test
     void deleteInvoice_withAPaymentRowIsRefusedNotAForeignKeyFailure() {
@@ -379,7 +382,7 @@ class BillingInvoiceServiceImplTest {
             () -> billingInvoiceService.deleteInvoice(invoice.getId(), Locale.ENGLISH));
 
         assertEquals("billing.invoice.hasPayments", refused.getMessageKey());
-        verify(invoiceRepository, org.mockito.Mockito.never()).deleteById(any());
+        verify(invoiceRepository, never()).deleteById(any());
     }
 
     @Test

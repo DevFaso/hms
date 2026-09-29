@@ -142,7 +142,7 @@ public class EncounterServiceImpl implements EncounterService {
     @Override
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<EncounterResponseDTO> getEncountersByDoctorIdentifier(String identifier, Locale locale) {
-        UUID staffId = resolveStaffIdByIdentifier(identifier, locale);
+        UUID staffId = resolveStaffIdByIdentifier(identifier);
         Staff staff = staffRepository.findById(staffId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_STAFF_NOT_FOUND, staffId));
 
@@ -164,7 +164,7 @@ public class EncounterServiceImpl implements EncounterService {
     }
 
     /** Accepts UUID | email | username | license/roleCode and returns Staff ID. */
-    private UUID resolveStaffIdByIdentifier(String identifier, Locale locale) {
+    private UUID resolveStaffIdByIdentifier(String identifier) {
         // UUID?
         try {
             return UUID.fromString(identifier);
@@ -570,7 +570,7 @@ public class EncounterServiceImpl implements EncounterService {
     @Override
     @Transactional
     public EncounterNoteResponseDTO signEncounterNote(UUID encounterId, Locale locale) {
-        EncounterNote note = loadNoteScoped(encounterId, locale);
+        EncounterNote note = loadNoteScoped(encounterId);
 
         if (note.isSigned() || note.getSignatureValue() != null) {
             throw new BusinessException(
@@ -615,7 +615,7 @@ public class EncounterServiceImpl implements EncounterService {
     @Override
     @Transactional
     public EncounterNoteResponseDTO cosignEncounterNote(UUID encounterId, Locale locale) {
-        EncounterNote note = loadNoteScoped(encounterId, locale);
+        EncounterNote note = loadNoteScoped(encounterId);
 
         if (!note.isRequiresCosign()) {
             throw new BusinessException("This note does not declare a co-signature requirement.");
@@ -654,7 +654,7 @@ public class EncounterServiceImpl implements EncounterService {
     }
 
     /** 404-not-403: a note at another hospital is indistinguishable from a missing one. */
-    private EncounterNote loadNoteScoped(UUID encounterId, Locale locale) {
+    private EncounterNote loadNoteScoped(UUID encounterId) {
         if (!encounterRepository.existsById(encounterId)) {
             throw new ResourceNotFoundException(MSG_ENCOUNTER_NOT_FOUND, encounterId);
         }
@@ -791,7 +791,7 @@ public class EncounterServiceImpl implements EncounterService {
 
         ensureStaffHospitalAlignment(staff, hospitalId, locale);
 
-        Appointment appointment = findAppointment(request.getAppointmentId(), locale);
+        Appointment appointment = findAppointment(request.getAppointmentId());
         UUID departmentId = resolveDepartmentId(request, hospital, locale);
         Department department = findDepartmentInHospital(hospital, departmentId);
 
@@ -826,7 +826,7 @@ public class EncounterServiceImpl implements EncounterService {
             && existing.getAssignment() != null;
     }
 
-    private Appointment findAppointment(UUID appointmentId, Locale locale) {
+    private Appointment findAppointment(UUID appointmentId) {
         if (appointmentId == null) {
             return null;
         }
@@ -1162,7 +1162,7 @@ public class EncounterServiceImpl implements EncounterService {
                                          String requestedDisplayName,
                                          Staff defaultStaff,
                                          Locale locale) {
-        Staff staff = resolveAuthorStaff(requestedStaffId, defaultStaff, locale);
+        Staff staff = resolveAuthorStaff(requestedStaffId, defaultStaff);
         User user = resolveAuthorUser(requestedUserId, staff, locale);
         String displayName = trimToNull(requestedDisplayName);
         if (displayName == null && user != null) {
@@ -1175,7 +1175,7 @@ public class EncounterServiceImpl implements EncounterService {
         return new NoteAuthor(user, staff, displayName, actorIdentifier);
     }
 
-    private Staff resolveAuthorStaff(UUID requestedStaffId, Staff defaultStaff, Locale locale) {
+    private Staff resolveAuthorStaff(UUID requestedStaffId, Staff defaultStaff) {
         if (requestedStaffId == null) {
             return defaultStaff;
         }

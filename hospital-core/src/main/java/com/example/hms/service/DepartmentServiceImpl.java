@@ -147,7 +147,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     @Transactional
     public DepartmentResponseDTO updateDepartmentHead(UUID departmentId, UUID staffId, Locale locale) {
-        Department department = findDepartmentOrThrow(departmentId, locale);
+        Department department = findDepartmentOrThrow(departmentId);
         Staff newHead = staffService.getStaffEntityById(staffId, locale);
 
         if (!newHead.getHospital().getId().equals(department.getHospital().getId())) {
@@ -242,12 +242,12 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     @Transactional
     public DepartmentResponseDTO updateDepartment(UUID id, DepartmentRequestDTO dto, Locale locale) {
-        Department department = findDepartmentOrThrow(id, locale);
-        enforceHospitalScopeOnEntity(department, locale);
+        Department department = findDepartmentOrThrow(id);
+        enforceHospitalScopeOnEntity(department);
         enforceHospitalScopeOnDto(dto);
         validateDepartmentRequest(dto, locale);
 
-        Hospital hospital = resolveHospital(dto, locale);
+        Hospital hospital = resolveHospital(dto);
         dto.setHospitalName(hospital.getName());
         dto.setCode(normalizeDepartmentCode(dto.getCode()));
 
@@ -275,8 +275,8 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     @Transactional(readOnly = true)
     public DepartmentWithStaffDTO getDepartmentWithStaff(UUID departmentId, Locale locale) {
-        Department department = findDepartmentOrThrow(departmentId, locale);
-        enforceHospitalScopeOnEntity(department, locale);
+        Department department = findDepartmentOrThrow(departmentId);
+        enforceHospitalScopeOnEntity(department);
 
         List<StaffMinimalDTO> staffList = department.getStaffMembers() != null ?
                 department.getStaffMembers().stream()
@@ -317,7 +317,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         Department department = departmentRepository.findByIdWithHeadOfDepartment(id)
                 .orElseThrow(() -> new ResourceNotFoundException(MESSAGE_DEPARTMENT_NOT_FOUND, id));
 
-        enforceHospitalScopeOnEntity(department, locale);
+        enforceHospitalScopeOnEntity(department);
         return buildLocalizedResponse(department, locale);
     }
 
@@ -327,7 +327,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         Department department = departmentRepository.findByIdWithTranslations(departmentId)
                 .orElseThrow(() -> new ResourceNotFoundException(MESSAGE_DEPARTMENT_NOT_FOUND, departmentId));
 
-        enforceHospitalScopeOnEntity(department, locale);
+        enforceHospitalScopeOnEntity(department);
 
         int totalStaff = department.getStaffMembers() != null ? department.getStaffMembers().size() : 0;
         assert department.getStaffMembers() != null;
@@ -348,7 +348,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         Department department = departmentRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Department not found"));
 
-        enforceHospitalScopeOnEntity(department, locale);
+        enforceHospitalScopeOnEntity(department);
 
         if (departmentRepository.hasStaffMembers(id)) {
             throw new BusinessRuleException(
@@ -364,7 +364,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     }
 
     private Hospital resolveHospitalAndSyncDto(DepartmentRequestDTO dto, Locale locale) {
-        Hospital hospital = resolveHospital(dto, locale);
+        Hospital hospital = resolveHospital(dto);
         dto.setHospitalName(hospital.getName());
         dto.setCode(normalizeDepartmentCode(dto.getCode()));
         return hospital;
@@ -404,10 +404,9 @@ public class DepartmentServiceImpl implements DepartmentService {
      * Ensures the existing department belongs to the caller's active hospital.
      *
      * <p>Throws {@link ResourceNotFoundException} (rather than 403) so cross-hospital
-     * existence is not leaked. The localized message is rendered in the caller's locale;
-     * pass {@code null} to fall back to {@link #DEFAULT_LOCALE}.
+     * existence is not leaked.
      */
-    private void enforceHospitalScopeOnEntity(Department department, Locale locale) {
+    private void enforceHospitalScopeOnEntity(Department department) {
         if (roleValidator.isSuperAdminFromAuth()) {
             return;
         }
@@ -507,10 +506,10 @@ public class DepartmentServiceImpl implements DepartmentService {
             throw new ResourceNotFoundException("assignment.notFoundForUserHospital", currentUserId, hospital.getId());
         }
 
-        Role hospitalAdminRole = resolveHospitalAdminRole(locale);
+        Role hospitalAdminRole = resolveHospitalAdminRole();
         return roleAssignmentRepository
             .findFirstByHospitalIdAndRole_Name(hospital.getId(), hospitalAdminRole.getName())
-            .orElseGet(() -> provisionHospitalAdminAssignmentForSuperAdmin(currentUserId, hospital, hospitalAdminRole, locale));
+            .orElseGet(() -> provisionHospitalAdminAssignmentForSuperAdmin(currentUserId, hospital, hospitalAdminRole));
     }
 
     private void updateHeadDepartmentIfNeeded(Department department, Staff headOfDepartment, Locale locale) {
@@ -638,7 +637,7 @@ public class DepartmentServiceImpl implements DepartmentService {
             || StringUtils.hasText(filter.getState());
     }
 
-    private Department findDepartmentOrThrow(UUID id, Locale locale) {
+    private Department findDepartmentOrThrow(UUID id) {
         return departmentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(MESSAGE_DEPARTMENT_NOT_FOUND, id));
     }
@@ -662,7 +661,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         }
     }
 
-    private Hospital resolveHospital(DepartmentRequestDTO dto, Locale locale) {
+    private Hospital resolveHospital(DepartmentRequestDTO dto) {
         if (dto.getHospitalId() != null) {
             return hospitalRepository.findById(dto.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", dto.getHospitalId()));
@@ -739,7 +738,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         return languageCode == null ? null : languageCode.trim().toLowerCase(Locale.ROOT);
     }
 
-    private Role resolveHospitalAdminRole(Locale locale) {
+    private Role resolveHospitalAdminRole() {
         return roleRepository.findByCode(ROLE_HOSPITAL_ADMIN)
             .or(() -> roleRepository.findByNameIgnoreCase(ROLE_HOSPITAL_ADMIN))
             .or(() -> roleRepository.findByNameIgnoreCase("HOSPITAL_ADMIN"))
@@ -748,8 +747,7 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     private UserRoleHospitalAssignment provisionHospitalAdminAssignmentForSuperAdmin(UUID superAdminId,
                                                                                      Hospital hospital,
-                                                                                     Role hospitalAdminRole,
-                                                                                     Locale locale) {
+                                                                                     Role hospitalAdminRole) {
         log.warn("[dept:create] Super admin {} lacks hospital admin assignment for hospital {} – auto provisioning",
             superAdminId, hospital.getId());
 

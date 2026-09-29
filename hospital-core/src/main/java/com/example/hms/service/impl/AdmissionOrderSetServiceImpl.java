@@ -36,6 +36,8 @@ import java.util.UUID;
 
 @Service
 public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
+    private static final String STAFF_NOT_FOUND_KEY = "staff.notFound";
+
 
     private static final Logger logger = LoggerFactory.getLogger(AdmissionOrderSetServiceImpl.class);
 
@@ -105,7 +107,7 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
             : departmentRepository.findById(request.getDepartmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("department.notFound", request.getDepartmentId()));
         Staff createdBy = staffRepository.findById(request.getCreatedByStaffId())
-            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getCreatedByStaffId()));
+            .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND_KEY, request.getCreatedByStaffId()));
 
         AdmissionOrderSet entity = new AdmissionOrderSet();
         entity.setName(request.getName());
@@ -138,7 +140,7 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
                     + " but request targets " + request.getHospitalId());
         }
         Staff modifiedBy = staffRepository.findById(request.getCreatedByStaffId())
-            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getCreatedByStaffId()));
+            .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND_KEY, request.getCreatedByStaffId()));
         Department department = request.getDepartmentId() == null ? null
             : departmentRepository.findById(request.getDepartmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("department.notFound", request.getDepartmentId()));
@@ -170,7 +172,7 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
     public AdmissionOrderSetResponseDTO deactivate(UUID id, String reason, UUID actingStaffId) {
         AdmissionOrderSet entity = loadOrderSet(id);
         Staff actor = staffRepository.findById(actingStaffId)
-            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", actingStaffId));
+            .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND_KEY, actingStaffId));
         entity.deactivate(reason, actor);
         return mapper.toDto(orderSetRepository.save(entity));
     }

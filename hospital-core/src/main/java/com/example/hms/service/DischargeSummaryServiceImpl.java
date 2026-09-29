@@ -58,6 +58,8 @@ import com.example.hms.service.recordaccess.RecordAccessPolicy;
 @Service
 @RequiredArgsConstructor
 public class DischargeSummaryServiceImpl implements DischargeSummaryService {
+    private static final String DISCHARGE_SUMMARY_NOT_FOUND_KEY = "dischargeSummary.notFound";
+
 
 
     private final DischargeSummaryRepository dischargeSummaryRepository;
@@ -191,7 +193,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         log.info("Updating discharge summary: {}", summaryId);
 
         DischargeSummary existing = dischargeSummaryRepository.findById(summaryId)
-            .orElseThrow(() -> new ResourceNotFoundException("dischargeSummary.notFound", summaryId));
+            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_NOT_FOUND_KEY, summaryId));
 
         enforceHospitalScope(existing, summaryId);
 
@@ -256,7 +258,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         log.info("Finalizing discharge summary: {}", summaryId);
 
         DischargeSummary dischargeSummary = dischargeSummaryRepository.findById(summaryId)
-            .orElseThrow(() -> new ResourceNotFoundException("dischargeSummary.notFound", summaryId));
+            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_NOT_FOUND_KEY, summaryId));
 
         enforceHospitalScope(dischargeSummary, summaryId);
 
@@ -283,7 +285,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     @Transactional(readOnly = true)
     public DischargeSummaryResponseDTO getDischargeSummaryById(UUID summaryId, Locale locale) {
         DischargeSummary dischargeSummary = dischargeSummaryRepository.findById(summaryId)
-            .orElseThrow(() -> new ResourceNotFoundException("dischargeSummary.notFound", summaryId));
+            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_NOT_FOUND_KEY, summaryId));
 
         enforceHospitalScope(dischargeSummary, summaryId);
 
@@ -382,7 +384,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         log.info("Deleting discharge summary: {}", summaryId);
 
         DischargeSummary dischargeSummary = dischargeSummaryRepository.findById(summaryId)
-            .orElseThrow(() -> new ResourceNotFoundException("dischargeSummary.notFound", summaryId));
+            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_NOT_FOUND_KEY, summaryId));
 
         enforceHospitalScope(dischargeSummary, summaryId);
 
@@ -399,7 +401,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && summary.getHospital() != null
                 && !activeHospitalId.equals(summary.getHospital().getId())) {
-            throw new ResourceNotFoundException("dischargeSummary.notFound", summaryId);
+            throw new ResourceNotFoundException(DISCHARGE_SUMMARY_NOT_FOUND_KEY, summaryId);
         }
     }
 

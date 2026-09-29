@@ -44,6 +44,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional
 public class PlatformRegistryServiceImpl implements PlatformRegistryService {
+    private static final String PLATFORM_SERVICE_NOT_FOUND_KEY = "platform.service.notFound";
+
 
     private static final String ORGANIZATION_ID_REQUIRED = "organizationId is required";
     private static final String ORGANIZATION_SERVICE_ID_REQUIRED = "organizationServiceId is required";
@@ -141,7 +143,7 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
         Hospital hospital = hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         OrganizationPlatformService service = organizationPlatformServiceRepository.findById(organizationServiceId)
-            .orElseThrow(() -> new ResourceNotFoundException("platform.service.notFound", organizationServiceId));
+            .orElseThrow(() -> new ResourceNotFoundException(PLATFORM_SERVICE_NOT_FOUND_KEY, organizationServiceId));
 
         validateHospitalBelongsToServiceOrganization(hospital, service);
 
@@ -208,7 +210,7 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
             .orElseThrow(() -> new ResourceNotFoundException("department.notFound", departmentId));
 
         OrganizationPlatformService service = organizationPlatformServiceRepository.findById(organizationServiceId)
-            .orElseThrow(() -> new ResourceNotFoundException("platform.service.notFound", organizationServiceId));
+            .orElseThrow(() -> new ResourceNotFoundException(PLATFORM_SERVICE_NOT_FOUND_KEY, organizationServiceId));
 
         validateDepartmentBelongsToServiceOrganization(department, service);
 
@@ -268,7 +270,7 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
         Objects.requireNonNull(serviceId, "serviceId is required");
 
         OrganizationPlatformService service = organizationPlatformServiceRepository.findById(serviceId)
-            .orElseThrow(() -> new ResourceNotFoundException("platform.service.notFound", serviceId));
+            .orElseThrow(() -> new ResourceNotFoundException(PLATFORM_SERVICE_NOT_FOUND_KEY, serviceId));
 
         UUID serviceOrganizationId = Optional.ofNullable(service.getOrganization())
             .map(Organization::getId)

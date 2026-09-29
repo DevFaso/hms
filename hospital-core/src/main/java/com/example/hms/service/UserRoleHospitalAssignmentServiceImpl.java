@@ -225,7 +225,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         assignment.setConfirmationSentAt(LocalDateTime.now());
         assignment.setConfirmationVerifiedAt(null);
 
-        User registrar = resolveRegistrar(dto, locale);
+        User registrar = resolveRegistrar(dto);
         if (registrar != null) {
             assignment.setRegisteredBy(registrar);
         }
@@ -271,7 +271,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             locale));
     }
 
-    private User resolveRegistrar(UserRoleHospitalAssignmentRequestDTO dto, Locale locale) {
+    private User resolveRegistrar(UserRoleHospitalAssignmentRequestDTO dto) {
         if (dto.getRegisteredByUserId() != null) {
             return userRepository.findById(dto.getRegisteredByUserId()).orElseThrow(() ->
                 new ResourceNotFoundException(MSG_USER_NOT_FOUND, dto.getRegisteredByUserId()));
@@ -324,7 +324,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         UserRoleHospitalAssignment target = assignmentRepository.findById(id).orElseThrow(() ->
             new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND, id));
 
-        User newUser = resolveUserForUpdate(dto, target, locale);
+        User newUser = resolveUserForUpdate(dto, target);
         Role newRole = resolveRoleForUpdate(dto, target, locale);
         Hospital newHospital = resolveHospitalForUpdate(dto, target, newRole, locale);
 
@@ -344,7 +344,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     }
 
     private User resolveUserForUpdate(UserRoleHospitalAssignmentRequestDTO dto,
-                                      UserRoleHospitalAssignment target, Locale locale) {
+                                      UserRoleHospitalAssignment target) {
         if (dto.getUserId() == null) {
             return target.getUser();
         }
@@ -423,7 +423,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     @Override
     @Transactional(readOnly = true)
     public UserRoleHospitalAssignmentResponseDTO getAssignmentById(UUID id) {
-        final Locale locale = Locale.getDefault();
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(id).orElseThrow(() ->
             new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND, id));
         return toDtoWithLinks(assignment);
@@ -495,7 +494,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         Objects.requireNonNull(requestDTO, "Request must not be null");
 
         Locale locale = Locale.getDefault();
-        Set<UUID> hospitalIds = collectTargetHospitalIds(requestDTO, locale);
+        Set<UUID> hospitalIds = collectTargetHospitalIds(requestDTO);
         List<UserRoleHospitalAssignmentResponseDTO> successes = new ArrayList<>();
         List<UserRoleAssignmentFailureDTO> failures = new ArrayList<>();
 
@@ -547,7 +546,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public UserRoleHospitalAssignmentResponseDTO regenerateAssignmentCode(UUID assignmentId, boolean resendNotifications) {
-        Locale locale = Locale.getDefault();
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(assignmentId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND, assignmentId));
 
@@ -633,7 +631,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public UserRoleAssignmentPublicViewDTO getAssignmentPublicView(String assignmentCode) {
-        Locale locale = Locale.getDefault();
         String sanitized = assignmentCode != null ? assignmentCode.trim() : null;
         if (sanitized == null || sanitized.isBlank()) {
             throw new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND_BY_CODE, assignmentCode);
@@ -847,7 +844,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public void deleteAssignment(UUID id) {
-        final Locale locale = Locale.getDefault();
         if (!assignmentRepository.existsById(id)) {
             throw new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND, id);
         }
@@ -865,7 +861,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public void deactivateAssignment(UUID id) {
-        final Locale locale = Locale.getDefault();
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND, id));
         if (Boolean.FALSE.equals(assignment.getActive())) {
@@ -993,7 +988,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
     }
 
-    private Set<UUID> collectTargetHospitalIds(UserRoleAssignmentMultiRequestDTO request, Locale locale) {
+    private Set<UUID> collectTargetHospitalIds(UserRoleAssignmentMultiRequestDTO request) {
         Set<UUID> hospitalIds = new LinkedHashSet<>();
         if (request.getHospitalIds() != null) {
             hospitalIds.addAll(request.getHospitalIds());
@@ -1830,7 +1825,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public void sendNotifications(UUID assignmentId) {
-        Locale locale = Locale.getDefault();
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(assignmentId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND, assignmentId));
         log.info("📧 Sending notifications for assignment '{}'", assignmentId);

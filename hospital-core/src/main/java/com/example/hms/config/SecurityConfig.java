@@ -75,6 +75,8 @@ public class SecurityConfig {
     // Path constants — context-path is /api, so Spring Security sees paths
     // *after* the context-path is stripped. All matchers are relative.
     // -----------------------------------------------------------------------
+    private static final String API_AUTH_LOGOUT = "/auth/logout";
+
     private static final String API_FEATURE_FLAGS = "/feature-flags";
     private static final String API_FEATURE_FLAGS_PATTERN = API_FEATURE_FLAGS + "/**";
 
@@ -393,7 +395,7 @@ public class SecurityConfig {
                     // Logout from the native apps (Bearer + body refresh token, no
                     // XSRF dance). A forged cross-site logout cannot carry the
                     // SameSite=Strict refresh cookie, so it revokes nothing.
-                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/logout"),
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, API_AUTH_LOGOUT),
                     // MFA login step: authenticated by the one-time mfaToken in
                     // the body, never by a cookie session.
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/mfa/verify"),
@@ -456,8 +458,8 @@ public class SecurityConfig {
                 // by the time it signs out, and it must still be able to hand
                 // back its refresh token for revocation. The endpoint only ever
                 // revokes the tokens presented to it (AuthController.logout).
-                .requestMatchers(HttpMethod.POST, "/auth/logout").permitAll()
-                .requestMatchers("/auth/logout").authenticated()
+                .requestMatchers(HttpMethod.POST, API_AUTH_LOGOUT).permitAll()
+                .requestMatchers(API_AUTH_LOGOUT).authenticated()
                 .requestMatchers("/auth/verify-password").authenticated()
                 .requestMatchers("/auth/me/**").authenticated()
                 .requestMatchers("/auth/session/bootstrap").authenticated()

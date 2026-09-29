@@ -32,6 +32,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class DischargeApprovalServiceImpl implements DischargeApprovalService {
+    private static final String ROLE_ASSIGNMENT_NOT_FOUND_KEY = "roleAssignment.notFound";
+
 
     private static final EnumSet<DischargeStatus> ACTIVE_STATUSES = EnumSet.of(DischargeStatus.PENDING, DischargeStatus.APPROVED);
 
@@ -65,7 +67,7 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         validateStaffHospitalMatch(nurse, registration);
 
         UserRoleHospitalAssignment nurseAssignment = assignmentRepository.findById(request.getNurseAssignmentId())
-            .orElseThrow(() -> new ResourceNotFoundException("roleAssignment.notFound", request.getNurseAssignmentId()));
+            .orElseThrow(() -> new ResourceNotFoundException(ROLE_ASSIGNMENT_NOT_FOUND_KEY, request.getNurseAssignmentId()));
         validateAssignment(nurseAssignment, nurse, registration.getHospital().getId());
 
         registration.markReadyForDischarge(nurse.getId(), request.getNurseSummary());
@@ -98,7 +100,7 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         validateStaffHospitalMatch(doctor, approval.getRegistration());
 
         UserRoleHospitalAssignment doctorAssignment = assignmentRepository.findById(decision.getDoctorAssignmentId())
-            .orElseThrow(() -> new ResourceNotFoundException("roleAssignment.notFound", decision.getDoctorAssignmentId()));
+            .orElseThrow(() -> new ResourceNotFoundException(ROLE_ASSIGNMENT_NOT_FOUND_KEY, decision.getDoctorAssignmentId()));
         validateAssignment(doctorAssignment, doctor, approval.getHospital().getId());
 
         approval.setDoctor(doctor);
@@ -143,7 +145,7 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         validateStaffHospitalMatch(doctor, approval.getRegistration());
 
         UserRoleHospitalAssignment doctorAssignment = assignmentRepository.findById(decision.getDoctorAssignmentId())
-            .orElseThrow(() -> new ResourceNotFoundException("roleAssignment.notFound", decision.getDoctorAssignmentId()));
+            .orElseThrow(() -> new ResourceNotFoundException(ROLE_ASSIGNMENT_NOT_FOUND_KEY, decision.getDoctorAssignmentId()));
         validateAssignment(doctorAssignment, doctor, approval.getHospital().getId());
 
         approval.setDoctor(doctor);

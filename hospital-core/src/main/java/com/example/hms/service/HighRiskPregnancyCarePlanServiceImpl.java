@@ -46,6 +46,8 @@ import com.example.hms.security.context.HospitalContextHolder;
 @RequiredArgsConstructor
 @Transactional
 public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCarePlanService {
+    private static final String PATIENT_NOT_FOUND_KEY = "patient.notFound";
+
 
     private static final Logger log = LoggerFactory.getLogger(HighRiskPregnancyCarePlanServiceImpl.class);
 
@@ -83,7 +85,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
         assertProviderAccess(user);
 
         Patient patient = patientRepository.findById(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
+            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, request.getPatientId()));
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
@@ -135,7 +137,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
         Objects.requireNonNull(patientId, MSG_PATIENT_ID_REQUIRED);
         User user = getUserOrThrow(username);
         Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
+            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, patientId));
         assertReadAccess(user, patient);
 
         // E9 #59d — high-risk care plans follow the patient across the
@@ -164,7 +166,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
         Objects.requireNonNull(patientId, MSG_PATIENT_ID_REQUIRED);
         User user = getUserOrThrow(username);
         Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
+            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, patientId));
         assertReadAccess(user, patient);
 
         // E9 #59d — the active plan across the readable hospitals.
