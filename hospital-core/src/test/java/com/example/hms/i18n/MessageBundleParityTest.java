@@ -51,7 +51,7 @@ class MessageBundleParityTest {
     private static final Set<String> KEYS_MUST_EXIST = Set.of("BusinessException", "ResourceNotFoundException");
 
     /** MessageFormat argument references: {@code {0}}, {@code {1,number}}, ... */
-    private static final Pattern PLACEHOLDER = Pattern.compile("\\{(\\d+)[^}]*+}");
+    private static final Pattern PLACEHOLDER = Pattern.compile("\\{(\\d++)[^}]*+}");
 
     /** A key definition at the start of a line (the bundles use no continuation lines). */
     private static final Pattern DEFINITION = Pattern.compile("^\\s*([^#!\\s=:][^\\s=:]*)\\s*[=:]");

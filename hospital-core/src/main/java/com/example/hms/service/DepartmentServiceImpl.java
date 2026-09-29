@@ -128,11 +128,11 @@ public class DepartmentServiceImpl implements DepartmentService {
         enforceHospitalScopeOnDto(dto);
         validateDepartmentRequest(dto, effectiveLocale);
 
-        Hospital hospital = resolveHospitalAndSyncDto(dto, effectiveLocale);
+        Hospital hospital = resolveHospitalAndSyncDto(dto);
         ensureDepartmentUniqueness(dto, hospital, effectiveLocale);
 
         Staff headOfDepartment = resolveHeadOfDepartment(dto, effectiveLocale);
-        UserRoleHospitalAssignment assignment = resolveCreatorAssignment(hospital, effectiveLocale);
+        UserRoleHospitalAssignment assignment = resolveCreatorAssignment(hospital);
 
         Department department = departmentMapper.toDepartment(dto, hospital, headOfDepartment, assignment);
         ensureLocaleTranslation(department, assignment, effectiveLocale);
@@ -363,7 +363,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         return locale != null ? locale : DEFAULT_LOCALE;
     }
 
-    private Hospital resolveHospitalAndSyncDto(DepartmentRequestDTO dto, Locale locale) {
+    private Hospital resolveHospitalAndSyncDto(DepartmentRequestDTO dto) {
         Hospital hospital = resolveHospital(dto);
         dto.setHospitalName(hospital.getName());
         dto.setCode(normalizeDepartmentCode(dto.getCode()));
@@ -493,7 +493,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         return staffService.getStaffEntityById(UUID.fromString(staffDto.getId()), locale);
     }
 
-    private UserRoleHospitalAssignment resolveCreatorAssignment(Hospital hospital, Locale locale) {
+    private UserRoleHospitalAssignment resolveCreatorAssignment(Hospital hospital) {
         UUID currentUserId = authService.getCurrentUserId();
         Optional<UserRoleHospitalAssignment> existingAssignment = roleAssignmentRepository
             .findByUserIdAndHospitalId(currentUserId, hospital.getId());

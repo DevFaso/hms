@@ -363,10 +363,13 @@ class BillingInvoiceServiceImplTest {
     void recordPatientPayment_onSomeoneElsesInvoiceWritesNoPaymentRow() {
         BillingInvoice invoice = payableInvoice(UUID.randomUUID());
         when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        UUID invoiceId = invoice.getId();
+        UUID wrongPatientId = UUID.randomUUID();
+        UUID transactionId = UUID.randomUUID();
         var cashPayment = payment("CASH");
 
         assertThrows(ResourceNotFoundException.class, () ->
-            billingInvoiceService.recordPatientPayment(invoice.getId(), UUID.randomUUID(), UUID.randomUUID(),
+            billingInvoiceService.recordPatientPayment(invoiceId, wrongPatientId, transactionId,
                 cashPayment, Locale.ENGLISH));
 
         verify(paymentTransactionRepository, never()).save(any());

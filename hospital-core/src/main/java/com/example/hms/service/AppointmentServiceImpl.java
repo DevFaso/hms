@@ -303,7 +303,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         requireHospitalScope(currentUser, hospital.getId(), locale);
 
         // --- Staff resolution ---
-        final Staff staff = resolveStaff(request, locale);
+        final Staff staff = resolveStaff(request);
 
         // staff must belong to hospital
         if (!staff.getHospital().getId().equals(hospital.getId())) {
@@ -481,7 +481,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         throw new BusinessException("Hospital identifier required");
     }
 
-    private Staff resolveStaff(AppointmentRequestDTO request, Locale locale) {
+    private Staff resolveStaff(AppointmentRequestDTO request) {
         if (request.getStaffId() != null) {
             return staffRepository.findById(request.getStaffId())
                 .orElseThrow(() -> new ResourceNotFoundException("staff.notfound", request.getStaffId()));
