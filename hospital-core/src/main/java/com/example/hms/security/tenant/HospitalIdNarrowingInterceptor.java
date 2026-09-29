@@ -78,7 +78,7 @@ public class HospitalIdNarrowingInterceptor implements HandlerInterceptor {
             return true;
         }
         if (resolver.narrowTo(hospitalId) instanceof ActingScope.Refused(ActingScope.Reason reason)) {
-            throw new HospitalScopeRefusedException(reason, ActingScopeResolver.refusalMessage(reason));
+            throw new HospitalScopeRefusedException(reason, ActingScopeResolver.refusalMessage(reason), hospitalId);
         }
         return true;
     }

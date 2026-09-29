@@ -110,6 +110,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import com.example.hms.service.i18n.NotificationLocales;
 
 /**
@@ -893,12 +894,6 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     }
 
     /**
-     * Resolve the patient's primary hospital ID.
-     * Tries {@code patient.getHospitalId()} first, then falls back to the first
-     * active hospital registration. Returns {@code null} if no hospital context is
-     * available (sub-services must tolerate null in that case).
-     */
-    /**
      * The hospital a patient-initiated write is filed at, when the record it
      * acts on does not carry one: the hospital the request names, checked
      * against the patient's active registrations; else their only active
@@ -909,7 +904,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
      */
     private UUID writeHospitalFor(Patient patient, UUID requestedHospitalId) {
         if (requestedHospitalId != null) {
-            requireHospitalRegistration(patient.getId(), requestedHospitalId);
+            if (!isRegisteredAt(patient.getId(), requestedHospitalId)) {
+                throw new BusinessException(portalMessage("patientPortal.request.hospitalNotRegistered"));
+            }
             return requestedHospitalId;
         }
         List<UUID> active = registrationRepository.findByPatientId(patient.getId()).stream()
@@ -923,11 +920,29 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (patient.getHospitalId() != null && active.contains(patient.getHospitalId())) {
             return patient.getHospitalId();
         }
-        throw new BusinessException(active.isEmpty()
-                ? "No hospital registration found for this patient"
-                : "Choose the hospital this request is for");
+        throw new BusinessException(portalMessage(active.isEmpty()
+                ? "patientPortal.request.noHospitalRegistration"
+                : "patientPortal.request.chooseHospital"));
     }
 
+    /** Whether the patient has an active registration at that hospital. */
+    private boolean isRegisteredAt(UUID patientId, UUID hospitalId) {
+        return registrationRepository
+                .findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId)
+                .isPresent();
+    }
+
+    /** A patient-facing refusal in the request's language. */
+    private String portalMessage(String key) {
+        return messageSource.getMessage(key, null, LocaleContextHolder.getLocale());
+    }
+
+    /**
+     * Resolve the patient's primary hospital ID.
+     * Tries {@code patient.getHospitalId()} first, then falls back to the first
+     * active hospital registration. Returns {@code null} if no hospital context is
+     * available (sub-services must tolerate null in that case).
+     */
     private UUID resolvePatientHospitalId(Patient patient) {
         if (patient.getHospitalId() != null) {
             return patient.getHospitalId();
@@ -1040,10 +1055,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
      * @throws BusinessException (HTTP 400) when no active registration is found.
      */
     private void requireHospitalRegistration(UUID patientId, UUID hospitalId) {
-        boolean registered = registrationRepository
-                .findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId)
-                .isPresent();
-        if (!registered) {
+        if (!isRegisteredAt(patientId, hospitalId)) {
             throw new BusinessException(
                     "You are not registered at the specified source hospital and cannot manage consent on its behalf.");
         }

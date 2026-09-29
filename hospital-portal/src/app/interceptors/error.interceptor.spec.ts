@@ -12,6 +12,7 @@ import { of, throwError } from 'rxjs';
 
 import { errorInterceptor, clearReportedSilent403s } from './error.interceptor';
 import { AuthService } from '../auth/auth.service';
+import { RoleContextService } from '../core/role-context.service';
 import { SessionScopeService } from '../core/session-scope.service';
 import { ImpersonationService } from '../services/impersonation.service';
 import { DowntimeService } from '../services/downtime.service';
@@ -23,6 +24,7 @@ describe('errorInterceptor', () => {
   let router: jasmine.SpyObj<Router>;
   let impersonation: jasmine.SpyObj<ImpersonationService>;
   let sessionScope: jasmine.SpyObj<SessionScopeService>;
+  let selectedHospital: string | null;
 
   beforeEach(() => {
     clearReportedSilent403s();
@@ -42,6 +44,7 @@ describe('errorInterceptor', () => {
     impersonation.isActive.and.returnValue(false);
     sessionScope = jasmine.createSpyObj('SessionScopeService', ['hydrate', 'forgetHospital']);
     sessionScope.hydrate.and.returnValue(of(null));
+    selectedHospital = 'hospital-a';
 
     TestBed.configureTestingModule({
       providers: [
@@ -51,6 +54,10 @@ describe('errorInterceptor', () => {
         { provide: Router, useValue: router },
         { provide: ImpersonationService, useValue: impersonation },
         { provide: SessionScopeService, useValue: sessionScope },
+        {
+          provide: RoleContextService,
+          useValue: { effectiveHospitalIdForRequest: () => selectedHospital },
+        },
       ],
     });
     http = TestBed.inject(HttpClient);
@@ -153,24 +160,41 @@ describe('errorInterceptor', () => {
   });
 
   describe('hospital scope refused (the one tenant resolver)', () => {
-    function refuse(reason: string): HttpErrorResponse | undefined {
+    function refuse(reason: string, hospitalId?: string): HttpErrorResponse | undefined {
       let error: HttpErrorResponse | undefined;
       http.get('/patients').subscribe({ error: (e) => (error = e) });
       httpMock
         .expectOne('/patients')
         .flush(
-          { code: 'hospital_scope_refused', reason },
+          { code: 'hospital_scope_refused', reason, ...(hospitalId ? { hospitalId } : {}) },
           { status: 403, statusText: 'Forbidden' },
         );
       return error;
     }
 
-    it('re-reads the session scope on a stale chip (NO_LONGER_PERMITTED), without the forbidden page', () => {
-      const error = refuse('NO_LONGER_PERMITTED');
+    it('a stale chip (the SELECTED hospital refused): forgets it and re-reads the scope, no forbidden page', () => {
+      const error = refuse('NO_LONGER_PERMITTED', 'hospital-a');
 
+      expect(sessionScope.forgetHospital).toHaveBeenCalledOnceWith('hospital-a');
       expect(sessionScope.hydrate).toHaveBeenCalledTimes(1);
       expect(router.navigate).not.toHaveBeenCalled();
       expect(error?.status).toBe(403);
+    });
+
+    it('a stale link to another hospital: forgets THAT one only, keeps the selection, no re-bootstrap', () => {
+      const error = refuse('NO_LONGER_PERMITTED', 'hospital-b');
+
+      expect(sessionScope.forgetHospital).toHaveBeenCalledOnceWith('hospital-b');
+      expect(sessionScope.hydrate).not.toHaveBeenCalled();
+      expect(router.navigate).not.toHaveBeenCalled();
+      expect(error?.status).toBe(403);
+    });
+
+    it('a refusal that names no hospital forgets nothing', () => {
+      refuse('NO_LONGER_PERMITTED');
+
+      expect(sessionScope.forgetHospital).not.toHaveBeenCalled();
+      expect(sessionScope.hydrate).not.toHaveBeenCalled();
     });
 
     it('leaves any other refusal to the page: no re-bootstrap, no redirect', () => {

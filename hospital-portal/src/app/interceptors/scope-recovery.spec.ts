@@ -73,7 +73,7 @@ describe('scope recovery after a revoked hospital', () => {
     const refused = httpMock.expectOne((r) => r.url.endsWith('/patients'));
     expect(refused.request.headers.get('X-Hospital-Id')).toBe(REVOKED);
     refused.flush(
-      { code: 'hospital_scope_refused', reason: 'NO_LONGER_PERMITTED' },
+      { code: 'hospital_scope_refused', reason: 'NO_LONGER_PERMITTED', hospitalId: REVOKED },
       { status: 403, statusText: 'Forbidden' },
     );
 
@@ -101,12 +101,33 @@ describe('scope recovery after a revoked hospital', () => {
     httpMock.expectNone((r) => r.url.endsWith('/auth/session/bootstrap'));
   });
 
+  it('a stale link to revoked B while A is selected: A stays, B is forgotten, no bootstrap, no loop', () => {
+    roleContext.activeHospitalId = KEPT;
+    http.get(`/patients?hospitalId=${REVOKED}`).subscribe({ error: () => undefined });
+    const link = httpMock.expectOne((r) => r.url.includes('/patients'));
+    expect(link.request.headers.get('X-Hospital-Id')).toBe(KEPT);
+    link.flush(
+      { code: 'hospital_scope_refused', reason: 'NO_LONGER_PERMITTED', hospitalId: REVOKED },
+      { status: 403, statusText: 'Forbidden' },
+    );
+
+    httpMock.expectNone((r) => r.url.endsWith('/auth/session/bootstrap'));
+    expect(roleContext.activeHospitalId).toBe(KEPT);
+    expect(roleContext.permittedHospitalIds).toEqual([KEPT]);
+    expect(profile?.hospitalIds).toEqual([KEPT]);
+
+    http.get('/patients').subscribe();
+    const next = httpMock.expectOne((r) => r.url.endsWith('/patients'));
+    expect(next.request.headers.get('X-Hospital-Id')).toBe(KEPT);
+    next.flush([]);
+  });
+
   it('a bootstrap that cannot be reached does not bring the stale hospital back from the stored profile', () => {
     http.get('/patients').subscribe({ error: () => undefined });
     httpMock
       .expectOne((r) => r.url.endsWith('/patients'))
       .flush(
-        { code: 'hospital_scope_refused', reason: 'NO_LONGER_PERMITTED' },
+        { code: 'hospital_scope_refused', reason: 'NO_LONGER_PERMITTED', hospitalId: REVOKED },
         { status: 403, statusText: 'Forbidden' },
       );
     httpMock

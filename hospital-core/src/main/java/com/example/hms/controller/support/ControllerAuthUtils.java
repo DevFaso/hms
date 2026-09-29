@@ -3,6 +3,7 @@ package com.example.hms.controller.support;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.HospitalScopeRefusedException;
 import com.example.hms.security.PrincipalUserIds;
+import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.security.tenant.ActingScope;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.utility.RoleValidator;
@@ -105,15 +106,19 @@ public class ControllerAuthUtils {
         return switch (scope) {
             case ActingScope.Pinned pinned -> pinned.hospitalId();
             case ActingScope.Global global -> null;
-            case ActingScope.Refused(ActingScope.Reason reason) -> refusedScope(auth, reason, requiredForReceptionist);
+            case ActingScope.Refused(ActingScope.Reason reason) -> refusedScope(auth, reason, requiredForReceptionist,
+                requestedHospitalId != null ? requestedHospitalId
+                    : HospitalContextHolder.getContextOrEmpty().getRefusedHospitalId());
             case ActingScope.PatientOwned owned -> throw HospitalScopeRefusedException.patientOwned();
         };
     }
 
-    private UUID refusedScope(Authentication auth, ActingScope.Reason reason, boolean requiredForReceptionist) {
+    private UUID refusedScope(Authentication auth, ActingScope.Reason reason, boolean requiredForReceptionist,
+                              UUID refusedHospitalId) {
         switch (reason) {
             case NOT_PERMITTED, NO_LONGER_PERMITTED ->
-                throw new HospitalScopeRefusedException(reason, ActingScopeResolver.refusalMessage(reason));
+                throw new HospitalScopeRefusedException(reason, ActingScopeResolver.refusalMessage(reason),
+                    refusedHospitalId);
             case AMBIGUOUS -> throw new BusinessException(RoleValidator.HOSPITAL_CONTEXT_REQUIRED);
             default -> {
                 if (requiredForReceptionist && hasAuthority(auth, ROLE_RECEPTIONIST)) {

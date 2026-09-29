@@ -65,16 +65,13 @@ public class RoleValidator {
     }
 
     /**
-     * Deprecated: it used to read the authorities collection, which a stale
-     * token, a demoted super-admin or a Keycloak realm role could carry. It now
-     * answers exactly what {@link #isSuperAdminFromJwtClaim()} answers — the
-     * live, verified signal — so its callers stopped disagreeing with every
-     * other scope decision. New code calls
-     * {@link ActingScopeResolver#isVerifiedSuperAdmin()}.
-     *
-     * @deprecated use {@link ActingScopeResolver#isVerifiedSuperAdmin()}
+     * The same answer as {@link #isSuperAdminFromJwtClaim()}: the live,
+     * verified signal ({@link ActingScopeResolver#isVerifiedSuperAdmin()}).
+     * It used to read the authorities collection, which a stale token, a
+     * demoted super-admin or a Keycloak realm role could carry; its callers
+     * now agree with every other scope decision, so it is kept as a correct
+     * adapter for them rather than deprecated.
      */
-    @Deprecated(since = "tenant-resolution design, 2026-09")
     public boolean isSuperAdminFromAuth() { return isSuperAdminFromJwtClaim(); }
 
     /**

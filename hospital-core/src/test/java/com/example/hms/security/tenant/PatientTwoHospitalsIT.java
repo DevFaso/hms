@@ -79,7 +79,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -254,7 +253,7 @@ class PatientTwoHospitalsIT {
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = {PASSWORD, KEYCLOAK})
     @DisplayName("a refill on B's prescription and a payment on B's invoice act on B's records")
-    void refillAndPayment(String path) throws Exception {
+    void refillAndPayment(String path) {
         String token = token(path);
 
         ResponseEntity<String> refill = send(HttpMethod.POST, "/me/patient/refills",
@@ -273,7 +272,7 @@ class PatientTwoHospitalsIT {
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = {PASSWORD, KEYCLOAK})
     @DisplayName("a profile edit (Patient's tenant listener runs) keeps the record's own hospital; nothing is pinned")
-    void entityListenerStampsTheRecordsHospital(String path) throws Exception {
+    void entityListenerStampsTheRecordsHospital(String path) {
         String token = token(path);
         ResponseEntity<String> update = send(HttpMethod.PUT, "/me/patient/profile",
             "{\"city\":\"Koudougou\"}", token);
@@ -305,6 +304,8 @@ class PatientTwoHospitalsIT {
         ResponseEntity<String> elsewhere = send(HttpMethod.POST, "/me/patient/roi-requests",
             body.formatted(",\"hospitalId\":\"" + unregistered.getId() + "\""), token);
         assertThat(elsewhere.getStatusCode().value()).as("not one of the patient's registrations").isEqualTo(400);
+        assertThat(elsewhere.getBody()).as("its own message, not the consent-management one")
+            .contains("You are not registered at the specified hospital.").doesNotContain("consent");
     }
 
     private UUID roiHospital(ResponseEntity<String> response) throws Exception {
@@ -317,7 +318,7 @@ class PatientTwoHospitalsIT {
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = {PASSWORD, KEYCLOAK})
     @DisplayName("chat: send to a doctor at B, then read the thread")
-    void chat(String path) throws Exception {
+    void chat(String path) {
         String token = token(path);
         UUID doctorB = siteB.doctor().getId();
 
@@ -337,7 +338,7 @@ class PatientTwoHospitalsIT {
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = {PASSWORD, KEYCLOAK})
     @DisplayName("record-sharing opt-out: read, set and revoke their own")
-    void optOut(String path) throws Exception {
+    void optOut(String path) {
         String token = token(path);
         String base = "/patients/" + patient.getId() + "/record-sharing/opt-out";
 
@@ -397,6 +398,7 @@ class PatientTwoHospitalsIT {
         headers.setBearerAuth(bearer);
         headers.add(HttpHeaders.COOKIE, "XSRF-TOKEN=" + CSRF);
         headers.set("X-XSRF-TOKEN", CSRF);
+        headers.set(HttpHeaders.ACCEPT_LANGUAGE, "en");
         return rest.exchange(path, method, new HttpEntity<>(body, headers), String.class);
     }
 

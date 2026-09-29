@@ -80,6 +80,19 @@ describe('backfillAppUserIds', () => {
     assert.deepEqual(writes[0]?.rep.attributes, { hospital_id: ['h-1'], [APP_USER_ID_ATTRIBUTE]: ['u-a'] });
   });
 
+  it('links a mixed-case HMS username to the lower-case user Keycloak stores', async () => {
+    const { client, writes } = realm({ 'kc-j': { id: 'kc-j', username: 'jdoe' } });
+    const outcome = await backfillAppUserIds({
+      users: [hmsUser('u-j', 'JDoe')],
+      client,
+      dryRun: false,
+      logger: silentLogger,
+    });
+    assert.equal(outcome.updated, 1);
+    assert.equal(outcome.notInKeycloak, 0);
+    assert.deepEqual(writes.map((w) => w.id), ['kc-j']);
+  });
+
   it('writes nothing on a dry run but reports what it would write', async () => {
     const { client, writes } = realm({ 'kc-a': { id: 'kc-a', username: 'alice' } });
     const outcome = await backfillAppUserIds({

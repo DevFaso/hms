@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
+import java.util.UUID;
 
 /**
  * The refusals both auth filters write before any controller runs: the 403 for
@@ -22,6 +23,17 @@ public final class HospitalScopeResponses {
     }
 
     public static void writeRefusal(HttpServletResponse response, ActingScope.Reason reason) {
+        writeRefusal(response, reason, null);
+    }
+
+    /**
+     * As above; for {@code NO_LONGER_PERMITTED} the body also names the
+     * refused hospital, so the portal forgets that one and no other. It is a
+     * UUID the caller itself sent (their own former hospital): nothing is
+     * disclosed.
+     */
+    public static void writeRefusal(HttpServletResponse response, ActingScope.Reason reason,
+                                    UUID refusedHospitalId) {
         if (response.isCommitted()) {
             return;
         }
@@ -30,11 +42,15 @@ public final class HospitalScopeResponses {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
         try {
-            // Every value is a constant or an enum name: nothing the caller sent
-            // is echoed back.
+            // Every value is a constant, an enum name or a parsed UUID: no raw
+            // caller text is echoed back.
+            String hospital = effective == ActingScope.Reason.NO_LONGER_PERMITTED && refusedHospitalId != null
+                ? "\"hospitalId\":\"" + refusedHospitalId + "\","
+                : "";
             response.getWriter().write("{\"status\":403,\"error\":\"Forbidden\","
                 + "\"code\":\"" + HospitalScopeRefusedException.CODE + "\","
                 + "\"reason\":\"" + effective.name() + "\","
+                + hospital
                 + "\"message\":\"" + ActingScopeResolver.refusalMessage(effective) + "\"}");
         } catch (IOException ex) {
             log.warn("[AUTH] Failed to write the hospital-scope refusal body", ex);

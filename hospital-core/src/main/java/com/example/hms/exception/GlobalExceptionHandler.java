@@ -388,6 +388,9 @@ public class GlobalExceptionHandler {
         Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN, ex.getMessage(), request);
         body.put("code", HospitalScopeRefusedException.CODE);
         body.put("reason", ex.getReason());
+        if (ex.getRefusedHospitalId() != null) {
+            body.put("hospitalId", ex.getRefusedHospitalId().toString());
+        }
         return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
     }
 

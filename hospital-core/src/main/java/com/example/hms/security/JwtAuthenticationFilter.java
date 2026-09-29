@@ -283,7 +283,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             SecurityContextHolder.clearContext();
             HospitalContextHolder.clear();
             ImpersonationContextHolder.clear();
-            HospitalScopeResponses.writeRefusal(response, context.getScopeRefusal());
+            HospitalScopeResponses.writeRefusal(response, context.getScopeRefusal(), context.getRefusedHospitalId());
             return false;
         }
 

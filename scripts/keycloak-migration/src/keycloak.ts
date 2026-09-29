@@ -144,7 +144,10 @@ export class KeycloakAdminClient {
       );
     }
     const list = (await res.json()) as Array<{ id: string; username: string }>;
-    const match = list.find((u) => u.username === username);
+    // Keycloak lower-cases every username it stores, so compare lower-case:
+    // an HMS "JDoe" is the realm's "jdoe".
+    const wanted = username.toLowerCase();
+    const match = list.find((u) => (u.username ?? '').toLowerCase() === wanted);
     return match?.id ?? null;
   }
 

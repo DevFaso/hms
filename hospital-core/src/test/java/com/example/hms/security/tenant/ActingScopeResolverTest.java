@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -178,7 +179,7 @@ class ActingScopeResolverTest {
                 assertThat(ActingScopeResolver.isRefusedHeader(context)).as(path).isFalse();
                 assertThat(context.pinnedHospitalId()).as(path).isEqualTo(A);
             }
-            verify(audit, org.mockito.Mockito.times(ActingScopeResolver.SCOPE_ESTABLISHING_PATHS.size()))
+            verify(audit, times(ActingScopeResolver.SCOPE_ESTABLISHING_PATHS.size()))
                 .recordRefusal(USER, "someone", B, ActingScope.Reason.NO_LONGER_PERMITTED, ActingScope.Source.HEADER);
         }
 

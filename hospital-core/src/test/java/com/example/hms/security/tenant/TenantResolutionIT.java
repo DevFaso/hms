@@ -218,10 +218,12 @@ class TenantResolutionIT {
 
         ResponseEntity<String> stale = get(ME_HOSPITAL, token, hospitalA.getId().toString());
         assertThat(stale.getStatusCode().value()).isEqualTo(403);
-        assertThat(stale.getBody()).contains("NO_LONGER_PERMITTED");
+        assertThat(stale.getBody()).contains("NO_LONGER_PERMITTED")
+            .as("the refused hospital is named, so the portal forgets that one")
+            .contains("\"hospitalId\":\"" + hospitalA.getId() + "\"");
         ResponseEntity<String> probe = get(ME_HOSPITAL, token, hospitalB.getId().toString());
         assertThat(probe.getStatusCode().value()).isEqualTo(403);
-        assertThat(probe.getBody()).contains("\"NOT_PERMITTED\"");
+        assertThat(probe.getBody()).contains("\"NOT_PERMITTED\"").doesNotContain("hospitalId");
         assertThat(auditEventLogRepository.findAll()).filteredOn(row -> row.getEventDescription() != null
                 && row.getEventDescription().startsWith("Hospital scope refused"))
             .hasSize(2);
@@ -273,6 +275,24 @@ class TenantResolutionIT {
 
         assertThat(get("/me/assignments", token, stale).getStatusCode().value()).isEqualTo(200);
         assertThat(get(ME_HOSPITAL, token, stale).getStatusCode().value()).isEqualTo(403);
+    }
+
+    @Test
+    @DisplayName("a stale link to revoked B while A is selected: 403 names B, not the valid header hospital A")
+    void staleLinkNamesTheRefusedHospitalNotTheSelection() {
+        User user = saveUser("stale-link");
+        assign(user, doctor, hospitalA, true);
+        UserRoleHospitalAssignment atB = assign(user, doctor, hospitalB, true);
+        String token = legacyToken(user, "ROLE_DOCTOR");
+        atB.setActive(false);
+        assignmentRepository.save(atB);
+
+        ResponseEntity<String> link = get("/patients?hospitalId=" + hospitalB.getId(), token, hospitalA.getId().toString());
+        assertThat(link.getStatusCode().value()).as(link.getBody()).isEqualTo(403);
+        assertThat(link.getBody()).contains("NO_LONGER_PERMITTED")
+            .contains("\"hospitalId\":\"" + hospitalB.getId() + "\"")
+            .doesNotContain(hospitalA.getId().toString());
+        assertThat(actingAt(token, hospitalA.getId().toString())).as("A is still valid").isEqualTo(hospitalA.getId().toString());
     }
 
     @Test
