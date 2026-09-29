@@ -19,6 +19,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -55,7 +57,8 @@ class PhiTextEncryptionBackfillTest {
             return List.of();
         });
         PlatformTransactionManager txm = mock(PlatformTransactionManager.class);
-        when(txm.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+        TransactionStatus status = mock(TransactionStatus.class);
+        when(txm.getTransaction(any())).thenReturn(status);
         PhiTextEncryptionBackfill backfill = new PhiTextEncryptionBackfill(jdbc, txm);
 
         long start = System.nanoTime();
@@ -86,13 +89,14 @@ class PhiTextEncryptionBackfillTest {
             return counts;
         });
         PlatformTransactionManager txm = mock(PlatformTransactionManager.class);
-        when(txm.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+        TransactionStatus status = mock(TransactionStatus.class);
+        when(txm.getTransaction(any())).thenReturn(status);
 
         new PhiTextEncryptionBackfill(jdbc, txm).backfill();
 
         // merge notes: 2 batches + the empty one; payload: 1 + the empty one.
-        org.mockito.Mockito.verify(txm, org.mockito.Mockito.times(5)).getTransaction(any());
-        org.mockito.Mockito.verify(txm, org.mockito.Mockito.times(5)).commit(any());
+        verify(txm, times(5)).getTransaction(any());
+        verify(txm, times(5)).commit(any());
     }
 
     private static List<PhiTextEncryptionBackfill.LegacyValue> legacyRows(int n) {
