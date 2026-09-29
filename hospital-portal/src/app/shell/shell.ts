@@ -587,13 +587,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         // its own question. Both reads admit it now
         // (PrescriptionControllerTest pins them), the route guard always did,
         // and the role carries the 'View Prescriptions' permission.
+        // ROLE_ADMIN is withheld for the same reason G9 was: neither backend
+        // read admits it, so the entry opened a page that could only fail.
         roles: [
           'ROLE_DOCTOR',
           'ROLE_NURSE',
           'ROLE_MIDWIFE',
           'ROLE_PHARMACIST',
           'ROLE_PHARMACY_VERIFIER',
-          'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
       },

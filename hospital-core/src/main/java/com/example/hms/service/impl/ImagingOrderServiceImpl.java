@@ -194,6 +194,15 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.IMAGING_ORDERS_BY_PATIENT, patientId)) {
             return List.of();
         }
+        if (subjectReadGuard.ownsAsItsPatient(patientId)) {
+            // Their own record, read as its patient wherever it was written (a
+            // patient, or staff who are also this patient, #754's rule). Not a
+            // disclosure: no reach recorded.
+            List<ImagingOrder> own = status != null
+                ? imagingOrderRepository.findByPatient_IdAndStatusOrderByOrderedAtDesc(patientId, status)
+                : imagingOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId);
+            return own.stream().map(imagingOrderMapper::toResponseDTO).toList();
+        }
         // ── Tenant isolation ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         List<ImagingOrder> orders;

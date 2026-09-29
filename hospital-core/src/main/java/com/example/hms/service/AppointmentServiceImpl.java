@@ -265,9 +265,6 @@ public class AppointmentServiceImpl implements AppointmentService {
     public AppointmentSummaryDTO createAppointment(AppointmentRequestDTO request, Locale locale, String username) {
         User currentUser = getUserOrThrow(username);
 
-        // --- Patient resolution (falls back to authenticated user) ---
-        final Patient patient = resolvePatient(request, locale, username);
-
         // Authorization: Staff/admins can book for any patient; pure patients can only book for themselves
         boolean isStaffOrAdmin = isSuperAdmin(currentUser)
             || hasRole(currentUser, "ROLE_HOSPITAL_ADMIN")
@@ -285,15 +282,15 @@ public class AppointmentServiceImpl implements AppointmentService {
             hasRole(currentUser, ROLE_NURSE_CODE),
             hasRole(currentUser, ROLE_RECEPTIONIST_CODE));
 
-        // If user is NOT staff/admin (i.e., they're a pure patient role), enforce self-booking
-        if (!isStaffOrAdmin) {
-            log.warn("❌ User {} is NOT staff/admin, enforcing self-booking restriction", currentUser.getUsername());
-            if (patient.getUser() == null || !patient.getUser().getId().equals(currentUser.getId())) {
-                throw new AccessDeniedException("Patients can only book appointments for themselves.");
-            }
-        } else {
-            log.info("✅ User {} is staff/admin, allowing booking for any patient", currentUser.getUsername());
-        }
+        // --- Patient resolution (falls back to authenticated user) ---
+        // A pure patient books only for themselves. Naming anyone else answers
+        // exactly as naming an unknown patient does — the same 404 and message
+        // for that identifier — where it used to be a 403 for a real patient
+        // beside a 404 for a made-up one, which told a patient which ids,
+        // usernames and emails exist.
+        final Patient patient = isStaffOrAdmin
+            ? resolvePatient(request, locale, username)
+            : resolveOwnPatientForBooking(request, locale, currentUser);
 
         // --- Hospital resolution (single block) ---
         final Hospital hospital = resolveHospital(request, locale);
@@ -466,6 +463,38 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USERNAME_PREFIX + authenticatedUsername));
         }
         throw new BusinessException("Patient identifier required");
+    }
+
+    /**
+     * The patient a pure patient books for: themselves. Each way of naming a
+     * patient answers a foreign one exactly as {@link #resolvePatient} answers
+     * one that does not exist, and asks ownership before loading anything a
+     * made-up identifier would not also reach.
+     */
+    private Patient resolveOwnPatientForBooking(AppointmentRequestDTO request, Locale locale, User currentUser) {
+        if (request.getPatientId() != null) {
+            if (!patientRepository.existsByIdAndUserId(request.getPatientId(), currentUser.getId())) {
+                throw new ResourceNotFoundException(
+                    messageSource.getMessage("patient.notfound", new Object[]{request.getPatientId()},
+                        "Patient not found with ID: " + request.getPatientId(), locale));
+            }
+            return resolvePatient(request, locale, currentUser.getUsername());
+        }
+        if (request.getPatientUsername() != null) {
+            if (!request.getPatientUsername().equalsIgnoreCase(currentUser.getUsername())) {
+                throw new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + request.getPatientUsername());
+            }
+            return resolvePatient(request, locale, currentUser.getUsername());
+        }
+        if (request.getPatientEmail() != null) {
+            Patient named = patientRepository.findByEmailContainingIgnoreCase(request.getPatientEmail())
+                .stream().findFirst().orElse(null);
+            if (named == null || named.getUser() == null || !currentUser.getId().equals(named.getUser().getId())) {
+                throw new ResourceNotFoundException("Patient not found for email: " + request.getPatientEmail());
+            }
+            return named;
+        }
+        return resolvePatient(request, locale, currentUser.getUsername());
     }
 
     private Hospital resolveHospital(AppointmentRequestDTO request, Locale locale) {

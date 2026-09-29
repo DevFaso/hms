@@ -102,15 +102,22 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         // encounters the D3 rule withholds; the ledger row names the session.
         boolean unlocked = readable != null && breakGlassGate.isUnlocked(requesterUserId, patient.getId(), hospitalId);
         Map<String, Long> reach = new HashMap<>();
+        // #751 — results this hospital's laboratory performed for another
+        // hospital are their own disclosure reason, counted apart from the
+        // treatment relationship's reach and never in both.
+        Map<String, Long> performedHereReach = new HashMap<>();
         List<EncounterEntryDTO> encounters = loadEncounters(patient.getId(), hospitalId, readable, effectiveLimit, reach, unlocked);
         List<NoteEntryDTO> notes = loadNotes(encounters);
-        List<ResultEntryDTO> results = loadResults(patient.getId(), hospitalId, readable, effectiveLimit, reach);
+        List<ResultEntryDTO> results = loadResults(patient.getId(), hospitalId, readable, effectiveLimit, reach,
+            performedHereReach);
         List<MedicationEntryDTO> medications = loadMedications(patient.getId(), hospitalId, readable, effectiveLimit, reach);
         List<ImagingEntryDTO> imaging = loadImaging(patient.getId(), hospitalId, readable, effectiveLimit, reach);
         List<ProcedureEntryDTO> procedures = loadProcedures(patient.getId(), hospitalId, readable, effectiveLimit, reach);
         if (hospitalId != null) {
             reachRecorder.recordReach(patient.getId(), hospitalId, requesterUserId, null, reach,
                 "Cross-hospital chart review read on the treatment relationship");
+            reachRecorder.recordReach(patient.getId(), hospitalId, requesterUserId, null, performedHereReach,
+                CrossHospitalReachRecorder.LAB_RESULT_PERFORMED_HERE_DESCRIPTION);
         }
 
         List<TimelineEventDTO> timeline = buildTimeline(
@@ -188,22 +195,35 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     }
 
     private List<ResultEntryDTO> loadResults(UUID patientId, UUID hospitalId, Set<UUID> readable,
-                                             int limit, Map<String, Long> reach) {
+                                             int limit, Map<String, Long> reach,
+                                             Map<String, Long> performedHereReach) {
         // id breaks resultDate ties, so a page boundary is the same on every read.
         Pageable page = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "resultDate", "id"));
         // Global view (no acting hospital) is a verified super-admin only —
         // PatientChartAccess.require refuses a null scope for anyone else — and
         // reads every hospital through findAllPatientResults: there is no
-        // patient-only finder left.
+        // patient-only finder left. With an acting hospital a result is
+        // readable where its order is handled (#751): ordered in the readable
+        // set, or performed by this hospital's own laboratory.
         List<LabResult> source = readable != null
-            ? labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(patientId, readable, page)
+            ? labResultRepository.findPatientResultsReadableAt(patientId, readable, hospitalId, false, page)
             : labResultRepository.findAllPatientResults(patientId, page);
         account(reach, hospitalId, source.stream()
-            .map(r -> r.getLabOrder() == null ? null : CrossHospitalReachRecorder.hospitalIdOf(r.getLabOrder().getHospital()))
+            .filter(r -> !CrossHospitalReachRecorder.isPerformedHere(r, hospitalId))
+            .map(ChartReviewServiceImpl::orderingHospitalIdOf)
+            .toList());
+        account(performedHereReach, hospitalId, source.stream()
+            .filter(r -> CrossHospitalReachRecorder.isPerformedHere(r, hospitalId))
+            .map(ChartReviewServiceImpl::orderingHospitalIdOf)
             .toList());
         return source.stream()
             .map(this::toResultDto)
             .toList();
+    }
+
+    private static UUID orderingHospitalIdOf(LabResult result) {
+        return result.getLabOrder() == null ? null
+            : CrossHospitalReachRecorder.hospitalIdOf(result.getLabOrder().getHospital());
     }
 
     private List<MedicationEntryDTO> loadMedications(UUID patientId, UUID hospitalId, Set<UUID> readable,

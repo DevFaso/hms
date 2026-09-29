@@ -125,3 +125,79 @@ describe('PatientPortalService lab results', () => {
     expect(mapped.map((l) => l.isAbnormal)).toEqual([true, true]);
   });
 });
+
+/**
+ * The chat picker's two sources. `/me/patient/care-team` sends
+ * `{ primaryCare, primaryCareHistory }` (not the `{ members }` the older
+ * `getMyCareTeam` declares), and only a user id can address a message — so
+ * the mapping reads `doctorUserId` / `staffUserId`, drops anything without
+ * one, and lets errors through so the picker can tell a failure from an
+ * empty list.
+ */
+describe('PatientPortalService chat recipients', () => {
+  let service: PatientPortalService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [PatientPortalService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(PatientPortalService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify());
+
+  it('maps the care team to its doctors’ user ids, current first, deduped', () => {
+    let ids: string[] = [];
+    service.getMyCareTeamClinicians().subscribe((r) => (ids = r.map((c) => c.userId)));
+    httpMock.expectOne('/me/patient/care-team').flush({
+      data: {
+        primaryCare: { id: 'p2', doctorUserId: 'u2', doctorDisplay: 'B', current: true },
+        primaryCareHistory: [
+          { id: 'p1', doctorUserId: 'u1', doctorDisplay: 'A', current: false },
+          { id: 'p2', doctorUserId: 'u2', doctorDisplay: 'B', current: true },
+          { id: 'p3', doctorUserId: null, doctorDisplay: 'C' },
+        ],
+      },
+    });
+    expect(ids).toEqual(['u2', 'u1']);
+  });
+
+  it('reads an empty care team as no one', () => {
+    let result: unknown = null;
+    service.getMyCareTeamClinicians().subscribe((r) => (result = r));
+    httpMock.expectOne('/me/patient/care-team').flush({ data: {} });
+    expect(result).toEqual([]);
+  });
+
+  it('maps appointments to their clinicians’ user ids, deduped, named only', () => {
+    let result: unknown = null;
+    service.getMyAppointmentClinicians().subscribe((r) => (result = r));
+    httpMock.expectOne('/me/patient/appointments').flush({
+      data: [
+        { id: 'a1', staffId: 's1', staffUserId: 'u1', staffName: 'A', hospitalName: 'H' },
+        { id: 'a2', staffId: 's1', staffUserId: 'u1', staffName: 'A', hospitalName: 'H' },
+        { id: 'a3', staffId: 's2', staffUserId: null, staffName: 'No user' },
+        { id: 'a4', staffId: 's3', staffUserId: 'u3', staffName: '' },
+      ],
+    });
+    expect(result).toEqual([{ userId: 'u1', name: 'A', hospitalName: 'H' }]);
+  });
+
+  it('lets a failure through instead of reading it as an empty list', () => {
+    let failed = false;
+    service.getMyAppointmentClinicians().subscribe({ error: () => (failed = true) });
+    httpMock
+      .expectOne('/me/patient/appointments')
+      .flush({}, { status: 500, statusText: 'Server Error' });
+    expect(failed).toBeTrue();
+
+    failed = false;
+    service.getMyCareTeamClinicians().subscribe({ error: () => (failed = true) });
+    httpMock
+      .expectOne('/me/patient/care-team')
+      .flush({}, { status: 500, statusText: 'Server Error' });
+    expect(failed).toBeTrue();
+  });
+});

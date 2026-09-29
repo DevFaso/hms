@@ -119,6 +119,11 @@ class FhirTenantBoundaryIT {
     @Autowired private FhirTenantBoundary boundary;
     @Autowired private FhirContext fhirContext;
     @Autowired private FhirWriteProperties writeProperties;
+    @Autowired private FhirOperationsProperties operationsProperties;
+    @Autowired private com.example.hms.fhir.bulk.FhirBulkExportRunner bulkExportRunner;
+    @Autowired private com.example.hms.repository.FhirBulkExportJobRepository bulkExportJobRepository;
+    @Autowired private com.example.hms.repository.FhirBulkExportFileRepository bulkExportFileRepository;
+    @Autowired private com.example.hms.repository.AuditEventLogRepository auditEventLogRepository;
     @Autowired private List<IResourceProvider> providers;
     @Autowired private OrganizationRepository organizationRepository;
     @Autowired private HospitalRepository hospitalRepository;
@@ -236,6 +241,9 @@ class FhirTenantBoundaryIT {
         patientRepository.deleteAllByIdInBatch(patients);
         staffRepository.deleteAllByIdInBatch(staff);
         assignmentRepository.deleteAllByIdInBatch(assignments);
+        // $everything audits its export under the reader's user row.
+        users.forEach(user -> auditEventLogRepository.deleteAllInBatch(
+            auditEventLogRepository.findByUserId(user, org.springframework.data.domain.Pageable.unpaged()).getContent()));
         userRepository.deleteAllByIdInBatch(users);
         hospitalRepository.deleteAllByIdInBatch(present(
             hospitalA == null ? null : hospitalA.getId(), hospitalB == null ? null : hospitalB.getId()));
@@ -326,6 +334,56 @@ class FhirTenantBoundaryIT {
             assertOnlyTheMrnAtA(conditional.getBody(), "conditional create");
         } finally {
             writeProperties.setEnabled(wasEnabled);
+        }
+    }
+
+    @Test
+    @DisplayName("Patient/{id}/$everything carries this hospital's MRN and no other's")
+    void everythingCarriesOnlyTheBoundHospitalsMrn() {
+        // The operation flag is read on every request; flipped here and put back.
+        boolean wasEnabled = operationsProperties.getEverything().isEnabled();
+        operationsProperties.getEverything().setEnabled(true);
+        try {
+            String token = legacyToken(doctorA, ROLE_DOCTOR);
+            ResponseEntity<String> everything =
+                get("/fhir/Patient/" + patientP.getId() + "/$everything", token, null);
+            assertThat(everything.getStatusCode().value()).as(everything.getBody()).isEqualTo(200);
+            assertThat(json(everything).get("entry").get(0).get("resource").get("resourceType").asText())
+                .isEqualTo("Patient");
+            assertOnlyTheMrnAtA(everything.getBody(), "$everything");
+        } finally {
+            operationsProperties.getEverything().setEnabled(wasEnabled);
+        }
+    }
+
+    @Test
+    @DisplayName("a bulk export of A writes P with A's MRN and nothing of B's registration")
+    void bulkExportCarriesOnlyTheJobHospitalsMrn() throws Exception {
+        // Driven through the runner directly: the kickoff pins the job to the
+        // caller's hospital (FhirBulkExportServiceTest), and the sweep is off
+        // with the flag, so nothing else claims this job.
+        UUID jobId = bulkExportJobRepository.save(com.example.hms.model.platform.FhirBulkExportJob.builder()
+            .hospitalId(hospitalA.getId())
+            .scope(com.example.hms.model.platform.FhirBulkExportJob.Scope.SYSTEM)
+            .types("Patient")
+            .status(com.example.hms.model.platform.FhirBulkExportJob.Status.QUEUED)
+            .requestUrl("/fhir/$export")
+            .build()).getId();
+        java.nio.file.Path jobDir = java.nio.file.Paths.get(operationsProperties.getBulkExport().getStorageDir())
+            .toAbsolutePath().normalize().resolve(jobId.toString());
+        try {
+            Object runner = org.springframework.test.util.AopTestUtils.getUltimateTargetObject(bulkExportRunner);
+            org.springframework.test.util.ReflectionTestUtils.invokeMethod(runner, "processJob", jobId);
+
+            assertThat(bulkExportJobRepository.findById(jobId).orElseThrow().getStatus())
+                .isEqualTo(com.example.hms.model.platform.FhirBulkExportJob.Status.COMPLETED);
+            List<String> lines = java.nio.file.Files.readAllLines(jobDir.resolve("Patient.ndjson"));
+            assertThat(lines).hasSize(1);
+            assertOnlyTheMrnAtA(lines.get(0), "bulk export");
+        } finally {
+            bulkExportFileRepository.deleteAll(bulkExportFileRepository.findByJob_IdOrderByResourceTypeAsc(jobId));
+            bulkExportJobRepository.deleteById(jobId);
+            org.springframework.util.FileSystemUtils.deleteRecursively(jobDir);
         }
     }
 

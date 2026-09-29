@@ -72,6 +72,29 @@ public class CrossHospitalReachRecorder {
         return hospital == null ? null : hospital.getId();
     }
 
+    /**
+     * B1 + E8 (#751): the description a lab result disclosure carries when the
+     * row surfaced because the acting hospital's laboratory performed an order
+     * another hospital placed. One string for every surface that reads such
+     * rows, so the patient's disclosure report groups them under one reason.
+     */
+    public static final String LAB_RESULT_PERFORMED_HERE_DESCRIPTION =
+        "Cross-hospital lab result read at the performing laboratory";
+
+    /**
+     * True when {@code result} is readable at {@code actingHospitalId} because
+     * that hospital's laboratory performed the order another hospital placed
+     * ({@link com.example.hms.model.LabOrder#isPerformedAt}). Such a row is
+     * accounted under {@link #LAB_RESULT_PERFORMED_HERE_DESCRIPTION} and never
+     * again under the treatment relationship, even when the ordering hospital
+     * is also readable — the split {@code LabResultServiceImpl} makes on its
+     * own reads.
+     */
+    public static boolean isPerformedHere(com.example.hms.model.LabResult result, UUID actingHospitalId) {
+        return result != null && result.getLabOrder() != null
+            && result.getLabOrder().isPerformedAt(actingHospitalId);
+    }
+
     /** Merge {@code more} into {@code into}, summing counts per source hospital. */
     public static Map<String, Long> merge(Map<String, Long> into, Map<String, Long> more) {
         more.forEach((k, v) -> into.merge(k, v, Long::sum));

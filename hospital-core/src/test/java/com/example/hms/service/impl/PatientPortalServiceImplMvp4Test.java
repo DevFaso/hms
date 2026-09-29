@@ -62,6 +62,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -259,9 +260,14 @@ class PatientPortalServiceImplMvp4Test {
             appt.setPatient(otherPatient);
             when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appt));
 
-            assertThatThrownBy(() -> service.getQuestionnairesForAppointment(auth, apptId))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("access");
+            // Another patient's appointment answers exactly as a missing one.
+            ResourceNotFoundException refused = catchThrowableOfType(ResourceNotFoundException.class,
+                    () -> service.getQuestionnairesForAppointment(auth, apptId));
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.empty());
+            ResourceNotFoundException missing = catchThrowableOfType(ResourceNotFoundException.class,
+                    () -> service.getQuestionnairesForAppointment(auth, apptId));
+            assertThat(refused.getMessageKey()).isEqualTo(missing.getMessageKey());
+            assertThat(refused.getMessage()).isEqualTo(missing.getMessage());
         }
 
         @Test
@@ -510,9 +516,13 @@ class PatientPortalServiceImplMvp4Test {
             when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appt));
 
             PreCheckInRequestDTO dto = buildDto(apptId);
-            assertThatThrownBy(() -> service.submitPreCheckIn(auth, dto))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("access");
+            ResourceNotFoundException refused = catchThrowableOfType(ResourceNotFoundException.class,
+                    () -> service.submitPreCheckIn(auth, dto));
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.empty());
+            ResourceNotFoundException missing = catchThrowableOfType(ResourceNotFoundException.class,
+                    () -> service.submitPreCheckIn(auth, dto));
+            assertThat(refused.getMessageKey()).isEqualTo(missing.getMessageKey());
+            assertThat(refused.getMessage()).isEqualTo(missing.getMessage());
         }
 
         @Test
