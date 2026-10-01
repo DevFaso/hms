@@ -131,7 +131,7 @@ jobs:
 
       - name: Upload lint report on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: android-lint-report
           path: patient-android-app/app/build/reports/
@@ -260,7 +260,7 @@ jobs:
           echo "signed bundle: $(du -h "$AAB" | cut -f1)"
 
       - name: Upload the bundle as an artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: patient-android-aab
           # One path on purpose. upload-artifact@v4 re-roots the artifact at
