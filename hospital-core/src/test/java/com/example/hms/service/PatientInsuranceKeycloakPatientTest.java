@@ -14,6 +14,7 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.ActingContext;
 import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.utility.RoleValidator;
+import com.example.hms.security.tenant.ActingScope;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
@@ -71,8 +72,12 @@ class PatientInsuranceKeycloakPatientTest {
     void setUp() {
         PatientSubjectReadGuard guard = new PatientSubjectReadGuard(
             new ControllerAuthUtils(mock(ActingScopeResolver.class)), patientRepository);
+        // The scope of a patient-only caller: bounded by ownership, no hospital.
+        ActingScopeResolver actingScopeResolver = mock(ActingScopeResolver.class);
+        when(actingScopeResolver.current()).thenReturn(new ActingScope.PatientOwned(callerUserId));
         service = new PatientInsuranceServiceImpl(insuranceRepository, patientRepository,
-            mock(UserRoleHospitalAssignmentRepository.class), mapper, messageSource, roleValidator, chartAccess, guard);
+            mock(UserRoleHospitalAssignmentRepository.class), mapper, messageSource, roleValidator, chartAccess, guard,
+            actingScopeResolver);
 
         Jwt jwt = Jwt.withTokenValue("t").header("alg", "RS256")
             .claim("sub", "keycloak-subject").claim("appUserId", callerUserId.toString()).build();
