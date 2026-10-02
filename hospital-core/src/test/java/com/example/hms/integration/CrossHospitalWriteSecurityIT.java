@@ -31,6 +31,8 @@ import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
+import com.example.hms.security.TenantLifecycleGate;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -442,9 +444,12 @@ class CrossHospitalWriteSecurityIT extends BaseIT {
 
         @Bean
         KeycloakHospitalContextFilter keycloakHospitalContextFilter(KeycloakHospitalContextResolver resolver,
+                                                                   ActingScopeResolver actingScopeResolver,
                                                                    IdleSessionGate idleSessionGate,
+                                                                   TenantLifecycleGate tenantLifecycleGate,
                                                                    UserRepository userRepository) {
-            return new KeycloakHospitalContextFilter(resolver, idleSessionGate, userRepository);
+            return new KeycloakHospitalContextFilter(resolver, actingScopeResolver, idleSessionGate,
+                tenantLifecycleGate, userRepository);
         }
     }
 }

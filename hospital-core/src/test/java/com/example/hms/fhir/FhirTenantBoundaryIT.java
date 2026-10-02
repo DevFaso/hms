@@ -139,7 +139,6 @@ class FhirTenantBoundaryIT {
     @Autowired private PatientProblemRepository problemRepository;
     @Autowired private ImmunizationRepository immunizationRepository;
     @Autowired private PrescriptionRepository prescriptionRepository;
-    @Autowired private com.example.hms.repository.AuditEventLogRepository auditEventLogRepository;
 
     private Organization organization;
     private Hospital hospitalA;

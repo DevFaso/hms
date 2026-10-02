@@ -14,6 +14,9 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.ActingContext;
 import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.utility.RoleValidator;
+import com.example.hms.security.tenant.ActingScopeResolver;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -67,7 +70,7 @@ class PatientInsuranceKeycloakPatientTest {
     @BeforeEach
     void setUp() {
         PatientSubjectReadGuard guard = new PatientSubjectReadGuard(
-            new ControllerAuthUtils(mock(UserRoleHospitalAssignmentRepository.class)), patientRepository);
+            new ControllerAuthUtils(mock(ActingScopeResolver.class)), patientRepository);
         service = new PatientInsuranceServiceImpl(insuranceRepository, patientRepository,
             mock(UserRoleHospitalAssignmentRepository.class), mapper, messageSource, roleValidator, chartAccess, guard);
 
@@ -75,6 +78,13 @@ class PatientInsuranceKeycloakPatientTest {
             .claim("sub", "keycloak-subject").claim("appUserId", callerUserId.toString()).build();
         SecurityContextHolder.getContext().setAuthentication(
             new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("ROLE_PATIENT"))));
+        // Since #789 the guard reads the link the context filter VERIFIED for
+        // this request, never the appUserId claim, so set the context the
+        // filter would have set for this token.
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(callerUserId)
+            .principalUsername("keycloak-subject")
+            .build());
 
         when(roleValidator.isPatientOnlyFromAuth()).thenReturn(true);
         // The resolver PR 1 owns still answers null on this path; the service must not depend on it.
@@ -87,6 +97,7 @@ class PatientInsuranceKeycloakPatientTest {
     @AfterEach
     void clear() {
         SecurityContextHolder.clearContext();
+        HospitalContextHolder.clear();
     }
 
     private static Patient patient(UUID id) {

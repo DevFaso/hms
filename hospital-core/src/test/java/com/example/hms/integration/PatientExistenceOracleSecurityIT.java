@@ -23,6 +23,8 @@ import com.example.hms.security.IdleSessionGate;
 import com.example.hms.security.oidc.IssuerAwareBearerTokenResolver;
 import com.example.hms.security.oidc.KeycloakHospitalContextFilter;
 import com.example.hms.security.oidc.KeycloakHospitalContextResolver;
+import com.example.hms.security.TenantLifecycleGate;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -357,9 +359,12 @@ class PatientExistenceOracleSecurityIT extends BaseIT {
 
         @Bean
         KeycloakHospitalContextFilter keycloakHospitalContextFilter(KeycloakHospitalContextResolver resolver,
+                                                                   ActingScopeResolver actingScopeResolver,
                                                                    IdleSessionGate idleSessionGate,
+                                                                   TenantLifecycleGate tenantLifecycleGate,
                                                                    UserRepository userRepository) {
-            return new KeycloakHospitalContextFilter(resolver, idleSessionGate, userRepository);
+            return new KeycloakHospitalContextFilter(resolver, actingScopeResolver, idleSessionGate,
+                tenantLifecycleGate, userRepository);
         }
     }
 }
