@@ -31,8 +31,10 @@ import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
+import com.example.hms.security.IdleSessionTracker;
 import com.example.hms.security.TenantLifecycleGate;
 import com.example.hms.security.tenant.ActingScopeResolver;
+import com.example.hms.security.tenant.LinkedTestAccounts;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -85,10 +87,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 /**
  * Writes on ultrasound orders and reports, consultations and prescriptions
  * are held to the hospital the caller acts at — through the REAL security
- * filter chain, with a signed Keycloak-style bearer token whose
- * {@code hospital_id} claim makes hospital A the active hospital (decoded by
- * the resource server, converted, run past {@code KeycloakHospitalContextFilter},
- * the URL matchers and the method security, as a portal request is).
+ * filter chain, with a signed Keycloak-style bearer token for a REAL local
+ * account that holds DOCTOR at hospital A, naming A in {@code X-Hospital-Id}
+ * (decoded by the resource server, converted, run past
+ * {@code KeycloakHospitalContextFilter}, the URL matchers and the method
+ * security, as a portal request is). Since the one tenant resolver, a
+ * request's hospitals are the account's live assignments and the acting
+ * hospital is the one it names: the {@code hospital_id} claim places nobody,
+ * so the caller here is linked by {@code appUserId} and its username, with a
+ * live DOCTOR assignment at A.
  *
  * <p>Each of these writes used to load its row by id and act on it whatever
  * hospital it belonged to. Every refusal here must be indistinguishable from
@@ -117,6 +124,13 @@ class CrossHospitalWriteSecurityIT extends BaseIT {
     @Autowired private UserRepository userRepository;
     @Autowired private PatientRepository patientRepository;
     @Autowired private PatientHospitalRegistrationRepository registrationRepository;
+    @Autowired private com.example.hms.repository.RoleRepository roleRepository;
+    @Autowired private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Autowired private com.example.hms.repository.AuditEventLogRepository auditEventLogRepository;
+    @Autowired private IdleSessionTracker idleSessionTracker;
+
+    /** The doctor's real local account: a Keycloak caller is placed by its live assignments. */
+    private LinkedTestAccounts accounts;
 
     private final UUID rowId = UUID.randomUUID();
     /**
@@ -152,7 +166,12 @@ class CrossHospitalWriteSecurityIT extends BaseIT {
                 .patient(registeredAtBoth).hospital(h).mrn("MRN-WS-" + h.getCode())
                 .registrationDate(java.time.LocalDate.now()).active(true).build());
         }
-        doctorAtA = token("doctor.a", UUID.randomUUID(), hospitalA, "DOCTOR");
+        accounts = new LinkedTestAccounts(hospitalRepository, userRepository, roleRepository,
+            assignmentRepository, auditEventLogRepository);
+        com.example.hms.model.User doctor = accounts.userAt("doctor.a", hospitalA, "DOCTOR");
+        // The account is linked, so the idle gate applies on this path too.
+        idleSessionTracker.touch(doctor.getId());
+        doctorAtA = token(doctor.getUsername(), doctor.getId(), hospitalA, "DOCTOR");
     }
 
     @AfterEach
@@ -161,6 +180,7 @@ class CrossHospitalWriteSecurityIT extends BaseIT {
         com.example.hms.model.User patientUser = registeredAtBoth.getUser();
         patientRepository.delete(registeredAtBoth);
         userRepository.delete(patientUser);
+        accounts.cleanUp();
         hospitalRepository.deleteAllById(List.of(hospitalA, hospitalB));
     }
 
@@ -324,7 +344,10 @@ class CrossHospitalWriteSecurityIT extends BaseIT {
     // ── fixtures ───────────────────────────────────────────────────────────
 
     private MvcResult send(MockHttpServletRequestBuilder request) throws Exception {
-        return mockMvc.perform(request.with(csrf()).header(HttpHeaders.AUTHORIZATION, "Bearer " + doctorAtA)).andReturn();
+        return mockMvc.perform(request.with(csrf())
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + doctorAtA)
+            // A staff caller names the hospital it acts at, as the portal does.
+            .header("X-Hospital-Id", hospitalA.toString())).andReturn();
     }
 
     /** Status, message (with the given id masked) and path — everything but the timestamp. */
