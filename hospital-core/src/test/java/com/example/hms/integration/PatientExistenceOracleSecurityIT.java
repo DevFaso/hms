@@ -9,7 +9,9 @@ import com.example.hms.model.PatientInsurance;
 import com.example.hms.model.RefillRequest;
 import com.example.hms.model.Role;
 import com.example.hms.model.User;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.highrisk.HighRiskPregnancyCarePlan;
+import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.repository.BirthPlanRepository;
 import com.example.hms.repository.HighRiskPregnancyCarePlanRepository;
 import com.example.hms.repository.HospitalRepository;
@@ -19,10 +21,14 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.RefillRequestRepository;
 import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.IdleSessionGate;
 import com.example.hms.security.oidc.IssuerAwareBearerTokenResolver;
 import com.example.hms.security.oidc.KeycloakHospitalContextFilter;
 import com.example.hms.security.oidc.KeycloakHospitalContextResolver;
+import com.example.hms.security.IdleSessionTracker;
+import com.example.hms.security.TenantLifecycleGate;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -80,8 +86,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 /**
  * The existence oracles, through the REAL security filter chain with a signed
- * Keycloak-style patient token ({@code appUserId} claim, a subject that is NOT
- * the user id, {@code hospital_id} naming the patient's hospital).
+ * Keycloak-style patient token for a REAL local account ({@code appUserId}
+ * naming it, {@code preferred_username} matching it — the link the one tenant
+ * resolver verifies — and a subject that is NOT the user id). The account holds
+ * the global PATIENT assignment and nothing else, so its scope is
+ * {@code PatientOwned}: bounded by ownership, not by a hospital.
  *
  * <p>Each of these answered a real row belonging to another patient
  * differently from an id that matches nothing — 403 (birth plan, insurance,
@@ -110,6 +119,9 @@ class PatientExistenceOracleSecurityIT extends BaseIT {
     @Autowired private PatientRepository patientRepository;
     @Autowired private HospitalRepository hospitalRepository;
     @Autowired private PatientHospitalRegistrationRepository registrationRepository;
+    @Autowired private UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Autowired private AuditEventLogRepository auditEventLogRepository;
+    @Autowired private IdleSessionTracker idleSessionTracker;
 
     @MockitoBean private BirthPlanRepository birthPlanRepository;
     @MockitoBean private HighRiskPregnancyCarePlanRepository carePlanRepository;
@@ -117,6 +129,7 @@ class PatientExistenceOracleSecurityIT extends BaseIT {
     @MockitoBean private RefillRequestRepository refillRequestRepository;
 
     private final AtomicInteger sequence = new AtomicInteger();
+    private final List<UserRoleHospitalAssignment> assignments = new java.util.ArrayList<>();
 
     private Hospital hospital;
     private User callerUser;
@@ -126,6 +139,7 @@ class PatientExistenceOracleSecurityIT extends BaseIT {
 
     @BeforeEach
     void setUp() {
+        assignments.clear();
         String n = next();
         hospital = hospitalRepository.save(Hospital.builder()
             .name("Oracle Hospital " + n).code("ORC" + n).city("Ouagadougou").country("Burkina Faso")
@@ -135,6 +149,8 @@ class PatientExistenceOracleSecurityIT extends BaseIT {
         callerUser = patientUser(patientRole);
         caller = patient(callerUser);
         stranger = patient(patientUser(patientRole));
+        // The account is linked now, so the idle gate applies on this path too.
+        idleSessionTracker.touch(callerUser.getId());
         token = token(callerUser.getUsername(), callerUser.getId(), hospital.getId());
     }
 
@@ -144,6 +160,13 @@ class PatientExistenceOracleSecurityIT extends BaseIT {
         registrationRepository.deleteAll(registrationRepository.findByPatientId(stranger.getId()));
         User strangerUser = stranger.getUser();
         patientRepository.deleteAll(List.of(caller, stranger));
+        // The caller is a linked local account now, so the rows that point at
+        // it (a write audit, a refusal) go before the account itself.
+        List<UUID> userIds = List.of(callerUser.getId(), strangerUser.getId());
+        auditEventLogRepository.deleteAllInBatch(auditEventLogRepository.findAll().stream()
+            .filter(row -> row.getUser() != null && userIds.contains(row.getUser().getId()))
+            .toList());
+        assignmentRepository.deleteAll(assignments);
         userRepository.deleteAll(List.of(callerUser, strangerUser));
         hospitalRepository.delete(hospital);
     }
@@ -274,13 +297,32 @@ class PatientExistenceOracleSecurityIT extends BaseIT {
         return insurance;
     }
 
+    /**
+     * A patient account the one tenant resolver can place: a LIVE global
+     * PATIENT assignment and nothing else, which is exactly the
+     * {@code PatientOwned} scope — a token's {@code hospital_id} claim places
+     * nobody any more. The legacy {@code user_roles} row goes on as well,
+     * because the services under test read "a patient and nothing else" off
+     * the User entity's own roles rather than off the assignments.
+     */
     private User patientUser(Role patientRole) {
         String n = next();
         User user = userRepository.save(User.builder()
             .username("oracle.patient" + n).passwordHash("hashed").email("oracle" + n + "@patient.test")
             .firstName("Oracle").lastName("P" + n).phoneNumber("+22670" + n).isActive(true).build());
         user.addRole(patientRole);
-        return userRepository.save(user);
+        user = userRepository.save(user);
+        assignments.add(assignmentRepository.save(UserRoleHospitalAssignment.builder()
+            .assignmentCode("ASSIGN-ORC-" + n)
+            .description("PATIENT assignment")
+            .user(user)
+            .hospital(null)
+            .role(patientRole)
+            .startDate(LocalDate.now())
+            .assignedAt(java.time.LocalDateTime.now())
+            .active(true)
+            .build()));
+        return user;
     }
 
     private Patient patient(User user) {
@@ -357,9 +399,12 @@ class PatientExistenceOracleSecurityIT extends BaseIT {
 
         @Bean
         KeycloakHospitalContextFilter keycloakHospitalContextFilter(KeycloakHospitalContextResolver resolver,
+                                                                   ActingScopeResolver actingScopeResolver,
                                                                    IdleSessionGate idleSessionGate,
+                                                                   TenantLifecycleGate tenantLifecycleGate,
                                                                    UserRepository userRepository) {
-            return new KeycloakHospitalContextFilter(resolver, idleSessionGate, userRepository);
+            return new KeycloakHospitalContextFilter(resolver, actingScopeResolver, idleSessionGate,
+                tenantLifecycleGate, userRepository);
         }
     }
 }

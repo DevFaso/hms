@@ -24,7 +24,6 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.ProcedureOrderRepository;
 import com.example.hms.repository.UltrasoundOrderRepository;
 import com.example.hms.repository.UltrasoundReportRepository;
-import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.CustomUserDetails;
 import com.example.hms.service.impl.ConsultationServiceImpl;
 import com.example.hms.service.impl.ImagingOrderServiceImpl;
@@ -34,6 +33,9 @@ import com.example.hms.service.impl.UltrasoundServiceImpl;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import com.example.hms.utility.RoleValidator;
+import com.example.hms.security.tenant.ActingScopeResolver;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -94,7 +96,7 @@ class StaffWhoArePatientsReadTest {
 
     private PatientSubjectReadGuard realGuard() {
         return new PatientSubjectReadGuard(
-            new ControllerAuthUtils(mock(UserRoleHospitalAssignmentRepository.class)), guardPatients);
+            new ControllerAuthUtils(mock(ActingScopeResolver.class)), guardPatients);
     }
 
     @BeforeEach
@@ -104,6 +106,7 @@ class StaffWhoArePatientsReadTest {
 
     @AfterEach
     void clear() {
+        HospitalContextHolder.clear();
         SecurityContextHolder.clearContext();
     }
 
@@ -120,6 +123,13 @@ class StaffWhoArePatientsReadTest {
         Jwt jwt = Jwt.withTokenValue("t").header("alg", "RS256")
             .claim("sub", "keycloak-subject").claim("appUserId", callerUserId.toString()).build();
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt, authorities));
+        // Since #789 an ownership guard reads the link the context filter
+        // VERIFIED for this request, never the appUserId claim, so a Keycloak
+        // login in a unit test has to set the context the filter would set.
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(callerUserId)
+            .principalUsername("keycloak-subject")
+            .build());
     }
 
     private void nurseWhoIsAPatient() {

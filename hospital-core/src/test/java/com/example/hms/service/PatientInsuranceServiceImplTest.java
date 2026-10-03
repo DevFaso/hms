@@ -52,6 +52,8 @@ class PatientInsuranceServiceImplTest {
     @Mock private RoleValidator roleValidator;
     @Mock private PatientChartAccess patientChartAccess;
     @Mock private PatientSubjectReadGuard subjectReadGuard;
+    /** A staff caller's scope: these cases resolve the hospital through the adapter. */
+    @Mock private com.example.hms.security.tenant.ActingScopeResolver actingScopeResolver;
 
     @InjectMocks private PatientInsuranceServiceImpl service;
 
