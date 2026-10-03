@@ -1,4 +1,5 @@
 import { RoleContextService } from '../core/role-context.service';
+import { expandRoleEquivalents } from '../core/role-equivalence';
 
 /** Mutable scope a spec can flip between tests. */
 export interface RoleContextStubState {
@@ -42,7 +43,11 @@ export function roleContextStub(state: RoleContextStubState): RoleContextService
     get activeHospitalId() {
       return state.hospitalId;
     },
-    hasAnyActiveRole: (roles: string[]) => roles.some((r) => state.roles.includes(r)),
+    // The real service's doctor equivalence, so a spec cannot pass on a
+    // narrower rule than the page runs.
+    hasAnyActiveRole: (roles: string[]) =>
+      expandRoleEquivalents(state.roles).some((r) => roles.includes(r)),
+    hasAnyActiveRoleExactly: (roles: string[]) => roles.some((r) => state.roles.includes(r)),
     get activeRoles() {
       return state.roles;
     },

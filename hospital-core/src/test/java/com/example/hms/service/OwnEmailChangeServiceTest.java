@@ -143,7 +143,7 @@ class OwnEmailChangeServiceTest {
             verify(emailService, never()).sendEmailAddressInUseNoticeEmail(any(), any());
             assertThat(ActivationDeliveryTracker.close()).singleElement().satisfies(d -> {
                 assertThat(d.getPurpose()).isEqualTo(NotificationDeliveryStatusDTO.PURPOSE_EMAIL_CHANGE_CODE);
-                assertThat(d.getOutcome()).isEqualTo(NotificationDeliveryStatusDTO.OUTCOME_SENT);
+                assertThat(d.getOutcome()).isEqualTo(NotificationDeliveryStatusDTO.OUTCOME_QUEUED);
                 assertThat(d.getTarget()).isEqualTo("n***@example.com");
             });
             assertThat(auditRows()).singleElement().satisfies(r -> {
@@ -162,10 +162,10 @@ class OwnEmailChangeServiceTest {
 
             verify(emailService).sendEmailAddressInUseNoticeEmail(eq("superadmin@example.com"), any());
             verify(emailService, never()).sendEmailChangeVerificationEmail(any(), any(), any());
-            // The same report a free address gets: one purpose, SENT, masked.
+            // The same report a free address gets: one purpose, QUEUED, masked.
             assertThat(ActivationDeliveryTracker.close()).singleElement().satisfies(d -> {
                 assertThat(d.getPurpose()).isEqualTo(NotificationDeliveryStatusDTO.PURPOSE_EMAIL_CHANGE_CODE);
-                assertThat(d.getOutcome()).isEqualTo(NotificationDeliveryStatusDTO.OUTCOME_SENT);
+                assertThat(d.getOutcome()).isEqualTo(NotificationDeliveryStatusDTO.OUTCOME_QUEUED);
                 assertThat(d.getTarget()).isEqualTo("s***@example.com");
             });
             // A pending change exists, but its code was never sent to anyone.

@@ -243,6 +243,16 @@ export class PatientDetailComponent implements OnInit {
     return this.roleContext.hasAnyActiveRole(VITALS_VIEW_ROLES);
   }
 
+  /**
+   * The staff vitals reads refuse a request with no hospital scope (a
+   * super-admin in global view): they used to answer with every hospital's
+   * vitals, gated by nothing and disclosed to no one. The tab declines to
+   * read without one, as the chart's Labs section does.
+   */
+  vitalsScoped(): boolean {
+    return this.scopedHospitalId() != null;
+  }
+
   /** Mirrors EncounterController's list READ gate — likewise not the
    *  'Create Encounters' write permission it used to check. */
   canViewEncounters(): boolean {
@@ -517,7 +527,13 @@ export class PatientDetailComponent implements OnInit {
 
   setTab(tab: TabKey): void {
     this.activeTab.set(tab);
-    if (tab === 'vitals' && this.canViewVitals() && this.vitals().length === 0) this.loadVitals();
+    if (
+      tab === 'vitals' &&
+      this.canViewVitals() &&
+      this.vitalsScoped() &&
+      this.vitals().length === 0
+    )
+      this.loadVitals();
     if (tab === 'encounters' && this.canViewEncounters() && this.encounters().length === 0)
       this.loadEncounters();
     if (tab === 'appointments' && this.appointments().length === 0) this.loadAppointments();

@@ -8,7 +8,6 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -17,11 +16,6 @@ public interface PatientEducationProgressRepository extends JpaRepository<Patien
     List<PatientEducationProgress> findByPatientIdOrderByLastAccessedAtDesc(UUID patientId);
 
     List<PatientEducationProgress> findByPatientIdAndResourceId(UUID patientId, UUID resourceId);
-
-    Optional<PatientEducationProgress> findTopByPatientIdAndResourceIdOrderByCreatedAtDesc(
-        UUID patientId, 
-        UUID resourceId
-    );
 
     List<PatientEducationProgress> findByPatientIdAndComprehensionStatus(
         UUID patientId, 

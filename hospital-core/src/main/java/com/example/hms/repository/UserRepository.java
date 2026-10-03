@@ -21,6 +21,15 @@ public interface UserRepository extends JpaRepository<User, UUID> {
   long countByIsDeletedFalse();
   long countByIsActiveTrueAndIsDeletedFalse();
 
+    /*
+     * Login throttle key (LoginAttemptService): the id of every account whose
+     * username matches case-insensitively, deleted accounts included, the same
+     * rows the login lookup (findByUsernameIgnoreCase) can land on. Ids only,
+     * so no entity is loaded or decrypted on the unauthenticated path.
+     */
+    @Query("select u.id from User u where lower(u.username) = lower(:username)")
+    List<UUID> findIdsByUsernameIgnoreCase(@Param("username") String username);
+
     /* ---------- Existence checks (case-insensitive where it matters) ---------- */
     @Query("select (count(u) > 0) from User u where lower(u.username) = lower(:username)")
     Boolean existsByUsername(@Param("username") String username);

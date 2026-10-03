@@ -84,6 +84,7 @@ class LabOrderServiceImplTest {
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock private com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
+    @Mock private com.example.hms.controller.support.ControllerAuthUtils authUtils;
 
     @InjectMocks
     private LabOrderServiceImpl labOrderService;
@@ -398,7 +399,6 @@ class LabOrderServiceImplTest {
     @Test
     void createLabOrderThrowsClearScopeErrorWhenPatientIsNotRegisteredAtHospital() {
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
 
@@ -420,9 +420,145 @@ class LabOrderServiceImplTest {
         verify(labOrderRepository, never()).save(any());
     }
 
+    // -- The ordering staff is the caller's staff row AT the order's hospital --
+
+    /** A second hospital, and the same doctor's staff row there (uq_staff_user_hospital). */
+    private Staff sameDoctorsRowAt(Hospital elsewhere) {
+        Staff row = new Staff();
+        row.setId(UUID.randomUUID());
+        row.setUser(staff.getUser());
+        row.setHospital(elsewhere);
+        return row;
+    }
+
+    private Hospital otherHospital() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        other.setName("Hopital B");
+        return other;
+    }
+
+    /** The row the request NAMES is where the doctor is primary; the order is at hospitalId. */
+    private void givenTheRequestNamesTheRowAt(Staff namedRow) {
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        when(staffRepository.findById(namedRow.getId())).thenReturn(Optional.of(namedRow));
+    }
+
+    @Test
+    void createLabOrder_bindsTheOrderToTheCallersStaffRowAtTheOrdersHospital() {
+        Staff primaryRowElsewhere = sameDoctorsRowAt(otherHospital());
+        givenTheRequestNamesTheRowAt(primaryRowElsewhere);
+        when(authUtils.resolveUserId(any())).thenReturn(Optional.of(orderingUserId));
+        when(staffRepository.findByUserIdAndHospitalId(orderingUserId, hospitalId)).thenReturn(Optional.of(staff));
+        when(roleValidator.canOrderLabTests(orderingUserId, hospitalId)).thenReturn(true);
+        when(labTestDefinitionRepository.findById(labTestDefinitionId)).thenReturn(Optional.of(labTestDefinition));
+        when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        labOrderService.createLabOrder(baseRequestBuilder().orderingStaffId(primaryRowElsewhere.getId()).build(),
+            Locale.ENGLISH);
+
+        ArgumentCaptor<LabOrder> captor = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository).save(captor.capture());
+        assertThat(captor.getValue().getOrderingStaff())
+            .as("the row at the order's hospital, never the one at the other hospital")
+            .isSameAs(staff);
+    }
+
+    @Test
+    void createLabOrder_refusesWhenTheCallerHasNoStaffRowAtTheOrdersHospital() {
+        Staff primaryRowElsewhere = sameDoctorsRowAt(otherHospital());
+        givenTheRequestNamesTheRowAt(primaryRowElsewhere);
+        when(authUtils.resolveUserId(any())).thenReturn(Optional.of(orderingUserId));
+        when(staffRepository.findByUserIdAndHospitalId(orderingUserId, hospitalId)).thenReturn(Optional.empty());
+
+        LabOrderRequestDTO request = baseRequestBuilder().orderingStaffId(primaryRowElsewhere.getId()).build();
+        assertThatThrownBy(() -> labOrderService.createLabOrder(request, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
+            .isEqualTo("staff.notfound");
+        verify(labOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void createLabOrder_refusesAnotherClinicianNamedAsTheOrderingStaff() {
+        givenTheRequestNamesTheRowAt(staff);
+        // Someone else is signed in and names this doctor's staff id.
+        when(authUtils.resolveUserId(any())).thenReturn(Optional.of(UUID.randomUUID()));
+
+        LabOrderRequestDTO request = baseRequestBuilder().build();
+        assertThatThrownBy(() -> labOrderService.createLabOrder(request, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
+            .isEqualTo("staff.notfound");
+        verify(roleValidator, never()).canOrderLabTests(any(), any());
+        verify(labOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void createLabOrder_aSuperAdminMayNameTheClinician_butStillOnlyTheirRowAtTheOrdersHospital() {
+        Staff primaryRowElsewhere = sameDoctorsRowAt(otherHospital());
+        givenTheRequestNamesTheRowAt(primaryRowElsewhere);
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        when(staffRepository.findByUserIdAndHospitalId(orderingUserId, hospitalId)).thenReturn(Optional.empty());
+
+        LabOrderRequestDTO request = baseRequestBuilder().orderingStaffId(primaryRowElsewhere.getId()).build();
+        assertThatThrownBy(() -> labOrderService.createLabOrder(request, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(authUtils, never()).resolveUserId(any());
+        verify(labOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void updateLabOrder_anotherClinicianMayEditWithoutTakingOverTheOrder() {
+        // A nurse corrects a doctor's order and leaves the doctor as the
+        // ordering clinician: the placing rule (the named clinician must be
+        // the caller) is not an edit rule, and it used to answer 404.
+        mockCommonLookups();
+        lenient().when(authUtils.resolveUserId(any())).thenReturn(Optional.of(UUID.randomUUID()));
+        UUID labOrderId = UUID.randomUUID();
+        LabOrder existing = existingLabOrder(labOrderId);
+        when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(existing));
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        labOrderService.updateLabOrder(labOrderId, baseRequestBuilder().id(labOrderId).build(), Locale.ENGLISH);
+
+        ArgumentCaptor<LabOrder> captor = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository).save(captor.capture());
+        assertThat(captor.getValue().getOrderingStaff()).isSameAs(staff);
+    }
+
+    @Test
+    void updateLabOrder_namingSomeoneNewStillFollowsThePlacingRule() {
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        when(authUtils.resolveUserId(any())).thenReturn(Optional.of(UUID.randomUUID()));
+        UUID labOrderId = UUID.randomUUID();
+        LabOrder existing = existingLabOrder(labOrderId);
+        Staff otherDoctor = new Staff();
+        otherDoctor.setId(UUID.randomUUID());
+        User otherUser = new User();
+        otherUser.setId(UUID.randomUUID());
+        otherDoctor.setUser(otherUser);
+        otherDoctor.setHospital(hospital);
+        when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(existing));
+        when(staffRepository.findById(otherDoctor.getId())).thenReturn(Optional.of(otherDoctor));
+
+        LabOrderRequestDTO request = baseRequestBuilder().id(labOrderId).orderingStaffId(otherDoctor.getId()).build();
+        assertThatThrownBy(() -> labOrderService.updateLabOrder(labOrderId, request, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(labOrderRepository, never()).save(any());
+    }
+
     private void mockCommonLookups() {
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        // Lenient: an edit that keeps the ordering clinician never looks the row up.
+        lenient().when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        // The caller is the ordering clinician.
+        lenient().when(authUtils.resolveUserId(any())).thenReturn(Optional.of(orderingUserId));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
         when(roleValidator.canOrderLabTests(orderingUserId, hospitalId)).thenReturn(true);

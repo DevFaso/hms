@@ -394,10 +394,20 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
     }
 
+    /**
+     * 403. The message is the literal "Access denied" unless the thrower opted
+     * in with {@link ClientSafeAccessDeniedException}, whose contract is that
+     * its message is written for the caller and discloses nothing across
+     * tenants. Every other message — a {@code @PreAuthorize} refusal, or a
+     * sentence composed deep in a service — stays in the log.
+     */
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     public ResponseEntity<Object> handleAccessDenied(AccessDeniedException ex, WebRequest req) {
         log.warn("Access denied: {}", ex.getMessage());
-        return buildErrorResponse(HttpStatus.FORBIDDEN, "Access denied", req);
+        String message = ex instanceof ClientSafeAccessDeniedException && ex.getMessage() != null
+            ? ex.getMessage()
+            : "Access denied";
+        return buildErrorResponse(HttpStatus.FORBIDDEN, message, req);
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)

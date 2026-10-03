@@ -66,7 +66,7 @@
     >
       {{ 'LAB_RESULTS.PENDING_RELEASE' | translate }} ({{ stats().pending }})
     </button>
-    @if (canSeeCritical) {
+    @if (canSeeCritical()) {
       <button
         class="tab tab-critical"
         [class.active]="activeTab() === 'critical'"
@@ -188,7 +188,7 @@
                       <span class="material-symbols-outlined">draw</span>
                     </button>
                   }
-                  @if (canReadBack && !r.acknowledged && isCritical(r)) {
+                  @if (canReadBack() && !r.acknowledged && isCritical(r)) {
                     <!--
                       Critical values get a read-back instead of a bare
                       acknowledge: the clinician repeats the value and the server
@@ -205,7 +205,7 @@
                     >
                       <span class="material-symbols-outlined">record_voice_over</span>
                     </button>
-                  } @else if (canAcknowledge && !r.acknowledged && !isCritical(r)) {
+                  } @else if (canAcknowledge() && !r.acknowledged && !isCritical(r)) {
                     <button
                       class="action-link ack-link"
                       [title]="'LAB_RESULTS.ACKNOWLEDGE' | translate"

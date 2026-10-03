@@ -337,9 +337,9 @@ class PatientPortalServiceImplPhase1Test {
 
             when(labResultService.getLabResultsForPatientPortal(eq(patientId), isNull(), eq(5)))
                     .thenReturn(List.of(new PatientLabResultResponseDTO()));
-            when(medicationService.getMedicationsForPatient(eq(patientId), isNull(), eq(10)))
+            when(medicationService.getMedicationsForPatientPortal(eq(patientId), isNull(), eq(10)))
                     .thenReturn(List.of(new PatientMedicationResponseDTO()));
-            when(vitalSignService.getRecentVitals(eq(patientId), isNull(), eq(5)))
+            when(vitalSignService.getRecentVitalsForPatientPortal(patientId, 5))
                     .thenReturn(List.of(new PatientVitalSignResponseDTO()));
             when(immunizationService.getImmunizationsByPatientId(patientId))
                     .thenReturn(List.of(new ImmunizationResponseDTO()));
@@ -364,9 +364,9 @@ class PatientPortalServiceImplPhase1Test {
 
             when(labResultService.getLabResultsForPatientPortal(any(), any(), anyInt()))
                     .thenThrow(new RuntimeException("lab service down"));
-            when(medicationService.getMedicationsForPatient(any(), any(), anyInt()))
+            when(medicationService.getMedicationsForPatientPortal(any(), any(), anyInt()))
                     .thenThrow(new RuntimeException("med service down"));
-            when(vitalSignService.getRecentVitals(any(), any(), anyInt()))
+            when(vitalSignService.getRecentVitalsForPatientPortal(any(), anyInt()))
                     .thenThrow(new RuntimeException("vital service down"));
             when(immunizationService.getImmunizationsByPatientId(any()))
                     .thenThrow(new RuntimeException("immunization service down"));
@@ -387,8 +387,8 @@ class PatientPortalServiceImplPhase1Test {
             stubPatientResolution();
 
             when(labResultService.getLabResultsForPatientPortal(any(), any(), anyInt())).thenReturn(List.of());
-            when(medicationService.getMedicationsForPatient(any(), any(), anyInt())).thenReturn(List.of());
-            when(vitalSignService.getRecentVitals(any(), any(), anyInt())).thenReturn(List.of());
+            when(medicationService.getMedicationsForPatientPortal(any(), any(), anyInt())).thenReturn(List.of());
+            when(vitalSignService.getRecentVitalsForPatientPortal(any(), anyInt())).thenReturn(List.of());
             when(immunizationService.getImmunizationsByPatientId(any())).thenReturn(List.of());
 
             HealthSummaryDTO result = service.getHealthSummary(auth, Locale.ENGLISH);
@@ -433,12 +433,12 @@ class PatientPortalServiceImplPhase1Test {
         void getMyMedications_delegates() {
             stubPatientResolution();
             List<PatientMedicationResponseDTO> expected = List.of(new PatientMedicationResponseDTO());
-            when(medicationService.getMedicationsForPatient(patientId, null, 20)).thenReturn(expected);
+            when(medicationService.getMedicationsForPatientPortal(patientId, null, 20)).thenReturn(expected);
 
             List<PatientMedicationResponseDTO> result = service.getMyMedications(auth, 20);
 
             assertThat(result).isEqualTo(expected);
-            verify(medicationService).getMedicationsForPatient(patientId, null, 20);
+            verify(medicationService).getMedicationsForPatientPortal(patientId, null, 20);
         }
     }
 
@@ -478,12 +478,12 @@ class PatientPortalServiceImplPhase1Test {
         void getMyVitals_delegates() {
             stubPatientResolution();
             List<PatientVitalSignResponseDTO> expected = List.of(new PatientVitalSignResponseDTO());
-            when(vitalSignService.getRecentVitals(patientId, null, 5)).thenReturn(expected);
+            when(vitalSignService.getRecentVitalsForPatientPortal(patientId, 5)).thenReturn(expected);
 
             List<PatientVitalSignResponseDTO> result = service.getMyVitals(auth, 5);
 
             assertThat(result).isEqualTo(expected);
-            verify(vitalSignService).getRecentVitals(patientId, null, 5);
+            verify(vitalSignService).getRecentVitalsForPatientPortal(patientId, 5);
         }
     }
 

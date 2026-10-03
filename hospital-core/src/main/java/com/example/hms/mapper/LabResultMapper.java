@@ -91,6 +91,8 @@ public class LabResultMapper {
         .signatureNotes(result.getSignatureNotes())
             .createdAt(result.getCreatedAt())
             .updatedAt(result.getUpdatedAt())
+            .sourceMessageControlId(result.getSourceMessageControlId())
+            .observationResultStatus(result.getObservationResultStatus())
             .build();
     }
 
@@ -110,6 +112,49 @@ public class LabResultMapper {
             .resultUnit(result.getResultUnit())
             .severityFlag(severityFlag)
             .build();
+    }
+
+    /**
+     * The reference range {@link #toResponseDTO} graded this result against
+     * (its {@code severityFlag}), or null when there was none to grade
+     * against. A reader showing "the" range beside the value must show THIS
+     * one: on a test configured with a range per unit, the first configured
+     * range can be in a unit the value was never expressed in, and a patient
+     * reading 5.4 mmol/L beside 70-110 mg/dL draws the wrong conclusion.
+     *
+     * <p>One selection, {@link #findMatchingRange}, serves both the grading
+     * and this, so the two cannot drift.
+     *
+     * <p><b>A range in another unit is never returned.</b> When no configured
+     * range is in the result's unit, {@code findMatchingRange} still falls back
+     * to the first range for GRADING (and so for critical alerting) - changing
+     * that is an open clinical decision, deliberately not taken here. For
+     * DISPLAY that fallback is refused: a range whose unit is stated and differs
+     * from the result's is null here, so nothing is shown rather than limits
+     * the value was never expressed in. The severity flag can therefore
+     * disagree with a (now blank) range until a clinician decides. A range with
+     * no unit of its own is still returned (bare limits, no unit claimed), and
+     * so is any range for a result that states no unit.
+     */
+    public LabResultReferenceRangeDTO gradedReferenceRange(LabResult result) {
+        if (result == null) {
+            return null;
+        }
+        OrderContext context = extractOrderContext(result.getLabOrder());
+        LabTestReferenceRange graded = findMatchingRange(result.getResultUnit(), context.referenceRanges());
+        if (graded == null || isInAnotherUnit(graded, result.getResultUnit())) {
+            return null;
+        }
+        return toReferenceRangeDto(graded);
+    }
+
+    /** True when both units are stated and they differ. */
+    private static boolean isInAnotherUnit(LabTestReferenceRange range, String resultUnit) {
+        String rangeUnit = range.getUnit();
+        if (rangeUnit == null || rangeUnit.isBlank() || resultUnit == null || resultUnit.isBlank()) {
+            return false;
+        }
+        return !rangeUnit.trim().equalsIgnoreCase(resultUnit.trim());
     }
 
     public LabResult toEntity(LabResultRequestDTO dto, LabOrder labOrder, UserRoleHospitalAssignment assignment) {
@@ -268,16 +313,20 @@ public class LabResultMapper {
         }
         return referenceRanges.stream()
             .filter(Objects::nonNull)
-            .map(range -> LabResultReferenceRangeDTO.builder()
-                .minValue(range.getMinValue())
-                .maxValue(range.getMaxValue())
-                .unit(range.getUnit())
-                .ageMin(range.getAgeMin())
-                .ageMax(range.getAgeMax())
-                .gender(range.getGender())
-                .notes(range.getNotes())
-                .build())
+            .map(LabResultMapper::toReferenceRangeDto)
             .toList();
+    }
+
+    private static LabResultReferenceRangeDTO toReferenceRangeDto(LabTestReferenceRange range) {
+        return LabResultReferenceRangeDTO.builder()
+            .minValue(range.getMinValue())
+            .maxValue(range.getMaxValue())
+            .unit(range.getUnit())
+            .ageMin(range.getAgeMin())
+            .ageMax(range.getAgeMax())
+            .gender(range.getGender())
+            .notes(range.getNotes())
+            .build();
     }
 
     private String determineSeverityFlag(String rawResultValue, String resultUnit, List<LabTestReferenceRange> referenceRanges) {

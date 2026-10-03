@@ -32,16 +32,27 @@ package com.example.hms.utility;
  * PV1-3 in {@code MllpInboundAdtVisitProjectionServiceImpl}, their only
  * reader, which skips the projection and keeps the demographic update.
  *
- * <p><b>Not covered: demographics and OBX-5.</b> PID-5, PID-7, PID-8 and
- * PID-11 are written by {@code MllpInboundAdtServiceImpl.applyDemographics}
- * into {@code Patient} columns of 100 characters (sex: 10); OBX-5 is written
- * by {@code MllpInboundLabServiceImpl} into {@code lab_results.result_value}
- * (2048). None is bounded here. They are not identifiers, so refuse versus
- * truncate is a separate decision; until it is made, an over-width value
- * fails at flush, the sender gets {@code AE Server-side handler error} with
- * no dead-letter row, and it retries indefinitely. OBX-3, OBX-6, OBX-7 and
- * OBX-11 are truncated to their columns where they are written - an older,
- * different decision, also outside this class. Known debt, not an oversight.
+ * <p><b>Demographics and OBX-5: refused too, though not identifiers.</b>
+ * PID-5 (the three name components), PID-8 and PID-11 (address line, city,
+ * state, zip, country) are written by
+ * {@code MllpInboundAdtServiceImpl.applyDemographics} into {@code Patient};
+ * OBX-5 by {@code MllpInboundLabServiceImpl} and the HTTP ingest into
+ * {@code lab_results.result_value}. Unbounded, an over-width value failed at
+ * flush: {@code AE Server-side handler error}, no dead-letter row, a sender
+ * retrying for ever, and on the ORU path a RECEIVED row for a message that
+ * was rolled back. Refused, never truncated, for the same reason as the
+ * identifiers: a cut name or a cut result value is a different value than the
+ * one sent, stored as if it were the one sent. Each is checked by its service
+ * before any lookup and answered AE with a dead-letter row naming the field and
+ * the limit. PID-7 is parsed to a date and has no width. OBX-3, OBX-6, OBX-7
+ * and OBX-11 are still truncated to their columns where they are written - an
+ * older, different decision outside this class.
+ *
+ * <p>The {@code Patient} fields carry {@code @Size(max)} as well as a column
+ * width, and bean validation runs at flush and counts UTF-16 units
+ * ({@code String.length()}), so they are checked with {@link #fitsSize}, the
+ * stricter count. {@code Patient.addressLine1} is an encrypted {@code TEXT}
+ * column: its only limit is that {@code @Size(max = 255)}.
  *
  * <p>The limits are column widths, not HL7's nominal field lengths: real
  * senders exceed v2.5's 20-character MSH-10, and a tighter bound would refuse
@@ -94,6 +105,25 @@ public final class Hl7FieldBounds {
      */
     public static final int ASSIGNED_LOCATION_MAX = 255;
 
+    /** PID-5 family, given and middle name: {@code Patient} first/last/middle name, 100. */
+    public static final int PERSON_NAME_MAX = 100;
+
+    /** PID-8: {@code Patient.gender}, 10. */
+    public static final int SEX_MAX = 10;
+
+    /**
+     * PID-11's street line: {@code Patient.addressLine1}. The column is
+     * encrypted {@code TEXT}, so this is its {@code @Size(max)}, not a column
+     * width.
+     */
+    public static final int ADDRESS_LINE_MAX = 255;
+
+    /** PID-11's city, state, zip and country: the {@code Patient} columns of 100. */
+    public static final int ADDRESS_PART_MAX = 100;
+
+    /** OBX-5: {@code lab_results.result_value}. */
+    public static final int RESULT_VALUE_MAX = 2048;
+
     private Hl7FieldBounds() {}
 
     /**
@@ -107,5 +137,16 @@ public final class Hl7FieldBounds {
      */
     public static boolean fits(String value, int max) {
         return value == null || value.codePointCount(0, value.length()) <= max;
+    }
+
+    /**
+     * Whether {@code value} passes a {@code @Size(max)} bean-validation check,
+     * which counts UTF-16 units ({@code String.length()}) - stricter than
+     * {@link #fits}, and the one that decides for a field that carries both a
+     * {@code @Size} and a column width, because validation runs at flush
+     * before the database sees the value. Absent is within bounds.
+     */
+    public static boolean fitsSize(String value, int max) {
+        return value == null || value.length() <= max;
     }
 }

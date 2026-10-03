@@ -28,6 +28,45 @@ class GlobalExceptionHandlerTest {
     }
 
     // =========================================================================
+    // handleAccessDenied
+    // =========================================================================
+
+    @Nested
+    @DisplayName("handleAccessDenied")
+    class HandleAccessDenied {
+
+        @SuppressWarnings("unchecked")
+        private Map<String, Object> bodyOf(ResponseEntity<Object> response) {
+            return (Map<String, Object>) response.getBody();
+        }
+
+        @Test
+        @DisplayName("a plain AccessDeniedException keeps the opaque default — its message could disclose a tenant")
+        void plainAccessDeniedIsOpaque() {
+            var ex = new org.springframework.security.access.AccessDeniedException(
+                "Prescription belongs to hospital B");
+
+            ResponseEntity<Object> response = handler.handleAccessDenied(ex, request);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(bodyOf(response)).containsEntry("message", "Access denied");
+        }
+
+        @Test
+        @DisplayName("a ClientSafeAccessDeniedException reaches the caller with its sentence")
+        void clientSafeMessageIsShown() {
+            var ex = new ClientSafeAccessDeniedException(
+                "Only the prescribing clinician can sign this prescription.");
+
+            ResponseEntity<Object> response = handler.handleAccessDenied(ex, request);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(bodyOf(response))
+                .containsEntry("message", "Only the prescribing clinician can sign this prescription.");
+        }
+    }
+
+    // =========================================================================
     // handleNotificationTransportUnavailable
     // =========================================================================
 
