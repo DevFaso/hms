@@ -5,15 +5,12 @@
       <p class="page-subtitle">{{ 'PHARMACY.MTM_SUBTITLE' | translate }}</p>
     </div>
     <div class="header-actions">
-      <app-hospital-scope-chip (scopeChange)="onScopeChange()" />
-      <button class="btn-primary" (click)="openCreate()" [disabled]="!scopeReady()">
+      <button class="btn-primary" (click)="openCreate()">
         <span class="material-symbols-outlined">add</span>
         {{ 'PHARMACY.MTM_NEW' | translate }}
       </button>
     </div>
   </div>
-
-  <app-hospital-scope-hint />
 
   @if (showForm()) {
     <div class="form-card">

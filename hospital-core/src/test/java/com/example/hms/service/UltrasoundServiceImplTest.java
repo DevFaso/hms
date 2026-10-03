@@ -634,7 +634,7 @@ class UltrasoundServiceImplTest {
 
         assertThatThrownBy(() -> ultrasoundService.getOrderById(orderId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Ultrasound order not found");
+            .hasFieldOrPropertyWithValue("messageKey", "ultrasound.order.notFound");
     }
 
     @Test
@@ -643,7 +643,7 @@ class UltrasoundServiceImplTest {
 
         assertThatThrownBy(() -> ultrasoundService.getReportById(reportId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Ultrasound report not found");
+            .hasFieldOrPropertyWithValue("messageKey", "ultrasound.report.notFound");
     }
 
     @Test
@@ -652,7 +652,7 @@ class UltrasoundServiceImplTest {
 
         assertThatThrownBy(() -> ultrasoundService.getReportByOrderId(orderId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Ultrasound report not found for order");
+            .hasFieldOrPropertyWithValue("messageKey", "ultrasound.report.notFoundForOrder");
     }
 
     @AfterEach

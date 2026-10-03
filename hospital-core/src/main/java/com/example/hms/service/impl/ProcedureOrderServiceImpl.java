@@ -78,13 +78,13 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         Staff orderingProvider = staffRepository.findById(orderingProviderId)
             .or(() -> staffRepository.findByUserIdAndHospitalId(orderingProviderId, hospital.getId()))
             .or(() -> staffRepository.findFirstByUserIdOrderByCreatedAtAsc(orderingProviderId))
-            .orElseThrow(() -> new ResourceNotFoundException("Ordering provider not found with ID: " + orderingProviderId));
+            .orElseThrow(() -> new ResourceNotFoundException("procedureOrder.orderingProvider.notFound", orderingProviderId));
 
         Encounter encounter = null;
         if (request.getEncounterId() != null) {
             encounter = encounterRepository.findById(request.getEncounterId())
                 .filter(e -> belongsTo(e, patient, hospital))
-                .orElseThrow(() -> new ResourceNotFoundException("Encounter not found with ID: " + request.getEncounterId()));
+                .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", request.getEncounterId()));
         }
 
         ProcedureOrder procedureOrder = ProcedureOrder.builder()
@@ -321,7 +321,7 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
     }
 
     private static ResourceNotFoundException procedureOrderNotFound(UUID orderId) {
-        return new ResourceNotFoundException("Procedure order not found with ID: " + orderId);
+        return new ResourceNotFoundException("procedureOrder.notFound", orderId);
     }
 
     private ProcedureOrderResponseDTO toResponseDTO(ProcedureOrder order) {

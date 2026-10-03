@@ -32,7 +32,7 @@ import java.util.UUID;
  * record a {@code BREAK_GLASS_ACCESS} audit event.
  *
  * <p>Sessions are time-bound (default 4 h, set by the service) and can
- * be revoked early. {@link #isLive()} captures both conditions; callers
+ * be revoked early. {@link #isLiveAt(LocalDateTime)} captures both conditions; callers
  * MUST use it rather than re-implementing the predicate.
  */
 @Entity
@@ -121,12 +121,11 @@ public class BreakGlassSession extends BaseEntity {
         return reviewedAt != null;
     }
 
-    /** True when the session is still active: not revoked and not expired. */
-    public boolean isLive() {
-        return isLiveAt(LocalDateTime.now());
-    }
-
-    /** Same as {@link #isLive()} but evaluated at a caller-supplied instant (testable). */
+    /**
+     * True when the session is still active at {@code moment}: not revoked and
+     * not expired. Callers pass the injected {@code Clock}'s now, the same time
+     * source that wrote {@code expiresAt}.
+     */
     public boolean isLiveAt(LocalDateTime moment) {
         return revokedAt == null && expiresAt.isAfter(moment);
     }

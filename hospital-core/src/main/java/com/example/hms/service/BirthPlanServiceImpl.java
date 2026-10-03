@@ -56,7 +56,6 @@ public class BirthPlanServiceImpl implements BirthPlanService {
     private static final String ROLE_MIDWIFE = "ROLE_MIDWIFE";
     private static final String ROLE_NURSE = "ROLE_NURSE";
     private static final String ROLE_PATIENT = "ROLE_PATIENT";
-    private static final String BIRTH_PLAN_NOT_FOUND_PREFIX = "Birth plan not found with ID: ";
 
     @Override
     @Transactional
@@ -262,7 +261,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
 
     private User getUserOrThrow(String username) {
         return userRepository.findByUsername(username)
-            .orElseThrow(() -> new ResourceNotFoundException("user.notFound", username));
+            .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByUsername", username));
     }
 
     private Patient getPatientByIdOrThrow(UUID patientId) {
@@ -272,7 +271,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
 
     private Patient getPatientByUserOrThrow(User user) {
         return patientRepository.findByUserId(user.getId())
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found for user: " + user.getUsername()));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundForUser", user.getUsername()));
     }
 
     private Hospital getHospitalByIdOrThrow(UUID hospitalId) {
@@ -282,7 +281,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
 
     private BirthPlan getBirthPlanByIdOrThrow(UUID id) {
         return birthPlanRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(BIRTH_PLAN_NOT_FOUND_PREFIX + id));
+            .orElseThrow(() -> new ResourceNotFoundException("birthPlan.notFound", id));
     }
 
     private boolean hasRole(User user, String roleCode) {
@@ -321,7 +320,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
         }
         BirthPlan birthPlan = getBirthPlanByIdOrThrow(id);
         if (patientOnly && !ownsPatient(user, birthPlan.getPatient() != null ? birthPlan.getPatient().getId() : null)) {
-            throw new ResourceNotFoundException(BIRTH_PLAN_NOT_FOUND_PREFIX + id);
+            throw new ResourceNotFoundException("birthPlan.notFound", id);
         }
         return patientOnly ? birthPlan : requireAtActingHospital(birthPlan);
     }
@@ -334,7 +333,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
     private BirthPlan requireAtActingHospital(BirthPlan birthPlan) {
         UUID scope = roleValidator.requireActiveHospitalId();
         if (scope != null && (birthPlan.getHospital() == null || !scope.equals(birthPlan.getHospital().getId()))) {
-            throw new ResourceNotFoundException(BIRTH_PLAN_NOT_FOUND_PREFIX + birthPlan.getId());
+            throw new ResourceNotFoundException("birthPlan.notFound", birthPlan.getId());
         }
         return birthPlan;
     }

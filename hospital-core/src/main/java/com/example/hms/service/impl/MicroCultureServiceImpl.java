@@ -63,9 +63,6 @@ import java.util.Locale;
 @Transactional
 public class MicroCultureServiceImpl implements MicroCultureService {
 
-    private static final String MSG_CULTURE_NOT_FOUND = "Culture report not found with ID: ";
-    private static final String MSG_ORDER_NOT_FOUND = "Lab order not found with ID: ";
-    private static final String MSG_ISOLATE_NOT_FOUND = "Isolate not found with ID: ";
     private static final String POSITIVE_CULTURE_TYPE = "POSITIVE_CULTURE_RESULT";
 
     private final MicroCultureResultRepository cultureRepository;
@@ -86,11 +83,11 @@ public class MicroCultureServiceImpl implements MicroCultureService {
             throw new BusinessException("An active hospital is required to record a culture.");
         }
         LabOrder order = labOrderRepository.findById(request.getLabOrderId())
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_ORDER_NOT_FOUND + request.getLabOrderId()));
+            .orElseThrow(() -> new ResourceNotFoundException("labOrder.notFound", request.getLabOrderId()));
         // 404-not-403: a scoped caller resulting another hospital's order
         // learns nothing, not "exists elsewhere".
         if (order.getHospital() == null || !Objects.equals(order.getHospital().getId(), hospitalId)) {
-            throw new ResourceNotFoundException(MSG_ORDER_NOT_FOUND + request.getLabOrderId());
+            throw new ResourceNotFoundException("labOrder.notFound", request.getLabOrderId());
         }
         if (order.getStatus() == LabOrderStatus.CANCELLED) {
             throw new BusinessException("A cancelled lab order cannot receive a culture report.");
@@ -103,8 +100,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         LabSpecimen specimen = null;
         if (request.getSpecimenId() != null) {
             specimen = specimenRepository.findById(request.getSpecimenId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                    "Specimen not found with ID: " + request.getSpecimenId()));
+                .orElseThrow(() -> new ResourceNotFoundException("labspecimen.notfound", request.getSpecimenId()));
             if (specimen.getLabOrder() == null
                 || !Objects.equals(specimen.getLabOrder().getId(), order.getId())) {
                 throw new BusinessException("The specimen belongs to a different lab order.");
@@ -303,8 +299,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         MicroIsolate isolate = loadIsolateOf(culture, isolateId);
         MicroSusceptibility row = susceptibilityRepository.findById(susceptibilityId)
             .filter(s -> s.getIsolate() != null && Objects.equals(s.getIsolate().getId(), isolate.getId()))
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Susceptibility not found with ID: " + susceptibilityId));
+            .orElseThrow(() -> new ResourceNotFoundException("microculture.susceptibility.notFound", susceptibilityId));
         applyCorrectionGuard(culture, correctionReason);
         susceptibilityRepository.delete(row);
         return toDto(cultureRepository.save(culture));
@@ -314,11 +309,11 @@ public class MicroCultureServiceImpl implements MicroCultureService {
 
     private MicroCultureResult loadScoped(UUID cultureId, UUID hospitalId) {
         MicroCultureResult culture = cultureRepository.findById(cultureId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_CULTURE_NOT_FOUND + cultureId));
+            .orElseThrow(() -> new ResourceNotFoundException("microculture.culture.notFound", cultureId));
         if (hospitalId != null
             && (culture.getHospital() == null
                 || !Objects.equals(culture.getHospital().getId(), hospitalId))) {
-            throw new ResourceNotFoundException(MSG_CULTURE_NOT_FOUND + cultureId);
+            throw new ResourceNotFoundException("microculture.culture.notFound", cultureId);
         }
         return culture;
     }
@@ -327,7 +322,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         return isolateRepository.findById(isolateId)
             .filter(i -> i.getCultureResult() != null
                 && Objects.equals(i.getCultureResult().getId(), culture.getId()))
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_ISOLATE_NOT_FOUND + isolateId));
+            .orElseThrow(() -> new ResourceNotFoundException("microculture.isolate.notFound", isolateId));
     }
 
     /**

@@ -40,7 +40,6 @@ import java.util.Set;
 public class ImagingOrderServiceImpl implements ImagingOrderService {
 
     private static final int DEFAULT_DUPLICATE_LOOKBACK_DAYS = 30;
-    private static final String ORDER_NOT_FOUND = "Imaging order not found with ID: ";
 
     /**
      * Self-reference for proxy-routed internal calls
@@ -278,7 +277,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
     private ImagingOrder getOrderEntity(UUID orderId) {
         return imagingOrderRepository.findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException(ORDER_NOT_FOUND + orderId));
+            .orElseThrow(() -> new ResourceNotFoundException("imaging.order.notFound", orderId));
     }
 
     /**
@@ -295,7 +294,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && order.getHospital() != null
                 && !activeHospitalId.equals(order.getHospital().getId())) {
-            throw new ResourceNotFoundException(ORDER_NOT_FOUND + orderId);
+            throw new ResourceNotFoundException("imaging.order.notFound", orderId);
         }
         return order;
     }

@@ -14,7 +14,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -36,6 +38,11 @@ class PhoneVerificationServiceImplTest {
     @Mock private IkoddiGateway ikoddiGateway;
     @Mock private AuditEventLogService auditService;
 
+    /** Fixed instant: the OTP window is computed against the injected clock. */
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 3, 1, 10, 0);
+    private static final Clock FIXED =
+        Clock.fixed(NOW.atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
+
     private PhoneVerificationServiceImpl service;
 
     private UUID staffUserId;
@@ -44,7 +51,7 @@ class PhoneVerificationServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new PhoneVerificationServiceImpl(challengeRepository, ikoddiGateway, auditService, "226", 300);
+        service = new PhoneVerificationServiceImpl(challengeRepository, ikoddiGateway, auditService, "226", 300, FIXED);
         staffUserId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
         challengeId = UUID.randomUUID();
@@ -55,7 +62,7 @@ class PhoneVerificationServiceImplTest {
             .phoneNumber("+22670707070")
             .purpose(PhoneOtpPurpose.REGISTRATION_PHONE_VERIFICATION)
             .verificationKey("tok-1")
-            .expiresAt(LocalDateTime.now().plusMinutes(5))
+            .expiresAt(NOW.plusMinutes(5))
             .consumed(false)
             .verified(false)
             .usedForRegistration(false)
@@ -72,7 +79,7 @@ class PhoneVerificationServiceImplTest {
     void requestDispatchesAndPersists() {
         PhoneOtpChallenge stale = challenge();
         // Outside the resend cooldown — created long ago
-        stale.setCreatedAt(LocalDateTime.now().minusMinutes(10));
+        stale.setCreatedAt(NOW.minusMinutes(10));
         when(challengeRepository.countByRequestedByUserIdAndCreatedAtAfter(eq(staffUserId), any()))
             .thenReturn(0L);
         when(challengeRepository.findByPhoneNumberAndPurposeAndConsumedFalse(
@@ -127,7 +134,7 @@ class PhoneVerificationServiceImplTest {
     @DisplayName("a resend inside the cooldown window is rejected without dispatching")
     void resendCooldownBlocks() {
         PhoneOtpChallenge justSent = challenge();
-        justSent.setCreatedAt(LocalDateTime.now().minusSeconds(5));
+        justSent.setCreatedAt(NOW.minusSeconds(5));
         when(challengeRepository.countByRequestedByUserIdAndCreatedAtAfter(eq(staffUserId), any()))
             .thenReturn(1L);
         when(challengeRepository.findByPhoneNumberAndPurposeAndConsumedFalse(
@@ -175,7 +182,7 @@ class PhoneVerificationServiceImplTest {
     @DisplayName("an expired challenge is rejected without calling IKODDI")
     void expiredChallengeRejected() {
         PhoneOtpChallenge c = challenge();
-        c.setExpiresAt(LocalDateTime.now().minusMinutes(1));
+        c.setExpiresAt(NOW.minusMinutes(1));
         when(challengeRepository.findByIdAndRequestedByUserId(challengeId, staffUserId))
             .thenReturn(Optional.of(c));
 
@@ -232,6 +239,48 @@ class PhoneVerificationServiceImplTest {
 
         assertThat(service.consumeVerifiedChallenge(challengeId, "+22670000000")).isFalse();
         assertThat(c.isUsedForRegistration()).isFalse();
+    }
+
+    @Test
+    @DisplayName("the code is still valid at exactly expiresAt and expired one nanosecond later")
+    void expiryBoundaryUsesInjectedClock() {
+        PhoneOtpChallenge atBoundary = challenge();
+        atBoundary.setExpiresAt(NOW);
+        when(challengeRepository.findByIdAndRequestedByUserId(challengeId, staffUserId))
+            .thenReturn(Optional.of(atBoundary));
+        when(ikoddiGateway.verifyOtp("+22670707070", "123456", "tok-1"))
+            .thenReturn(new IkoddiGateway.OtpVerification(0, "ok"));
+
+        assertThat(service.confirmRegistrationVerification(challengeId, "123456", staffUserId).verified()).isTrue();
+
+        PhoneOtpChallenge justExpired = challenge();
+        justExpired.setExpiresAt(NOW.minusNanos(1));
+        when(challengeRepository.findByIdAndRequestedByUserId(challengeId, staffUserId))
+            .thenReturn(Optional.of(justExpired));
+
+        assertThatThrownBy(() -> service.confirmRegistrationVerification(challengeId, "123456", staffUserId))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("expired");
+    }
+
+    @Test
+    @DisplayName("the TTL, the hourly-cap window and the resend cooldown are all measured from the injected clock")
+    void requestWindowsUseInjectedClock() {
+        PhoneOtpChallenge sentSixtySecondsAgo = challenge();
+        // Exactly at the cooldown edge: isAfter is strict, so this one no longer blocks.
+        sentSixtySecondsAgo.setCreatedAt(NOW.minusSeconds(60));
+        when(challengeRepository.countByRequestedByUserIdAndCreatedAtAfter(staffUserId, NOW.minusHours(1)))
+            .thenReturn(0L);
+        when(challengeRepository.findByPhoneNumberAndPurposeAndConsumedFalse(
+            "+22670707070", PhoneOtpPurpose.REGISTRATION_PHONE_VERIFICATION))
+            .thenReturn(List.of(sentSixtySecondsAgo));
+        when(ikoddiGateway.sendOtp("+22670707070", IkoddiGateway.OtpChannel.SMS))
+            .thenReturn(new IkoddiGateway.OtpDispatch(0, "tok-2"));
+        when(challengeRepository.save(any(PhoneOtpChallenge.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var view = service.requestRegistrationVerification("+22670707070", staffUserId, hospitalId);
+
+        assertThat(view.expiresAt()).isEqualTo(NOW.plusSeconds(300));
     }
 
     @Test

@@ -81,6 +81,27 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
+    void shouldLeaveLogoutToTheController() {
+        // A refused bearer (idle, suspended tenant, blacklisted) must not be
+        // answered 401 before logout revokes the refresh token it carries.
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/auth/logout");
+        request.setContextPath("/api");
+
+        assertThat(filter.shouldNotFilter(request)).isTrue();
+    }
+
+    @Test
+    void shouldStillFilterAnyOtherAuthRoute() {
+        MockHttpServletRequest get = new MockHttpServletRequest("GET", "/api/auth/logout");
+        get.setContextPath("/api");
+        MockHttpServletRequest bootstrap = new MockHttpServletRequest("GET", "/api/auth/session/bootstrap");
+        bootstrap.setContextPath("/api");
+
+        assertThat(filter.shouldNotFilter(get)).isFalse();
+        assertThat(filter.shouldNotFilter(bootstrap)).isFalse();
+    }
+
+    @Test
     void shouldProcessApiRequests() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setRequestURI(API_PATIENTS);

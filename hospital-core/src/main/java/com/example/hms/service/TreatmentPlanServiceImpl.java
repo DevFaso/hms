@@ -63,8 +63,6 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     }
 
     private static final String AUTHOR_LABEL = "Author";
-    private static final String STAFF_LABEL = "Staff";
-    private static final String REVIEWER_LABEL = "Reviewer";
 
     private final TreatmentPlanRepository treatmentPlanRepository;
     private final TreatmentPlanFollowUpRepository treatmentPlanFollowUpRepository;
@@ -82,7 +80,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         Patient patient = fetchPatient(requestDTO.getPatientId());
         Hospital hospital = fetchHospital(requestDTO.getHospitalId());
         Encounter encounter = resolveEncounter(requestDTO.getEncounterId());
-    Staff author = fetchStaff(requestDTO.getAuthorStaffId(), AUTHOR_LABEL);
+    Staff author = fetchStaff(requestDTO.getAuthorStaffId());
         UserRoleHospitalAssignment assignment = resolveAssignment(requestDTO.getAssignmentId(), author);
         Staff supervising = fetchOptionalStaff(requestDTO.getSupervisingStaffId());
         Staff signOff = fetchOptionalStaff(requestDTO.getSignOffStaffId());
@@ -103,7 +101,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         Patient patient = fetchPatient(requestDTO.getPatientId());
         Hospital hospital = fetchHospital(requestDTO.getHospitalId());
         Encounter encounter = resolveEncounter(requestDTO.getEncounterId());
-    Staff author = fetchStaff(requestDTO.getAuthorStaffId(), AUTHOR_LABEL);
+    Staff author = fetchStaff(requestDTO.getAuthorStaffId());
         UserRoleHospitalAssignment assignment = resolveAssignment(requestDTO.getAssignmentId(), author);
         Staff supervising = fetchOptionalStaff(requestDTO.getSupervisingStaffId());
         Staff signOff = fetchOptionalStaff(requestDTO.getSignOffStaffId());
@@ -126,7 +124,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && plan.getHospital() != null
                 && !activeHospitalId.equals(plan.getHospital().getId())) {
-            throw new ResourceNotFoundException("Treatment plan not found with ID: " + id);
+            throw new ResourceNotFoundException("treatmentPlan.notFound", id);
         }
         return treatmentPlanMapper.toResponseDTO(plan);
     }
@@ -195,7 +193,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     @Override
     public TreatmentPlanFollowUpDTO updateFollowUp(UUID planId, UUID followUpId, TreatmentPlanFollowUpRequestDTO requestDTO) {
         TreatmentPlanFollowUp followUp = treatmentPlanFollowUpRepository.findByIdAndTreatmentPlanId(followUpId, planId)
-            .orElseThrow(() -> new ResourceNotFoundException("Treatment plan follow-up not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("treatmentPlan.followUp.notFound", followUpId));
         followUp.setLabel(requestDTO.getLabel());
         followUp.setInstructions(requestDTO.getInstructions());
         followUp.setDueOn(requestDTO.getDueOn());
@@ -207,7 +205,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     @Override
     public TreatmentPlanReviewDTO addReview(UUID planId, TreatmentPlanReviewRequestDTO requestDTO) {
         TreatmentPlan plan = getPlanOrThrow(planId);
-    Staff reviewer = fetchStaff(requestDTO.getReviewerStaffId(), REVIEWER_LABEL);
+    Staff reviewer = fetchStaff(requestDTO.getReviewerStaffId());
         TreatmentPlanReview review = TreatmentPlanReview.builder()
             .treatmentPlan(plan)
             .reviewer(reviewer)
@@ -221,7 +219,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
 
     private TreatmentPlan getPlanOrThrow(UUID id) {
         return treatmentPlanRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Treatment plan not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("treatmentPlan.notFound", id));
     }
 
     private Patient fetchPatient(UUID id) {
@@ -231,7 +229,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
 
     private Hospital fetchHospital(UUID id) {
         return hospitalRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", id));
     }
 
     private Encounter resolveEncounter(UUID encounterId) {
@@ -239,12 +237,12 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
             return null;
         }
         return encounterRepository.findById(encounterId)
-            .orElseThrow(() -> new ResourceNotFoundException("Encounter not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", encounterId));
     }
 
     private UserRoleHospitalAssignment fetchAssignment(UUID assignmentId) {
         return assignmentRepository.findById(assignmentId)
-            .orElseThrow(() -> new ResourceNotFoundException("Assignment not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("roleAssignment.notFound", assignmentId));
     }
 
     /** Resolve assignment: use explicit ID if provided, otherwise derive from author staff. */
@@ -255,20 +253,20 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         return author.getAssignment();
     }
 
-    private Staff fetchStaff(UUID staffId, String label) {
+    private Staff fetchStaff(UUID staffId) {
         return staffRepository.findById(staffId)
-            .orElseThrow(() -> new ResourceNotFoundException(label + " staff not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", staffId));
     }
 
     private Staff fetchOptionalStaff(UUID staffId) {
         if (staffId == null) {
             return null;
         }
-        return fetchStaff(staffId, STAFF_LABEL);
+        return fetchStaff(staffId);
     }
 
     private Staff optionalStaff(UUID staffId) {
-        return staffId == null ? null : fetchStaff(staffId, STAFF_LABEL);
+        return staffId == null ? null : fetchStaff(staffId);
     }
 
     private void applyFollowUps(TreatmentPlan plan, List<TreatmentPlanFollowUpRequestDTO> followUps) {
@@ -302,7 +300,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
             .collect(Collectors.toMap(Staff::getId, Function.identity()));
         ids.forEach(id -> {
             if (!map.containsKey(id)) {
-                throw new ResourceNotFoundException("Staff not found");
+                throw new ResourceNotFoundException("staff.notFound", id);
             }
         });
         return map;

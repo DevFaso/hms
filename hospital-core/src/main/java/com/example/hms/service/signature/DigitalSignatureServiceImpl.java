@@ -44,11 +44,10 @@ import java.util.Locale;
 @RequiredArgsConstructor
 @Transactional
 public class DigitalSignatureServiceImpl implements DigitalSignatureService {
+    private static final String SIGNATURE_NOT_FOUND_KEY = "signature.notFound";
+
 
     private static final HexFormat HEX_FORMAT = HexFormat.of();
-    private static final String SIGNATURE_NOT_FOUND = "Digital signature not found";
-    private static final String STAFF_NOT_FOUND = "Staff member not found";
-    private static final String HOSPITAL_NOT_FOUND = "Hospital not found";
 
     private final DigitalSignatureRepository signatureRepository;
     private final StaffRepository staffRepository;
@@ -65,11 +64,11 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
 
         // Validate staff exists
         Staff staff = staffRepository.findById(request.getSignedByStaffId())
-            .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getSignedByStaffId()));
 
         // Validate hospital exists
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         // Compute signature hash
         String signatureHash = computeSignatureHash(request.getSignatureValue());
@@ -126,7 +125,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
         if (request.getSignatureId() != null) {
             // Verify specific signature
             DigitalSignature signature = signatureRepository.findById(request.getSignatureId())
-                .orElseThrow(() -> new ResourceNotFoundException(SIGNATURE_NOT_FOUND));
+                .orElseThrow(() -> new ResourceNotFoundException(SIGNATURE_NOT_FOUND_KEY, request.getSignatureId()));
             signatures = List.of(signature);
         } else {
             // Find all signatures for report
@@ -191,7 +190,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
         log.debug("Revoking signature: {}", signatureId);
 
         DigitalSignature signature = signatureRepository.findById(signatureId)
-            .orElseThrow(() -> new ResourceNotFoundException(SIGNATURE_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(SIGNATURE_NOT_FOUND_KEY, signatureId));
 
         if (!signature.canRevoke()) {
             throw new BusinessException("Signature cannot be revoked. Current status: " + signature.getStatus());
@@ -258,7 +257,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
         log.debug("Fetching signature: {}", signatureId);
 
         DigitalSignature signature = signatureRepository.findById(signatureId)
-            .orElseThrow(() -> new ResourceNotFoundException(SIGNATURE_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(SIGNATURE_NOT_FOUND_KEY, signatureId));
 
         return signatureMapper.toResponseDTO(signature);
     }
@@ -269,7 +268,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
         log.debug("Fetching audit trail for signature: {}", signatureId);
 
         DigitalSignature signature = signatureRepository.findById(signatureId)
-            .orElseThrow(() -> new ResourceNotFoundException(SIGNATURE_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(SIGNATURE_NOT_FOUND_KEY, signatureId));
 
         return signatureMapper.toAuditEntryDTOs(signature.getAuditLog());
     }

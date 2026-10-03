@@ -1107,6 +1107,18 @@ describe('ShellComponent — route-level hospital scope gate', () => {
         'lab-instruments',
         'lab-inventory',
         'lab-ops-dashboard',
+        // The ten that used to gate themselves (own chip + scopeReady +
+        // hint): moved onto the flag, their per-page block and chip deleted.
+        'bed-board',
+        'microbiology',
+        'on-call',
+        'panels',
+        'pharmacy/mtm',
+        'registries',
+        'roi',
+        'slot-admin',
+        'transfusions',
+        'webhooks',
         // The release worklist is one laboratory's queue: getPendingRelease
         // refuses a scopeless read outright rather than guessing a hospital,
         // so the page must not render until one is pinned.

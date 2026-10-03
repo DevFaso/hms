@@ -55,7 +55,6 @@ public class ApiKeyService {
     public record ApiKeyAuth(UUID keyId, UUID hospitalId, String label) {
     }
 
-    private static final String NOT_FOUND = "API key not found.";
     private static final String RAW_PREFIX = "hms_pk_";
     private static final int RANDOM_BYTES = 32;
     private static final int DISPLAY_PREFIX_CHARS = 12;
@@ -200,7 +199,7 @@ public class ApiKeyService {
     private ApiKey requireActiveInTenant(UUID keyId, UUID hospitalId) {
         ApiKey key = apiKeyRepository.findById(keyId)
             .filter(k -> k.getHospital() != null && hospitalId.equals(k.getHospital().getId()))
-            .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException("apiKey.notFound", keyId));
         if (key.getStatus() != ApiKeyStatus.ACTIVE) {
             throw new BusinessException("The key is already revoked.");
         }

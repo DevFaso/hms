@@ -306,7 +306,6 @@
     "STAT": {
       "ORGANIZATIONS": "Organizations",
       "HOSPITALS": "Hospitals",
-      "USERS": "Users",
       "PATIENTS": "Patients",
       "TODAY_APPOINTMENTS": "Today's appointments",
       "DEPARTMENTS": "Departments",
@@ -316,7 +315,6 @@
       "ENCOUNTERS": "Encounters",
       "CONSULTATIONS": "Consultations",
       "ADMISSIONS": "Admissions",
-      "PRESCRIPTIONS": "Prescriptions",
       "LAB_ORDERS": "Lab orders",
       "LAB_RESULTS": "Lab results",
       "LAB_TEST_DEFINITIONS": "Lab test catalogue",
@@ -332,7 +330,6 @@
     "LINK": {
       "ORGANIZATIONS_TITLE": "Organizations",
       "ORGANIZATIONS_DESC": "Tenants, hospital assignments, contact info",
-      "USERS_TITLE": "Users",
       "USERS_DESC": "Cross-tenant user governance and provisioning",
       "ROLES_TITLE": "Roles",
       "ROLES_DESC": "Role catalogue and permission matrix",
@@ -1179,8 +1176,6 @@
       "TOTAL_PATIENTS": "Total Patients",
       "INVOICES": "Invoices",
       "LAB_ORDERS": "Lab Orders",
-      "PRESCRIPTIONS": "Prescriptions",
-      "USERS": "Users",
       "ACTIVE_HOSPITALS": "Active Hospitals"
     },
     "TREND_BAR_TITLE": "{{count}} appointments"
@@ -1569,7 +1564,11 @@
     "UPLOAD": "Upload",
     "VIEW": "View",
     "VIEW_ALL": "View All",
-    "YES": "Yes"
+    "YES": "Yes",
+    "LABEL": {
+      "PRESCRIPTIONS": "Prescriptions",
+      "USERS": "Users"
+    }
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acknowledge",
@@ -1783,9 +1782,11 @@
     "LAB_MODULE": "Lab Module",
     "LAB_MODULE_DESC": "Access lab orders, submit results, and track specimens from the lab module.",
     "LAB_ORDERS": "Lab Orders",
+    "LAB_ORDER": "Lab Order",
     "LAB_ORDERS_TODAY": "Lab Orders Today",
     "LAB_WORK_QUEUE": "Lab Work Queue",
     "LATEST_LABS": "Latest Labs",
+    "LAB_TEST": "Lab Test",
     "LICENSE_ALERTS": "License Alerts",
     "LICENSE_EXPIRY_ALERTS": "License Expiry Alerts",
     "LOW": "Low",
@@ -1865,7 +1866,6 @@
     "PHARMACY_CLARIFICATIONS": "Pharmacy Clarifications",
     "PHARMACY_MODULE": "Pharmacy Module",
     "PHARMACY_MODULE_DESC": "Manage all prescriptions and dispense medications from the pharmacy module.",
-    "PRESCRIPTIONS": "Prescriptions",
     "PRESCRIPTION_QUEUE": "Prescription Queue",
     "PROGRESS": "Progress",
     "PROVIDER": "Provider",
@@ -2021,7 +2021,6 @@
     "UPCOMING_APPOINTMENTS": "Upcoming Appointments",
     "URGENT": "Urgent",
     "USER": "User",
-    "USERS": "Users",
     "VALIDATION_STUDIES": "Validation Studies",
     "VALIDATION_STUDIES_30D": "Studies (Last 30d)",
     "VALIDATION_STUDIES_PENDING": "Pending Approval",
@@ -4476,7 +4475,10 @@
       "LOADING": "Loading care team...",
       "EMPTY_TITLE": "No care team members",
       "EMPTY_DESC": "Your care team information will appear here.",
-      "PRIMARY_PROVIDER": "Primary Care Provider"
+      "PRIMARY_PROVIDER": "Primary Care Provider",
+      "SINCE": "Since {{date}}",
+      "HISTORY_TITLE": "Previous primary care providers",
+      "LOAD_ERROR": "Your care team could not be loaded. Try again."
     },
     "RECORDS": {
       "TITLE": "Health Summary",
@@ -5433,18 +5435,9 @@
         "PAIN": "Pain",
         "PSYCHOSOCIAL": "Psychosocial"
       },
-      "SNAPSHOT_ITEM_TYPE": {
-        "LAB": "Lab",
-        "VITALS": "Vitals"
-      },
       "VITAL_TASK_TYPE": {
         "FULL_SET": "Full Set",
         "ROUTINE": "Routine"
-      },
-      "ORDER_TASK_TYPE": {
-        "IMAGING": "Imaging",
-        "LAB": "Lab",
-        "PROCEDURE": "Procedure"
       },
       "NEWBORN_ALERT_TYPE": {
         "APGAR": "Apgar",
@@ -5506,6 +5499,35 @@
       "PRESCRIPTION_DISPATCH_STATUS": {
         "SENT": "Sent",
         "FAILED": "Failed"
+      },
+      "ORDER_SOURCE_TYPE": {
+        "IMAGING": "Imaging",
+        "LAB": "Lab",
+        "PROCEDURE": "Procedure",
+        "VITALS": "Vitals"
+      },
+      "SHIFT_TYPE": {
+        "MORNING": "Morning",
+        "AFTERNOON": "Afternoon",
+        "EVENING": "Evening",
+        "NIGHT": "Night",
+        "ON_CALL": "On-Call",
+        "FLEX": "Flex"
+      },
+      "LEAVE_TYPE": {
+        "VACATION": "Vacation",
+        "SICK": "Sick Leave",
+        "EMERGENCY": "Emergency",
+        "TRAINING": "Training",
+        "UNPAID": "Unpaid Leave",
+        "OTHER": "Other"
+      },
+      "EMPLOYMENT_TYPE": {
+        "FULL_TIME": "Full-Time",
+        "PART_TIME": "Part-Time",
+        "CONTRACT": "Contract",
+        "LOCUM": "Locum",
+        "INTERN": "Intern"
       }
     },
     "DOCUMENTS": {
@@ -5525,6 +5547,7 @@
       "UPLOAD_FAILED": "Failed to upload document",
       "LOAD_FAILED": "Failed to load documents",
       "FILE_REQUIRED": "Please select a file to upload",
+      "FILE_TOO_LARGE": "The file must be 10 MB or smaller.",
       "DELETE": "Delete",
       "DELETE_CONFIRM": "Are you sure you want to delete this document?",
       "DELETE_SUCCESS": "Document deleted",
@@ -9981,8 +10004,5 @@
     "STATUS_PIPELINE": "Order Status Pipeline",
     "THROUGHPUT": "Throughput",
     "TITLE": "Lab Operations Dashboard"
-  },
-  "SNAPSHOT": {
-    "ORDER": "Order"
   }
 }

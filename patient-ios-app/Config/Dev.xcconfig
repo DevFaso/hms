@@ -10,12 +10,16 @@
 // does not resolve. Slashes are escaped because xcconfig treats `//` as
 // a comment.
 MEDIHUB_API_BASE_URL = https:/$()/dev.e-keneya.com/api
-MEDIHUB_KEYCLOAK_ISSUER = https://hms-keycloak-dev.up.railway.app/realms/hms
-// Was 1. Nothing populates the user id on an SSO session
-// (`completeSsoSession()` only flips `isAuthenticated`), so a tester signing
-// in with SSO gets a Messages tab that cannot resolve who they are. Shipping
-// the button in that state is worse than not shipping it; re-enable with the
-// Phase 3 cutover, once the id is resolved for SSO too.
+// Escaped like the API URL: an unescaped `//` starts an xcconfig comment,
+// which left the issuer as just "https:".
+MEDIHUB_KEYCLOAK_ISSUER = https:/$()/hms-keycloak-dev.up.railway.app/realms/hms
+// Was 1, turned off because an SSO session had no HMS user id and the
+// Messages tab reported "not signed in". The app side is fixed: every login
+// path, SSO included, now resolves and persists the id from
+// /auth/session/bootstrap before the session opens. Still 0 until someone has
+// signed in with SSO on a TestFlight build and seen chat work against the dev
+// realm (the Keycloak token must carry the patient role CHAT_ROLES checks);
+// that end-to-end check has not been made, so flipping this is a product call.
 MEDIHUB_KEYCLOAK_SSO_ENABLED = 0
 MEDIHUB_KEYCLOAK_CLIENT_ID = hms-patient-ios
 MEDIHUB_KEYCLOAK_REDIRECT_URI = com.bitnesttechs.hms.patient.native:/oauth2redirect

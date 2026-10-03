@@ -14,10 +14,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,6 +48,11 @@ class OnCallScheduleServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private DepartmentRepository departmentRepository;
     @Mock private RoleValidator roleValidator;
+
+    /** Fixed instant: "currently on call" is evaluated against the injected clock. */
+    private static final Instant FIXED_INSTANT = Instant.parse("2026-03-01T22:00:00Z");
+    private static final OffsetDateTime NOW = OffsetDateTime.ofInstant(FIXED_INSTANT, ZoneOffset.UTC);
+    @Spy private Clock clock = Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC);
 
     @InjectMocks private OnCallScheduleServiceImpl service;
 
@@ -73,7 +82,7 @@ class OnCallScheduleServiceImplTest {
 
     @Test
     void createPersistsARotaEntry() {
-        OffsetDateTime start = OffsetDateTime.now().plusHours(1);
+        OffsetDateTime start = NOW.plusHours(1);
         OnCallScheduleRequestDTO req = request(start, start.plusHours(8));
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -90,7 +99,7 @@ class OnCallScheduleServiceImplTest {
     void createRefusesAnOverlappingShiftForTheSameClinician() {
         // Two overlapping entries mean two rotas each believe they have cover,
         // which is worse than one rota knowing it has none.
-        OffsetDateTime start = OffsetDateTime.now().plusHours(1);
+        OffsetDateTime start = NOW.plusHours(1);
         OnCallScheduleRequestDTO req = request(start, start.plusHours(8));
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -106,7 +115,7 @@ class OnCallScheduleServiceImplTest {
 
     @Test
     void createRefusesAShiftThatEndsBeforeItStarts() {
-        OffsetDateTime start = OffsetDateTime.now().plusHours(4);
+        OffsetDateTime start = NOW.plusHours(4);
         OnCallScheduleRequestDTO req = request(start, start.minusHours(2));
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -119,7 +128,7 @@ class OnCallScheduleServiceImplTest {
 
     @Test
     void createRefusesToRosterAnotherHospitalsStaff() {
-        OffsetDateTime start = OffsetDateTime.now().plusHours(1);
+        OffsetDateTime start = NOW.plusHours(1);
         OnCallScheduleRequestDTO req = request(start, start.plusHours(8));
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
@@ -134,7 +143,7 @@ class OnCallScheduleServiceImplTest {
         // The overlap check has to exclude the row being edited, or nudging a
         // shift by five minutes would report it clashing with itself.
         UUID entryId = UUID.randomUUID();
-        OffsetDateTime start = OffsetDateTime.now().plusHours(1);
+        OffsetDateTime start = NOW.plusHours(1);
         OnCallScheduleRequestDTO req = request(start, start.plusHours(8));
 
         OnCallSchedule existing = new OnCallSchedule();
@@ -155,7 +164,7 @@ class OnCallScheduleServiceImplTest {
 
     @Test
     void listMarksTheEntryCoveringRightNow() {
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = NOW;
         OnCallSchedule current = new OnCallSchedule();
         current.setId(UUID.randomUUID());
         current.setStaff(staff);
@@ -175,5 +184,34 @@ class OnCallScheduleServiceImplTest {
         assertThat(service.listForHospital(null, null))
             .extracting("currentlyOnCall")
             .containsExactly(true, false);
+    }
+
+    @Test
+    void aShiftIsCurrentFromItsFirstToItsLastInstantOnTheInjectedClock() {
+        OnCallSchedule startsNow = new OnCallSchedule();
+        startsNow.setId(UUID.randomUUID());
+        startsNow.setStaff(staff);
+        startsNow.setStartTime(NOW);
+        startsNow.setEndTime(NOW.plusHours(8));
+
+        OnCallSchedule endsNow = new OnCallSchedule();
+        endsNow.setId(UUID.randomUUID());
+        endsNow.setStaff(staff);
+        endsNow.setStartTime(NOW.minusHours(8));
+        endsNow.setEndTime(NOW);
+
+        OnCallSchedule endedJustBefore = new OnCallSchedule();
+        endedJustBefore.setId(UUID.randomUUID());
+        endedJustBefore.setStaff(staff);
+        endedJustBefore.setStartTime(NOW.minusHours(8));
+        endedJustBefore.setEndTime(NOW.minusNanos(1));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(onCallRepository.findByHospitalAndWindow(hospitalId, NOW.minusDays(1), NOW.plusDays(7)))
+            .thenReturn(List.of(startsNow, endsNow, endedJustBefore));
+
+        assertThat(service.listForHospital(null, null))
+            .extracting("currentlyOnCall")
+            .containsExactly(true, true, false);
     }
 }

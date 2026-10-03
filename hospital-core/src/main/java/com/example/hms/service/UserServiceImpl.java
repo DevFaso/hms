@@ -75,16 +75,17 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class UserServiceImpl implements UserService {
+    private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
+    private static final String USER_NOT_FOUND_KEY = "user.notFound";
+
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
     private static final String ROLE_PATIENT = "ROLE_PATIENT";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-    private static final String HOSPITAL_NOT_FOUND_PREFIX = "Hospital not found with ID: ";
     private static final String ROLE_NURSE = "ROLE_NURSE";
     private static final String ROLE_PHARMACIST = "ROLE_PHARMACIST";
     private static final String ROLE_HOSPITAL_ADMIN = "ROLE_HOSPITAL_ADMIN";
     private static final String ROLE_DOCTOR = "ROLE_DOCTOR";
     private static final String ROLE_LAB_SCIENTIST = "ROLE_LAB_SCIENTIST";
-    private static final String USER_NOT_FOUND_PREFIX = "User not found with ID: ";
 
 
     private final UserRepository userRepository;
@@ -150,8 +151,7 @@ public class UserServiceImpl implements UserService {
             createAssignmentIfAbsent(saved.getId(), patient.getId(), targetHospitalId);
         }
 
-        final String activationLink = String.format(
-                "%s/verify?email=%s&token=%s",
+        final String activationLink = com.example.hms.utility.ActivationLinks.build(
                 frontendBaseUrl, saved.getEmail(), saved.getActivationToken());
         try {
             emailService.sendActivationEmail(saved.getEmail(), activationLink);
@@ -553,7 +553,7 @@ public class UserServiceImpl implements UserService {
     private void upsertStaff(User user, UUID hospitalId, String lic,
                          List<UserRoleHospitalAssignment> assignments, AdminSignupRequest request, Set<Role> roles) {
         final Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_PREFIX + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
         staffRepository.findByUserIdAndHospitalId(user.getId(), hospital.getId())
             .map(Staff::getLicenseNumber)
@@ -743,7 +743,7 @@ public class UserServiceImpl implements UserService {
         if (hospitalId != null) {
             final UUID resolvedHospitalId = hospitalId;
             hospitalRepository.findById(resolvedHospitalId)
-                    .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_PREFIX + resolvedHospitalId));
+                    .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, resolvedHospitalId));
         }
         return hospitalId;
     }
@@ -762,7 +762,7 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException("Hospital must be provided for non-SUPER_ADMIN staff/admin roles.");
         }
         return hospitalRepository.findById(provided)
-                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_PREFIX + provided))
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, provided))
                 .getId();
     }
 
@@ -1310,7 +1310,7 @@ public class UserServiceImpl implements UserService {
 
     /** The one answer for a missing account and for one the caller may not touch. */
     private static ResourceNotFoundException userNotFound(UUID id) {
-        return new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + id);
+        return new ResourceNotFoundException(USER_NOT_FOUND_KEY, id);
     }
 
     /** True when the string is non-null and non-blank. */
@@ -1327,7 +1327,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public boolean verifyEmail(String email, String token) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+                .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByEmail", email));
 
         if (user.getActivationToken() == null
                 || !token.equals(user.getActivationToken())
@@ -1372,7 +1372,7 @@ public class UserServiceImpl implements UserService {
      */
     private Role getRoleByCode(String code) {
         return roleRepository.findByCode(code)
-                .orElseThrow(() -> new ResourceNotFoundException("Role not found: " + code));
+                .orElseThrow(() -> new ResourceNotFoundException("role.notfound", code));
     }
 
     /** Create a global user-role link if it doesn't already exist. */
@@ -1409,7 +1409,7 @@ public class UserServiceImpl implements UserService {
 
     private Hospital getDefaultHospital() {
         return hospitalRepository.findByCodeIgnoreCase("Hospital Yalgado Ouedraogo")
-                .orElseThrow(() -> new ResourceNotFoundException("Default hospital not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", "Hospital Yalgado Ouedraogo"));
     }
 
     /** Map job title from request or role codes */
@@ -1437,7 +1437,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public UUID getUserIdByUsername(String username) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username));
+                .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByUsername", username));
         return user.getId();
     }
 
@@ -1445,7 +1445,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void changeOwnPassword(UUID userId, String newPassword) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + userId));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, userId));
         String encodedPassword = passwordEncoder.encode(newPassword);
         user.setPasswordHash(encodedPassword);
         user.setPasswordChangedAt(LocalDateTime.now());
@@ -1464,7 +1464,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void changeOwnUsername(UUID userId, String newUsername) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + userId));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, userId));
         if (userRepository.findByUsername(newUsername).filter(u -> !u.getId().equals(userId)).isPresent()) {
             throw new IllegalArgumentException("Username '" + newUsername + "' is already taken.");
         }
@@ -1478,7 +1478,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void updateProfileImage(UUID userId, String imageUrl) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, userId));
 
         String oldImageUrl = user.getProfileImageUrl();
         user.setProfileImageUrl(imageUrl);

@@ -172,7 +172,7 @@ class PatientPhotoServiceImplTest {
     void loadIs404WhenNoPhotoExists() {
         assertThatThrownBy(() -> service.load(patientId, hospitalId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("No photo on file");
+            .hasFieldOrPropertyWithValue("messageKey", "patientPhoto.notFound");
     }
 
     @Test
@@ -183,7 +183,7 @@ class PatientPhotoServiceImplTest {
         // 404-not-403: an unregistered patient looks exactly like a missing one.
         assertThatThrownBy(() -> service.load(patientId, foreignScope))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Patient not found");
+            .hasFieldOrPropertyWithValue("messageKey", "patient.notFound");
     }
 
     @Test
@@ -239,7 +239,7 @@ class PatientPhotoServiceImplTest {
         // no photo, never a 500.
         assertThatThrownBy(() -> service.load(patientId, hospitalId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("No photo on file");
+            .hasFieldOrPropertyWithValue("messageKey", "patientPhoto.notFound");
     }
 
     @Test

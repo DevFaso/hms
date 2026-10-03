@@ -645,7 +645,7 @@ class PatientSnapshotServiceImplTest {
     }
 
     @Test
-    void getSnapshot_labResultWithNullTestDef_shouldUseFallback() {
+    void getSnapshot_labResultWithNullTestDef_shouldSendNullNotAWord() {
         UUID patientId = UUID.randomUUID();
         Patient patient = stubPatient(patientId);
         givenPatient(patientId, patient);
@@ -671,7 +671,8 @@ class PatientSnapshotServiceImplTest {
         PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertEquals(1, result.getLatestLabs().size());
-        assertEquals("Lab Test", result.getLatestLabs().get(0).getTest());
+        // Not the English "Lab Test": the drawer owns the translated fallback.
+        assertNull(result.getLatestLabs().get(0).getTest());
         assertEquals("REVIEW", result.getLatestLabs().get(0).getFlag());
         assertEquals("", result.getLatestLabs().get(0).getDate());
     }

@@ -197,7 +197,7 @@ class PatientPortalServiceImplPhase1Test {
             stubPatientNotFound();
             assertThatThrownBy(() -> service.resolvePatientId(auth))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("No patient record");
+                    .hasFieldOrPropertyWithValue("messageKey", "patient.portal.noRecord");
         }
     }
 

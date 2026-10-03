@@ -24,7 +24,7 @@ import { DowntimeService } from '../services/downtime.service';
       </div>
     }
   `,
-  changeDetection: ChangeDetectionStrategy.Eager,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   styles: `
     .downtime-banner {
       display: flex;

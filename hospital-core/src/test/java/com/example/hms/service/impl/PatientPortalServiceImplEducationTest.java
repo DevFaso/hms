@@ -192,7 +192,7 @@ class PatientPortalServiceImplEducationTest {
 
             assertThatThrownBy(() -> service.getMyEducationItem(auth, resourceId))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("assigned to you");
+                    .hasFieldOrPropertyWithValue("messageKey", "educationResource.notAssigned");
         }
     }
 

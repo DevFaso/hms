@@ -94,9 +94,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import jakarta.persistence.EntityNotFoundException;
 
 /**
@@ -112,6 +114,9 @@ import jakarta.persistence.EntityNotFoundException;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class NurseTaskServiceImpl implements NurseTaskService {
+    private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
+    private static final String PATIENT_NOT_FOUND_KEY = "patient.notFound";
+
 
     /* ── Constants ────────────────────────────────────────────────────── */
 
@@ -119,8 +124,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private static final int DEFAULT_LIMIT = 6;
     private static final int MAX_LIMIT = 20;
 
-    private static final String TYPE_ROUTINE = "ROUTINE";
-    private static final String TYPE_FULL_SET = "FULL_SET";
+    // The vitals-round type (vitalTaskType on the portal), not an order priority:
+    // PRIORITY_ROUTINE below holds the same wire value for a different vocabulary.
+    private static final String VITALS_ROUND_ROUTINE = "ROUTINE";
+    private static final String VITALS_ROUND_FULL_SET = "FULL_SET";
     private static final String ORDER_TYPE_LAB = "LAB";
     private static final String ORDER_TYPE_IMAGING = "IMAGING";
     private static final String ORDER_TYPE_PROCEDURE = "PROCEDURE";
@@ -231,7 +238,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                     .id(UUID.nameUUIDFromBytes((ctx.patientId() + ":VITAL:" + hospitalId).getBytes()))
                     .patientId(ctx.patientId())
                     .patientName(ctx.displayName())
-                    .type(overdue ? TYPE_FULL_SET : TYPE_ROUTINE)
+                    .type(overdue ? VITALS_ROUND_FULL_SET : VITALS_ROUND_ROUTINE)
                     .dueTime(dueTime)
                     .overdue(overdue)
                     .build());
@@ -359,7 +366,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .filter(task -> medicationTaskId.equals(task.getId()))
             .findFirst()
             .map(task -> toAdministeredTask(task, normalizedStatus))
-            .orElseThrow(() -> new ResourceNotFoundException("Medication administration task not found."));
+            .orElseThrow(() -> new ResourceNotFoundException("nurse.medicationTask.notFound", medicationTaskId));
     }
 
     /* ═══════════════════════════════════════════════════════════════════
@@ -437,7 +444,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (existing.isPresent()) return existing.get();
 
         Prescription rx = prescriptionRepository.findById(marId)
-            .orElseThrow(() -> new ResourceNotFoundException("MAR record not found: " + marId));
+            .orElseThrow(() -> new ResourceNotFoundException("nurse.mar.notFound", marId));
         validateHospitalMatch(rx.getHospital(), hospitalId);
 
         MedicationAdministrationRecord seeded = MedicationAdministrationRecord.builder()
@@ -630,10 +637,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private Set<UUID> assignedPatientIds(UUID nurseUserId, UUID hospitalId) {
         if (nurseUserId == null || hospitalId == null) return null;
         List<PatientResponseDTO> assigned = nurseDashboardService.getPatientsForNurse(nurseUserId, hospitalId, null);
-        Set<UUID> ids = new HashSet<>();
-        for (PatientResponseDTO p : assigned) {
-            if (p.getId() != null) ids.add(p.getId());
-        }
+        Set<UUID> ids = assigned.stream()
+            .map(PatientResponseDTO::getId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
         return ids.isEmpty() ? null : ids;
     }
 
@@ -670,9 +677,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     @Transactional
     public NurseHandoffSummaryDTO createHandoff(UUID nurseUserId, UUID hospitalId, NurseHandoffCreateRequestDTO request) {
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + request.getPatientId()));
+            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, request.getPatientId()));
 
         if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new BusinessException("Patient is not registered at this hospital.");
@@ -704,7 +711,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         // ── Tenant isolation: id + hospital lookup — a handoff from another
         // hospital reads as not-found. ──
         NurseHandoff handoff = nurseHandoffRepository.findByIdAndHospital_Id(handoffId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Handoff not found: " + handoffId));
+            .orElseThrow(() -> new ResourceNotFoundException("nurse.handoff.notFound", handoffId));
         if (STATUS_COMPLETED.equals(handoff.getStatus())) {
             return; // already completed — keep the endpoint idempotent
         }
@@ -1229,9 +1236,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (request == null) throw new BusinessException("Vital sign data required.");
 
         Patient patient = patientRepository.findByIdUnscoped(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId));
+            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, patientId));
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
         if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new BusinessException("Patient is not registered at this hospital.");
@@ -1411,9 +1418,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     @Transactional
     public NurseTaskItemDTO createNursingTask(UUID nurseUserId, UUID hospitalId, NurseTaskCreateRequestDTO request) {
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + request.getPatientId()));
+            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, request.getPatientId()));
 
         if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new BusinessException("Patient is not registered at this hospital.");
@@ -1441,7 +1448,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     @Transactional
     public NurseTaskItemDTO completeNursingTask(UUID taskId, UUID nurseUserId, UUID hospitalId, NurseTaskCompleteRequestDTO request) {
         NursingTask task = nursingTaskRepository.findByIdAndHospital_Id(taskId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Nursing task not found: " + taskId));
+            .orElseThrow(() -> new ResourceNotFoundException("nurse.task.notFound", taskId));
 
         String nurseName = resolveNurseName(nurseUserId);
         task.setStatus(STATUS_COMPLETED);
@@ -1477,7 +1484,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     @Transactional
     public void markNurseInboxRead(UUID itemId, String nurseUsername) {
         Notification notification = notificationRepository.findById(itemId)
-            .orElseThrow(() -> new ResourceNotFoundException("Notification not found: " + itemId));
+            .orElseThrow(() -> new ResourceNotFoundException("notification.notFound", itemId));
         if (!notification.getRecipientUsername().equals(nurseUsername)) {
             throw new BusinessException("Access denied: notification does not belong to this nurse.");
         }
@@ -1490,9 +1497,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     public NurseCareNoteResponseDTO createCareNote(UUID patientId, UUID nurseUserId,
                                                    UUID hospitalId, NurseCareNoteRequestDTO request) {
         Patient patient = patientRepository.findByIdUnscoped(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId));
+            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, patientId));
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
         if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new BusinessException("Patient is not registered at this hospital.");

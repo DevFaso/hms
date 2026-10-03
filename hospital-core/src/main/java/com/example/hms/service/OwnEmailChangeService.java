@@ -113,7 +113,7 @@ public class OwnEmailChangeService {
     @Transactional(noRollbackFor = BusinessException.class)
     public void requestChange(UUID userId, String currentPassword, String newEmail) {
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
+            .orElseThrow(() -> new ResourceNotFoundException("user.notFound", userId));
         EmailChangeRequest state = lockedRowOf(userId);
         LocalDateTime now = LocalDateTime.now();
 
@@ -187,7 +187,7 @@ public class OwnEmailChangeService {
     @Transactional(noRollbackFor = BusinessException.class)
     public void confirmChange(UUID userId, String code) {
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
+            .orElseThrow(() -> new ResourceNotFoundException("user.notFound", userId));
         EmailChangeRequest state = requestRepository.findByUserId(userId).orElse(null);
         if (state == null || state.getPendingEmail() == null || state.getCodeHash() == null) {
             throw gone(userId, "no email change is waiting for a code", "user.email.change.nopending");

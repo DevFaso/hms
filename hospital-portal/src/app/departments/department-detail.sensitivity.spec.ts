@@ -41,7 +41,7 @@ describe('DepartmentDetailComponent — default sensitive category', () => {
     http
       .expectOne('/departments/d-1')
       .flush({ id: 'd-1', name: 'Psychiatrie', code: 'PSY', active: true });
-    http.expectOne('/departments/d-1/with-staff').flush({ staff: [] });
+    http.expectOne('/departments/d-1/with-staff').flush({ staffMembers: [] });
     http
       .expectOne('/departments/d-1/stats')
       .flush({ totalStaff: 0, activeStaff: 0, totalPatients: 0, totalAppointments: 0 });

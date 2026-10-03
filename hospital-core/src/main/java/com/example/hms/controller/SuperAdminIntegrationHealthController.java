@@ -67,7 +67,7 @@ public class SuperAdminIntegrationHealthController {
         @RequestParam(value = "organizationId", required = false) UUID organizationId
     ) {
         if (!actionService.isKnownIntegration(integrationId)) {
-            throw new ResourceNotFoundException("Unknown integration: " + integrationId);
+            throw new ResourceNotFoundException("integration.health.notfound", integrationId);
         }
         if (!actionService.supportsResync(integrationId)) {
             throw new BusinessRuleException(
@@ -89,7 +89,7 @@ public class SuperAdminIntegrationHealthController {
         // the same id. API consumers couldn't distinguish "no history
         // yet" from "integration does not exist". Now consistent.
         if (!actionService.isKnownIntegration(integrationId)) {
-            throw new ResourceNotFoundException("Unknown integration: " + integrationId);
+            throw new ResourceNotFoundException("integration.health.notfound", integrationId);
         }
         return ResponseEntity.ok(actionService.getHistory(integrationId, windowHours));
     }

@@ -612,7 +612,7 @@ describe('PatientChartComponent — labs section', () => {
   it('re-reads BOTH blocks when Retry is pressed after the scope moved', () => {
     // Otherwise the retried block renders the new hospital's rows directly
     // above the other block's rows from the old one, under one heading.
-    const state = { superAdmin: false, hospitalId: 'h-1' as string | null, roles: ['ROLE_DOCTOR'] };
+    const scope = roleContextStub({ superAdmin: false, hospitalId: 'h-1', roles: ['ROLE_DOCTOR'] });
     patientService = jasmine.createSpyObj<PatientService>('PatientService', [
       'getDoctorTimeline',
       'listAllergies',
@@ -635,13 +635,13 @@ describe('PatientChartComponent — labs section', () => {
         provideHttpClientTesting(),
         { provide: PatientService, useValue: patientService },
         { provide: LabService, useValue: labService },
-        { provide: RoleContextService, useValue: roleContextStub(state) },
+        { provide: RoleContextService, useValue: scope },
         {
           provide: AuthService,
           useValue: {
             isAuthenticated: () => true,
-            getRoles: () => state.roles,
-            getHospitalId: () => state.hospitalId,
+            getRoles: () => scope.activeRoles,
+            getHospitalId: () => scope.effectiveHospitalIdForRequest(),
           },
         },
         {
@@ -662,10 +662,12 @@ describe('PatientChartComponent — labs section', () => {
     openLabs();
     expect(labService.listOrders).toHaveBeenCalledTimes(1);
 
-    state.hospitalId = 'h-2';
+    scope.set({ hospitalId: 'h-2' });
     patientService.listLabResults.and.returnValue(of([released()]));
+    // Retry lands before change detection lets the scope watcher run: this
+    // pins Retry's own guard. (Once the watcher runs it re-reads the section
+    // for the new scope as well — that path has its own test below.)
     component.loadLabResults();
-    fixture.detectChanges();
 
     // Both blocks re-read, under the new scope.
     expect(labService.listOrders).toHaveBeenCalledTimes(2);
@@ -739,7 +741,7 @@ describe('PatientChartComponent — labs section', () => {
     // Both lab reads are scoped, so rows from the previous scope must not
     // survive the change. The key is hospitalId() — the same value the
     // results request sends — not a "have we loaded" boolean.
-    const state = { superAdmin: false, hospitalId: 'h-1' as string | null, roles: ['ROLE_DOCTOR'] };
+    const scope = roleContextStub({ superAdmin: false, hospitalId: 'h-1', roles: ['ROLE_DOCTOR'] });
     patientService = jasmine.createSpyObj<PatientService>('PatientService', [
       'getDoctorTimeline',
       'listAllergies',
@@ -762,13 +764,13 @@ describe('PatientChartComponent — labs section', () => {
         provideHttpClientTesting(),
         { provide: PatientService, useValue: patientService },
         { provide: LabService, useValue: labService },
-        { provide: RoleContextService, useValue: roleContextStub(state) },
+        { provide: RoleContextService, useValue: scope },
         {
           provide: AuthService,
           useValue: {
             isAuthenticated: () => true,
-            getRoles: () => state.roles,
-            getHospitalId: () => state.hospitalId,
+            getRoles: () => scope.activeRoles,
+            getHospitalId: () => scope.effectiveHospitalIdForRequest(),
           },
         },
         {
@@ -789,8 +791,12 @@ describe('PatientChartComponent — labs section', () => {
     openLabs();
     expect(patientService.listLabResults).toHaveBeenCalledTimes(1);
 
-    state.hospitalId = 'h-2';
+    // The chip moves while another section is on screen; change detection
+    // runs the scope watcher, which drops the cached rows without re-reading.
     component.setSection('allergies');
+    scope.set({ hospitalId: 'h-2' });
+    fixture.detectChanges();
+    expect(patientService.listLabResults).toHaveBeenCalledTimes(1);
     openLabs();
 
     expect(patientService.listLabResults).toHaveBeenCalledTimes(2);

@@ -247,7 +247,7 @@ public class PanelService {
     private Patient requirePatientInTenant(UUID patientId, UUID hospitalId) {
         return patientRepository.findById(patientId)
             .filter(p -> p.isRegisteredInHospital(hospitalId))
-            .orElseThrow(() -> new ResourceNotFoundException("patient.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", patientId));
     }
 
     /**
@@ -259,7 +259,7 @@ public class PanelService {
         return staffRepository.findById(staffId)
             .filter(Staff::isActive)
             .filter(s -> s.getHospital() != null && hospitalId.equals(s.getHospital().getId()))
-            .orElseThrow(() -> new ResourceNotFoundException("staff.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notfound", staffId));
     }
 
     /**
@@ -270,7 +270,7 @@ public class PanelService {
     private void requireProviderRowInTenant(UUID staffId, UUID hospitalId) {
         staffRepository.findById(staffId)
             .filter(s -> s.getHospital() != null && hospitalId.equals(s.getHospital().getId()))
-            .orElseThrow(() -> new ResourceNotFoundException("staff.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notfound", staffId));
     }
 
     private PanelAssignment requireAssignmentInTenant(UUID assignmentId, UUID patientId,

@@ -63,7 +63,7 @@ public class PlatformRegistryController {
         Locale locale
     ) {
         IntegrationDescriptor descriptor = platformServiceRegistry.findIntegration(serviceType, locale)
-            .orElseThrow(() -> new ResourceNotFoundException("Integration descriptor not found: " + serviceType));
+            .orElseThrow(() -> new ResourceNotFoundException("integration.descriptor.notFound", serviceType));
         return ResponseEntity.ok(integrationDescriptorMapper.toDto(descriptor));
     }
 

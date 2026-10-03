@@ -162,7 +162,7 @@
                         <span class="material-symbols-outlined">{{
                           shiftTypeIcon(shift.shiftType)
                         }}</span>
-                        {{ formatShiftType(shift.shiftType) }}
+                        {{ shift.shiftType | enumLabel: 'shiftType' }}
                       </span>
                     </div>
                     <span class="shift-status-badge" [attr.data-status]="shift.status">
@@ -241,7 +241,7 @@
             <div class="leave-details">
               <div class="leave-title-row">
                 <span class="leave-staff-name">{{ leave.staffName }}</span>
-                <span class="leave-type-label">{{ formatLeaveType(leave.leaveType) }}</span>
+                <span class="leave-type-label">{{ leave.leaveType | enumLabel: 'leaveType' }}</span>
                 <span class="leave-status-badge" [attr.data-status]="leave.status">{{
                   leave.status | enumLabel: 'leaveStatus'
                 }}</span>
@@ -333,8 +333,8 @@
               <div class="chip-info">
                 <span class="chip-name">{{ selectedStaff()!.name }}</span>
                 <span class="chip-sub">{{
-                  selectedStaff()!.jobTitle ??
-                    selectedStaff()!.roleName ??
+                  (selectedStaff()!.jobTitle | enumLabel: 'jobTitle') ||
+                    (selectedStaff()!.roleName | roleLabel) ||
                     ('SCHEDULING.STAFF_FALLBACK' | translate)
                 }}</span>
               </div>
@@ -376,7 +376,9 @@
                         <span class="sug-name">{{ s.name }}</span>
                         <span class="sug-meta">
                           {{
-                            s.jobTitle ?? s.roleName ?? ('SCHEDULING.STAFF_FALLBACK' | translate)
+                            (s.jobTitle | enumLabel: 'jobTitle') ||
+                              (s.roleName | roleLabel) ||
+                              ('SCHEDULING.STAFF_FALLBACK' | translate)
                           }}
                           @if (s.departmentName) {
                             &nbsp;·&nbsp; {{ s.departmentName }}

@@ -25,11 +25,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -63,6 +66,9 @@ class BreakGlassServiceImplTest {
     @Mock private HospitalRepository hospitalRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private AuditEventLogService auditService;
+
+    /** Real system clock — the production bean is Clock.systemDefaultZone() (TimeConfig). */
+    @Spy private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks private BreakGlassServiceImpl service;
 
@@ -560,6 +566,55 @@ class BreakGlassServiceImplTest {
 
             // Must not throw — declare should still succeed even if audit emission fails.
             assertThat(service.declare(req)).isNotNull();
+        }
+    }
+
+    // -------------------------------------------------------------------- injected clock
+
+    @Nested
+    @DisplayName("injected clock")
+    class InjectedClock {
+        private final LocalDateTime now = LocalDateTime.of(2026, 3, 1, 10, 0);
+        private BreakGlassServiceImpl fixedService;
+
+        @BeforeEach
+        void fixClock() {
+            Clock fixed = Clock.fixed(now.atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
+            fixedService = new BreakGlassServiceImpl(sessionRepository, userRepository, patientRepository,
+                hospitalRepository, assignmentRepository, auditService, fixed);
+        }
+
+        @Test
+        @DisplayName("declare stamps startedAt and expiresAt from the injected clock")
+        void declareWritesFromInjectedClock() {
+            stubAuthenticatedDoctor();
+            when(sessionRepository.save(any(BreakGlassSession.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            fixedService.declare(BreakGlassDeclareRequestDTO.builder()
+                .patientId(patientId).hospitalId(hospitalId).reason("Unconscious, no family reachable.").build());
+
+            ArgumentCaptor<BreakGlassSession> captor = ArgumentCaptor.forClass(BreakGlassSession.class);
+            verify(sessionRepository).save(captor.capture());
+            assertThat(captor.getValue().getStartedAt()).isEqualTo(now);
+            assertThat(captor.getValue().getExpiresAt()).isEqualTo(now.plusMinutes(240));
+        }
+
+        @Test
+        @DisplayName("the live lookup reads at the injected now, and a session expiring exactly then is not live")
+        void liveLookupReadsFromInjectedClock() {
+            when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
+            BreakGlassSession expiringNow = liveSession();
+            expiringNow.setExpiresAt(now);
+            when(sessionRepository.findLiveForUserAndPatient(userId, patientId, now))
+                .thenReturn(List.of(expiringNow));
+
+            Optional<BreakGlassSessionResponseDTO> out = fixedService.findLiveForCurrentUserAndPatient(patientId);
+
+            assertThat(out).isPresent();
+            assertThat(out.get().isLive()).isFalse();
+
+            expiringNow.setExpiresAt(now.plusNanos(1));
+            assertThat(fixedService.findLiveForCurrentUserAndPatient(patientId).orElseThrow().isLive()).isTrue();
         }
     }
 

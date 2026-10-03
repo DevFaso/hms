@@ -70,7 +70,7 @@ If you don't have seeded IDs, omit them. The script auto-detects this and skips
 the `post_dispense` scenario, running the two read scenarios only:
 
 ```bash
-k6 run -e BASE_URL=https://api.dev.e-keneya.com \
+k6 run -e BASE_URL=https://dev.e-keneya.com/api \
        -e AUTH_TOKEN="$KC_PHARMACIST_JWT" \
        scripts/perf/dispense-baseline.js
 ```

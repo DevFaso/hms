@@ -4,8 +4,6 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.User;
-import com.example.hms.security.EncryptionKeyHolder;
-import com.example.hms.security.tenant.TenantContextAccessor;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.repository.support.TenantAwareJpaRepository;
@@ -15,11 +13,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
 import java.util.Set;
@@ -37,9 +33,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * and must not be found from C. Before #57 the filter keyed on
  * {@code Patient.hospitalId} (= A) and B saw nothing.
  */
-@DataJpaTest
-@ActiveProfiles("test")
-@Import({PatientRepositoryRegistrationScopeTest.JpaConfig.class, TenantContextAccessor.class, EncryptionKeyHolder.class})
+@TenantScopedDataJpaTest
+@Import(PatientRepositoryRegistrationScopeTest.JpaConfig.class)
 class PatientRepositoryRegistrationScopeTest {
 
     @Autowired

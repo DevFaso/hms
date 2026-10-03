@@ -52,6 +52,7 @@ public class BillingInvoiceController {
     private final BillingInvoiceService invoiceService;
     private final MessageSource messageSource;
     private final InvoiceEmailService invoiceEmailService;
+    private final com.example.hms.controller.support.ControllerAuthUtils authUtils;
 
     @PostMapping
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT')")
@@ -162,8 +163,10 @@ public class BillingInvoiceController {
     public ResponseEntity<BillingInvoiceResponseDTO> recordStaffPayment(
         @PathVariable UUID invoiceId,
         @Valid @RequestBody com.example.hms.payload.dto.StaffPaymentRequestDTO request,
-        @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(invoiceService.recordStaffPayment(invoiceId, request.getAmount(), locale));
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale,
+        org.springframework.security.core.Authentication authentication) {
+        UUID recordedBy = authUtils.resolveUserId(authentication).orElse(null);
+        return ResponseEntity.ok(invoiceService.recordStaffPayment(invoiceId, request, recordedBy, locale));
     }
 
     @PostMapping("/{id}/email")

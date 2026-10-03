@@ -93,11 +93,11 @@ public class WristbandPdfService {
     public byte[] generateSpecimenLabelPdf(UUID specimenId, UUID hospitalId) {
         PdfLabels t = PdfLabels.ofRequest(messageSource);
         LabSpecimen specimen = specimenRepository.findById(specimenId)
-            .orElseThrow(() -> new ResourceNotFoundException("Specimen not found with ID: " + specimenId));
+            .orElseThrow(() -> new ResourceNotFoundException("labspecimen.notfound", specimenId));
         // B1: the laboratory that collected the specimen prints its label too.
         if (hospitalId != null
                 && (specimen.getLabOrder() == null || !specimen.getLabOrder().isHandledBy(hospitalId))) {
-            throw new ResourceNotFoundException("Specimen not found with ID: " + specimenId);
+            throw new ResourceNotFoundException("labspecimen.notfound", specimenId);
         }
         Patient patient = specimen.getLabOrder() != null ? specimen.getLabOrder().getPatient() : null;
         String patientLine = patient != null
@@ -138,13 +138,13 @@ public class WristbandPdfService {
     public byte[] generateStockLotLabelPdf(UUID stockLotId, UUID hospitalId) {
         PdfLabels t = PdfLabels.ofRequest(messageSource);
         StockLot lot = stockLotRepository.findById(stockLotId)
-            .orElseThrow(() -> new ResourceNotFoundException("Stock lot not found with ID: " + stockLotId));
+            .orElseThrow(() -> new ResourceNotFoundException("stockLot.notFound", stockLotId));
 
         InventoryItem inventoryItem = lot.getInventoryItem();
         // 404-not-403: another hospital's lot is indistinguishable from one
         // that does not exist.
         if (hospitalId != null && !Objects.equals(hospitalOf(inventoryItem), hospitalId)) {
-            throw new ResourceNotFoundException("Stock lot not found with ID: " + stockLotId);
+            throw new ResourceNotFoundException("stockLot.notFound", stockLotId);
         }
 
         if (lot.getBarcodeValue() == null || lot.getBarcodeValue().isBlank()) {
@@ -234,7 +234,7 @@ public class WristbandPdfService {
         }
     }
 
-    private static void writeText(PDPageContentStream cs, int size, float x, float y, String text)
+    private static void writeText(PDPageContentStream cs, float size, float x, float y, String text)
             throws IOException {
         cs.beginText();
         cs.setFont(PDType1Font.HELVETICA_BOLD, size);

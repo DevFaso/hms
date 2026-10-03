@@ -56,7 +56,7 @@ public class CdsAcknowledgementServiceImpl implements CdsAcknowledgementService 
         UUID userId = authUtils.resolveUserId(auth)
                 .orElseThrow(() -> new BusinessException("Unable to resolve user from authentication."));
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("user.notFound", userId));
 
         // The scope first: a hospital named in the body narrows the request,
         // and it must do so before the tenant-scoped patient load reads (and
@@ -65,7 +65,7 @@ public class CdsAcknowledgementServiceImpl implements CdsAcknowledgementService 
                 auth, request.getHospitalId(), false);
 
         Patient patient = patientRepository.findById(request.getPatientId())
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
         requirePatientAccessible(auth, patient, resolvedHospitalId);
 
         Hospital hospital = null;
@@ -101,7 +101,7 @@ public class CdsAcknowledgementServiceImpl implements CdsAcknowledgementService 
     public List<CdsAcknowledgementResponseDTO> activeForPatient(Authentication auth, UUID patientId) {
         authUtils.requireAuth(auth);
         Patient patient = patientRepository.findById(patientId)
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, null, false);
         requirePatientAccessible(auth, patient, resolvedHospitalId);
 

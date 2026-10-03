@@ -646,6 +646,153 @@ export class EnumLabelService implements OnDestroy {
       CASH: 'Cash',
       INSURANCE: 'Insurance',
     },
+
+    /* Tier-2 nets for the domains that had none. Appended last on purpose:
+     * the cross-group scan in lookup() returns the FIRST group that defines a
+     * value, so a group added here can only fill a gap, never change the label
+     * an earlier group already gives. scripts/lib/enum-labels-net.test.mjs
+     * fails when a declared domain has no group. */
+    /* ── Immunization status ───────────────────────────────── */
+    immunizationStatus: {
+      COMPLETED: 'Completed',
+      DEFERRED: 'Deferred',
+      ENTERED_IN_ERROR: 'Entered in Error',
+      NOT_DONE: 'Not Done',
+      REFUSED: 'Refused',
+    },
+
+    /* ── MAR task status ───────────────────────────────────── */
+    marTaskStatus: {
+      COMPLETED: 'Completed',
+      DUE: 'Due',
+      OVERDUE: 'Overdue',
+    },
+
+    /* ── Newborn alert types ───────────────────────────────── */
+    newbornAlertType: {
+      APGAR: 'Apgar',
+      CARDIOVASCULAR: 'Cardiovascular',
+      GENERAL: 'General',
+      GLUCOSE: 'Glucose',
+      OXYGENATION: 'Oxygenation',
+      RESPIRATORY: 'Respiratory',
+      THERMOREGULATION: 'Thermoregulation',
+    },
+
+    /* ── Notification types (Notification.type, a String column) ─── */
+    notificationType: {
+      APPOINTMENT_REMINDER: 'Appointment Reminder',
+      CRITICAL_IMAGING_FINDING: 'Critical Imaging Finding',
+      CRITICAL_IMAGING_FINDING_ESCALATION: 'Critical Imaging Finding Escalation',
+      CRITICAL_LAB_RESULT: 'Critical Lab Result',
+      CRITICAL_LAB_RESULT_ESCALATION: 'Critical Lab Result Escalation',
+      DISCHARGE_SUMMARY: 'Discharge Summary',
+      LICENSE_EXPIRY: 'License Expiry',
+      MEDICATION_REFILL: 'Medication Refill',
+      POSITIVE_CULTURE_RESULT: 'Positive Culture Result',
+      PRO_CRITICAL_ITEM: 'Critical PRO Item',
+      PRO_CRITICAL_ITEM_ESCALATION: 'Critical PRO Item Escalation',
+      PRO_SCREEN_POSITIVE: 'Positive PRO Screen',
+      REORDER_ALERT: 'Reorder Alert',
+    },
+
+    /* ── Order source (snapshot drawer + nurse station board) ─── */
+    orderSourceType: {
+      IMAGING: 'Imaging',
+      LAB: 'Lab',
+      PROCEDURE: 'Procedure',
+      VITALS: 'Vitals',
+    },
+
+    /* ── Organization types ────────────────────────────────── */
+    organizationType: {
+      ACADEMIC_CENTER: 'Academic Center',
+      ACADEMIC_MEDICAL_CENTER: 'Academic Medical Center',
+      AMBULATORY: 'Ambulatory Network',
+      COMMUNITY_HOSPITAL: 'Community Hospital',
+      GOVERNMENT_AGENCY: 'Government Agency',
+      HEALTHCARE_NETWORK: 'Healthcare Network',
+      HEALTH_SYSTEM: 'Health System',
+      HOSPITAL: 'Hospital',
+      HOSPITAL_CHAIN: 'Hospital Chain',
+      PEDIATRIC_SYSTEM: 'Pediatric System',
+      PRIVATE_PRACTICE: 'Private Practice',
+      REGIONAL_NETWORK: 'Regional Network',
+      RESEARCH_INSTITUTION: 'Research Institution',
+      SPECIALTY_GROUP: 'Specialty Group',
+      SPECIALTY_NETWORK: 'Specialty Network',
+    },
+
+    /* ── Platform release status ───────────────────────────── */
+    platformReleaseStatus: {
+      CANCELLED: 'Cancelled',
+      COMPLETED: 'Completed',
+      IN_PROGRESS: 'In Progress',
+      SCHEDULED: 'Scheduled',
+    },
+
+    /* ── Platform service status ───────────────────────────── */
+    platformServiceStatus: {
+      ACTIVE: 'Active',
+      DECOMMISSIONED: 'Decommissioned',
+      INACTIVE: 'Inactive',
+      PENDING: 'Pending',
+      PILOT: 'Pilot',
+      UNKNOWN: 'Unknown',
+    },
+
+    /* ── Postpartum alert types ────────────────────────────── */
+    postpartumAlertType: {
+      EDUCATION: 'Education',
+      FOLLOW_UP: 'Follow-Up',
+      HEMORRHAGE: 'Hemorrhage',
+      INFECTION: 'Infection',
+      PAIN: 'Pain',
+      PSYCHOSOCIAL: 'Psychosocial',
+    },
+
+    /* ── Procedure order status ────────────────────────────── */
+    procedureOrderStatus: {
+      CANCELLED: 'Cancelled',
+      COMPLETED: 'Completed',
+      IN_PROGRESS: 'In Progress',
+      ORDERED: 'Ordered',
+      POSTPONED: 'Postponed',
+      PRE_OP_CLEARANCE_PENDING: 'Pre-Op Clearance Pending',
+      READY_FOR_PROCEDURE: 'Ready for Procedure',
+      SCHEDULED: 'Scheduled',
+    },
+
+    /* ── Vitals round type ─────────────────────────────────── */
+    vitalTaskType: {
+      FULL_SET: 'Full Set',
+      ROUTINE: 'Routine',
+    },
+
+    /* ── Staff scheduling and employment ──────────────────── */
+    shiftType: {
+      MORNING: 'Morning',
+      AFTERNOON: 'Afternoon',
+      EVENING: 'Evening',
+      NIGHT: 'Night',
+      ON_CALL: 'On-Call',
+      FLEX: 'Flex',
+    },
+    leaveType: {
+      VACATION: 'Vacation',
+      SICK: 'Sick Leave',
+      EMERGENCY: 'Emergency',
+      TRAINING: 'Training',
+      UNPAID: 'Unpaid Leave',
+      OTHER: 'Other',
+    },
+    employmentType: {
+      FULL_TIME: 'Full-Time',
+      PART_TIME: 'Part-Time',
+      CONTRACT: 'Contract',
+      LOCUM: 'Locum',
+      INTERN: 'Intern',
+    },
   };
 
   /** The locale-aware label for one raw enum value, or `''` for a blank one. */

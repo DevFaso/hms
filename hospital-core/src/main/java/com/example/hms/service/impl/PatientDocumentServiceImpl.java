@@ -69,6 +69,11 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
         UUID userId = resolveUserId(auth);
         Patient patient = resolvePatient(userId);
         User uploader = resolveUser(userId);
+        if (request.getNotes() != null
+                && request.getNotes().length() > PatientDocumentRequestDTO.NOTES_MAX_LENGTH) {
+            throw new IllegalArgumentException("Notes cannot exceed "
+                    + PatientDocumentRequestDTO.NOTES_MAX_LENGTH + " characters");
+        }
 
         FileUploadService.StoredFileDescriptor descriptor = fileUploadService.uploadPatientDocument(file, userId);
 
@@ -179,7 +184,8 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
                             + "the patient is registered at. Select a hospital first.");
         }
         if (patientId == null) {
-            throw new ResourceNotFoundException("Patient not found: null");
+            // No id to name: "Patient not found with ID: null" helped nobody.
+            throw new ResourceNotFoundException("patient.notFoundUnspecified");
         }
         return registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
@@ -238,7 +244,7 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     private PatientUploadedDocument requireOwnDocument(UUID patientId, UUID documentId) {
         return documentRepository
                 .findByIdAndPatient_IdAndDeletedAtIsNull(documentId, patientId)
-                .orElseThrow(() -> new ResourceNotFoundException("Document not found: " + documentId));
+                .orElseThrow(() -> new ResourceNotFoundException("patientDocument.notFound", documentId));
     }
 
     private UUID resolveUserId(Authentication auth) {
@@ -250,14 +256,12 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
         UUID userId = resolveUserId(auth);
         return LinkedPatientLookup.linkedPatient(patientRepository, userId)
                 .map(Patient::getId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "No patient record linked to your account. Contact your care team."));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.portal.noRecord"));
     }
 
     private Patient resolvePatient(UUID userId) {
         return LinkedPatientLookup.linkedPatient(patientRepository, userId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "No patient record linked to your account. Contact your care team."));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.portal.noRecord"));
     }
 
     private User resolveUser(UUID userId) {

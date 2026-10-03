@@ -11,6 +11,7 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 interface DeptOption {
   id: string;
@@ -20,7 +21,7 @@ interface DeptOption {
 @Component({
   selector: 'app-appointment-form',
   standalone: true,
-  imports: [FormsModule, RouterLink, TranslateModule],
+  imports: [FormsModule, RouterLink, TranslateModule, EnumLabelPipe],
   templateUrl: './appointment-form.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './appointment-form.scss',

@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
 import { SchedulingComponent } from './scheduling';
@@ -247,6 +247,57 @@ describe('SchedulingComponent', () => {
     expect(component.selectedStaff()).toBeNull();
   });
 
+  it('shows the picked staff member by translated job title, else by role', () => {
+    // The chip rendered `jobTitle ?? roleName ?? fallback` raw — MIDWIFE, or
+    // ROLE_DOCTOR for a member with no title — while the fallback beside
+    // them was translated, and the raw-enum gate excused the whole binding
+    // because a `translate` pipe appeared in it.
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PORTAL: { ENUM: { JOB_TITLE: { MIDWIFE: 'Sage-femme' }, ROLE: { DOCTOR: 'Médecin' } } },
+    });
+    translate.use('fr');
+    fixture.detectChanges();
+    component.openBulkModal();
+    const chip = () =>
+      (fixture.nativeElement.querySelector('.selected-chip .chip-sub')?.textContent ?? '').trim();
+
+    component.selectStaff({
+      id: 'st1',
+      name: 'Ama Owusu',
+      hospitalId: 'h1',
+      jobTitle: 'MIDWIFE',
+    } as StaffResponse);
+    fixture.detectChanges();
+    expect(chip()).toBe('Sage-femme');
+
+    component.selectStaff({
+      id: 'st2',
+      name: 'Kofi Mensah',
+      hospitalId: 'h1',
+      roleName: 'ROLE_DOCTOR',
+    } as StaffResponse);
+    fixture.detectChanges();
+    expect(chip()).toBe('Médecin');
+  });
+
+  it('labels leave requests by translated leave type', () => {
+    // formatLeaveType() capitalised the token — "Vacation" on a French screen.
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PORTAL: { ENUM: { LEAVE_TYPE: { VACATION: 'Congés payés' } } },
+    });
+    translate.use('fr');
+    fixture.detectChanges();
+    component.activeView.set('leaves');
+    fixture.detectChanges();
+
+    const labels = Array.from(
+      fixture.nativeElement.querySelectorAll('.leave-type-label') as NodeListOf<HTMLElement>,
+    ).map((el) => (el.textContent ?? '').trim());
+    expect(labels).toEqual(['Congés payés', 'Congés payés']);
+  });
+
   it('formats times, ranges, and enum labels', () => {
     expect(component.formatTime('08:30')).toBe('8:30 AM');
     expect(component.formatTime('16:05')).toBe('4:05 PM');
@@ -257,7 +308,6 @@ describe('SchedulingComponent', () => {
         mockShift({ startTime: '18:00', endTime: '01:00', crossMidnight: true }),
       ),
     ).toContain('(+1)');
-    expect(component.formatShiftType('NIGHT')).toBe('Night');
     expect(component.getInitials('Ama Owusu')).toBe('AO');
     expect(component.getInitials('Cher')).toBe('CH');
     expect(component.getInitials('')).toBe('??');

@@ -1,11 +1,13 @@
 import {
   Component,
+  DestroyRef,
   computed,
   inject,
   OnInit,
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -28,11 +30,7 @@ import {
 import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
-import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
-import { Subject, finalize, takeUntil } from 'rxjs';
-import { ActivatedRoute } from '@angular/router';
-import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
+import { finalize } from 'rxjs';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 
@@ -49,29 +47,16 @@ type Tab = 'requests' | 'units';
 @Component({
   selector: 'app-transfusion',
   standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    TranslateModule,
-    EnumLabelPipe,
-    PatientPickerComponent,
-    HospitalScopeChipComponent,
-    HospitalScopeHintComponent,
-  ],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, PatientPickerComponent],
   templateUrl: './transfusion.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './transfusion.scss',
 })
 export class TransfusionComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
   private readonly transfusion = inject(TransfusionService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
-  private readonly route = inject(ActivatedRoute);
-  private readonly scopeUrl = inject(HospitalScopeUrlService);
-  /** See RoleContextService.hasHospitalScope: loads and write buttons wait for a pinned hospital. */
-  readonly scopeReady = this.roleContext.hasHospitalScope;
-  /** Emits on every scope change so a response for the previous hospital can never land. */
-  private readonly scopeChanged$ = new Subject<void>();
 
   private readonly translate = inject(TranslateService);
 
@@ -190,24 +175,7 @@ export class TransfusionComponent implements OnInit {
   reactionForm = this.emptyReactionForm();
 
   ngOnInit(): void {
-    // Read ?hospitalId= before the first load: the chip does the same in its
-    // own ngOnInit, which runs after ours, and the interceptor must see the
-    // right scope on the initial fetch (the pattern every chip host uses).
-    this.scopeUrl.applyUrlScopeSync(this.route);
     this.loadRequests();
-  }
-
-  onScopeChange(): void {
-    this.scopeChanged$.next();
-    // Both tabs cache their list and setTab() only fetches an empty one, so
-    // the hidden tab is cleared (not fetched) and the visible tab reloads.
-    this.selectedRequest.set(null);
-    this.assignableUnits.set([]);
-    this.requests.set([]);
-    this.units.set([]);
-    this.requestsLoaded.set(false);
-    this.unitsLoaded.set(false);
-    this.setTab(this.tab());
   }
 
   setTab(tab: Tab): void {
@@ -224,17 +192,12 @@ export class TransfusionComponent implements OnInit {
   /* ── Requests ── */
 
   loadRequests(): void {
-    if (!this.scopeReady()) {
-      this.requests.set([]);
-      this.loading.set(false);
-      return;
-    }
     this.loading.set(true);
     const filter = this.requestStatusFilter();
     this.transfusion
       .listRequests(filter || undefined)
       .pipe(
-        takeUntil(this.scopeChanged$),
+        takeUntilDestroyed(this.destroyRef),
         finalize(() => this.loading.set(false)),
       )
       .subscribe({
@@ -379,17 +342,12 @@ export class TransfusionComponent implements OnInit {
   /* ── Units ── */
 
   loadUnits(): void {
-    if (!this.scopeReady()) {
-      this.units.set([]);
-      this.loading.set(false);
-      return;
-    }
     this.loading.set(true);
     const filter = this.unitStatusFilter();
     this.transfusion
       .listUnits(filter || undefined)
       .pipe(
-        takeUntil(this.scopeChanged$),
+        takeUntilDestroyed(this.destroyRef),
         finalize(() => this.loading.set(false)),
       )
       .subscribe({

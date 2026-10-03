@@ -77,7 +77,7 @@ public class PatientChartUpdateServiceImpl implements PatientChartUpdateService 
         PatientChartUpdate update = patientChartUpdateRepository.findById(updateId)
             .filter(entity -> Objects.equals(entity.getPatient().getId(), patientId))
             .filter(entity -> Objects.equals(entity.getHospital().getId(), hospitalId))
-            .orElseThrow(() -> new ResourceNotFoundException("Chart update not found for patient and hospital context."));
+            .orElseThrow(() -> new ResourceNotFoundException("chartUpdate.notFound", updateId));
         return patientChartUpdateMapper.toResponseDto(update);
     }
 

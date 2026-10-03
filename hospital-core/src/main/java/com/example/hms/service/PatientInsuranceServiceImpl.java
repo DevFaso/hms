@@ -70,9 +70,9 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
                     null, PATIENT_REQUIRED_MSG, locale));
         }
 
-        Patient patient = getPatientOrThrow(dto.getPatientId(), locale);
+        Patient patient = getPatientOrThrow(dto.getPatientId());
         // PATIENT may only act on self; another patient answers as a missing one
-        enforceSelfAccessIfPatient(patient, () -> patientNotFound(dto.getPatientId(), locale));
+        enforceSelfAccessIfPatient(patient, () -> patientNotFound(dto.getPatientId()));
 
         PatientInsurance insurance = patientInsuranceMapper.toPatientInsurance(dto, patient);
 
@@ -86,9 +86,9 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     @Override
     @Transactional(readOnly = true)
     public PatientInsuranceResponseDTO getPatientInsuranceById(UUID insuranceId, Locale locale) {
-        PatientInsurance insurance = getInsuranceOrThrow(insuranceId, locale);
+        PatientInsurance insurance = getInsuranceOrThrow(insuranceId);
         // Another patient's insurance answers exactly as a missing id does.
-        enforceSelfAccessIfPatient(insurance.getPatient(), () -> insuranceNotFound(insuranceId, locale));
+        enforceSelfAccessIfPatient(insurance.getPatient(), () -> insuranceNotFound(insuranceId));
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(insurance);
     }
 
@@ -112,15 +112,15 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     @Override
     @Transactional
     public PatientInsuranceResponseDTO updatePatientInsurance(UUID insuranceId, PatientInsuranceRequestDTO dto, Locale locale) {
-        PatientInsurance existing = getInsuranceOrThrow(insuranceId, locale);
+        PatientInsurance existing = getInsuranceOrThrow(insuranceId);
         // The record's current owner first: a patient naming their own id in
         // the body must not rewrite, and so take over, another patient's
         // coverage. (The endpoint admits no patient today; the rule is the
         // service's, so a future caller cannot skip it.)
-        enforceSelfAccessIfPatient(existing.getPatient(), () -> insuranceNotFound(insuranceId, locale));
+        enforceSelfAccessIfPatient(existing.getPatient(), () -> insuranceNotFound(insuranceId));
 
         Patient targetPatient = (dto.getPatientId() != null)
-            ? getPatientOrThrow(dto.getPatientId(), locale)
+            ? getPatientOrThrow(dto.getPatientId())
             : existing.getPatient();
 
         if (targetPatient == null) {
@@ -129,7 +129,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
                     null, PATIENT_REQUIRED_MSG, locale));
         }
 
-        enforceSelfAccessIfPatient(targetPatient, () -> patientNotFound(targetPatient.getId(), locale));
+        enforceSelfAccessIfPatient(targetPatient, () -> patientNotFound(targetPatient.getId()));
 
         // Apply changes (do not touch assignment here)
         patientInsuranceMapper.updateEntityFromDto(existing, dto, targetPatient);
@@ -141,8 +141,8 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     @Override
     @Transactional
     public void deletePatientInsurance(UUID insuranceId, Locale locale) {
-        PatientInsurance existing = getInsuranceOrThrow(insuranceId, locale);
-        enforceSelfAccessIfPatient(existing.getPatient(), () -> insuranceNotFound(insuranceId, locale));
+        PatientInsurance existing = getInsuranceOrThrow(insuranceId);
+        enforceSelfAccessIfPatient(existing.getPatient(), () -> insuranceNotFound(insuranceId));
         patientInsuranceRepository.deleteById(insuranceId);
     }
 
@@ -152,8 +152,8 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
                                                             LinkPatientInsuranceRequestDTO req,
                                                             ActingContext ctx,
                                                             Locale locale) {
-        PatientInsurance insurance = getInsuranceOrThrow(insuranceId, locale);
-        Patient patient = getPatientOrThrow(req.getPatientId(), locale);
+        PatientInsurance insurance = getInsuranceOrThrow(insuranceId);
+        Patient patient = getPatientOrThrow(req.getPatientId());
 
         // Decide acting mode
         boolean actAsPatient = isActingAsPatient(ctx);
@@ -162,16 +162,16 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         // A patient-only caller is held to their own rows whatever X-Act-As
         // says, before the staff checks below, whose answers (400/403) would
         // otherwise differ between a real id and a missing one.
-        enforceSelfAccessIfPatient(patient, () -> patientNotFound(req.getPatientId(), locale));
-        enforceSelfAccessIfPatient(insurance.getPatient(), () -> insuranceNotFound(insuranceId, locale));
+        enforceSelfAccessIfPatient(patient, () -> patientNotFound(req.getPatientId()));
+        enforceSelfAccessIfPatient(insurance.getPatient(), () -> insuranceNotFound(insuranceId));
 
         if (actAsPatient) {
             // A patient links only their own row, and only coverage that is
             // unowned or already theirs: another patient's insurance record
             // could otherwise be re-pointed at the caller. Either refusal
             // answers exactly as the missing id does.
-            enforcePatientSelfAccess(patient, () -> patientNotFound(req.getPatientId(), locale));
-            enforcePatientSelfAccess(insurance.getPatient(), () -> insuranceNotFound(insuranceId, locale));
+            enforcePatientSelfAccess(patient, () -> patientNotFound(req.getPatientId()));
+            enforcePatientSelfAccess(insurance.getPatient(), () -> insuranceNotFound(insuranceId));
             rejectHospitalLinkForPatient(req, locale);
         } else {
             UUID hospitalId = resolveHospitalId(req, ctx);
@@ -218,25 +218,22 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         return patientChartAccess.require(patientId, hospitalId);
     }
 
-    private Patient getPatientOrThrow(UUID patientId, Locale locale) {
-        return patientRepository.findById(patientId).orElseThrow(() -> patientNotFound(patientId, locale));
+    private Patient getPatientOrThrow(UUID patientId) {
+        return patientRepository.findById(patientId).orElseThrow(() -> patientNotFound(patientId));
     }
 
-    private PatientInsurance getInsuranceOrThrow(UUID insuranceId, Locale locale) {
-        return patientInsuranceRepository.findById(insuranceId).orElseThrow(() -> insuranceNotFound(insuranceId, locale));
+    private PatientInsurance getInsuranceOrThrow(UUID insuranceId) {
+        return patientInsuranceRepository.findById(insuranceId).orElseThrow(() -> insuranceNotFound(insuranceId));
     }
 
     /** The answer for a patient id that matches no row — and for one the caller may not name. */
-    private ResourceNotFoundException patientNotFound(UUID patientId, Locale locale) {
-        return new ResourceNotFoundException(
-            messageSource.getMessage("patient.notfound", new Object[]{patientId}, "Patient not found", locale));
+    private static ResourceNotFoundException patientNotFound(UUID patientId) {
+        return new ResourceNotFoundException("patient.notfound", patientId);
     }
 
     /** The answer for an insurance id that matches no row — and for one the caller may not read. */
-    private ResourceNotFoundException insuranceNotFound(UUID insuranceId, Locale locale) {
-        return new ResourceNotFoundException(
-            messageSource.getMessage("patientinsurance.notfound", new Object[]{insuranceId},
-                "Patient insurance not found", locale));
+    private static ResourceNotFoundException insuranceNotFound(UUID insuranceId) {
+        return new ResourceNotFoundException("patientinsurance.notfound", insuranceId);
     }
 
     /**
@@ -260,24 +257,24 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         ActingContext ctx,
         Locale locale
     ) {
-        PatientInsurance insurance = getInsuranceOrThrow(insuranceId, locale);
+        PatientInsurance insurance = getInsuranceOrThrow(insuranceId);
 
         if (req.getPatientId() == null) {
             throw new BusinessException(messageSource.getMessage(
                 PATIENT_REQUIRED_KEY, null, PATIENT_REQUIRED_MSG, locale));
         }
-        Patient patient = getPatientOrThrow(req.getPatientId(), locale);
-        enforceSelfAccessIfPatient(patient, () -> patientNotFound(req.getPatientId(), locale));
+        Patient patient = getPatientOrThrow(req.getPatientId());
+        enforceSelfAccessIfPatient(patient, () -> patientNotFound(req.getPatientId()));
         // As in linkPatientInsurance: a patient-only caller is held to their own
         // coverage whatever X-Act-As says, before the staff checks answer.
-        enforceSelfAccessIfPatient(insurance.getPatient(), () -> insuranceNotFound(insuranceId, locale));
+        enforceSelfAccessIfPatient(insurance.getPatient(), () -> insuranceNotFound(insuranceId));
 
         boolean actAsPatient = isActingAsPatient(ctx);
         UUID actorUserId = resolveActorUserId(ctx);
 
         if (actAsPatient) {
-            enforcePatientSelfAccess(patient, () -> patientNotFound(req.getPatientId(), locale));
-            enforcePatientSelfAccess(insurance.getPatient(), () -> insuranceNotFound(insuranceId, locale));
+            enforcePatientSelfAccess(patient, () -> patientNotFound(req.getPatientId()));
+            enforcePatientSelfAccess(insurance.getPatient(), () -> insuranceNotFound(insuranceId));
             insurance.setPatient(patient);
         } else {
             insurance.setPatient(patient);
@@ -303,15 +300,15 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         final String payerCode = req.getPayerCode().trim();
         final String policyNumber = req.getPolicyNumber().trim();
 
-        Patient patient = getPatientOrThrow(patientId, locale);
-        enforceSelfAccessIfPatient(patient, () -> patientNotFound(patientId, locale));
+        Patient patient = getPatientOrThrow(patientId);
+        enforceSelfAccessIfPatient(patient, () -> patientNotFound(patientId));
 
         final boolean actAsPatient = isActingAsPatient(ctx);
         final UUID actorUserId = resolveActorUserId(ctx);
 
         UUID hospitalIdForStaff = null;
         if (actAsPatient) {
-            enforcePatientSelfAccess(patient, () -> patientNotFound(patientId, locale));
+            enforcePatientSelfAccess(patient, () -> patientNotFound(patientId));
             rejectHospitalLinkForPatient(req, locale);
         } else {
             hospitalIdForStaff = resolveHospitalId(req, ctx);

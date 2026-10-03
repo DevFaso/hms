@@ -127,9 +127,64 @@ describe('PatientPortalService lab results', () => {
 });
 
 /**
+ * GET /me/patient/care-team returns CareTeamDTO { primaryCare,
+ * primaryCareHistory }. The portal declared `{ members }` for it and swallowed
+ * every error as an empty team.
+ */
+describe('PatientPortalService care team', () => {
+  let service: PatientPortalService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [PatientPortalService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(PatientPortalService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify());
+
+  it('passes the backend shape through', () => {
+    const pcp = {
+      id: 'pcp-1',
+      hospitalId: 'h-1',
+      hospitalName: null,
+      doctorUserId: 'd-1',
+      doctorDisplay: 'Dr Awa Traoré',
+      startDate: '2026-01-15',
+      endDate: null,
+      current: true,
+    };
+    let received: unknown;
+    service.getMyCareTeam().subscribe((t) => (received = t));
+    httpMock
+      .expectOne('/me/patient/care-team')
+      .flush({ data: { primaryCare: pcp, primaryCareHistory: [pcp] } });
+    expect(received).toEqual({ primaryCare: pcp, primaryCareHistory: [pcp] });
+  });
+
+  it('normalises an absent current provider and history', () => {
+    let received: unknown;
+    service.getMyCareTeam().subscribe((t) => (received = t));
+    httpMock.expectOne('/me/patient/care-team').flush({ data: {} });
+    expect(received).toEqual({ primaryCare: null, primaryCareHistory: [] });
+  });
+
+  it('lets a failure through instead of reporting an empty team', () => {
+    let failed = false;
+    service.getMyCareTeam().subscribe({ error: () => (failed = true) });
+    httpMock
+      .expectOne('/me/patient/care-team')
+      .flush('boom', { status: 500, statusText: 'Server Error' });
+    expect(failed).toBeTrue();
+  });
+});
+
+/**
  * The chat picker's two sources. `/me/patient/care-team` sends
- * `{ primaryCare, primaryCareHistory }` (not the `{ members }` the older
- * `getMyCareTeam` declares), and only a user id can address a message — so
+ * `{ primaryCare, primaryCareHistory }` (the `CareTeamDTO` `getMyCareTeam`
+ * returns), and only a user id can address a message — so
  * the mapping reads `doctorUserId` / `staffUserId`, drops anything without
  * one, and lets errors through so the picker can tell a failure from an
  * empty list.

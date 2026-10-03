@@ -142,9 +142,9 @@ public class EncounterServiceImpl implements EncounterService {
     @Override
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<EncounterResponseDTO> getEncountersByDoctorIdentifier(String identifier, Locale locale) {
-        UUID staffId = resolveStaffIdByIdentifier(identifier, locale);
+        UUID staffId = resolveStaffIdByIdentifier(identifier);
         Staff staff = staffRepository.findById(staffId)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_STAFF_NOT_FOUND, null, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_STAFF_NOT_FOUND, staffId));
 
         // Optional: validate role in hospital context
         UUID hospitalId = staff.getHospital() != null ? staff.getHospital().getId() : null;
@@ -164,7 +164,7 @@ public class EncounterServiceImpl implements EncounterService {
     }
 
     /** Accepts UUID | email | username | license/roleCode and returns Staff ID. */
-    private UUID resolveStaffIdByIdentifier(String identifier, Locale locale) {
+    private UUID resolveStaffIdByIdentifier(String identifier) {
         // UUID?
         try {
             return UUID.fromString(identifier);
@@ -181,7 +181,7 @@ public class EncounterServiceImpl implements EncounterService {
         // Username / license / role code
         return staffRepository.findByUsernameOrLicenseOrRoleCode(identifier)
             .map(Staff::getId)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_STAFF_NOT_FOUND, null, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notFoundByIdentifier", identifier));
     }
 
 
@@ -203,7 +203,7 @@ public class EncounterServiceImpl implements EncounterService {
         if (dto.getPatientId() != null) return dto.getPatientId();
         if (dto.getPatientIdentifier() != null) {
             Patient patient = patientRepository.findByUsernameOrEmail(dto.getPatientIdentifier())
-                .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_PATIENT_NOT_FOUND, null, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundByIdentifier", dto.getPatientIdentifier()));
             return patient.getId();
         }
         throw new IllegalArgumentException(messageSource.getMessage("patient.identifier.required", null, locale));
@@ -229,7 +229,7 @@ public class EncounterServiceImpl implements EncounterService {
         if (dto.getHospitalId() != null) return dto.getHospitalId();
         if (dto.getHospitalIdentifier() != null) {
             Hospital hospital = hospitalRepository.findByNameOrCodeOrEmail(dto.getHospitalIdentifier())
-                .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_HOSPITAL_NOT_FOUND, null, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", dto.getHospitalIdentifier()));
             return hospital.getId();
         }
         throw new IllegalArgumentException(messageSource.getMessage("hospital.identifier.required", null, locale));
@@ -242,7 +242,7 @@ public class EncounterServiceImpl implements EncounterService {
                 .filter(dep -> dep.getName().equalsIgnoreCase(dto.getDepartmentIdentifier()) ||
                                (dep.getCode() != null && dep.getCode().equalsIgnoreCase(dto.getDepartmentIdentifier())))
                 .findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage("department.notfound", null, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("department.notFoundByIdentifier", dto.getDepartmentIdentifier()));
             return department.getId();
         }
         throw new IllegalArgumentException(messageSource.getMessage("department.identifier.required", null, locale));
@@ -461,7 +461,7 @@ public class EncounterServiceImpl implements EncounterService {
     @Transactional
     public void deleteEncounter(UUID id, Locale locale) {
         if (!encounterRepository.existsById(id)) {
-            throw new ResourceNotFoundException(messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, locale));
+            throw new ResourceNotFoundException(MSG_ENCOUNTER_NOT_FOUND, id);
         }
         Encounter existing = encounterRepository.findById(id).orElse(null);
         encounterRepository.deleteById(id);
@@ -570,7 +570,7 @@ public class EncounterServiceImpl implements EncounterService {
     @Override
     @Transactional
     public EncounterNoteResponseDTO signEncounterNote(UUID encounterId, Locale locale) {
-        EncounterNote note = loadNoteScoped(encounterId, locale);
+        EncounterNote note = loadNoteScoped(encounterId);
 
         if (note.isSigned() || note.getSignatureValue() != null) {
             throw new BusinessException(
@@ -615,7 +615,7 @@ public class EncounterServiceImpl implements EncounterService {
     @Override
     @Transactional
     public EncounterNoteResponseDTO cosignEncounterNote(UUID encounterId, Locale locale) {
-        EncounterNote note = loadNoteScoped(encounterId, locale);
+        EncounterNote note = loadNoteScoped(encounterId);
 
         if (!note.isRequiresCosign()) {
             throw new BusinessException("This note does not declare a co-signature requirement.");
@@ -654,18 +654,17 @@ public class EncounterServiceImpl implements EncounterService {
     }
 
     /** 404-not-403: a note at another hospital is indistinguishable from a missing one. */
-    private EncounterNote loadNoteScoped(UUID encounterId, Locale locale) {
+    private EncounterNote loadNoteScoped(UUID encounterId) {
         if (!encounterRepository.existsById(encounterId)) {
-            throw new ResourceNotFoundException(messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, locale));
+            throw new ResourceNotFoundException(MSG_ENCOUNTER_NOT_FOUND, encounterId);
         }
         EncounterNote note = encounterNoteRepository.findByEncounter_Id(encounterId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage("encounter.note.notfound", null, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("encounter.note.notfound"));
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null
             && note.getHospital() != null
             && !hospitalId.equals(note.getHospital().getId())) {
-            throw new ResourceNotFoundException(messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, locale));
+            throw new ResourceNotFoundException(MSG_ENCOUNTER_NOT_FOUND, encounterId);
         }
         return note;
     }
@@ -775,24 +774,24 @@ public class EncounterServiceImpl implements EncounterService {
         // their FIRST hospital, so the tenant-scoped findById misses them when accessed
         // from a different hospital. Security is enforced via registration check below.
         Patient patient = patientRepository.findByIdUnscoped(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_PATIENT_NOT_FOUND, null, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
 
         UUID staffId = resolveStaffId(request, locale);
         Staff staff = staffRepository.findById(staffId)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_STAFF_NOT_FOUND, null, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_STAFF_NOT_FOUND, staffId));
 
         UUID hospitalId = resolveHospitalId(request, locale);
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_HOSPITAL_NOT_FOUND, null, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND, hospitalId));
 
         // SECURITY: Verify the patient is registered at this hospital
         if (!patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)) {
-            throw new ResourceNotFoundException(messageSource.getMessage(MSG_PATIENT_NOT_FOUND, null, locale));
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
 
         ensureStaffHospitalAlignment(staff, hospitalId, locale);
 
-        Appointment appointment = findAppointment(request.getAppointmentId(), locale);
+        Appointment appointment = findAppointment(request.getAppointmentId());
         UUID departmentId = resolveDepartmentId(request, hospital, locale);
         Department department = findDepartmentInHospital(hospital, departmentId);
 
@@ -809,7 +808,7 @@ public class EncounterServiceImpl implements EncounterService {
             validateStaffRole(userId, hospitalId, locale);
             assignment = assignmentRepository
                 .findByUserIdAndHospitalId(userId, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_ASSIGNMENT_NOT_FOUND, null, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND));
         }
 
         return new EncounterResolution(patient, staff, hospital, appointment, department, assignment, hospitalId, userId);
@@ -827,12 +826,12 @@ public class EncounterServiceImpl implements EncounterService {
             && existing.getAssignment() != null;
     }
 
-    private Appointment findAppointment(UUID appointmentId, Locale locale) {
+    private Appointment findAppointment(UUID appointmentId) {
         if (appointmentId == null) {
             return null;
         }
         return appointmentRepository.findById(appointmentId)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage("appointment.notfound", null, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", appointmentId));
     }
 
     private Department findDepartmentInHospital(Hospital hospital, UUID departmentId) {
@@ -1031,7 +1030,7 @@ public class EncounterServiceImpl implements EncounterService {
                 continue;
             }
             LabOrder order = labOrderRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage("laborder.notfound", null, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("laborder.notfound"));
             validateArtifactScope(encounter, order.getPatient().getId(), order.getHospital().getId(), locale);
             note.addLink(EncounterNoteLink.builder()
                 .artifactType(EncounterNoteLinkType.LAB_ORDER)
@@ -1056,7 +1055,7 @@ public class EncounterServiceImpl implements EncounterService {
                 continue;
             }
             Prescription prescription = prescriptionRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage("prescription.notfound", null, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
             validateArtifactScope(encounter, prescription.getPatient().getId(), prescription.getHospital().getId(), locale);
             note.addLink(EncounterNoteLink.builder()
                 .artifactType(EncounterNoteLinkType.PRESCRIPTION)
@@ -1081,7 +1080,7 @@ public class EncounterServiceImpl implements EncounterService {
                 continue;
             }
             ObgynReferral referral = obgynReferralRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage("obgyn.referral.notfound", null, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("obgyn.referral.notfound"));
             validateArtifactScope(encounter, referral.getPatient().getId(), referral.getHospital().getId(), locale);
             note.addLink(EncounterNoteLink.builder()
                 .artifactType(EncounterNoteLinkType.REFERRAL)
@@ -1163,7 +1162,7 @@ public class EncounterServiceImpl implements EncounterService {
                                          String requestedDisplayName,
                                          Staff defaultStaff,
                                          Locale locale) {
-        Staff staff = resolveAuthorStaff(requestedStaffId, defaultStaff, locale);
+        Staff staff = resolveAuthorStaff(requestedStaffId, defaultStaff);
         User user = resolveAuthorUser(requestedUserId, staff, locale);
         String displayName = trimToNull(requestedDisplayName);
         if (displayName == null && user != null) {
@@ -1176,18 +1175,18 @@ public class EncounterServiceImpl implements EncounterService {
         return new NoteAuthor(user, staff, displayName, actorIdentifier);
     }
 
-    private Staff resolveAuthorStaff(UUID requestedStaffId, Staff defaultStaff, Locale locale) {
+    private Staff resolveAuthorStaff(UUID requestedStaffId, Staff defaultStaff) {
         if (requestedStaffId == null) {
             return defaultStaff;
         }
         return staffRepository.findById(requestedStaffId)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_STAFF_NOT_FOUND, null, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_STAFF_NOT_FOUND, requestedStaffId));
     }
 
     private User resolveAuthorUser(UUID requestedUserId, Staff authorStaff, Locale locale) {
         if (requestedUserId != null) {
             return userRepository.findById(requestedUserId)
-                .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage("user.notfound", null, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("user.notfound", requestedUserId));
         }
         if (authorStaff != null && authorStaff.getUser() != null) {
             return authorStaff.getUser();
@@ -1482,7 +1481,7 @@ public class EncounterServiceImpl implements EncounterService {
     @Transactional
     public List<EncounterResponseDTO> getEncountersByDoctorId(UUID staffId, Locale locale) {
         Staff staff = staffRepository.findById(staffId)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_STAFF_NOT_FOUND, null, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_STAFF_NOT_FOUND, staffId));
 
         if (staff.getUser() == null || !roleValidator.isDoctor(staff.getUser().getId(), null)) {
             throw new BusinessException(messageSource.getMessage(MSG_ENCOUNTER_STAFF_INVALID, null, locale));
@@ -1603,7 +1602,7 @@ public class EncounterServiceImpl implements EncounterService {
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<EncounterResponseDTO> getEncountersByPatientIdentifier(String identifier, Locale locale) {
         Patient patient = patientRepository.findByUsernameOrEmail(identifier)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_PATIENT_NOT_FOUND, null, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundByIdentifier", identifier));
 
         return readEncountersForPatient(patient.getId());
     }
@@ -1612,7 +1611,7 @@ public class EncounterServiceImpl implements EncounterService {
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<EncounterResponseDTO> getEncountersByPatientId(UUID patientId, Locale locale) {
         if (!patientRepository.existsById(patientId)) {
-            throw new ResourceNotFoundException(messageSource.getMessage(MSG_PATIENT_NOT_FOUND, null, locale));
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
         return readEncountersForPatient(patientId);
     }

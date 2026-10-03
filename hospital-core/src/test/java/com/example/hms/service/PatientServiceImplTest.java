@@ -400,11 +400,10 @@ class PatientServiceImplTest {
     @Test
     void deletePatientThrowsWhenNotFound() {
         when(patientRepository.existsById(patientId)).thenReturn(false);
-        when(messageSource.getMessage(anyString(), any(), any())).thenReturn("not found");
 
         assertThatThrownBy(() -> patientService.deletePatient(patientId, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("not found");
+            .hasFieldOrPropertyWithValue("messageKey", "patient.notFound");
 
         verify(patientRepository, never()).deleteById(any());
     }

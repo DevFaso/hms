@@ -123,7 +123,7 @@ export class SuperAdminComponent implements OnInit {
       },
       {
         key: 'users',
-        labelKey: 'SUPER_ADMIN.STAT.USERS',
+        labelKey: 'COMMON.LABEL.USERS',
         value: s.totalUsers ?? 0,
         sublabelKey: 'SUPER_ADMIN.STAT.ACTIVE',
         subvalue: s.activeUsers ?? 0,
@@ -206,7 +206,7 @@ export class SuperAdminComponent implements OnInit {
       },
       {
         key: 'prescriptions',
-        labelKey: 'SUPER_ADMIN.STAT.PRESCRIPTIONS',
+        labelKey: 'COMMON.LABEL.PRESCRIPTIONS',
         value: s.totalPrescriptions ?? 0,
         icon: 'medication',
         color: '#10b981',
@@ -270,7 +270,7 @@ export class SuperAdminComponent implements OnInit {
     },
     {
       key: 'prescriptions',
-      labelKey: 'SUPER_ADMIN.STAT.PRESCRIPTIONS',
+      labelKey: 'COMMON.LABEL.PRESCRIPTIONS',
       icon: 'medication',
       countOf: (s) => s.totalPrescriptions ?? 0,
     },
@@ -331,7 +331,7 @@ export class SuperAdminComponent implements OnInit {
       color: '#6366f1',
     },
     {
-      titleKey: 'SUPER_ADMIN.LINK.USERS_TITLE',
+      titleKey: 'COMMON.LABEL.USERS',
       descKey: 'SUPER_ADMIN.LINK.USERS_DESC',
       icon: 'manage_accounts',
       route: '/users',

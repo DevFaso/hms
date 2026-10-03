@@ -19,7 +19,10 @@ import com.example.hms.repository.PatientAllergyRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.i18n.TestMessageSources;
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.RoleValidator;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,6 +30,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -129,8 +133,17 @@ class PrescriptionServiceImplTest {
     private Encounter encounter;
     private UserRoleHospitalAssignment assignment;
 
+    @AfterEach
+    void resetLocale() {
+        LocaleContextHolder.resetLocaleContext();
+    }
+
     @BeforeEach
     void setUp() {
+        // BusinessException resolves its key through MessageUtil, so the
+        // refusals below are asserted as the English a clinician reads.
+        MessageUtil.setMessageSource(TestMessageSources.bundles());
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
         // The services ask the one PatientSubjectReadGuard; it is built here over
         // this class's authUtils and patientRepository so ownership is decided
         // exactly as before, by those two.
@@ -217,7 +230,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("prescription.only.doctor.admin");
+            .hasMessage("Only a doctor, nurse, nurse practitioner, or hospital admin can create or update prescriptions.");
 
         verify(prescriptionRepository, never()).save(any());
     }
@@ -389,7 +402,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("prescription.encounter.patient.mismatch");
+            .hasMessage("Encounter does not belong to the specified patient.");
     }
 
     @Test
@@ -708,7 +721,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("prescription.patient.required");
+            .hasMessage("A patient is required to create a prescription.");
     }
 
     // ═══════════════ ensureContextConsistency edge cases ═══════════════
@@ -724,7 +737,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("prescription.hospital.link.required");
+            .hasMessage("Prescriptions must be linked to a hospital via an encounter.");
     }
 
     @Test
@@ -740,7 +753,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("prescription.encounter.staff.mismatch");
+            .hasMessage("The encounter belongs to a different staff member.");
     }
 
     @Test
@@ -756,7 +769,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("prescription.encounter.staff.hospital.mismatch");
+            .hasMessage("The prescriber does not belong to the encounter's hospital.");
     }
 
     // ═══════════════ resolveStaffContext edge cases ═══════════════
@@ -785,7 +798,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("prescription.staff.context.missing");
+            .hasMessage("No prescriber could be determined for the current user.");
     }
 
     @Test
@@ -804,7 +817,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("prescription.staff.context.missing");
+            .hasMessage("No prescriber could be determined for the current user.");
     }
 
     // ═══════════════ resolveEncounterContext edge cases ═══════════════
@@ -1206,7 +1219,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("prescription.assignment.missing");
+            .hasMessage("The prescriber has no active doctor assignment at this hospital.");
     }
 
     @Test
@@ -1226,7 +1239,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("prescription.assignment.missing.staff.user");
+            .hasMessage("The prescriber's staff record is not linked to a user account.");
     }
 
     // ═══════════════ updatePrescription not found ═══════════════

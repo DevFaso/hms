@@ -32,7 +32,7 @@ const SUPPORTED_LANGS = [
   standalone: true,
   imports: [RouterLink, TranslateModule],
   templateUrl: './settings.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './settings.scss',
 })
 export class SettingsComponent {

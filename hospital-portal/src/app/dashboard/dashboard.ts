@@ -801,7 +801,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         'View Prescriptions',
         {
           icon: 'local_pharmacy',
-          label: this.t('DASHBOARD.PRESCRIPTIONS'),
+          label: this.t('COMMON.LABEL.PRESCRIPTIONS'),
           description: this.t('DASHBOARD.QA.PRESCRIPTIONS_DESC'),
           route: '/prescriptions',
           color: '#0e7c6b',
@@ -1283,7 +1283,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         icon: 'local_pharmacy',
-        label: this.t('DASHBOARD.PRESCRIPTIONS'),
+        label: this.t('COMMON.LABEL.PRESCRIPTIONS'),
         route: '/prescriptions',
         color: '#9333ea',
         bg: '#f3e8ff',
@@ -1339,7 +1339,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         icon: 'medication',
-        label: this.t('DASHBOARD.PRESCRIPTIONS'),
+        label: this.t('COMMON.LABEL.PRESCRIPTIONS'),
         route: '/prescriptions',
         color: '#7c3aed',
         bg: '#ede9fe',
@@ -1826,7 +1826,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return [
       {
         icon: 'local_pharmacy',
-        label: this.t('DASHBOARD.PRESCRIPTIONS'),
+        label: this.t('COMMON.LABEL.PRESCRIPTIONS'),
         route: '/prescriptions',
         color: '#9333ea',
         bg: '#f3e8ff',

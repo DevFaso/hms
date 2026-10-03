@@ -81,14 +81,14 @@ export class AnalyticsComponent implements OnInit {
         bg: '#fef2f2',
       },
       {
-        labelKey: 'ANALYTICS.CARD.PRESCRIPTIONS',
+        labelKey: 'COMMON.LABEL.PRESCRIPTIONS',
         value: a.totalPrescriptions,
         icon: 'medication',
         color: '#06b6d4',
         bg: '#ecfeff',
       },
       {
-        labelKey: 'ANALYTICS.CARD.USERS',
+        labelKey: 'COMMON.LABEL.USERS',
         value: a.totalUsers,
         icon: 'group',
         color: '#6366f1',

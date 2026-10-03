@@ -45,8 +45,6 @@ import java.util.UUID;
 @Transactional
 public class TreatmentConsentServiceImpl implements TreatmentConsentService {
 
-    private static final String MSG_PATIENT_NOT_FOUND = "Patient not found with ID: ";
-    private static final String MSG_CONSENT_NOT_FOUND = "Consent record not found with ID: ";
 
     private final PatientTreatmentConsentRepository consentRepository;
     private final PatientRepository patientRepository;
@@ -67,7 +65,7 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
             throw new BusinessException("A consent capture method is required.");
         }
         Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         Hospital hospital = hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         if (!patient.isRegisteredInHospital(hospitalId)) {
@@ -107,10 +105,10 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
     @Transactional(readOnly = true)
     public List<TreatmentConsentResponseDTO> getForPatient(UUID patientId, UUID hospitalId) {
         Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         // 404-not-403: a scoped caller learns nothing about unregistered patients.
         if (hospitalId != null && !patient.isRegisteredInHospital(hospitalId)) {
-            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId);
+            throw new ResourceNotFoundException("patient.notFound", patientId);
         }
         return consentRepository.findForPatient(patientId, hospitalId).stream()
             .map(this::toDto)
@@ -121,11 +119,11 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
     public TreatmentConsentResponseDTO revoke(UUID consentId, UUID hospitalId, UUID actorUserId,
                                               String reason) {
         PatientTreatmentConsent consent = consentRepository.findById(consentId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_CONSENT_NOT_FOUND + consentId));
+            .orElseThrow(() -> new ResourceNotFoundException("treatmentConsent.notFound", consentId));
         if (hospitalId != null
             && (consent.getHospital() == null
                 || !Objects.equals(consent.getHospital().getId(), hospitalId))) {
-            throw new ResourceNotFoundException(MSG_CONSENT_NOT_FOUND + consentId);
+            throw new ResourceNotFoundException("treatmentConsent.notFound", consentId);
         }
         if (consent.getStatus() == TreatmentConsentStatus.REVOKED) {
             throw new BusinessException("This consent has already been revoked.");
@@ -158,8 +156,7 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
             return null;
         }
         Appointment appointment = appointmentRepository.findById(appointmentId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Appointment not found with ID: " + appointmentId));
+            .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", appointmentId));
         if (appointment.getPatient() == null
             || !Objects.equals(appointment.getPatient().getId(), patientId)) {
             throw new BusinessException("The appointment belongs to a different patient.");
@@ -176,8 +173,7 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
             return null;
         }
         Encounter encounter = encounterRepository.findById(encounterId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Encounter not found with ID: " + encounterId));
+            .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", encounterId));
         if (encounter.getPatient() == null
             || !Objects.equals(encounter.getPatient().getId(), patientId)) {
             throw new BusinessException("The encounter belongs to a different patient.");

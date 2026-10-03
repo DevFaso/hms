@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.TestApplication
 import com.bitnesttechs.hms.patient.core.auth.AuthRepository
 import com.bitnesttechs.hms.patient.core.auth.AuthResult
@@ -84,7 +85,7 @@ class LoginScreenSsoOnlyTest {
         val authRepository = mockk<AuthRepository> {
             coEvery {
                 login(any(), any(), any())
-            } returns AuthResult.Error(legacyDisabledMessage)
+            } returns AuthResult.Error(R.string.login_error_sso_required, legacyDisabledMessage)
         }
         val tokenStorage = mockk<TokenStorage>(relaxed = true) {
             every { savedUsername } returns null

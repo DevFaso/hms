@@ -75,6 +75,8 @@ public class SecurityConfig {
     // Path constants — context-path is /api, so Spring Security sees paths
     // *after* the context-path is stripped. All matchers are relative.
     // -----------------------------------------------------------------------
+    private static final String API_AUTH_LOGOUT = "/auth/logout";
+
     private static final String API_FEATURE_FLAGS = "/feature-flags";
     private static final String API_FEATURE_FLAGS_PATTERN = API_FEATURE_FLAGS + "/**";
 
@@ -390,6 +392,22 @@ public class SecurityConfig {
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/register"),
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/bootstrap-signup"),
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/token/refresh"),
+                    // Logout from the native apps (Bearer + body refresh token, no
+                    // XSRF dance). A forged cross-site logout cannot carry the
+                    // SameSite=Strict refresh cookie, so it revokes nothing.
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, API_AUTH_LOGOUT),
+                    // MFA login step: authenticated by the one-time mfaToken in
+                    // the body, never by a cookie session.
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/mfa/verify"),
+                    // Change own password and the push-device registry: the
+                    // access token is read ONLY from the Authorization header
+                    // (JwtAuthenticationFilter.getJwtFromRequest, and the OIDC
+                    // resolver's default header-only delegate), never from a
+                    // cookie, so a cross-site request cannot carry credentials
+                    // and CSRF has nothing to protect. The native apps send no
+                    // XSRF header, which made these unreachable for them.
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/me/change-password"),
+                    PathPatternRequestMatcher.withDefaults().matcher("/me/push-devices/**"),
                     PathPatternRequestMatcher.withDefaults().matcher("/auth/password/**"),
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/resend-verification"),
                     // SockJS handshake & transport (xhr_send, xhr_streaming are POSTs
@@ -436,7 +454,12 @@ public class SecurityConfig {
                 // Refresh is public (access token may be expired)
                 .requestMatchers(HttpMethod.POST, "/auth/token/refresh").permitAll()
                 .requestMatchers("/auth/token/**").authenticated()
-                .requestMatchers("/auth/logout").authenticated()
+                // Logout is public: an idle client's access token has expired
+                // by the time it signs out, and it must still be able to hand
+                // back its refresh token for revocation. The endpoint only ever
+                // revokes the tokens presented to it (AuthController.logout).
+                .requestMatchers(HttpMethod.POST, API_AUTH_LOGOUT).permitAll()
+                .requestMatchers(API_AUTH_LOGOUT).authenticated()
                 .requestMatchers("/auth/verify-password").authenticated()
                 .requestMatchers("/auth/me/**").authenticated()
                 .requestMatchers("/auth/session/bootstrap").authenticated()

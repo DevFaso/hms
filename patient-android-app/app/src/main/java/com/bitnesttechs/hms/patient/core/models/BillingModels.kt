@@ -18,8 +18,7 @@ data class InvoiceDto(
 ) {
     val isPaid: Boolean get() = status.uppercase() == "PAID"
     val isCancelled: Boolean get() = status.uppercase() == "CANCELLED"
-    val statusDisplay: String get() = status.replace("_", " ").lowercase()
-        .replaceFirstChar { it.uppercase() }
+    val statusEnum: InvoiceStatus get() = InvoiceStatus.fromWire(status)
 }
 
 /** Mirrors PatientPaymentRequestDTO: the same body the web portal sends. */

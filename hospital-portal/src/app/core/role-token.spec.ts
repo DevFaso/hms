@@ -48,7 +48,13 @@ describe('bareRole', () => {
   });
 });
 
-describe('PatientPortalService — role tokens at the boundary', () => {
+/**
+ * The server now normalises both READ paths (DisclosureAccountingServiceImpl
+ * .toEntry and PatientPortalServiceImpl.getProvidersForDepartment): a bare
+ * token, or null instead of "Unknown Role". The portal passes them through;
+ * `bareRole` stays for the staff screens, through RoleLabelPipe.
+ */
+describe('PatientPortalService — role tokens pass through as the server sends them', () => {
   let service: PatientPortalService;
   let httpMock: HttpTestingController;
 
@@ -62,10 +68,9 @@ describe('PatientPortalService — role tokens at the boundary', () => {
 
   afterEach(() => httpMock.verify());
 
-  it('normalises the actor role on the disclosure accounting', (done) => {
+  it('keeps the actor role on the disclosure accounting as sent', (done) => {
     service.getMyDisclosures().subscribe((accounting) => {
       expect(accounting.entries.map((e) => e.actorRole)).toEqual(['DOCTOR', 'NURSE', null]);
-      // Nothing else on the entry is touched.
       expect(accounting.entries[0].actor).toBe('Dr Ouédraogo');
       done();
     });
@@ -75,21 +80,18 @@ describe('PatientPortalService — role tokens at the boundary', () => {
       .flush({
         data: {
           entries: [
-            { id: 'a-1', actor: 'Dr Ouédraogo', actorRole: 'ROLE_DOCTOR' },
+            { id: 'a-1', actor: 'Dr Ouédraogo', actorRole: 'DOCTOR' },
             { id: 'a-2', actor: 'Awa Sawadogo', actorRole: 'NURSE' },
-            { id: 'a-3', actor: 'système', actorRole: 'Unknown Role' },
+            { id: 'a-3', actor: 'système', actorRole: null },
           ],
           counts: {},
         },
       });
   });
 
-  it('normalises the role on a bookable provider', (done) => {
-    // getProvidersForDepartment sends assignment.getRole().getName(), which
-    // always carries the prefix, and omits the key entirely when the provider
-    // has no assignment.
+  it('keeps the role on a bookable provider as sent', (done) => {
     service.getSchedulingProviders('h-1', 'd-1').subscribe((providers) => {
-      expect(providers.map((p) => p.role)).toEqual(['DOCTOR', undefined]);
+      expect(providers.map((p) => p.role)).toEqual(['DOCTOR', null]);
       expect(providers[0].name).toBe('Dr Kaboré');
       done();
     });
@@ -98,8 +100,8 @@ describe('PatientPortalService — role tokens at the boundary', () => {
       .expectOne((r) => r.url.includes('/departments/d-1/providers'))
       .flush({
         data: [
-          { id: 'p-1', name: 'Dr Kaboré', role: 'ROLE_DOCTOR' },
-          { id: 'p-2', name: 'Awa Sawadogo' },
+          { id: 'p-1', name: 'Dr Kaboré', role: 'DOCTOR' },
+          { id: 'p-2', name: 'Awa Sawadogo', role: null },
         ],
       });
   });

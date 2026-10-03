@@ -26,7 +26,8 @@ import java.util.UUID;
 @Slf4j
 @Transactional
 public class FamilyHistoryServiceImpl implements FamilyHistoryService {
-    private static final String FAMILY_HISTORY_NOT_FOUND_PREFIX = "Family history not found with id: ";
+    private static final String FAMILY_HISTORY_NOT_FOUND_KEY = "familyHistory.notFound";
+
 
 
     private final FamilyHistoryRepository familyHistoryRepository;
@@ -64,7 +65,7 @@ public class FamilyHistoryServiceImpl implements FamilyHistoryService {
         log.debug("Fetching family history with id: {}", id);
         
         PatientFamilyHistory familyHistory = familyHistoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(FAMILY_HISTORY_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> new ResourceNotFoundException(FAMILY_HISTORY_NOT_FOUND_KEY, id));
 
         return familyHistoryMapper.toResponseDTO(familyHistory);
     }
@@ -141,7 +142,7 @@ public class FamilyHistoryServiceImpl implements FamilyHistoryService {
         log.info("Updating family history with id: {}", id);
 
         PatientFamilyHistory existingHistory = familyHistoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(FAMILY_HISTORY_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> new ResourceNotFoundException(FAMILY_HISTORY_NOT_FOUND_KEY, id));
 
         // Update staff if changed
         if (requestDTO.getRecordedByStaffId() != null && 
@@ -164,7 +165,7 @@ public class FamilyHistoryServiceImpl implements FamilyHistoryService {
         log.info("Deleting family history with id: {}", id);
 
         PatientFamilyHistory familyHistory = familyHistoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(FAMILY_HISTORY_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> new ResourceNotFoundException(FAMILY_HISTORY_NOT_FOUND_KEY, id));
 
         familyHistory.setActive(false);
         familyHistoryRepository.save(familyHistory);

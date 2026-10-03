@@ -15,7 +15,7 @@
 //
 // How to run (locally against a seeded dev environment):
 //   k6 run \
-//     -e BASE_URL=https://api.dev.e-keneya.com \
+//     -e BASE_URL=https://dev.e-keneya.com/api \
 //     -e AUTH_TOKEN="$KC_PHARMACIST_JWT" \
 //     -e PRESCRIPTION_ID=00000000-0000-0000-0000-000000000001 \
 //     -e PATIENT_ID=00000000-0000-0000-0000-000000000002 \

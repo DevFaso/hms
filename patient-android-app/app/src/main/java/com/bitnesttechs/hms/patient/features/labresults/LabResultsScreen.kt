@@ -59,7 +59,7 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                             tint = androidx.compose.ui.graphics.Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue,
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandPrimary,
                     titleContentColor = androidx.compose.ui.graphics.Color.White)
             )
         }
@@ -69,7 +69,7 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
         // stale results the banner exists to keep in front of the patient.
         if (isLoading && results.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BrandBlue)
+                CircularProgressIndicator(color = BrandPrimary)
             }
             return@Scaffold
         }
@@ -100,7 +100,7 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                         // In the banner, not over the list: a refresh must not
                         // blank the results it is refreshing.
                         CircularProgressIndicator(
-                            color = BrandBlue,
+                            color = BrandPrimary,
                             strokeWidth = 2.dp,
                             modifier = Modifier.size(16.dp)
                         )

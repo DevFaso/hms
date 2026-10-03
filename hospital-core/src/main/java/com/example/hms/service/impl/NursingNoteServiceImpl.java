@@ -88,17 +88,15 @@ public class NursingNoteServiceImpl implements NursingNoteService {
         ensureCanDocument(actorUserId, hospitalId, effectiveLocale);
 
         User author = userRepository.findById(actorUserId)
-            .orElseThrow(() -> new ResourceNotFoundException("Author user not found."));
+            .orElseThrow(() -> new ResourceNotFoundException("nursingNote.author.notFound", actorUserId));
 
         Patient patient = patientRepository.findById(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage("patient.notFound", new Object[]{request.getPatientId()}, "Patient not found", effectiveLocale)
-            ));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
         ensurePatientRegistration(patient.getId(), hospitalId, effectiveLocale);
 
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found."));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
 
         Staff staff = staffRepository.findByUserIdAndHospitalId(actorUserId, hospitalId).orElse(null);
 
@@ -136,12 +134,12 @@ public class NursingNoteServiceImpl implements NursingNoteService {
         ensureCanDocument(actorUserId, resolvedHospitalId, effectiveLocale);
 
         NursingNote note = nursingNoteRepository.findByIdAndHospital_Id(noteId, resolvedHospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Nursing note not found."));
+            .orElseThrow(() -> new ResourceNotFoundException("nursingNote.notFound", noteId));
 
         ensurePatientRegistration(note.getPatient().getId(), resolvedHospitalId, effectiveLocale);
 
         User author = userRepository.findById(actorUserId)
-            .orElseThrow(() -> new ResourceNotFoundException("Author user not found."));
+            .orElseThrow(() -> new ResourceNotFoundException("nursingNote.author.notFound", actorUserId));
 
         Staff staff = staffRepository.findByUserIdAndHospitalId(actorUserId, resolvedHospitalId).orElse(null);
 
@@ -205,7 +203,7 @@ public class NursingNoteServiceImpl implements NursingNoteService {
         ensureCanView(actorUserId, resolvedHospitalId, locale != null ? locale : Locale.getDefault());
 
         NursingNote note = nursingNoteRepository.findByIdAndHospital_Id(noteId, resolvedHospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Nursing note not found."));
+            .orElseThrow(() -> new ResourceNotFoundException("nursingNote.notFound", noteId));
         return nursingNoteMapper.toResponse(note);
     }
 

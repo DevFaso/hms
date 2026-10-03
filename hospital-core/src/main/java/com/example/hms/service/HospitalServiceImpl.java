@@ -86,7 +86,7 @@ public class HospitalServiceImpl implements HospitalService {
     @Override
     @Transactional(readOnly = true)
     public HospitalResponseDTO getHospitalById(UUID id, Locale locale) {
-        Hospital hospital = getHospitalOrThrow(id, locale);
+        Hospital hospital = getHospitalOrThrow(id);
         requireHospitalScope(hospital.getId(), locale);
         return hospitalMapper.toHospitalDTO(hospital);
     }
@@ -94,7 +94,7 @@ public class HospitalServiceImpl implements HospitalService {
     @Override
     @Transactional(readOnly = true)
     public HospitalResponseDTO getHospitalByIdUnscoped(UUID id, Locale locale) {
-        Hospital hospital = getHospitalOrThrow(id, locale);
+        Hospital hospital = getHospitalOrThrow(id);
         return hospitalMapper.toHospitalDTO(hospital);
     }
 
@@ -113,7 +113,7 @@ public class HospitalServiceImpl implements HospitalService {
 
         Organization organization = null;
         if (dto.getOrganizationId() != null) {
-            organization = getOrganizationOrThrow(dto.getOrganizationId(), locale);
+            organization = getOrganizationOrThrow(dto.getOrganizationId());
         }
 
         Hospital hospital = hospitalMapper.toHospital(dto);
@@ -133,11 +133,11 @@ public class HospitalServiceImpl implements HospitalService {
     @Transactional
     public HospitalResponseDTO updateHospital(UUID id, HospitalRequestDTO dto, Locale locale) {
         validateSuperAdminOrThrow(locale);
-        Hospital hospital = getHospitalOrThrow(id, locale);
+        Hospital hospital = getHospitalOrThrow(id);
         validateAddressFields(dto, locale);
         hospitalMapper.updateHospitalFromDto(dto, hospital);
         if (dto.getOrganizationId() != null) {
-            Organization organization = getOrganizationOrThrow(dto.getOrganizationId(), locale);
+            Organization organization = getOrganizationOrThrow(dto.getOrganizationId());
             hospital.setOrganization(organization);
         }
         Hospital updated = hospitalRepository.save(hospital);
@@ -150,9 +150,7 @@ public class HospitalServiceImpl implements HospitalService {
         validateSuperAdminOrThrow(locale);
 
         if (!hospitalRepository.existsById(id)) {
-            throw new ResourceNotFoundException(
-                    messageSource.getMessage("hospital.notFound", new Object[]{id}, "Hospital not found with id: " + id, locale)
-            );
+            throw new ResourceNotFoundException("hospital.notFound", id);
         }
 
         hospitalRepository.deleteById(id);
@@ -207,10 +205,7 @@ public class HospitalServiceImpl implements HospitalService {
         List<Hospital> hospitals = hospitalRepository.findByOrganizationIdOrderByNameAsc(organizationId);
         if (hospitals.isEmpty()) {
             if (!organizationRepository.existsById(organizationId)) {
-                throw new ResourceNotFoundException(
-                        messageSource.getMessage("organization.notFound", new Object[]{organizationId},
-                                "Organization not found with id: " + organizationId, locale)
-                );
+                throw new ResourceNotFoundException("organization.notFound", organizationId);
             }
             return List.of();
         }
@@ -226,8 +221,8 @@ public class HospitalServiceImpl implements HospitalService {
     @Transactional
     public HospitalResponseDTO assignHospitalToOrganization(UUID hospitalId, UUID organizationId, Locale locale) {
         validateSuperAdminOrThrow(locale);
-        Hospital hospital = getHospitalOrThrow(hospitalId, locale);
-        Organization organization = getOrganizationOrThrow(organizationId, locale);
+        Hospital hospital = getHospitalOrThrow(hospitalId);
+        Organization organization = getOrganizationOrThrow(organizationId);
         hospital.setOrganization(organization);
         Hospital saved = hospitalRepository.save(hospital);
         return hospitalMapper.toHospitalDTO(saved);
@@ -237,17 +232,15 @@ public class HospitalServiceImpl implements HospitalService {
     @Transactional
     public HospitalResponseDTO unassignHospitalFromOrganization(UUID hospitalId, Locale locale) {
         validateSuperAdminOrThrow(locale);
-        Hospital hospital = getHospitalOrThrow(hospitalId, locale);
+        Hospital hospital = getHospitalOrThrow(hospitalId);
         hospital.setOrganization(null);
         Hospital saved = hospitalRepository.save(hospital);
         return hospitalMapper.toHospitalDTO(saved);
     }
 
-    private Hospital getHospitalOrThrow(UUID id, Locale locale) {
+    private Hospital getHospitalOrThrow(UUID id) {
         return hospitalRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage("hospital.notFound", new Object[]{id}, "Hospital not found with id: " + id, locale)
-                ));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", id));
     }
 
     private List<Hospital> applyHospitalScope(List<Hospital> hospitals) {
@@ -288,11 +281,9 @@ public class HospitalServiceImpl implements HospitalService {
         }
     }
 
-    private Organization getOrganizationOrThrow(UUID id, Locale locale) {
+    private Organization getOrganizationOrThrow(UUID id) {
         return organizationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage("organization.notFound", new Object[]{id}, "Organization not found with id: " + id, locale)
-                ));
+                .orElseThrow(() -> new ResourceNotFoundException("organization.notFound", id));
     }
 
     private void validateSuperAdminOrThrow(Locale locale) {

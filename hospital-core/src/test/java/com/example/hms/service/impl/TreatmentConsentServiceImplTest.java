@@ -167,7 +167,7 @@ class TreatmentConsentServiceImplTest {
         // Same message as unknown-patient: the caller learns nothing.
         assertThatThrownBy(() -> service.getForPatient(patientId, foreignScope))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Patient not found");
+            .hasFieldOrPropertyWithValue("messageKey", "patient.notFound");
     }
 
     @Test
@@ -237,7 +237,7 @@ class TreatmentConsentServiceImplTest {
 
         assertThatThrownBy(() -> service.revoke(rowId, foreignScope, null, "reason"))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Consent record not found");
+            .hasFieldOrPropertyWithValue("messageKey", "treatmentConsent.notFound");
     }
 
     @Test

@@ -267,7 +267,7 @@ class PlatformRegistryServiceImplTest {
         assertThatThrownBy(() -> platformRegistryService
             .linkHospitalToService(hospitalId, serviceId, null, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Platform service not found");
+            .hasFieldOrPropertyWithValue("messageKey", "platform.service.notFound");
     }
 
     @Test
@@ -427,7 +427,7 @@ class PlatformRegistryServiceImplTest {
         assertThatThrownBy(() -> platformRegistryService
             .linkDepartmentToService(departmentId, serviceId, null, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Platform service not found");
+            .hasFieldOrPropertyWithValue("messageKey", "platform.service.notFound");
     }
 
     @Test
@@ -701,7 +701,7 @@ class PlatformRegistryServiceImplTest {
         assertThatThrownBy(() -> platformRegistryService
             .unlinkHospitalFromService(hospitalId, serviceId, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Hospital link not found");
+            .hasFieldOrPropertyWithValue("messageKey", "platform.hospitalLink.notFound");
     }
 
     @Test
@@ -850,7 +850,7 @@ class PlatformRegistryServiceImplTest {
         assertThatThrownBy(() -> platformRegistryService
             .unlinkDepartmentFromService(departmentId, serviceId, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Department link not found");
+            .hasFieldOrPropertyWithValue("messageKey", "platform.departmentLink.notFound");
     }
 
     @Test

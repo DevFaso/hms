@@ -75,6 +75,9 @@ final class LocalizedKeyResolutionTests: XCTestCase {
 
     private static let missing = "__MISSING__"
 
+    /// Every language the app ships and the in-app picker offers.
+    private static let languages = ["en", "fr", "es"]
+
     private func bundle(_ language: String) throws -> Bundle {
         let candidates = [Bundle(for: LocalizationManager.self), Bundle.main]
         for candidate in candidates {
@@ -107,7 +110,7 @@ final class LocalizedKeyResolutionTests: XCTestCase {
         }
         XCTAssertGreaterThan(keys.count, 100, "the scan found almost nothing — check the regex")
 
-        for language in ["en", "fr"] {
+        for language in Self.languages {
             let missing = unresolved(keys, in: try bundle(language))
             XCTAssertTrue(missing.isEmpty,
                           "\(missing.count) key(s) used with .localized resolve to nothing in "
@@ -140,7 +143,7 @@ final class LocalizedKeyResolutionTests: XCTestCase {
         keys.subtract(Self.nonKeyLiterals)
         XCTAssertGreaterThan(keys.count, 100, "the scan found almost nothing — check the regex")
 
-        for language in ["en", "fr"] {
+        for language in Self.languages {
             let missing = unresolved(keys, in: try bundle(language))
             XCTAssertTrue(missing.isEmpty,
                           "\(missing.count) key-shaped literal(s) in Features/ resolve to nothing "
@@ -165,12 +168,18 @@ final class LocalizedKeyResolutionTests: XCTestCase {
                      "lab_manager", "lab_scientist", "lab_technician", "midwife", "nurse",
                      "patient", "pharmacist", "pharmacy_verifier", "physician",
                      "physiotherapist", "quality_manager", "radiologist", "receptionist",
-                     "staff", "super_admin", "surgeon", "technician", "therapist", "user"] {
+                     "staff", "super_admin", "surgeon", "technician", "therapist", "user",
+                     // The rest of the portal's PORTAL.ENUM.ROLE registry, and
+                     // the generic label an unknown role falls back to.
+                     "cleaner", "inventory_clerk", "manager", "moderator", "security",
+                     "store_manager", "support", "fallback"] {
             keys.insert("disclosures_role_" + role)
         }
         keys.formUnion(["sharing_optout_already_off", "sharing_optout_already_on"])
+        // Returned by Core helpers and localised at the call site.
+        keys.formUnion(["password_min_length", "passwords_mismatch", "password_must_differ", "enum_unknown"])
 
-        for language in ["en", "fr"] {
+        for language in Self.languages {
             let missing = unresolved(keys, in: try bundle(language))
             XCTAssertTrue(missing.isEmpty,
                           "\(missing.count) constructed key(s) resolve to nothing in "
@@ -191,16 +200,18 @@ final class LocalizedKeyResolutionTests: XCTestCase {
             keys.formUnion(matches("\"([A-Za-z0-9_]+)\"\\.localized", in: text))
         }
         let english = try bundle("en")
-        let french = try bundle("fr")
 
-        for key in keys.sorted() {
-            let en = english.localizedString(forKey: key, value: Self.missing, table: nil)
-            let fr = french.localizedString(forKey: key, value: Self.missing, table: nil)
-            guard en != Self.missing, fr != Self.missing else { continue }
-            XCTAssertEqual(matches("%(?:[0-9]+\\$)?([@df])", in: en),
-                           matches("%(?:[0-9]+\\$)?([@df])", in: fr),
-                           "\(key) takes different format arguments in en and fr: "
-                            + "\"\(en)\" vs \"\(fr)\"")
+        for language in Self.languages where language != "en" {
+            let other = try bundle(language)
+            for key in keys.sorted() {
+                let en = english.localizedString(forKey: key, value: Self.missing, table: nil)
+                let translated = other.localizedString(forKey: key, value: Self.missing, table: nil)
+                guard en != Self.missing, translated != Self.missing else { continue }
+                XCTAssertEqual(matches("%(?:[0-9]+\\$)?([@df])", in: en),
+                               matches("%(?:[0-9]+\\$)?([@df])", in: translated),
+                               "\(key) takes different format arguments in en and \(language): "
+                                + "\"\(en)\" vs \"\(translated)\"")
+            }
         }
     }
 }

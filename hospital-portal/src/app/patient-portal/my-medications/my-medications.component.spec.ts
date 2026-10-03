@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { MyMedicationsComponent } from './my-medications.component';
 import { PatientPortalService, MedicationSummary } from '../../services/patient-portal.service';
@@ -181,6 +181,29 @@ describe('MyMedicationsComponent — refill visibility', () => {
     expect(component.medications()[0].refillRequestOpen).toBeTrue();
     expect(component.medications()[0].refillRequestStatus).toBe('REQUESTED');
     expect(toast.success).toHaveBeenCalled();
+  });
+
+  it('toasts in the patient language, never the raw key', async () => {
+    // ToastService renders its message verbatim, so a key passed straight
+    // through showed PORTAL.MEDICATIONS.REFILL_REQUESTED to the patient.
+    await render(med());
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PORTAL: {
+        MEDICATIONS: {
+          REFILL_REQUESTED: 'Demande de renouvellement envoyée',
+          REFILL_FAILED: 'Échec de la demande de renouvellement',
+        },
+      },
+    });
+    translate.use('fr');
+
+    component.requestRefill(component.medications()[0]);
+    expect(toast.success).toHaveBeenCalledWith('Demande de renouvellement envoyée');
+
+    requestRefill.and.returnValue(throwError(() => ({ status: 500 })));
+    component.requestRefill(component.medications()[0]);
+    expect(toast.error).toHaveBeenCalledWith('Échec de la demande de renouvellement');
   });
 
   it("surfaces the backend's own refusal message rather than a generic failure", async () => {

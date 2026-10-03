@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
 import { StaffDetailComponent } from './staff-detail';
@@ -163,5 +163,57 @@ describe('StaffDetailComponent — credentialing entry point', () => {
 
     expect(staffService.getById).toHaveBeenCalledWith('staff-1');
     expect(fixture.componentInstance.credentialTarget()).toBeNull();
+  });
+
+  describe('the job title', () => {
+    // formatJobTitle() used to Title-Case the JobTitle token in TypeScript —
+    // "Nurse Practitioner" on a French screen. The badge and the employment
+    // row now go through the enum pipe and the PORTAL.ENUM.JOB_TITLE bundle.
+    function useFrench(): void {
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation('fr', {
+        PORTAL: { ENUM: { JOB_TITLE: { NURSE_PRACTITIONER: 'Infirmier praticien' } } },
+        STAFF: { TITLE: 'Membre du personnel' },
+      });
+      translate.use('fr');
+      fixture.detectChanges();
+    }
+
+    it('renders the translated title in the header badge and the employment row', async () => {
+      await setup(staff({ jobTitle: 'NURSE_PRACTITIONER' }));
+      useFrench();
+      openEmploymentTab();
+
+      expect(root().querySelector('.header-meta .role-badge')?.textContent?.trim()).toBe(
+        'Infirmier praticien',
+      );
+      expect(root().textContent).toContain('Infirmier praticien');
+      expect(root().textContent).not.toContain('Nurse Practitioner');
+      expect(root().textContent).not.toContain('NURSE_PRACTITIONER');
+    });
+
+    it('renders the employment type in the current language', async () => {
+      // formatEmploymentType() Title-Cased the token: "Locum" to a French admin.
+      await setup(staff({ employmentType: 'LOCUM' }));
+      useFrench();
+      TestBed.inject(TranslateService).setTranslation(
+        'fr',
+        { PORTAL: { ENUM: { EMPLOYMENT_TYPE: { LOCUM: 'Remplaçant' } } } },
+        true,
+      );
+      openEmploymentTab();
+
+      expect(root().textContent).toContain('Remplaçant');
+      expect(root().textContent).not.toContain('Locum');
+    });
+
+    it('falls back to the translated generic title when there is none', async () => {
+      await setup(staff({ jobTitle: undefined }));
+      useFrench();
+
+      expect(root().querySelector('.header-meta .role-badge')?.textContent?.trim()).toBe(
+        'Membre du personnel',
+      );
+    });
   });
 });

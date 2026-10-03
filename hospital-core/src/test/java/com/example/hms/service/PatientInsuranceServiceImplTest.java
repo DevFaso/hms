@@ -129,7 +129,6 @@ class PatientInsuranceServiceImplTest {
     @Test
     void getPatientInsuranceById_notFound_throws() {
         when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class))).thenReturn("not found");
 
         assertThatThrownBy(() -> service.getPatientInsuranceById(insuranceId, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -217,8 +216,6 @@ class PatientInsuranceServiceImplTest {
         when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(insurance));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(subjectReadGuard.callerOwns(patient)).thenReturn(false);
-        when(messageSource.getMessage(eq("patient.notfound"), any(), anyString(), any(Locale.class)))
-            .thenAnswer(inv -> "Patient not found: " + ((Object[]) inv.getArgument(1))[0]);
 
         String refused = catchThrowableOfType(ResourceNotFoundException.class,
             () -> service.linkPatientInsurance(insuranceId, req, ctx, locale)).getMessage();
@@ -245,8 +242,6 @@ class PatientInsuranceServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(subjectReadGuard.callerOwns(patient)).thenReturn(true);
         when(subjectReadGuard.callerOwns(otherPatient)).thenReturn(false);
-        when(messageSource.getMessage(eq("patientinsurance.notfound"), any(), anyString(), any(Locale.class)))
-            .thenAnswer(inv -> "Patient insurance not found: " + ((Object[]) inv.getArgument(1))[0]);
 
         String refused = catchThrowableOfType(ResourceNotFoundException.class,
             () -> service.linkPatientInsurance(insuranceId, req, ctx, locale)).getMessage();
@@ -435,8 +430,6 @@ class PatientInsuranceServiceImplTest {
         when(patientRepository.findById(otherPatient.getId())).thenReturn(Optional.of(otherPatient));
         when(roleValidator.isPatientOnlyFromAuth()).thenReturn(true);
         when(subjectReadGuard.callerOwns(otherPatient)).thenReturn(false);
-        when(messageSource.getMessage(eq("patient.notfound"), any(), anyString(), any(Locale.class)))
-            .thenAnswer(inv -> "Patient not found: " + ((Object[]) inv.getArgument(1))[0]);
 
         String refused = catchThrowableOfType(ResourceNotFoundException.class,
             () -> service.addInsuranceToPatient(dto, locale)).getMessage();

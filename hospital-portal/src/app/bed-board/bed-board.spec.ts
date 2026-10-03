@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
 import { BedBoardComponent } from './bed-board';
@@ -17,7 +17,7 @@ import { IsolationPrecautionResponse, IsolationService } from '../services/isola
 import { TransferOrderResponse, TransferService } from '../services/transfer.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { RoleContextStubState, roleContextStub } from '../testing/role-context.stub';
+import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
 
 function occupant(overrides: Partial<BedOccupant> = {}): BedOccupant {
   return {
@@ -125,8 +125,7 @@ describe('BedBoardComponent', () => {
   let isolationSpy: jasmine.SpyObj<IsolationService>;
   let transferSpy: jasmine.SpyObj<TransferService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
-  let scope: RoleContextStubState;
-  let roleCtx: RoleContextService;
+  let roleCtx: RoleContextStub;
 
   beforeEach(async () => {
     boardSpy = jasmine.createSpyObj('BedBoardService', ['getBoard']);
@@ -150,8 +149,11 @@ describe('BedBoardComponent', () => {
     transferSpy.getPending.and.returnValue(of([]));
 
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);
-    scope = { superAdmin: false, hospitalId: 'h1', roles: ['ROLE_NURSE', 'ROLE_DOCTOR'] };
-    roleCtx = roleContextStub(scope);
+    roleCtx = roleContextStub({
+      superAdmin: false,
+      hospitalId: 'h1',
+      roles: ['ROLE_NURSE', 'ROLE_DOCTOR'],
+    });
 
     await TestBed.configureTestingModule({
       imports: [BedBoardComponent, TranslateModule.forRoot()],
@@ -174,31 +176,14 @@ describe('BedBoardComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('a super-admin in global view sees the pick-a-hospital hint and no request is made', () => {
-    // A bed board belongs to a building: nothing to fetch until one is picked.
-    scope.superAdmin = true;
-    scope.hospitalId = null;
+  it('carries no scope chip or hint of its own: the route gate owns them', () => {
+    // /bed-board is flagged requiresHospitalScope; the shell shows the one
+    // chip and keeps the page unbuilt until a hospital is pinned.
     const fixture = TestBed.createComponent(BedBoardComponent);
     fixture.detectChanges();
-    expect(boardSpy.getBoard).not.toHaveBeenCalled();
-    expect(transferSpy.getPending).not.toHaveBeenCalled();
-    expect(
-      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="scope-hint"]'),
-    ).toBeTruthy();
-  });
-
-  it('picking a hospital after landing in global view loads that board', () => {
-    scope.superAdmin = true;
-    scope.hospitalId = null;
-    const fixture = TestBed.createComponent(BedBoardComponent);
-    fixture.detectChanges();
-    expect(boardSpy.getBoard).not.toHaveBeenCalled();
-
-    // What the chip does on a pick: pin the scope, then tell the host.
-    roleCtx.scopeToHospital('h1');
-    fixture.componentInstance.onScopeChange();
-    expect(boardSpy.getBoard).toHaveBeenCalledTimes(1);
-    expect(transferSpy.getPending).toHaveBeenCalledTimes(1);
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('app-hospital-scope-chip')).toBeNull();
+    expect(el.querySelector('app-hospital-scope-hint')).toBeNull();
   });
 
   it('loads the board on init', () => {
@@ -533,5 +518,24 @@ describe('BedBoardComponent', () => {
 
     const [, sent] = transferSpy.cancelTransfer.calls.mostRecent().args;
     expect(sent.cancellationReason).toBe('Patient improved');
+  });
+
+  it('titles the precautions dialog without a literal "null" when the name is unknown', () => {
+    // The title is a translate param; ngx-translate prints a null param as
+    // "null" and leaves "{{name}}" for an undefined one, so the template
+    // passes an empty string for a patient with no name on file.
+    TestBed.inject(TranslateService).setTranslation('en', {
+      BED_BOARD: { PRECAUTIONS_FOR: 'Isolation precautions — {{name}}' },
+    });
+    TestBed.inject(TranslateService).use('en');
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openPrecautions(occupant({ patientName: null }));
+    fixture.detectChanges();
+
+    const title = (fixture.nativeElement as HTMLElement)
+      .querySelector('[role="dialog"] h2')
+      ?.textContent?.trim();
+    expect(title).toBe('Isolation precautions —');
   });
 });

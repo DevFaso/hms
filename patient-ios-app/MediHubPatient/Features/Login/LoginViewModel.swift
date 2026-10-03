@@ -16,6 +16,16 @@ final class LoginViewModel: ObservableObject {
     /// non-empty issuer configured.
     @Published var ssoEnabled: Bool = false
 
+    /// Set when the password was right and a second factor is due; the view
+    /// presents the challenge sheet from it.
+    @Published var mfaChallenge: MfaChallenge?
+    @Published var mfaCode: String = ""
+    @Published var mfaError: String?
+    @Published var isVerifyingMfa = false
+
+    @Published var showForgotPassword = false
+    @Published var showActivation = false
+
     private let authManager = AuthManager.shared
 
     init() {
@@ -36,7 +46,7 @@ final class LoginViewModel: ObservableObject {
             case .faceID: biometricType = "Face ID"
             case .touchID: biometricType = "Touch ID"
             case .opticID: biometricType = "Optic ID"
-            default: biometricType = "Biometrics"
+            default: biometricType = "biometrics_generic".localized
             }
         }
     }
@@ -56,7 +66,8 @@ final class LoginViewModel: ObservableObject {
                 guard let self else { return }
                 if success {
                     do {
-                        try await authManager.biometricLogin()
+                        let outcome = try await authManager.biometricLogin()
+                        handle(outcome)
                     } catch {
                         errorMessage = error.localizedDescription
                     }
@@ -79,7 +90,7 @@ final class LoginViewModel: ObservableObject {
         guard !username.trimmingCharacters(in: .whitespaces).isEmpty,
               !password.isEmpty
         else {
-            errorMessage = "Please enter your username and password."
+            errorMessage = "login_credentials_required".localized
             return
         }
         isLoading = true
@@ -87,12 +98,58 @@ final class LoginViewModel: ObservableObject {
 
         Task {
             do {
-                try await authManager.login(username: username, password: password)
+                let outcome = try await authManager.login(username: username, password: password)
+                handle(outcome)
             } catch {
                 errorMessage = error.localizedDescription
             }
             isLoading = false
         }
+    }
+
+    private func handle(_ outcome: AuthManager.LoginOutcome) {
+        switch outcome {
+        case .signedIn:
+            mfaChallenge = nil
+        case let .mfaRequired(challenge):
+            mfaCode = ""
+            mfaError = nil
+            mfaChallenge = challenge
+        }
+    }
+
+    // MARK: - MFA challenge
+
+    /// A 6-digit TOTP or an 8-character backup code, as the backend accepts.
+    nonisolated static func isPlausibleMfaCode(_ code: String) -> Bool {
+        let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (6 ... 8).contains(trimmed.count) && trimmed.allSatisfy { $0.isLetter || $0.isNumber }
+    }
+
+    func verifyMfa() {
+        guard let challenge = mfaChallenge else { return }
+        guard Self.isPlausibleMfaCode(mfaCode) else {
+            mfaError = "mfa_invalid_code".localized
+            return
+        }
+        isVerifyingMfa = true
+        mfaError = nil
+        Task {
+            do {
+                try await authManager.verifyMfa(challenge, code: mfaCode)
+                mfaChallenge = nil
+            } catch {
+                mfaError = error.localizedDescription
+            }
+            isVerifyingMfa = false
+        }
+    }
+
+    func cancelMfa() {
+        authManager.cancelMfa()
+        mfaChallenge = nil
+        mfaCode = ""
+        mfaError = nil
     }
 
     // MARK: - SSO (KC-3)
@@ -107,7 +164,9 @@ final class LoginViewModel: ObservableObject {
         Task {
             do {
                 try await KeycloakAuthService.shared.login(presenting: presenter)
-                authManager.completeSsoSession()
+                // Resolves the HMS user id before the session opens; chat
+                // and the history notes need it and the token cannot give it.
+                try await authManager.completeSsoSession()
             } catch {
                 // Ignore user-cancel — AppAuth returns domain == OIDOAuthTokenError etc.
                 let ns = error as NSError

@@ -13,7 +13,9 @@ import com.example.hms.enums.OrganizationLifecycleState;
 import com.example.hms.model.Organization;
 import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.service.OrganizationLifecycleStatusService;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
@@ -22,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -45,6 +48,13 @@ class TenantPurgeJobTest {
     @Mock
     private TenantPurgeExecutor purgeExecutor;
 
+    /**
+     * Fixed instant, deliberately in the future: a time that is past on the
+     * injected clock but not on the system clock proves which one is read.
+     */
+    private static final Instant NOW = Instant.parse("2099-03-01T03:00:00Z");
+    @Spy private Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+
     @InjectMocks
     private TenantPurgeJob job;
 
@@ -54,7 +64,7 @@ class TenantPurgeJobTest {
         o.setName("Org " + code);
         o.setCode(code);
         o.setLifecycleState(OrganizationLifecycleState.PENDING_PURGE);
-        o.setPurgeScheduledFor(Instant.now().minus(1, ChronoUnit.HOURS));
+        o.setPurgeScheduledFor(NOW.minus(1, ChronoUnit.HOURS));
         return o;
     }
 
@@ -131,5 +141,15 @@ class TenantPurgeJobTest {
     /** Tiny helper to keep the verify call sites readable when paired with same(). */
     private static boolean eqBoolean(boolean expected) {
         return org.mockito.ArgumentMatchers.eq(expected);
+    }
+
+    @Test
+    void sweepAsksForPurgesDueAtTheInjectedNow() {
+        ReflectionTestUtils.setField(job, "enabled", true);
+        when(organizationRepository.findDuePurges(NOW)).thenReturn(List.of());
+
+        job.runSweep();
+
+        verify(organizationRepository).findDuePurges(NOW);
     }
 }

@@ -103,10 +103,10 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
         // which a pharmacy could accept — the double fill SENT_TO_PARTNER
         // exists to prevent.
         Prescription rx = prescriptionRepository.findByIdForUpdate(prescriptionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Prescription not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("prescription.notFound", prescriptionId));
         requireCallerHospital(auth, rx);
         Pharmacy pharmacy = pharmacyRepository.findById(request.getPharmacyId())
-                .orElseThrow(() -> new ResourceNotFoundException("Pharmacy not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notFound", request.getPharmacyId()));
 
         refuseWhileAwaitingClarification(rx);
         validateScope(rx, pharmacy);
@@ -163,11 +163,11 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
             if (authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN)) {
                 return;
             }
-            throw new ResourceNotFoundException("Prescription not found");
+            throw new ResourceNotFoundException("prescription.notFound", rx.getId());
         }
         UUID rxHospitalId = rx.getHospital() != null ? rx.getHospital().getId() : null;
         if (!callerHospitalId.equals(rxHospitalId)) {
-            throw new ResourceNotFoundException("Prescription not found");
+            throw new ResourceNotFoundException("prescription.notFound", rx.getId());
         }
     }
 

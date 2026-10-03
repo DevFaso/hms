@@ -22,13 +22,10 @@ import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabOrderRepository;
-import com.example.hms.repository.InstrumentOutboxRepository;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
-import com.example.hms.repository.PatientProblemHistoryRepository;
-import com.example.hms.repository.PatientProblemRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.StaffRepository;
@@ -44,6 +41,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.ApplicationContext;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -87,6 +85,7 @@ class PatientPortalLabResultsIT extends BaseIT {
 
     private final AtomicInteger sequence = new AtomicInteger();
 
+    @Autowired private ApplicationContext applicationContext;
     @Autowired private MockMvc mockMvc;
     @Autowired private OrganizationRepository organizationRepository;
     @Autowired private HospitalRepository hospitalRepository;
@@ -96,12 +95,9 @@ class PatientPortalLabResultsIT extends BaseIT {
     @Autowired private StaffRepository staffRepository;
     @Autowired private PatientRepository patientRepository;
     @Autowired private PatientHospitalRegistrationRepository registrationRepository;
-    @Autowired private PatientProblemRepository patientProblemRepository;
-    @Autowired private PatientProblemHistoryRepository patientProblemHistoryRepository;
     @Autowired private LabTestDefinitionRepository labTestDefinitionRepository;
     @Autowired private LabOrderRepository labOrderRepository;
     @Autowired private LabResultRepository labResultRepository;
-    @Autowired private InstrumentOutboxRepository instrumentOutboxRepository;
     @Autowired private AuditEventLogRepository auditEventLogRepository;
     @Autowired private LabResultService labResultService;
     @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager entityManager;
@@ -119,26 +115,7 @@ class PatientPortalLabResultsIT extends BaseIT {
 
     @BeforeEach
     void seedAnUnreleasedAnalyzerResult() {
-        auditEventLogRepository.deleteAllInBatch();
-        labResultRepository.deleteAll();
-        // Releasing a result we created enqueues an outbound message that
-        // references the order, so it has to go before the orders do.
-        instrumentOutboxRepository.deleteAll();
-        labOrderRepository.deleteAll();
-        labTestDefinitionRepository.deleteAll();
-        registrationRepository.deleteAll();
-        // patient_problems (and their history) reference staff: a sibling IT
-        // that records a diagnosis leaves rows here, and deleting staff under
-        // them fails on fk_problem_staff. Children first.
-        patientProblemHistoryRepository.deleteAllInBatch();
-        patientProblemRepository.deleteAllInBatch();
-        patientRepository.deleteAll();
-        staffRepository.deleteAll();
-        assignmentRepository.deleteAll();
-        userRepository.deleteAll();
-        roleRepository.deleteAll();
-        hospitalRepository.deleteAll();
-        organizationRepository.deleteAll();
+        SharedClinicalRowsCleanup.deleteAll(applicationContext);
 
         Organization organization = organizationRepository.save(Organization.builder()
             .name("Test Health Network")

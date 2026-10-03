@@ -15,10 +15,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -27,6 +30,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -52,8 +56,63 @@ class UserCredentialLifecycleServiceImplTest {
     @Mock
     private EmailService emailService;
 
+    /** Fixed instant: the recovery-code expiry is written and checked against the injected clock. */
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 3, 1, 10, 0);
+
+    @Spy
+    private Clock clock = Clock.fixed(NOW.atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
+
     @InjectMocks
     private UserCredentialLifecycleServiceImpl service;
+
+    private UserRecoveryContact pendingContact(UUID userId) {
+        User owner = User.builder().username("owner").email("owner@example.com").passwordHash("hash").build();
+        owner.setId(userId);
+        UserRecoveryContact contact = UserRecoveryContact.builder()
+            .user(owner)
+            .contactType(RecoveryContactType.EMAIL)
+            .contactValue("backup@example.com")
+            .build();
+        contact.setId(UUID.randomUUID());
+        return contact;
+    }
+
+    @Test
+    void recoveryCodeExpiryIsStampedFromTheInjectedClock() {
+        UUID userId = UUID.randomUUID();
+        UserRecoveryContact contact = pendingContact(userId);
+        when(recoveryContactRepository.findById(contact.getId())).thenReturn(Optional.of(contact));
+        when(passwordEncoder.encode(anyString())).thenReturn("hashed");
+
+        service.sendRecoveryContactVerificationCode(userId, contact.getId());
+
+        assertThat(contact.getVerificationCodeExpiresAt()).isEqualTo(NOW.plusMinutes(15));
+    }
+
+    @Test
+    void recoveryCodeIsStillValidAtItsExpiryInstantAndExpiredOneNanosecondLater() {
+        UUID userId = UUID.randomUUID();
+        UserRecoveryContact contact = pendingContact(userId);
+        contact.setVerificationCodeHash("hashed");
+        contact.setVerificationCodeExpiresAt(NOW);
+        when(recoveryContactRepository.findById(contact.getId())).thenReturn(Optional.of(contact));
+        when(passwordEncoder.matches("123456", "hashed")).thenReturn(true);
+        when(recoveryContactRepository.save(contact)).thenReturn(contact);
+
+        service.verifyRecoveryContact(userId, contact.getId(), "123456");
+        assertThat(contact.isVerified()).isTrue();
+        assertThat(contact.getVerifiedAt()).isEqualTo(NOW);
+
+        UserRecoveryContact late = pendingContact(userId);
+        late.setVerificationCodeHash("hashed");
+        late.setVerificationCodeExpiresAt(NOW.minusNanos(1));
+        when(recoveryContactRepository.findById(late.getId())).thenReturn(Optional.of(late));
+
+        UUID lateId = late.getId();
+        assertThatThrownBy(() -> service.verifyRecoveryContact(userId, lateId, "123456"))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("expired");
+    }
 
     @Test
     void recordSuccessfulLoginUpdatesLastLogin() {
@@ -107,7 +166,7 @@ class UserCredentialLifecycleServiceImplTest {
             .method(MfaMethodType.TOTP)
             .enabled(true)
             .primaryFactor(true)
-            .lastVerifiedAt(LocalDateTime.now().minusDays(1))
+            .lastVerifiedAt(NOW.minusDays(1))
             .build();
         enrollment.setId(UUID.randomUUID());
 
@@ -140,7 +199,7 @@ class UserCredentialLifecycleServiceImplTest {
     @Test
     void getCredentialHealthAggregatesForUser() {
         UUID userId = UUID.randomUUID();
-        LocalDateTime lastLogin = LocalDateTime.now().minusHours(4);
+        LocalDateTime lastLogin = NOW.minusHours(4);
 
         User user = User.builder()
             .username("health-user")
@@ -156,7 +215,7 @@ class UserCredentialLifecycleServiceImplTest {
             .method(MfaMethodType.TOTP)
             .enabled(true)
             .primaryFactor(true)
-            .lastVerifiedAt(LocalDateTime.now().minusDays(1))
+            .lastVerifiedAt(NOW.minusDays(1))
             .build();
         primary.setId(UUID.randomUUID());
 
@@ -175,7 +234,7 @@ class UserCredentialLifecycleServiceImplTest {
             .contactValue("health.recovery@example.com")
             .verified(true)
             .primaryContact(true)
-            .verifiedAt(LocalDateTime.now().minusDays(2))
+            .verifiedAt(NOW.minusDays(2))
             .build();
         recovery.setId(UUID.randomUUID());
 
@@ -350,7 +409,7 @@ class UserCredentialLifecycleServiceImplTest {
         User user = User.builder().username("verified-user").email("verified@example.com").build();
         user.setId(userId);
 
-        LocalDateTime verifiedTime = LocalDateTime.now().minusDays(3);
+        LocalDateTime verifiedTime = NOW.minusDays(3);
         UserRecoveryContact existing = UserRecoveryContact.builder()
             .user(user)
             .contactType(RecoveryContactType.EMAIL)

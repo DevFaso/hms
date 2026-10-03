@@ -232,7 +232,7 @@ public class PatientPortalController {
             @PathVariable UUID invoiceId,
             @Valid @RequestBody PatientPaymentRequestDTO dto) {
         Locale locale = LocaleContextHolder.getLocale();
-        BillingInvoiceResponseDTO result = portalService.recordMyPayment(auth, invoiceId, dto.getAmount(), locale);
+        BillingInvoiceResponseDTO result = portalService.recordMyPayment(auth, invoiceId, dto, locale);
         return ResponseEntity.ok(ApiResponseWrapper.success(result));
     }
 
@@ -626,7 +626,7 @@ public class PatientPortalController {
     // ── Documents (Phase 3) ───────────────────────────────────────────────
 
     @Operation(summary = "Upload a personal document",
-            description = "Accepts PDF, JPG, PNG, TIFF, DOC, DOCX — max 20 MB")
+            description = "Accepts PDF, JPG, PNG, TIFF, DOC, DOCX — max 10 MB; notes up to 2048 characters")
     @PostMapping(value = "/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAuthority('ROLE_PATIENT')")
     public ResponseEntity<ApiResponseWrapper<PatientDocumentResponseDTO>> uploadDocument(

@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
@@ -61,6 +62,11 @@ class ClinicalDashboardServiceImplTest {
     @Mock private DigitalSignatureRepository digitalSignatureRepository;
     @Mock private EncounterRepository encounterRepository;
     @Mock private OnCallScheduleRepository onCallScheduleRepository;
+
+    /** Fixed instant for the on-call lookup; the other reads still use the system clock. */
+    private static final java.time.Instant FIXED_INSTANT = java.time.Instant.parse("2026-03-01T22:00:00Z");
+    @Spy
+    private java.time.Clock clock = java.time.Clock.fixed(FIXED_INSTANT, java.time.ZoneOffset.UTC);
 
     @InjectMocks
     private ClinicalDashboardServiceImpl service;
@@ -384,7 +390,9 @@ class ClinicalDashboardServiceImplTest {
         java.time.OffsetDateTime end = java.time.OffsetDateTime.now().plusHours(7);
         when(schedule.getStartTime()).thenReturn(start);
         when(schedule.getEndTime()).thenReturn(end);
-        when(onCallScheduleRepository.findActiveByStaffIdAt(eq(staffId), any(java.time.OffsetDateTime.class)))
+        // The lookup instant is the injected clock's now, not the system's.
+        when(onCallScheduleRepository.findActiveByStaffIdAt(staffId,
+                java.time.OffsetDateTime.ofInstant(FIXED_INSTANT, java.time.ZoneOffset.UTC)))
                 .thenReturn(List.of(schedule));
 
         OnCallStatusDTO status = service.getOnCallStatus(userId);

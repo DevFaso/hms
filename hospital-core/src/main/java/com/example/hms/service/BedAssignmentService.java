@@ -77,7 +77,7 @@ public class BedAssignmentService {
         UUID hospitalId = admission.getHospital().getId();
         // ── Tenant isolation: a bed from another hospital reads as not-found. ──
         Bed bed = bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Bed not found: " + bedId));
+            .orElseThrow(() -> new ResourceNotFoundException("bed.notFound", bedId));
 
         Bed current = admission.getBed();
         if (current != null && current.getId().equals(bed.getId())) {
@@ -157,7 +157,7 @@ public class BedAssignmentService {
     @Transactional
     public Bed reserveBed(UUID bedId, UUID hospitalId) {
         Bed bed = bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Bed not found: " + bedId));
+            .orElseThrow(() -> new ResourceNotFoundException("bed.notFound", bedId));
         if (!bed.isActive() || bed.getStatus() != BedStatus.AVAILABLE) {
             throw new BusinessException("Bed " + bedLabel(bed) + " is not available.");
         }

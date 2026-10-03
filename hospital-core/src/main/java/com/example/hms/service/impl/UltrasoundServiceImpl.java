@@ -41,8 +41,9 @@ import com.example.hms.utility.RoleValidator;
 @RequiredArgsConstructor
 @Transactional
 public class UltrasoundServiceImpl implements UltrasoundService {
-    private static final String ULTRASOUND_ORDER_NOT_FOUND_PREFIX = "Ultrasound order not found with ID: ";
-    private static final String ULTRASOUND_REPORT_NOT_FOUND_PREFIX = "Ultrasound report not found with ID: ";
+    private static final String ULTRASOUND_ORDER_NOT_FOUND_KEY = "ultrasound.order.notFound";
+    private static final String ULTRASOUND_REPORT_NOT_FOUND_KEY = "ultrasound.report.notFound";
+
 
 
     private final UltrasoundOrderRepository orderRepository;
@@ -146,7 +147,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Transactional(readOnly = true)
     public UltrasoundOrderResponseDTO getOrderById(UUID orderId) {
         UltrasoundOrder order = orderRepository.findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_PREFIX + orderId));
+            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_KEY, orderId));
         // A patient caller reads only their own; staff read their active
         // hospital's, and — staff who are also patients (#754's rule) — their
         // own order elsewhere, as its patient. Every refusal answers exactly
@@ -162,7 +163,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             readable = asPatient;
         }
         if (!readable) {
-            throw new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_PREFIX + orderId);
+            throw new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_KEY, orderId);
         }
         return toOrderResponseDTO(order, asPatient);
     }
@@ -337,9 +338,9 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Transactional(readOnly = true)
     public UltrasoundReportResponseDTO getReportById(UUID reportId) {
         UltrasoundReport report = reportRepository.findById(reportId)
-            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_PREFIX + reportId));
+            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_KEY, reportId));
         if (!mayReadReport(report)) {
-            throw new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_PREFIX + reportId);
+            throw new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_KEY, reportId);
         }
         return ultrasoundMapper.toReportResponseDTO(report);
     }
@@ -389,9 +390,9 @@ public class UltrasoundServiceImpl implements UltrasoundService {
      */
     private UltrasoundOrder getOrderInScope(UUID orderId) {
         UltrasoundOrder order = orderRepository.findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_PREFIX + orderId));
+            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_KEY, orderId));
         if (!inStaffScope(order.getHospital())) {
-            throw new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_PREFIX + orderId);
+            throw new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_KEY, orderId);
         }
         return order;
     }
@@ -399,9 +400,9 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     /** The report, only at the hospital the caller acts at; otherwise as missing. */
     private UltrasoundReport getReportInScope(UUID reportId) {
         UltrasoundReport report = reportRepository.findById(reportId)
-            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_PREFIX + reportId));
+            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_KEY, reportId));
         if (!inStaffScope(report.getHospital())) {
-            throw new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_PREFIX + reportId);
+            throw new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_KEY, reportId);
         }
         return report;
     }
@@ -463,7 +464,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     }
 
     private static ResourceNotFoundException reportForOrderNotFound(UUID orderId) {
-        return new ResourceNotFoundException("Ultrasound report not found for order ID: " + orderId);
+        return new ResourceNotFoundException("ultrasound.report.notFoundForOrder", orderId);
     }
 
     @Override

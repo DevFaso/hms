@@ -155,10 +155,9 @@ public class SessionTemplateServiceImpl implements SessionTemplateService {
             return null;
         }
         VisitType visitType = visitTypeRepository.findById(visitTypeId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Visit type not found with ID: " + visitTypeId));
+            .orElseThrow(() -> new ResourceNotFoundException("visitType.notFound", visitTypeId));
         if (!hospitalId.equals(visitType.getHospital().getId())) {
-            throw new ResourceNotFoundException("Visit type not found with ID: " + visitTypeId);
+            throw new ResourceNotFoundException("visitType.notFound", visitTypeId);
         }
         if (!visitType.isActive()) {
             throw new BusinessException(
@@ -177,11 +176,10 @@ public class SessionTemplateServiceImpl implements SessionTemplateService {
 
     private SessionTemplate loadScoped(UUID id) {
         SessionTemplate entity = templateRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Session template not found with ID: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException("sessionTemplate.notFound", id));
         UUID hospitalId = requireHospital();
         if (!hospitalId.equals(entity.getHospital().getId())) {
-            throw new ResourceNotFoundException("Session template not found with ID: " + id);
+            throw new ResourceNotFoundException("sessionTemplate.notFound", id);
         }
         return entity;
     }

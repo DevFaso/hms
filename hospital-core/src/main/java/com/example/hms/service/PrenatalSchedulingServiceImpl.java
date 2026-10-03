@@ -79,10 +79,10 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
     public PrenatalScheduleResponseDTO generateSchedule(PrenatalScheduleRequestDTO request, Locale locale, String username) {
         Objects.requireNonNull(request, "Prenatal scheduling request is required");
         Patient patient = patientRepository.findById(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         Staff staff = resolveStaffIfPresent(request.getStaffId(), hospital.getId());
         validateHospitalScope(hospital.getId(), username);
@@ -133,7 +133,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
     public AppointmentResponseDTO reschedulePrenatalAppointment(PrenatalRescheduleRequestDTO request, Locale locale, String username) {
         Objects.requireNonNull(request, "Reschedule request is required");
         Appointment appointment = appointmentRepository.findById(request.getAppointmentId())
-            .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", request.getAppointmentId()));
 
         validateHospitalScope(appointment.getHospital().getId(), username);
 
@@ -160,7 +160,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
     public void createReminder(PrenatalReminderRequestDTO request, Locale locale, String username) {
         Objects.requireNonNull(request, "Reminder request is required");
         Appointment appointment = appointmentRepository.findById(request.getAppointmentId())
-            .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", request.getAppointmentId()));
 
         validateHospitalScope(appointment.getHospital().getId(), username);
 
@@ -212,7 +212,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
             return null;
         }
         Staff staff = staffRepository.findById(staffId)
-            .orElseThrow(() -> new ResourceNotFoundException("Staff not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", staffId));
         if (!staff.getHospital().getId().equals(hospitalId)) {
             throw new BusinessException("Selected staff member does not belong to the requested hospital");
         }
@@ -479,7 +479,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
     private UUID resolveStaffForReschedule(PrenatalRescheduleRequestDTO request, Appointment appointment) {
         if (request.getNewStaffId() != null) {
             Staff staff = staffRepository.findById(request.getNewStaffId())
-                .orElseThrow(() -> new ResourceNotFoundException("Staff not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getNewStaffId()));
             if (!appointment.getHospital().getId().equals(staff.getHospital().getId())) {
                 throw new BusinessException("Selected staff member does not belong to appointment hospital");
             }

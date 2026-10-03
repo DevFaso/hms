@@ -30,8 +30,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -66,9 +64,6 @@ class AppointmentBookingOwnershipTest {
         receptionist = user("front.desk", "ROLE_RECEPTIONIST");
         when(userRepository.findByUsername(patientUser.getUsername())).thenReturn(Optional.of(patientUser));
         when(userRepository.findByUsername(receptionist.getUsername())).thenReturn(Optional.of(receptionist));
-        // The not-found text a real MessageSource would give, keyed by its id.
-        when(messageSource.getMessage(eq("patient.notfound"), any(), anyString(), any()))
-            .thenAnswer(inv -> "Patient not found with ID: " + ((Object[]) inv.getArgument(1))[0]);
     }
 
     private static User user(String username, String roleCode) {
@@ -118,7 +113,7 @@ class AppointmentBookingOwnershipTest {
         AppointmentRequestDTO byUsername = new AppointmentRequestDTO();
         byUsername.setPatientUsername("someone.else");
         assertThat(refusal(byUsername, patientUser).getMessage())
-            .isEqualTo(new ResourceNotFoundException("User not found: someone.else").getMessage());
+            .isEqualTo(new ResourceNotFoundException("user.notFoundByUsername", "someone.else").getMessage());
 
         Patient other = new Patient();
         other.setId(UUID.randomUUID());
@@ -144,11 +139,10 @@ class AppointmentBookingOwnershipTest {
         when(patientRepository.findByIdUnscoped(own.getId())).thenReturn(Optional.of(own));
         AppointmentRequestDTO request = forPatientId(own.getId());
         when(hospitalRepository.findById(request.getHospitalId())).thenReturn(Optional.empty());
-        when(messageSource.getMessage(eq("hospital.notfound"), any(), any(Locale.class))).thenReturn("Hospital not found");
 
         ResourceNotFoundException stoppedLater = refusal(request, patientUser);
 
-        assertThat(stoppedLater.getMessage()).isEqualTo(new ResourceNotFoundException("Hospital not found").getMessage());
+        assertThat(stoppedLater.getMessage()).isEqualTo(new ResourceNotFoundException("hospital.notfound", request.getHospitalId()).getMessage());
         verify(patientRepository).findByIdUnscoped(own.getId());
     }
 }

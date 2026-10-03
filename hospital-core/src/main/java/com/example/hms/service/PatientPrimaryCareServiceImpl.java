@@ -49,7 +49,7 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", req.getHospitalId()));
 
         UserRoleHospitalAssignment assignment = assignmentRepo.findById(req.getAssignmentId())
-            .orElseThrow(() -> new ResourceNotFoundException("Assignment not found: " + req.getAssignmentId()));
+            .orElseThrow(() -> new ResourceNotFoundException("roleAssignment.notFound", req.getAssignmentId()));
 
         // Validate: assignment hospital must match requested hospital
         if (!assignment.getHospital().getId().equals(hospital.getId())) {
@@ -75,7 +75,7 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
     @Transactional
     public PatientPrimaryCareResponseDTO updatePrimaryCare(UUID pcpId, PatientPrimaryCareRequestDTO req) {
         PatientPrimaryCare entity = pcpRepo.findById(pcpId)
-            .orElseThrow(() -> new ResourceNotFoundException("Primary care link not found: " + pcpId));
+            .orElseThrow(() -> new ResourceNotFoundException("primaryCare.link.notFound", pcpId));
 
         // Optional updates
         if (req.getStartDate() != null) entity.setStartDate(req.getStartDate());
@@ -90,7 +90,7 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
         }
         if (req.getAssignmentId() != null && !req.getAssignmentId().equals(entity.getAssignment().getId())) {
             UserRoleHospitalAssignment a = assignmentRepo.findById(req.getAssignmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Assignment not found: " + req.getAssignmentId()));
+                .orElseThrow(() -> new ResourceNotFoundException("roleAssignment.notFound", req.getAssignmentId()));
             // validate reassignment
             if (!a.getHospital().getId().equals(entity.getHospital().getId())) {
                 throw new BusinessException("Assignment hospital mismatch");
@@ -108,7 +108,7 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
     public PatientPrimaryCareResponseDTO endPrimaryCare(UUID pcpId, LocalDate endDate) {
         if (endDate == null) endDate = LocalDate.now();
         PatientPrimaryCare entity = pcpRepo.findById(pcpId)
-            .orElseThrow(() -> new ResourceNotFoundException("Primary care link not found: " + pcpId));
+            .orElseThrow(() -> new ResourceNotFoundException("primaryCare.link.notFound", pcpId));
 
         if (entity.getStartDate() != null && endDate.isBefore(entity.getStartDate())) {
             throw new BusinessException("PCP endDate cannot be before startDate");
@@ -135,7 +135,7 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
     @Transactional
     public void deletePrimaryCare(UUID pcpId) {
         if (!pcpRepo.existsById(pcpId)) {
-            throw new ResourceNotFoundException("Primary care link not found: " + pcpId);
+            throw new ResourceNotFoundException("primaryCare.link.notFound", pcpId);
         }
         pcpRepo.deleteById(pcpId);
     }

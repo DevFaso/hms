@@ -40,7 +40,7 @@
       @if (critical.detail) {
         <p class="bpa-modal__detail">{{ critical.detail }}</p>
       }
-      @if (critical.source?.label) {
+      @if (critical.source.label) {
         <p class="bpa-modal__source">
           {{ 'CDS.SECTION_LABEL' | translate }}: {{ critical.source.label }}
         </p>

@@ -1,5 +1,6 @@
 package com.bitnesttechs.hms.patient.features.appointments
 
+import com.bitnesttechs.hms.patient.core.network.FailureText
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bitnesttechs.hms.patient.core.di.ApplicationScope
@@ -202,7 +203,7 @@ class PreCheckInViewModel @Inject constructor(
                     _state.update { it.copy(isSubmitting = false, submitError = serverMessage(resp.errorBody()?.string())) }
                 }
             } catch (e: Exception) {
-                _state.update { it.copy(isSubmitting = false, submitError = e.message) }
+                _state.update { it.copy(isSubmitting = false, submitError = FailureText.of(e)) }
             }
         }
     }

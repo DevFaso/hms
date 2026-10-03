@@ -198,7 +198,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
                 .orElse(null);
         }
         PatientHospitalRegistration registration = registrationRepository.findById(registrationId)
-            .orElseThrow(() -> new ResourceNotFoundException("Registration not found with ID: " + registrationId));
+            .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", registrationId));
         if (!registration.getPatient().getId().equals(patient.getId())) {
             throw new BusinessException("Registration does not belong to the specified patient.");
         }
@@ -224,7 +224,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
     private Staff resolveRecorderStaff(UUID staffId, UUID recorderUserId, Hospital hospital) {
         if (staffId != null) {
             return staffRepository.findByIdAndActiveTrue(staffId)
-                .orElseThrow(() -> new ResourceNotFoundException("Staff not found or inactive with ID: " + staffId));
+                .orElseThrow(() -> new ResourceNotFoundException("staff.not.found.or.inactive", staffId));
         }
         if (recorderUserId == null) {
             return null;
@@ -238,7 +238,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
     private UserRoleHospitalAssignment resolveAssignment(UUID assignmentId, Staff staff) {
         if (assignmentId != null) {
             UserRoleHospitalAssignment assignment = assignmentRepository.findById(assignmentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Assignment not found with ID: " + assignmentId));
+                .orElseThrow(() -> new ResourceNotFoundException("roleAssignment.notFound", assignmentId));
             if (!Boolean.TRUE.equals(assignment.getActive())) {
                 throw new BusinessException("Assignment is not active for vital sign capture.");
             }

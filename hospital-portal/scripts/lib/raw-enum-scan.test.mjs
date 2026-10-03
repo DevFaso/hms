@@ -25,10 +25,8 @@ test('finds the plain interpolation', () => {
 
 test('finds the shapes the first version missed', () => {
   assert.deepEqual(exprs('<p>{{ probe.status ?? "-" }}</p>'), ['probe.status']);
-  assert.deepEqual(exprs('<p>{{ a.priority ? a.priority : "-" }}</p>'), [
-    'a.priority',
-    'a.priority',
-  ]);
+  // The ternary's condition is tested, not rendered; its branch is rendered.
+  assert.deepEqual(exprs('<p>{{ a.priority ? a.priority : "-" }}</p>'), ['a.priority']);
   assert.deepEqual(exprs('<p [title]="row.severity"></p>'), ['row.severity']);
   assert.deepEqual(exprs('<p>{{ a?.b?.status }}</p>'), ['a?.b?.status']);
 });
@@ -55,6 +53,28 @@ test('reports only the unpiped half of a binding pair', () => {
 test('ignores a binding whose value nobody reads', () => {
   assert.deepEqual(exprs('<div [style.background]="statusColor(row.status)"></div>'), []);
   assert.deepEqual(exprs('<div [class.is-urgent]="row.priority === \'STAT\'"></div>'), []);
+});
+
+test('a hit inside a wrapped attribute reports its own line, not the name', () => {
+  // Prettier wraps a long [title] ternary; the build error must point at the
+  // line holding the field, not at `[title]=` three lines up.
+  const bound = [
+    '<span',
+    '  [title]="',
+    '    flag',
+    '      ? row.severity',
+    "      : ''",
+    '  "',
+    '></span>',
+  ];
+  assert.deepEqual(rawEnumRenders(bound.join('\n')), [{ expr: 'row.severity', line: 4 }]);
+  const interpolated = ['<img', '  alt="prefix', '  {{ p.severity }}"', '/>'];
+  assert.deepEqual(rawEnumRenders(interpolated.join('\n')), [{ expr: 'p.severity', line: 3 }]);
+});
+
+test('a wrapped interpolation reports the line the field is on', () => {
+  const html = ['<p>', '  {{', '    a.label ??', '      a.status', '  }}', '</p>'].join('\n');
+  assert.deepEqual(rawEnumRenders(html), [{ expr: 'a.status', line: 4 }]);
 });
 
 test('reports the line the binding starts on', () => {
@@ -104,7 +124,28 @@ test('the text beside a class binding is still a render', () => {
 test('a data attribute is machinery; a title is read', () => {
   assert.deepEqual(exprs('<td [attr.data-status]="shift.status"></td>'), []);
   assert.deepEqual(exprs('<td [title]="shift.status"></td>'), ['shift.status']);
-  assert.deepEqual(exprs('<td matTooltip="{{ x.priority }}"></td>'), ['x.priority']);
+});
+
+test('every text-bearing attribute on the list is read', () => {
+  // One case per entry, so an entry that stops matching fails here rather
+  // than reading as config a future reader has to re-verify by hand.
+  for (const attr of [
+    'title',
+    'alt',
+    'placeholder',
+    'aria-label',
+    'aria-description',
+    'aria-valuetext',
+    'label',
+  ]) {
+    assert.deepEqual(exprs(`<x ${attr}="{{ q.priority }}"></x>`), ['q.priority'], attr);
+    assert.deepEqual(exprs(`<x [attr.${attr}]="q.priority"></x>`), ['q.priority'], attr);
+  }
+});
+
+test('an Angular Material attribute is not on the list', () => {
+  // No template in src/app uses a Material component; see TEXT_ATTRS.
+  assert.deepEqual(exprs('<td matTooltip="{{ x.priority }}"></td>'), []);
 });
 
 test('blanking an attribute keeps the line numbers honest', () => {
@@ -139,8 +180,24 @@ test('a single-quoted attribute is an attribute', () => {
 
 test('an interpolated value= is painted; a [value] binding is not', () => {
   assert.deepEqual(exprs('<input value="{{ v.status }}">'), ['v.status']);
+  assert.deepEqual(exprs('<input\n  type="text"\n  value="{{ v.status }}"\n/>'), ['v.status']);
   // `<option [value]="b.status">` carries the form value; its label is separate.
   assert.deepEqual(exprs('<option [value]="b.status">x</option>'), []);
+});
+
+test('an option or button value= is the form value, not the label', () => {
+  // The label beside it is what a person reads, and here it is piped: counting
+  // the value would pin a site whose on-screen text is already translated.
+  const html = `<option value="{{ o.status }}">{{ o.status | enumLabel: 'x' }}</option>`;
+  assert.deepEqual(exprs(html), []);
+  assert.deepEqual(exprs('<button value="{{ o.status }}">Go</button>'), []);
+  // …while a raw label beside it is still a finding.
+  assert.deepEqual(exprs('<option value="{{ o.status }}">{{ o.status }}</option>'), ['o.status']);
+});
+
+test('a < inside an earlier attribute is not mistaken for a tag', () => {
+  const html = '<input *ngIf="a < b" value="{{ v.status }}">';
+  assert.deepEqual(exprs(html), ['v.status']);
 });
 
 test('commented-out markup is not on screen', () => {
@@ -153,4 +210,75 @@ test('commented-out markup is not on screen', () => {
 test('a comment keeps the lines below it honest', () => {
   const html = ['<!--', '  {{ ignored.status }}', '-->', '{{ real.status }}'].join('\n');
   assert.deepEqual(rawEnumRenders(html), [{ expr: 'real.status', line: 4 }]);
+});
+
+test('a property read OFF an enum-named field is not that field', () => {
+  // `card.source.label` renders the CDS card's source LABEL, free text the
+  // service sends; matching `card.source` inside it pinned a site that was
+  // never an enum render.
+  assert.deepEqual(exprs('<span>{{ card.source.label }}</span>'), []);
+  assert.deepEqual(exprs('<span>{{ card.source?.label }}</span>'), []);
+  assert.deepEqual(exprs('<span>{{ card.source!.label }}</span>'), []);
+  // …while the field itself, and a method called on it, still are.
+  assert.deepEqual(exprs('<span>{{ card.source }}</span>'), ['card.source']);
+  assert.deepEqual(exprs('<span>{{ card?.source ?? "-" }}</span>'), ['card?.source']);
+});
+
+test('a translate parameter is spliced into the sentence raw', () => {
+  // The five onboarding role-welcome screens: `translate` resolved the key and
+  // the gate excused the whole binding, while ROLE_DOCTOR went into the text.
+  assert.deepEqual(
+    exprs("<p>{{ 'ONBOARDING.BODY' | translate: { role: a.roleName, org: a.hospitalName } }}</p>"),
+    ['a.roleName'],
+  );
+  assert.deepEqual(
+    exprs("<p>{{ 'ONBOARDING.BODY' | translate: { role: (a.roleName | roleLabel) } }}</p>"),
+    [],
+  );
+});
+
+test('a pipe inside parentheses resolves only its own group', () => {
+  // The scheduling picker: translate covered the fallback, not the fields.
+  assert.deepEqual(exprs("<i>{{ s.jobTitle ?? s.roleName ?? ('X.FALLBACK' | translate) }}</i>"), [
+    's.jobTitle',
+    's.roleName',
+  ]);
+  assert.deepEqual(
+    exprs(
+      "<i>{{ (s.jobTitle | enumLabel: 'jobTitle') || (s.roleName | roleLabel) || ('X' | translate) }}</i>",
+    ),
+    [],
+  );
+});
+
+test('a tested field is not a rendered one', () => {
+  assert.deepEqual(exprs("<i>{{ e.type ? (e.type | enumLabel: 'x') : '—' }}</i>"), []);
+  assert.deepEqual(exprs("<i>{{ t.type === 'error' ? 'error' : 'info' }}</i>"), []);
+  // Nested: both conditions are tests; the raw branch is still a render.
+  assert.deepEqual(exprs("<i>{{ n.type === 'A' ? 'warn' : n.kind ? n.kind : 'info' }}</i>"), [
+    'n.kind',
+  ]);
+  // `?.` and `??` are not ternaries.
+  assert.deepEqual(exprs("<i>{{ a?.status ?? '—' }}</i>"), ['a?.status']);
+});
+
+test('a key, or a pipe inside a string, cannot mislead the split', () => {
+  assert.deepEqual(exprs("<i>{{ 'A.status | x (' | translate }}</i>"), []);
+  assert.deepEqual(exprs("<i>{{ 'LABOR.OUTCOME_' + e.outcome | translate }}</i>"), []);
+  assert.deepEqual(exprs('<i>{{ x.status | lowercase }}</i>'), ['x.status']);
+  // Other pipes' arguments are configuration, not text.
+  assert.deepEqual(exprs('<i>{{ d.when | date: r.mode }}</i>'), []);
+});
+
+test('a field read off a signal or a non-null assertion is still a field', () => {
+  // `selectedStaff()!.jobTitle` and `deletingRef()?.targetSpecialty`: the
+  // receiver is a call, and FIELD used to require a plain identifier chain,
+  // so every modal that reads a signal was invisible.
+  assert.deepEqual(exprs('<i>{{ selectedStaff()!.jobTitle }}</i>'), ['selectedStaff()!.jobTitle']);
+  assert.deepEqual(exprs('<i>{{ ref()?.targetSpecialty }}</i>'), ['ref()?.targetSpecialty']);
+  assert.deepEqual(exprs('<i>{{ summary()!.profile.bloodType }}</i>'), [
+    'summary()!.profile.bloodType',
+  ]);
+  // A method taking an argument is not a field read; its return is unknown.
+  assert.deepEqual(exprs('<i>{{ label(x).status }}</i>'), []);
 });

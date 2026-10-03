@@ -19,7 +19,11 @@ describe('PrescriptionClarificationComponent', () => {
   let component: PrescriptionClarificationComponent;
   let prescriptions: jasmine.SpyObj<PrescriptionService>;
   let toast: jasmine.SpyObj<ToastService>;
-  const roleState = { superAdmin: false, hospitalId: 'h-1', roles: ['ROLE_PHARMACIST'] };
+  const roleState = roleContextStub({
+    superAdmin: false,
+    hospitalId: 'h-1',
+    roles: ['ROLE_PHARMACIST'],
+  });
 
   const el = (testId: string): HTMLElement | null =>
     fixture.nativeElement.querySelector(`[data-testid="${testId}"]`);
@@ -36,8 +40,7 @@ describe('PrescriptionClarificationComponent', () => {
   }
 
   function create(roles: string[], inputs: Inputs): void {
-    roleState.roles = roles;
-    roleState.superAdmin = roles.includes('ROLE_SUPER_ADMIN');
+    roleState.set({ roles, superAdmin: roles.includes('ROLE_SUPER_ADMIN') });
     fixture = TestBed.createComponent(PrescriptionClarificationComponent);
     component = fixture.componentInstance;
     fixture.componentRef.setInput('mode', inputs.mode);
@@ -55,8 +58,7 @@ describe('PrescriptionClarificationComponent', () => {
   }
 
   beforeEach(async () => {
-    roleState.roles = ['ROLE_PHARMACIST'];
-    roleState.superAdmin = false;
+    roleState.set({ roles: ['ROLE_PHARMACIST'], superAdmin: false });
     prescriptions = jasmine.createSpyObj('PrescriptionService', [
       'getById',
       'requestClarification',
@@ -77,7 +79,7 @@ describe('PrescriptionClarificationComponent', () => {
           // activeRoles, which the doctor-equivalence path reads. A stub with
           // only hasAnyActiveRole cannot exercise that path at all.
           provide: RoleContextService,
-          useValue: roleContextStub(roleState),
+          useValue: roleState,
         },
       ],
     }).compileComponents();

@@ -9,7 +9,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
   standalone: true,
   imports: [CommonModule, DatePipe, EnumLabelPipe, TranslateModule],
   templateUrl: './my-lab-results.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-lab-results.component.scss', '../patient-portal-pages.scss'],
 })
 export class MyLabResultsComponent implements OnInit {

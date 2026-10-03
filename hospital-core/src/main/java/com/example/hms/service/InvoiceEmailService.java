@@ -28,7 +28,7 @@ public class InvoiceEmailService {
     public void emailInvoice(UUID invoiceId, EmailInvoiceRequest req) {
         // Load invoice with patient & hospital to avoid LazyInitialization issues
         var invoice = billingInvoiceRepository.findByIdWithRefs(invoiceId)
-            .orElseThrow(() -> new ResourceNotFoundException("Invoice not found: " + invoiceId));
+            .orElseThrow(() -> new ResourceNotFoundException("billinginvoice.notfound", invoiceId));
 
         List<InvoiceItem> items = invoiceItemRepository.findByBillingInvoiceId(invoiceId);
 

@@ -1,0 +1,37 @@
+# Fixture for check-info-plist.sh's key derivation. Shaped like
+# patient-ios-app/project.yml, plus the things the line parser must not trip
+# on: comments and blank lines inside the block, nested keys that are NOT
+# top-level plist keys, quoted scalars, and a second target with no info.
+name: Fixture
+settings:
+  base:
+    MEDIHUB_KEYCLOAK_REDIRECT_URI: "com.example.fixture:/oauth2redirect"
+targets:
+  App:
+    type: application
+    info:
+      path: App/Info.plist
+      properties:
+        # A comment at the child indent.
+
+        CFBundleDisplayName: Fixture   # trailing comment
+        NSFaceIDUsageDescription: "Use Face ID: quoted, with a colon"
+        ITSAppUsesNonExemptEncryption: false
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleURLTypes:
+          - CFBundleTypeRole: Editor
+            CFBundleURLSchemes:
+              - com.example.fixture
+        MEDIHUB_API_BASE_URL: $(MEDIHUB_API_BASE_URL)
+        MEDIHUB_KEYCLOAK_ISSUER: $(MEDIHUB_KEYCLOAK_ISSUER)
+        MEDIHUB_KEYCLOAK_SSO_ENABLED: $(MEDIHUB_KEYCLOAK_SSO_ENABLED)
+        MEDIHUB_KEYCLOAK_REDIRECT_URI: '$(MEDIHUB_KEYCLOAK_REDIRECT_URI)'
+    scheme:
+      testTargets:
+        - AppTests
+  AppTests:
+    type: bundle.unit-test
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true

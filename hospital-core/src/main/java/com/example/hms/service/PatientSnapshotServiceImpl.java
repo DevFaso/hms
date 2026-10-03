@@ -445,10 +445,13 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                     .filter(r -> CrossHospitalReachRecorder.isPerformedHere(r, hospitalId))
                     .map(PatientSnapshotServiceImpl::orderingHospitalIdOf)
                     .toList());
+            // No test definition (deleted, or never linked) sends null rather
+            // than an English word: the drawer renders its own translated
+            // fallback, as it already does for the pending order below.
             rows.forEach(r -> labs.add(PatientSnapshotDTO.LabItem.builder()
                             .test(r.getLabOrder().getLabTestDefinition() != null
                                     ? r.getLabOrder().getLabTestDefinition().getName()
-                                    : "Lab Test")
+                                    : null)
                             .value(r.getResultValue())
                             .flag(labResultFlag(r))
                             .abnormalDirection(r.getAbnormalFlag() != null ? r.getAbnormalFlag().direction() : null)

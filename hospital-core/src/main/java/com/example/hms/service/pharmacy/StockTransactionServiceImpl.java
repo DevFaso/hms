@@ -54,7 +54,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
 
         StockLot lot = dto.getStockLotId() != null
                 ? stockLotRepository.findById(dto.getStockLotId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Stock lot not found"))
+                    .orElseThrow(() -> new ResourceNotFoundException("stockLot.notFound", dto.getStockLotId()))
                 : null;
 
         User performer = resolvePerformer(dto.getPerformedBy());
@@ -79,7 +79,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     @Transactional(readOnly = true)
     public StockTransactionResponseDTO getTransaction(UUID id) {
         StockTransaction tx = stockTransactionRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Stock transaction not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("stockTransaction.notFound", id));
         enforceHospitalScope(tx.getInventoryItem().getPharmacy());
         return stockTransactionMapper.toResponseDTO(tx);
     }
@@ -124,33 +124,33 @@ public class StockTransactionServiceImpl implements StockTransactionService {
 
     private InventoryItem resolveInventoryItem(UUID id) {
         return inventoryItemRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Inventory item not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("inventoryItem.notFound", id));
     }
 
     private User resolvePerformer(UUID performedBy) {
         if (performedBy != null) {
             return userRepository.findById(performedBy)
-                    .orElseThrow(() -> new ResourceNotFoundException("Performer user not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("stockTransaction.performer.notFound", performedBy));
         }
         UUID userId = roleValidator.getCurrentUserId();
         if (userId == null) {
             throw new BusinessException("Unable to determine performing user");
         }
         return userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Current user not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));
     }
 
     private void enforceHospitalScope(Pharmacy pharmacy) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null && pharmacy.getHospital() != null
                 && !pharmacy.getHospital().getId().equals(hospitalId)) {
-            throw new ResourceNotFoundException("Pharmacy not found");
+            throw new ResourceNotFoundException("pharmacy.notFound", pharmacy.getId());
         }
     }
 
     private void enforcePharmacyScope(UUID pharmacyId) {
         Pharmacy pharmacy = pharmacyRepository.findById(pharmacyId)
-                .orElseThrow(() -> new ResourceNotFoundException("Pharmacy not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notFound", pharmacyId));
         enforceHospitalScope(pharmacy);
     }
 

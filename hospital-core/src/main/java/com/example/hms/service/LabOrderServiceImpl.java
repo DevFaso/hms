@@ -176,7 +176,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             performing = current;
         } else {
             performing = hospitalRepository.findById(requested)
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", requested));
             if (!isRoutableLab(performing)) {
                 throw new BusinessException("The performing laboratory must be an active hospital.");
             }
@@ -279,13 +279,13 @@ public class LabOrderServiceImpl implements LabOrderService {
         String notes = normalizeOptionalText(request.getNotes());
 
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException("patient.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", request.getPatientId()));
 
         UUID requestedHospitalId = request.getHospitalId();
         Encounter encounter = null;
         if (request.getEncounterId() != null) {
             encounter = encounterRepository.findById(request.getEncounterId())
-                .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", request.getEncounterId()));
         }
 
         Hospital hospital = encounter != null ? encounter.getHospital() : null;
@@ -295,7 +295,7 @@ public class LabOrderServiceImpl implements LabOrderService {
 
         if (hospital == null && requestedHospitalId != null) {
             hospital = hospitalRepository.findById(requestedHospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", requestedHospitalId));
         }
 
         if (hospital == null) {
@@ -425,14 +425,14 @@ public class LabOrderServiceImpl implements LabOrderService {
         Staff named = requestedStaffId == null ? null : staffRepository.findById(requestedStaffId).orElse(null);
         UUID personId = named != null && named.getUser() != null ? named.getUser().getId() : null;
         if (personId == null) {
-            throw new ResourceNotFoundException(STAFF_NOT_FOUND);
+            throw new ResourceNotFoundException(STAFF_NOT_FOUND, requestedStaffId);
         }
         if (!roleValidator.isSuperAdminFromJwtClaim()) {
             UUID callerId = authUtils.resolveUserId(SecurityContextHolder.getContext().getAuthentication())
                 .orElse(null);
             if (!personId.equals(callerId)) {
                 log.warn("Lab order refused: the ordering staff named is not the caller");
-                throw new ResourceNotFoundException(STAFF_NOT_FOUND);
+                throw new ResourceNotFoundException(STAFF_NOT_FOUND, requestedStaffId);
             }
         }
         if (named.isActive() && named.getHospital() != null && hospital.getId().equals(named.getHospital().getId())) {
@@ -442,7 +442,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             .filter(Staff::isActive)
             .orElseThrow(() -> {
                 log.warn("Lab order refused: ordering staff has no active staff row at hospital {}", hospital.getId());
-                return new ResourceNotFoundException(STAFF_NOT_FOUND);
+                return new ResourceNotFoundException(STAFF_NOT_FOUND, requestedStaffId);
             });
     }
 

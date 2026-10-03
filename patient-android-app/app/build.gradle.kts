@@ -53,6 +53,16 @@ android {
             ?: "https://api.e-keneya.com/api"
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
 
+        // The web portal, for the account steps the app hands over to it
+        // (MFA enrolment, and a fallback for password reset). Derived from
+        // the API URL so a build pointed at dev (-PapiBaseUrl) opens the dev
+        // portal: https://dev.e-keneya.com/api -> https://dev.e-keneya.com,
+        // https://api.e-keneya.com/api -> https://e-keneya.com.
+        // -PwebPortalUrl overrides it.
+        val webPortalUrl = (project.findProperty("webPortalUrl") as String?)
+            ?: apiBaseUrl.removeSuffix("/").removeSuffix("/api").replace("://api.", "://")
+        buildConfigField("String", "WEB_PORTAL_URL", "\"$webPortalUrl\"")
+
         // Keycloak / OIDC config (KC-3). SSO is OFF by default until prod Keycloak is
         // provisioned (tasks-keycloak.md P-2). Override via local.properties or CI env.
         val keycloakIssuer = localProps.getProperty("KEYCLOAK_ISSUER", "")
@@ -76,6 +86,23 @@ android {
         buildConfigField("String", "KEYCLOAK_CLIENT_ID", "\"$keycloakClientId\"")
         buildConfigField("String", "KEYCLOAK_REDIRECT_URI", "\"$keycloakRedirectUri\"")
         buildConfigField("Boolean", "KEYCLOAK_SSO_ENABLED_DEFAULT", keycloakSsoEnabled)
+
+        // Push (FCM) without the google-services plugin: the four values of the
+        // Firebase Android app are compiled in and MediHubApplication
+        // initialises FirebaseApp from them. Each comes from a Gradle property
+        // (-PFCM_API_KEY=...), local.properties or the environment (CI
+        // secrets of the same names), and defaults to empty. While ANY is
+        // empty, push is off: no FirebaseApp, no token, no registration.
+        fun fcmValue(key: String): String =
+            (project.findProperty(key) as String?)
+                ?: localProps.getProperty(key)
+                ?: System.getenv(key)
+                ?: ""
+        for (key in listOf("FCM_APPLICATION_ID", "FCM_API_KEY", "FCM_PROJECT_ID", "FCM_SENDER_ID")) {
+            val value = fcmValue(key).trim()
+            require(!value.contains('"') && !value.contains('\\')) { "$key must not contain quotes or backslashes" }
+            buildConfigField("String", key, "\"$value\"")
+        }
 
         // AppAuth redirect scheme consumed by net.openid.appauth.RedirectUriReceiverActivity
         // via manifest placeholder. Must match the scheme portion of KEYCLOAK_REDIRECT_URI.
@@ -103,6 +130,7 @@ android {
             // The dev API is served same-origin by the portal host; the
             // `api.dev.` subdomain was never provisioned.
             buildConfigField("String", "API_BASE_URL", "\"https://dev.e-keneya.com/api\"")
+            buildConfigField("String", "WEB_PORTAL_URL", "\"https://dev.e-keneya.com\"")
         }
         release {
             isMinifyEnabled = true
@@ -194,6 +222,11 @@ dependencies {
 
     // DataStore-backed feature flags
     implementation(libs.datastore.preferences)
+
+    // Push notifications (FCM), initialised programmatically (no google-services plugin)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
+    implementation(libs.coroutines.play.services)
 
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)

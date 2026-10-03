@@ -215,13 +215,11 @@ public class FhirBulkExportService {
     public Path resolveOutputFile(FhirBulkExportJob job, String fileName) {
         FhirBulkExportFile file = fileRepository
             .findByJob_IdAndFileName(job.getId(), fileName)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "No output file '" + fileName + "' on bulk-export job " + job.getId()));
+            .orElseThrow(() -> new ResourceNotFoundException("fhir.bulkExport.file.notFound", fileName, job.getId()));
         Path jobDir = storageRoot.resolve(job.getId().toString()).normalize();
         Path path = jobDir.resolve(file.getFileName()).normalize();
         if (!path.startsWith(jobDir) || !Files.exists(path)) {
-            throw new ResourceNotFoundException(
-                "Output file '" + fileName + "' is no longer on disk for job " + job.getId());
+            throw new ResourceNotFoundException("fhir.bulkExport.file.gone", fileName, job.getId());
         }
         return path;
     }

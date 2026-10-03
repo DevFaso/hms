@@ -86,6 +86,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.doThrow;
 import org.mockito.Spy;
 import org.springframework.context.MessageSource;
@@ -912,7 +913,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.requestMedicationRefill(auth, dto))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Prescription not found");
+                    .hasFieldOrPropertyWithValue("messageKey", "prescription.notFound");
         }
 
         @Test
@@ -1131,6 +1132,30 @@ class PatientPortalServiceImplPhase2Test {
             assertThat(result.getPrimaryCare()).isNull();
             assertThat(result.getPrimaryCareHistory()).isEmpty();
         }
+
+        @Test
+        @DisplayName("names the hospital of each entry, with one lookup")
+        void getCareTeam_namesTheHospitals() {
+            stubPatientResolution();
+            UUID hospitalA = UUID.randomUUID();
+            com.example.hms.model.Hospital a = new com.example.hms.model.Hospital();
+            a.setId(hospitalA);
+            a.setName("CHU Yalgado");
+            PatientPrimaryCareResponseDTO currentPcp = PatientPrimaryCareResponseDTO.builder()
+                    .id(UUID.randomUUID()).hospitalId(hospitalA).doctorDisplay("Dr. Smith").current(true).build();
+            PatientPrimaryCareResponseDTO noHospital = PatientPrimaryCareResponseDTO.builder()
+                    .id(UUID.randomUUID()).doctorDisplay("Dr. Jones").current(false).build();
+            when(primaryCareService.getCurrentPrimaryCare(patientId)).thenReturn(Optional.of(currentPcp));
+            when(primaryCareService.getPrimaryCareHistory(patientId)).thenReturn(List.of(currentPcp, noHospital));
+            when(hospitalRepository.findAllById(java.util.Set.of(hospitalA))).thenReturn(List.of(a));
+
+            CareTeamDTO result = service.getMyCareTeam(auth);
+
+            assertThat(result.getPrimaryCare().getHospitalName()).isEqualTo("CHU Yalgado");
+            assertThat(result.getPrimaryCareHistory().get(0).getHospitalName()).isEqualTo("CHU Yalgado");
+            assertThat(result.getPrimaryCareHistory().get(1).getHospitalName()).isNull();
+            verify(hospitalRepository, times(1)).findAllById(any());
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -1262,7 +1287,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.cancelMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("No patient record linked");
+                    .hasFieldOrPropertyWithValue("messageKey", "patient.portal.noRecord");
         }
     }
 
@@ -1659,7 +1684,7 @@ class PatientPortalServiceImplPhase2Test {
         }
 
         @Test
-        @DisplayName("getProvidersForDepartment — should map provider fields with fullName and role")
+        @DisplayName("getProvidersForDepartment — should map provider fields with fullName and a bare role token")
         void getProviders_mapsProviderFields() {
             UUID hospId = UUID.randomUUID();
             UUID deptId = UUID.randomUUID();
@@ -1668,8 +1693,9 @@ class PatientPortalServiceImplPhase2Test {
             staffUser.setFirstName("Jane");
             staffUser.setLastName("Doe");
 
+            // security.roles.name carries the prefix; the picker keys on the bare token.
             Role role = new Role();
-            role.setName("Doctor");
+            role.setName("ROLE_DOCTOR");
 
             UserRoleHospitalAssignment assign = new UserRoleHospitalAssignment();
             assign.setRole(role);
@@ -1690,7 +1716,7 @@ class PatientPortalServiceImplPhase2Test {
             assertThat(result.get(0)).containsEntry("id", s.getId());
             assertThat(result.get(0)).containsEntry("name", "Dr. Doe");
             assertThat(result.get(0)).containsEntry("fullName", "Jane Doe");
-            assertThat(result.get(0)).containsEntry("role", "Doctor");
+            assertThat(result.get(0)).containsEntry("role", "DOCTOR");
         }
 
         @Test

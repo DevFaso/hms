@@ -17,7 +17,7 @@ import {
   standalone: true,
   imports: [CommonModule, DatePipe, DecimalPipe],
   templateUrl: './my-pharmacy-invoices.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-pharmacy-invoices.component.scss', '../patient-portal-pages.scss'],
 })
 export class MyPharmacyInvoicesComponent implements OnInit {

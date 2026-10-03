@@ -2,8 +2,6 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, map, catchError, of } from 'rxjs';
 
-import { bareRole } from '../core/role-token';
-
 /* ── DTOs matching backend PatientPortalController ── */
 
 export interface PatientProfileDTO {
@@ -404,36 +402,29 @@ export interface PortalInvoice {
   description: string;
 }
 
-export interface CareTeamMember {
-  name: string;
-  role: string;
-  specialty: string;
-  phone: string;
-  email: string;
-  isPrimary: boolean;
-}
-
-export interface CareTeamDTO {
-  members: CareTeamMember[];
-}
-
 /**
- * One primary-care link as `GET /me/patient/care-team` really sends it
- * (backend `CareTeamDTO.PrimaryCareEntry`). {@link CareTeamDTO} above is the
- * shape `my-care-team` expects and the endpoint has never sent.
+ * One primary-care link (CareTeamDTO.PrimaryCareEntry on the backend). The
+ * care team the endpoint returns IS the primary-care history: the current
+ * provider and every earlier one, with dates. It is also the chat picker's
+ * source ({@link PatientPortalService.getMyCareTeamClinicians}).
  */
-interface PrimaryCareEntryApi {
+export interface PrimaryCareEntry {
   id: string;
-  hospitalName?: string | null;
-  doctorUserId?: string | null;
-  doctorDisplay?: string | null;
-  current?: boolean;
+  hospitalId: string | null;
+  hospitalName: string | null;
+  doctorUserId: string | null;
+  doctorDisplay: string | null;
+  /** ISO local date (yyyy-MM-dd). */
+  startDate: string | null;
+  endDate: string | null;
+  current: boolean;
 }
 
-/** Raw `GET /me/patient/care-team` payload (backend `CareTeamDTO`). */
-interface CareTeamApiResponse {
-  primaryCare?: PrimaryCareEntryApi | null;
-  primaryCareHistory?: PrimaryCareEntryApi[] | null;
+/** GET /me/patient/care-team — CareTeamDTO { primaryCare, primaryCareHistory }. */
+export interface CareTeamDTO {
+  primaryCare: PrimaryCareEntry | null;
+  /** Newest first; includes the current link. */
+  primaryCareHistory: PrimaryCareEntry[];
 }
 
 /** A clinician a patient can address a chat message to. */
@@ -714,7 +705,8 @@ export interface SchedulingProvider {
   id: string;
   name: string;
   fullName?: string;
-  role?: string;
+  /** Bare role token (DOCTOR), or null/absent when the provider has none. */
+  role?: string | null;
 }
 
 export interface PatientPaymentRequest {
@@ -1046,10 +1038,16 @@ export class PatientPortalService {
       .pipe(map((r) => r.data));
   }
 
+  /**
+   * Errors propagate: an outage must not read as "no care team" (the page
+   * shows its error state, the dashboard simply leaves the card out).
+   */
   getMyCareTeam(): Observable<CareTeamDTO> {
     return this.http.get<ApiWrapper<CareTeamDTO>>(`${this.base}/care-team`).pipe(
-      map((r) => r.data),
-      catchError(() => of({ members: [] })),
+      map((r) => ({
+        primaryCare: r.data?.primaryCare ?? null,
+        primaryCareHistory: r.data?.primaryCareHistory ?? [],
+      })),
     );
   }
 
@@ -1059,7 +1057,7 @@ export class PatientPortalService {
    * from "the care team could not be loaded".
    */
   getMyCareTeamClinicians(): Observable<MessageableClinician[]> {
-    return this.http.get<ApiWrapper<CareTeamApiResponse>>(`${this.base}/care-team`).pipe(
+    return this.http.get<ApiWrapper<Partial<CareTeamDTO> | null>>(`${this.base}/care-team`).pipe(
       map((r) => {
         const team = r.data;
         const entries = [
@@ -1203,15 +1201,15 @@ export class PatientPortalService {
         params: { page: 0, size: 50 },
       })
       .pipe(
+        // actorRole arrives bare, or null for an unresolvable role:
+        // DisclosureAccountingServiceImpl.toEntry normalises every row,
+        // legacy spellings included, so the portal no longer maps it.
         map((r) => {
           const d = r.data;
           if (!d) {
             throw new Error('empty disclosure accounting response');
           }
-          return {
-            ...d,
-            entries: (d.entries ?? []).map((e) => ({ ...e, actorRole: bareRole(e.actorRole) })),
-          };
+          return { ...d, entries: d.entries ?? [] };
         }),
       );
   }
@@ -1265,9 +1263,9 @@ export class PatientPortalService {
         `${this.base}/booking/hospitals/${hospitalId}/departments/${departmentId}/providers`,
       )
       .pipe(
-        // getProvidersForDepartment sends assignment.getRole().getName(), so
-        // every row arrives prefixed.
-        map((r) => (r.data ?? []).map((p) => ({ ...p, role: bareRole(p.role) ?? undefined }))),
+        // role arrives bare, or null when the provider has no role:
+        // PatientPortalServiceImpl.getProvidersForDepartment strips the prefix.
+        map((r) => r.data ?? []),
         catchError(() => of([])),
       );
   }

@@ -4,6 +4,8 @@ struct MainTabView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var localization: LocalizationManager
     @ObservedObject private var profileImageManager = ProfileImageManager.shared
+    /// A tapped chat notification opens Messages.
+    @ObservedObject private var push = PushManager.shared
     @State private var selectedTab: Tab = .dashboard
     @State private var showMenu = false
     /// Destination pushed on the Dashboard stack by the side menu.
@@ -61,6 +63,18 @@ struct MainTabView: View {
             }
         }
         .animation(.spring(response: 0.3), value: showMenu)
+        .onChange(of: push.messagesRequest) { _, request in
+            if request != nil { openMessagesForNotification() }
+        }
+        .onAppear {
+            // A tap that cold-started the app arrived before this view existed.
+            if push.messagesRequest != nil { openMessagesForNotification() }
+        }
+    }
+
+    private func openMessagesForNotification() {
+        showMenu = false
+        selectedTab = .messages
     }
 
     private func tabButton(icon: String, titleKey: String, tab: Tab) -> some View {
@@ -77,7 +91,7 @@ struct MainTabView: View {
                 ZStack {
                     if isSelected {
                         Capsule()
-                            .fill(Color("BrandBlue").opacity(0.12))
+                            .fill(Color("BrandPrimary").opacity(0.12))
                             .frame(width: 48, height: 28)
                     }
                     Image(systemName: icon)
@@ -87,7 +101,7 @@ struct MainTabView: View {
                 Text(titleKey.localized)
                     .font(.system(size: 10, weight: isSelected ? .semibold : .regular))
             }
-            .foregroundStyle(isSelected ? Color("BrandBlue") : .secondary)
+            .foregroundStyle(isSelected ? Color("BrandPrimaryText") : .secondary)
             .frame(maxWidth: .infinity)
         }
     }
@@ -101,7 +115,7 @@ struct MainTabView: View {
                 ZStack {
                     if isSelected {
                         Capsule()
-                            .fill(Color("BrandBlue").opacity(0.12))
+                            .fill(Color("BrandPrimary").opacity(0.12))
                             .frame(width: 48, height: 28)
                     }
                     if let url = profileImageManager.resolvedURL {
@@ -116,7 +130,7 @@ struct MainTabView: View {
                         .frame(width: 22, height: 22)
                         .clipShape(Circle())
                         .overlay(
-                            Circle().stroke(isSelected ? Color("BrandBlue") : .clear, lineWidth: 1.5)
+                            Circle().stroke(isSelected ? Color("BrandPrimary") : .clear, lineWidth: 1.5)
                         )
                     } else {
                         Image(systemName: "person.crop.circle.fill")
@@ -127,7 +141,7 @@ struct MainTabView: View {
                 Text("tab_profile".localized)
                     .font(.system(size: 10, weight: isSelected ? .semibold : .regular))
             }
-            .foregroundStyle(isSelected ? Color("BrandBlue") : .secondary)
+            .foregroundStyle(isSelected ? Color("BrandPrimaryText") : .secondary)
             .frame(maxWidth: .infinity)
         }
     }
@@ -210,7 +224,7 @@ struct SideMenuView: View {
             .padding(.bottom, 20)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                LinearGradient(colors: [Color("BrandBlue"), Color("BrandDarkBlue")],
+                LinearGradient(colors: [Color("BrandPrimary"), Color("BrandPrimaryDark")],
                                startPoint: .topLeading, endPoint: .bottomTrailing)
             )
 
@@ -228,14 +242,14 @@ struct SideMenuView: View {
                                 Image(systemName: item.icon)
                                     .font(.system(size: 16, weight: .medium))
                                     .frame(width: 28)
-                                    .foregroundStyle(selectedTab == item.tab ? Color("BrandBlue") : .primary)
+                                    .foregroundStyle(selectedTab == item.tab ? Color("BrandPrimaryText") : .primary)
                                 Text(item.titleKey.localized)
                                     .font(.subheadline.weight(selectedTab == item.tab ? .semibold : .regular))
-                                    .foregroundStyle(selectedTab == item.tab ? Color("BrandBlue") : .primary)
+                                    .foregroundStyle(selectedTab == item.tab ? Color("BrandPrimaryText") : .primary)
                                 Spacer()
                                 if selectedTab == item.tab {
                                     Circle()
-                                        .fill(Color("BrandBlue"))
+                                        .fill(Color("BrandPrimary"))
                                         .frame(width: 6, height: 6)
                                 }
                             }
@@ -243,7 +257,7 @@ struct SideMenuView: View {
                             .padding(.vertical, 13)
                             .background(
                                 RoundedRectangle(cornerRadius: 10)
-                                    .fill(selectedTab == item.tab ? Color("BrandBlue").opacity(0.08) : .clear)
+                                    .fill(selectedTab == item.tab ? Color("BrandPrimary").opacity(0.08) : .clear)
                             )
                         }
                     }

@@ -219,6 +219,12 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
       if (error.status === 401) {
+        // AuthService.logout() fires POST /auth/logout while it signs out.
+        // Its 401 (an already-expired bearer) must not start a refresh, which
+        // would mint a new session mid-logout, nor call logout() again.
+        if (req.url.includes('/auth/logout')) {
+          return throwError(() => error);
+        }
         const isRefreshCall = req.url.includes('/auth/token/refresh');
         const isVerifyPassword = req.url.includes('/auth/verify-password');
 

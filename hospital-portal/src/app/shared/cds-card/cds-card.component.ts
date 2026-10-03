@@ -38,7 +38,7 @@ import { CdsCard, CdsIndicator } from './cds-card.model';
               <span class="cds-card__indicator">{{
                 indicatorLabel(card.indicator) | translate
               }}</span>
-              @if (card.source?.label) {
+              @if (card.source.label) {
                 <span class="cds-card__source">{{ card.source.label }}</span>
               }
             </div>

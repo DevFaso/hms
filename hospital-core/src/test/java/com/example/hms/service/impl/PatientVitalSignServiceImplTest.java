@@ -336,7 +336,7 @@ class PatientVitalSignServiceImplTest {
 
         assertThatThrownBy(() -> service.recordVital(patientId, request, recorderUserId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Assignment not found");
+            .hasFieldOrPropertyWithValue("messageKey", "roleAssignment.notFound");
     }
 
     @Test
@@ -363,7 +363,7 @@ class PatientVitalSignServiceImplTest {
         UUID randomId = UUID.randomUUID();
         assertThatThrownBy(() -> service.recordVital(patientId, request, randomId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Staff not found or inactive");
+            .hasFieldOrPropertyWithValue("messageKey", "staff.not.found.or.inactive");
     }
 
     @Test
@@ -384,7 +384,7 @@ class PatientVitalSignServiceImplTest {
         UUID randomId = UUID.randomUUID();
         assertThatThrownBy(() -> service.recordVital(patientId, request, randomId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Registration not found");
+            .hasFieldOrPropertyWithValue("messageKey", "registration.notFound");
     }
 
     @Test

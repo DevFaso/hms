@@ -47,7 +47,7 @@ public class PermissionServiceImpl implements PermissionService {
         Permission permission = permissionMapper.toEntity(request);
 
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(request.getAssignmentId())
-            .orElseThrow(() -> new ResourceNotFoundException("Assignment not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("roleAssignment.notFound", request.getAssignmentId()));
 
         permission.setAssignment(assignment);
 

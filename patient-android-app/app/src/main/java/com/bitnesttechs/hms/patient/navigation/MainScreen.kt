@@ -48,8 +48,10 @@ import com.bitnesttechs.hms.patient.features.visits.VisitHistoryScreen
 import com.bitnesttechs.hms.patient.features.vitals.VitalsScreen
 import com.bitnesttechs.hms.patient.features.visitsummaries.VisitSummariesScreen
 import com.bitnesttechs.hms.patient.R
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
+import com.bitnesttechs.hms.patient.ui.theme.OnBrandMuted
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
 import kotlinx.coroutines.launch
+import com.bitnesttechs.hms.patient.core.push.PushNavigation
 
 sealed class Tab(val route: String, @StringRes val labelRes: Int, val icon: ImageVector) {
     object Dashboard : Tab("tab_dashboard", R.string.dashboard, Icons.Default.Home)
@@ -93,10 +95,23 @@ fun MainScreen(onLogout: () -> Unit) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
+    // A tapped chat notification: open Messages, then the thread when the
+    // sender is known. Waits here while the patient is still signing in.
+    val pushTarget by PushNavigation.pending.collectAsState()
+    val graphReady = navBackStackEntry != null
+    LaunchedEffect(pushTarget, graphReady) {
+        val target = PushNavigation.consumeWhenReady(graphReady) ?: return@LaunchedEffect
+        navController.navigate(Tab.Messages.route) {
+            popUpTo(navController.graph.findStartDestination().id) { inclusive = false }
+            launchSingleTop = true
+        }
+        target.senderId?.let { navController.navigate("thread/$it") }
+    }
+
     // Show bottom bar on tab routes AND drawer sub-screens
     // Full-screen routes: no bottom bar and no drawer swipe, so a tab tap cannot
     // pop a form with a request in flight (see pre_checkin in #703).
-    val hideBottomBarRoutes = setOf("thread/{threadId}", "appointment_detail", "pre_checkin", "screenings")
+    val hideBottomBarRoutes = setOf("thread/{threadId}", "appointment_detail", "pre_checkin", "screenings", "change_password")
     val showBottomBar = currentDestination?.route !in hideBottomBarRoutes
 
     ModalNavigationDrawer(
@@ -110,14 +125,14 @@ fun MainScreen(onLogout: () -> Unit) {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 // Header
                 Surface(
-                    color = BrandBlue,
+                    color = BrandPrimary,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(24.dp)) {
                         Text(stringResource(R.string.medihub), style = MaterialTheme.typography.headlineSmall,
                             color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.Bold)
                         Text(stringResource(R.string.patient_portal), style = MaterialTheme.typography.bodySmall,
-                            color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.8f))
+                            color = OnBrandMuted)
                     }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -212,6 +227,12 @@ fun MainScreen(onLogout: () -> Unit) {
                     ProfileScreen(
                         navController = navController,
                         onLogout = onLogout
+                    )
+                }
+
+                composable("change_password") {
+                    com.bitnesttechs.hms.patient.features.account.ChangePasswordScreen(
+                        onBack = { navController.popBackStack() }
                     )
                 }
 

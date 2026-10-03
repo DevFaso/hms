@@ -173,7 +173,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
     @Transactional(readOnly = true)
     public PharmacyFillResponseDTO getPharmacyFillById(UUID fillId, Locale locale) {
         PharmacyFill fill = pharmacyFillRepository.findById(fillId)
-            .orElseThrow(() -> new ResourceNotFoundException("Pharmacy fill not found with ID: " + fillId));
+            .orElseThrow(() -> new ResourceNotFoundException("pharmacyFill.notFound", fillId));
         return pharmacyFillMapper.toResponseDTO(fill);
     }
 
@@ -198,7 +198,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         log.info("Updating pharmacy fill: {}", fillId);
 
         PharmacyFill fill = pharmacyFillRepository.findById(fillId)
-            .orElseThrow(() -> new ResourceNotFoundException("Pharmacy fill not found with ID: " + fillId));
+            .orElseThrow(() -> new ResourceNotFoundException("pharmacyFill.notFound", fillId));
 
         pharmacyFillMapper.updateEntity(fill, request);
         PharmacyFill updated = pharmacyFillRepository.save(fill);
@@ -214,7 +214,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         log.info("Deleting pharmacy fill: {}", fillId);
 
         if (!pharmacyFillRepository.existsById(fillId)) {
-            throw new ResourceNotFoundException("Pharmacy fill not found with ID: " + fillId);
+            throw new ResourceNotFoundException("pharmacyFill.notFound", fillId);
         }
 
         pharmacyFillRepository.deleteById(fillId);

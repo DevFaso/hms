@@ -66,7 +66,7 @@ public class ProInstrumentService {
     @Transactional(readOnly = true)
     public ProInstrument requireActive(String code) {
         return instrumentRepository.findByCodeAndActiveTrue(normalizeCode(code))
-            .orElseThrow(() -> new ResourceNotFoundException("Instrument not found: " + code));
+            .orElseThrow(() -> new ResourceNotFoundException("pro.instrument.notFound", code));
     }
 
     @Transactional(readOnly = true)
@@ -112,13 +112,12 @@ public class ProInstrumentService {
 
         List<ProInstrumentViewDTO.Item> items = new ArrayList<>();
         for (ProInstrumentItem item : instrument.getItems()) {
-            List<ProInstrumentViewDTO.Option> options = new ArrayList<>();
-            for (ProInstrumentOption option : item.getOptions()) {
-                options.add(ProInstrumentViewDTO.Option.builder()
+            List<ProInstrumentViewDTO.Option> options = item.getOptions().stream()
+                .map(option -> ProInstrumentViewDTO.Option.builder()
                     .optionNo(option.getOptionNo())
                     .label(texts.get(key(item.getItemNo(), option.getOptionNo())))
-                    .build());
-            }
+                    .build())
+                .toList();
             items.add(ProInstrumentViewDTO.Item.builder()
                 .itemNo(item.getItemNo())
                 .prompt(texts.get(key(item.getItemNo(), ProInstrumentText.PROMPT)))

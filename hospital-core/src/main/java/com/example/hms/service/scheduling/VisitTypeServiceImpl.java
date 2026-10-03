@@ -141,10 +141,10 @@ public class VisitTypeServiceImpl implements VisitTypeService {
 
     private VisitType loadScoped(UUID id) {
         VisitType entity = visitTypeRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Visit type not found with ID: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException("visitType.notFound", id));
         UUID hospitalId = requireHospital();
         if (!hospitalId.equals(entity.getHospital().getId())) {
-            throw new ResourceNotFoundException("Visit type not found with ID: " + id);
+            throw new ResourceNotFoundException("visitType.notFound", id);
         }
         return entity;
     }

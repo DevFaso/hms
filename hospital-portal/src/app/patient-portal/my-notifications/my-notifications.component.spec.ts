@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { MyNotificationsComponent } from './my-notifications.component';
 import { PatientPortalService } from '../../services/patient-portal.service';
@@ -61,6 +61,27 @@ describe('MyNotificationsComponent', () => {
     expect(component.notifications().length).toBe(2);
     expect(component.unreadCount()).toBe(1);
     expect(component.loading()).toBeFalse();
+  });
+
+  it('toasts in the patient language, never the raw key', () => {
+    // ToastService renders its message verbatim; the keys used to reach it.
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PORTAL: {
+        NOTIFICATIONS: {
+          LOAD_FAILED: 'Impossible de charger les notifications',
+          MARK_ALL_SUCCESS: 'Toutes les notifications sont lues',
+        },
+      },
+    });
+    translate.use('fr');
+
+    portalService.getMyNotifications.and.returnValue(throwError(() => new Error('fail')));
+    component.loadNotifications();
+    expect(toastService.error).toHaveBeenCalledWith('Impossible de charger les notifications');
+
+    component.markAllRead();
+    expect(toastService.success).toHaveBeenCalledWith('Toutes les notifications sont lues');
   });
 
   it('should show error toast when load fails', () => {

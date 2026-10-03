@@ -5,7 +5,6 @@
       <p class="page-subtitle">{{ 'BED_BOARD.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
-      <app-hospital-scope-chip (scopeChange)="onScopeChange()" />
       <button class="btn-secondary" (click)="loadBoard()" [disabled]="loading()">
         <span class="material-symbols-outlined">refresh</span>
         {{ 'BED_BOARD.REFRESH' | translate }}
@@ -15,7 +14,6 @@
 
   <!-- An airborne case in a ward that cannot contain it. This is the board's
        reason for existing, so it sits above everything else. -->
-  <app-hospital-scope-hint />
 
   @if (mismatches().length > 0) {
     <div class="alert-banner" role="alert">
@@ -295,8 +293,7 @@
     <header class="modal-header">
       <h2>
         {{
-          'BED_BOARD.PRECAUTIONS_FOR'
-            | translate: { name: $safeNavigationMigration(precautionTarget()?.patientName) }
+          'BED_BOARD.PRECAUTIONS_FOR' | translate: { name: precautionTarget()?.patientName ?? '' }
         }}
       </h2>
       <button class="btn-close" (click)="closePrecautions()" [title]="'COMMON.CLOSE' | translate">
@@ -403,10 +400,7 @@
   >
     <header class="modal-header">
       <h2>
-        {{
-          'BED_BOARD.TRANSFER_FOR'
-            | translate: { name: $safeNavigationMigration(transferTarget()?.patientName) }
-        }}
+        {{ 'BED_BOARD.TRANSFER_FOR' | translate: { name: transferTarget()?.patientName ?? '' } }}
       </h2>
       <button class="btn-close" (click)="closeTransfer()" [title]="'COMMON.CLOSE' | translate">
         <span class="material-symbols-outlined">close</span>

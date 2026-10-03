@@ -1,5 +1,9 @@
 package com.bitnesttechs.hms.patient.features.familyaccess
 
+import com.bitnesttechs.hms.patient.core.models.ProxyPermission
+import com.bitnesttechs.hms.patient.core.models.ProxyStatus
+import com.bitnesttechs.hms.patient.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,7 +22,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.bitnesttechs.hms.patient.core.models.GrantProxyRequest
 import com.bitnesttechs.hms.patient.core.models.ProxyResponse
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
 import com.bitnesttechs.hms.patient.ui.theme.SuccessGreen
 import com.bitnesttechs.hms.patient.ui.theme.ErrorRed
 import com.bitnesttechs.hms.patient.ui.theme.WarningOrange
@@ -48,14 +52,14 @@ fun FamilyAccessScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Family Access") },
+                title = { Text(stringResource(R.string.family_access)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandBlue,
+                    containerColor = BrandPrimary,
                     titleContentColor = Color.White
                 ),
                 actions = {
@@ -69,9 +73,9 @@ fun FamilyAccessScreen(
             if (selectedTab == 0) {
                 FloatingActionButton(
                     onClick = { showGrantSheet = true },
-                    containerColor = BrandBlue
+                    containerColor = BrandPrimary
                 ) {
-                    Icon(Icons.Default.PersonAdd, "Grant Access", tint = Color.White)
+                    Icon(Icons.Default.PersonAdd, stringResource(R.string.grant_access), tint = Color.White)
                 }
             }
         }
@@ -82,20 +86,20 @@ fun FamilyAccessScreen(
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    text = { Text("Granted by Me") },
+                    text = { Text(stringResource(R.string.granted_by_me)) },
                     icon = { Icon(Icons.Default.Share, null) }
                 )
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text("Access I Have") },
+                    text = { Text(stringResource(R.string.access_i_have)) },
                     icon = { Icon(Icons.Default.People, null) }
                 )
             }
 
             if (uiState.isLoading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = BrandBlue)
+                    CircularProgressIndicator(color = BrandPrimary)
                 }
                 return@Column
             }
@@ -109,8 +113,8 @@ fun FamilyAccessScreen(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            if (selectedTab == 0) "No access granted to anyone"
-                            else "No one has granted you access",
+                            if (selectedTab == 0) stringResource(R.string.proxy_none_granted)
+                            else stringResource(R.string.proxy_none_received),
                             style = MaterialTheme.typography.bodyLarge
                         )
                     }
@@ -170,8 +174,8 @@ fun FamilyAccessScreen(
         AlertDialog(
             onDismissRequest = { revokeDialogProxy = null },
             icon = { Icon(Icons.Default.Warning, null, tint = ErrorRed) },
-            title = { Text("Revoke Access") },
-            text = { Text("Are you sure you want to revoke access for ${proxy.granteeName ?: "this person"}?") },
+            title = { Text(stringResource(R.string.revoke_access)) },
+            text = { Text(stringResource(R.string.proxy_revoke_confirm, proxy.granteeName ?: stringResource(R.string.proxy_this_person))) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -179,10 +183,10 @@ fun FamilyAccessScreen(
                         revokeDialogProxy = null
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ErrorRed)
-                ) { Text("Revoke") }
+                ) { Text(stringResource(R.string.proxy_revoke)) }
             },
             dismissButton = {
-                OutlinedButton(onClick = { revokeDialogProxy = null }) { Text("Cancel") }
+                OutlinedButton(onClick = { revokeDialogProxy = null }) { Text(stringResource(R.string.cancel)) }
             }
         )
     }
@@ -216,12 +220,12 @@ fun ProxyCard(
                     Icons.Default.Person,
                     null,
                     modifier = Modifier.size(40.dp),
-                    tint = BrandBlue
+                    tint = BrandPrimary
                 )
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        if (isGrantor) proxy.granteeName ?: "Unknown" else proxy.grantorName ?: "Unknown",
+                        if (isGrantor) proxy.granteeName ?: stringResource(R.string.unknown_person) else proxy.grantorName ?: stringResource(R.string.unknown_person),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -236,7 +240,7 @@ fun ProxyCard(
                     color = statusColor.copy(alpha = 0.15f)
                 ) {
                     Text(
-                        proxy.status?.replaceFirstChar { it.uppercase() } ?: "Unknown",
+                        stringResource(ProxyStatus.fromWire(proxy.status).labelRes),
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = statusColor,
@@ -251,7 +255,7 @@ fun ProxyCard(
                     proxy.permissionsList.take(3).forEach { perm ->
                         AssistChip(
                             onClick = {},
-                            label = { Text(perm.lowercase().replace("_", " "), style = MaterialTheme.typography.labelSmall) },
+                            label = { Text(stringResource(ProxyPermission.fromWire(perm).labelRes), style = MaterialTheme.typography.labelSmall) },
                             leadingIcon = {
                                 Icon(permissionIcon(perm), null, Modifier.size(14.dp))
                             }
@@ -274,7 +278,7 @@ fun ProxyCard(
                 ) {
                     Icon(Icons.Default.Close, null, Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Revoke")
+                    Text(stringResource(R.string.proxy_revoke))
                 }
             }
         }
@@ -319,12 +323,12 @@ fun GrantProxyBottomSheet(
                 .padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Grant Family Access", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.proxy_grant_title), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
 
             OutlinedTextField(
                 value = username,
                 onValueChange = { username = it },
-                label = { Text("Patient Username") },
+                label = { Text(stringResource(R.string.proxy_grantee_username)) },
                 leadingIcon = { Icon(Icons.Default.Person, null) },
                 modifier = Modifier.fillMaxWidth()
             )
@@ -332,12 +336,12 @@ fun GrantProxyBottomSheet(
             OutlinedTextField(
                 value = relationship,
                 onValueChange = { relationship = it },
-                label = { Text("Relationship (e.g. Spouse, Parent)") },
+                label = { Text(stringResource(R.string.proxy_relationship_hint)) },
                 leadingIcon = { Icon(Icons.Default.People, null) },
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Text("Permissions", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.permissions), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -345,7 +349,7 @@ fun GrantProxyBottomSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "${selectedPermissions.size} of ${allPermissions.size} selected",
+                    stringResource(R.string.proxy_selected_count, selectedPermissions.size, allPermissions.size),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -353,7 +357,7 @@ fun GrantProxyBottomSheet(
                     selectedPermissions = if (selectedPermissions.size == allPermissions.size) emptySet()
                     else allPermissions.toSet()
                 }) {
-                    Text(if (selectedPermissions.size == allPermissions.size) "Clear all" else "Select all")
+                    Text(if (selectedPermissions.size == allPermissions.size) stringResource(R.string.clear_all) else stringResource(R.string.select_all))
                 }
             }
 
@@ -370,7 +374,7 @@ fun GrantProxyBottomSheet(
                         }
                     )
                     Text(
-                        perm.lowercase().replace("_", " ").replaceFirstChar { it.uppercase() },
+                        stringResource(ProxyPermission.fromWire(perm).labelRes),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -379,7 +383,7 @@ fun GrantProxyBottomSheet(
             OutlinedTextField(
                 value = notes,
                 onValueChange = { notes = it },
-                label = { Text("Notes (optional)") },
+                label = { Text(stringResource(R.string.notes_optional)) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 2
             )
@@ -397,11 +401,11 @@ fun GrantProxyBottomSheet(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = username.isNotBlank() && relationship.isNotBlank() && selectedPermissions.isNotEmpty(),
-                colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+                colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
             ) {
                 Icon(Icons.Default.PersonAdd, null)
                 Spacer(Modifier.width(8.dp))
-                Text("Grant Access")
+                Text(stringResource(R.string.grant_access))
             }
         }
     }
@@ -434,11 +438,11 @@ fun ProxyDetailSheet(
         ) {
             // Header
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Person, null, Modifier.size(48.dp), tint = BrandBlue)
+                Icon(Icons.Default.Person, null, Modifier.size(48.dp), tint = BrandPrimary)
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text(
-                        if (isGrantor) proxy.granteeName ?: "Unknown" else proxy.grantorName ?: "Unknown",
+                        if (isGrantor) proxy.granteeName ?: stringResource(R.string.unknown_person) else proxy.grantorName ?: stringResource(R.string.unknown_person),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -448,7 +452,7 @@ fun ProxyDetailSheet(
                 Spacer(Modifier.weight(1f))
                 Surface(shape = RoundedCornerShape(16.dp), color = statusColor.copy(alpha = 0.15f)) {
                     Text(
-                        proxy.status?.replaceFirstChar { it.uppercase() } ?: "Unknown",
+                        stringResource(ProxyStatus.fromWire(proxy.status).labelRes),
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         color = statusColor, fontWeight = FontWeight.Bold
                     )
@@ -458,7 +462,7 @@ fun ProxyDetailSheet(
             HorizontalDivider()
 
             // Permissions
-            Text("Permissions", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.permissions), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             proxy.permissionsList.forEach { perm ->
                 val isClickable = onPermissionClick != null
                 Row(
@@ -471,10 +475,10 @@ fun ProxyDetailSheet(
                         )
                         .padding(vertical = 8.dp)
                 ) {
-                    Icon(permissionIcon(perm), null, Modifier.size(20.dp), tint = BrandBlue)
+                    Icon(permissionIcon(perm), null, Modifier.size(20.dp), tint = BrandPrimary)
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        perm.lowercase().replace("_", " ").replaceFirstChar { it.uppercase() },
+                        stringResource(ProxyPermission.fromWire(perm).labelRes),
                         modifier = Modifier.weight(1f)
                     )
                     if (isClickable) {
@@ -487,32 +491,32 @@ fun ProxyDetailSheet(
             HorizontalDivider()
 
             // Timeline
-            Text("Timeline", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.treatment_plan_timeline), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             if (proxy.grantedAt != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.CheckCircle, null, Modifier.size(16.dp), tint = SuccessGreen)
                     Spacer(Modifier.width(8.dp))
-                    Text("Granted: ${proxy.grantedAt.take(10)}", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.proxy_granted_on, proxy.grantedAt.take(10)), style = MaterialTheme.typography.bodyMedium)
                 }
             }
             if (proxy.expiresAt != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Schedule, null, Modifier.size(16.dp), tint = WarningOrange)
                     Spacer(Modifier.width(8.dp))
-                    Text("Expires: ${proxy.expiresAt.take(10)}", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.proxy_expires_on, proxy.expiresAt.take(10)), style = MaterialTheme.typography.bodyMedium)
                 }
             }
             if (proxy.revokedAt != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Cancel, null, Modifier.size(16.dp), tint = ErrorRed)
                     Spacer(Modifier.width(8.dp))
-                    Text("Revoked: ${proxy.revokedAt.take(10)}", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.proxy_revoked_on, proxy.revokedAt.take(10)), style = MaterialTheme.typography.bodyMedium)
                 }
             }
 
             if (!proxy.notes.isNullOrBlank()) {
                 HorizontalDivider()
-                Text("Notes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.notes), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(proxy.notes, style = MaterialTheme.typography.bodyMedium)
             }
 
@@ -525,7 +529,7 @@ fun ProxyDetailSheet(
                 ) {
                     Icon(Icons.Default.Close, null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Revoke Access")
+                    Text(stringResource(R.string.revoke_access))
                 }
             }
         }

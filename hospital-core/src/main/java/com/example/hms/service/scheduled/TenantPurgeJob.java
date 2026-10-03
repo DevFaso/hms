@@ -10,6 +10,7 @@ import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 
@@ -43,6 +44,8 @@ public class TenantPurgeJob {
     private final OrganizationRepository organizationRepository;
     private final OrganizationLifecycleStatusService lifecycleStatusService;
     private final TenantPurgeExecutor purgeExecutor;
+    /** Reads {@code purgeScheduledFor} against the clock that wrote it (OrganizationLifecycleServiceImpl). */
+    private final Clock clock;
 
     @Value("${hms.tenant-purge.enabled:false}")
     private boolean enabled;
@@ -67,7 +70,7 @@ public class TenantPurgeJob {
             return;
         }
 
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
         List<Organization> due = organizationRepository.findDuePurges(now);
 
         if (due.isEmpty()) {

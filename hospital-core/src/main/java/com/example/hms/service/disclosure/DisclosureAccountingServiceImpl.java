@@ -6,6 +6,7 @@ import com.example.hms.model.AuditEventLog;
 import com.example.hms.payload.dto.portal.AccessLogEntryDTO;
 import com.example.hms.payload.dto.portal.DisclosureAccountingDTO;
 import com.example.hms.repository.AuditEventLogRepository;
+import com.example.hms.utility.RoleNames;
 
 import java.time.LocalDateTime;
 import java.util.EnumMap;
@@ -115,7 +116,9 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
         return AccessLogEntryDTO.builder()
             .id(event.getId())
             .actor(event.getUserName())
-            .actorRole(event.getRoleName())
+            // One choke point for both audit surfaces: legacy rows stored
+            // "ROLE_X" or the "Unknown Role" sentence, and no write reaches them.
+            .actorRole(RoleNames.bareRole(event.getRoleName()))
             .hospitalName(event.getHospitalName())
             .eventType(event.getEventType() != null ? event.getEventType().name() : null)
             .entityType(event.getEntityType())

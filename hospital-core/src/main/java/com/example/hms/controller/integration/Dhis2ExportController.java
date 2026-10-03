@@ -86,7 +86,7 @@ public class Dhis2ExportController {
     ) {
         authUtils.requireAuth(auth);
         final Dhis2ExportRun run = runRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("DHIS2 run not found: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException("dhis2.run.notFound", id));
         final UUID scoped = authUtils.resolveHospitalScope(auth, run.getHospital().getId(), false);
         if (scoped == null || !scoped.equals(run.getHospital().getId())) {
             throw new BusinessException(

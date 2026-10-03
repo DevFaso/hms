@@ -189,7 +189,8 @@ class PatientEducationServiceImplTest {
         // When & Then
         assertThatThrownBy(() -> service.createResource(requestDTO, hospitalId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Hospital not found");
+            .extracting(e -> ((ResourceNotFoundException) e).getMessageKey())
+            .isEqualTo("hospital.notFound");
     }
 
     @Test
@@ -319,7 +320,8 @@ class PatientEducationServiceImplTest {
         // When & Then
         assertThatThrownBy(() -> service.deleteResource(resourceId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Education resource not found");
+            .extracting(e -> ((ResourceNotFoundException) e).getMessageKey())
+            .isEqualTo("education.resource.notFound");
     }
 
     // ==================== Progress Tracking Tests ====================
@@ -468,7 +470,8 @@ class PatientEducationServiceImplTest {
         // When & Then
         assertThatThrownBy(() -> service.updateProgress(progressId, requestDTO))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Progress record not found");
+            .extracting(e -> ((ResourceNotFoundException) e).getMessageKey())
+            .isEqualTo("education.progress.notFound");
     }
 
     @Test

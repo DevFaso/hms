@@ -127,6 +127,9 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
 @RequiredArgsConstructor
 @Slf4j
 public class PatientServiceImpl implements PatientService {
+    private static final String USER_NOT_FOUND_KEY = "user.notFound";
+    private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
+
 
     /**
      * Self-reference injected as a proxy so internal calls
@@ -156,9 +159,6 @@ public class PatientServiceImpl implements PatientService {
     }
 
     private static final String MSG_PATIENT_NOT_FOUND = "patient.notFound";
-    private static final String MSG_USER_NOT_FOUND_PREFIX = "User not found with ID: ";
-    private static final String MSG_HOSPITAL_NOT_FOUND = "Hospital not found with ID: ";
-    private static final String MSG_ALLERGY_NOT_FOUND = "Allergy entry not found for the specified context.";
     private static final String DEFAULT_UNKNOWN = "Unknown";
     private static final String DEFAULT_PREFIX = "MRX";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
@@ -322,10 +322,10 @@ public class PatientServiceImpl implements PatientService {
     @Transactional
     public PatientResponseDTO createPatient(PatientRequestDTO dto, Locale locale) {
         User user = userRepository.findById(dto.getUserId())
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_USER_NOT_FOUND_PREFIX + dto.getUserId()));
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, dto.getUserId()));
 
         Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND + dto.getHospitalId()));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, dto.getHospitalId()));
 
         Optional<Patient> existing = patientRepository.findByUserId(user.getId());
         Patient patient = existing
@@ -385,16 +385,14 @@ public class PatientServiceImpl implements PatientService {
     @Transactional
     public PatientResponseDTO updatePatient(UUID id, PatientRequestDTO dto, Locale locale) {
         Patient patient = patientRepository.findByIdUnscoped(id)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{id}, locale)
-            ));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, id));
 
         if (dto.getHospitalId() != null) {
             ensurePatientRegistered(id, dto.getHospitalId());
         }
 
         User user = userRepository.findById(dto.getUserId())
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_USER_NOT_FOUND_PREFIX + dto.getUserId()));
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, dto.getUserId()));
 
         PatientAddressHistoryRecorder.AddressSnapshot before = addressHistoryRecorder.snapshot(patient);
         patientMapper.updatePatientFromDto(dto, patient, user);
@@ -411,9 +409,7 @@ public class PatientServiceImpl implements PatientService {
             throw new BusinessException("Update payload is required.");
         }
         Patient patient = patientRepository.findByIdUnscoped(id)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{id}, locale)
-            ));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, id));
 
         if (hospitalId != null) {
             ensurePatientRegistered(id, hospitalId);
@@ -469,9 +465,7 @@ public class PatientServiceImpl implements PatientService {
     @Transactional
     public void deletePatient(UUID id, Locale locale) {
         if (!patientRepository.existsById(id)) {
-            throw new ResourceNotFoundException(
-                messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{id}, locale)
-            );
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, id);
         }
         // Remove non-cascaded child records before deleting the patient
         patientProxyRepository.deleteByGrantorPatient_Id(id);
@@ -595,10 +589,10 @@ public class PatientServiceImpl implements PatientService {
             throw new BusinessException("Hospital must be resolved from context for staff-created patients.");
         }
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
         User user = userRepository.findById(dto.getUserId())
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_USER_NOT_FOUND_PREFIX + dto.getUserId()));
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, dto.getUserId()));
 
         Optional<Patient> existing = patientRepository.findByUserId(user.getId());
         Patient patient = existing
@@ -821,9 +815,7 @@ public class PatientServiceImpl implements PatientService {
         }
 
         Patient patient = patientRepository.findByIdUnscoped(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{patientId}, Locale.getDefault())
-            ));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
 
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)) {
             throw new BusinessException("Patient is not registered in the requested hospital.");
@@ -937,9 +929,7 @@ public class PatientServiceImpl implements PatientService {
         }
 
         Patient patient = patientRepository.findByIdUnscoped(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{patientId}, Locale.getDefault())
-            ));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
 
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, resolvedHospitalId)) {
             throw new BusinessException("Patient is not registered in the requested hospital.");
@@ -1087,9 +1077,7 @@ public class PatientServiceImpl implements PatientService {
             throw new BusinessException("Requester context is required to load patient allergies.");
         }
         Patient patient = patientRepository.findByIdUnscoped(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{patientId}, Locale.getDefault())
-            ));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
 
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)) {
             throw new BusinessException("Patient is not registered in the requested hospital.");
@@ -1522,9 +1510,7 @@ public class PatientServiceImpl implements PatientService {
             throw new BusinessException("Patient identifier is required.");
         }
         return patientRepository.findByIdUnscoped(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{patientId}, Locale.getDefault())
-            ));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
     }
 
     private Hospital fetchHospital(UUID hospitalId) {
@@ -1532,7 +1518,7 @@ public class PatientServiceImpl implements PatientService {
             throw new BusinessException("Hospital identifier is required.");
         }
         return hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
     }
 
     private void ensurePatientRegistered(UUID patientId, UUID hospitalId) {
@@ -1552,7 +1538,7 @@ public class PatientServiceImpl implements PatientService {
             throw new BusinessException("Diagnosis identifier is required.");
         }
         PatientProblem problem = patientProblemRepository.findById(diagnosisId)
-            .orElseThrow(() -> new ResourceNotFoundException("Diagnosis not found with ID: " + diagnosisId));
+            .orElseThrow(() -> new ResourceNotFoundException("diagnosis.notFound", diagnosisId));
         if (problem.getPatient() == null || problem.getPatient().getId() == null
             || !problem.getPatient().getId().equals(patientId)
             || problem.getHospital() == null || problem.getHospital().getId() == null
@@ -1575,7 +1561,7 @@ public class PatientServiceImpl implements PatientService {
         }
         PatientAllergy allergy = patientAllergyRepository
             .findByIdAndPatient_IdAndHospital_Id(allergyId, patientId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_ALLERGY_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException("allergy.notFound", allergyId));
         ensurePatientRegistered(patientId, hospitalId);
         return allergy;
     }

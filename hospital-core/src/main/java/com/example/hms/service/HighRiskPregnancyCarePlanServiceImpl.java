@@ -46,6 +46,9 @@ import com.example.hms.security.context.HospitalContextHolder;
 @RequiredArgsConstructor
 @Transactional
 public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCarePlanService {
+    private static final String PATIENT_NOT_FOUND_KEY = "patient.notFound";
+    private static final String CARE_PLAN_NOT_FOUND_KEY = "highRiskPregnancy.carePlan.notFound";
+
 
     private static final Logger log = LoggerFactory.getLogger(HighRiskPregnancyCarePlanServiceImpl.class);
 
@@ -55,12 +58,8 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
     private static final String ROLE_MIDWIFE = "ROLE_MIDWIFE";
     private static final String ROLE_PATIENT = "ROLE_PATIENT";
 
-    private static final String MSG_PATIENT_NOT_FOUND = "Patient not found";
-    private static final String MSG_HOSPITAL_NOT_FOUND = "Hospital not found";
-    private static final String MSG_PLAN_NOT_FOUND = "High-risk pregnancy care plan not found";
     private static final String MSG_PLAN_ID_REQUIRED = "Plan ID is required";
     private static final String MSG_PATIENT_ID_REQUIRED = "Patient ID is required";
-    private static final String MSG_USERNAME_PREFIX = "User not found: ";
     private static final String MSG_LOG_ACCESS_DENIED = "You do not have permission to update monitoring logs";
     private static final String MSG_PLAN_ACCESS_DENIED = "You do not have permission to access this care plan";
     private static final String MSG_PATIENT_ACCESS_DENIED = "You do not have permission to access this patient";
@@ -88,9 +87,9 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
         assertProviderAccess(user);
 
         Patient patient = patientRepository.findById(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, request.getPatientId()));
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         ensurePatientBelongsToHospital(patient, hospital.getId());
 
@@ -265,7 +264,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
         HighRiskMonitoringMilestone milestone = plan.getMonitoringMilestones().stream()
             .filter(item -> item.getMilestoneId().equals(milestoneId))
             .findFirst()
-            .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("highRiskPregnancy.milestone.notFound", milestoneId));
 
         milestone.setCompleted(Boolean.TRUE);
         milestone.setCompletedAt(completionDate != null ? completionDate : LocalDate.now(clock));
@@ -332,19 +331,19 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
         HighRiskPregnancyCarePlan plan = findPlanOrThrow(planId);
         UUID scope = roleValidator.requireActiveHospitalId();
         if (scope != null && (plan.getHospital() == null || !scope.equals(plan.getHospital().getId()))) {
-            throw new ResourceNotFoundException(MSG_PLAN_NOT_FOUND);
+            throw new ResourceNotFoundException(CARE_PLAN_NOT_FOUND_KEY, planId);
         }
         return plan;
     }
 
     private HighRiskPregnancyCarePlan findPlanOrThrow(UUID planId) {
         return carePlanRepository.findById(planId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_PLAN_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(CARE_PLAN_NOT_FOUND_KEY, planId));
     }
 
     private User getUserOrThrow(String username) {
         return userRepository.findByUsername(username)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_USERNAME_PREFIX + username));
+            .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByUsername", username));
     }
 
     private void assertProviderAccess(User user) {
@@ -375,7 +374,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
         }
         HighRiskPregnancyCarePlan plan = provider ? findPlanInActingHospital(planId) : findPlanOrThrow(planId);
         if (!provider && !ownsPatient(user, plan.getPatient() != null ? plan.getPatient().getId() : null)) {
-            throw new ResourceNotFoundException(MSG_PLAN_NOT_FOUND);
+            throw new ResourceNotFoundException(CARE_PLAN_NOT_FOUND_KEY, planId);
         }
         return plan;
     }
@@ -388,14 +387,14 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
     private void requirePatientInReach(User user, UUID patientId) {
         if (isProvider(user)) {
             patientRepository.findById(patientId)
-                .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND));
+                .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, patientId));
             return;
         }
         if (!isPatient(user)) {
             throw new BusinessException(MSG_PATIENT_ACCESS_DENIED);
         }
         if (!ownsPatient(user, patientId)) {
-            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND);
+            throw new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, patientId);
         }
     }
 

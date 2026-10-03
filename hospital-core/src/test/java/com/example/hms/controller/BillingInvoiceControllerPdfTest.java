@@ -51,6 +51,9 @@ class BillingInvoiceControllerPdfTest {
     @MockitoBean
     private InvoiceEmailService invoiceEmailService;
 
+    @MockitoBean
+    private com.example.hms.controller.support.ControllerAuthUtils authUtils;
+
     @Test
     void downloadInvoicePdfRespondsWithAttachment() throws Exception {
         UUID invoiceId = UUID.randomUUID();

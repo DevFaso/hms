@@ -120,7 +120,7 @@ class SuperAdminIntegrationMessageServiceImplTest {
 
         assertThatThrownBy(() -> service.getById(missingId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("not found");
+            .hasFieldOrPropertyWithValue("messageKey", "integration.message.notFound");
     }
 
     @Test
@@ -130,7 +130,7 @@ class SuperAdminIntegrationMessageServiceImplTest {
 
         assertThatThrownBy(() -> service.replay(missingId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("not found");
+            .hasFieldOrPropertyWithValue("messageKey", "integration.message.notFound");
 
         verify(recorder, never()).recordReplay(any(), any(), any());
     }

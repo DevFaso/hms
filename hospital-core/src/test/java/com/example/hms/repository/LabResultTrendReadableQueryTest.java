@@ -12,19 +12,14 @@ import com.example.hms.model.Role;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
-import com.example.hms.security.EncryptionKeyHolder;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
-import com.example.hms.security.tenant.TenantContextAccessor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -45,14 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * the performing laboratory's trend lost its data in production. This pins
  * the three kinds of readable row, and the ones that must not come back.
  */
-@DataJpaTest
-@ActiveProfiles("test")
-// Exactly PatientRepositoryTenantScopeTest's configuration, so the two share
-// one cached context. A test-specific JpaConfig made this a new context, and
-// one more EntityManagerFactory in the test JVM was enough to exhaust the heap
-// under the full suite (PatientRepositoryRegistrationScopeTest's context then
-// failed to load with OutOfMemoryError).
-@Import({TenantContextAccessor.class, EncryptionKeyHolder.class})
+@TenantScopedDataJpaTest
 class LabResultTrendReadableQueryTest {
 
     private static final PageRequest WINDOW = PageRequest.of(0, 12);

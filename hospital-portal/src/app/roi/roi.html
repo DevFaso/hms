@@ -2,126 +2,120 @@
   <header class="page-header">
     <h1>{{ 'ROI.TITLE' | translate }}</h1>
     <div class="header-actions">
-      <app-hospital-scope-chip (scopeChange)="onScopeChange($event)" />
-      @if (scopeReady()) {
-        <button
-          type="button"
-          class="btn-primary"
-          data-testid="open-intake"
-          (click)="openIntake($event)"
-        >
-          <span class="material-symbols-outlined">post_add</span>
-          {{ 'ROI.LOG_REQUEST' | translate }}
-        </button>
-      }
+      <button
+        type="button"
+        class="btn-primary"
+        data-testid="open-intake"
+        (click)="openIntake($event)"
+      >
+        <span class="material-symbols-outlined">post_add</span>
+        {{ 'ROI.LOG_REQUEST' | translate }}
+      </button>
     </div>
   </header>
 
-  <app-hospital-scope-hint />
-  @if (scopeReady()) {
-    <!-- Status filters as plain pressed buttons: a full ARIA tab widget
-         needs tabpanels + roving tabindex, and these are filters anyway. -->
-    <div class="tabs">
-      @for (s of statuses; track s) {
-        <button
-          type="button"
-          class="tab"
-          [class.active]="activeStatus() === s"
-          [attr.aria-pressed]="activeStatus() === s"
-          (click)="setStatus(s)"
-        >
-          {{ statusKey(s) | translate }}
-        </button>
-      }
-    </div>
+  <!-- Status filters as plain pressed buttons: a full ARIA tab widget
+       needs tabpanels + roving tabindex, and these are filters anyway. -->
+  <div class="tabs">
+    @for (s of statuses; track s) {
+      <button
+        type="button"
+        class="tab"
+        [class.active]="activeStatus() === s"
+        [attr.aria-pressed]="activeStatus() === s"
+        (click)="setStatus(s)"
+      >
+        {{ statusKey(s) | translate }}
+      </button>
+    }
+  </div>
 
-    <section class="card">
-      @if (loadFailed()) {
-        <p class="hint error-hint">{{ 'ROI.LOAD_FAILED' | translate }}</p>
-      } @else if (loading()) {
-        <p class="hint">{{ 'COMMON.LOADING' | translate }}</p>
-      } @else if (rows().length === 0) {
-        <p class="hint">{{ 'ROI.EMPTY' | translate }}</p>
-      } @else {
-        @if (truncated()) {
-          <p class="hint">
-            {{ 'ROI.SHOWING_FIRST' | translate: { shown: rows().length, total: total() } }}
-          </p>
-        }
-        <div class="table-scroll">
-          <table>
-            <thead>
+  <section class="card">
+    @if (loadFailed()) {
+      <p class="hint error-hint">{{ 'ROI.LOAD_FAILED' | translate }}</p>
+    } @else if (loading()) {
+      <p class="hint">{{ 'COMMON.LOADING' | translate }}</p>
+    } @else if (rows().length === 0) {
+      <p class="hint">{{ 'ROI.EMPTY' | translate }}</p>
+    } @else {
+      @if (truncated()) {
+        <p class="hint">
+          {{ 'ROI.SHOWING_FIRST' | translate: { shown: rows().length, total: total() } }}
+        </p>
+      }
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>{{ 'ROI.PATIENT' | translate }}</th>
+              <th>{{ 'ROI.REQUESTER' | translate }}</th>
+              <th>{{ 'ROI.SCOPE' | translate }}</th>
+              <th>{{ 'ROI.REQUESTED_ON' | translate }}</th>
+              @if (activeStatus() !== 'PENDING') {
+                <th>{{ 'ROI.DECIDED' | translate }}</th>
+              }
+              <th>
+                <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows(); track row.id) {
               <tr>
-                <th>{{ 'ROI.PATIENT' | translate }}</th>
-                <th>{{ 'ROI.REQUESTER' | translate }}</th>
-                <th>{{ 'ROI.SCOPE' | translate }}</th>
-                <th>{{ 'ROI.REQUESTED_ON' | translate }}</th>
+                <td>
+                  <a [routerLink]="['/patients', row.patientId]">{{ row.patientName }}</a>
+                </td>
+                <td>
+                  {{ requesterKey(row.requesterType) | translate }}
+                  @if (row.requesterName) {
+                    — {{ row.requesterName }}
+                  }
+                </td>
+                <td class="scope-cell">{{ row.scopeDescription }}</td>
+                <td>{{ row.requestedOn | date: 'mediumDate' }}</td>
                 @if (activeStatus() !== 'PENDING') {
-                  <th>{{ 'ROI.DECIDED' | translate }}</th>
-                }
-                <th>
-                  <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (row of rows(); track row.id) {
-                <tr>
                   <td>
-                    <a [routerLink]="['/patients', row.patientId]">{{ row.patientName }}</a>
-                  </td>
-                  <td>
-                    {{ requesterKey(row.requesterType) | translate }}
-                    @if (row.requesterName) {
-                      — {{ row.requesterName }}
+                    {{ row.decidedAt | date: 'mediumDate' }}
+                    @if (row.decidedByName) {
+                      · {{ row.decidedByName }}
                     }
                   </td>
-                  <td class="scope-cell">{{ row.scopeDescription }}</td>
-                  <td>{{ row.requestedOn | date: 'mediumDate' }}</td>
-                  @if (activeStatus() !== 'PENDING') {
-                    <td>
-                      {{ row.decidedAt | date: 'mediumDate' }}
-                      @if (row.decidedByName) {
-                        · {{ row.decidedByName }}
-                      }
-                    </td>
-                  }
-                  <td class="actions-cell">
-                    @if (row.status === 'PENDING') {
-                      @if (canDecide()) {
-                        <button
-                          type="button"
-                          class="btn-link"
-                          data-testid="fulfil-btn"
-                          (click)="openDecision(row, 'fulfil', $event)"
-                        >
-                          {{ 'ROI.FULFIL' | translate }}
-                        </button>
-                        <button
-                          type="button"
-                          class="btn-link danger"
-                          (click)="openDecision(row, 'deny', $event)"
-                        >
-                          {{ 'ROI.DENY' | translate }}
-                        </button>
-                      }
+                }
+                <td class="actions-cell">
+                  @if (row.status === 'PENDING') {
+                    @if (canDecide()) {
                       <button
                         type="button"
                         class="btn-link"
-                        (click)="openDecision(row, 'cancel', $event)"
+                        data-testid="fulfil-btn"
+                        (click)="openDecision(row, 'fulfil', $event)"
                       >
-                        {{ 'ROI.CANCEL' | translate }}
+                        {{ 'ROI.FULFIL' | translate }}
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-link danger"
+                        (click)="openDecision(row, 'deny', $event)"
+                      >
+                        {{ 'ROI.DENY' | translate }}
                       </button>
                     }
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-      }
-    </section>
-  }
+                    <button
+                      type="button"
+                      class="btn-link"
+                      (click)="openDecision(row, 'cancel', $event)"
+                    >
+                      {{ 'ROI.CANCEL' | translate }}
+                    </button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
 </div>
 
 <!-- ── Intake modal (registries dialog pattern) ──────────────────────── -->

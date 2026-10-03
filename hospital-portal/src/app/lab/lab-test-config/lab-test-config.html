@@ -469,7 +469,7 @@
           <p>
             {{
               'LAB_TEST_CONFIG.DELETE_CONFIRM_MSG'
-                | translate: { name: $safeNavigationMigration(deletingDef()?.testName) }
+                | translate: { name: deletingDef()?.testName ?? '' }
             }}
           </p>
         </div>
