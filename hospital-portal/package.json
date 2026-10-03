@@ -106,8 +106,8 @@
     "karma-jasmine": "5.1.0",
     "karma-jasmine-html-reporter": "^2.3.0",
     "prettier": "^3.9.9",
-    "puppeteer": "^25.11.0",
+    "puppeteer": "^25.12.0",
     "typescript": "6.0.3",
-    "typescript-eslint": "^8.70.1"
+    "typescript-eslint": "^8.71.0"
   }
 }
