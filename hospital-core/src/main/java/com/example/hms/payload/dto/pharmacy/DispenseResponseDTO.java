@@ -26,6 +26,13 @@ public class DispenseResponseDTO {
     private UUID pharmacyId;
     private UUID stockLotId;
     private UUID dispensedBy;
+    /**
+     * Who handed the medication over, as a person reads them. The portal's
+     * dispensing history has a "Dispensed by" column that read a field this
+     * DTO never carried, so it was blank on every row. Null when the row
+     * cannot say (a user with no name on file).
+     */
+    private String dispensedByName;
     private UUID verifiedBy;
     private UUID medicationCatalogItemId;
     private String medicationName;

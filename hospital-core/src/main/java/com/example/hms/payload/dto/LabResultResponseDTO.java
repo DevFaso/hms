@@ -64,4 +64,22 @@ public class LabResultResponseDTO {
     private String signatureNotes;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    // ── Provenance. Both were on the entity and in no DTO, so the release
+    // worklist could not tell an analyzer's number from a typed one, or a
+    // preliminary from a final — and `released` is no substitute there, since
+    // every row on that queue is unreleased. ──
+
+    /**
+     * MSH-10 of the HL7 v2 message that produced this row; null for a result
+     * a person entered. Non-null is what "came from an instrument" means.
+     */
+    private String sourceMessageControlId;
+
+    /**
+     * OBX-11 as the analyzer sent it ({@code F} final, {@code P} preliminary,
+     * {@code C} corrected, …, HL7 table 0085); null when the analyzer did not
+     * say and always for a hand-entered row.
+     */
+    private String observationResultStatus;
 }

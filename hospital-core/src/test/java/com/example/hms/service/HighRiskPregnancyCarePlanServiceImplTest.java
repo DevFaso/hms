@@ -328,10 +328,13 @@ class HighRiskPregnancyCarePlanServiceImplTest {
         UUID otherPatientId = UUID.randomUUID();
         UUID unknownPatientId = UUID.randomUUID();
 
+        // The message echoes the id the caller named, so compare with that id
+        // swapped out: another patient's row must read exactly like no row.
         String foreign = notFoundMessage(() -> service.getPlansForPatient(otherPatientId, USERNAME));
         String unknown = notFoundMessage(() -> service.getPlansForPatient(unknownPatientId, USERNAME));
-        assertThat(foreign).isEqualTo(unknown);
-        assertThat(notFoundMessage(() -> service.getActivePlan(otherPatientId, USERNAME))).isEqualTo(unknown);
+        String unknownAsForeign = unknown.replace(unknownPatientId.toString(), otherPatientId.toString());
+        assertThat(foreign).isEqualTo(unknownAsForeign);
+        assertThat(notFoundMessage(() -> service.getActivePlan(otherPatientId, USERNAME))).isEqualTo(unknownAsForeign);
         verify(patientRepository, never()).findById(any());
         verify(carePlanRepository, never()).findByPatient_IdOrderByCreatedAtDesc(any());
     }

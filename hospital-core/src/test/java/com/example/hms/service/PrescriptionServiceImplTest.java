@@ -2881,7 +2881,9 @@ class PrescriptionServiceImplTest {
 
         UUID rxId = rx.getId();
         assertThatThrownBy(() -> prescriptionService.cosignPrescription(rxId, Locale.ENGLISH))
-            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class)
+            // Client-safe: the row was already resolved in scope, so the
+            // caller is told what they would need (GlobalExceptionHandler).
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
             .hasMessageContaining("active prescribing assignment");
         assertThat(rx.getCosignedAt()).isNull();
         assertThat(rx.getCosignedBy()).isNull();
@@ -2969,7 +2971,9 @@ class PrescriptionServiceImplTest {
 
         UUID rxId = rx.getId();
         assertThatThrownBy(() -> prescriptionService.cosignPrescription(rxId, Locale.ENGLISH))
-            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class)
+            // Client-safe: the row was already resolved in scope, so the
+            // caller is told what they would need (GlobalExceptionHandler).
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
             .hasMessageContaining("active prescribing assignment");
         assertThat(rx.getCosignedBy()).isNull();
     }
@@ -3213,7 +3217,8 @@ class PrescriptionServiceImplTest {
 
         UUID rxId = rx.getId();
         assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, java.util.Locale.ENGLISH))
-            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+            .hasMessage("Only the prescribing clinician can sign this prescription.");
         assertThat(rx.getSignatureValue()).isNull();
     }
 

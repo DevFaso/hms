@@ -176,8 +176,8 @@ class PatientPortalServiceImplEducationTest {
         @DisplayName("returns material assigned to this patient")
         void assigned_returnsItem() {
             when(educationProgressRepository
-                    .findTopByPatientIdAndResourceIdOrderByCreatedAtDesc(patientId, resourceId))
-                    .thenReturn(Optional.of(progress(0, null)));
+                    .findByPatientIdAndResourceId(patientId, resourceId))
+                    .thenReturn(java.util.List.of(progress(0, null)));
             when(educationResourceRepository.findById(resourceId)).thenReturn(Optional.of(resource(true)));
 
             assertThat(service.getMyEducationItem(auth, resourceId).getResourceId()).isEqualTo(resourceId);
@@ -187,8 +187,8 @@ class PatientPortalServiceImplEducationTest {
         @DisplayName("404s material that was never assigned to this patient")
         void notAssigned_throws() {
             when(educationProgressRepository
-                    .findTopByPatientIdAndResourceIdOrderByCreatedAtDesc(patientId, resourceId))
-                    .thenReturn(Optional.empty());
+                    .findByPatientIdAndResourceId(patientId, resourceId))
+                    .thenReturn(java.util.List.of());
 
             assertThatThrownBy(() -> service.getMyEducationItem(auth, resourceId))
                     .isInstanceOf(ResourceNotFoundException.class)
@@ -202,8 +202,8 @@ class PatientPortalServiceImplEducationTest {
 
         private void stubAssigned(PatientEducationProgress p, EducationResource r) {
             when(educationProgressRepository
-                    .findTopByPatientIdAndResourceIdOrderByCreatedAtDesc(patientId, resourceId))
-                    .thenReturn(Optional.of(p));
+                    .findByPatientIdAndResourceId(patientId, resourceId))
+                    .thenReturn(java.util.List.of(p));
             when(educationResourceRepository.findById(resourceId)).thenReturn(Optional.of(r));
             when(educationProgressRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         }
@@ -287,8 +287,8 @@ class PatientPortalServiceImplEducationTest {
         @DisplayName("404s an update for material not assigned to this patient")
         void notAssigned_throws() {
             when(educationProgressRepository
-                    .findTopByPatientIdAndResourceIdOrderByCreatedAtDesc(patientId, resourceId))
-                    .thenReturn(Optional.empty());
+                    .findByPatientIdAndResourceId(patientId, resourceId))
+                    .thenReturn(java.util.List.of());
 
             assertThatThrownBy(() -> service.updateMyEducationProgress(auth, resourceId,
                     PatientEducationProgressUpdateDTO.builder().progressPercentage(50).build()))
@@ -306,8 +306,8 @@ class PatientPortalServiceImplEducationTest {
         void resourceQuestion_usesAssignmentHospital() {
             PatientEducationProgress p = progress(0, null);
             when(educationProgressRepository
-                    .findTopByPatientIdAndResourceIdOrderByCreatedAtDesc(patientId, resourceId))
-                    .thenReturn(Optional.of(p));
+                    .findByPatientIdAndResourceId(patientId, resourceId))
+                    .thenReturn(java.util.List.of(p));
             when(educationQuestionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             service.submitMyEducationQuestion(auth, PatientEducationQuestionSubmitDTO.builder()
@@ -332,8 +332,8 @@ class PatientPortalServiceImplEducationTest {
         @DisplayName("404s a question about material not assigned to this patient")
         void unassignedResource_throws() {
             when(educationProgressRepository
-                    .findTopByPatientIdAndResourceIdOrderByCreatedAtDesc(patientId, resourceId))
-                    .thenReturn(Optional.empty());
+                    .findByPatientIdAndResourceId(patientId, resourceId))
+                    .thenReturn(java.util.List.of());
 
             assertThatThrownBy(() -> service.submitMyEducationQuestion(auth,
                     PatientEducationQuestionSubmitDTO.builder()
@@ -342,6 +342,41 @@ class PatientPortalServiceImplEducationTest {
                             .build()))
                     .isInstanceOf(ResourceNotFoundException.class);
             verify(educationQuestionRepository, never()).save(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("duplicate progress rows (#708)")
+    class DuplicateRows {
+
+        @Test
+        @DisplayName("the list shows one row per resource and the write lands on that same row")
+        void listAndWriteAgreeOnTheRow() {
+            // Older but just accessed: what the patient is looking at.
+            PatientEducationProgress onScreen = progress(100, LocalDateTime.now().minusDays(1));
+            onScreen.setCreatedAt(LocalDateTime.now().minusDays(30));
+            onScreen.setLastAccessedAt(LocalDateTime.now().minusHours(1));
+            // Newer but never opened: the one the write used to pick.
+            PatientEducationProgress newest = progress(0, null);
+            newest.setCreatedAt(LocalDateTime.now().minusDays(1));
+            newest.setLastAccessedAt(null);
+            EducationResource r = resource(true);
+            when(educationProgressRepository.findByPatientIdOrderByLastAccessedAtDesc(patientId))
+                    .thenReturn(java.util.List.of(newest, onScreen));
+            when(educationProgressRepository.findByPatientIdAndResourceId(patientId, resourceId))
+                    .thenReturn(java.util.List.of(newest, onScreen));
+            when(educationResourceRepository.findAllById(any())).thenReturn(java.util.List.of(r));
+            when(educationResourceRepository.findById(resourceId)).thenReturn(Optional.of(r));
+            when(educationProgressRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            java.util.List<PatientEducationItemDTO> listed = service.getMyEducation(auth);
+            service.updateMyEducationProgress(auth, resourceId,
+                    PatientEducationProgressUpdateDTO.builder().rating(5).build());
+
+            assertThat(listed).hasSize(1);
+            assertThat(listed.get(0).getProgressId()).isEqualTo(onScreen.getId());
+            assertThat(onScreen.getRating()).isEqualTo(5);
+            assertThat(newest.getRating()).isNull();
         }
     }
 }

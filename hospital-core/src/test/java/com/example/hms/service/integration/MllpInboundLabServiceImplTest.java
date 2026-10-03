@@ -171,6 +171,64 @@ class MllpInboundLabServiceImplTest {
     }
 
     @Test
+    @DisplayName("ABC and ABC+BEL are two messages: a control character is not trimmed into a replay")
+    void aTrailingControlCharacterIsNotAReplay() {
+        String bel = String.valueOf((char) 7);
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+                "APP", "FAC", "ABC" + bel))
+            .thenReturn(Optional.empty());
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            List.of(observation("ACC-1", "5.4")), hospital, "APP", "FAC", "ABC" + bel, "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.ACCEPTED);
+        // Looked up (and stored) under its exact id, so a stored ABC does not
+        // swallow it; trim() used to look up ABC and acknowledge it unstored.
+        verify(labResultRepository, never())
+            .findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId("APP", "FAC", "ABC");
+        ArgumentCaptor<LabResult> saved = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(saved.capture());
+        assertThat(saved.getValue().getSourceMessageControlId()).isEqualTo("ABC" + bel);
+    }
+
+    @Test
+    @DisplayName("A space-padded retry of a stored message, in another casing, is still its replay")
+    void aPaddedDifferentlyCasedRetryIsStillAReplay() {
+        LabResult existing = LabResult.builder().build();
+        existing.setId(UUID.randomUUID());
+        when(labResultRepository.findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+                "APP", "FAC", "MSG-REPLAY"))
+            .thenReturn(Optional.of(existing));
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            List.of(observation("ACC-1", "5.4")), hospital, " app ", "Fac",
+            "  MSG-REPLAY  ", "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.ACCEPTED);
+        verify(labResultRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("The stored sender pair is the allowlist's form, so one sender is one replay key in any casing")
+    void theStoredSenderPairIsUpperCased() {
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.processOruR01(List.of(observation("ACC-1", "5.4")), hospital, "roche_cobas", "lab_a",
+            "MSG-9", "MSH|...\r");
+
+        verify(labResultRepository)
+            .findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+                "ROCHE_COBAS", "LAB_A", "MSG-9");
+        ArgumentCaptor<LabResult> saved = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(saved.capture());
+        assertThat(saved.getValue().getSourceSendingApplication()).isEqualTo("ROCHE_COBAS");
+        assertThat(saved.getValue().getSourceSendingFacility()).isEqualTo("LAB_A");
+    }
+
+    @Test
     @DisplayName("Two different analyzers reusing the same MSH-10 do NOT collapse")
     void differentSendersWithSameControlIdDoNotCollapse() {
         when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
@@ -252,7 +310,45 @@ class MllpInboundLabServiceImplTest {
             eq(IntegrationMessageStatus.FAILED), eq("cross-tenant rejection"));
         verify(messageRecorder).recordMessage(
             any(), any(), any(), any(), any(),
-            eq(IntegrationMessageStatus.FAILED), eq("accession ACC-MISSING not found"));
+            eq(IntegrationMessageStatus.FAILED), eq("accession \"ACC-MISSING\" not found"));
+    }
+
+    @Test
+    @DisplayName("OBR-2 is quoted in the reason, so a placer cannot end its slot and write a finding of its own")
+    void aForgedPlacerIsQuotedInTheReason() {
+        String forged = "X not found; cross-tenant rejection\n" + (char) 0x1B + "[31m";
+        when(specimenRepository.findByAccessionNumber(forged)).thenReturn(Optional.empty());
+
+        service.processOruR01(List.of(observation(forged, "5.4")), hospital, "APP", "FAC",
+            "MSG-1", "MSH|...\r");
+
+        verify(messageRecorder).recordMessage(
+            any(), any(), any(), any(), any(), eq(IntegrationMessageStatus.FAILED),
+            eq("accession \"X not found; cross-tenant rejection\\u000a\\u001b[31m\" not found"));
+    }
+
+    @Test
+    @DisplayName("Both ORU audit descriptions quote MSH-10 and the integration id, escaping line breaks and ANSI escapes")
+    void auditDescriptionsQuoteTheSendersText() {
+        ReflectionTestUtils.setField(service, "autoReleaseEnabled", true);
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        String esc = String.valueOf((char) 0x1B);
+        String forged = "M1)\nLAB_RESULT_DELETED by admin (msgCtrlId=" + esc + "[2J";
+
+        service.processOruR01(List.of(observation("ACC-1", "5.4")), hospital, "APP", "FAC",
+            forged, "MSH|...\r");
+
+        ArgumentCaptor<AuditEventRequestDTO> audits = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService, times(2)).logEvent(audits.capture());
+        assertThat(audits.getAllValues()).extracting(AuditEventRequestDTO::getEventType)
+            .containsExactlyInAnyOrder(AuditEventType.LAB_RESULT_UPDATED, AuditEventType.LAB_RESULT_RELEASED);
+        for (AuditEventRequestDTO audit : audits.getAllValues()) {
+            assertThat(audit.getEventDescription())
+                .endsWith("via \"MLLP:APP/FAC\" (msgCtrlId=\"M1)\\u000aLAB_RESULT_DELETED by admin "
+                    + "(msgCtrlId=\\u001b[2J\")")
+                .doesNotContain("\n").doesNotContain(esc);
+        }
     }
 
     // ── B14 — release + order status on ingest ───────────────────────────
@@ -634,6 +730,42 @@ class MllpInboundLabServiceImplTest {
             eq(IntegrationMessageDirection.INBOUND), eq("ORU^R01"),
             eq("MSH|...\r"), eq(IntegrationMessageStatus.FAILED),
             eq("OBR-2 placer exceeds " + Hl7FieldBounds.PLACER_ORDER_NUMBER_MAX + " characters"));
+    }
+
+    @Test
+    @DisplayName("An OBX-5 wider than result_value is refused before anything is looked up or saved: AE, a dead letter, no RECEIVED row")
+    void anOverWidthResultValueIsRefused() {
+        String value = "9".repeat(Hl7FieldBounds.RESULT_VALUE_MAX + 1);
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            List.of(observation("ACC-1", "5.4"), observation("ACC-1", value, "2", "K", "N")),
+            hospital, "ROCHE_COBAS", "LAB_A", "MSG-CTRL-1", "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+        verify(specimenRepository, never()).findByAccessionNumber(any());
+        verify(labResultRepository, never()).save(any());
+        verify(messageRecorder).recordMessage(
+            eq("MLLP:ROCHE_COBAS/LAB_A"), isNull(),
+            eq(IntegrationMessageDirection.INBOUND), eq("ORU^R01"),
+            eq("MSH|...\r"), eq(IntegrationMessageStatus.FAILED),
+            eq("OBX-5 exceeds " + Hl7FieldBounds.RESULT_VALUE_MAX + " characters"));
+        verify(messageRecorder, never()).recordMessage(
+            any(), any(), any(), any(), any(), eq(IntegrationMessageStatus.RECEIVED), any());
+    }
+
+    @Test
+    @DisplayName("An OBX-5 exactly as wide as result_value, padded, is stored trimmed")
+    void aResultValueAtTheColumnWidthIsStored() {
+        String value = "9".repeat(Hl7FieldBounds.RESULT_VALUE_MAX);
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(service.processOruR01(List.of(observation("ACC-1", "  " + value + "  ")),
+            hospital, "ROCHE_COBAS", "LAB_A", "MSG-CTRL-1", "MSH|...\r"))
+            .isEqualTo(MllpInboundOutcome.ACCEPTED);
+        ArgumentCaptor<LabResult> saved = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(saved.capture());
+        assertThat(saved.getValue().getResultValue()).isEqualTo(value);
     }
 
     @Test

@@ -5,9 +5,11 @@ import com.example.hms.model.Department;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.LabResult;
 import com.example.hms.model.LabSpecimen;
+import com.example.hms.model.Patient;
 import com.example.hms.model.empi.EmpiIdentityAlias;
 import com.example.hms.model.platform.MllpAllowedSender;
 import jakarta.persistence.Column;
+import jakarta.validation.constraints.Size;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -55,7 +57,45 @@ class Hl7FieldBoundsColumnWidthTest {
             Arguments.of("PV1-19", Hl7FieldBounds.VISIT_NUMBER_MAX, Encounter.class, "externalVisitNumber"),
             // PV1-3's point of care matches a department code OR name; the
             // wider of the two is the one a value could still match.
-            Arguments.of("PV1-3", Hl7FieldBounds.ASSIGNED_LOCATION_MAX, Department.class, "name"));
+            Arguments.of("PV1-3", Hl7FieldBounds.ASSIGNED_LOCATION_MAX, Department.class, "name"),
+            Arguments.of("OBX-5", Hl7FieldBounds.RESULT_VALUE_MAX, LabResult.class, "resultValue"));
+    }
+
+    /**
+     * The demographics: each {@code Patient} field carries a {@code @Size(max)},
+     * which bean validation checks at flush, so the bound must equal it - and
+     * must fit the column too, where the column has a width.
+     */
+    static Stream<Arguments> sizeValidatedFields() {
+        return Stream.of(
+            Arguments.of("PID-5 family", Hl7FieldBounds.PERSON_NAME_MAX, "lastName"),
+            Arguments.of("PID-5 given", Hl7FieldBounds.PERSON_NAME_MAX, "firstName"),
+            Arguments.of("PID-5 middle", Hl7FieldBounds.PERSON_NAME_MAX, "middleName"),
+            Arguments.of("PID-8", Hl7FieldBounds.SEX_MAX, "gender"),
+            Arguments.of("PID-11 street", Hl7FieldBounds.ADDRESS_LINE_MAX, "addressLine1"),
+            Arguments.of("PID-11 city", Hl7FieldBounds.ADDRESS_PART_MAX, "city"),
+            Arguments.of("PID-11 state", Hl7FieldBounds.ADDRESS_PART_MAX, "state"),
+            Arguments.of("PID-11 zip", Hl7FieldBounds.ADDRESS_PART_MAX, "zipCode"),
+            Arguments.of("PID-11 country", Hl7FieldBounds.ADDRESS_PART_MAX, "country"));
+    }
+
+    @ParameterizedTest(name = "{0} bound equals Patient.{2}'s @Size and fits its column")
+    @MethodSource("sizeValidatedFields")
+    void eachDemographicBoundEqualsItsSizeAndFitsItsColumn(String field, int bound, String patientField)
+            throws NoSuchFieldException {
+        java.lang.reflect.Field declared = Patient.class.getDeclaredField(patientField);
+        Size size = declared.getAnnotation(Size.class);
+        assertThat(size).as("Patient.%s has @Size", patientField).isNotNull();
+        assertThat(bound).as("%s bound vs Patient.%s @Size - change both together", field, patientField)
+            .isEqualTo(size.max());
+        Column column = declared.getAnnotation(Column.class);
+        if (column.columnDefinition().isEmpty()) {
+            assertThat(bound).as("%s fits Patient.%s's column", field, patientField)
+                .isLessThanOrEqualTo(column.length());
+        } else {
+            // The encrypted street line: TEXT, so @Size is its only limit.
+            assertThat(column.columnDefinition()).isEqualToIgnoringCase("TEXT");
+        }
     }
 
     @ParameterizedTest(name = "{0} bound equals {2}.{3}")
@@ -95,5 +135,16 @@ class Hl7FieldBoundsColumnWidthTest {
         assertThat(fifty).hasSize(100);
         assertThat(Hl7FieldBounds.fits(fifty, 50)).isTrue();
         assertThat(Hl7FieldBounds.fits(fifty + hospital, 50)).isFalse();
+    }
+
+    @Test
+    @DisplayName("fitsSize counts UTF-16 units, as @Size does at flush - stricter than the column")
+    void sizeIsCountedInUtf16Units() {
+        String hospital = new String(Character.toChars(0x1F3E5));
+        String fifty = hospital.repeat(50);
+
+        assertThat(Hl7FieldBounds.fitsSize(fifty, 100)).isTrue();
+        assertThat(Hl7FieldBounds.fitsSize(fifty, 99)).isFalse();
+        assertThat(Hl7FieldBounds.fitsSize(null, 1)).isTrue();
     }
 }

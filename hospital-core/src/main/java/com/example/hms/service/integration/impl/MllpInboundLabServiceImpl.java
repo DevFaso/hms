@@ -18,7 +18,9 @@ import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.integration.MllpInboundLabService;
 import com.example.hms.service.integration.MllpInboundOutcome;
 import com.example.hms.service.integration.message.IntegrationMessageRecorder;
+import com.example.hms.service.integration.message.MllpRecordingContext;
 import com.example.hms.utility.Hl7FieldBounds;
+import com.example.hms.utility.Hl7SenderText;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedObservation;
 
 import java.time.LocalDateTime;
@@ -93,34 +95,13 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
         // the analyzer resends a corrected one — a partial persist would
         // poison the replay check (any surviving row for the triple
         // reads as "message already landed").
-        for (ParsedObservation observation : observations) {
-            if (observation == null
-                || !StringUtils.hasText(observation.placerOrderNumber())
-                || !StringUtils.hasText(observation.resultValue())) {
-                log.warn("MLLP ORU^R01 rejected — an OBX is missing OBR-2 or its value (sender={}/{} hospital={})",
-                    sendingApplication, sendingFacility, hospitalId);
-                recordInboundMessage(integrationId, organizationId, rawMessageBody,
-                    IntegrationMessageStatus.FAILED, "missing OBR-2 placer or OBX value");
-                return MllpInboundOutcome.REJECTED_INVALID;
-            }
-            // OBR-2 is matched, trimmed, against lab_specimens.accession_number,
-            // so one wider than that column can never match and is refused
-            // here - before the placer reaches the log lines and reason
-            // strings below - rather than cut short, which could match
-            // someone else's specimen. Checked here and not in
-            // Hl7v2MessageBuilder.parseOruR01 because that parser also serves
-            // the HTTP ingest and the instrument preview, where OBR-2 is not
-            // an accession and any width works. Decided on the message alone,
-            // so it reveals nothing about any tenant.
-            if (!Hl7FieldBounds.fits(observation.placerOrderNumber().trim(),
-                    Hl7FieldBounds.PLACER_ORDER_NUMBER_MAX)) {
-                log.warn("MLLP ORU^R01 rejected — an OBR-2 is wider than any accession (sender={}/{} hospital={})",
-                    sendingApplication, sendingFacility, hospitalId);
-                recordInboundMessage(integrationId, organizationId, rawMessageBody,
-                    IntegrationMessageStatus.FAILED,
-                    "OBR-2 placer exceeds " + Hl7FieldBounds.PLACER_ORDER_NUMBER_MAX + " characters");
-                return MllpInboundOutcome.REJECTED_INVALID;
-            }
+        String malformed = firstMalformedObservation(observations);
+        if (malformed != null) {
+            log.warn("MLLP ORU^R01 rejected — {} (sender={}/{} hospital={})",
+                malformed, sendingApplication, sendingFacility, hospitalId);
+            recordInboundMessage(integrationId, organizationId, rawMessageBody,
+                IntegrationMessageStatus.FAILED, malformed);
+            return MllpInboundOutcome.REJECTED_INVALID;
         }
         if (receivingHospital == null || hospitalId == null) {
             log.warn("MLLP ORU^R01 rejected — no resolved hospital (sender={}/{})",
@@ -140,16 +121,25 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
         // landed — replaying is safe. The composite partial unique
         // index (V98, widened by V131 with the OBX set id) enforces
         // the same invariant at the DB layer.
-        String controlId = StringUtils.hasText(messageControlId) ? messageControlId.trim() : null;
-        String senderApp = StringUtils.hasText(sendingApplication) ? sendingApplication.trim() : null;
-        String senderFac = StringUtils.hasText(sendingFacility) ? sendingFacility.trim() : null;
+        //
+        // The key is MSH-10 exactly as bounded (spaces aside), not trim()med:
+        // trim() made ABC and ABC+BEL one key, so the second was acknowledged
+        // as a replay and never stored. The sender pair is upper-cased the
+        // way the allowlist matches it: one sender is one key in any casing.
+        // See MllpRecordingContext.messageControlIdKey / senderKey.
+        String controlId = MllpRecordingContext.messageControlIdKey(messageControlId);
+        String senderApp = MllpRecordingContext.senderKey(sendingApplication);
+        String senderFac = MllpRecordingContext.senderKey(sendingFacility);
+        // MSH-10 as every log line below shows it: quoted and escaped, so a
+        // sender cannot forge or break a log line with it.
+        String loggedControlId = MllpRecordingContext.quotedControlId(controlId);
         if (controlId != null && senderApp != null && senderFac != null) {
             Optional<LabResult> existing = labResultRepository
                 .findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
                     senderApp, senderFac, controlId);
             if (existing.isPresent()) {
                 log.info("MLLP ORU^R01 replay — sender={}/{} controlId={} already persisted (labResult {}); ACCEPTED without re-insert",
-                    senderApp, senderFac, controlId, existing.get().getId());
+                    senderApp, senderFac, loggedControlId, existing.get().getId());
                 recordInboundMessage(integrationId, organizationId, rawMessageBody,
                     IntegrationMessageStatus.RECEIVED, "duplicate (sender, MSH-10); replayed");
                 return MllpInboundOutcome.ACCEPTED;
@@ -166,17 +156,20 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                 continue;
             }
             Optional<LabSpecimen> specimen = specimenRepository.findByAccessionNumber(placer);
+            // OBR-2 is the sender's text: quoted wherever it is shown, so it
+            // cannot end its slot in the reason an operator reads as ours.
+            String quotedPlacer = Hl7SenderText.quote(placer);
             if (specimen.isEmpty()) {
                 log.warn("MLLP ORU^R01 placer={} unknown — sender={}/{} hospital={}",
-                    placer, sendingApplication, sendingFacility, hospitalId);
+                    quotedPlacer, sendingApplication, sendingFacility, hospitalId);
                 recordInboundMessage(integrationId, organizationId, rawMessageBody,
-                    IntegrationMessageStatus.FAILED, "accession " + placer + " not found");
+                    IntegrationMessageStatus.FAILED, "accession " + quotedPlacer + " not found");
                 return MllpInboundOutcome.REJECTED_NOT_FOUND;
             }
             LabOrder order = specimen.get().getLabOrder();
             if (order == null || order.getHospital() == null || order.getHospital().getId() == null) {
                 log.warn("MLLP ORU^R01 placer={} maps to a specimen without a hospital-scoped order",
-                    placer);
+                    quotedPlacer);
                 recordInboundMessage(integrationId, organizationId, rawMessageBody,
                     IntegrationMessageStatus.FAILED, "specimen without hospital-scoped order");
                 return MllpInboundOutcome.REJECTED_INVALID;
@@ -197,7 +190,7 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                 // alone meant an outsourced order could never be resulted.
                 log.warn("MLLP ORU^R01 cross-tenant: order hospital={} but sender hospital={} (sender={}/{}, placer={})",
                     order.getHospital().getId(), hospitalId,
-                    sendingApplication, sendingFacility, placer);
+                    sendingApplication, sendingFacility, quotedPlacer);
                 recordInboundMessage(integrationId, organizationId, rawMessageBody,
                     IntegrationMessageStatus.FAILED, "cross-tenant rejection");
                 return MllpInboundOutcome.REJECTED_NOT_FOUND;
@@ -239,7 +232,7 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
         }
         log.info("MLLP ORU^R01 persisted {} observation(s) — orders={} sender={}/{} hospital={} msgCtrlId={}",
             saved.size(), ordersByPlacer.keySet(),
-            sendingApplication, sendingFacility, hospitalId, controlId);
+            sendingApplication, sendingFacility, hospitalId, loggedControlId);
         recordInboundMessage(integrationId, organizationId, rawMessageBody,
             IntegrationMessageStatus.RECEIVED, null);
         for (LabResult savedResult : saved) {
@@ -264,6 +257,45 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
             criticalValueNotificationService.notifyIfCritical(savedResult);
         }
         return MllpInboundOutcome.ACCEPTED;
+    }
+
+    /**
+     * Why this message cannot be stored as sent - the first observation missing
+     * its OBR-2 or its value, or carrying one wider than where it goes - as a
+     * dead-letter reason naming the field and the limit, never the value; or
+     * null when every observation is well formed. Decided on the message alone,
+     * before anything is looked up, so it reveals nothing about any tenant.
+     *
+     * <p>OBR-2 is matched, trimmed, against {@code lab_specimens.accession_number},
+     * so one wider than that column can never match and is refused here -
+     * before the placer reaches the log lines and reason strings - rather than
+     * cut short, which could match someone else's specimen. Checked here and
+     * not in {@code Hl7v2MessageBuilder.parseOruR01} because that parser also
+     * serves the HTTP ingest and the instrument preview, where OBR-2 is not an
+     * accession and any width works.
+     *
+     * <p>OBX-5 is held to {@code lab_results.result_value} as it is written,
+     * trimmed. Refused, not truncated: a cut result is a different result.
+     * Unbounded, an over-width value failed at flush as a server error with no
+     * dead letter and - the RECEIVED row being written in its own transaction
+     * first - a RECEIVED row for a message that was then rolled back.
+     */
+    private static String firstMalformedObservation(List<ParsedObservation> observations) {
+        for (ParsedObservation observation : observations) {
+            if (observation == null
+                || !StringUtils.hasText(observation.placerOrderNumber())
+                || !StringUtils.hasText(observation.resultValue())) {
+                return "missing OBR-2 placer or OBX value";
+            }
+            if (!Hl7FieldBounds.fits(observation.placerOrderNumber().trim(),
+                    Hl7FieldBounds.PLACER_ORDER_NUMBER_MAX)) {
+                return "OBR-2 placer exceeds " + Hl7FieldBounds.PLACER_ORDER_NUMBER_MAX + " characters";
+            }
+            if (!Hl7FieldBounds.fits(observation.resultValue().trim(), Hl7FieldBounds.RESULT_VALUE_MAX)) {
+                return "OBX-5 exceeds " + Hl7FieldBounds.RESULT_VALUE_MAX + " characters";
+            }
+        }
+        return null;
     }
 
     /**
@@ -432,8 +464,7 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
             AuditEventRequestDTO request = AuditEventRequestDTO.builder()
                 .eventType(AuditEventType.LAB_RESULT_UPDATED)
                 .status(AuditStatus.SUCCESS)
-                .eventDescription("ORU^R01 ingested via " + integrationId
-                    + (controlId != null ? " (msgCtrlId=" + controlId + ")" : ""))
+                .eventDescription("ORU^R01 ingested via " + describedSource(integrationId, controlId))
                 .entityType("LabResult")
                 .resourceId(saved.getId() != null ? saved.getId().toString() : null)
                 .build();
@@ -457,8 +488,8 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                 .eventType(AuditEventType.LAB_RESULT_RELEASED)
                 .status(AuditStatus.SUCCESS)
                 .userName(released.getActorLabel())
-                .eventDescription(AUTO_RELEASE_DISPLAY + " on analyzer flag N via " + integrationId
-                    + (controlId != null ? " (msgCtrlId=" + controlId + ")" : ""))
+                .eventDescription(AUTO_RELEASE_DISPLAY + " on analyzer flag N via "
+                    + describedSource(integrationId, controlId))
                 .entityType("LabResult")
                 .resourceId(released.getId() != null ? released.getId().toString() : null)
                 .build();
@@ -467,6 +498,19 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
             log.warn("MLLP ORU^R01 auto-release audit emission failed for labResult={} hospital={} integration={}",
                 released.getId(), hospitalId, integrationId, ex);
         }
+    }
+
+    /**
+     * Where an audited result came from, as the audit description shows it:
+     * the integration id and MSH-10, each quoted and escaped. Both are the
+     * sender's text (the id is its MSH-3/MSH-4), and this is persisted audit
+     * text an operator reads as ours, so neither may end its slot or carry an
+     * ANSI escape or a line separator into it.
+     */
+    private static String describedSource(String integrationId, String controlId) {
+        String quotedControlId = MllpRecordingContext.quotedControlId(controlId);
+        return Hl7SenderText.quote(integrationId)
+            + (quotedControlId != null ? " (msgCtrlId=" + quotedControlId + ")" : "");
     }
 
     /**

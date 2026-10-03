@@ -7,6 +7,7 @@ import { signal } from '@angular/core';
 import { LabResultsComponent } from './lab-results';
 import { LabOrderResponse, LabResultResponse } from '../../services/lab.service';
 import { RoleContextService } from '../../core/role-context.service';
+import { expandRoleEquivalents } from '../../core/role-equivalence';
 
 function mockResult(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -271,7 +272,7 @@ describe('LabResultsComponent', () => {
       // canReadBack is role-derived and false in this harness; overriding it
       // is what makes the assertion about CRITICAL-vs-normal rather than about
       // whether the actions column renders at all.
-      (component as unknown as { canReadBack: boolean }).canReadBack = true;
+      spyOn(component, 'canReadBack').and.returnValue(true);
       fixture.detectChanges();
       flushInit([mockResult({ severityFlag: 'CRITICAL' })]);
       fixture.detectChanges();
@@ -320,7 +321,7 @@ describe('LabResultsComponent', () => {
     });
 
     it('leaves a normal result with a plain acknowledge', () => {
-      (component as unknown as { canAcknowledge: boolean }).canAcknowledge = true;
+      spyOn(component, 'canAcknowledge').and.returnValue(true);
       fixture.detectChanges();
       flushInit([mockResult({ severityFlag: 'NORMAL' })]);
       fixture.detectChanges();
@@ -398,7 +399,12 @@ describe('LabResultsComponent — read-back role gate', () => {
             globalView: signal(false),
             activeHospitalId: 'h-1',
             effectiveHospitalIdForRequest: () => 'h-1',
-            hasAnyActiveRole: (roles: string[]) => roles.some((r) => activeRoles.includes(r)),
+            // The real service's two rules: doctor equivalence by default,
+            // and the exact variant the isDoctor-backed gates use.
+            hasAnyActiveRole: (roles: string[]) =>
+              expandRoleEquivalents(activeRoles).some((r) => roles.includes(r)),
+            hasAnyActiveRoleExactly: (roles: string[]) =>
+              roles.some((r) => activeRoles.includes(r)),
           },
         },
       ],
@@ -411,8 +417,8 @@ describe('LabResultsComponent — read-back role gate', () => {
     // lab's; a hospital admin is administrative on the chart and gets no
     // control that would 403 on submit.
     const component = createWithRoles(['ROLE_HOSPITAL_ADMIN']);
-    expect(component.canReadBack).toBeFalse();
-    expect(component.canAcknowledge).toBeFalse();
+    expect(component.canReadBack()).toBeFalse();
+    expect(component.canAcknowledge()).toBeFalse();
   });
 
   it('offers the release control only where the backend accepts it (B1)', () => {
@@ -520,7 +526,39 @@ describe('LabResultsComponent — read-back role gate', () => {
     // lab attestation is a different act. A button that 403s teaches the
     // lab to ignore controls.
     const component = createWithRoles(['ROLE_LAB_SCIENTIST']);
-    expect(component.canReadBack).toBeFalse();
-    expect(component.canAcknowledge).toBeTrue();
+    expect(component.canReadBack()).toBeFalse();
+    expect(component.canAcknowledge()).toBeTrue();
+  });
+
+  it('re-reads the critical-queue, acknowledge and read-back authority live (not a construction snapshot)', () => {
+    // The three used to be fields evaluated once in the constructor — the
+    // shape #722/#724 removed from release and sign on this screen.
+    const roles = ['ROLE_LAB_SCIENTIST'];
+    const component = createWithRoles(roles);
+    expect(component.canSeeCritical()).toBeTrue();
+    expect(component.canAcknowledge()).toBeTrue();
+    expect(component.canReadBack()).toBeFalse();
+
+    roles.length = 0;
+    roles.push('ROLE_NURSE');
+    expect(component.canReadBack()).toBeTrue();
+
+    roles.length = 0;
+    roles.push('ROLE_HOSPITAL_ADMIN');
+    expect(component.canSeeCritical()).toBeFalse();
+    expect(component.canAcknowledge()).toBeFalse();
+    expect(component.canReadBack()).toBeFalse();
+  });
+
+  it('offers a surgeon the read-back a doctor gets, through the shared doctor equivalence', () => {
+    expect(createWithRoles(['ROLE_SURGEON']).canReadBack()).toBeTrue();
+  });
+
+  it('does NOT offer result entry to a surgeon: validateLabResultAuthor is isDoctor-only', () => {
+    // canEnterResults is protected; read it the way the template does.
+    const component = createWithRoles(['ROLE_SURGEON']) as unknown as {
+      canEnterResults(): boolean;
+    };
+    expect(component.canEnterResults()).toBeFalse();
   });
 });

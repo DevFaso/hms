@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.support.LinkedPatientLookup;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.PatientDocumentType;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -253,13 +254,13 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
 
     private UUID resolvePatientId(Authentication auth) {
         UUID userId = resolveUserId(auth);
-        return patientRepository.findByUserId(userId)
+        return LinkedPatientLookup.linkedPatient(patientRepository, userId)
                 .map(Patient::getId)
                 .orElseThrow(() -> new ResourceNotFoundException("patient.portal.noRecord"));
     }
 
     private Patient resolvePatient(UUID userId) {
-        return patientRepository.findByUserId(userId)
+        return LinkedPatientLookup.linkedPatient(patientRepository, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("patient.portal.noRecord"));
     }
 

@@ -5,6 +5,7 @@ import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.LabResultRequestDTO;
 import com.example.hms.payload.dto.LabResultResponseDTO;
 import com.example.hms.service.LabResultService;
+import com.example.hms.service.integration.message.MllpRecordingContext;
 import com.example.hms.service.platform.MllpAllowedSenderService;
 import com.example.hms.utility.Hl7v2MessageBuilder;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedObservation;
@@ -88,7 +89,9 @@ public class Hl7InboundController {
                            + "The message's sending pair (MSH-3, MSH-4) must resolve to an active MLLP "
                            + "allowlist entry, and the lab order must belong to that entry's hospital.")
     @ApiResponse(responseCode = "201", description = "LabResult created from HL7 message")
-    @ApiResponse(responseCode = "400", description = "Unparseable HL7v2 message")
+    @ApiResponse(responseCode = "400",
+                 description = "Unparseable HL7v2 message, or an MSH field wider than its column "
+                             + "(the answer names the field and the limit)")
     @ApiResponse(responseCode = "404",
                  description = "The sending pair is not allowlisted, or the order is not one that "
                              + "sender's hospital handles. Deliberately the same answer for both.")
@@ -116,6 +119,16 @@ public class Hl7InboundController {
                 "Unable to parse HL7v2 message. Ensure the message is a valid ORU^R01.");
         }
         ParsedObservation obs = observations.get(0);
+        // OBX-5 is stored as sent into lab_results.result_value (2048), so it
+        // is held to that width here: refused with a 400 naming the field and
+        // the limit, not truncated (a cut result is a different result) and
+        // not left to fail at flush as a server error. Decided on the message
+        // alone, before the sender is resolved, so it reveals nothing.
+        if (!com.example.hms.utility.Hl7FieldBounds.fits(
+                obs.resultValue(), com.example.hms.utility.Hl7FieldBounds.RESULT_VALUE_MAX)) {
+            throw new com.example.hms.exception.BusinessException(
+                "OBX-5 exceeds " + com.example.hms.utility.Hl7FieldBounds.RESULT_VALUE_MAX + " characters");
+        }
 
         // Who is sending, resolved the way the MLLP transport resolves it.
         // Runs after the parse guard so an unreadable body still gets the 400
@@ -133,9 +146,13 @@ public class Hl7InboundController {
             // that worked before these fields were carried at all.
             .testCode(trimToColumn(obs.testCode()))
             // MSH-3/4/10: what makes a retransmission recognisable as one.
-            .sourceSendingApplication(trimToColumn(header == null ? null : header.sendingApplication()))
-            .sourceSendingFacility(trimToColumn(header == null ? null : header.sendingFacility()))
-            .sourceMessageControlId(trimToColumn(header == null ? null : header.messageControlId()))
+            // The same key the MLLP ingest writes to these columns: the pair
+            // as the allowlist matches it (so it fits: it equals an allowlist
+            // entry), MSH-10 exactly as bounded at parse, spaces aside.
+            .sourceSendingApplication(MllpRecordingContext.senderKey(header == null ? null : header.sendingApplication()))
+            .sourceSendingFacility(MllpRecordingContext.senderKey(header == null ? null : header.sendingFacility()))
+            .sourceMessageControlId(MllpRecordingContext.messageControlIdKey(
+                header == null ? null : header.messageControlId()))
             .resultValue(obs.resultValue())
             .resultUnit(obs.resultUnit())
             .resultDate(obs.resultDate() != null ? obs.resultDate() : LocalDateTime.now())
@@ -169,18 +186,27 @@ public class Hl7InboundController {
      * signals a malformed frame by throwing; here a malformed body is just a
      * body with no replay identity, and the parse guard that follows answers
      * it with the documented 400.
+     *
+     * <p>A <b>refused</b> MSH - a field wider than its column - is a 400 of
+     * its own, naming the field and the limit: it was answered 404
+     * {@code laborder.notfound} (an MSH we could not read identifies no
+     * sender), which sent an integrator looking for a missing order that was
+     * never the problem. Safe to say, and before the allowlist: a width check
+     * is decided on the message alone and reveals nothing about any tenant.
+     * The text never carries the value.
      */
     private com.example.hms.hl7.mllp.Hl7MessageHeader readHeaderOrNull(String hl7Message) {
         try {
             return com.example.hms.hl7.mllp.Hl7MessageInspector.parseHeader(hl7Message);
         } catch (com.example.hms.hl7.mllp.MllpFieldWidthException refused) {
             // A refused MSH, not an unreadable one: a field wider than its
-            // column. WARN, because the caller's 404 cannot say why and DEBUG is
-            // off in production. Safe to log: the message names the field and
-            // the limit, never a value. An empty or non-MSH body is a different
-            // exception and still falls through to the DEBUG line below.
+            // column. WARN, because DEBUG is off in production. Safe to log and
+            // to answer: the message names the field and the limit, never a
+            // value. An empty or non-MSH body is a different exception and
+            // still falls through to the DEBUG line below.
             log.warn("Inbound HL7v2 ORU^R01 MSH refused: {}", refused.getMessage());
-            return null;
+            throw new com.example.hms.exception.BusinessException(
+                "Invalid MSH: " + refused.getMessage());
         } catch (RuntimeException notReadable) {
             log.debug("Inbound HL7v2 body carries no readable MSH; no replay identity: {}",
                 notReadable.getMessage());

@@ -19,7 +19,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.access.AccessDeniedException;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -280,7 +279,8 @@ class PrescriptionClarificationServiceTest {
                     .thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.resolveClarification(prescriptionId, "ok"))
-                    .isInstanceOf(AccessDeniedException.class);
+                    .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+                    .hasMessageContaining("staff profile at the prescribing hospital");
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PENDING_CLARIFICATION);
         }
 

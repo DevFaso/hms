@@ -868,6 +868,28 @@ class AuthControllerTest {
     }
 
     // =====================================================================
+    // Lockout
+    // =====================================================================
+
+    @Test
+    void login_locked_answers423BeforeAnyPasswordCheck() throws Exception {
+        when(loginAttemptService.remainingLockMs("someone")).thenReturn(90_000L);
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new LoginRequest("someone", "AnyPass1!", null))))
+                .andExpect(status().is(423))
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.containsString("2 minute(s)")));
+
+        // The lock is read once, and the password is never tried: the answer
+        // is the same whether "someone" exists or not.
+        verify(loginAttemptService).remainingLockMs("someone");
+        verify(authenticationManager, never()).authenticate(any());
+    }
+
+    // =====================================================================
     // Disabled-account guidance
     // =====================================================================
 
@@ -922,7 +944,7 @@ class AuthControllerTest {
         // The disabled arm of /auth/login counts failures, so trying the
         // password before verifying accumulates a lockout. Without this reset
         // the link "works" and the next sign-in is still refused with 423.
-        verify(loginAttemptService).resetAttempts("apatient");
+        verify(loginAttemptService).resetAttempts(user.getId());
     }
 
     @Test

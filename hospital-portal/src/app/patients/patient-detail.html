@@ -522,7 +522,18 @@
     }
 
     <!-- ═══ Vitals Tab ═══ -->
-    @if (activeTab() === 'vitals' && canViewVitals()) {
+    @if (activeTab() === 'vitals' && canViewVitals() && !vitalsScoped()) {
+      <!--
+        No hospital scope: the backend refuses the staff vitals read rather
+        than answer across every tenant undisclosed, so the tab does not ask,
+        and says why instead of showing a load failure.
+      -->
+      <div class="empty-state" role="status" data-testid="vitals-no-hospital">
+        <span class="material-symbols-outlined empty-icon" aria-hidden="true">monitor_heart</span>
+        <p>{{ 'PATIENTS.VITALS_NO_HOSPITAL' | translate }}</p>
+      </div>
+    }
+    @if (activeTab() === 'vitals' && canViewVitals() && vitalsScoped()) {
       @if (vitalsLoading()) {
         <div class="loading-state">
           <div class="spinner"></div>

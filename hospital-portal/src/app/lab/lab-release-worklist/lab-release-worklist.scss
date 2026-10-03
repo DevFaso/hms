@@ -133,6 +133,32 @@
     font-weight: 400;
   }
 
+  .source-tag,
+  .status-tag {
+    display: inline-block;
+    margin-right: 0.35rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    background: var(--color-surface-alt, #f3f4f6);
+    color: #374151;
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+
+  .status-tag.status-preliminary {
+    background: #fef3c7;
+    color: #92400e;
+  }
+
+  .control-id {
+    display: inline-block;
+    max-width: 10rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: bottom;
+    white-space: nowrap;
+  }
+
   .critical-tag {
     margin-left: 0.4rem;
     padding: 0.1rem 0.45rem;

@@ -125,6 +125,34 @@ public class PatientChartAccess {
     }
 
     /**
+     * Resolve the patient for a read of their OWN record — the patient portal
+     * and the proxy views, whose caller has already established whose record
+     * it is ({@code PatientPortalServiceImpl} derives the patient from the
+     * authenticated principal, or verifies the proxy grant, before calling).
+     *
+     * <p>Deliberately NOT {@link #require}. That is the staff chart gate: it
+     * asks whether a hospital's staff may open this chart, which is the wrong
+     * question for the patient themselves. With no hospital scope,
+     * {@link #require} admits the patient through its {@link #ownedByCaller}
+     * branch (but not a proxy, who does not own the chart). With a scope it
+     * still runs the record-access policy for a patient actor, so a patient
+     * whose chart is restricted would be refused their own results — that is
+     * the case this method exists for.
+     *
+     * <p>Never call this with a patient id that came from a request: it
+     * authorizes nothing, it only resolves.
+     *
+     * @throws ResourceNotFoundException if no such patient
+     */
+    public Patient requireOwnRecord(UUID patientId) {
+        if (patientId == null) {
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, "<null>");
+        }
+        return patientRepository.findByIdUnscoped(patientId)
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
+    }
+
+    /**
      * The caller is the patient: the chart is linked to the caller's own
      * account. Ownership is the whole bound (design Q1); it admits nobody's
      * chart but their own.

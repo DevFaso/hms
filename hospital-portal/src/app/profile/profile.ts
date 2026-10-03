@@ -656,7 +656,11 @@ export class ProfileComponent implements OnInit {
         this.emailChangePassword.set('');
         this.emailCode.set('');
         this.pendingEmail.set(newEmail);
-        const sent = (res?.delivery ?? []).some((d) => d.outcome === 'SENT');
+        // QUEUED is the normal answer: the code mail goes out from the
+        // server's mail outbox a few seconds later.
+        const sent = (res?.delivery ?? []).some(
+          (d) => d.outcome === 'QUEUED' || d.outcome === 'SENT',
+        );
         if (sent) {
           this.toast.info(this.translate.instant('PROFILE.EMAIL_CODE_SENT', { email: newEmail }));
         } else {

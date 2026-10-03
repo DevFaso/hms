@@ -154,7 +154,7 @@ Not collected.
 | Field                              | Persistence                              | At-rest enc | Roles with read       | Notes                                                  |
 | ---------------------------------- | ---------------------------------------- | ----------- | --------------------- | ------------------------------------------------------ |
 | `LabSpecimen.accessionNumber`      | `lab.lab_specimens.accession_number`     | No          | Clinical roles        | Lab analyzer-issued; per-specimen                      |
-| HL7 v2 MSH-10 message control id   | inbound only — `integration_messages.payload` | No     | Operator + admin      | Inbound message envelope; raw HL7 stored for replay/DLQ |
+| HL7 v2 MSH-10 message control id   | inbound only — `clinical.integration_message_event.payload` | Yes (gcm1) | Operator + admin | Inbound message envelope; raw HL7 stored for replay/DLQ (legacy rows encrypted at startup by `PhiTextEncryptionBackfill`) |
 
 ## §164.514(b)(2)(i)(N) — Web URLs
 
@@ -241,6 +241,8 @@ usages in the JPA model).** A grep of the entity layer
 | `Patient`      | `address`, `address_line1`, `address_line2`, `emergency_contact_name`, `emergency_contact_phone`, `emergency_contact_relationship`, `allergies`, `medical_history_summary`, `care_team_notes`, `chronic_conditions` |
 | `Prescription` | 3 narrative columns (sig / instructions / notes)                                                                                    |
 | `Dispense`     | 1 narrative column                                                                                                                  |
+| `EmpiMergeEvent` | `notes` - an inbound HL7 `ADT^A40` writes both MRNs and the sender's provenance there, and a manual merge note is free text. Legacy plaintext rows are encrypted at startup by `PhiTextEncryptionBackfill`. |
+| `IntegrationMessageEvent` | `payload` - raw partner traffic; an unparseable HL7 message is kept whole (PID and all) as the only diagnostic. Legacy plaintext rows are encrypted at startup by `PhiTextEncryptionBackfill`. Retention is still undecided. |
 
 Plus the bespoke TOTP encryption on `user_mfa_enrollments.totp_secret`
 via `TotpSecretEncryptor` (separate converter, separate key derivation).

@@ -1236,7 +1236,7 @@ class UserServiceImplTest {
             assertThat(target.isActive()).isTrue();
             // No transaction is active in a unit test, so the after-commit
             // callback runs inline — the assertion still pins the behaviour.
-            verify(loginAttemptService).resetAttempts("someone");
+            verify(loginAttemptService).resetAttempts(userId);
         }
 
         @Test
@@ -1247,12 +1247,12 @@ class UserServiceImplTest {
             userService.updateUser(userId, activeFlag(true));
 
             assertThat(target.isActive()).isTrue();
-            verify(loginAttemptService).resetAttempts("someone");
+            verify(loginAttemptService).resetAttempts(userId);
         }
 
         @Test
-        @DisplayName("a new account does not inherit a lockout probed against its name")
-        void creationClearsAnyPreExistingLockout() {
+        @DisplayName("creating an account clears nothing: its id has no lockout to inherit")
+        void creationNeedsNoClear() {
             when(userRepository.findByUsername("newstaff")).thenReturn(Optional.empty());
             when(userRepository.findByEmail("staff@hospital.com")).thenReturn(Optional.empty());
             when(userRepository.findByPhoneNumber("+1234567899")).thenReturn(Optional.empty());
@@ -1291,11 +1291,11 @@ class UserServiceImplTest {
 
             userService.createUserWithRolesAndHospital(req);
 
-            // Failures are recorded for usernames that do not exist, and the
-            // lockout check in /auth/login returns 423 before authentication —
-            // so without this the new holder is refused on their first login
-            // with the credentials just mailed to them.
-            verify(loginAttemptService).resetAttempts("newstaff");
+            // The throttle is keyed on the account id: failures probed against
+            // this name before it existed sit on the name's key, which the
+            // name stops using once an account holds it (pinned in
+            // LoginAttemptServiceTest). Nothing to clear here.
+            verify(loginAttemptService, never()).resetAttempts(any());
         }
 
         @Test
@@ -1313,20 +1313,17 @@ class UserServiceImplTest {
         }
 
         @Test
-        @DisplayName("updateUser clears the key the account will be locked under after a rename")
-        void updateUsesTheRenamedUsername() {
+        @DisplayName("a rename + reactivate clears the account's own lockout, by id")
+        void updateClearsByIdAcrossARename() {
             reactivationTarget(false);
             UpdateUserRequestDTO dto = activeFlag(true);
             dto.setUsername("renamed");
 
             userService.updateUser(userId, dto);
 
-            // The key the account will be locked under from now on — read
-            // after the rename merge, not before. Only that one: the old name
-            // may belong to another account, since the throttle map lowercases
-            // while uq_user_username does not.
-            verify(loginAttemptService).resetAttempts("renamed");
-            verify(loginAttemptService, never()).resetAttempts("someone");
+            // By id: the lockout collected under the old name is the
+            // account's own and is cleared with it; no other account's can be.
+            verify(loginAttemptService).resetAttempts(userId);
         }
 
         private User reactivationTarget(boolean alreadyActive) {

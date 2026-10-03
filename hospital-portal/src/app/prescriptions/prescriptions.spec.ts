@@ -613,7 +613,7 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
       prescriptionId: 'rx-1',
       patientId: 'p-1',
       pharmacyId: 'ph-1',
-      dispensedById: 'u-1',
+      dispensedBy: 'u-1',
       medicationName: 'Amoxicillin',
       quantityRequested: 30,
       quantityDispensed: 30,

@@ -441,9 +441,9 @@ public class UserServiceImpl implements UserService {
                         roleName, hospitalName, activationUrl),
                     emailService::deliversRealEmail);
                 if (sent) {
-                    log.info("📧 Welcome email dispatched to new user '{}'", user.getUsername());
+                    log.info("📧 Welcome email queued for new user '{}'", user.getUsername());
                 } else {
-                    log.warn("⚠️ Failed to send welcome email to '{}'", user.getUsername());
+                    log.warn("⚠️ Failed to queue welcome email for '{}'", user.getUsername());
                 }
             });
         }
@@ -640,21 +640,12 @@ public class UserServiceImpl implements UserService {
         u.setLastName(request.getLastName());
         u.setPhoneNumber(phone);
 
-        // Failures are recorded for usernames that do not exist, so a name
-        // probed before the account was created is already locked — and the
-        // lockout check in /auth/login returns 423 BEFORE authentication, so
-        // nothing about being newly created clears it. Without this the holder
-        // is refused on their very first login with the credentials just
-        // mailed to them, for up to the lock duration.
-        //
-        // (An earlier round removed this on the reasoning that the disabled
-        // arm would keep re-locking the key until activation. That arm is
-        // never reached while the account is locked: the 423 comes first.)
-        //
-        // After commit, like every other throttle write here: a licence
-        // conflict in upsertStaff or the transaction timeout would otherwise
-        // clear the counter for a registration that rolled back.
-        TransactionCallbacks.afterCommit(() -> loginAttemptService.resetAttempts(username));
+        // No throttle clear here. The lockout is keyed on the account id
+        // (LoginAttemptService), and a new account's id has no history:
+        // failures a prober recorded against this name before it existed stay
+        // on the name's own key, which the name stops using the moment an
+        // account holds it. The holder's first login with the credentials just
+        // mailed to them is never refused for someone else's probing.
 
         boolean isPatient = roles.stream().anyMatch(r -> ROLE_PATIENT.equalsIgnoreCase(r.getCode()));
 
@@ -1058,8 +1049,9 @@ public class UserServiceImpl implements UserService {
     public void restoreUser(UUID id) {
         // The same tenant rule as editing: a hospital admin restores only an
         // account whose assignments are all at hospitals they administer. A
-        // soft delete hard-deletes the assignments, so in practice a restore
-        // is a super-admin action (the deleted view is super-admin-only too).
+        // soft delete now DEACTIVATES the assignments rather than deleting
+        // them, so they are still there to decide that by; they come back
+        // inactive, and an administrator reactivates the ones still wanted.
         User user = userRepository.findById(id)
                 .orElseThrow(() -> userNotFound(id));
         if (!accountAccess.canAdminister(user)) {
@@ -1072,8 +1064,8 @@ public class UserServiceImpl implements UserService {
         // A lockout collected while the account was switched off must not
         // survive it being switched on. After commit: a rollback must not
         // leave the counter cleared for an account that stayed deactivated.
-        final String restoredUsername = user.getUsername();
-        TransactionCallbacks.afterCommit(() -> loginAttemptService.resetAttempts(restoredUsername));
+        final UUID restoredId = user.getId();
+        TransactionCallbacks.afterCommit(() -> loginAttemptService.resetAttempts(restoredId));
 
         // Reactivate Staff records that were deactivated when the user was deleted
         List<Staff> staffRecords = staffRepository.findByUserId(id);
@@ -1162,32 +1154,20 @@ public class UserServiceImpl implements UserService {
         }
 
         // Reactivation clears the login lockout, so the holder is not refused
-        // at the moment their account is switched on. The name is read AFTER
-        // the merge above, so the key is the one the account will actually be
-        // locked under, and the clear runs after commit so a failed save
-        // cannot free an account that stayed inactive.
-        //
-        // ONLY that key. A combined rename + reactivate does strand the old
-        // name's record — the lockout collected while the account was inactive
-        // lives under the name it had then, and nothing evicts it until
-        // isLocked() is called for that name after expiry. Clearing it anyway
-        // is the worse trade: the old name may now answer for another account,
-        // since the throttle map lowercases while uq_user_username does not.
-        // The stranded record is covered by the rename entry in tasklist.md.
-        //
-        // A rename cannot land on a case variant of another account:
-        // requireIdentifiersFree, above, refuses any username or email another
-        // account holds in any letter case, so the lowercased throttle key
-        // belongs to this account alone.
+        // at the moment their account is switched on. The throttle is keyed on
+        // the account id, so the clear reaches the lockout whatever name it was
+        // collected under, a combined rename + reactivate included, and never
+        // touches another account's. After commit, so a failed save cannot
+        // free an account that stayed inactive.
         //
         // The transition guard is about not clearing on an ordinary edit; it
         // is NOT an authorization control. Authorization is the caller check
         // at the top of this method: only an administrator of the account
         // reaches here with a status change, since a self-edit cannot make one.
-        final String usernameAfterUpdate = user.getUsername();
+        final UUID reactivatedId = user.getId();
         if (reactivated) {
             TransactionCallbacks.afterCommit(
-                () -> loginAttemptService.resetAttempts(usernameAfterUpdate));
+                () -> loginAttemptService.resetAttempts(reactivatedId));
         }
 
         // Password: only update if a new non-blank password is explicitly provided
@@ -1370,8 +1350,8 @@ public class UserServiceImpl implements UserService {
         // stayed inactive. (Note for whoever wires it up: unlike
         // AuthController#verifyEmail this method does NOT activate the user's
         // ROLE_PATIENT assignments — it only flips the Patient row.)
-        final String verifiedUsername = user.getUsername();
-        TransactionCallbacks.afterCommit(() -> loginAttemptService.resetAttempts(verifiedUsername));
+        final UUID verifiedId = user.getId();
+        TransactionCallbacks.afterCommit(() -> loginAttemptService.resetAttempts(verifiedId));
 
         // Activate the Patient entity to match the now-verified User
         patientRepository.findByUserId(user.getId()).ifPresent(patient -> {

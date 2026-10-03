@@ -1,5 +1,6 @@
 import { computed, signal } from '@angular/core';
 import { RoleContextService } from '../core/role-context.service';
+import { expandRoleEquivalents, roleSatisfies } from '../core/role-equivalence';
 
 /**
  * The scope a stub starts from. Read-only on purpose: the stub copies it into
@@ -94,8 +95,15 @@ export function roleContextStub(initial: RoleContextStubState): RoleContextStub 
     },
     hasRole,
     isReceptionist: () => hasRole('ROLE_RECEPTIONIST') || hasRole('RECEPTIONIST'),
-    // Same rule as the real service: a picked role is the only one that counts.
+    // Same rules as the real service, doctor equivalence included, so a spec
+    // cannot pass on a narrower rule than the page runs. A picked role is the
+    // only one that counts.
     hasAnyActiveRole: (wanted: string[]) => {
+      const active = activeRole();
+      if (active) return roleSatisfies(wanted, active);
+      return expandRoleEquivalents(roles()).some((r) => wanted.includes(r));
+    },
+    hasAnyActiveRoleExactly: (wanted: string[]) => {
       const active = activeRole();
       if (active) return wanted.includes(active);
       return wanted.some((r) => roles().includes(r));

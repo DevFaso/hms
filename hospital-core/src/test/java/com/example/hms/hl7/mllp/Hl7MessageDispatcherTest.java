@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
@@ -360,7 +361,7 @@ class Hl7MessageDispatcherTest {
 
         ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> bodies = ArgumentCaptor.forClass(String.class);
-        verify(messageRecorder, org.mockito.Mockito.times(2)).recordRecurringFailure(
+        verify(messageRecorder, times(2)).recordRecurringFailure(
             any(), any(), any(), any(), bodies.capture(), any(), ids.capture());
 
         assertThat(ids.getAllValues().get(0))
@@ -390,7 +391,7 @@ class Hl7MessageDispatcherTest {
 
         ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> bodies = ArgumentCaptor.forClass(String.class);
-        verify(messageRecorder, org.mockito.Mockito.times(2)).recordRecurringFailure(
+        verify(messageRecorder, times(2)).recordRecurringFailure(
             any(), any(), any(), any(), bodies.capture(), any(), ids.capture());
         assertThat(ids.getAllValues().get(0))
             .isNotNull()
@@ -431,9 +432,33 @@ class Hl7MessageDispatcherTest {
         dispatcher.dispatch(unsupported, "10.0.0.51:1");
 
         ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
-        verify(messageRecorder, org.mockito.Mockito.times(2)).recordRecurringFailure(
+        verify(messageRecorder, times(2)).recordRecurringFailure(
             any(), any(), any(), any(), any(), any(), ids.capture());
         assertThat(ids.getAllValues().get(0)).isNotEqualTo(ids.getAllValues().get(1));
+    }
+
+    @Test
+    void theDispatchersReasonsQuoteTheSendersText() {
+        // The claimed sender pair and MSH-9 are the sender's text inside a
+        // reason an operator reads as ours: quoted and escaped, so neither can
+        // end its slot and write a finding of its own.
+        when(allowlist.resolveHospital(anyString(), anyString()))
+            .thenReturn(Optional.empty())
+            .thenReturn(Optional.of(hospital));
+        String esc = String.valueOf((char) 0x1B);
+        String lineSeparator = String.valueOf((char) 0x2028);
+        String rogue = "MSH|^~\\&|RO" + esc + "[2J|UNK) cross-tenant rejection (x|HMS|HOSP1|20260428||ORU^R01|M-1|P|2.5\r";
+        String unsupported = "MSH|^~\\&|X|Y|HMS|HOSP1|20260428||ZZZ^Z99" + lineSeparator + "forged|C-1|P|2.5\r";
+
+        dispatcher.dispatch(rogue, "10.0.0.1:1");
+        dispatcher.dispatch(unsupported, "10.0.0.1:1");
+
+        ArgumentCaptor<String> reasons = ArgumentCaptor.forClass(String.class);
+        verify(messageRecorder, times(2)).recordRecurringFailure(
+            any(), any(), any(), any(), any(), reasons.capture(), any());
+        assertThat(reasons.getAllValues()).containsExactly(
+            "sender \"RO\\u001b[2J\"/\"UNK) cross-tenant rejection (x\" not allowlisted",
+            "unsupported message type \"ZZZ^Z99\\u2028forged\"");
     }
 
     @Test
@@ -625,5 +650,31 @@ class Hl7MessageDispatcherTest {
             .contains("Invalid MSH: MSH-4 exceeds 180 characters")
             .doesNotContain("FFFF");
         verifyNoInteractions(allowlist, inboundLab, inboundAdt, inboundMerge);
+    }
+
+    @Test
+    void anOverWidthSenderFieldRowNamesTheControlIdTheArEchoes() {
+        // The AR echoes MSH-10, so the dead letter must name it too, or an
+        // operator cannot match the row to the refusal the sender received.
+        String adt = "MSH|^~\\&|" + "A".repeat(181) + "|HOSP1|HMS|HOSP1|20260428||ADT^A08|CTRL-ROW|P|2.5\r";
+
+        dispatcher.dispatch(adt, "10.0.0.74:1");
+
+        verify(messageRecorder).recordRecurringFailure(
+            eq("MLLP:?/?"), isNull(), eq(IntegrationMessageDirection.INBOUND), eq("UNKNOWN"), eq(adt),
+            eq("Invalid MSH: MSH-3 exceeds 180 characters (MSH-10 \"CTRL-ROW\")"),
+            isNull());
+    }
+
+    @Test
+    void anOverWidthControlIdRowNamesNoControlId() {
+        // MSH-10 itself refused: nothing to echo, so nothing in the reason.
+        String adt = "MSH|^~\\&|REG|HOSP1|HMS|HOSP1|20260428||ADT^A08|" + "C".repeat(256) + "|P|2.5\r";
+
+        dispatcher.dispatch(adt, "10.0.0.74:1");
+
+        verify(messageRecorder).recordRecurringFailure(
+            any(), any(), any(), any(), any(),
+            eq("Invalid MSH: MSH-10 exceeds 255 characters"), isNull());
     }
 }

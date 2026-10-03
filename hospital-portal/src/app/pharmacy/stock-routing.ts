@@ -64,6 +64,15 @@ export class StockRoutingComponent implements OnInit {
    */
   private readonly decisionRequests = new Subject<boolean>();
 
+  /**
+   * The history pages, so it needs an order: the endpoint's derived query has
+   * none of its own, and without one "page 2" is not a continuation of page 1
+   * — a row can appear on both or on neither. Newest decision first (what the
+   * backend itself treats as the current one), then the id, which is unique,
+   * so two decisions stamped in the same instant still have one fixed order.
+   */
+  private static readonly DECISION_ORDER = ['decidedAt,desc', 'id,desc'];
+
   constructor() {
     this.decisionRequests
       .pipe(
@@ -75,7 +84,12 @@ export class StockRoutingComponent implements OnInit {
           // the new id, which is what the reset in checkStock is for.
           load
             ? this.svc
-                .listRoutingDecisionsByPrescription(this.prescriptionId, this.decisionsPage, 10)
+                .listRoutingDecisionsByPrescription(
+                  this.prescriptionId,
+                  this.decisionsPage,
+                  10,
+                  StockRoutingComponent.DECISION_ORDER,
+                )
                 .pipe(
                   map((res) => ({ page: res.data, failed: false, cancelled: false })),
                   catchError(() => of({ page: null, failed: true, cancelled: false })),
