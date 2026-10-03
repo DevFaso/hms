@@ -496,7 +496,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
             Counter.builder(name)
                     .tag(TAG_OUTCOME, outcome)
                     .register(meterRegistry)
-                    .increment(amount);
+                    .increment((double) amount);
         } catch (Exception ex) {
             // Metrics must never fail the request.
             log.debug("Failed to record metric {}: {}", name, ex.getMessage());

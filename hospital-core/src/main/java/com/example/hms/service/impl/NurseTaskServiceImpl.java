@@ -94,9 +94,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import jakarta.persistence.EntityNotFoundException;
 
 /**
@@ -635,10 +637,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private Set<UUID> assignedPatientIds(UUID nurseUserId, UUID hospitalId) {
         if (nurseUserId == null || hospitalId == null) return null;
         List<PatientResponseDTO> assigned = nurseDashboardService.getPatientsForNurse(nurseUserId, hospitalId, null);
-        Set<UUID> ids = new HashSet<>();
-        for (PatientResponseDTO p : assigned) {
-            if (p.getId() != null) ids.add(p.getId());
-        }
+        Set<UUID> ids = assigned.stream()
+            .map(PatientResponseDTO::getId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
         return ids.isEmpty() ? null : ids;
     }
 
