@@ -354,6 +354,66 @@ class AdtA40MergeEndToEndIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("A<-B racing B<-A apply ONE merge, never both: the loser finds its survivor merged away")
+    void oppositeDirectionMergesRacingApplyOnlyOne() throws Exception {
+        ExecutorService workers = Executors.newFixedThreadPool(2);
+        try {
+            // Several pairs, so that at least some genuinely overlap. Without
+            // the lock on both rows each claim retires a DIFFERENT identity,
+            // so both win and the pair ends up merged into each other.
+            // The id ORDER of the two locks is not visible here: an unordered
+            // pair deadlocks, the database kills one side, and the survivor
+            // still makes one merge. EmpiServiceImplTest pins the order.
+            for (int attempt = 0; attempt < 8; attempt++) {
+                String run = nextId();
+                String mrnA = "A40OA-" + run;
+                String mrnB = "A40OB-" + run;
+                Patient patientA = patientAt(receiving, receiving);
+                Patient patientB = patientAt(receiving, receiving);
+                EmpiMasterIdentity identityA = identityFor(patientA, receiving, mrnA);
+                EmpiMasterIdentity identityB = identityFor(patientB, receiving, mrnB);
+
+                CountDownLatch go = new CountDownLatch(1);
+                // A survives B on one connection, B survives A on the other.
+                Future<String> aKeepsB = workers.submit(() -> {
+                    go.await();
+                    return dispatcher.dispatch(a40("MSG-OA-" + run, mrnA, mrnB), REMOTE);
+                });
+                Future<String> bKeepsA = workers.submit(() -> {
+                    go.await();
+                    return dispatcher.dispatch(a40("MSG-OB-" + run, mrnB, mrnA), REMOTE);
+                });
+                go.countDown();
+                List<String> answers = List.of(
+                    msa(aKeepsB.get(60, TimeUnit.SECONDS)), msa(bKeepsA.get(60, TimeUnit.SECONDS)));
+
+                Integer merges = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM empi.merge_events WHERE secondary_identity_id IN (?, ?)",
+                    Integer.class, identityA.getId(), identityB.getId());
+                assertThat(merges).as("merge events for pair %s", run).isEqualTo(1);
+                List<String> statuses = jdbcTemplate.queryForList(
+                    "SELECT status FROM empi.master_identities WHERE id IN (?, ?)",
+                    String.class, identityA.getId(), identityB.getId());
+                assertThat(statuses).as("identity statuses for pair %s", run)
+                    .containsExactlyInAnyOrder(EmpiIdentityStatus.ACTIVE.name(), EmpiIdentityStatus.MERGED.name());
+                assertThat(mergeAuditsFor(identityA).size() + mergeAuditsFor(identityB).size())
+                    .as("PATIENT_MERGE audits for pair %s", run).isEqualTo(1);
+                // One applied. The other either ran after the commit (both
+                // MRNs now resolve to the survivor: AA) or waited on the lock
+                // and found its own survivor merged away (the already-merged
+                // refusal: AE).
+                assertThat(answers).anySatisfy(msa -> assertThat(msa).startsWith("MSA|AA|"));
+                assertThat(answers).allSatisfy(msa -> assertThat(msa)
+                    .matches("MSA\\|AA\\|MSG-O[AB]-" + run
+                        + "|MSA\\|AE\\|MSG-O[AB]-" + run + "\\|"
+                        + java.util.regex.Pattern.quote(INVALID_MSA_TEXT)));
+            }
+        } finally {
+            workers.shutdownNow();
+        }
+    }
+
+    @Test
     @DisplayName("a merge that fails when flushed answers its refusal and leaves no SUCCESS audit")
     void flushFailureIsARefusalWithNoSuccessAudit() {
         String run = nextId();

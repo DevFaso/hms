@@ -43,10 +43,10 @@ public class PatientFhirMapper {
 
     /**
      * Every registration's MRN, at every hospital, active or not. Only for a
-     * reader entitled to all of them (a verified super-admin in global view)
-     * and the callers that have not been scoped yet ({@code $everything},
-     * bulk export): the identifier system names the hospital, so each MRN
-     * discloses where else the patient is registered.
+     * reader entitled to all of them (a verified super-admin in global view):
+     * the identifier system names the hospital, so each MRN discloses where
+     * else the patient is registered. {@code $everything} and bulk export
+     * never reach it — both refuse a request without a hospital scope.
      */
     public org.hl7.fhir.r4.model.Patient toFhir(Patient src) {
         return map(src, null, true);

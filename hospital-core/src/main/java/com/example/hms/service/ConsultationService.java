@@ -19,6 +19,15 @@ public interface ConsultationService {
 
     List<ConsultationResponseDTO> getConsultationsForPatient(UUID patientId);
 
+    /**
+     * The portal patient's own consultations, at every hospital that holds any
+     * (design Q1: a patient is bounded by ownership, not by a hospital). No
+     * hospital scope is read. Callers MUST have bound {{@code patientId}} to the
+     * principal first: PatientPortalServiceImpl resolves it from the caller
+     * (or verifies a proxy grant); nothing else calls this.
+     */
+    List<ConsultationResponseDTO> getConsultationsForPortalPatient(UUID patientId);
+
     List<ConsultationResponseDTO> getConsultationsForHospital(UUID hospitalId, ConsultationStatus status);
 
     List<ConsultationResponseDTO> getAllConsultations(ConsultationStatus status);

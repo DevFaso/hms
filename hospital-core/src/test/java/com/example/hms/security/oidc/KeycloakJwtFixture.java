@@ -99,6 +99,10 @@ public final class KeycloakJwtFixture {
             claims.claim("hospital_id", spec.hospitalId());
         }
 
+        if (spec.appUserId() != null) {
+            claims.claim("appUserId", spec.appUserId());
+        }
+
         if (!spec.roleAssignments().isEmpty()) {
             claims.claim("role_assignments", spec.roleAssignments());
         }
@@ -131,7 +135,8 @@ public final class KeycloakJwtFixture {
             Map<String, List<String>> clientRoles,
             String hospitalId,
             List<String> roleAssignments,
-            Duration ttl
+            Duration ttl,
+            String appUserId
     ) {
         public TokenSpec {
             if (audiences == null || audiences.isEmpty()) {
@@ -166,42 +171,53 @@ public final class KeycloakJwtFixture {
                     Map.of(),
                     null,
                     List.of(),
-                    Duration.ofMinutes(15));
+                    Duration.ofMinutes(15),
+                    null);
         }
 
         public TokenSpec withRealmRoles(List<String> roles) {
             return new TokenSpec(issuer, subject, preferredUsername, email, audiences,
-                    authorizedParty, roles, clientRoles, hospitalId, roleAssignments, ttl);
+                    authorizedParty, roles, clientRoles, hospitalId, roleAssignments, ttl, appUserId);
         }
 
         public TokenSpec withClientRoles(Map<String, List<String>> roles) {
             return new TokenSpec(issuer, subject, preferredUsername, email, audiences,
-                    authorizedParty, realmRoles, roles, hospitalId, roleAssignments, ttl);
+                    authorizedParty, realmRoles, roles, hospitalId, roleAssignments, ttl, appUserId);
         }
 
         public TokenSpec withIssuer(String newIssuer) {
             return new TokenSpec(newIssuer, subject, preferredUsername, email, audiences,
-                    authorizedParty, realmRoles, clientRoles, hospitalId, roleAssignments, ttl);
+                    authorizedParty, realmRoles, clientRoles, hospitalId, roleAssignments, ttl, appUserId);
         }
 
         public TokenSpec withAudiences(List<String> newAudiences) {
             return new TokenSpec(issuer, subject, preferredUsername, email, newAudiences,
-                    authorizedParty, realmRoles, clientRoles, hospitalId, roleAssignments, ttl);
+                    authorizedParty, realmRoles, clientRoles, hospitalId, roleAssignments, ttl, appUserId);
         }
 
         public TokenSpec withHospitalId(String newHospitalId) {
             return new TokenSpec(issuer, subject, preferredUsername, email, audiences,
-                    authorizedParty, realmRoles, clientRoles, newHospitalId, roleAssignments, ttl);
+                    authorizedParty, realmRoles, clientRoles, newHospitalId, roleAssignments, ttl, appUserId);
         }
 
         public TokenSpec withRoleAssignments(List<String> newRoleAssignments) {
             return new TokenSpec(issuer, subject, preferredUsername, email, audiences,
-                    authorizedParty, realmRoles, clientRoles, hospitalId, newRoleAssignments, ttl);
+                    authorizedParty, realmRoles, clientRoles, hospitalId, newRoleAssignments, ttl, appUserId);
+        }
+
+        /**
+         * The local account the token names: {@code appUserId}, the one identity
+         * link the backend reads, and the username it must match.
+         */
+        public TokenSpec linkedTo(UUID newAppUserId, String username) {
+            return new TokenSpec(issuer, subject, username, email, audiences,
+                    authorizedParty, realmRoles, clientRoles, hospitalId, roleAssignments, ttl,
+                    newAppUserId == null ? null : newAppUserId.toString());
         }
 
         public TokenSpec withTtl(Duration newTtl) {
             return new TokenSpec(issuer, subject, preferredUsername, email, audiences,
-                    authorizedParty, realmRoles, clientRoles, hospitalId, roleAssignments, newTtl);
+                    authorizedParty, realmRoles, clientRoles, hospitalId, roleAssignments, newTtl, appUserId);
         }
     }
 }

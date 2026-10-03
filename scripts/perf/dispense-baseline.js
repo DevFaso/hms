@@ -43,11 +43,13 @@ const PATIENT_ID = __ENV.PATIENT_ID || '';
 const PHARMACY_ID = __ENV.PHARMACY_ID || '';
 const STOCK_LOT_ID = __ENV.STOCK_LOT_ID || '';
 const MEDICATION_CATALOG_ITEM_ID = __ENV.MEDICATION_CATALOG_ITEM_ID || '';
+const HOSPITAL_ID = __ENV.HOSPITAL_ID || '';
 
 const HEADERS = {
   'Content-Type': 'application/json',
   Accept: 'application/json',
   ...(AUTH_TOKEN ? { Authorization: `Bearer ${AUTH_TOKEN}` } : {}),
+  ...(HOSPITAL_ID ? { 'X-Hospital-Id': HOSPITAL_ID } : {}),
 };
 
 const writeScenarioEnabled = Boolean(

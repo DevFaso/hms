@@ -13,10 +13,14 @@ schema-per-tenant for high-isolation deployments.
 
 ### `HospitalContext` (thread-local)
 
-- Set by `KeycloakHospitalContextFilter` on every authenticated request
-  from the JWT's `hospital_id` claim (resolved via
-  `KeycloakHospitalContextResolver`).
-- Read inside services + repositories via `HospitalContextHolder.getCurrentHospitalId()`.
+- Set by BOTH auth filters (`JwtAuthenticationFilter`,
+  `KeycloakHospitalContextFilter`) from ONE live computation,
+  `ActingScopeResolver.liveContext`: the caller's active assignments read
+  from the table on every request. No token claim (`hospital_id`,
+  `role_assignments`, `primaryHospitalId`, `isSuperAdmin`) is an
+  authorization input. On Keycloak the local account comes only from the
+  `appUserId` claim (`scripts/keycloak-migration` backfills it).
+- Read through `ActingScopeResolver` (below), never the raw fields.
 - **Worker threads (MLLP, schedulers, Kafka consumers) have NO context** —
   they must resolve the hospital from the message envelope and pass it
   explicitly.
@@ -92,25 +96,49 @@ tracked as a defect to fix.
 
 ### Resolving the tenant
 
-What holds on every path:
+One resolver, `ActingScopeResolver` (docs/security/tenant-resolution.md). Its
+answer is an `ActingScope`, never a meaningful `null`:
 
-- **Two tenant resolvers exist, with different super-admin semantics** —
-  `RoleValidator.requireActiveHospitalId()` and
-  `ControllerAuthUtils.resolveHospitalScope`. That inconsistency is
-  tracked as debt.
-- **Resolve through the endpoint's own resolver.** Never hand-roll a read
-  of the raw hospital context.
-- **Refuse before any lookup when no tenant resolves.** Decided before
-  anything is looked up, the refusal is the same for every identifier the
-  caller could name, so it confirms nothing.
-- **A cross-tenant mismatch always answers exactly like a miss** — the
-  gate above.
+- **`Pinned(hospital)`** — the hospital the caller named (`X-Hospital-Id`,
+  or a controller's `?hospitalId=` / path variable via `narrowTo`), else
+  the only one they hold.
+- **`Global`** — only a VERIFIED super-admin (a live active SUPER_ADMIN
+  assignment) who named no hospital. Read-only: writes call
+  `requirePinned()`.
+- **`PatientOwned`** — a patient-only caller (ROLE_PATIENT and nothing
+  else) who named no hospital, however many hospitals registered them.
+  Bounded by ownership, not by a hospital (design Q1): every adapter that
+  needs "the" hospital refuses it (403 `PATIENT_OWNED`), never `null`
+  (null means an unscoped super-admin). A patient-reached read uses an
+  explicit owner variant filtered by the caller's own patient id
+  (`...ForPortalPatient`, `PatientChartAccess` admits the chart's owner);
+  a patient write takes its hospital from the record it acts on, or from
+  the body's hospital checked against the patient's registrations.
+- **`Refused(reason)`** — `AMBIGUOUS` (several hospitals, none named;
+  never "the newest"), `NO_HOSPITAL`, `NO_LOCAL_USER`, or, for a hospital
+  named explicitly, `NOT_PERMITTED` / `NO_LONGER_PERMITTED` (403 with the
+  reason; a refused header is answered by the filter before any
+  controller).
 
-The detail is deliberately omitted until the two resolvers are unified:
-what each returns for an unpinned super-admin, which flows are exempt, and
-when a null scope may mean a global view. The code has no single rule for
-prose to state, and every attempt to write one here contradicted itself.
-Do not re-add it; test the case on the endpoint instead.
+Rules:
+
+- **Services** call `RoleValidator.requireActiveHospitalId()` (the adapter:
+  pinned → id, global → `null`, refused → `HOSPITAL_CONTEXT_REQUIRED`) or
+  `ActingScopeResolver.requirePinned()` when global view must not reach
+  them. Code that cannot take the bean uses
+  `ActingScopeResolver.pinnedHospitalIdOrNull()`.
+- **Controllers** call `ControllerAuthUtils.resolveHospitalScope`; a
+  handler parameter named `hospitalId` is narrowed before the handler runs
+  by `HospitalIdNarrowingInterceptor`, unless the handler carries
+  `@HospitalScopeExempt(reason = ...)`.
+- **The scope is read once.** The first consumer seals it; a `narrowTo` to
+  a different hospital afterwards is an `IllegalStateException`.
+- **Refuse before any lookup when no tenant resolves**, and **a
+  cross-tenant mismatch answers exactly like a miss** (the gate above).
+- `ActingScopeCoverageTest` fails a new raw `getActiveHospitalId()` read,
+  a local `ctx.isSuperAdmin()` test or a "newest assignment" pick outside
+  its frozen list; `HospitalIdParameterCoverageTest` freezes the exempt
+  handlers. Tests set the context with `ActingScopeTestSupport`.
 
 `PatientHospitalRegistration` is the authoritative table. A patient can
 be registered at multiple hospitals over time; never assume a single
@@ -118,13 +146,19 @@ home tenant.
 
 ## Audit cross-tenant attempts
 
-`CrossTenantReadAudit` (`security/audit/CrossTenantReadAudit.java`) is
-**not** a rejection audit, whatever its name suggests. It records one thing:
-a *successful* super-admin read spanning tenants — it returns early for any
-other caller and writes `DATA_ACCESS` with status `SUCCESS`. This section
-used to say every cross-tenant rejection MUST emit it; followed literally,
-that records nothing for an ordinary user and a false successful-read row
-for a super-admin. No rejection path emits it, and none should.
+`CrossTenantReadAudit` (`security/audit/CrossTenantReadAudit.java`) writes
+two kinds of row:
+
+- **Global-view reads** — one `DATA_ACCESS` / `SUCCESS` row per request a
+  verified super-admin served in global view (`GlobalViewAuditInterceptor`,
+  from the final scope, ids only), or the view's own labelled row from
+  `recordCrossTenantRead`. A super-admin pinned to a hospital writes none.
+- **Refusals of an explicitly named hospital** — `recordRefusal`, called by
+  the resolver for a refused header or `narrowTo`: `DATA_ACCESS` /
+  `REJECTED`, reason `NOT_PERMITTED` (a hospital never held: the probe) or
+  `NO_LONGER_PERMITTED` (a stale chip), deduplicated per actor, hospital and
+  reason per hour. A service's own cross-tenant 404 (the gate above) is not
+  a named-hospital refusal and does not call it.
 
 The MLLP inbound paths have no principal on the worker thread and record a
 refusal on an `integration_message_event` row instead. The ADT and A40
@@ -174,17 +208,11 @@ an explicit unscoped-justification comment and an audit emission.
 For aggregate rollups that never expose patient-level rows (e.g. the
 row-32 KPI dashboard — `KpiDashboardServiceImpl`), the contract is:
 
-1. Resolve the active hospital via
-   `RoleValidator.requireActiveHospitalId()` (or its empty-rollup
-   variant), **not** raw
-   `HospitalContextHolder.getContextOrEmpty().getActiveHospitalId()`.
-   For a real super-admin in global view, the raw context can still
-   carry a JWT-derived primary hospital — only `RoleValidator`
-   explicitly drops that value when no `X-Hospital-Id` override was
-   sent. The row-32 foundation pass read the raw context and Copilot
-   flagged it (PR #341 Medium severity): an unpinned super-admin
-   would receive one hospital's KPIs instead of the documented
-   empty rollup. Fix this before flipping row 32 to `completed`.
+1. Resolve the hospital via `ActingScopeResolver.pinnedHospitalIdOrNull()`
+   (or `RoleValidator.requireActiveHospitalId()`), never the raw
+   `getActiveHospitalId()`: the row-32 foundation pass read the raw
+   context, and for a super-admin in global view that was an incidental
+   assignment (PR #341), which is why the ratchet now forbids it.
 2. **Don't** thread `hospitalId` through the controller signature —
    the dashboard is an implicit-context endpoint by design. Clients
    set the hospital via `X-Hospital-Id` (or via the JWT for normal
@@ -263,9 +291,9 @@ if (tenant == null) {
 // Then the ownership check, answering a mismatch exactly like a miss.
 ```
 
-Caught on `FhirBulkExportService.getJob` in PR #351. This skill does not
-name any service as a model for the null case: none follows one rule
-reliably, for the reason given under "Resolving the tenant".
+Caught on `FhirBulkExportService.getJob` in PR #351. With the one resolver
+the rule is `requirePinned()` (or `pinnedHospitalIdOrNull()` and refuse on
+`null`) before the lookup.
 
 The exception: read-only aggregate dashboards (row 32 KPI) where
 the documented behaviour is "super-admin without X-Hospital-Id

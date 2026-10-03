@@ -123,15 +123,17 @@
                 @for (user of filteredUsers(); track user.id) {
                   <button class="user-item" (click)="startConversationWith(user)">
                     <div class="conv-avatar">
-                      {{ getInitials(user.firstName + ' ' + user.lastName) }}
+                      {{ getInitials(user.name) }}
                     </div>
                     <div class="user-item-info">
-                      <span class="user-item-name">{{ user.firstName }} {{ user.lastName }}</span>
+                      <span class="user-item-name">{{ user.name }}</span>
                       <span class="user-item-role">
                         @if (user.roleName) {
                           {{ user.roleName | roleLabel }}
-                        } @else {
+                        } @else if (user.profileType) {
                           {{ user.profileType }}
+                        } @else {
+                          {{ user.subtitle }}
                         }
                       </span>
                     </div>
@@ -142,7 +144,11 @@
             } @else {
               <div class="new-conv-empty">
                 <span class="material-symbols-outlined">group_off</span>
-                <p>{{ 'CHAT.NO_USERS_FOUND' | translate }}</p>
+                @if (noRecipientsYet()) {
+                  <p>{{ 'CHAT.NO_MESSAGE_RECIPIENTS' | translate }}</p>
+                } @else {
+                  <p>{{ 'CHAT.NO_USERS_FOUND' | translate }}</p>
+                }
               </div>
             }
           </div>

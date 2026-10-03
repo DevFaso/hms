@@ -1,5 +1,6 @@
 package com.example.hms.fhir.provider;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import ca.uhn.fhir.rest.annotation.IdParam;
 import ca.uhn.fhir.rest.annotation.OptionalParam;
 import ca.uhn.fhir.rest.annotation.Read;
@@ -20,7 +21,6 @@ import com.example.hms.fhir.write.ObservationFhirWriteService;
 import com.example.hms.model.LabResult;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
-import com.example.hms.security.context.HospitalContextHolder;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.OperationOutcome;
@@ -159,7 +159,7 @@ public class ObservationFhirResourceProvider implements IResourceProvider {
      * write path.
      */
     private static UUID requireHospitalScope() {
-        UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
+        UUID hospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
         if (hospitalId == null) {
             OperationOutcome outcome = new OperationOutcome();
             outcome.addIssue()

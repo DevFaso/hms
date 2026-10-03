@@ -1,5 +1,7 @@
 package com.example.hms.integration;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
+import com.example.hms.security.TenantLifecycleGate;
 import com.example.hms.BaseIT;
 import com.example.hms.cdshooks.service.CdsHookRegistry;
 import com.example.hms.enums.AllergySeverity;
@@ -105,15 +107,27 @@ class CdsHooksInvokeSecurityIT extends BaseIT {
     @MockitoBean private RecordAccessPolicy recordAccessPolicy;
     @MockitoBean private PatientAllergyRepository allergyRepository;
     @MockitoBean private PatientProblemRepository problemRepository;
+    @Autowired private com.example.hms.repository.HospitalRepository hospitalRepository;
+    @Autowired private com.example.hms.repository.UserRepository userRepository;
+    @Autowired private com.example.hms.repository.RoleRepository roleRepository;
+    @Autowired private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Autowired private com.example.hms.repository.AuditEventLogRepository auditEventLogRepository;
+    /** Real local accounts: the Keycloak path places a caller by the appUserId account's live assignments. */
+    private com.example.hms.security.tenant.LinkedTestAccounts accounts;
+    @Autowired private com.example.hms.security.IdleSessionTracker idleSessionTracker;
 
-    private final UUID hospitalA = UUID.randomUUID();
-    private final UUID hospitalB = UUID.randomUUID();
+    private UUID hospitalA;
+    private UUID hospitalB;
     /** Registered at hospital A only. */
     private final UUID patientAtA = UUID.randomUUID();
     private final UUID unknownPatient = UUID.randomUUID();
 
     @BeforeEach
     void seedTheChart() {
+        accounts = new com.example.hms.security.tenant.LinkedTestAccounts(
+            hospitalRepository, userRepository, roleRepository, assignmentRepository, auditEventLogRepository);
+        hospitalA = accounts.hospital("CDS A").getId();
+        hospitalB = accounts.hospital("CDS B").getId();
         when(patientRepository.findByIdUnscoped(patientAtA)).thenReturn(Optional.of(patient(patientAtA, false)));
         when(patientRepository.findByIdUnscoped(unknownPatient)).thenReturn(Optional.empty());
         when(registrationRepository.existsByPatientIdAndHospitalId(patientAtA, hospitalA)).thenReturn(true);
@@ -130,6 +144,11 @@ class CdsHooksInvokeSecurityIT extends BaseIT {
             .build();
         when(allergyRepository.findByPatient_Id(patientAtA)).thenReturn(List.of(allergy));
         when(problemRepository.findByPatient_Id(patientAtA)).thenReturn(List.of(problem));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void removeTheAccounts() {
+        accounts.cleanUp();
     }
 
     private Patient patient(UUID id, boolean restricted) {
@@ -174,7 +193,7 @@ class CdsHooksInvokeSecurityIT extends BaseIT {
     @Test
     @DisplayName("a doctor at the patient's hospital gets the allergy and problem-list cards")
     void clinicianAtThePatientsHospitalGetsTheCards() throws Exception {
-        String doctor = token("doctor-a", UUID.randomUUID(), hospitalA, "DOCTOR");
+        String doctor = linkedToken("doctor-a", hospitalA, "DOCTOR");
 
         MvcResult summary = invoke(doctor, "hms-patient-view", patientAtA);
         assertThat(summary.getResponse().getStatus()).isEqualTo(200);
@@ -190,7 +209,7 @@ class CdsHooksInvokeSecurityIT extends BaseIT {
     @Test
     @DisplayName("a patient token is refused every CDS service, and no chart is read")
     void patientTokenIsRefused() throws Exception {
-        String patient = token("patient001", UUID.randomUUID(), hospitalA, "PATIENT");
+        String patient = linkedToken("patient001", hospitalA, "PATIENT");
         for (String serviceId : SERVICES.keySet()) {
             assertThat(invoke(patient, serviceId, patientAtA).getResponse().getStatus())
                 .as(serviceId).isEqualTo(403);
@@ -203,7 +222,7 @@ class CdsHooksInvokeSecurityIT extends BaseIT {
     @Test
     @DisplayName("a receptionist is refused too — the cards are clinical")
     void receptionistIsRefused() throws Exception {
-        String receptionist = token("desk-a", UUID.randomUUID(), hospitalA, "RECEPTIONIST");
+        String receptionist = linkedToken("desk-a", hospitalA, "RECEPTIONIST");
         for (String serviceId : SERVICES.keySet()) {
             assertThat(invoke(receptionist, serviceId, patientAtA).getResponse().getStatus())
                 .as(serviceId).isEqualTo(403);
@@ -213,7 +232,7 @@ class CdsHooksInvokeSecurityIT extends BaseIT {
     @Test
     @DisplayName("a doctor at another hospital gets the same answer for A's patient as for an unknown one, from every service")
     void foreignPatientAnswersAsUnknown() throws Exception {
-        String doctorB = token("doctor-b", UUID.randomUUID(), hospitalB, "DOCTOR");
+        String doctorB = linkedToken("doctor-b", hospitalB, "DOCTOR");
         for (String serviceId : SERVICES.keySet()) {
             MvcResult foreign = invoke(doctorB, serviceId, patientAtA);
             MvcResult unknown = invoke(doctorB, serviceId, unknownPatient);
@@ -233,7 +252,7 @@ class CdsHooksInvokeSecurityIT extends BaseIT {
         when(patientRepository.findByIdUnscoped(patientAtA)).thenReturn(Optional.of(patient(patientAtA, true)));
         when(recordAccessPolicy.decide(any(), eq(patientAtA), eq(hospitalA))).thenAnswer(inv -> RecordAccessDecision.refused(
             patientAtA, hospitalA, inv.getArgument(0), RecordAccessDenialReason.CHART_RESTRICTED, null));
-        String doctor = token("doctor-a", UUID.randomUUID(), hospitalA, "DOCTOR");
+        String doctor = linkedToken("doctor-a", hospitalA, "DOCTOR");
 
         MvcResult restricted = invoke(doctor, "hms-patient-view", patientAtA);
         MvcResult unknown = invoke(doctor, "hms-patient-view", unknownPatient);
@@ -252,6 +271,18 @@ class CdsHooksInvokeSecurityIT extends BaseIT {
     }
 
     // ── token minting (as PatientSubjectReadSecurityIT) ────────────────────
+
+    /**
+     * A token for a real local account holding {@code roles} at {@code hospitalId}: the
+     * appUserId claim names it and preferred_username matches it, as the one tenant resolver
+     * requires; the hospital claims are not read.
+     */
+    private String linkedToken(String username, UUID hospitalId, String... roles) {
+        com.example.hms.model.User user = accounts.userAt(username, hospitalId, roles);
+        // The account is linked, so the idle gate now applies on this path too.
+        idleSessionTracker.touch(user.getId());
+        return token(user.getUsername(), user.getId(), hospitalId, roles);
+    }
 
     private static String token(String username, UUID appUserId, UUID hospitalId, String... realmRoles) {
         Instant now = Instant.now();
@@ -313,9 +344,12 @@ class CdsHooksInvokeSecurityIT extends BaseIT {
 
         @Bean
         KeycloakHospitalContextFilter keycloakHospitalContextFilter(KeycloakHospitalContextResolver resolver,
+                                                                   ActingScopeResolver actingScopeResolver,
                                                                    IdleSessionGate idleSessionGate,
+                                                                   TenantLifecycleGate tenantLifecycleGate,
                                                                    UserRepository userRepository) {
-            return new KeycloakHospitalContextFilter(resolver, idleSessionGate, userRepository);
+            return new KeycloakHospitalContextFilter(resolver, actingScopeResolver, idleSessionGate,
+                tenantLifecycleGate, userRepository);
         }
     }
 }

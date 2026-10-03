@@ -1,9 +1,9 @@
 package com.example.hms.controller;
 
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.HospitalScopeRefusedException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.User;
-import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.DashboardConfigResponseDTO;
 import com.example.hms.payload.dto.StaffResponseDTO;
@@ -22,6 +22,10 @@ import com.example.hms.payload.dto.clinical.RoomedPatientDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import com.example.hms.service.ClinicalDashboardService;
 import com.example.hms.service.DashboardConfigService;
 import com.example.hms.service.DoctorWorklistService;
@@ -38,8 +42,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import com.example.hms.security.context.HospitalContext;
-import com.example.hms.security.context.HospitalContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
@@ -60,6 +62,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -124,7 +127,8 @@ class MeControllerTest {
     void setUp() {
         controller = new MeController(hospitalRepository, userRepository, assignmentRepository,
                 clinicalDashboardService, staffService, dashboardConfigService,
-                doctorWorklistService, patientFlowService, resultReviewService, patientSnapshotService);
+                doctorWorklistService, patientFlowService, resultReviewService, patientSnapshotService,
+                ActingScopeTestSupport.resolver());
 
         testUserId = UUID.randomUUID();
         testHospitalId = UUID.randomUUID();
@@ -133,14 +137,32 @@ class MeControllerTest {
         Jwt jwt = Jwt.withTokenValue(TEST_TOKEN_VALUE)
                 .header("alg", "none")
                 .claim("sub", testUserId.toString())
+                .claim("appUserId", testUserId.toString())
                 .build();
         doctorAuth = new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority(ROLE_DOCTOR)));
 
         Jwt midwifeJwt = Jwt.withTokenValue(TEST_TOKEN_VALUE + "-midwife")
                 .header("alg", "none")
                 .claim("sub", testUserId.toString())
+                .claim("appUserId", testUserId.toString())
                 .build();
         midwifeAuth = new JwtAuthenticationToken(midwifeJwt, List.of(new SimpleGrantedAuthority(ROLE_MIDWIFE)));
+        // As KeycloakHospitalContextFilter leaves it: the appUserId it verified
+        // for this principal is on the context (both tokens name testUserId).
+        linkTestUser();
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearHospitalContext() {
+        HospitalContextHolder.clear();
+    }
+
+    /** Merge the filter's verified link for the test tokens into the current context. */
+    private void linkTestUser() {
+        HospitalContextHolder.setContext(HospitalContextHolder.getContextOrEmpty().toBuilder()
+                .principalUserId(testUserId)
+                .principalUsername(testUserId.toString())
+                .build());
     }
 
     private static <T> T requireBody(ResponseEntity<T> response) {
@@ -570,10 +592,9 @@ class MeControllerTest {
     // ========== User ID Resolution Tests ==========
 
     @Test
-    void resolveUserId_fromJwtSub_shouldExtractUserId() {
-        // Arrange - already set up in @BeforeEach with testUserId in JWT
+    void resolveUserId_fromAppUserIdClaim_shouldExtractUserId() {
+        // Arrange - the tokens set up in @BeforeEach carry appUserId = testUserId
 
-        // Create a service call that will trigger resolveUserId
         when(clinicalDashboardService.getOnCallStatus(testUserId))
                 .thenReturn(OnCallStatusDTO.builder().isOnCall(false).build());
 
@@ -582,6 +603,31 @@ class MeControllerTest {
 
         // Assert
         verify(clinicalDashboardService).getOnCallStatus(testUserId);
+    }
+
+    @Test
+    void resolveUserId_neverReadsTheKeycloakSubjectAsALocalId() {
+        // A Keycloak subject is a Keycloak UUID and matches no users row: it must
+        // not be taken for the local id (it used to be, here). With no
+        // appUserId the controller falls back to the principal name lookup.
+        UUID keycloakSubject = UUID.randomUUID();
+        Jwt jwt = Jwt.withTokenValue(TEST_TOKEN_VALUE)
+                .header("alg", "none")
+                .claim("sub", keycloakSubject.toString())
+                .build();
+        JwtAuthenticationToken auth = new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority(ROLE_DOCTOR)));
+        User local = new User();
+        local.setId(testUserId);
+        when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(
+                keycloakSubject.toString(), keycloakSubject.toString(), keycloakSubject.toString()))
+                .thenReturn(Optional.of(local));
+        when(clinicalDashboardService.getOnCallStatus(testUserId))
+                .thenReturn(OnCallStatusDTO.builder().isOnCall(false).build());
+
+        controller.getOnCallStatus(auth);
+
+        verify(clinicalDashboardService).getOnCallStatus(testUserId);
+        verify(clinicalDashboardService, never()).getOnCallStatus(keycloakSubject);
     }
 
     @Test
@@ -625,6 +671,7 @@ class MeControllerTest {
         Jwt jwt = Jwt.withTokenValue(TEST_TOKEN_VALUE)
                 .header("alg", "none")
                 .claim("sub", testUserId.toString())
+                .claim("appUserId", testUserId.toString())
                 .build();
         JwtAuthenticationToken receptionistAuth = new JwtAuthenticationToken(jwt,
                 List.of(new SimpleGrantedAuthority(ROLE_RECEPTIONIST)));
@@ -654,35 +701,46 @@ class MeControllerTest {
     }
 
     @Test
-    void myHospital_withoutHospitalIdInJwt_shouldFallbackToAssignment() {
-        // Arrange
-        Hospital hospital = new Hospital();
-        hospital.setId(testHospitalId);
-        hospital.setName(HOSPITAL_NAME_TEST);
-
-        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
-        assignment.setHospital(hospital);
-        assignment.setActive(true);
-
+    void myHospital_withoutAPinnedHospital_isRefusedNotGivenTheNewestAssignment() {
+        // A caller holding several hospitals who named none has no hospital: the
+        // "newest assignment" fallback is gone (design Q2, option A).
         Jwt jwt = Jwt.withTokenValue(TEST_TOKEN_VALUE)
                 .header("alg", "none")
                 .claim("sub", testUserId.toString())
+                .claim("appUserId", testUserId.toString())
                 .build();
         JwtAuthenticationToken receptionistAuth = new JwtAuthenticationToken(jwt,
                 List.of(new SimpleGrantedAuthority(ROLE_RECEPTIONIST)));
+        HospitalContextHolder.setContext(HospitalContext.builder()
+                .principalUserId(testUserId)
+                .permittedHospitalIds(Set.of(testHospitalId, UUID.randomUUID()))
+                .scopeRefusal(ActingScope.Reason.AMBIGUOUS)
+                .build());
+        try {
+            assertThrows(BusinessException.class, () -> controller.myHospital(receptionistAuth));
+        } finally {
+            HospitalContextHolder.clear();
+        }
+        verifyNoInteractions(assignmentRepository, hospitalRepository);
+    }
 
-        when(assignmentRepository.findAllDetailedByUserId(testUserId))
-                .thenReturn(List.of(assignment));
-        when(hospitalRepository.findById(testHospitalId)).thenReturn(Optional.of(hospital));
-
-        // Act
-        ResponseEntity<MeController.HospitalMinimalDTO> response = controller.myHospital(receptionistAuth);
-
-        // Assert
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        MeController.HospitalMinimalDTO body = requireBody(response);
-        assertEquals(testHospitalId, body.id());
-        verify(assignmentRepository).findAllDetailedByUserId(testUserId);
+    @Test
+    void perPatientReads_askAGlobalViewSuperAdminToSelectAHospital() {
+        // Design Q1, option B: a super-admin in global view is asked to select a
+        // hospital on per-patient reads, never scoped to an incidental
+        // assignment and told the patient does not exist (D3).
+        UUID patientId = UUID.randomUUID();
+        ActingScopeTestSupport.globalSuperAdmin(testUserId);
+        linkTestUser();
+        try {
+            assertThrows(HospitalScopeRefusedException.class,
+                () -> controller.getPatientSnapshot(patientId, doctorAuth));
+            assertThrows(HospitalScopeRefusedException.class,
+                () -> controller.getResultReviewQueue(doctorAuth));
+        } finally {
+            HospitalContextHolder.clear();
+        }
+        verifyNoInteractions(patientSnapshotService, resultReviewService, assignmentRepository);
     }
 
     // ========== GET /api/me/critical-strip ==========
@@ -784,6 +842,7 @@ class MeControllerTest {
                 .activeHospitalId(testHospitalId)
                 .permittedHospitalIds(Set.of(testHospitalId))
                 .build());
+        linkTestUser();
         ResponseEntity<ApiResponseWrapper<List<DoctorResultQueueItemDTO>>> response;
         try {
             response = controller.getResultReviewQueue(doctorAuth);

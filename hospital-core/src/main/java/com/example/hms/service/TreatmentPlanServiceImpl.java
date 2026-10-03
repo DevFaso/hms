@@ -131,6 +131,13 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<TreatmentPlanResponseDTO> listForPortalPatient(UUID patientId, Pageable pageable) {
+        return treatmentPlanRepository.findAllByPatientId(patientId, pageable)
+            .map(treatmentPlanMapper::toResponseDTO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Page<TreatmentPlanResponseDTO> listByPatient(UUID patientId, Pageable pageable) {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null) {

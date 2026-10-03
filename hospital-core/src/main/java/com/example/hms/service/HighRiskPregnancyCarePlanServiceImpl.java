@@ -47,6 +47,7 @@ import com.example.hms.security.context.HospitalContextHolder;
 @Transactional
 public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCarePlanService {
     private static final String PATIENT_NOT_FOUND_KEY = "patient.notFound";
+    private static final String CARE_PLAN_NOT_FOUND_KEY = "highRiskPregnancy.carePlan.notFound";
 
 
     private static final Logger log = LoggerFactory.getLogger(HighRiskPregnancyCarePlanServiceImpl.class);
@@ -77,6 +78,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
     private final Clock clock;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    private final com.example.hms.utility.RoleValidator roleValidator;
 
     @Override
     public HighRiskPregnancyCarePlanResponseDTO createPlan(HighRiskPregnancyCarePlanRequestDTO request, String username) {
@@ -110,7 +112,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
         User user = getUserOrThrow(username);
         assertProviderAccess(user);
 
-        HighRiskPregnancyCarePlan plan = findPlanOrThrow(planId);
+        HighRiskPregnancyCarePlan plan = findPlanInActingHospital(planId);
         ensurePatientBelongsToHospital(plan.getPatient(), plan.getHospital().getId());
 
         mapper.updateEntityFromRequest(plan, request, false);
@@ -126,8 +128,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
     public HighRiskPregnancyCarePlanResponseDTO getPlan(UUID planId, String username) {
         Objects.requireNonNull(planId, MSG_PLAN_ID_REQUIRED);
         User user = getUserOrThrow(username);
-        HighRiskPregnancyCarePlan plan = findPlanOrThrow(planId);
-        assertReadAccess(user, plan);
+        HighRiskPregnancyCarePlan plan = findPlanInReach(user, planId, MSG_PLAN_ACCESS_DENIED);
         return mapper.toResponse(plan, computeAlerts(plan));
     }
 
@@ -136,9 +137,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
     public List<HighRiskPregnancyCarePlanResponseDTO> getPlansForPatient(UUID patientId, String username) {
         Objects.requireNonNull(patientId, MSG_PATIENT_ID_REQUIRED);
         User user = getUserOrThrow(username);
-        Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, patientId));
-        assertReadAccess(user, patient);
+        requirePatientInReach(user, patientId);
 
         // E9 #59d — high-risk care plans follow the patient across the
         // readable hospitals when the caller acts in one.
@@ -165,9 +164,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
     public HighRiskPregnancyCarePlanResponseDTO getActivePlan(UUID patientId, String username) {
         Objects.requireNonNull(patientId, MSG_PATIENT_ID_REQUIRED);
         User user = getUserOrThrow(username);
-        Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, patientId));
-        assertReadAccess(user, patient);
+        requirePatientInReach(user, patientId);
 
         // E9 #59d — the active plan across the readable hospitals.
         HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
@@ -195,8 +192,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
         Objects.requireNonNull(request, "Blood pressure log request is required");
         User user = getUserOrThrow(username);
 
-        HighRiskPregnancyCarePlan plan = findPlanOrThrow(planId);
-        assertLogAccess(user, plan);
+        HighRiskPregnancyCarePlan plan = findPlanInReach(user, planId, MSG_LOG_ACCESS_DENIED);
 
         HighRiskBloodPressureLog logEntry = mapper.toEntityBloodPressureLog(request);
         List<HighRiskBloodPressureLog> logs = new ArrayList<>(plan.getBloodPressureLogs());
@@ -218,8 +214,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
         Objects.requireNonNull(request, "Medication log request is required");
         User user = getUserOrThrow(username);
 
-        HighRiskPregnancyCarePlan plan = findPlanOrThrow(planId);
-        assertLogAccess(user, plan);
+        HighRiskPregnancyCarePlan plan = findPlanInReach(user, planId, MSG_LOG_ACCESS_DENIED);
 
         HighRiskMedicationLog logEntry = mapper.toEntityMedicationLog(request);
         List<HighRiskMedicationLog> logs = new ArrayList<>(plan.getMedicationLogs());
@@ -242,8 +237,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
         User user = getUserOrThrow(username);
         assertProviderOrPatient(user);
 
-        HighRiskPregnancyCarePlan plan = findPlanOrThrow(planId);
-        assertReadAccess(user, plan);
+        HighRiskPregnancyCarePlan plan = findPlanInReach(user, planId, MSG_PLAN_ACCESS_DENIED);
 
         HighRiskCareTeamNote note = mapper.toEntityNote(request);
         List<HighRiskCareTeamNote> notes = new ArrayList<>(plan.getCareTeamNotes());
@@ -266,7 +260,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
         User user = getUserOrThrow(username);
         assertProviderAccess(user);
 
-        HighRiskPregnancyCarePlan plan = findPlanOrThrow(planId);
+        HighRiskPregnancyCarePlan plan = findPlanInActingHospital(planId);
         HighRiskMonitoringMilestone milestone = plan.getMonitoringMilestones().stream()
             .filter(item -> item.getMilestoneId().equals(milestoneId))
             .findFirst()
@@ -327,9 +321,24 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
         return aDate.compareTo(bDate);
     }
 
+    /**
+     * A provider reaches a plan only at the hospital they act at, as every
+     * other clinical write and by-id read does; another hospital's plan
+     * answers exactly as a missing one. A null scope (a super-admin in global
+     * view) reaches any. Not asked of a patient, whose boundary is ownership.
+     */
+    private HighRiskPregnancyCarePlan findPlanInActingHospital(UUID planId) {
+        HighRiskPregnancyCarePlan plan = findPlanOrThrow(planId);
+        UUID scope = roleValidator.requireActiveHospitalId();
+        if (scope != null && (plan.getHospital() == null || !scope.equals(plan.getHospital().getId()))) {
+            throw new ResourceNotFoundException(CARE_PLAN_NOT_FOUND_KEY, planId);
+        }
+        return plan;
+    }
+
     private HighRiskPregnancyCarePlan findPlanOrThrow(UUID planId) {
         return carePlanRepository.findById(planId)
-            .orElseThrow(() -> new ResourceNotFoundException("highRiskPregnancy.carePlan.notFound", planId));
+            .orElseThrow(() -> new ResourceNotFoundException(CARE_PLAN_NOT_FOUND_KEY, planId));
     }
 
     private User getUserOrThrow(String username) {
@@ -350,55 +359,56 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
         throw new BusinessException("Action limited to clinical staff or the patient");
     }
 
-    private void assertReadAccess(User user, HighRiskPregnancyCarePlan plan) {
-        if (isProvider(user) || isSuperAdmin(user)) {
-            return;
+    /**
+     * The plan, when this caller may reach it. A provider (a super-admin
+     * included) reaches any plan, as before. A caller who is neither a provider
+     * nor a patient is refused BEFORE the lookup, so the answer cannot depend on
+     * the id. A patient reaches only a plan for their own row, and another
+     * patient's plan answers exactly as a missing one: it used to be a 400
+     * ("permission") for a real id beside a 404 for a made-up one.
+     */
+    private HighRiskPregnancyCarePlan findPlanInReach(User user, UUID planId, String deniedMessage) {
+        boolean provider = isProvider(user);
+        if (!provider && !isPatient(user)) {
+            throw new BusinessException(deniedMessage);
         }
-        if (isPatient(user)) {
-            Patient patient = getPatientByUserOrThrow(user);
-            if (patient.getId().equals(plan.getPatient().getId())) {
-                return;
-            }
+        HighRiskPregnancyCarePlan plan = provider ? findPlanInActingHospital(planId) : findPlanOrThrow(planId);
+        if (!provider && !ownsPatient(user, plan.getPatient() != null ? plan.getPatient().getId() : null)) {
+            throw new ResourceNotFoundException(CARE_PLAN_NOT_FOUND_KEY, planId);
         }
-    throw new BusinessException(MSG_PLAN_ACCESS_DENIED);
+        return plan;
     }
 
-    private void assertReadAccess(User user, Patient patient) {
-        if (isProvider(user) || isSuperAdmin(user)) {
-            return;
-        }
-        if (isPatient(user)) {
-            Patient linked = getPatientByUserOrThrow(user);
-            if (linked.getId().equals(patient.getId())) {
-                return;
-            }
-        }
-    throw new BusinessException(MSG_PATIENT_ACCESS_DENIED);
-    }
-
-    private void assertLogAccess(User user, HighRiskPregnancyCarePlan plan) {
+    /**
+     * The patient-id reads: a provider reads any patient that exists; a patient
+     * names only their own row and is told otherwise exactly as for an unknown
+     * id, before the patient is looked up; anyone else is refused before it.
+     */
+    private void requirePatientInReach(User user, UUID patientId) {
         if (isProvider(user)) {
+            patientRepository.findById(patientId)
+                .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, patientId));
             return;
         }
-        if (isPatient(user)) {
-            Patient patient = getPatientByUserOrThrow(user);
-            if (patient.getId().equals(plan.getPatient().getId())) {
-                return;
-            }
+        if (!isPatient(user)) {
+            throw new BusinessException(MSG_PATIENT_ACCESS_DENIED);
         }
-    throw new BusinessException(MSG_LOG_ACCESS_DENIED);
+        if (!ownsPatient(user, patientId)) {
+            throw new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, patientId);
+        }
     }
 
+    /** {@code existsByIdAndUserId}: no 500 on duplicate user_id rows, no Patient decrypted. */
+    private boolean ownsPatient(User user, UUID patientId) {
+        return patientId != null && patientRepository.existsByIdAndUserId(patientId, user.getId());
+    }
+
+    /** E9 #67 (D5): the platform operator is counted with the providers. */
     private boolean isProvider(User user) {
         return hasRole(user, ROLE_SUPER_ADMIN)
             || hasRole(user, ROLE_DOCTOR)
             || hasRole(user, ROLE_MIDWIFE)
             || hasRole(user, ROLE_NURSE);
-    }
-
-    /** E9 #67 (D5): only the platform operator bypasses the provider/patient checks. */
-    private boolean isSuperAdmin(User user) {
-        return hasRole(user, ROLE_SUPER_ADMIN);
     }
 
     private boolean isPatient(User user) {
@@ -408,11 +418,6 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
     private boolean hasRole(User user, String role) {
         return user.getUserRoles() != null && user.getUserRoles().stream()
             .anyMatch(userRole -> userRole.getRole() != null && role.equals(userRole.getRole().getCode()));
-    }
-
-    private Patient getPatientByUserOrThrow(User user) {
-        return patientRepository.findByUserId(user.getId())
-            .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundForUser", user.getUsername()));
     }
 
     private void ensurePatientBelongsToHospital(Patient patient, UUID hospitalId) {

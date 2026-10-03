@@ -1041,7 +1041,10 @@ export const routes: Routes = [
             // the guard rejected it, so the role that exists to do this job
             // could not reach the page it is done on.
             'ROLE_PHARMACY_VERIFIER',
-            'ROLE_ADMIN',
+            // ROLE_ADMIN is not here: neither backend read admits it (GET
+            // /prescriptions and GET /prescriptions/{id}), and RoleExpansion
+            // grants it nothing, so the page could only toast "failed to
+            // load". Same fix as the lab-result entries (B16).
             'ROLE_SUPER_ADMIN',
           ],
         },

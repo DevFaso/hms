@@ -16,6 +16,15 @@ public interface BillingInvoiceService {
     BillingInvoiceResponseDTO createInvoice(BillingInvoiceRequestDTO dto, Locale locale);
     BillingInvoiceResponseDTO getInvoiceById(UUID id, Locale locale);
     Page<BillingInvoiceResponseDTO> getInvoicesByPatientId(UUID patientId, Pageable pageable, Locale locale);
+
+    /**
+     * The portal patient's own invoices, at every hospital that holds any
+     * (design Q1: a patient is bounded by ownership, not by a hospital). No
+     * hospital scope is read. Callers MUST have bound {{@code patientId}} to the
+     * principal first: PatientPortalServiceImpl resolves it from the caller
+     * (or verifies a proxy grant); nothing else calls this.
+     */
+    Page<BillingInvoiceResponseDTO> getInvoicesForPortalPatient(UUID patientId, Pageable pageable, Locale locale);
     Page<BillingInvoiceResponseDTO> getInvoicesByHospitalId(UUID hospitalId, Pageable pageable, Locale locale);
     List<BillingInvoiceResponseDTO> getOverdueInvoices(LocalDate referenceDate, Locale locale);
     BillingInvoiceResponseDTO updateInvoice(UUID id, BillingInvoiceRequestDTO dto, Locale locale);

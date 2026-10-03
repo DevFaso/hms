@@ -10,6 +10,7 @@
   "scripts": {
     "migrate": "tsx src/migrate.ts",
     "migrate:dry-run": "tsx src/migrate.ts --dry-run",
+    "backfill:app-user-id": "tsx src/backfill-app-user-id.ts",
     "test": "tsx --test src/__tests__/*.test.ts",
     "lint": "tsc --noEmit"
   },

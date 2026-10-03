@@ -127,12 +127,23 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
 
         if (hospitalId != null) {
             // Accounted on what the patient is actually shown, not on the wider
-            // window the pairing needed.
+            // window the pairing needed. On the staff path a row this
+            // hospital's laboratory performed for another hospital is its own
+            // disclosure reason (#751) and is counted there alone; the portal
+            // path is accounted as it always was.
             UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+            java.util.function.Predicate<LabResult> performedHere =
+                r -> !portalView && CrossHospitalReachRecorder.isPerformedHere(r, hospitalId);
             reachRecorder.recordReach(patient.getId(), hospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(
-                    visible.stream().map(r -> hospitalIdOf(r.getLabOrder())).toList(), hospitalId),
+                    visible.stream().filter(performedHere.negate())
+                        .map(r -> hospitalIdOf(r.getLabOrder())).toList(), hospitalId),
                 "Cross-hospital lab result read on the treatment relationship");
+            reachRecorder.recordReach(patient.getId(), hospitalId, requesterUserId, null,
+                CrossHospitalReachRecorder.reachOf(
+                    visible.stream().filter(performedHere)
+                        .map(r -> hospitalIdOf(r.getLabOrder())).toList(), hospitalId),
+                CrossHospitalReachRecorder.LAB_RESULT_PERFORMED_HERE_DESCRIPTION);
         }
 
         return visible.stream()
@@ -162,8 +173,15 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             // foreign row surfaced is accounted.
             UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patient.getId(), hospital.getId());
-            results = labResultRepository
-                .findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(patient.getId(), readable, pageable);
+            // #751 on the staff path: a result is readable where its order is
+            // handled, so staff also see what this hospital's own laboratory
+            // performed for another hospital. The portal keeps the ordered
+            // rows it has always read.
+            results = portalView
+                ? labResultRepository
+                    .findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(patient.getId(), readable, pageable)
+                : labResultRepository
+                    .findPatientResultsReadableAt(patient.getId(), readable, hospital.getId(), false, pageable);
         } else if (!portalView) {
             // A staff read with no hospital scope. This used to fall through to
             // the patient-only query below, which returns EVERY hospital's rows

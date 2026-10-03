@@ -61,8 +61,11 @@ class FhirRoleGateIT extends BaseIT {
     @Autowired private IdleSessionTracker idleSessionTracker;
     @Autowired private UserRepository userRepository;
     @Autowired private KeycloakJwtFixture keycloak;
+    @Autowired private com.example.hms.repository.RoleRepository roleRepository;
+    @Autowired private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
 
     private User user;
+    private final List<UUID> assignments = new java.util.ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -80,11 +83,36 @@ class FhirRoleGateIT extends BaseIT {
 
     @AfterEach
     void tearDown() {
+        assignmentRepository.deleteAllByIdInBatch(assignments);
         userRepository.deleteAllByIdInBatch(List.of(user.getId()));
+    }
+
+    /**
+     * A SUPER_ADMIN role counts only when the assignment table backs it (design
+     * Q4 B, Q10 A: the filters strip an unbacked one), so the super-admin
+     * cases hold a live global SUPER_ADMIN assignment, as a real one does.
+     */
+    private void backedBy(String role) {
+        if (!"ROLE_SUPER_ADMIN".equals(role) || !assignments.isEmpty()) {
+            return;
+        }
+        com.example.hms.model.Role superAdmin = roleRepository.findByCode(role)
+            .orElseGet(() -> roleRepository.save(com.example.hms.model.Role.builder()
+                .name(role).code(role).description("Super admin role").build()));
+        assignments.add(assignmentRepository.save(com.example.hms.model.UserRoleHospitalAssignment.builder()
+            .assignmentCode("ASSIGN-GATE-" + UUID.randomUUID().toString().substring(0, 8))
+            .description("Super admin assignment")
+            .user(user)
+            .role(superAdmin)
+            .startDate(java.time.LocalDate.now())
+            .assignedAt(java.time.LocalDateTime.now())
+            .active(true)
+            .build()).getId());
     }
 
     /** An HMS-minted token: the roles ride in the token, as they do after a password login. */
     private String hms(String role) {
+        backedBy(role);
         // A login touches the idle tracker; a token minted here must too, or
         // the idle gate answers 401 before authorization is decided.
         idleSessionTracker.touch(user.getId());
@@ -94,9 +122,16 @@ class FhirRoleGateIT extends BaseIT {
 
     /** A Keycloak token carrying the role as a realm role, as the realm export defines them. */
     private String keycloak(String role) {
-        return keycloak.mintToken(KeycloakJwtFixture.TokenSpec
+        backedBy(role);
+        KeycloakJwtFixture.TokenSpec spec = KeycloakJwtFixture.TokenSpec
             .defaults(TEST_ISSUER, OidcResourceServerIntegrationTest.TEST_AUDIENCE)
-            .withRealmRoles(List.of(role)));
+            .withRealmRoles(List.of(role));
+        if ("ROLE_SUPER_ADMIN".equals(role)) {
+            // Linked to the account whose assignment backs the role.
+            idleSessionTracker.touch(user.getId());
+            spec = spec.linkedTo(user.getId(), user.getUsername());
+        }
+        return keycloak.mintToken(spec);
     }
 
     private int status(MockHttpServletRequestBuilder request, String bearer) throws Exception {

@@ -1,9 +1,11 @@
 package com.example.hms.security.context;
 
+import com.example.hms.security.tenant.ActingScope;
 import lombok.Builder;
 import lombok.Getter;
 
 import java.util.Collections;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -35,52 +37,106 @@ public class HospitalContext {
     @Builder.Default
     private final Set<UUID> permittedDepartmentIds = Collections.emptySet();
 
-    /** Indicates caller has ROLE_SUPER_ADMIN privileges. */
+    /**
+     * The caller is a <b>verified</b> super-admin: they hold a live, active
+     * SUPER_ADMIN assignment, read from the assignment table on this request
+     * by {@code ActingScopeResolver.liveContext} on both auth paths. Never the
+     * token's claim, never the authorities collection (design Q4, option B).
+     */
     private final boolean superAdmin;
 
     /** Indicates caller has ROLE_HOSPITAL_ADMIN privileges. */
     private final boolean hospitalAdmin;
 
     /**
-     * True when {@link #activeHospitalId} was set from an explicit
-     * {@code X-Hospital-Id} request header (validated against the
-     * principal's permitted scope by
-     * {@link HospitalContextRequestOverrides}), false when it was
-     * derived from a JWT claim ({@code primaryHospitalId}) or left
-     * unset.
+     * True when {@link #activeHospitalId} was named <b>explicitly</b> by the
+     * caller: the {@code X-Hospital-Id} header (validated against the live
+     * permitted set by {@link HospitalContextRequestOverrides}), or a hospital
+     * the controller narrowed to with {@code ActingScopeResolver.narrowTo}.
+     * False when it came from the caller holding exactly one hospital, or is
+     * unset. (The name predates {@code narrowTo}; design §3.4 calls it
+     * "explicit".)
      *
-     * <p>Why this matters: for a real super-admin, {@code activeHospitalId}
-     * is populated from the JWT primary-hospital claim by default, but
-     * the design treats super-admins as <b>global</b> by default — that
-     * JWT-derived value must be ignored unless the request explicitly
-     * scopes via {@code X-Hospital-Id}. Without this flag,
-     * {@code RoleValidator.requireActiveHospitalId()} cannot tell the
-     * two apart and either silently re-scopes super-admin reads to
-     * their home hospital (the F1 click-card bug) or unconditionally
-     * runs them unscoped (which breaks the explicit-header scoping
-     * path Copilot flagged on the F1 fixup). This flag lets us honour
-     * both: explicit scope wins, JWT-only is dropped.</p>
+     * <p>It is what pins a super-admin: without an explicit hospital a
+     * verified super-admin is in global view, with one they act at it.
      */
     private final boolean headerOverridden;
 
     /**
+     * Why this request has no hospital to act at, or {@code null} when it has
+     * one (or is a super-admin in global view). Set by the producers for a
+     * caller holding several hospitals who named none ({@code AMBIGUOUS}), one
+     * holding none ({@code NO_HOSPITAL}), a Keycloak principal with no local
+     * account ({@code NO_LOCAL_USER}), and an {@code X-Hospital-Id} the caller
+     * may not use ({@code NOT_PERMITTED} / {@code NO_LONGER_PERMITTED}; the
+     * filters answer 403 for that one before any controller runs).
+     */
+    private final ActingScope.Reason scopeRefusal;
+
+    /** The hospital an explicit refusal named ({@code X-Hospital-Id}), for the refusal audit. */
+    private final UUID refusedHospitalId;
+
+    /**
+     * The role codes ({@code ROLE_*}) of the caller's live active assignments.
+     * Read only to reconcile the authorities collection with the verified
+     * super-admin signal (design Q10, option A); never a scope input.
+     */
+    @Builder.Default
+    private final Set<String> assignedRoles = Collections.emptySet();
+
+    /**
+     * The caller holds ROLE_PATIENT and nothing else: their requests are
+     * bounded by ownership of their own records, not by a hospital (design
+     * Q1), so no hospital is pinned for them unless they name one.
+     */
+    private final boolean patientOwned;
+
+    /**
+     * The organisation of each hospital the caller holds, from the same live
+     * assignments. Read only to keep {@link #activeOrganizationId} the
+     * organisation of the hospital the request acts at (organisation policies,
+     * plan gating); never a read scope (design Q6, option A).
+     */
+    @Builder.Default
+    private final Map<UUID, UUID> hospitalOrganizations = Collections.emptyMap();
+
+    /**
+     * This context acting at {@code hospitalId}, named explicitly: the active
+     * organisation follows the hospital (null when the caller holds no
+     * assignment there, e.g. a super-admin naming another tenant).
+     */
+    public HospitalContext actingAt(UUID hospitalId) {
+        return toBuilder()
+            .activeHospitalId(hospitalId)
+            .activeOrganizationId(hospitalId == null ? null : hospitalOrganizations.get(hospitalId))
+            .headerOverridden(true)
+            .scopeRefusal(null)
+            .refusedHospitalId(null)
+            .build();
+    }
+
+    /**
      * The hospital this request is pinned to, or {@code null} when it is not
-     * pinned. A super-admin is global unless an explicit {@code X-Hospital-Id}
-     * scope was applied ({@link #headerOverridden}); everyone else is pinned to
-     * their {@link #activeHospitalId}, which {@code JwtTokenProvider} derives
-     * from the LIVE assignment table on every request.
+     * pinned. A super-admin is global unless an explicit hospital was named
+     * ({@link #headerOverridden}); everyone else is pinned to their
+     * {@link #activeHospitalId}, which the producers derive from the LIVE
+     * assignment table on every request: the hospital the caller named, else
+     * the only one they hold. A refused scope pins nothing.
      *
-     * <p>This is the one rule every scope resolver reads (E9 #55) —
-     * {@code ControllerAuthUtils}, {@code RoleValidator}, {@code MeController},
-     * the registration controller and the user service used to each carry
-     * their own copy, several of them reading a claim that the
-     * username/password login never produced.
+     * <p>Callers outside {@code security/**} ask
+     * {@code ActingScopeResolver} instead; this accessor is what the resolver,
+     * the repository filter and the FHIR boundary read.
      */
     public UUID pinnedHospitalId() {
-        if (superAdmin && !headerOverridden) {
+        if (((superAdmin || patientOwned) && !headerOverridden) || scopeRefusal != null) {
             return null;
         }
         return activeHospitalId;
+    }
+
+    /** A verified super-admin who named no hospital: reads span every tenant. */
+    public boolean isGlobalView() {
+        return superAdmin && !headerOverridden && scopeRefusal == null;
     }
 
     public static HospitalContext empty() {

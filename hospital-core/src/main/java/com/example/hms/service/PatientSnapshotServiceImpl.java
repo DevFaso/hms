@@ -17,6 +17,7 @@ import com.example.hms.repository.PrescriptionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -215,6 +216,9 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         // rows the D3 rule withholds; the ledger row names the session.
         boolean unlocked = breakGlassGate.isUnlocked(requesterUserId, patientId, hospitalId);
         Map<String, Long> reach = new HashMap<>();
+        // #751 — lab results this hospital's laboratory performed for another
+        // hospital are their own disclosure reason, never counted in both.
+        Map<String, Long> performedHereReach = new HashMap<>();
         List<Encounter> encounters = loadEncounters(patientId, hospitalId, readable, reach, unlocked);
         PatientSnapshotDTO snapshot = PatientSnapshotDTO.builder()
                 .patientId(patient.getId())
@@ -227,13 +231,15 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                 .activeDiagnoses(buildActiveDiagnoses(patientId, patient, hospitalId, readable, reach, unlocked))
                 .activeMedications(buildActiveMedications(patientId, hospitalId, readable, reach))
                 .recentVitals(buildRecentVitals(patientId, hospitalId, readable, reach))
-                .latestLabs(buildLatestLabs(patientId, hospitalId, readable, reach))
+                .latestLabs(buildLatestLabs(patientId, hospitalId, readable, reach, performedHereReach))
                 .pendingOrders(buildPendingOrders(patientId, hospitalId, readable, reach))
                 .recentNotes(buildRecentNotes(encounters))
                 .careTeam(buildCareTeam(encounters))
                 .build();
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null, reach,
                 "Cross-hospital patient snapshot read on the treatment relationship");
+        reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null, performedHereReach,
+                CrossHospitalReachRecorder.LAB_RESULT_PERFORMED_HERE_DESCRIPTION);
         return snapshot;
     }
 
@@ -405,15 +411,25 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
     }
 
     private List<PatientSnapshotDTO.LabItem> buildLatestLabs(UUID patientId, UUID hospitalId,
-                                                            Set<UUID> readable, Map<String, Long> reach) {
+                                                            Set<UUID> readable, Map<String, Long> reach,
+                                                            Map<String, Long> performedHereReach) {
         List<PatientSnapshotDTO.LabItem> labs = new ArrayList<>();
         try {
             // Paged at the DB so the patient's full lab history is never loaded
-            // to trim to 10 after the fact.
-            List<LabResult> rows = labResultRepository
-                    .findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(patientId, readable, PageRequest.of(0, 10));
+            // to trim to 10 after the fact — the LATEST 10 (newest result first,
+            // id breaking ties; the page had no order, so "latest" was not
+            // guaranteed). Readable where its order is handled (#751): ordered
+            // in the readable set, or performed by this hospital's laboratory,
+            // as on the other staff lab views.
+            List<LabResult> rows = labResultRepository.findPatientResultsReadableAt(patientId, readable, hospitalId,
+                    false, PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "resultDate", "id")));
             account(reach, hospitalId, rows.stream()
-                    .map(r -> r.getLabOrder() == null ? null : CrossHospitalReachRecorder.hospitalIdOf(r.getLabOrder().getHospital()))
+                    .filter(r -> !CrossHospitalReachRecorder.isPerformedHere(r, hospitalId))
+                    .map(PatientSnapshotServiceImpl::orderingHospitalIdOf)
+                    .toList());
+            account(performedHereReach, hospitalId, rows.stream()
+                    .filter(r -> CrossHospitalReachRecorder.isPerformedHere(r, hospitalId))
+                    .map(PatientSnapshotServiceImpl::orderingHospitalIdOf)
                     .toList());
             // No test definition (deleted, or never linked) sends null rather
             // than an English word: the drawer renders its own translated
@@ -431,6 +447,11 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             log.debug("Lab results query error: {}", e.getMessage());
         }
         return labs;
+    }
+
+    private static UUID orderingHospitalIdOf(LabResult result) {
+        return result.getLabOrder() == null ? null
+                : CrossHospitalReachRecorder.hospitalIdOf(result.getLabOrder().getHospital());
     }
 
     /** The three-value family: the drawer colours on the literal ABNORMAL / CRITICAL. */

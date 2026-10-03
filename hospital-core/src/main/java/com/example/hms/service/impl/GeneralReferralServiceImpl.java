@@ -312,6 +312,13 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     }
 
     @Override
+    public List<GeneralReferralResponseDTO> getReferralsForPortalPatient(UUID patientId) {
+        return referralRepository.findByPatientIdOrderByCreatedAtDesc(patientId).stream()
+            .map(this::toResponse)
+            .toList();
+    }
+
+    @Override
     public List<GeneralReferralResponseDTO> getReferralsByReferringProvider(UUID providerId) {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         List<GeneralReferral> referrals;

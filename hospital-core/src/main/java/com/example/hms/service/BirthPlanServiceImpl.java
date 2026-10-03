@@ -49,6 +49,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
     private final BirthPlanMapper birthPlanMapper;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    private final com.example.hms.utility.RoleValidator roleValidator;
 
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
     private static final String ROLE_DOCTOR = "ROLE_DOCTOR";
@@ -65,7 +66,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
         Patient patient;
         Hospital hospital;
 
-        if (hasRole(user, ROLE_PATIENT)) {
+        if (isPatientOnly(user)) {
             // Patient creating their own birth plan
             patient = getPatientByUserOrThrow(user);
             hospital = determineHospitalForPatient(patient, request.getHospitalId());
@@ -97,10 +98,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
     @Transactional
     public BirthPlanResponseDTO updateBirthPlan(UUID id, BirthPlanRequestDTO request, String username) {
         User user = getUserOrThrow(username);
-        BirthPlan birthPlan = getBirthPlanByIdOrThrow(id);
-
-        // Check access
-        checkBirthPlanAccess(user, birthPlan);
+        BirthPlan birthPlan = getBirthPlanInReach(user, id);
 
         // Update entity
         birthPlanMapper.updateEntityFromRequest(birthPlan, request);
@@ -125,10 +123,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
     @Transactional(readOnly = true)
     public BirthPlanResponseDTO getBirthPlanById(UUID id, String username) {
         User user = getUserOrThrow(username);
-        BirthPlan birthPlan = getBirthPlanByIdOrThrow(id);
-
-        // Check access
-        checkBirthPlanAccess(user, birthPlan);
+        BirthPlan birthPlan = getBirthPlanInReach(user, id);
 
         return birthPlanMapper.toResponseDTO(birthPlan);
     }
@@ -137,17 +132,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
     @Transactional(readOnly = true)
     public List<BirthPlanResponseDTO> getBirthPlansByPatientId(UUID patientId, String username) {
         User user = getUserOrThrow(username);
-        getPatientByIdOrThrow(patientId);
-
-        // Check access
-        if (hasRole(user, ROLE_PATIENT)) {
-            Patient userPatient = getPatientByUserOrThrow(user);
-            if (!userPatient.getId().equals(patientId)) {
-                throw new AccessDeniedException("You can only view your own birth plans");
-            }
-        } else {
-            checkProviderAccess(user);
-        }
+        requirePatientInReach(user, patientId);
 
         // E9 #59d — birth plans follow the patient across the readable
         // hospitals when the caller acts in one; a super-admin in global view
@@ -174,17 +159,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
     @Transactional(readOnly = true)
     public BirthPlanResponseDTO getActiveBirthPlan(UUID patientId, String username) {
         User user = getUserOrThrow(username);
-        getPatientByIdOrThrow(patientId);
-
-        // Check access
-        if (hasRole(user, ROLE_PATIENT)) {
-            Patient userPatient = getPatientByUserOrThrow(user);
-            if (!userPatient.getId().equals(patientId)) {
-                throw new AccessDeniedException("You can only view your own birth plan");
-            }
-        } else {
-            checkProviderAccess(user);
-        }
+        requirePatientInReach(user, patientId);
 
         // E9 #59d — the most recent plan across the readable hospitals.
         HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
@@ -238,10 +213,10 @@ public class BirthPlanServiceImpl implements BirthPlanService {
     @Transactional
     public BirthPlanResponseDTO providerReview(UUID id, BirthPlanProviderReviewRequestDTO review, String username) {
         User user = getUserOrThrow(username);
-        BirthPlan birthPlan = getBirthPlanByIdOrThrow(id);
 
-        // Only providers can review
+        // Only providers can review, and only at the hospital they act at
         checkProviderReviewAccess(user);
+        BirthPlan birthPlan = requireAtActingHospital(getBirthPlanByIdOrThrow(id));
 
         // Update review fields
         birthPlan.setProviderReviewed(review.getReviewed());
@@ -260,10 +235,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
     @Transactional
     public void deleteBirthPlan(UUID id, String username) {
         User user = getUserOrThrow(username);
-        BirthPlan birthPlan = getBirthPlanByIdOrThrow(id);
-
-        // Check access
-        checkBirthPlanAccess(user, birthPlan);
+        BirthPlan birthPlan = getBirthPlanInReach(user, id);
 
         birthPlanRepository.delete(birthPlan);
         log.info("Deleted birth plan ID {} by user {}", id, username);
@@ -317,30 +289,83 @@ public class BirthPlanServiceImpl implements BirthPlanService {
             .anyMatch(userRole -> roleCode.equals(userRole.getRole().getCode()));
     }
 
-    private void checkBirthPlanAccess(User user, BirthPlan birthPlan) {
-        // E9 #67 (D5): a hospital admin is refused at the controller; only the
-        // platform operator bypasses the per-role checks below.
-        if (hasRole(user, ROLE_SUPER_ADMIN)) {
-            return;
-        }
+    /**
+     * A patient-only caller holds {@code ROLE_PATIENT} and none of the
+     * provider roles. The patient role used to be asked FIRST, so a doctor,
+     * midwife or nurse who is also a patient was held to their own birth plans
+     * — and, creating one, filed it for themselves instead of the patient.
+     */
+    private boolean isPatientOnly(User user) {
+        return hasRole(user, ROLE_PATIENT) && !isProvider(user);
+    }
 
-        if (hasRole(user, ROLE_PATIENT)) {
-            Patient userPatient = getPatientByUserOrThrow(user);
-            if (!userPatient.getId().equals(birthPlan.getPatient().getId())) {
-                throw new AccessDeniedException("You can only access your own birth plans");
-            }
-        } else if (hasRole(user, ROLE_DOCTOR) || hasRole(user, ROLE_MIDWIFE) || hasRole(user, ROLE_NURSE)) {
-            // Providers can access birth plans in their hospital
-        } else {
+    private boolean isProvider(User user) {
+        return hasRole(user, ROLE_SUPER_ADMIN) || hasRole(user, ROLE_DOCTOR)
+            || hasRole(user, ROLE_MIDWIFE) || hasRole(user, ROLE_NURSE);
+    }
+
+    /**
+     * The birth plan, when this caller may reach it. A caller who is neither a
+     * provider nor the patient is refused before the lookup (the answer does
+     * not depend on the id). A patient-only caller's refusal for another
+     * patient's plan is the missing-id answer, not a 403: a 403 for a real id
+     * beside a 404 for a made-up one told a patient which ids exist.
+     * E9 #67 (D5): a hospital admin is refused at the controller; only the
+     * platform operator bypasses the per-role checks.
+     */
+    private BirthPlan getBirthPlanInReach(User user, UUID id) {
+        boolean patientOnly = isPatientOnly(user);
+        if (!patientOnly && !isProvider(user)) {
             throw new AccessDeniedException("You do not have permission to access this birth plan");
         }
+        BirthPlan birthPlan = getBirthPlanByIdOrThrow(id);
+        if (patientOnly && !ownsPatient(user, birthPlan.getPatient() != null ? birthPlan.getPatient().getId() : null)) {
+            throw new ResourceNotFoundException("birthPlan.notFound", id);
+        }
+        return patientOnly ? birthPlan : requireAtActingHospital(birthPlan);
+    }
+
+    /**
+     * A provider reaches a birth plan only at the hospital they act at;
+     * another hospital's plan answers exactly as a missing one. A null scope
+     * (a super-admin in global view) reaches any.
+     */
+    private BirthPlan requireAtActingHospital(BirthPlan birthPlan) {
+        UUID scope = roleValidator.requireActiveHospitalId();
+        if (scope != null && (birthPlan.getHospital() == null || !scope.equals(birthPlan.getHospital().getId()))) {
+            throw new ResourceNotFoundException("birthPlan.notFound", birthPlan.getId());
+        }
+        return birthPlan;
+    }
+
+    /**
+     * The patient-id reads: a patient-only caller may name only their own row
+     * and is told otherwise exactly as for an unknown id, before the patient is
+     * looked up; a provider reads any, as before.
+     */
+    private void requirePatientInReach(User user, UUID patientId) {
+        if (isPatientOnly(user)) {
+            if (!ownsPatient(user, patientId)) {
+                throw new ResourceNotFoundException("patient.notFound", patientId);
+            }
+            return;
+        }
+        checkProviderAccess(user);
+        getPatientByIdOrThrow(patientId);
+    }
+
+    /**
+     * {@code existsByIdAndUserId}, not {@code findByUserId}: the single-result
+     * finder throws on a tenant left with duplicate {@code user_id} rows (a
+     * 500 where this owes a decision) and decrypts a whole Patient to compare
+     * two ids.
+     */
+    private boolean ownsPatient(User user, UUID patientId) {
+        return patientId != null && patientRepository.existsByIdAndUserId(patientId, user.getId());
     }
 
     private void checkProviderAccess(User user) {
-        if (!hasRole(user, ROLE_SUPER_ADMIN) &&
-            !hasRole(user, ROLE_DOCTOR) &&
-            !hasRole(user, ROLE_MIDWIFE) &&
-            !hasRole(user, ROLE_NURSE)) {
+        if (!isProvider(user)) {
             throw new AccessDeniedException("Only healthcare providers can perform this action");
         }
     }

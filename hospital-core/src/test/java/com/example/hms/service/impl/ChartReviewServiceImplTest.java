@@ -127,8 +127,8 @@ class ChartReviewServiceImplTest {
             any(UUID.class), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
         when(noteRepo.findByEncounter_IdIn(any())).thenReturn(List.of());
-        when(labResultRepo.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(
-            any(UUID.class), any(), any(Pageable.class)))
+        when(labResultRepo.findPatientResultsReadableAt(
+            any(UUID.class), any(), any(), anyBoolean(), any(Pageable.class)))
             .thenReturn(List.of());
         when(labResultRepo.findAllPatientResults(any(UUID.class), any(Pageable.class)))
             .thenReturn(List.of());
@@ -196,8 +196,8 @@ class ChartReviewServiceImplTest {
             .thenReturn(List.of(note));
 
         LabResult labResult = labResult(now.minusDays(1), AbnormalFlag.ABNORMAL, "Hemoglobin", "718-7");
-        when(labResultRepo.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(
-            any(UUID.class), any(), any(Pageable.class)))
+        when(labResultRepo.findPatientResultsReadableAt(
+            any(UUID.class), any(), any(), anyBoolean(), any(Pageable.class)))
             .thenReturn(List.of(labResult));
 
         Prescription rx = prescription("Amoxicillin", "RxNorm-723", now.minusDays(2));
@@ -332,8 +332,8 @@ class ChartReviewServiceImplTest {
     @Test
     void directionalResultKeepsTheFamilyOnTabAndTimelineAndCarriesTheDirection() {
         LabResult r = labResult(LocalDateTime.now(), AbnormalFlag.ABNORMAL_LOW, "Sodium", "2951-2");
-        when(labResultRepo.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(
-            any(UUID.class), any(), any(Pageable.class)))
+        when(labResultRepo.findPatientResultsReadableAt(
+            any(UUID.class), any(), any(), anyBoolean(), any(Pageable.class)))
             .thenReturn(List.of(r));
 
         ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
@@ -354,8 +354,8 @@ class ChartReviewServiceImplTest {
         // event summary, which leaked English into FR/ES UIs. Now summary stays null
         // and the UI carries the abnormal flag via the status pill instead.
         LabResult r = labResult(LocalDateTime.now(), AbnormalFlag.ABNORMAL, "Glucose", "2345-7");
-        when(labResultRepo.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(
-            any(UUID.class), any(), any(Pageable.class)))
+        when(labResultRepo.findPatientResultsReadableAt(
+            any(UUID.class), any(), any(), anyBoolean(), any(Pageable.class)))
             .thenReturn(List.of(r));
 
         ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
@@ -552,17 +552,52 @@ class ChartReviewServiceImplTest {
         assertThat(page.getValue().getSort()).containsExactly(
             org.springframework.data.domain.Sort.Order.desc("resultDate"),
             org.springframework.data.domain.Sort.Order.desc("id"));
-        verify(labResultRepo, never()).findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(any(), any(), any());
+        verify(labResultRepo, never()).findPatientResultsReadableAt(any(), any(), any(), eq(false), any());
     }
 
     @Test
     void anActingHospitalNeverTakesTheGlobalViewQuery() {
         service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
 
-        verify(labResultRepo).findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(PATIENT_ID),
-            eq(Set.of(HOSPITAL_ID)), any(Pageable.class));
+        // #751: readable where the order is handled, so the acting hospital is
+        // passed as the performer and never the global-view flag.
+        verify(labResultRepo).findPatientResultsReadableAt(eq(PATIENT_ID),
+            eq(Set.of(HOSPITAL_ID)), eq(HOSPITAL_ID), eq(false), any(Pageable.class));
         verify(labResultRepo, never()).findAllPatientResults(any(), any());
-        verify(labResultRepo, never()).findPatientResultsReadableAt(any(), any(), any(), anyBoolean(), any());
+        verify(labResultRepo, never()).findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(any(), any(), any());
+    }
+
+    @Test
+    void aResultThisHospitalsLaboratoryPerformedIsShownAndAccountedOnce() {
+        // #751 on the chart review: hospital B ordered, this hospital's
+        // laboratory performed. The row is read with the acting hospital as
+        // performer, shown, and accounted under the performing-laboratory
+        // reason alone - even though B is also readable on the treatment
+        // relationship, it is not counted a second time there. A row B
+        // ordered and ran itself is B's treatment-relationship reach.
+        Hospital orderingB = Hospital.builder().name("CHU Yalgado").build();
+        orderingB.setId(UUID.randomUUID());
+        LabResult performedHere = labResult(LocalDateTime.now().minusHours(3), AbnormalFlag.NORMAL, "Glucose", "2345-7");
+        performedHere.getLabOrder().setHospital(orderingB);
+        performedHere.getLabOrder().setPerformingHospital(hospital);
+        LabResult orderedAndRunAtB = labResult(LocalDateTime.now().minusHours(5), AbnormalFlag.NORMAL, "Sodium", "2951-2");
+        orderedAndRunAtB.getLabOrder().setHospital(orderingB);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(PATIENT_ID), eq(HOSPITAL_ID)))
+            .thenReturn(Set.of(HOSPITAL_ID, orderingB.getId()));
+        when(labResultRepo.findPatientResultsReadableAt(eq(PATIENT_ID), eq(Set.of(HOSPITAL_ID, orderingB.getId())),
+            eq(HOSPITAL_ID), eq(false), any(Pageable.class)))
+            .thenReturn(List.of(performedHere, orderedAndRunAtB));
+
+        ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+
+        assertThat(dto.getResults()).extracting(ChartReviewDTO.ResultEntryDTO::getId)
+            .containsExactly(performedHere.getId(), orderedAndRunAtB.getId());
+        verify(reachRecorder).recordReach(eq(PATIENT_ID), eq(HOSPITAL_ID), any(), isNull(),
+            eq(Map.of(orderingB.getId().toString(), 1L)),
+            eq("Cross-hospital chart review read on the treatment relationship"));
+        verify(reachRecorder).recordReach(eq(PATIENT_ID), eq(HOSPITAL_ID), any(), isNull(),
+            eq(Map.of(orderingB.getId().toString(), 1L)),
+            eq(com.example.hms.service.recordaccess.CrossHospitalReachRecorder.LAB_RESULT_PERFORMED_HERE_DESCRIPTION));
     }
 
     @Test

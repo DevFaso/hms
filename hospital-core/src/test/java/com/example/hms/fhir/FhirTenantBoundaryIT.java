@@ -1,5 +1,7 @@
 package com.example.hms.fhir;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
+import com.example.hms.security.TenantLifecycleGate;
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.rest.server.IResourceProvider;
 import com.example.hms.HmsApplication;
@@ -119,6 +121,11 @@ class FhirTenantBoundaryIT {
     @Autowired private FhirTenantBoundary boundary;
     @Autowired private FhirContext fhirContext;
     @Autowired private FhirWriteProperties writeProperties;
+    @Autowired private FhirOperationsProperties operationsProperties;
+    @Autowired private com.example.hms.fhir.bulk.FhirBulkExportRunner bulkExportRunner;
+    @Autowired private com.example.hms.repository.FhirBulkExportJobRepository bulkExportJobRepository;
+    @Autowired private com.example.hms.repository.FhirBulkExportFileRepository bulkExportFileRepository;
+    @Autowired private com.example.hms.repository.AuditEventLogRepository auditEventLogRepository;
     @Autowired private List<IResourceProvider> providers;
     @Autowired private OrganizationRepository organizationRepository;
     @Autowired private HospitalRepository hospitalRepository;
@@ -213,6 +220,9 @@ class FhirTenantBoundaryIT {
         // HospitalContextRequestOverrides lets pick ANY hospital by header.
         orphan = saveUser("orphan");
         superAdmin = saveUser("root");
+        // A super-admin is one the assignment table says is (design Q4, option
+        // B): the token's ROLE_SUPER_ADMIN alone no longer grants global view.
+        saveAssignment(superAdmin, ensureRole(ROLE_SUPER_ADMIN, "Super Admin"), null);
 
         patientP = savePatient(hospitalA);
         mrnOfPAtA = register(patientP, hospitalA);
@@ -228,6 +238,10 @@ class FhirTenantBoundaryIT {
 
     @AfterEach
     void tearDown() {
+        // A refused X-Hospital-Id writes an audit row naming the caller (Q3 A).
+        auditEventLogRepository.deleteAllInBatch(auditEventLogRepository.findAll().stream()
+            .filter(row -> row.getUser() != null && users.contains(row.getUser().getId()))
+            .toList());
         prescriptionRepository.deleteAllByIdInBatch(present(atA.prescription, atB.prescription));
         immunizationRepository.deleteAllByIdInBatch(present(atA.immunization, atB.immunization));
         problemRepository.deleteAllByIdInBatch(present(atA.condition, atB.condition));
@@ -236,6 +250,9 @@ class FhirTenantBoundaryIT {
         patientRepository.deleteAllByIdInBatch(patients);
         staffRepository.deleteAllByIdInBatch(staff);
         assignmentRepository.deleteAllByIdInBatch(assignments);
+        // $everything audits its export under the reader's user row.
+        users.forEach(user -> auditEventLogRepository.deleteAllInBatch(
+            auditEventLogRepository.findByUserId(user, org.springframework.data.domain.Pageable.unpaged()).getContent()));
         userRepository.deleteAllByIdInBatch(users);
         hospitalRepository.deleteAllByIdInBatch(present(
             hospitalA == null ? null : hospitalA.getId(), hospitalB == null ? null : hospitalB.getId()));
@@ -330,6 +347,56 @@ class FhirTenantBoundaryIT {
     }
 
     @Test
+    @DisplayName("Patient/{id}/$everything carries this hospital's MRN and no other's")
+    void everythingCarriesOnlyTheBoundHospitalsMrn() {
+        // The operation flag is read on every request; flipped here and put back.
+        boolean wasEnabled = operationsProperties.getEverything().isEnabled();
+        operationsProperties.getEverything().setEnabled(true);
+        try {
+            String token = legacyToken(doctorA, ROLE_DOCTOR);
+            ResponseEntity<String> everything =
+                get("/fhir/Patient/" + patientP.getId() + "/$everything", token, null);
+            assertThat(everything.getStatusCode().value()).as(everything.getBody()).isEqualTo(200);
+            assertThat(json(everything).get("entry").get(0).get("resource").get("resourceType").asText())
+                .isEqualTo("Patient");
+            assertOnlyTheMrnAtA(everything.getBody(), "$everything");
+        } finally {
+            operationsProperties.getEverything().setEnabled(wasEnabled);
+        }
+    }
+
+    @Test
+    @DisplayName("a bulk export of A writes P with A's MRN and nothing of B's registration")
+    void bulkExportCarriesOnlyTheJobHospitalsMrn() throws Exception {
+        // Driven through the runner directly: the kickoff pins the job to the
+        // caller's hospital (FhirBulkExportServiceTest), and the sweep is off
+        // with the flag, so nothing else claims this job.
+        UUID jobId = bulkExportJobRepository.save(com.example.hms.model.platform.FhirBulkExportJob.builder()
+            .hospitalId(hospitalA.getId())
+            .scope(com.example.hms.model.platform.FhirBulkExportJob.Scope.SYSTEM)
+            .types("Patient")
+            .status(com.example.hms.model.platform.FhirBulkExportJob.Status.QUEUED)
+            .requestUrl("/fhir/$export")
+            .build()).getId();
+        java.nio.file.Path jobDir = java.nio.file.Paths.get(operationsProperties.getBulkExport().getStorageDir())
+            .toAbsolutePath().normalize().resolve(jobId.toString());
+        try {
+            Object runner = org.springframework.test.util.AopTestUtils.getUltimateTargetObject(bulkExportRunner);
+            org.springframework.test.util.ReflectionTestUtils.invokeMethod(runner, "processJob", jobId);
+
+            assertThat(bulkExportJobRepository.findById(jobId).orElseThrow().getStatus())
+                .isEqualTo(com.example.hms.model.platform.FhirBulkExportJob.Status.COMPLETED);
+            List<String> lines = java.nio.file.Files.readAllLines(jobDir.resolve("Patient.ndjson"));
+            assertThat(lines).hasSize(1);
+            assertOnlyTheMrnAtA(lines.get(0), "bulk export");
+        } finally {
+            bulkExportFileRepository.deleteAll(bulkExportFileRepository.findByJob_IdOrderByResourceTypeAsc(jobId));
+            bulkExportJobRepository.deleteById(jobId);
+            org.springframework.util.FileSystemUtils.deleteRecursively(jobDir);
+        }
+    }
+
+    @Test
     @DisplayName("another hospital's row answers exactly like an id that does not exist")
     void crossTenantReadIsIndistinguishableFromMissing() {
         String token = legacyToken(doctorA, ROLE_DOCTOR);
@@ -415,7 +482,7 @@ class FhirTenantBoundaryIT {
     @Test
     @DisplayName("X-Hospital-Id cannot choose a hospital the principal does not hold")
     void headerCannotChooseAForeignHospital() {
-        // No permitted hospital at all: the override accepts the header, the boundary does not.
+        // No permitted hospital at all: the header is refused (Q3 A), 403.
         String orphanToken = legacyToken(orphan, ROLE_DOCTOR);
         String hospitalB = this.hospitalB.getId().toString();
         assertThat(get("/fhir/Encounter/" + atB.encounter, orphanToken, hospitalB).getStatusCode().value())
@@ -423,10 +490,12 @@ class FhirTenantBoundaryIT {
         assertThat(get("/fhir/Encounter?patient=" + patientQ.getId(), orphanToken, hospitalB)
             .getStatusCode().value()).isEqualTo(403);
 
-        // A doctor at A naming B stays at A.
+        // A doctor at A naming B is refused outright (Q3 A): it used to be
+        // silently kept at A, which answered B's row 404 and A's 200.
         String token = legacyToken(doctorA, ROLE_DOCTOR);
-        assertThat(get("/fhir/Encounter/" + atB.encounter, token, hospitalB).getStatusCode().value()).isEqualTo(404);
-        assertThat(get("/fhir/Encounter/" + atA.encounter, token, hospitalB).getStatusCode().value()).isEqualTo(200);
+        assertThat(get("/fhir/Encounter/" + atB.encounter, token, hospitalB).getStatusCode().value()).isEqualTo(403);
+        assertThat(get("/fhir/Encounter/" + atA.encounter, token, hospitalB).getStatusCode().value()).isEqualTo(403);
+        assertThat(get("/fhir/Encounter/" + atA.encounter, token, null).getStatusCode().value()).isEqualTo(200);
     }
 
     @Test
@@ -442,12 +511,15 @@ class FhirTenantBoundaryIT {
         assertThat(get("/fhir/Encounter/" + atA.encounter, token, atHospitalA).getStatusCode().value())
             .isEqualTo(200);
 
+        // The Keycloak path asks the SAME live assignments (appUserId links the
+        // token to the account); the token's hospital claims are not inputs.
         String keycloakAtB = keycloak.mintToken(KeycloakJwtFixture.TokenSpec
             .defaults(TEST_ISSUER, OidcTestConfig.AUDIENCE)
             .withRealmRoles(List.of(ROLE_DOCTOR, "ROLE_RECEPTIONIST"))
-            .withRoleAssignments(List.of(ROLE_DOCTOR + "@" + hospitalA.getId(), "ROLE_RECEPTIONIST@" + hospitalB.getId()))
-            .withHospitalId(atHospitalB));
-        assertThat(get("/fhir/Encounter/" + atB.encounter, keycloakAtB, null).getStatusCode().value()).isEqualTo(403);
+            .linkedTo(dualRoleUser.getId(), dualRoleUser.getUsername()));
+        idleSessionTracker.touch(dualRoleUser.getId());
+        assertThat(get("/fhir/Encounter/" + atB.encounter, keycloakAtB, atHospitalB).getStatusCode().value())
+            .isEqualTo(403);
     }
 
     @Test
@@ -461,22 +533,26 @@ class FhirTenantBoundaryIT {
     }
 
     @Test
-    @DisplayName("a Keycloak principal is bounded by its hospital claim, and refused without one")
+    @DisplayName("a Keycloak principal is bounded by its linked account's live hospital, and refused without a link")
     void keycloakPrincipalIsBounded() {
         String token = keycloak.mintToken(KeycloakJwtFixture.TokenSpec
             .defaults(TEST_ISSUER, OidcTestConfig.AUDIENCE)
             .withRealmRoles(List.of(ROLE_DOCTOR))
-            .withRoleAssignments(List.of(ROLE_DOCTOR + "@" + hospitalA.getId()))
-            .withHospitalId(hospitalA.getId().toString()));
+            .linkedTo(doctorA.getId(), doctorA.getUsername()));
+        idleSessionTracker.touch(doctorA.getId());
         ResponseEntity<String> own = get("/fhir/Encounter/" + atA.encounter, token, null);
         assertThat(own.getStatusCode().value()).as(own.getBody()).isEqualTo(200);
         assertIndistinguishable("Encounter", atB.encounter.toString(), token, null);
         JsonNode bundle = json(get("/fhir/Encounter?patient=" + patientP.getId(), token, null));
         assertThat(entryIds(bundle)).containsExactly(atA.encounter.toString());
 
+        // No appUserId: no local account, so no hospital — whatever the
+        // hospital claims say — and a named one is refused.
         String unscoped = keycloak.mintToken(KeycloakJwtFixture.TokenSpec
             .defaults(TEST_ISSUER, OidcTestConfig.AUDIENCE)
-            .withRealmRoles(List.of(ROLE_DOCTOR)));
+            .withRealmRoles(List.of(ROLE_DOCTOR))
+            .withRoleAssignments(List.of(ROLE_DOCTOR + "@" + hospitalB.getId()))
+            .withHospitalId(hospitalB.getId().toString()));
         assertThat(get("/fhir/Encounter/" + atB.encounter, unscoped, hospitalB.getId().toString())
             .getStatusCode().value()).isEqualTo(403);
     }
@@ -758,9 +834,12 @@ class FhirTenantBoundaryIT {
          */
         @Bean
         KeycloakHospitalContextFilter keycloakHospitalContextFilter(KeycloakHospitalContextResolver resolver,
+                                                                    ActingScopeResolver actingScopeResolver,
                                                                     IdleSessionGate idleSessionGate,
+                                                                    TenantLifecycleGate tenantLifecycleGate,
                                                                     UserRepository userRepository) {
-            return new KeycloakHospitalContextFilter(resolver, idleSessionGate, userRepository);
+            return new KeycloakHospitalContextFilter(resolver, actingScopeResolver, idleSessionGate,
+                tenantLifecycleGate, userRepository);
         }
     }
 }

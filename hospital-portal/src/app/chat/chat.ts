@@ -17,9 +17,12 @@ import {
   ChatAttachment,
 } from '../services/chat.service';
 import { UserService, UserSummary } from '../services/user.service';
+import { MessageableClinician, PatientPortalService } from '../services/patient-portal.service';
 import { AuthService } from '../auth/auth.service';
+import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { Observable, catchError, forkJoin, of } from 'rxjs';
 
 import { currentLocale } from '../shared/i18n/app-locale';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
@@ -108,6 +111,44 @@ const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
   ROLE_PATIENT: new Set(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']),
 };
 
+/** One row of the new-conversation picker, whichever list it came from. */
+export interface ChatTarget {
+  /** User id — the chat send API's `recipientId`. */
+  id: string;
+  name: string;
+  /** Staff directory rows carry a role; a patient's clinicians do not. */
+  roleName?: string;
+  /**
+   * Staff directory rows without a role fall back to the raw account type, as
+   * before (a pinned raw-enum render); kept apart from `subtitle` so the
+   * raw-enum gate still sees it.
+   */
+  profileType?: string;
+  /** A patient's clinicians: the hospital they were seen at. Free text, not an enum. */
+  subtitle?: string;
+  /** Values the picker's search box matches against. */
+  searchFields: (string | null | undefined)[];
+}
+
+function staffTarget(u: UserSummary): ChatTarget {
+  return {
+    id: u.id,
+    name: `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim() || u.username,
+    roleName: u.roleName || undefined,
+    profileType: u.profileType,
+    searchFields: [u.firstName, u.lastName, u.username, u.email],
+  };
+}
+
+function clinicianTarget(c: MessageableClinician): ChatTarget {
+  return {
+    id: c.userId,
+    name: c.name,
+    subtitle: c.hospitalName ?? undefined,
+    searchFields: [c.name, c.hospitalName],
+  };
+}
+
 @Component({
   selector: 'app-chat',
   standalone: true,
@@ -119,7 +160,9 @@ const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
 export class ChatComponent implements OnInit, OnDestroy {
   private readonly chatService = inject(ChatService);
   private readonly userService = inject(UserService);
+  private readonly patientPortal = inject(PatientPortalService);
   private readonly auth = inject(AuthService);
+  private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
 
@@ -187,8 +230,13 @@ export class ChatComponent implements OnInit, OnDestroy {
   /* ── New Conversation panel ── */
   showNewConversation = signal(false);
   userSearchTerm = signal('');
-  availableUsers = signal<UserSummary[]>([]);
+  availableUsers = signal<ChatTarget[]>([]);
   loadingUsers = signal(false);
+  /**
+   * A patient's picker loaded cleanly and holds nobody: they have no care
+   * team and no appointment yet, which is not an error.
+   */
+  noRecipientsYet = signal(false);
 
   /* ── Sidebar search ── */
   convSearchTerm = signal('');
@@ -464,6 +512,11 @@ export class ChatComponent implements OnInit, OnDestroy {
 
   loadUsers(): void {
     this.loadingUsers.set(true);
+    this.noRecipientsYet.set(false);
+    if (this.isPatientCaller()) {
+      this.loadPatientRecipients();
+      return;
+    }
     this.userService.list(0, 100).subscribe({
       next: (page) => {
         // Filter out current user and already-conversing users
@@ -485,7 +538,7 @@ export class ChatComponent implements OnInit, OnDestroy {
           const userRole = u.roleName?.startsWith('ROLE_') ? u.roleName : 'ROLE_' + u.roleName;
           return allowedTargets.has(userRole);
         });
-        this.availableUsers.set(filtered);
+        this.availableUsers.set(filtered.map(staffTarget));
         this.loadingUsers.set(false);
       },
       error: () => {
@@ -495,24 +548,68 @@ export class ChatComponent implements OnInit, OnDestroy {
     });
   }
 
-  filteredUsers(): UserSummary[] {
+  /**
+   * `GET /users` is the staff directory and answers 403 to a patient (#776),
+   * so a patient cannot pick from it. Acting as a patient — the role picked at
+   * sign-in, or the only role held — means the patient picker.
+   */
+  private isPatientCaller(): boolean {
+    if (this.roleContext.activeRole === 'ROLE_PATIENT') return true;
+    const roles = this.auth.getRoles();
+    return roles.length > 0 && roles.every((r) => r === 'ROLE_PATIENT');
+  }
+
+  /**
+   * A patient writes to their care team and to the clinicians of their
+   * appointments — the list the native apps offer. The two sources load
+   * independently: one failing still shows the other, with a warning that
+   * the list may be incomplete.
+   */
+  private loadPatientRecipients(): void {
+    let failures = 0;
+    const tolerant = (source: Observable<MessageableClinician[]>) =>
+      source.pipe(
+        catchError(() => {
+          failures++;
+          return of<MessageableClinician[]>([]);
+        }),
+      );
+    forkJoin([
+      tolerant(this.patientPortal.getMyCareTeamClinicians()),
+      tolerant(this.patientPortal.getMyAppointmentClinicians()),
+    ]).subscribe(([careTeam, appointments]) => {
+      const seen = new Set<string>([this.currentUserId]);
+      const targets = [...careTeam, ...appointments]
+        .filter((c) => {
+          if (seen.has(c.userId)) return false;
+          seen.add(c.userId);
+          return true;
+        })
+        .map(clinicianTarget);
+      this.availableUsers.set(targets);
+      this.loadingUsers.set(false);
+      if (failures === 2) {
+        this.toast.error(this.translate.instant('CHAT.RECIPIENTS_LOAD_FAILED'));
+      } else if (failures === 1) {
+        this.toast.warning(this.translate.instant('CHAT.RECIPIENTS_PARTIAL_LOAD'));
+      } else if (targets.length === 0) {
+        this.noRecipientsYet.set(true);
+      }
+    });
+  }
+
+  filteredUsers(): ChatTarget[] {
     const term = this.userSearchTerm().toLowerCase().trim();
     const users = this.availableUsers();
     if (!term) return users;
-    return users.filter(
-      (u) =>
-        u.firstName?.toLowerCase().includes(term) ||
-        u.lastName?.toLowerCase().includes(term) ||
-        u.username?.toLowerCase().includes(term) ||
-        u.email?.toLowerCase().includes(term),
-    );
+    return users.filter((u) => u.searchFields.some((f) => f?.toLowerCase().includes(term)));
   }
 
-  startConversationWith(user: UserSummary): void {
+  startConversationWith(user: ChatTarget): void {
     // Create a synthetic conversation and select it
     const conv: ChatConversation = {
       conversationUserId: user.id,
-      conversationUserName: `${user.firstName} ${user.lastName}`.trim() || user.username,
+      conversationUserName: user.name,
       lastMessageContent: '',
       lastMessageTimestamp: '',
       lastMessageRead: true,

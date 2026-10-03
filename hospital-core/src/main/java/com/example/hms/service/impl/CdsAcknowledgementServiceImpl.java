@@ -58,11 +58,14 @@ public class CdsAcknowledgementServiceImpl implements CdsAcknowledgementService 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.notFound", userId));
 
-        Patient patient = patientRepository.findById(request.getPatientId())
-                .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
-
+        // The scope first: a hospital named in the body narrows the request,
+        // and it must do so before the tenant-scoped patient load reads (and
+        // seals) the scope.
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(
                 auth, request.getHospitalId(), false);
+
+        Patient patient = patientRepository.findById(request.getPatientId())
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
         requirePatientAccessible(auth, patient, resolvedHospitalId);
 
         Hospital hospital = null;

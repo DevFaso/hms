@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.security.EncryptedStringConverter;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.tenant.TenantEntityListener;
@@ -374,8 +375,8 @@ public class Patient extends BaseEntity implements TenantScoped {
         if (organizationId == null && effectiveContext.getActiveOrganizationId() != null) {
             organizationId = effectiveContext.getActiveOrganizationId();
         }
-        if (hospitalId == null && effectiveContext.getActiveHospitalId() != null) {
-            hospitalId = effectiveContext.getActiveHospitalId();
+        if (hospitalId == null && ActingScopeResolver.pinnedHospitalIdOf(effectiveContext) != null) {
+            hospitalId = ActingScopeResolver.pinnedHospitalIdOf(effectiveContext);
         }
         if (departmentId == null && !effectiveContext.getPermittedDepartmentIds().isEmpty()) {
             departmentId = effectiveContext.getPermittedDepartmentIds().iterator().next();

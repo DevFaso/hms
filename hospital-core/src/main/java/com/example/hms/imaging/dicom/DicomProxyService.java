@@ -1,5 +1,6 @@
 package com.example.hms.imaging.dicom;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.model.User;
@@ -7,7 +8,6 @@ import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.ImagingReportRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.security.SecurityUtils;
-import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.AuditEventLogService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -148,7 +148,7 @@ public class DicomProxyService {
      * out-of-scope caller cannot read other tenants' studies.
      */
     private boolean belongsToActiveHospital(String studyUid) {
-        UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
+        UUID hospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
         if (hospitalId == null) return false;
         return imagingReportRepository.existsByHospital_IdAndStudyInstanceUid(hospitalId, studyUid);
     }

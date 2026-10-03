@@ -28,6 +28,8 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.service.support.HospitalScopeUtils;
 import com.example.hms.specification.AppointmentSpecification;
 import jakarta.persistence.EntityManager;
@@ -266,9 +268,6 @@ public class AppointmentServiceImpl implements AppointmentService {
     public AppointmentSummaryDTO createAppointment(AppointmentRequestDTO request, Locale locale, String username) {
         User currentUser = getUserOrThrow(username);
 
-        // --- Patient resolution (falls back to authenticated user) ---
-        final Patient patient = resolvePatient(request, username);
-
         // Authorization: Staff/admins can book for any patient; pure patients can only book for themselves
         boolean isStaffOrAdmin = isSuperAdmin(currentUser)
             || hasRole(currentUser, "ROLE_HOSPITAL_ADMIN")
@@ -286,15 +285,15 @@ public class AppointmentServiceImpl implements AppointmentService {
             hasRole(currentUser, ROLE_NURSE_CODE),
             hasRole(currentUser, ROLE_RECEPTIONIST_CODE));
 
-        // If user is NOT staff/admin (i.e., they're a pure patient role), enforce self-booking
-        if (!isStaffOrAdmin) {
-            log.warn("❌ User {} is NOT staff/admin, enforcing self-booking restriction", currentUser.getUsername());
-            if (patient.getUser() == null || !patient.getUser().getId().equals(currentUser.getId())) {
-                throw new AccessDeniedException("Patients can only book appointments for themselves.");
-            }
-        } else {
-            log.info("✅ User {} is staff/admin, allowing booking for any patient", currentUser.getUsername());
-        }
+        // --- Patient resolution (falls back to authenticated user) ---
+        // A pure patient books only for themselves. Naming anyone else answers
+        // exactly as naming an unknown patient does — the same 404 and message
+        // for that identifier — where it used to be a 403 for a real patient
+        // beside a 404 for a made-up one, which told a patient which ids,
+        // usernames and emails exist.
+        final Patient patient = isStaffOrAdmin
+            ? resolvePatient(request, username)
+            : resolveOwnPatientForBooking(request, currentUser);
 
         // --- Hospital resolution (single block) ---
         final Hospital hospital = resolveHospital(request);
@@ -465,6 +464,36 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USER_KEY, authenticatedUsername));
         }
         throw new BusinessException("Patient identifier required");
+    }
+
+    /**
+     * The patient a pure patient books for: themselves. Each way of naming a
+     * patient answers a foreign one exactly as {@link #resolvePatient} answers
+     * one that does not exist, and asks ownership before loading anything a
+     * made-up identifier would not also reach.
+     */
+    private Patient resolveOwnPatientForBooking(AppointmentRequestDTO request, User currentUser) {
+        if (request.getPatientId() != null) {
+            if (!patientRepository.existsByIdAndUserId(request.getPatientId(), currentUser.getId())) {
+                throw new ResourceNotFoundException("patient.notfound", request.getPatientId());
+            }
+            return resolvePatient(request, currentUser.getUsername());
+        }
+        if (request.getPatientUsername() != null) {
+            if (!request.getPatientUsername().equalsIgnoreCase(currentUser.getUsername())) {
+                throw new ResourceNotFoundException(USER_NOT_FOUND_BY_USERNAME_KEY, request.getPatientUsername());
+            }
+            return resolvePatient(request, currentUser.getUsername());
+        }
+        if (request.getPatientEmail() != null) {
+            Patient named = patientRepository.findByEmailContainingIgnoreCase(request.getPatientEmail())
+                .stream().findFirst().orElse(null);
+            if (named == null || named.getUser() == null || !currentUser.getId().equals(named.getUser().getId())) {
+                throw new ResourceNotFoundException("patient.notFoundByIdentifier", request.getPatientEmail());
+            }
+            return named;
+        }
+        return resolvePatient(request, currentUser.getUsername());
     }
 
     private Hospital resolveHospital(AppointmentRequestDTO request) {
@@ -975,13 +1004,15 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Transactional(readOnly = true)
     public List<AppointmentResponseDTO> getAppointmentsByDoctorId(UUID staffId, Locale locale) {
         // ── Hospital scope enforcement: filter results to the caller's hospital scope ──
-        HospitalContext context = HospitalContextHolder.getContextOrEmpty();
-        if (context.isSuperAdmin()) {
+        // Global view only for a verified super-admin who named no hospital; a
+        // super-admin who named one reads it like anyone else.
+        ActingScope scope = ActingScopeResolver.currentScope();
+        if (scope instanceof ActingScope.Global) {
             return appointmentRepository.findByStaff_Id(staffId).stream()
                 .map(appointmentMapper::toAppointmentResponseDTO)
                 .toList();
         }
-        UUID activeHospitalId = context.getActiveHospitalId();
+        UUID activeHospitalId = scope instanceof ActingScope.Pinned pinned ? pinned.hospitalId() : null;
         if (activeHospitalId == null) {
             log.warn("getAppointmentsByDoctorId: no active hospital context, returning empty");
             return List.of();
@@ -1031,7 +1062,12 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private Set<UUID> resolveHospitalScope(User user) {
         HospitalContext context = HospitalContextHolder.getContextOrEmpty();
-        if (context.isSuperAdmin()) {
+        UUID pinnedHospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
+        if (context.isSuperAdmin() && pinnedHospitalId != null) {
+            // A super-admin who named a hospital reads that one (D1).
+            return Set.of(pinnedHospitalId);
+        }
+        if (context.isGlobalView()) {
             LinkedHashSet<UUID> superAdminScope = hospitalRepository.findAll().stream()
                 .map(Hospital::getId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
@@ -1046,10 +1082,10 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         if (log.isDebugEnabled()) {
             log.debug("resolveScope → context snapshot for {}: activeHospital={} permitted={} actual={}", user.getUsername(),
-                context.getActiveHospitalId(), context.getPermittedHospitalIds(), actualHospitalIds);
+                pinnedHospitalId, context.getPermittedHospitalIds(), actualHospitalIds);
             logHospitalLookup("assignments", actualHospitalIds);
         }
-        UUID activeCandidate = resolveActiveHospitalCandidate(context, actualHospitalIds);
+        UUID activeCandidate = resolveActiveHospitalCandidate(actualHospitalIds);
         if (activeCandidate != null) {
             return Set.of(activeCandidate);
         }
@@ -1084,8 +1120,8 @@ public class AppointmentServiceImpl implements AppointmentService {
         logHospitalLookup("scope", hospitalScope);
     }
 
-    private UUID resolveActiveHospitalCandidate(HospitalContext context, Set<UUID> actualHospitalIds) {
-        UUID activeHospitalId = context.getActiveHospitalId();
+    private UUID resolveActiveHospitalCandidate(Set<UUID> actualHospitalIds) {
+        UUID activeHospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
         if (activeHospitalId == null) {
             return null;
         }

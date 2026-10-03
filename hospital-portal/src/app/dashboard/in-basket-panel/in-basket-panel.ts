@@ -1,15 +1,17 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  OnInit,
+  effect,
   inject,
   signal,
   computed,
+  untracked,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { InBasketService, InBasketItem, InBasketSummary } from '../../services/in-basket.service';
 import { ToastService } from '../../core/toast.service';
+import { RoleContextService } from '../../core/role-context.service';
 import { RovingFocusDirective } from '../../shared/a11y/roving-focus.directive';
 import { currentLocale } from '../../shared/i18n/app-locale';
 
@@ -21,10 +23,14 @@ import { currentLocale } from '../../shared/i18n/app-locale';
   styleUrl: './in-basket-panel.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class InBasketPanelComponent implements OnInit {
+export class InBasketPanelComponent {
   private readonly inBasketService = inject(InBasketService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly roleContext = inject(RoleContextService);
+
+  /** Only the latest load may write: a response issued under the previous scope is dropped. */
+  private loadRequest = 0;
 
   /* ── state ── */
   items = signal<InBasketItem[]>([]);
@@ -48,8 +54,27 @@ export class InBasketPanelComponent implements OnInit {
 
   badgeCount = computed(() => this.summary().totalUnread);
 
-  ngOnInit(): void {
-    this.loadData();
+  constructor() {
+    // The load follows the hospital scope, not the mount: the endpoints are
+    // hospital-scoped, and on /in-basket nothing rebuilds the panel when the
+    // picker moves, so a load-once panel kept the old hospital's items and
+    // unread badge beside a lab category showing the new one. The effect
+    // covers the first render too. The previous hospital's rows are dropped
+    // BEFORE the new read is issued, never shown under the new scope.
+    effect(() => {
+      this.roleContext.effectiveHospitalIdForRequest();
+      untracked(() => {
+        this.items.set([]);
+        this.summary.set({
+          totalUnread: 0,
+          resultUnread: 0,
+          orderUnread: 0,
+          messageUnread: 0,
+          taskUnread: 0,
+        });
+        this.loadData();
+      });
+    });
   }
 
   /* ── public API ── */
@@ -138,20 +163,27 @@ export class InBasketPanelComponent implements OnInit {
   }
 
   private loadData(): void {
+    const request = ++this.loadRequest;
     this.loading.set(true);
     this.inBasketService.getItems().subscribe({
       next: (page) => {
+        if (request !== this.loadRequest) return;
         this.items.set(page.content);
         this.loading.set(false);
       },
-      error: () => this.loading.set(false),
+      error: () => {
+        if (request === this.loadRequest) this.loading.set(false);
+      },
     });
     this.loadSummary();
   }
 
   private loadSummary(): void {
+    const request = this.loadRequest;
     this.inBasketService.getSummary().subscribe({
-      next: (s) => this.summary.set(s),
+      next: (s) => {
+        if (request === this.loadRequest) this.summary.set(s);
+      },
     });
   }
 

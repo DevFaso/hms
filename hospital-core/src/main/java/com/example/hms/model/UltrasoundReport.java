@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.enums.UltrasoundFindingCategory;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.tenant.TenantEntityListener;
@@ -268,9 +269,9 @@ public class UltrasoundReport extends BaseEntity implements TenantScoped {
             return;
         }
         // Apply hospital scope from context if not already set
-        if (this.hospital == null && context.getActiveHospitalId() != null) {
+        if (this.hospital == null && ActingScopeResolver.pinnedHospitalIdOf(context) != null) {
             this.hospital = new Hospital();
-            this.hospital.setId(context.getActiveHospitalId());
+            this.hospital.setId(ActingScopeResolver.pinnedHospitalIdOf(context));
         }
     }
 }

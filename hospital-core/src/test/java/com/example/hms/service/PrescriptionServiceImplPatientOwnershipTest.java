@@ -9,7 +9,9 @@ import com.example.hms.payload.dto.PrescriptionResponseDTO;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.security.RoleExpansion;
+import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.security.oidc.KeycloakJwtAuthenticationConverter;
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -94,6 +96,11 @@ class PrescriptionServiceImplPatientOwnershipTest {
 
     @BeforeEach
     void setUp() {
+        // The services ask the one PatientSubjectReadGuard; it is built here over
+        // this class's authUtils and patientRepository so ownership is decided
+        // exactly as before, by those two.
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "subjectReadGuard",
+            new PatientSubjectReadGuard(authUtils, patientRepository));
         hospitalId = UUID.randomUUID();
         callerUserId = UUID.randomUUID();
         callerPatientId = UUID.randomUUID();
@@ -111,6 +118,7 @@ class PrescriptionServiceImplPatientOwnershipTest {
     @AfterEach
     void clearContext() {
         SecurityContextHolder.clearContext();
+        HospitalContextHolder.clear();
     }
 
     /** A password-path principal: {@code CustomUserDetails} carrying the HMS user id. */
@@ -137,7 +145,7 @@ class PrescriptionServiceImplPatientOwnershipTest {
             .claim("appUserId", callerUserId.toString())
             .claim("realm_access", Map.of("roles", List.of(roles)))
             .build();
-        SecurityContextHolder.getContext().setAuthentication(new KeycloakJwtAuthenticationConverter().convert(jwt));
+        ActingScopeTestSupport.signInLinked(new KeycloakJwtAuthenticationConverter().convert(jwt), callerUserId);
     }
 
     /**

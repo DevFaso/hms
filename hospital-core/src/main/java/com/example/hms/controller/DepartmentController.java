@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.tenant.HospitalScopeExempt;
 import com.example.hms.payload.dto.DepartmentFilterDTO;
 import com.example.hms.payload.dto.DepartmentMinimalDTO;
 import com.example.hms.payload.dto.DepartmentRequestDTO;
@@ -177,6 +178,8 @@ public class DepartmentController {
     @Operation(summary = "Get active departments (minimal)", description = "Returns a minimal list of active departments in a hospital.")
     @GetMapping("/active-minimal/{hospitalId}")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('DOCTOR') or hasRole('NURSE') or hasRole('MIDWIFE') or hasRole('RECEPTIONIST')")
+    @HospitalScopeExempt(reason = "A referral names the RECEIVING hospital's departments: a directory of another "
+        + "hospital (names only, no patient data), not the hospital the request acts at")
     public ResponseEntity<List<DepartmentMinimalDTO>> getActiveDepartmentsMinimal(
             @PathVariable UUID hospitalId,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {

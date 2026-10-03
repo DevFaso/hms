@@ -5,11 +5,12 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Role;
 import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.CustomUserDetails;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
-import com.example.hms.payload.dto.AuditEventRequestDTO;
-import com.example.hms.security.CustomUserDetails;
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import com.example.hms.service.AuditEventLogService;
 import org.hibernate.LazyInitializationException;
 import org.junit.jupiter.api.AfterEach;
@@ -88,7 +89,7 @@ class WriteAuditInterceptorTest {
         ObjectProvider<AuditEventLogService> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(auditService);
         assignmentRepository = mock(UserRoleHospitalAssignmentRepository.class);
-        interceptor = new WriteAuditInterceptor(provider, providerOf(new ControllerAuthUtils(mock(UserRoleHospitalAssignmentRepository.class))),
+        interceptor = new WriteAuditInterceptor(provider, providerOf(new ControllerAuthUtils(ActingScopeTestSupport.resolver())),
             providerOf(assignmentRepository));
         ReflectionTestUtils.setField(interceptor, "enabled", true);
         authenticate();
@@ -239,12 +240,12 @@ class WriteAuditInterceptorTest {
     }
 
     @Test
-    @DisplayName("a Keycloak JwtAuthenticationToken is attributed through its uid claim, not dropped")
+    @DisplayName("a Keycloak JwtAuthenticationToken is attributed through the account the filter linked, not dropped")
     void recordsOidcPrincipals() throws Exception {
         Jwt jwt = Jwt.withTokenValue("t").header("alg", "none")
-            .claim("uid", NURSE.toString()).claim("preferred_username", "nurse.awa").subject("nurse.awa").build();
-        SecurityContextHolder.getContext().setAuthentication(
-            new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("ROLE_NURSE"))));
+            .claim("appUserId", NURSE.toString()).claim("preferred_username", "nurse.awa").subject("nurse.awa").build();
+        ActingScopeTestSupport.signInLinked(
+            new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("ROLE_NURSE"))), NURSE);
 
         interceptor.afterCompletion(request("POST", "/labor/episodes", Map.of()), ok(201),
             handler(Handlers.class, "plain"), null);

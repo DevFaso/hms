@@ -1,5 +1,7 @@
 package com.example.hms.controller;
 
+import java.util.Optional;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.payload.dto.CheckInRequestDTO;
@@ -13,8 +15,6 @@ import com.example.hms.payload.dto.ReceptionDashboardSummaryDTO;
 import com.example.hms.payload.dto.ReceptionQueueItemDTO;
 import com.example.hms.payload.dto.WaitlistEntryRequestDTO;
 import com.example.hms.payload.dto.WaitlistEntryResponseDTO;
-import com.example.hms.security.context.HospitalContext;
-import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.ReceptionService;
 import com.example.hms.utility.RoleValidator;
 import io.swagger.v3.oas.annotations.Operation;
@@ -261,8 +261,7 @@ public class ReceptionController {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private UUID resolveHospitalId() {
-        return HospitalContextHolder.getContext()
-                .map(HospitalContext::getActiveHospitalId)
+        return Optional.ofNullable(ActingScopeResolver.pinnedHospitalIdOrNull())
                 .orElse(null);
     }
 }

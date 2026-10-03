@@ -11,7 +11,9 @@ import com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.security.RoleExpansion;
+import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.security.oidc.KeycloakJwtAuthenticationConverter;
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -108,6 +110,11 @@ class EncounterServiceImplReadAccessControlTest {
 
     @BeforeEach
     void setUp() {
+        // The services ask the one PatientSubjectReadGuard; it is built here over
+        // this class's authUtils and patientRepository so ownership is decided
+        // exactly as before, by those two.
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "subjectReadGuard",
+            new PatientSubjectReadGuard(authUtils, patientRepository));
         hospitalId = UUID.randomUUID();
         otherHospitalId = UUID.randomUUID();
         callerUserId = UUID.randomUUID();
@@ -147,6 +154,7 @@ class EncounterServiceImplReadAccessControlTest {
     @AfterEach
     void clearContext() {
         SecurityContextHolder.clearContext();
+        HospitalContextHolder.clear();
     }
 
     // ------------------------------------------------------------------
@@ -180,7 +188,7 @@ class EncounterServiceImplReadAccessControlTest {
             .claim("appUserId", callerUserId.toString())
             .claim("realm_access", Map.of("roles", List.of(roles)))
             .build();
-        SecurityContextHolder.getContext().setAuthentication(new KeycloakJwtAuthenticationConverter().convert(jwt));
+        ActingScopeTestSupport.signInLinked(new KeycloakJwtAuthenticationConverter().convert(jwt), callerUserId);
     }
 
     /**
