@@ -235,8 +235,10 @@ public class AuthController {
                 java.time.Instant.now());
 
         // ── Lockout check (T-12) ──
-        if (loginAttemptService.isLocked(loginRequest.getUsername())) {
-            long remainMs = loginAttemptService.remainingLockMs(loginRequest.getUsername());
+        // One lookup, the same for a known and an unknown name: see
+        // LoginAttemptService on why the 423 must not tell them apart.
+        long remainMs = loginAttemptService.remainingLockMs(loginRequest.getUsername());
+        if (remainMs > 0) {
             long remainMin = Math.max(1, (remainMs + 59_999) / 60_000);
             log.warn("🔐 [LOGIN] Account '{}' is locked", loginRequest.getUsername());
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
@@ -348,7 +350,7 @@ public class AuthController {
             log.debug("🔐 [LOGIN] Tokens generated (effectiveRoles={}); fetching profiles...", effectiveRoles);
 
             userCredentialLifecycleService.recordSuccessfulLogin(user.getId());
-            loginAttemptService.resetAttempts(loginRequest.getUsername());
+            loginAttemptService.resetAttempts(user.getId());
 
             // Pull details from related profiles
             var patient = user.getPatientProfile();
@@ -489,7 +491,7 @@ public class AuthController {
         // lockout, so five attempts before verifying would otherwise leave the
         // holder locked out at the moment the link finally works. This is the
         // endpoint that actually runs — UserService#verifyEmail has no caller.
-        loginAttemptService.resetAttempts(user.getUsername());
+        loginAttemptService.resetAttempts(user.getId());
 
         // 2. Activate all patient role assignments for this user
         var assignments = assignmentRepository.findByUserId(user.getId());

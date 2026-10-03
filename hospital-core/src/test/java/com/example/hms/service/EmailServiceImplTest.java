@@ -9,6 +9,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import com.example.hms.exception.NotificationTransportUnavailableException;
+import com.example.hms.service.mail.MailOutboxService;
 import org.springframework.context.MessageSource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessagePreparator;
@@ -23,6 +25,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -48,6 +51,9 @@ class EmailServiceImplTest {
     @Mock
     private MessageSource messageSource;
 
+    @Mock
+    private MailOutboxService mailOutbox;
+
     @InjectMocks
     private EmailServiceImpl emailService;
 
@@ -56,6 +62,12 @@ class EmailServiceImplTest {
     @BeforeEach
     void injectFrontendBaseUrl() {
         ReflectionTestUtils.setField(emailService, "frontendBaseUrl", FRONTEND_BASE_URL);
+        // A deployment with a real transport; DeliversRealEmail re-configures
+        // these per case, and the not-configured case below clears them.
+        ReflectionTestUtils.setField(emailService, "configuredMailHost", "smtp.example.test");
+        ReflectionTestUtils.setField(emailService, "configuredMailUsername", "noreply@example.test");
+        ReflectionTestUtils.setField(emailService, "configuredMailPassword", "secret");
+        ReflectionTestUtils.setField(emailService, "smtpAuthProperty", "true");
         // Every sentence comes from the bundle. The mock renders a key as
         // "key" or "key[arg|arg]" so a test can assert both that the right key
         // was asked for and that the dynamic values reached it — the real
@@ -72,30 +84,26 @@ class EmailServiceImplTest {
     }
 
     /**
-     * EmailServiceImpl.sendWithAttachment calls mailSender.send(MimeMessagePreparator),
-     * which is a void method — stub it to do nothing so tests don't hit a real mail server.
+     * Every templated mail is queued, never sent on the caller's thread: the
+     * outbox mock stands in for the table. Lenient because the address-edge
+     * cases below refuse before anything is queued.
      */
     private void stubMailSender() {
-        doNothing().when(mailSender).send(any(MimeMessagePreparator.class));
+        lenient().when(mailOutbox.enqueue(any(), any(), any(), anyString(), anyString()))
+            .thenReturn(UUID.randomUUID());
     }
 
     /**
-     * Runs the captured preparator against a real (unsent) MimeMessage so a
-     * test can assert on the copy itself. The wording is the product here:
-     * this mail told inactive accounts to sign in immediately, which is how a
-     * delivered activation code got reported as a missing activation email.
+     * The subject and body handed to the outbox, so a test can assert on the
+     * copy itself. The wording is the product here: this mail told inactive
+     * accounts to sign in immediately, which is how a delivered activation
+     * code got reported as a missing activation email.
      */
     private String renderedHtml() {
-        ArgumentCaptor<MimeMessagePreparator> captor =
-            ArgumentCaptor.forClass(MimeMessagePreparator.class);
-        verify(mailSender).send(captor.capture());
-        MimeMessage message = new MimeMessage(Session.getInstance(new Properties()));
-        try {
-            captor.getValue().prepare(message);
-            return message.getSubject() + System.lineSeparator() + collectText(message.getContent());
-        } catch (Exception e) {
-            throw new IllegalStateException("Could not render the prepared message", e);
-        }
+        ArgumentCaptor<String> subject = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(mailOutbox).enqueue(any(), any(), any(), subject.capture(), body.capture());
+        return subject.getValue() + System.lineSeparator() + body.getValue();
     }
 
     /** Flattens whatever the helper built (String, or a multipart tree). */
@@ -111,6 +119,57 @@ class EmailServiceImplTest {
             return sb.toString();
         }
         return String.valueOf(content);
+    }
+
+    // =========================================================================
+    // Transport — queued mail vs the synchronous send (V173)
+    // =========================================================================
+
+    @Nested
+    @DisplayName("transport")
+    class Transport {
+
+        @Test
+        @DisplayName("a templated mail is queued in the outbox and never handed to SMTP on the caller's thread")
+        void templatedMailIsQueuedNotSent() {
+            stubMailSender();
+            emailService.sendAccountRestoredEmail("awa@example.com", "Awa Traore");
+
+            verify(mailOutbox).enqueue(eq(List.of("awa@example.com")), eq(List.of()), eq(List.of()),
+                eq("email.account.restored.subject"), anyString());
+            verify(mailSender, never()).send(any(MimeMessagePreparator.class));
+        }
+
+        @Test
+        @DisplayName("with no mail transport nothing is queued and the caller hears NOT_CONFIGURED at once")
+        void noTransportRefusesInsteadOfQueueing() {
+            ReflectionTestUtils.setField(emailService, "configuredMailUsername", "");
+            ReflectionTestUtils.setField(emailService, "configuredMailPassword", "");
+            List<String> to = List.of("awa@example.com");
+            List<String> none = List.of();
+
+            assertThatThrownBy(() -> emailService.sendHtml(to, none, none, "subj", "<p>b</p>"))
+                .isInstanceOf(NotificationTransportUnavailableException.class);
+            verify(mailOutbox, never()).enqueue(any(), any(), any(), any(), any());
+            verify(mailSender, never()).send(any(MimeMessagePreparator.class));
+        }
+
+        @Test
+        @DisplayName("sendWithAttachment is the synchronous transport: straight to SMTP, never queued")
+        void sendWithAttachmentSendsNow() throws Exception {
+            doNothing().when(mailSender).send(any(MimeMessagePreparator.class));
+            emailService.sendWithAttachment(List.of("awa@example.com"), List.of("cc@example.com"), List.of(),
+                "Subject", "<p>Body</p>", null, null, null);
+
+            ArgumentCaptor<MimeMessagePreparator> captor = ArgumentCaptor.forClass(MimeMessagePreparator.class);
+            verify(mailSender).send(captor.capture());
+            MimeMessage message = new MimeMessage(Session.getInstance(new Properties()));
+            captor.getValue().prepare(message);
+            assertThat(message.getSubject()).isEqualTo("Subject");
+            assertThat(collectText(message.getContent())).contains("<p>Body</p>");
+            assertThat(message.getRecipients(jakarta.mail.Message.RecipientType.CC)).hasSize(1);
+            verify(mailOutbox, never()).enqueue(any(), any(), any(), any(), any());
+        }
     }
 
     // =========================================================================
@@ -256,11 +315,11 @@ class EmailServiceImplTest {
     class SendPasswordResetEmail {
 
         @Test
-        @DisplayName("delegates to mailSender once for a valid recipient")
+        @DisplayName("queues once for a valid recipient")
         void sendsEmail() {
             stubMailSender();
             emailService.sendPasswordResetEmail("user@example.com", "https://example.com/reset?token=abc");
-            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            verify(mailOutbox, times(1)).enqueue(any(), any(), any(), any(), any());
         }
 
         @Test
@@ -312,11 +371,11 @@ class EmailServiceImplTest {
     class SendPasswordResetConfirmationEmail {
 
         @Test
-        @DisplayName("delegates to mailSender once for a named recipient, greeting them by name")
+        @DisplayName("queues once for a named recipient, greeting them by name")
         void sendsForNamedRecipient() {
             stubMailSender();
             emailService.sendPasswordResetConfirmationEmail("user@example.com", "John Doe");
-            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            verify(mailOutbox, times(1)).enqueue(any(), any(), any(), any(), any());
             String html = renderedHtml();
             assertThat(html)
                 .contains("email.common.greeting.hi[John Doe]")
@@ -338,7 +397,7 @@ class EmailServiceImplTest {
         void sendsWithBlankDisplayName() {
             stubMailSender();
             emailService.sendPasswordResetConfirmationEmail("user@example.com", "");
-            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            verify(mailOutbox, times(1)).enqueue(any(), any(), any(), any(), any());
             assertThat(renderedHtml()).contains("email.common.greeting.anonymous");
         }
 
@@ -347,7 +406,7 @@ class EmailServiceImplTest {
         void sendsWithNullDisplayName() {
             stubMailSender();
             emailService.sendPasswordResetConfirmationEmail("user@example.com", null);
-            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            verify(mailOutbox, times(1)).enqueue(any(), any(), any(), any(), any());
             assertThat(renderedHtml()).contains("email.common.greeting.anonymous");
         }
 
@@ -357,7 +416,7 @@ class EmailServiceImplTest {
             ReflectionTestUtils.setField(emailService, "frontendBaseUrl", "https://custom.hms.example.com");
             stubMailSender();
             emailService.sendPasswordResetConfirmationEmail("user@example.com", "Alice");
-            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            verify(mailOutbox, times(1)).enqueue(any(), any(), any(), any(), any());
             String html = renderedHtml();
             assertThat(html)
                 .contains("href=\"https://custom.hms.example.com/login\"")
@@ -492,14 +551,14 @@ class EmailServiceImplTest {
     class SendAdminWelcomeEmail {
 
         @Test
-        @DisplayName("delegates to mailSender once for a fully populated request")
+        @DisplayName("queues once for a fully populated request")
         void sendsForFullRequest() {
             stubMailSender();
             emailService.sendAdminWelcomeEmail(
                 "admin@hospital.com", "Jane Doe", "janedoe",
                 "Temp@1234", "Hospital Admin", "City General Hospital",
                 "https://portal.example/onboarding/role-welcome?assignment=A-1");
-            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            verify(mailOutbox, times(1)).enqueue(any(), any(), any(), any(), any());
         }
 
         @Test
@@ -510,7 +569,7 @@ class EmailServiceImplTest {
                 "admin@hospital.com", "Jane Doe", "janedoe",
                 "Temp@1234", "Super Admin", null,
                 "https://portal.example/onboarding/role-welcome?assignment=A-2");
-            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            verify(mailOutbox, times(1)).enqueue(any(), any(), any(), any(), any());
             String html = renderedHtml();
             assertThat(html)
                 .contains("email.admin.welcome.body.created[Super Admin]")
@@ -525,7 +584,7 @@ class EmailServiceImplTest {
             emailService.sendAdminWelcomeEmail(
                 "admin@hospital.com", null, "janedoe",
                 "Temp@1234", "Doctor", "City Hospital", null);
-            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            verify(mailOutbox, times(1)).enqueue(any(), any(), any(), any(), any());
             assertThat(renderedHtml()).contains("email.common.greeting.anonymous");
         }
 
@@ -604,11 +663,11 @@ class EmailServiceImplTest {
     class SendAccountRestoredEmail {
 
         @Test
-        @DisplayName("delegates to mailSender once for a valid named recipient")
+        @DisplayName("queues once for a valid named recipient")
         void sendsForNamedRecipient() {
             stubMailSender();
             emailService.sendAccountRestoredEmail("user@example.com", "John Doe");
-            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            verify(mailOutbox, times(1)).enqueue(any(), any(), any(), any(), any());
             String html = renderedHtml();
             assertThat(html)
                 .startsWith("email.account.restored.subject")
@@ -617,20 +676,20 @@ class EmailServiceImplTest {
         }
 
         @Test
-        @DisplayName("delegates to mailSender once when displayName is blank (anonymous greeting)")
+        @DisplayName("queues once when displayName is blank (anonymous greeting)")
         void sendsWithBlankDisplayName() {
             stubMailSender();
             emailService.sendAccountRestoredEmail("user@example.com", "");
-            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            verify(mailOutbox, times(1)).enqueue(any(), any(), any(), any(), any());
             assertThat(renderedHtml()).contains("email.common.greeting.anonymous");
         }
 
         @Test
-        @DisplayName("delegates to mailSender once when displayName is null (anonymous greeting)")
+        @DisplayName("queues once when displayName is null (anonymous greeting)")
         void sendsWithNullDisplayName() {
             stubMailSender();
             emailService.sendAccountRestoredEmail("user@example.com", null);
-            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            verify(mailOutbox, times(1)).enqueue(any(), any(), any(), any(), any());
             assertThat(renderedHtml()).contains("email.common.greeting.anonymous");
         }
 
@@ -664,7 +723,7 @@ class EmailServiceImplTest {
         void sendsTheCode() {
             stubMailSender();
             emailService.sendEmailChangeVerificationEmail("new@example.com", "482913", java.util.Locale.ENGLISH);
-            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            verify(mailOutbox, times(1)).enqueue(any(), any(), any(), any(), any());
             assertThat(renderedHtml())
                 .startsWith("email.change.code.subject")
                 .contains("482913")
@@ -677,7 +736,7 @@ class EmailServiceImplTest {
         void noticeCarriesOnlyTheMaskedAddress() {
             stubMailSender();
             emailService.sendEmailChangedNoticeEmail("old@example.com", "John Doe", "n***@example.com", null);
-            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            verify(mailOutbox, times(1)).enqueue(any(), any(), any(), any(), any());
             assertThat(renderedHtml())
                 .startsWith("email.change.notice.subject")
                 .contains("email.common.greeting.hi[John Doe]")
@@ -690,7 +749,7 @@ class EmailServiceImplTest {
         void inUseNotice() {
             stubMailSender();
             emailService.sendEmailAddressInUseNoticeEmail("holder@example.com", null);
-            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            verify(mailOutbox, times(1)).enqueue(any(), any(), any(), any(), any());
             assertThat(renderedHtml())
                 .startsWith("email.change.inuse.subject")
                 .contains("email.change.inuse.body.intro")

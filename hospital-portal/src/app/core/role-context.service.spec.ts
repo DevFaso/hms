@@ -94,6 +94,43 @@ describe('RoleContextService', () => {
     expect(svc.hasRole('ROLE_NURSE')).toBeFalse();
   });
 
+  // ── hasAnyActiveRole: the same doctor equivalence as RoleGuard ──
+
+  it('hasAnyActiveRole admits a surgeon to a list naming ROLE_DOCTOR, as RoleGuard does', () => {
+    svc.setRoles(['ROLE_SURGEON']); // single role → pinned as the active role
+    expect(svc.hasAnyActiveRole(['ROLE_DOCTOR'])).toBeTrue();
+  });
+
+  it('hasAnyActiveRole admits a multi-role physician with no pinned role', () => {
+    svc.setRoles(['ROLE_PHYSICIAN', 'ROLE_HOSPITAL_ADMIN']);
+    expect(svc.activeRole).toBeNull();
+    expect(svc.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_NURSE'])).toBeTrue();
+  });
+
+  it('hasAnyActiveRole never widens a list that names no doctor', () => {
+    // The pharmacist-verify gate: expansion is of the HELD roles, so a
+    // prescriber is never offered the verify button.
+    const verifierRoles = ['ROLE_PHARMACIST', 'ROLE_PHARMACY_VERIFIER', 'ROLE_SUPER_ADMIN'];
+    svc.setRoles(['ROLE_DOCTOR', 'ROLE_SURGEON']);
+    expect(svc.hasAnyActiveRole(verifierRoles)).toBeFalse();
+    svc.activeRole = 'ROLE_PHYSICIAN';
+    expect(svc.hasAnyActiveRole(verifierRoles)).toBeFalse();
+  });
+
+  it('hasAnyActiveRoleExactly keeps the raw comparison for the isDoctor-backed gates', () => {
+    svc.setRoles(['ROLE_SURGEON']);
+    expect(svc.hasAnyActiveRoleExactly(['ROLE_DOCTOR'])).toBeFalse();
+    expect(svc.hasAnyActiveRoleExactly(['ROLE_SURGEON'])).toBeTrue();
+    svc.setRoles(['ROLE_PHYSICIAN', 'ROLE_NURSE']);
+    expect(svc.hasAnyActiveRoleExactly(['ROLE_DOCTOR'])).toBeFalse();
+  });
+
+  it('hasAnyActiveRole still honours a pinned non-doctor role over held doctor roles', () => {
+    svc.setRoles(['ROLE_SURGEON', 'ROLE_NURSE']);
+    svc.activeRole = 'ROLE_NURSE';
+    expect(svc.hasAnyActiveRole(['ROLE_DOCTOR'])).toBeFalse();
+  });
+
   // ── Cross-tenant scope (super-admin global view) ────────────
   //   docs/super-admin-cross-tenant-design.md
 

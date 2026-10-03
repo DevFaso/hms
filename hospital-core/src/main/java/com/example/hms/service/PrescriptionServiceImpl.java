@@ -470,13 +470,16 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         boolean prescriberHere = roleValidator.isDoctor(currentUserId, rxHospitalId)
             || roleValidator.isPhysician(currentUserId, rxHospitalId)
             || roleValidator.isSurgeon(currentUserId, rxHospitalId);
+        // Client-safe: cosignPrescription has already answered 404 for a
+        // prescription outside the caller's scope, and the sentence names what
+        // the caller would need, not anything about the record.
         if (!prescriberHere) {
-            throw new AccessDeniedException(
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                 "Only a clinician with an active prescribing assignment at the prescribing "
                     + "hospital can co-sign a prescription.");
         }
         return staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUserId)
-            .orElseThrow(() -> new AccessDeniedException(
+            .orElseThrow(() -> new com.example.hms.exception.ClientSafeAccessDeniedException(
                 "Only a clinician with a staff profile can co-sign a prescription."));
     }
 
@@ -503,7 +506,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         UUID currentUserId = roleValidator.getCurrentUserId();
         if (currentUserId == null || prescriberUserId == null
                 || !prescriberUserId.equals(currentUserId)) {
-            throw new AccessDeniedException(
+            // Client-safe: signPrescription resolved the row in the caller's
+            // scope first; "you are not its prescriber" reveals nothing more.
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                 "Only the prescribing clinician can sign this prescription.");
         }
         return prescriber;

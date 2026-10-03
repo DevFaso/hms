@@ -1,5 +1,7 @@
 import { Injectable, signal, computed } from '@angular/core';
 
+import { expandRoleEquivalents, roleSatisfies } from './role-equivalence';
+
 @Injectable({ providedIn: 'root' })
 export class RoleContextService {
   isReceptionist(): boolean {
@@ -128,8 +130,29 @@ export class RoleContextService {
    * Active-role-aware check for gating page actions. When the user picked an
    * active role at login only that role counts (a multi-role user scoped to
    * NURSE must not see doctor-only actions); otherwise all JWT roles apply.
+   *
+   * Applies the same doctor equivalence as `RoleGuard` and the shell nav
+   * (`role-equivalence.ts`, role audit C2): a physician or surgeon satisfies a
+   * list naming ROLE_DOCTOR. It used to compare raw strings, so every
+   * in-component gate was narrower than the route hosting it and hid controls
+   * the backend would serve. The expansion widens the HELD roles, never the
+   * list asked about: a list with no ROLE_DOCTOR in it (the pharmacist-verify
+   * gate, say) admits exactly whom it admitted before.
    */
   hasAnyActiveRole(roles: string[]): boolean {
+    const active = this._activeRole();
+    if (active) return roleSatisfies(roles, active);
+    return expandRoleEquivalents(this._activeRoles()).some((r) => roles.includes(r));
+  }
+
+  /**
+   * `hasAnyActiveRole` WITHOUT the doctor equivalence, for the few gates whose
+   * backend admits physicians and surgeons at the annotation and then refuses
+   * them one layer down (`RoleValidator.isDoctor` matches the stored
+   * assignment code DOCTOR only). Expanding there would offer a control that
+   * can only fail. Each caller says which service check it mirrors.
+   */
+  hasAnyActiveRoleExactly(roles: string[]): boolean {
     const active = this._activeRole();
     if (active) return roles.includes(active);
     return roles.some((r) => this._activeRoles().includes(r));

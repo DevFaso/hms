@@ -26,7 +26,8 @@ import java.util.UUID;
  * caller's transaction can roll back without losing the trace, and they
  * never throw — a bug in the recorder must not fail the partner-side
  * write that triggered it. PHI in the payload is truncated at
- * {@link #MAX_PAYLOAD_CHARS}.
+ * {@link #MAX_PAYLOAD_CHARS} and encrypted at rest by the entity's
+ * {@code EncryptedStringConverter}.
  */
 @Service
 @RequiredArgsConstructor

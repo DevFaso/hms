@@ -141,7 +141,12 @@ describe('StockRoutingComponent', () => {
     component.checkStock();
 
     expect(pharmacySvc.checkStock).toHaveBeenCalledWith('rx-1');
-    expect(pharmacySvc.listRoutingDecisionsByPrescription).toHaveBeenCalledWith('rx-1', 0, 10);
+    // A deterministic order with a unique tiebreaker, or page 2 is not a
+    // continuation of page 1.
+    expect(pharmacySvc.listRoutingDecisionsByPrescription).toHaveBeenCalledWith('rx-1', 0, 10, [
+      'decidedAt,desc',
+      'id,desc',
+    ]);
     expect(component.stockResult()?.medicationName).toBe('Amoxicillin');
     expect(component.decisions().length).toBe(1);
   });

@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.support.EducationProgressRows;
 import com.example.hms.enums.EducationCategory;
 import com.example.hms.enums.EducationComprehensionStatus;
 import com.example.hms.enums.EducationResourceType;
@@ -222,8 +223,8 @@ public class PatientEducationServiceImpl implements PatientEducationService {
         Hospital hospital = hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND + hospitalId));
 
-        PatientEducationProgress progress = progressRepository
-            .findTopByPatientIdAndResourceIdOrderByCreatedAtDesc(patientId, requestDTO.getResourceId())
+        PatientEducationProgress progress = EducationProgressRows
+            .canonical(progressRepository.findByPatientIdAndResourceId(patientId, requestDTO.getResourceId()))
             .orElseGet(() -> {
                 PatientEducationProgress newProgress = new PatientEducationProgress();
                 newProgress.setPatientId(patientId);

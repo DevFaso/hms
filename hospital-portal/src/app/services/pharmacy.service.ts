@@ -250,18 +250,27 @@ export type DispenseVerificationStatus = 'NOT_VERIFIED' | 'VERIFIED' | 'OVERRIDD
 /** Which dispense-time check was overridden. Mirrors the backend enum. */
 export type DispenseCheck = 'PATIENT' | 'DRUG' | 'EXPIRY';
 
+/**
+ * Mirrors `DispenseResponseDTO` field for field. Six fields used to be
+ * declared here that `DispenseMapper` never sent (patientName, pharmacyName,
+ * dispensedById, dispensedByName, verifiedById, verifiedByName) while the
+ * wire carried `dispensedBy` / `verifiedBy`, so the dispensing history's
+ * "Dispensed by" column was blank on every row. The backend now sends
+ * `dispensedByName`; the ids are named as the wire names them; the rest,
+ * which nothing rendered, are gone rather than left to look available.
+ */
 export interface DispenseResponse {
   id: string;
   prescriptionId: string;
   patientId: string;
-  patientName?: string;
   pharmacyId: string;
-  pharmacyName?: string;
   stockLotId?: string;
-  dispensedById: string;
+  /** The dispensing user's id. */
+  dispensedBy: string;
+  /** Their name; absent when none is on file. */
   dispensedByName?: string;
-  verifiedById?: string;
-  verifiedByName?: string;
+  /** The verifying user's id, when a second person verified. */
+  verifiedBy?: string;
   medicationCatalogItemId?: string;
   medicationName: string;
   quantityRequested: number;
@@ -864,10 +873,14 @@ export class PharmacyService {
     prescriptionId: string,
     page = 0,
     size = 20,
-    sort?: string,
+    sort?: string | string[],
   ): Observable<ApiResponse<Page<RoutingDecisionResponse>>> {
     let params = new HttpParams().set('page', page).set('size', size);
-    if (sort) params = params.set('sort', sort);
+    // Spring takes one `sort` parameter per key, so a tiebreaker is a second
+    // parameter rather than a longer string.
+    for (const key of typeof sort === 'string' ? [sort] : (sort ?? [])) {
+      params = params.append('sort', key);
+    }
     return this.http.get<ApiResponse<Page<RoutingDecisionResponse>>>(
       `/pharmacy/routing/decisions/prescription/${prescriptionId}`,
       { params },

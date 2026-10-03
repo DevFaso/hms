@@ -8,9 +8,12 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests for the {@link PatientDiagnosis} entity — constructor defaults,
@@ -118,6 +121,31 @@ class PatientDiagnosisTest {
                 () -> assertEquals("CHRONIC", d.getStatus()),
                 () -> assertEquals(now, d.getDiagnosedAt())
             );
+        }
+    }
+
+    // ═══════════════ V171: a new row records its hospital ═══════════════
+
+    @Nested
+    @DisplayName("requireHospitalOnCreate (V171)")
+    class RequireHospitalOnCreate {
+
+        @Test
+        @DisplayName("refuses to insert a diagnosis with no hospital")
+        void refusesWithoutHospital() {
+            PatientDiagnosis d = PatientDiagnosis.builder().description("Hypertension").build();
+
+            IllegalStateException ex = assertThrows(IllegalStateException.class, d::requireHospitalOnCreate);
+            assertTrue(ex.getMessage().contains("V171"));
+        }
+
+        @Test
+        @DisplayName("accepts a diagnosis that records its hospital")
+        void acceptsWithHospital() {
+            Hospital hospital = new Hospital();
+            PatientDiagnosis d = PatientDiagnosis.builder().description("Hypertension").hospital(hospital).build();
+
+            assertDoesNotThrow(d::requireHospitalOnCreate);
         }
     }
 }

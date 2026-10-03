@@ -240,11 +240,13 @@ public class UserRoleHospitalAssignmentController {
         return ResponseEntity.noContent().build();
     }
 
-    @Operation(summary = "Delete all assignments for a specific user")
+    @Operation(summary = "Retire all assignments of a specific user",
+        description = "Deactivates every assignment the user holds; the rows are kept, because "
+            + "encounters and other clinical records keep the assignment they were recorded under.")
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
     @DeleteMapping("/user/{userId}")
     public ResponseEntity<Void> deleteAllForUser(@PathVariable UUID userId) {
-        log.warn("🗑️ Deleting all assignments for user ID {}", userId);
+        log.warn("🔒 Deactivating all assignments for user ID {}", userId);
         assignmentService.deleteAllAssignmentsForUser(userId);
         return ResponseEntity.noContent().build();
     }

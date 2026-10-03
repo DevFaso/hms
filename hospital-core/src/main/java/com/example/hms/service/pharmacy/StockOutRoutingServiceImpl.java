@@ -63,6 +63,9 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
     private static final String AUDIT_ENTITY = "PRESCRIPTION_ROUTING";
 
+    /** {@code prescription_routing_decisions.no_show_reason} is 1024 characters. */
+    private static final int NO_SHOW_REASON_MAX_LENGTH = 1024;
+
     /**
      * What a pharmacist may route (to a partner, to paper, or to a back
      * order).
@@ -242,11 +245,6 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
         // Create routing decision
         dto.setRoutingType(RoutingType.PARTNER);
-        // The reason is client free text and shares a column with the no-show
-        // marker, so a pharmacist typing one (by accident or not) would give
-        // their own routing reason a translated "the partner never delivered"
-        // flag and lose the sentence out of the reason. Defanged on the way in.
-        dto.setReason(PartnerNoShowReason.defuseAuthoredReason(dto.getReason()));
         PrescriptionRoutingMapper.RoutingContext ctx = new PrescriptionRoutingMapper.RoutingContext(
                 prescription, targetPharmacy, currentUser, patient, remaining);
         PrescriptionRoutingDecision decision = routingMapper.toEntity(dto, ctx);
@@ -467,15 +465,23 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                     + "this one is " + decision.getStatus() + ".");
         }
 
+        String words = reason.trim();
+        if (words.length() > NO_SHOW_REASON_MAX_LENGTH) {
+            // Refused rather than shortened: eating the end of a sentence
+            // somebody typed, with nothing on screen to say so, is not
+            // something a pharmacy record should do quietly.
+            throw new BusinessException(
+                    "This no-show reason is too long to record. Shorten it by at least "
+                            + (words.length() - NO_SHOW_REASON_MAX_LENGTH) + " characters.");
+        }
+
         Prescription prescription = decision.getPrescription();
         decision.setStatus(RoutingDecisionStatus.CANCELLED);
-        // The pharmacist's words are client text like any other, so they are
-        // defused before being composed: the marker in front of them is the
-        // server's assertion of the fact, and a second one inside them would
-        // both double it and reach the prescriber as a raw reserved token.
-        decision.setReason(PartnerNoShowReason.compose(
-                decision.getReason(),
-                PartnerNoShowReason.defuseAuthoredReason(reason.trim())));
+        // The fact and the pharmacist's words have columns of their own (V167),
+        // so the routing reason the decision was taken for stays untouched and
+        // nothing a client types can be mistaken for the fact.
+        decision.setPartnerNoShow(true);
+        decision.setNoShowReason(words);
         prescription.setStatus(PrescriptionStatus.SIGNED);
         // The partner that did not deliver is no longer this order's pharmacy.
         clearPharmacy(prescription);

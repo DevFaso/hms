@@ -9,6 +9,7 @@ import com.example.hms.service.integration.MllpInboundOutcome;
 import com.example.hms.service.integration.message.IntegrationMessageRecorder;
 import com.example.hms.service.integration.message.MllpRecordingContext;
 import com.example.hms.service.platform.MllpAllowedSenderService;
+import com.example.hms.utility.Hl7SenderText;
 import com.example.hms.utility.Hl7v2MessageBuilder;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedAdtMessage;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedObservation;
@@ -117,6 +118,20 @@ public class Hl7MessageDispatcher {
             header = Hl7MessageInspector.parseHeader(hl7Body);
         } catch (MllpProtocolException ex) {
             log.warn("[MLLP {}] Rejecting message — invalid MSH: {}", remoteAddress, ex.getMessage());
+            // A refused sender field still leaves a readable MSH-10: answer on
+            // that header, so MSA-2 echoes it and the sender can match its
+            // own refusal instead of resending. Only an unreadable MSH, or an
+            // over-width MSH-10 itself, falls back to the anonymous envelope.
+            Hl7MessageHeader replyHeader = ex instanceof MllpFieldWidthException widthRefusal
+                ? widthRefusal.replyHeader()
+                : null;
+            // The row names the MSH-10 the AR echoes (quoted, like every
+            // dead-letter reason), so an operator can match it to the refusal
+            // the sender received.
+            String invalidMsh = "Invalid MSH: " + ex.getMessage();
+            String reason = replyHeader != null
+                ? MllpRecordingContext.withControlId(invalidMsh, replyHeader.messageControlId())
+                : invalidMsh;
             // No parsed header — record under a sentinel integration id
             // so the DLQ surface still shows the failure. The fallback
             // header is what we send back as the ACK envelope.
@@ -124,7 +139,7 @@ public class Hl7MessageDispatcher {
             // form, not a hand-written copy of it.
             recordReject(MllpRecordingContext.integrationId(null, null),
                 null, "UNKNOWN", hl7Body,
-                "Invalid MSH: " + ex.getMessage(), "invalid MSH",
+                reason, "invalid MSH",
                 // No scope, so no dedupe: a random id per row and every
                 // occurrence keeps its own counted entry and its own body.
                 //
@@ -137,16 +152,11 @@ public class Hl7MessageDispatcher {
                 // not-allowlisted path was fixed for. There is no sender to
                 // bound by when the header is the thing that would not parse.
                 null);
-            // A refused sender field still leaves a readable MSH-10: answer on
-            // that header, so MSA-2 echoes it and the sender can match its
-            // own refusal instead of resending. Only an unreadable MSH, or an
-            // over-width MSH-10 itself, falls back to the anonymous envelope.
-            Hl7MessageHeader envelope = ex instanceof MllpFieldWidthException widthRefusal
-                    && widthRefusal.replyHeader() != null
-                ? widthRefusal.replyHeader()
+            Hl7MessageHeader envelope = replyHeader != null
+                ? replyHeader
                 : new Hl7MessageHeader(
                     "|", "^~\\&", "?", "?", "HMS", "HMS", "", "ACK", "?", "P", "2.5");
-            return Hl7AckBuilder.buildAck(envelope, Hl7AckBuilder.AckCode.AR, "Invalid MSH: " + ex.getMessage());
+            return Hl7AckBuilder.buildAck(envelope, Hl7AckBuilder.AckCode.AR, invalidMsh);
         }
 
         // Allowlist gate — runs before any domain work so unknown
@@ -159,7 +169,11 @@ public class Hl7MessageDispatcher {
                 header.messageType());
             recordReject(integrationIdFor(header), null,
                 header.messageType(), hl7Body,
-                "sender " + header.sendingApplication() + "/" + header.sendingFacility()
+                // The claimed pair is the sender's text, and not yet checked
+                // against anything: quoted, so it cannot end its slot and
+                // write a finding of its own into the reason.
+                "sender " + Hl7SenderText.quote(header.sendingApplication())
+                    + "/" + Hl7SenderText.quote(header.sendingFacility())
                     + " not allowlisted",
                 "sender not allowlisted",
                 // The claimed sender, normalised. This bounds the honest
@@ -202,7 +216,8 @@ public class Hl7MessageDispatcher {
             header.sendingApplication(), header.sendingFacility());
         recordReject(integrationIdFor(header), organizationIdOf(hospital.get()),
             header.messageType(), hl7Body,
-            "unsupported message type " + header.messageType(),
+            // MSH-9 is whatever the sender wrote: quoted in the reason.
+            "unsupported message type " + Hl7SenderText.quote(header.messageType()),
             // One row per sender for unsupported types, not one per type:
             // MSH-9 is sender-controlled, so keying on it would let anyone
             // mint entries. The cost is stated rather than hidden - a partner
@@ -247,7 +262,7 @@ public class Hl7MessageDispatcher {
                 header.sendingApplication(), header.sendingFacility());
             recordReject(integrationIdFor(header), organizationIdOf(hospital),
                 header.messageType(), hl7Body,
-                "unparseable " + header.messageType()
+                "unparseable " + Hl7SenderText.quote(header.messageType())
                     + " — missing or over-width PID-3 or required segments",
                 // The trigger belongs in the key: it is one of the five in
                 // ACCEPTED_ADT_EVENTS, checked before we got here, so it

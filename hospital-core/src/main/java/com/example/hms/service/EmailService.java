@@ -121,10 +121,28 @@ public interface EmailService {
         String tempPassword
     );
 
+    /**
+     * Queue one HTML mail for the outbox sweep and return. Every templated
+     * mail on this interface goes through here, so a normal return from any of
+     * them means QUEUED, not delivered: the SMTP conversation happens later,
+     * on the sweep's thread, with retries (V173). Throws, and queues nothing,
+     * when an address is malformed ({@link IllegalArgumentException}) or this
+     * deployment has no mail transport
+     * ({@link com.example.hms.exception.NotificationTransportUnavailableException}),
+     * so a caller that reports delivery still reports those at once.
+     */
     void sendHtml(
         List<String> to, List<String> cc, List<String> bcc,
         String subject, String htmlBody);
 
+    /**
+     * Hand one mail to the SMTP server NOW, on the calling thread, and return
+     * only once it was accepted: the synchronous transport. Used by the outbox
+     * sweep and by the two senders whose own state records the send (invoice
+     * status, scheduled-report run), which also carry attachments the outbox
+     * does not store. Do not call it from a request thread holding a database
+     * connection.
+     */
     void sendWithAttachment(
         List<String> to, List<String> cc, List<String> bcc,
         String subject, String htmlBody,

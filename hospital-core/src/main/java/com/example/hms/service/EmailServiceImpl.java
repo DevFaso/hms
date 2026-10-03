@@ -1,5 +1,7 @@
 package com.example.hms.service;
 
+import com.example.hms.exception.NotificationTransportUnavailableException;
+import com.example.hms.service.mail.MailOutboxService;
 import com.example.hms.utility.ActivationDeliveryTracker;
 import com.example.hms.utility.EmailAddresses;
 
@@ -20,6 +22,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 /**
  * Composes every transactional mail from the message bundle.
@@ -42,6 +45,7 @@ public class EmailServiceImpl implements EmailService {
 
     private final JavaMailSender mailSender;
     private final MessageSource messageSource;
+    private final MailOutboxService mailOutbox;
 
     @Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -160,7 +164,7 @@ public class EmailServiceImpl implements EmailService {
                                                 String rescheduleLink, String cancelLink, Locale locale) {
         validateAddresses(List.of(to));
         Locale l = recipientLocale(locale);
-        log.info("📧 Sending appointment rescheduled email to: {}", to);
+        log.info("📧 Composing appointment rescheduled email for {}", ActivationDeliveryTracker.maskEmail(to));
         String subject = text(l, "email.appointment.rescheduled.subject");
         String body = heading(subject)
             + paragraph(text(l, KEY_GREETING_DEAR, escapeHtml(patientName)))
@@ -170,7 +174,7 @@ public class EmailServiceImpl implements EmailService {
             + appointmentLinks(l, "email.appointment.rescheduled.links.intro", rescheduleLink, cancelLink)
             + paragraph(text(l, KEY_APPOINTMENT_CONTACT, escapeHtml(hospitalEmail), escapeHtml(hospitalPhone)));
         sendHtml(List.of(to), List.of(), List.of(), subject, body);
-        log.info("✅ Appointment rescheduled email sent to {}", to);
+        log.info("✅ Appointment rescheduled email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
     @Override
@@ -179,7 +183,7 @@ public class EmailServiceImpl implements EmailService {
                                               String hospitalEmail, String hospitalPhone, Locale locale) {
         validateAddresses(List.of(to));
         Locale l = recipientLocale(locale);
-        log.info("📧 Sending appointment cancelled email to: {}", to);
+        log.info("📧 Composing appointment cancelled email for {}", ActivationDeliveryTracker.maskEmail(to));
         String subject = text(l, "email.appointment.cancelled.subject");
         String body = heading(subject)
             + paragraph(text(l, KEY_GREETING_DEAR, escapeHtml(patientName)))
@@ -187,7 +191,7 @@ public class EmailServiceImpl implements EmailService {
                 escapeHtml(appointmentDate), escapeHtml(appointmentTime)))
             + paragraph(text(l, KEY_APPOINTMENT_CONTACT, escapeHtml(hospitalEmail), escapeHtml(hospitalPhone)));
         sendHtml(List.of(to), List.of(), List.of(), subject, body);
-        log.info("✅ Appointment cancelled email sent to {}", to);
+        log.info("✅ Appointment cancelled email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
     @Override
@@ -196,7 +200,7 @@ public class EmailServiceImpl implements EmailService {
                                               String hospitalEmail, String hospitalPhone, Locale locale) {
         validateAddresses(List.of(to));
         Locale l = recipientLocale(locale);
-        log.info("📧 Sending appointment completed email to: {}", to);
+        log.info("📧 Composing appointment completed email for {}", ActivationDeliveryTracker.maskEmail(to));
         String subject = text(l, "email.appointment.completed.subject");
         String body = heading(subject)
             + paragraph(text(l, KEY_GREETING_DEAR, escapeHtml(patientName)))
@@ -204,7 +208,7 @@ public class EmailServiceImpl implements EmailService {
                 escapeHtml(appointmentDate), escapeHtml(appointmentTime)))
             + paragraph(text(l, KEY_APPOINTMENT_CONTACT, escapeHtml(hospitalEmail), escapeHtml(hospitalPhone)));
         sendHtml(List.of(to), List.of(), List.of(), subject, body);
-        log.info("✅ Appointment completed email sent to {}", to);
+        log.info("✅ Appointment completed email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
     @Override
@@ -213,7 +217,7 @@ public class EmailServiceImpl implements EmailService {
                                            String hospitalEmail, String hospitalPhone, Locale locale) {
         validateAddresses(List.of(to));
         Locale l = recipientLocale(locale);
-        log.info("📧 Sending appointment no-show email to: {}", to);
+        log.info("📧 Composing appointment no-show email for {}", ActivationDeliveryTracker.maskEmail(to));
         String subject = text(l, "email.appointment.noshow.subject");
         String body = heading(subject)
             + paragraph(text(l, KEY_GREETING_DEAR, escapeHtml(patientName)))
@@ -221,7 +225,7 @@ public class EmailServiceImpl implements EmailService {
                 escapeHtml(appointmentDate), escapeHtml(appointmentTime)))
             + paragraph(text(l, "email.appointment.noshow.contact", escapeHtml(hospitalEmail), escapeHtml(hospitalPhone)));
         sendHtml(List.of(to), List.of(), List.of(), subject, body);
-        log.info("✅ Appointment no-show email sent to {}", to);
+        log.info("✅ Appointment no-show email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
     @Override
@@ -231,7 +235,7 @@ public class EmailServiceImpl implements EmailService {
                                                  String rescheduleLink, String cancelLink, Locale locale) {
         validateAddresses(List.of(to));
         Locale l = recipientLocale(locale);
-        log.info("📧 Sending appointment confirmation email to: {}", to);
+        log.info("📧 Composing appointment confirmation email for {}", ActivationDeliveryTracker.maskEmail(to));
         String subject = text(l, "email.appointment.confirmed.subject");
         String body = heading(subject)
             + paragraph(text(l, KEY_GREETING_DEAR, escapeHtml(patientName)))
@@ -240,7 +244,7 @@ public class EmailServiceImpl implements EmailService {
             + appointmentLinks(l, "email.appointment.links.intro", rescheduleLink, cancelLink)
             + paragraph(text(l, KEY_APPOINTMENT_CONTACT, escapeHtml(hospitalEmail), escapeHtml(hospitalPhone)));
         sendHtml(List.of(to), List.of(), List.of(), subject, body);
-        log.info("✅ Appointment confirmation email sent to {}", to);
+        log.info("✅ Appointment confirmation email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
     private static String heading(String s) {
@@ -285,10 +289,24 @@ public class EmailServiceImpl implements EmailService {
             && configuredMailPassword != null && !configuredMailPassword.isBlank();
     }
 
+    /**
+     * Queues instead of sending: see {@link EmailService#sendHtml}. The body is
+     * composed here, on the caller's thread and in the caller's locale; only
+     * the SMTP conversation moves to the outbox sweep.
+     */
     @Override
     public void sendHtml(List<String> to, List<String> cc, List<String> bcc,
                          String subject, String htmlBody) {
-        sendWithAttachment(to, cc, bcc, subject, htmlBody, null, null, null);
+        validateAddresses(to);
+        if (!deliversRealEmail()) {
+            // Queueing mail no transport will ever carry would turn today's
+            // NOT_CONFIGURED report into a false QUEUED one.
+            throw new NotificationTransportUnavailableException(
+                "Mail transport is not configured on this deployment");
+        }
+        UUID id = mailOutbox.enqueue(to, cc, bcc, subject, htmlBody);
+        log.info("📧 Mail queued as outbox {} for {}", id,
+            to.stream().map(ActivationDeliveryTracker::maskEmail).toList());
     }
 
     @Override
@@ -296,8 +314,9 @@ public class EmailServiceImpl implements EmailService {
                                    String subject, String htmlBody,
                                    byte[] attachment, String filename, String contentType) {
         validateAddresses(to);
-        log.info("📧 Sending email to: {}, subject: {}",
-            to.stream().map(ActivationDeliveryTracker::maskEmail).toList(), subject);
+        // No subject: some carry a patient's or a hospital's name.
+        log.info("📧 Sending email to: {}",
+            to.stream().map(ActivationDeliveryTracker::maskEmail).toList());
         mailSender.send(mime -> {
             var multipart = attachment != null;
             var helper = new MimeMessageHelper(mime, multipart, "UTF-8");
@@ -334,7 +353,7 @@ public class EmailServiceImpl implements EmailService {
         // EmailService#DEFAULT_RECIPIENT_LOCALE). A patient at this point has
         // no medical history yet either, so the resolver would answer the same.
         Locale l = DEFAULT_RECIPIENT_LOCALE;
-        log.info("📧 Sending role assignment confirmation email to: {}", to);
+        log.info("📧 Composing role assignment confirmation email for {}", ActivationDeliveryTracker.maskEmail(to));
 
         boolean isPatient = roleDisplayName != null
                 && roleDisplayName.toUpperCase(Locale.ROOT).contains("PATIENT");
@@ -406,7 +425,7 @@ public class EmailServiceImpl implements EmailService {
         }
 
         sendHtml(List.of(to), List.of(), List.of(), subject, body);
-        log.info("✅ Role assignment confirmation email sent to {}", to);
+        log.info("✅ Role assignment confirmation email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
     // -------------------------------------------------------------------------
@@ -425,7 +444,7 @@ public class EmailServiceImpl implements EmailService {
         Locale l = DEFAULT_RECIPIENT_LOCALE;
         var body = buildActivationEmailBody(l, activationLink, patientName, username, hospitalName);
         sendHtml(List.of(to), List.of(), List.of(), text(l, "email.activation.subject"), body);
-        log.info("✅ Activation email sent to {}", to);
+        log.info("✅ Activation email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
     @Override
@@ -433,7 +452,7 @@ public class EmailServiceImpl implements EmailService {
         Locale l = DEFAULT_RECIPIENT_LOCALE;
         var body = buildResetEmailBody(l, resetLink);
         sendHtml(List.of(to), List.of(), List.of(), text(l, "email.password.reset.subject"), body);
-        log.info("✅ Password reset email sent to {}", to);
+        log.info("✅ Password reset email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
     @Override
@@ -468,7 +487,7 @@ public class EmailServiceImpl implements EmailService {
         String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
 
         sendHtml(List.of(to), List.of(), List.of(), text(l, "email.password.changed.subject"), body);
-        log.info("✅ Password reset confirmation email sent to {}", to);
+        log.info("✅ Password reset confirmation email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
     @Override
@@ -494,7 +513,7 @@ public class EmailServiceImpl implements EmailService {
 
         String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
         sendHtml(List.of(to), List.of(), List.of(), text(l, "email.account.restored.subject"), body);
-        log.info("✅ Account restored notification email sent to {}", to);
+        log.info("✅ Account restored notification email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
     @Override
@@ -526,7 +545,7 @@ public class EmailServiceImpl implements EmailService {
 
         String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
         sendHtml(List.of(to), List.of(), List.of(), text(l, "email.recovery.contact.subject"), body);
-        log.info("✅ Recovery contact verification email sent to {}", to);
+        log.info("✅ Recovery contact verification email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
     /*
@@ -562,7 +581,7 @@ public class EmailServiceImpl implements EmailService {
 
         String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
         sendHtml(List.of(to), List.of(), List.of(), text(l, "email.change.code.subject"), body);
-        log.info("✅ Email-change verification code sent");
+        log.info("✅ Email-change verification code queued");
     }
 
     @Override
@@ -586,7 +605,7 @@ public class EmailServiceImpl implements EmailService {
 
         String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
         sendHtml(List.of(to), List.of(), List.of(), text(l, "email.change.notice.subject"), body);
-        log.info("✅ Email-changed notice sent to the previous address");
+        log.info("✅ Email-changed notice queued for the previous address");
     }
 
     @Override
@@ -605,7 +624,7 @@ public class EmailServiceImpl implements EmailService {
 
         String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
         sendHtml(List.of(to), List.of(), List.of(), text(l, "email.change.inuse.subject"), body);
-        log.info("✅ Email-in-use notice sent");
+        log.info("✅ Email-in-use notice queued");
     }
 
     @Override
@@ -618,7 +637,7 @@ public class EmailServiceImpl implements EmailService {
             + paragraph(text(l, "email.username.reminder.body.signin", anchor(loginUrl())))
             + "<p style=\"color:#666\">" + text(l, "email.username.reminder.body.unexpected") + CLOSE_PARAGRAPH;
         sendHtml(List.of(toEmail), List.of(), List.of(), subject, body);
-        log.info("✅ Username reminder email sent to {}", toEmail);
+        log.info("✅ Username reminder email queued for {}", ActivationDeliveryTracker.maskEmail(toEmail));
     }
 
     @Override
@@ -639,7 +658,7 @@ public class EmailServiceImpl implements EmailService {
             + paragraph(text(l, "email.password.rotation.reminder.body.action", anchor(loginUrl())))
             + paragraph(text(l, "email.password.rotation.reminder.body.ignore"));
         sendHtml(List.of(to), List.of(), List.of(), subject, body);
-        log.info("📧 Password rotation reminder sent to {} ({} day(s) remaining)", to, daysRemaining);
+        log.info("📧 Password rotation reminder queued for {} ({} day(s) remaining)", ActivationDeliveryTracker.maskEmail(to), daysRemaining);
     }
 
     @Override
@@ -657,7 +676,7 @@ public class EmailServiceImpl implements EmailService {
             + paragraph(text(l, "email.password.rotation.force.body.action", anchor(loginUrl())))
             + paragraph(text(l, "email.password.rotation.force.body.restricted"));
         sendHtml(List.of(to), List.of(), List.of(), subject, body);
-        log.info("📧 Password rotation enforcement notice sent to {} ({} day(s) overdue)", to, daysOverdue);
+        log.info("📧 Password rotation enforcement notice queued for {} ({} day(s) overdue)", ActivationDeliveryTracker.maskEmail(to), daysOverdue);
     }
 
     private String buildActivationEmailBody(Locale l, String link, String patientName,
@@ -852,7 +871,7 @@ public class EmailServiceImpl implements EmailService {
         if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
         validateAddresses(List.of(to));
         Locale l = DEFAULT_RECIPIENT_LOCALE;
-        log.info("📧 Sending admin welcome email to: {}", to);
+        log.info("📧 Composing admin welcome email for {}", ActivationDeliveryTracker.maskEmail(to));
 
         String escapedRole     = hasText(roleName)     ? escapeHtml(roleName)     : text(l, "email.admin.welcome.fallback.role");
         String escapedHospital = hasText(hospitalName) ? escapeHtml(hospitalName) : null;
@@ -916,7 +935,7 @@ public class EmailServiceImpl implements EmailService {
         String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
 
         sendHtml(List.of(to), List.of(), List.of(), text(l, "email.admin.welcome.subject"), body);
-        log.info("✅ Admin welcome email sent to {}", to);
+        log.info("✅ Admin welcome email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
 

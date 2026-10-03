@@ -97,6 +97,29 @@ class Hl7InboundControllerTenancyTest {
     }
 
     @Test
+    @DisplayName("the replay key is the MLLP one: the pair as the allowlist matches it, MSH-10 exactly as bounded")
+    void theReplayKeyMatchesTheMllpIngest() {
+        UUID receivingHospitalId = UUID.randomUUID();
+        stubParse();
+        String bel = String.valueOf((char) 0x07);
+        String lowerCased = ORU.replace("|ANALYZER|LAB-A|", "| analyzer |lab-a|")
+            .replace("|MSG-1|", "|  MSG-1" + bel + "  |");
+        when(mllpAllowedSenderService.resolveHospitalId(" analyzer ", "lab-a"))
+            .thenReturn(Optional.of(receivingHospitalId));
+        when(labResultService.createIngestedLabResult(any(), eq(receivingHospitalId), any()))
+            .thenReturn(LabResultResponseDTO.builder().build());
+
+        controller.inbound(lowerCased, labOrderId, assignmentId, Locale.ENGLISH);
+
+        ArgumentCaptor<LabResultRequestDTO> sent = ArgumentCaptor.forClass(LabResultRequestDTO.class);
+        verify(labResultService).createIngestedLabResult(sent.capture(), eq(receivingHospitalId), any());
+        assertThat(sent.getValue().getSourceSendingApplication()).isEqualTo("ANALYZER");
+        assertThat(sent.getValue().getSourceSendingFacility()).isEqualTo("LAB-A");
+        // Spaces stripped, the control character kept: not a replay of MSG-1.
+        assertThat(sent.getValue().getSourceMessageControlId()).isEqualTo("MSG-1" + bel);
+    }
+
+    @Test
     @DisplayName("a sender that is not on the active allowlist never reaches the service")
     void anUnlistedSenderIsRefusedBeforeTheService() {
         stubParse();
@@ -165,17 +188,45 @@ class Hl7InboundControllerTenancyTest {
     }
 
     @Test
-    @DisplayName("an MSH-10 wider than its column is refused like an unreadable MSH, never truncated and stored")
+    @DisplayName("an MSH-10 wider than its column is a 400 naming the field and the limit, never truncated and stored")
     void anOverWidthMsh10IsRefusedNotTruncated() {
         // Before the parse-time bound this endpoint cut MSH-10 to 255 and
         // stored it, so two control ids sharing 255 characters became one
-        // replay key. Now the MSH is refused, and the body is answered as one
-        // that identifies no sender.
-        stubParse();
+        // replay key. Then it answered 404 laborder.notfound, which sent the
+        // integrator after a missing order. Now: 400, the field and the limit.
         String overWidth = ORU.replace("|MSG-1|", "|" + "C".repeat(256) + "|");
 
         assertThatThrownBy(() -> controller.inbound(overWidth, labOrderId, assignmentId, Locale.ENGLISH))
-            .isInstanceOf(ResourceNotFoundException.class);
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessage("Invalid MSH: MSH-10 exceeds 255 characters");
+
+        verify(mllpAllowedSenderService, never()).resolveHospitalId(any(), any());
+        verify(labResultService, never()).createIngestedLabResult(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("an over-width MSH-3 is a 400 as well, and the answer never carries the value")
+    void anOverWidthSenderFieldIsA400WithoutTheValue() {
+        String overWidth = ORU.replace("|ANALYZER|", "|" + "A".repeat(181) + "|");
+
+        assertThatThrownBy(() -> controller.inbound(overWidth, labOrderId, assignmentId, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessage("Invalid MSH: MSH-3 exceeds 180 characters")
+            .message().doesNotContain("AAAA");
+
+        verify(mllpAllowedSenderService, never()).resolveHospitalId(any(), any());
+    }
+
+    @Test
+    @DisplayName("an OBX-5 wider than result_value is a 400 naming the field, not a flush-time server error")
+    void anOverWidthResultValueIsA400() {
+        when(hl7v2MessageBuilder.parseOruR01(any())).thenReturn(List.of(new ParsedObservation(
+            "11111111-1111-1111-1111-111111111111", "PLACER-1", "ACC-1", "1",
+            "K", "4".repeat(2049), "mmol/L", "3.5-5.1", "N", LocalDateTime.now(), "F")));
+
+        assertThatThrownBy(() -> controller.inbound(ORU, labOrderId, assignmentId, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessage("OBX-5 exceeds 2048 characters");
 
         verify(mllpAllowedSenderService, never()).resolveHospitalId(any(), any());
         verify(labResultService, never()).createIngestedLabResult(any(), any(), any());

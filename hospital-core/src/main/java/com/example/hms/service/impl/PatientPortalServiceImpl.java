@@ -1,5 +1,7 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.support.EducationProgressRows;
+import com.example.hms.service.support.LinkedPatientLookup;
 import com.example.hms.config.SecurityConstants;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.EducationComprehensionStatus;
@@ -211,7 +213,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public UUID resolvePatientId(Authentication auth) {
         UUID userId = authUtils.resolveUserId(auth)
                 .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
-        return patientRepository.findByUserId(userId)
+        return LinkedPatientLookup.linkedPatient(patientRepository, userId)
                 .map(Patient::getId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "No patient record linked to your account. Contact your care team."));
@@ -346,7 +348,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<PatientMedicationResponseDTO> getMyMedications(Authentication auth, int limit) {
         Patient patient = findPatient(auth);
-        return medicationService.getMedicationsForPatient(patient.getId(), null, limit);
+        // Own medications at every hospital (design Q1): the portal variant
+        // resolves the patient by ownership, so no hospital scope is needed.
+        return medicationService.getMedicationsForPatientPortal(patient.getId(), null, limit);
     }
 
     // ── Prescriptions ────────────────────────────────────────────────────
@@ -368,7 +372,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<PatientVitalSignResponseDTO> getMyVitals(Authentication auth, int limit) {
         UUID patientId = resolvePatientId(auth);
-        return vitalSignService.getRecentVitals(patientId, null, limit);
+        return vitalSignService.getRecentVitalsForPatientPortal(patientId, limit);
     }
 
     // ── Encounters / visit history ───────────────────────────────────────
@@ -891,7 +895,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private Patient findPatient(Authentication auth) {
         UUID userId = authUtils.resolveUserId(auth)
                 .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
-        return patientRepository.findByUserId(userId)
+        return LinkedPatientLookup.linkedPatient(patientRepository, userId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "No patient record linked to your account. Contact your care team."));
     }
@@ -1009,7 +1013,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     private List<PatientMedicationResponseDTO> safeMedications(UUID patientId, UUID hospitalId) {
         try {
-            return medicationService.getMedicationsForPatient(patientId, hospitalId, 10);
+            return medicationService.getMedicationsForPatientPortal(patientId, hospitalId, 10);
         } catch (Exception e) {
             log.warn("Failed to fetch medications for health summary: {}", e.getMessage());
             return Collections.emptyList();
@@ -1018,7 +1022,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     private List<PatientVitalSignResponseDTO> safeVitals(UUID patientId) {
         try {
-            return vitalSignService.getRecentVitals(patientId, null, 5);
+            return vitalSignService.getRecentVitalsForPatientPortal(patientId, 5);
         } catch (Exception e) {
             log.warn("Failed to fetch vitals for health summary: {}", e.getMessage());
             return Collections.emptyList();
@@ -1391,7 +1395,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public List<PatientMedicationResponseDTO> getProxyMedications(Authentication auth, UUID patientId, int limit) {
         Patient patient = verifyProxyAccess(auth, patientId, "VIEW_MEDICATIONS");
         UUID hospitalId = resolvePatientHospitalId(patient);
-        return medicationService.getMedicationsForPatient(patient.getId(), hospitalId, limit);
+        return medicationService.getMedicationsForPatientPortal(patient.getId(), hospitalId, limit);
     }
 
     @Override
@@ -1438,8 +1442,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<PatientEducationItemDTO> getMyEducation(Authentication auth) {
         UUID patientId = resolvePatientId(auth);
-        List<PatientEducationProgress> progressRows =
-                educationProgressRepository.findByPatientIdOrderByLastAccessedAtDesc(patientId);
+        // One row per resource, chosen on the server exactly as the write
+        // chooses it; the clients used to dedupe, each its own way (#708).
+        List<PatientEducationProgress> progressRows = EducationProgressRows.onePerResource(
+                educationProgressRepository.findByPatientIdOrderByLastAccessedAtDesc(patientId));
         if (progressRows.isEmpty()) {
             return List.of();
         }
@@ -1582,8 +1588,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     /** The assignment check: no progress row for (patient, resource) means not assigned. */
     private PatientEducationProgress requireAssignedEducation(UUID patientId, UUID resourceId) {
-        return educationProgressRepository
-                .findTopByPatientIdAndResourceIdOrderByCreatedAtDesc(patientId, resourceId)
+        // The row the list shows for this resource, not merely the newest one:
+        // with duplicates the two used to differ (#708).
+        return EducationProgressRows.canonical(
+                        educationProgressRepository.findByPatientIdAndResourceId(patientId, resourceId))
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "No education resource assigned to you with id " + resourceId));
     }

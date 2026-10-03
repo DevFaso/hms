@@ -181,12 +181,10 @@ class PrescriptionSmsDispatchServiceImplTest {
         assertThat(decision.getDecidedForPatient()).isSameAs(rx.getPatient());
         assertThat(decision.getDecidedAt()).isNotNull();
         assertThat(decision.getReason()).contains("COMMUNITY_PHARMACY").contains("priority");
-        // The note shares its column with the no-show marker, so it is
-        // defused here as it is on the routing path: otherwise a note could
-        // forge the fact and, once this PENDING decision is superseded, the
-        // prescriber's history would read "The partner never delivered".
-        assertThat(com.example.hms.service.pharmacy.PartnerNoShowReason
-                .isNoShow(decision.getReason())).isFalse();
+        // A dispatch is never a no-show: that fact has its own column (V167)
+        // and only the no-show endpoint sets it.
+        assertThat(decision.isPartnerNoShow()).isFalse();
+        assertThat(decision.getNoShowReason()).isNull();
 
         assertThat(result.getStatus()).isEqualTo("SENT");
         assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);

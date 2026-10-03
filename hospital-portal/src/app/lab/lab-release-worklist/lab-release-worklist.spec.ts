@@ -138,6 +138,38 @@ describe('LabReleaseWorklistComponent', () => {
     expect(cells.some((t) => t.includes('2:30'))).toBeTrue();
   });
 
+  it("tells an analyzer's preliminary from its final, and both from a typed result", () => {
+    // Every row here is unreleased, so `released` cannot tell them apart; the
+    // HL7 message id and OBX-11 can.
+    setup(['ROLE_LAB_SCIENTIST']);
+    fixture.detectChanges();
+    flushWorklist([
+      result({ id: 'prelim', sourceMessageControlId: 'MSG-1', observationResultStatus: 'P' }),
+      result({ id: 'final', sourceMessageControlId: 'MSG-2', observationResultStatus: 'F' }),
+      result({ id: 'odd', sourceMessageControlId: 'MSG-3', observationResultStatus: 'x' }),
+      result({ id: 'typed' }),
+    ]);
+
+    expect(host().querySelector('[data-testid="release-source-instrument-prelim"]')).not.toBeNull();
+    expect(host().querySelector('[data-testid="release-source-manual-typed"]')).not.toBeNull();
+    expect(host().querySelector('[data-testid="release-source-instrument-typed"]')).toBeNull();
+    expect(host().querySelector('[data-testid="release-row-prelim"]')?.textContent).toContain(
+      'MSG-1',
+    );
+    expect(host().querySelector('[data-testid="release-status-prelim"]')?.textContent?.trim()).toBe(
+      'LAB_RELEASE.STATUS_PRELIMINARY',
+    );
+    expect(host().querySelector('[data-testid="release-status-final"]')?.textContent?.trim()).toBe(
+      'LAB_RELEASE.STATUS_FINAL',
+    );
+    // A code the screen does not name is shown as a code, not guessed at.
+    expect(component.resultStatusKey(result({ observationResultStatus: 'x' }))).toBe(
+      'LAB_RELEASE.STATUS_OTHER',
+    );
+    // A typed row has no analyzer status to show.
+    expect(host().querySelector('[data-testid="release-status-typed"]')).toBeNull();
+  });
+
   it('withholds the release control from a role the release endpoint refuses', () => {
     // A technician and a quality manager are on the worklist's @PreAuthorize
     // but not on LabResultAuthority.RELEASE_ROLES: they read the queue and
