@@ -1,5 +1,8 @@
 package com.example.hms.service;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
+import com.example.hms.exception.BusinessException;
+import com.example.hms.utility.RoleValidator;
 import com.example.hms.model.Announcement;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.User;
@@ -36,6 +39,11 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     public List<AnnouncementResponseDTO> getAnnouncements(int limit) {
         int effectiveLimit = Math.clamp(limit, 1, 100);
         UUID hospitalId = currentHospitalId();
+        if (hospitalId == null && !HospitalContextHolder.getContextOrEmpty().isGlobalView()) {
+            // No hospital to read at (several held and none named, or none held):
+            // no hospital's announcements, never every hospital's.
+            return List.of();
+        }
         List<Announcement> announcements = hospitalId != null
             ? announcementRepository.findByHospital_IdOrderByDateDesc(
                 hospitalId,
@@ -63,6 +71,10 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     @Transactional
     public AnnouncementResponseDTO createAnnouncement(String text) {
         UUID hospitalId = currentHospitalId();
+        if (hospitalId == null && !HospitalContextHolder.getContextOrEmpty().isGlobalView()) {
+            // Only a super-admin in global view posts a platform-wide announcement.
+            throw new BusinessException(RoleValidator.HOSPITAL_CONTEXT_REQUIRED);
+        }
         Hospital hospital = hospitalId != null ? hospitalRepository.getReferenceById(hospitalId) : null;
         Announcement announcement = Announcement.builder()
             .text(text)
@@ -118,7 +130,8 @@ public class AnnouncementServiceImpl implements AnnouncementService {
         );
     }
 
+    /** The hospital this request is pinned to; {@code null} in global view or with none. */
     private UUID currentHospitalId() {
-        return HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
+        return ActingScopeResolver.pinnedHospitalIdOrNull();
     }
 }

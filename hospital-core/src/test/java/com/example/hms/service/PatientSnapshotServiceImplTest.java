@@ -1275,4 +1275,24 @@ class PatientSnapshotServiceImplTest {
             HospitalContextHolder.clear();
         }
     }
+
+    @Test
+    void aDiagnosisWrittenBeforeItHadAHospitalIsNotShownToASuperAdminPinnedToOneHospital() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+        // X-Hospital-Id pins the super-admin: they act at that hospital, so the
+        // hospital-less rows — which no hospital can claim — stay out.
+        HospitalContextHolder.setContext(HospitalContext.builder()
+                .activeHospitalId(HOSPITAL_ID).superAdmin(true).headerOverridden(true).build());
+        try {
+            PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
+
+            assertTrue(result.getActiveDiagnoses().isEmpty());
+            verify(patientDiagnosisRepository, never())
+                    .findByPatient_IdAndStatusAndHospitalIsNullOrderByDiagnosedAtDesc(any(), any());
+        } finally {
+            HospitalContextHolder.clear();
+        }
+    }
 }

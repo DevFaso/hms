@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import com.example.hms.model.Announcement;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.User;
@@ -80,6 +81,8 @@ class AnnouncementServiceImplTest {
         @Test
         @DisplayName("returns announcements sorted by date descending, limited")
         void returnsSortedAndLimited() {
+            // Every hospital's announcements: a super-admin in global view.
+            ActingScopeTestSupport.globalSuperAdmin(UUID.randomUUID());
             LocalDateTime oldest = LocalDateTime.of(2026, 1, 1, 8, 0);
             LocalDateTime middle = LocalDateTime.of(2026, 1, 5, 12, 0);
             LocalDateTime newest = LocalDateTime.of(2026, 1, 10, 16, 0);
@@ -101,6 +104,8 @@ class AnnouncementServiceImplTest {
         @Test
         @DisplayName("returns empty list when repository is empty")
         void returnsEmptyList() {
+            // Every hospital's announcements: a super-admin in global view.
+            ActingScopeTestSupport.globalSuperAdmin(UUID.randomUUID());
             when(announcementRepository.findAll()).thenReturn(List.of());
 
             List<AnnouncementResponseDTO> result = service.getAnnouncements(5);
@@ -111,6 +116,8 @@ class AnnouncementServiceImplTest {
         @Test
         @DisplayName("returns all when limit exceeds total count")
         void limitExceedsCount() {
+            // Every hospital's announcements: a super-admin in global view.
+            ActingScopeTestSupport.globalSuperAdmin(UUID.randomUUID());
             Announcement a = buildAnnouncement(UUID.randomUUID(), "Only one", LocalDateTime.now());
             when(announcementRepository.findAll()).thenReturn(List.of(a));
 
@@ -118,6 +125,18 @@ class AnnouncementServiceImplTest {
 
             assertEquals(1, result.size());
             assertEquals("Only one", result.get(0).getText());
+        }
+
+        @Test
+        @DisplayName("a caller with no hospital to act at reads no announcements, never every hospital's")
+        void noHospitalReadsNothing() {
+            HospitalContextHolder.setContext(HospitalContext.builder()
+                .permittedHospitalIds(java.util.Set.of(UUID.randomUUID(), UUID.randomUUID()))
+                .scopeRefusal(com.example.hms.security.tenant.ActingScope.Reason.AMBIGUOUS)
+                .build());
+
+            assertTrue(service.getAnnouncements(5).isEmpty());
+            org.mockito.Mockito.verifyNoInteractions(announcementRepository);
         }
 
         @Test
@@ -183,6 +202,8 @@ class AnnouncementServiceImplTest {
         @Test
         @DisplayName("saves new announcement and returns DTO")
         void createsAndReturns() {
+            // Every hospital's announcements: a super-admin in global view.
+            ActingScopeTestSupport.globalSuperAdmin(UUID.randomUUID());
             UUID savedId = UUID.randomUUID();
             ArgumentCaptor<Announcement> captor = ArgumentCaptor.forClass(Announcement.class);
 
@@ -204,6 +225,14 @@ class AnnouncementServiceImplTest {
                 () -> assertEquals(savedId, dto.getId()),
                 () -> assertEquals("New policy", dto.getText())
             );
+        }
+
+        @Test
+        @DisplayName("without a hospital, only a super-admin in global view posts a platform-wide announcement")
+        void noHospitalCannotPostPlatformWide() {
+            assertThrows(com.example.hms.exception.BusinessException.class,
+                () -> service.createAnnouncement("Everyone, everywhere"));
+            org.mockito.Mockito.verifyNoInteractions(announcementRepository);
         }
 
         @Test

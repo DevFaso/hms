@@ -102,9 +102,9 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         // Staff: the chart gate — cross-hospital safe, and the hospital
         // authorization this read previously relied on the finder for. Portal:
         // the caller already established whose record it is, and the staff
-        // gate is the wrong question for the patient themselves (with no scope
-        // it refused every patient, which left the null branch of fetchRows
-        // unreachable) — see PatientChartAccess.requireOwnRecord.
+        // gate is the wrong question for the patient themselves (with a scope
+        // it refuses a patient their own restricted chart, and with none it
+        // refuses a proxy) — see PatientChartAccess.requireOwnRecord.
         Patient patient = portalView
             ? patientChartAccess.requireOwnRecord(patientId)
             : patientChartAccess.require(patientId, hospitalId);

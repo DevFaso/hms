@@ -1,8 +1,12 @@
 package com.example.hms.utility;
 
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.HospitalScopeRefusedException;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.PrincipalUserIds;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.MessageSource;
 import org.springframework.security.core.Authentication;
@@ -10,7 +14,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 import java.util.HashSet;
-import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -31,6 +34,7 @@ public class RoleValidator {
 
 
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
+    private final ActingScopeResolver actingScopeResolver;
 
     /* =========================================
        Authority helpers (JWT/global authorities)
@@ -60,32 +64,28 @@ public class RoleValidator {
             .anyMatch(wanted::contains);
     }
 
-    public boolean isSuperAdminFromAuth() { return hasAuthority("SUPER_ADMIN"); }
+    /**
+     * The same answer as {@link #isSuperAdminFromJwtClaim()}: the live,
+     * verified signal ({@link ActingScopeResolver#isVerifiedSuperAdmin()}).
+     * It used to read the authorities collection, which a stale token, a
+     * demoted super-admin or a Keycloak realm role could carry; its callers
+     * now agree with every other scope decision, so it is kept as a correct
+     * adapter for them rather than deprecated.
+     */
+    public boolean isSuperAdminFromAuth() { return isSuperAdminFromJwtClaim(); }
 
     /**
-     * Authoritative super-admin check based on the discrete
-     * {@code isSuperAdmin} JWT claim (mirrored into
-     * {@link com.example.hms.security.context.HospitalContext#isSuperAdmin()}
-     * by {@link com.example.hms.security.JwtTokenProvider#buildHospitalContext}),
-     * <b>not</b> on the inflated authorities collection.
-     *
-     * <p>Why this matters: {@code JwtTokenProvider.getAuthenticationFromJwt}
-     * inflates a real super-admin's {@code ROLE_SUPER_ADMIN} authority to
-     * also carry {@link com.example.hms.security.RoleExpansion#SUPER_ADMIN_INHERITS}
-     * (the one list both auth paths share since E9 #67) so per-hospital
-     * staff checks "just work". An impersonation context
-     * (or any future code path that copies authorities verbatim) could
-     * therefore present {@code ROLE_SUPER_ADMIN} in {@code authorities}
-     * without the principal actually being a super-admin. The discrete
-     * {@code isSuperAdmin} claim is set only when the token was minted
-     * for a real super-admin, so it's the only safe signal for
-     * cross-tenant authorisation decisions. See design call #1 in
-     * {@code docs/super-admin-cross-tenant-design.md}.</p>
+     * The verified super-admin signal for scope decisions: the caller holds a
+     * live, active SUPER_ADMIN assignment, read from the assignment table on
+     * this request by the shared computation both auth filters use
+     * ({@link ActingScopeResolver#liveContext}). It is NOT the token's
+     * {@code isSuperAdmin} claim and NOT the authorities collection — the name
+     * is historical: the claim it once read was itself derived from the
+     * authorities, and on Keycloak the authority was the only input (design
+     * D5). A demoted super-admin loses it on the next request.
      */
     public boolean isSuperAdminFromJwtClaim() {
-        return com.example.hms.security.context.HospitalContextHolder
-            .getContextOrEmpty()
-            .isSuperAdmin();
+        return actingScopeResolver.isVerifiedSuperAdmin();
     }
 
     public boolean isHospitalAdminFromAuthGlobalOnly() { return hasAuthority(HOSPITAL_ADMIN_ROLE); }
@@ -106,115 +106,57 @@ public class RoleValidator {
     /* =========================================
        Current principal helpers
        ========================================= */
+    /**
+     * The caller's local user id: a password-path principal's, or a Keycloak
+     * principal's {@code appUserId} claim ({@link PrincipalUserIds}). Null
+     * when there is none.
+     */
     public UUID getCurrentUserId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null) return null;
-        Object principal = auth.getPrincipal();
-
-        // CustomUserDetails with userId is ideal
-        if (principal instanceof com.example.hms.security.CustomUserDetails cud) {
-            return cud.getUserId();
-        }
-        // Sometimes principal is a domain User
-        if (principal instanceof com.example.hms.model.User u) {
+        if (auth != null && auth.getPrincipal() instanceof com.example.hms.model.User u) {
             return u.getId();
         }
-        // Could also be a plain String/username – resolve via repository if you want (not here)
-        return null;
+        return PrincipalUserIds.of(auth).orElse(null);
     }
 
     /**
-     * Resolve a single current hospital if there's exactly one active
-     * assignment that has a hospital attached.
-     *
-     * <p>Important nuance: {@link UserRoleHospitalAssignment#getHospital()}
-     * is legally nullable (no {@code optional=false} on the JPA mapping).
-     * A {@code null} hospital represents a <b>global</b> assignment —
-     * the typical shape for a SUPER_ADMIN role granted without a tenant
-     * scope. Before the cross-tenant list-pages slice this method was
-     * rarely reached for super-admins (the {@code X-Hospital-Id} header
-     * was always set), but the new "global view" deliberately omits the
-     * header, so this method runs and used to NPE on
-     * {@code .getHospital().getId()} when the single assignment was
-     * global. Now we treat that case the same as "no resolvable single
-     * hospital" and return {@code null}, letting the caller's super-admin
-     * branch in {@link #requireActiveHospitalId()} take over.
+     * The hospital this request acts at, or {@code null} for global view or no
+     * hospital. Once its own "exactly one active assignment" lookup; now the
+     * resolver's answer, whose {@code SOLE_ASSIGNMENT} rule subsumes it.
      */
     public UUID getCurrentHospitalId() {
-        UUID uid = getCurrentUserId();
-        if (uid == null) return null;
-        List<UserRoleHospitalAssignment> active = assignmentRepository.findByUser_IdAndActiveTrue(uid);
-        if (active.size() != 1) return null;
-        var hospital = active.get(0).getHospital();
-        return hospital != null ? hospital.getId() : null;
+        return actingScopeResolver.current() instanceof ActingScope.Pinned pinned ? pinned.hospitalId() : null;
     }
 
     /**
-     * Returns the active hospital ID from HospitalContext (set via X-Hospital-Id header + JWT validation).
-     * Falls back to single-assignment detection. Throws if no hospital can be determined and user is not super-admin.
-     * This is the <b>mandatory</b> method for all hospital-scoped operations.
-     *
-     * <p><b>Order of resolution (matters):</b>
-     * <ol>
-     *   <li><b>Real super-admin (JWT claim) without an explicit
-     *       {@code X-Hospital-Id} override ⇒ {@code null}.</b> Closes
-     *       (a) the F1 impersonation correctness gap from design call
-     *       #1 — authorities can be inflated, the JWT
-     *       {@code isSuperAdmin} claim cannot — and (b) the
-     *       "click-card → no data" cross-tenant bug: when no
-     *       {@code X-Hospital-Id} header is sent (super-admin in global
-     *       view), {@link com.example.hms.security.JwtTokenProvider}
-     *       still populates {@code HospitalContext.activeHospitalId}
-     *       from the {@code primaryHospitalId} JWT claim. Without this
-     *       early-out we'd silently re-scope every list endpoint to
-     *       the super-admin's home hospital. <b>However</b>, when the
-     *       super-admin <i>did</i> send an {@code X-Hospital-Id} header
-     *       (chip-scoped view), {@link
-     *       com.example.hms.security.context.HospitalContextRequestOverrides}
-     *       sets {@code headerOverridden=true} on the context — in
-     *       that case we honour the explicit scope. Super-admin via
-     *       {@code ?hospitalId=…} query param doesn't reach this
-     *       fallback because the controller passes the param straight
-     *       to the service.</li>
-     *   <li>HospitalContext (populated by JwtAuthenticationFilter from
-     *       the X-Hospital-Id header).</li>
-     *   <li>Single active assignment (DB lookup).</li>
-     *   <li>Authorities-based super-admin safety net — left in place so
-     *       paths where {@code HospitalContext} isn't populated (legacy
-     *       tests, edge entrypoints) still get the unscoped
-     *       short-circuit instead of throwing.</li>
-     * </ol>
+     * The hospital this request acts at, from the one tenant resolver
+     * ({@link ActingScopeResolver}, docs/security/tenant-resolution.md). This
+     * is the thin adapter every hospital-scoped service calls:
+     * <ul>
+     *   <li>{@code Pinned} → its hospital: the one the caller named
+     *       ({@code X-Hospital-Id} or a controller's {@code narrowTo}), else
+     *       the only one they hold;</li>
+     *   <li>{@code Global} → {@code null}: a VERIFIED super-admin (a live
+     *       SUPER_ADMIN assignment) who named no hospital. Nothing else can
+     *       reach {@code null}; the old authorities-based fallback ("step 4")
+     *       is gone;</li>
+     *   <li>{@code Refused} (several hospitals and none named, none held, no
+     *       local account) → {@link BusinessException} with
+     *       {@link #HOSPITAL_CONTEXT_REQUIRED}.</li>
+     * </ul>
+     * Reading the scope seals it for the rest of the request.
      */
     public UUID requireActiveHospitalId() {
-        com.example.hms.security.context.HospitalContext ctx =
-            com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty();
-
-        // 1. Real super-admin (per JWT claim, not authorities). Honour an
-        //    explicit X-Hospital-Id header override (chip-scoped view);
-        //    drop the JWT-derived primary (global view).
-        if (ctx.isSuperAdmin()) {
-            if (ctx.isHeaderOverridden() && ctx.getActiveHospitalId() != null) {
-                return ctx.getActiveHospitalId();
-            }
-            return null;
-        }
-        // 2. Try HospitalContext (populated by JwtAuthenticationFilter from X-Hospital-Id header)
-        if (ctx.getActiveHospitalId() != null) {
-            return ctx.getActiveHospitalId();
-        }
-        // 3. Fallback: single active assignment
-        UUID singleHospital = getCurrentHospitalId();
-        if (singleHospital != null) {
-            return singleHospital;
-        }
-        // 4. Super-admin safety net for paths without populated HospitalContext.
-        //    The primary check is step 1; this only fires when ctx.isSuperAdmin()
-        //    is false (e.g. unit tests bypassing the filter chain) but the
-        //    authorities still mark the principal as super-admin.
-        if (isSuperAdminFromAuth()) {
-            return null; // super-admin can see cross-hospital
-        }
-        throw new BusinessException(HOSPITAL_CONTEXT_REQUIRED);
+        ActingScope scope = actingScopeResolver.current();
+        return switch (scope) {
+            case ActingScope.Pinned pinned -> pinned.hospitalId();
+            case ActingScope.Global global -> null;
+            case ActingScope.Refused refused -> throw new BusinessException(HOSPITAL_CONTEXT_REQUIRED);
+            // Never null for a patient: null means an unscoped super-admin to
+            // every caller of this method. A patient-reached path takes its
+            // hospital from the record (design Q1).
+            case ActingScope.PatientOwned owned -> throw HospitalScopeRefusedException.patientOwned();
+        };
     }
 
     /** Active assignment for (currentUser, currentHospital) if uniquely determined */

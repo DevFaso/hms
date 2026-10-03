@@ -376,6 +376,25 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * A hospital scope the request cannot have (design §3.6). 403 with a code
+     * and the reason, so the portal re-reads its scope on a stale chip
+     * ({@code NO_LONGER_PERMITTED}) instead of showing the forbidden page.
+     */
+    @ExceptionHandler(HospitalScopeRefusedException.class)
+    public ResponseEntity<Object> handleHospitalScopeRefused(HospitalScopeRefusedException ex, WebRequest request) {
+        if (log.isWarnEnabled()) {
+            log.warn("Hospital scope refused ({}) at path {}", ex.getReason(), request.getDescription(false));
+        }
+        Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+        body.put("code", HospitalScopeRefusedException.CODE);
+        body.put("reason", ex.getReason());
+        if (ex.getRefusedHospitalId() != null) {
+            body.put("hospitalId", ex.getRefusedHospitalId().toString());
+        }
+        return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
+    }
+
+    /**
      * 403. The message is the literal "Access denied" unless the thrower opted
      * in with {@link ClientSafeAccessDeniedException}, whose contract is that
      * its message is written for the caller and discloses nothing across

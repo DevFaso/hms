@@ -1,5 +1,7 @@
 package com.example.hms.controller;
 
+import org.junit.jupiter.api.AfterEach;
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import com.example.hms.BaseIT;
 import com.example.hms.enums.OrganizationType;
 import com.example.hms.model.Department;
@@ -62,8 +64,24 @@ class DepartmentControllerIT extends BaseIT {
 	@Autowired
 	private UserRoleHospitalAssignmentRepository assignmentRepository;
 
+	/**
+	 * {@code @WithMockUser} grants the ROLE_SUPER_ADMIN authority only; the
+	 * filters are off, so the request carries the context a verified
+	 * super-admin in global view would (the authorities alone no longer make
+	 * a super-admin: the one tenant resolver's "step 4" is gone).
+	 */
+	private void globalSuperAdmin() {
+		ActingScopeTestSupport.globalSuperAdmin(UUID.randomUUID());
+	}
+
+	@AfterEach
+	void clearScope() {
+		ActingScopeTestSupport.clear();
+	}
+
 	@BeforeEach
 	void cleanDatabase() {
+		globalSuperAdmin();
 		departmentRepository.deleteAll();
 		assignmentRepository.deleteAll();
 		hospitalRepository.deleteAll();

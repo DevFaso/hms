@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -50,11 +51,16 @@ class SuperAdminOrganizationControllerIT extends com.example.hms.BaseIT {
     void captureLocale() {
         originalLocale = LocaleContextHolder.getLocale();
         LocaleContextHolder.setLocale(Locale.ENGLISH);
+        // @WithMockUser grants the authority only; a VERIFIED super-admin is
+        // what the auth filter computes from a live SUPER_ADMIN assignment,
+        // and the authorities alone no longer make one.
+        ActingScopeTestSupport.globalSuperAdmin(java.util.UUID.randomUUID());
     }
 
     @AfterEach
     void resetLocale() {
         LocaleContextHolder.setLocale(originalLocale);
+        ActingScopeTestSupport.clear();
     }
 
     @Test

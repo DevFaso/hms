@@ -1,5 +1,6 @@
 package com.example.hms.model.empi;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.enums.empi.EmpiMergeType;
 import com.example.hms.model.BaseEntity;
 import com.example.hms.security.context.HospitalContext;
@@ -127,8 +128,8 @@ public class EmpiMergeEvent extends BaseEntity implements TenantScoped {
         if (organizationId == null && context.getActiveOrganizationId() != null) {
             organizationId = context.getActiveOrganizationId();
         }
-        if (hospitalId == null && context.getActiveHospitalId() != null) {
-            hospitalId = context.getActiveHospitalId();
+        if (hospitalId == null && ActingScopeResolver.pinnedHospitalIdOf(context) != null) {
+            hospitalId = ActingScopeResolver.pinnedHospitalIdOf(context);
         }
         if (departmentId == null && !context.getPermittedDepartmentIds().isEmpty()) {
             departmentId = context.getPermittedDepartmentIds().iterator().next();

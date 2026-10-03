@@ -1,5 +1,7 @@
 package com.example.hms.fhir;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
+import com.example.hms.security.TenantLifecycleGate;
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.rest.server.IResourceProvider;
 import com.example.hms.HmsApplication;
@@ -218,6 +220,9 @@ class FhirTenantBoundaryIT {
         // HospitalContextRequestOverrides lets pick ANY hospital by header.
         orphan = saveUser("orphan");
         superAdmin = saveUser("root");
+        // A super-admin is one the assignment table says is (design Q4, option
+        // B): the token's ROLE_SUPER_ADMIN alone no longer grants global view.
+        saveAssignment(superAdmin, ensureRole(ROLE_SUPER_ADMIN, "Super Admin"), null);
 
         patientP = savePatient(hospitalA);
         mrnOfPAtA = register(patientP, hospitalA);
@@ -233,6 +238,10 @@ class FhirTenantBoundaryIT {
 
     @AfterEach
     void tearDown() {
+        // A refused X-Hospital-Id writes an audit row naming the caller (Q3 A).
+        auditEventLogRepository.deleteAllInBatch(auditEventLogRepository.findAll().stream()
+            .filter(row -> row.getUser() != null && users.contains(row.getUser().getId()))
+            .toList());
         prescriptionRepository.deleteAllByIdInBatch(present(atA.prescription, atB.prescription));
         immunizationRepository.deleteAllByIdInBatch(present(atA.immunization, atB.immunization));
         problemRepository.deleteAllByIdInBatch(present(atA.condition, atB.condition));
@@ -473,7 +482,7 @@ class FhirTenantBoundaryIT {
     @Test
     @DisplayName("X-Hospital-Id cannot choose a hospital the principal does not hold")
     void headerCannotChooseAForeignHospital() {
-        // No permitted hospital at all: the override accepts the header, the boundary does not.
+        // No permitted hospital at all: the header is refused (Q3 A), 403.
         String orphanToken = legacyToken(orphan, ROLE_DOCTOR);
         String hospitalB = this.hospitalB.getId().toString();
         assertThat(get("/fhir/Encounter/" + atB.encounter, orphanToken, hospitalB).getStatusCode().value())
@@ -481,10 +490,12 @@ class FhirTenantBoundaryIT {
         assertThat(get("/fhir/Encounter?patient=" + patientQ.getId(), orphanToken, hospitalB)
             .getStatusCode().value()).isEqualTo(403);
 
-        // A doctor at A naming B stays at A.
+        // A doctor at A naming B is refused outright (Q3 A): it used to be
+        // silently kept at A, which answered B's row 404 and A's 200.
         String token = legacyToken(doctorA, ROLE_DOCTOR);
-        assertThat(get("/fhir/Encounter/" + atB.encounter, token, hospitalB).getStatusCode().value()).isEqualTo(404);
-        assertThat(get("/fhir/Encounter/" + atA.encounter, token, hospitalB).getStatusCode().value()).isEqualTo(200);
+        assertThat(get("/fhir/Encounter/" + atB.encounter, token, hospitalB).getStatusCode().value()).isEqualTo(403);
+        assertThat(get("/fhir/Encounter/" + atA.encounter, token, hospitalB).getStatusCode().value()).isEqualTo(403);
+        assertThat(get("/fhir/Encounter/" + atA.encounter, token, null).getStatusCode().value()).isEqualTo(200);
     }
 
     @Test
@@ -500,12 +511,15 @@ class FhirTenantBoundaryIT {
         assertThat(get("/fhir/Encounter/" + atA.encounter, token, atHospitalA).getStatusCode().value())
             .isEqualTo(200);
 
+        // The Keycloak path asks the SAME live assignments (appUserId links the
+        // token to the account); the token's hospital claims are not inputs.
         String keycloakAtB = keycloak.mintToken(KeycloakJwtFixture.TokenSpec
             .defaults(TEST_ISSUER, OidcTestConfig.AUDIENCE)
             .withRealmRoles(List.of(ROLE_DOCTOR, "ROLE_RECEPTIONIST"))
-            .withRoleAssignments(List.of(ROLE_DOCTOR + "@" + hospitalA.getId(), "ROLE_RECEPTIONIST@" + hospitalB.getId()))
-            .withHospitalId(atHospitalB));
-        assertThat(get("/fhir/Encounter/" + atB.encounter, keycloakAtB, null).getStatusCode().value()).isEqualTo(403);
+            .linkedTo(dualRoleUser.getId(), dualRoleUser.getUsername()));
+        idleSessionTracker.touch(dualRoleUser.getId());
+        assertThat(get("/fhir/Encounter/" + atB.encounter, keycloakAtB, atHospitalB).getStatusCode().value())
+            .isEqualTo(403);
     }
 
     @Test
@@ -519,22 +533,26 @@ class FhirTenantBoundaryIT {
     }
 
     @Test
-    @DisplayName("a Keycloak principal is bounded by its hospital claim, and refused without one")
+    @DisplayName("a Keycloak principal is bounded by its linked account's live hospital, and refused without a link")
     void keycloakPrincipalIsBounded() {
         String token = keycloak.mintToken(KeycloakJwtFixture.TokenSpec
             .defaults(TEST_ISSUER, OidcTestConfig.AUDIENCE)
             .withRealmRoles(List.of(ROLE_DOCTOR))
-            .withRoleAssignments(List.of(ROLE_DOCTOR + "@" + hospitalA.getId()))
-            .withHospitalId(hospitalA.getId().toString()));
+            .linkedTo(doctorA.getId(), doctorA.getUsername()));
+        idleSessionTracker.touch(doctorA.getId());
         ResponseEntity<String> own = get("/fhir/Encounter/" + atA.encounter, token, null);
         assertThat(own.getStatusCode().value()).as(own.getBody()).isEqualTo(200);
         assertIndistinguishable("Encounter", atB.encounter.toString(), token, null);
         JsonNode bundle = json(get("/fhir/Encounter?patient=" + patientP.getId(), token, null));
         assertThat(entryIds(bundle)).containsExactly(atA.encounter.toString());
 
+        // No appUserId: no local account, so no hospital — whatever the
+        // hospital claims say — and a named one is refused.
         String unscoped = keycloak.mintToken(KeycloakJwtFixture.TokenSpec
             .defaults(TEST_ISSUER, OidcTestConfig.AUDIENCE)
-            .withRealmRoles(List.of(ROLE_DOCTOR)));
+            .withRealmRoles(List.of(ROLE_DOCTOR))
+            .withRoleAssignments(List.of(ROLE_DOCTOR + "@" + hospitalB.getId()))
+            .withHospitalId(hospitalB.getId().toString()));
         assertThat(get("/fhir/Encounter/" + atB.encounter, unscoped, hospitalB.getId().toString())
             .getStatusCode().value()).isEqualTo(403);
     }
@@ -816,9 +834,12 @@ class FhirTenantBoundaryIT {
          */
         @Bean
         KeycloakHospitalContextFilter keycloakHospitalContextFilter(KeycloakHospitalContextResolver resolver,
+                                                                    ActingScopeResolver actingScopeResolver,
                                                                     IdleSessionGate idleSessionGate,
+                                                                    TenantLifecycleGate tenantLifecycleGate,
                                                                     UserRepository userRepository) {
-            return new KeycloakHospitalContextFilter(resolver, idleSessionGate, userRepository);
+            return new KeycloakHospitalContextFilter(resolver, actingScopeResolver, idleSessionGate,
+                tenantLifecycleGate, userRepository);
         }
     }
 }

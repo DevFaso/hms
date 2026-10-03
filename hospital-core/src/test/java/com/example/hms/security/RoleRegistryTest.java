@@ -223,4 +223,76 @@ class RoleRegistryTest {
             .as("roles named in code that no migration creates (a user can never hold them)")
             .isEmpty();
     }
+
+    /** Every authority string a has*Role / has*Authority call names, prefixed as the call compares it. */
+    private static final Pattern GUARD_CALL = Pattern.compile("has(Any)?(Role|Authority)\\(([^)]*)\\)");
+    private static final Pattern GUARD_TOKEN = Pattern.compile("'([^']*)'");
+
+    @Test
+    @DisplayName("no @PreAuthorize, constants resolved, names an authority no user can hold")
+    void resolvedGuardsNameOnlyHoldableAuthorities() throws IOException {
+        // Reflection, not source: a guard held in a constant
+        // (TransfusionController.PRESCRIBER) is invisible to the source scans
+        // above, which is how hasAuthority('REQUEST_BLOOD_PRODUCTS') outlived
+        // the E9 #68 sweep. Authorities are roles only (RoleExpansion builds
+        // them from the role claim), so a token outside the seeded roles can
+        // never match: the clause is dead, and removing it changes no access.
+        Set<String> holdable = new TreeSet<>(seededRoles());
+        holdable.addAll(SYNTHETIC_ROLES);
+        Map<String, String> dead = new TreeMap<>();
+        for (Class<?> type : classesWithGuards()) {
+            List<java.lang.reflect.AnnotatedElement> elements = new ArrayList<>();
+            elements.add(type);
+            elements.addAll(List.of(type.getDeclaredMethods()));
+            for (java.lang.reflect.AnnotatedElement element : elements) {
+                org.springframework.security.access.prepost.PreAuthorize guard =
+                    org.springframework.core.annotation.AnnotatedElementUtils.findMergedAnnotation(
+                        element, org.springframework.security.access.prepost.PreAuthorize.class);
+                if (guard == null) {
+                    continue;
+                }
+                Matcher call = GUARD_CALL.matcher(guard.value());
+                while (call.find()) {
+                    boolean role = "Role".equals(call.group(2));
+                    Matcher token = GUARD_TOKEN.matcher(call.group(3));
+                    while (token.find()) {
+                        String authority = role && !token.group(1).startsWith("ROLE_")
+                            ? "ROLE_" + token.group(1) : token.group(1);
+                        if (!holdable.contains(authority)) {
+                            dead.putIfAbsent(authority, type.getSimpleName());
+                        }
+                    }
+                }
+            }
+        }
+        assertThat(dead)
+            .as("authorities named in a resolved guard that no user can hold (a dead clause)")
+            .isEmpty();
+    }
+
+    private static List<Class<?>> classesWithGuards() throws IOException {
+        org.springframework.core.io.support.PathMatchingResourcePatternResolver resolver =
+            new org.springframework.core.io.support.PathMatchingResourcePatternResolver();
+        org.springframework.core.type.classreading.CachingMetadataReaderFactory factory =
+            new org.springframework.core.type.classreading.CachingMetadataReaderFactory(resolver);
+        String preAuthorize = org.springframework.security.access.prepost.PreAuthorize.class.getName();
+        List<Class<?>> found = new ArrayList<>();
+        for (org.springframework.core.io.Resource resource : resolver.getResources("classpath*:com/example/hms/**/*.class")) {
+            org.springframework.core.type.classreading.MetadataReader reader = factory.getMetadataReader(resource);
+            String className = reader.getClassMetadata().getClassName();
+            if (className.endsWith("Test") || className.endsWith("IT") || className.contains("$")) {
+                continue;
+            }
+            var metadata = reader.getAnnotationMetadata();
+            if (metadata.hasAnnotation(preAuthorize) || metadata.hasAnnotatedMethods(preAuthorize)) {
+                try {
+                    found.add(Class.forName(className));
+                } catch (ClassNotFoundException e) {
+                    throw new IllegalStateException(e);
+                }
+            }
+        }
+        assertThat(found).as("the scan reached the guarded classes").hasSizeGreaterThan(100);
+        return found;
+    }
 }

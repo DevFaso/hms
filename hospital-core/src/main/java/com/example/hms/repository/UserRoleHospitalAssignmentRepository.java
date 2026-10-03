@@ -73,6 +73,9 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
     /* ------------ Existence checks ------------ */
     boolean existsByUserIdAndHospitalIdAndActiveTrue(UUID userId, UUID hospitalId);
 
+    /** A hospital the user held once: an inactive assignment there (ActingScopeResolver's NO_LONGER_PERMITTED). */
+    boolean existsByUserIdAndHospitalIdAndActiveFalse(UUID userId, UUID hospitalId);
+
     boolean existsByUserIdAndActiveTrue(UUID userId);
 
     boolean existsByUserIdAndHospitalIdAndRoleId(UUID userId, UUID hospitalId, UUID roleId);

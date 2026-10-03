@@ -74,8 +74,8 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
         // passed as a message key rendered as "[Missing translation] ...".
         // PatientChartAccess fixes both and adds the authorization this read
         // never had. Portal: the patient's own record, already established by
-        // the caller — the staff gate refuses every patient when no hospital
-        // resolves (see PatientChartAccess.requireOwnRecord).
+        // the caller — the staff gate refuses a patient their own restricted
+        // chart (see PatientChartAccess.requireOwnRecord).
         Patient patient = portalView
             ? patientChartAccess.requireOwnRecord(patientId)
             : patientChartAccess.require(patientId, hospitalId);

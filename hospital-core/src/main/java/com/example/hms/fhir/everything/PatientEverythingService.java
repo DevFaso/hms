@@ -1,5 +1,6 @@
 package com.example.hms.fhir.everything;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
 import ca.uhn.fhir.rest.server.exceptions.MethodNotAllowedException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
@@ -342,7 +343,7 @@ public class PatientEverythingService {
     }
 
     private UUID resolveHospitalScopeOrForbid() {
-        UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
+        UUID hospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
         if (hospitalId == null) {
             throw forbidden(
                 "FHIR Patient/{id}/$everything requires an active hospital scope; "

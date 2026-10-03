@@ -3,8 +3,9 @@ package com.example.hms.service;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.model.Patient;
 import com.example.hms.repository.PatientRepository;
-import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.CustomUserDetails;
+import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -37,7 +38,7 @@ class PatientSubjectReadGuardTest {
 
     private final PatientRepository patientRepository = mock(PatientRepository.class);
     private final PatientSubjectReadGuard guard = new PatientSubjectReadGuard(
-        new ControllerAuthUtils(mock(UserRoleHospitalAssignmentRepository.class)), patientRepository);
+        new ControllerAuthUtils(ActingScopeTestSupport.resolver()), patientRepository);
 
     private final UUID callerUserId = UUID.randomUUID();
     private final UUID ownPatientId = UUID.randomUUID();
@@ -51,6 +52,7 @@ class PatientSubjectReadGuardTest {
     @AfterEach
     void clear() {
         SecurityContextHolder.clearContext();
+        HospitalContextHolder.clear();
     }
 
     private void passwordLogin(String... roles) {
@@ -67,7 +69,7 @@ class PatientSubjectReadGuardTest {
             .claim("sub", "keycloak-subject")
             .claim("appUserId", callerUserId.toString())
             .build();
-        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt, authorities));
+        ActingScopeTestSupport.signInLinked(new JwtAuthenticationToken(jwt, authorities), callerUserId);
     }
 
     @Test

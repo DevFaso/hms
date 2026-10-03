@@ -455,13 +455,13 @@ class PatientPortalServiceImplPhase1Test {
         void getMyPrescriptions_delegates() {
             stubPatientResolution();
             List<PrescriptionResponseDTO> expected = List.of(new PrescriptionResponseDTO());
-            when(prescriptionService.getPrescriptionsByPatientId(patientId, Locale.ENGLISH))
+            when(prescriptionService.getPrescriptionsForPortalPatient(patientId, Locale.ENGLISH))
                     .thenReturn(expected);
 
             List<PrescriptionResponseDTO> result = service.getMyPrescriptions(auth, Locale.ENGLISH);
 
             assertThat(result).isEqualTo(expected);
-            verify(prescriptionService).getPrescriptionsByPatientId(patientId, Locale.ENGLISH);
+            verify(prescriptionService).getPrescriptionsForPortalPatient(patientId, Locale.ENGLISH);
         }
     }
 
@@ -500,13 +500,13 @@ class PatientPortalServiceImplPhase1Test {
         void getMyEncounters_delegates() {
             stubPatientResolution();
             List<EncounterResponseDTO> expected = List.of(new EncounterResponseDTO());
-            when(encounterService.getEncountersByPatientId(patientId, Locale.ENGLISH))
+            when(encounterService.getEncountersForPortalPatient(patientId))
                     .thenReturn(expected);
 
             List<EncounterResponseDTO> result = service.getMyEncounters(auth, Locale.ENGLISH);
 
             assertThat(result).isEqualTo(expected);
-            verify(encounterService).getEncountersByPatientId(patientId, Locale.ENGLISH);
+            verify(encounterService).getEncountersForPortalPatient(patientId);
         }
     }
 
@@ -548,13 +548,13 @@ class PatientPortalServiceImplPhase1Test {
             stubPatientResolution();
             Pageable pageable = PageRequest.of(0, 10);
             Page<BillingInvoiceResponseDTO> expected = new PageImpl<>(List.of(new BillingInvoiceResponseDTO()));
-            when(billingInvoiceService.getInvoicesByPatientId(patientId, pageable, Locale.ENGLISH))
+            when(billingInvoiceService.getInvoicesForPortalPatient(patientId, pageable, Locale.ENGLISH))
                     .thenReturn(expected);
 
             Page<BillingInvoiceResponseDTO> result = service.getMyInvoices(auth, pageable, Locale.ENGLISH);
 
             assertThat(result).isEqualTo(expected);
-            verify(billingInvoiceService).getInvoicesByPatientId(patientId, pageable, Locale.ENGLISH);
+            verify(billingInvoiceService).getInvoicesForPortalPatient(patientId, pageable, Locale.ENGLISH);
         }
     }
 
@@ -616,12 +616,12 @@ class PatientPortalServiceImplPhase1Test {
         void getMyConsultations_delegates() {
             stubPatientResolution();
             List<ConsultationResponseDTO> expected = List.of(new ConsultationResponseDTO());
-            when(consultationService.getConsultationsForPatient(patientId)).thenReturn(expected);
+            when(consultationService.getConsultationsForPortalPatient(patientId)).thenReturn(expected);
 
             List<ConsultationResponseDTO> result = service.getMyConsultations(auth);
 
             assertThat(result).isEqualTo(expected);
-            verify(consultationService).getConsultationsForPatient(patientId);
+            verify(consultationService).getConsultationsForPortalPatient(patientId);
         }
     }
 
@@ -639,12 +639,12 @@ class PatientPortalServiceImplPhase1Test {
             stubPatientResolution();
             Pageable pageable = PageRequest.of(0, 10);
             Page<TreatmentPlanResponseDTO> expected = new PageImpl<>(List.of(new TreatmentPlanResponseDTO()));
-            when(treatmentPlanService.listByPatient(patientId, pageable)).thenReturn(expected);
+            when(treatmentPlanService.listForPortalPatient(patientId, pageable)).thenReturn(expected);
 
             Page<TreatmentPlanResponseDTO> result = service.getMyTreatmentPlans(auth, pageable);
 
             assertThat(result).isEqualTo(expected);
-            verify(treatmentPlanService).listByPatient(patientId, pageable);
+            verify(treatmentPlanService).listForPortalPatient(patientId, pageable);
         }
     }
 
@@ -661,12 +661,12 @@ class PatientPortalServiceImplPhase1Test {
         void getMyReferrals_delegates() {
             stubPatientResolution();
             List<GeneralReferralResponseDTO> expected = List.of(new GeneralReferralResponseDTO());
-            when(referralService.getReferralsByPatient(patientId)).thenReturn(expected);
+            when(referralService.getReferralsForPortalPatient(patientId)).thenReturn(expected);
 
             List<GeneralReferralResponseDTO> result = service.getMyReferrals(auth);
 
             assertThat(result).isEqualTo(expected);
-            verify(referralService).getReferralsByPatient(patientId);
+            verify(referralService).getReferralsForPortalPatient(patientId);
         }
     }
 

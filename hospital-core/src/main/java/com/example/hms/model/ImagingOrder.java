@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.enums.ImagingLaterality;
 import com.example.hms.enums.ImagingModality;
 import com.example.hms.enums.ImagingOrderPriority;
@@ -229,12 +230,12 @@ public class ImagingOrder extends BaseEntity implements TenantScoped {
 
     @Override
     public void applyTenantScope(HospitalContext context) {
-        if (context == null || context.getActiveHospitalId() == null) {
+        if (context == null || ActingScopeResolver.pinnedHospitalIdOf(context) == null) {
             return;
         }
         if (this.hospital == null) {
             this.hospital = new Hospital();
-            this.hospital.setId(context.getActiveHospitalId());
+            this.hospital.setId(ActingScopeResolver.pinnedHospitalIdOf(context));
         }
     }
 }

@@ -1,12 +1,12 @@
 package com.example.hms.controller;
 
+import java.util.Optional;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.payload.dto.dashboard.DashboardConfigResponseDTO;
 import com.example.hms.payload.dto.dashboard.HospitalAdminSummaryDTO;
 import com.example.hms.payload.dto.dashboard.LabDirectorDashboardDTO;
 import com.example.hms.payload.dto.dashboard.LabOpsSummaryDTO;
 import com.example.hms.payload.dto.dashboard.QualityManagerDashboardDTO;
-import com.example.hms.security.context.HospitalContext;
-import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.DashboardConfigurationService;
 import com.example.hms.service.HospitalAdminDashboardService;
 import com.example.hms.service.LabDirectorDashboardService;
@@ -55,8 +55,7 @@ public class DashboardController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(defaultValue = "10") int auditLimit) {
 
-        UUID hospitalId = HospitalContextHolder.getContext()
-                .map(HospitalContext::getActiveHospitalId)
+        UUID hospitalId = Optional.ofNullable(ActingScopeResolver.pinnedHospitalIdOrNull())
                 .orElseThrow(() -> new IllegalStateException(NO_HOSPITAL_CONTEXT));
 
         LocalDate asOfDate = (date != null) ? date : LocalDate.now();
@@ -68,8 +67,7 @@ public class DashboardController {
     @PreAuthorize("hasRole('LAB_DIRECTOR')")
     @Operation(summary = "Get Lab Director operational dashboard summary")
     public ResponseEntity<LabDirectorDashboardDTO> getLabDirectorSummary() {
-        UUID hospitalId = HospitalContextHolder.getContext()
-                .map(HospitalContext::getActiveHospitalId)
+        UUID hospitalId = Optional.ofNullable(ActingScopeResolver.pinnedHospitalIdOrNull())
                 .orElseThrow(() -> new IllegalStateException(NO_HOSPITAL_CONTEXT));
 
         return ResponseEntity.ok(labDirectorDashboardService.getSummary(hospitalId));
@@ -79,8 +77,7 @@ public class DashboardController {
     @PreAuthorize("hasRole('QUALITY_MANAGER')")
     @Operation(summary = "Get Quality Manager dashboard summary")
     public ResponseEntity<QualityManagerDashboardDTO> getQualityManagerSummary() {
-        UUID hospitalId = HospitalContextHolder.getContext()
-                .map(HospitalContext::getActiveHospitalId)
+        UUID hospitalId = Optional.ofNullable(ActingScopeResolver.pinnedHospitalIdOrNull())
                 .orElseThrow(() -> new IllegalStateException(NO_HOSPITAL_CONTEXT));
 
         return ResponseEntity.ok(qualityManagerDashboardService.getSummary(hospitalId));
@@ -98,8 +95,7 @@ public class DashboardController {
         + " 'QUALITY_MANAGER', 'HOSPITAL_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Get Lab Operations dashboard summary")
     public ResponseEntity<LabOpsSummaryDTO> getLabOpsSummary() {
-        UUID hospitalId = HospitalContextHolder.getContext()
-                .map(HospitalContext::getActiveHospitalId)
+        UUID hospitalId = Optional.ofNullable(ActingScopeResolver.pinnedHospitalIdOrNull())
                 .orElseThrow(() -> new IllegalStateException(NO_HOSPITAL_CONTEXT));
 
         return ResponseEntity.ok(labOpsDashboardService.getSummary(hospitalId));

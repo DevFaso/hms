@@ -4,6 +4,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.authority.mapping.GrantedAuthoritiesMapper;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -86,6 +87,46 @@ public final class RoleExpansion {
             expanded.add(ROLE_DOCTOR);
         }
         return expanded;
+    }
+
+    /**
+     * Design Q10, option A: the authorities collection agrees with the LIVE
+     * super-admin signal. A token still asserting {@code ROLE_SUPER_ADMIN} for
+     * a caller with no active SUPER_ADMIN assignment (demoted after sign-in,
+     * a legacy {@code user_roles}-only grant, a Keycloak realm role the
+     * assignment table does not back) loses {@code ROLE_SUPER_ADMIN} and every
+     * {@link #SUPER_ADMIN_INHERITS} role they do not hold on their own — so
+     * every {@code @PreAuthorize} and {@code SecurityConfig} matcher naming
+     * SUPER_ADMIN reflects the demotion on the next request, not at refresh.
+     *
+     * <p>"On their own" is their live active assignments plus every token role
+     * the super-admin rule could not have added, widened by the doctor
+     * equivalence. Roles outside the inheritance list are never touched.
+     *
+     * @param authorities        the authority strings the token produced (already expanded)
+     * @param verifiedSuperAdmin the caller holds a live active SUPER_ADMIN assignment
+     * @param assignedRoles      the role codes of the caller's live active assignments
+     * @return {@code authorities} unchanged when there is nothing to reconcile,
+     *         otherwise the reconciled set in the original order
+     */
+    public static Set<String> reconcile(Collection<String> authorities, boolean verifiedSuperAdmin,
+                                        Collection<String> assignedRoles) {
+        LinkedHashSet<String> current = new LinkedHashSet<>(authorities);
+        if (verifiedSuperAdmin || !current.contains(ROLE_SUPER_ADMIN)) {
+            return current;
+        }
+        List<String> held = new ArrayList<>(assignedRoles);
+        for (String role : current) {
+            if (!ROLE_SUPER_ADMIN.equals(role) && !SUPER_ADMIN_INHERITS.contains(role)) {
+                held.add(role);
+            }
+        }
+        held.removeIf(ROLE_SUPER_ADMIN::equals);
+        Set<String> own = expand(held);
+        own.remove(ROLE_SUPER_ADMIN);
+        current.remove(ROLE_SUPER_ADMIN);
+        current.removeIf(role -> SUPER_ADMIN_INHERITS.contains(role) && !own.contains(role));
+        return current;
     }
 
     /** The same rule as a Spring Security mapper, for the password-login path. */

@@ -3,14 +3,17 @@ package com.example.hms.controller;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.payload.dto.procedure.ProcedureOrderRequestDTO;
 import com.example.hms.payload.dto.procedure.ProcedureOrderResponseDTO;
-import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.service.ProcedureOrderService;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import org.junit.jupiter.api.AfterEach;
 
 import java.util.List;
 import java.util.UUID;
@@ -29,13 +32,22 @@ import static org.mockito.Mockito.when;
  * Keycloak token as well as a password principal. The old parser read the
  * username as a UUID and threw "Unsupported authentication principal type" on
  * a JWT, so an order could never be placed over SSO.
+ *
+ * <p>Since #789 the Keycloak id is the link the context filter VERIFIED for
+ * this request, never the raw claim, so the Keycloak case sets the context the
+ * filter would have set.
  */
 @DisplayName("POST /procedure-orders: who is ordering")
 class ProcedureOrderControllerCallerTest {
 
     private final ProcedureOrderService service = mock(ProcedureOrderService.class);
     private final ProcedureOrderController controller = new ProcedureOrderController(
-        service, new ControllerAuthUtils(mock(UserRoleHospitalAssignmentRepository.class)));
+        service, new ControllerAuthUtils(mock(ActingScopeResolver.class)));
+
+    @AfterEach
+    void clearContext() {
+        HospitalContextHolder.clear();
+    }
 
     @Test
     @DisplayName("a Keycloak clinician is resolved from appUserId, not from the token subject")
@@ -43,6 +55,13 @@ class ProcedureOrderControllerCallerTest {
         UUID appUserId = UUID.randomUUID();
         Jwt jwt = Jwt.withTokenValue("t").header("alg", "RS256")
             .claim("sub", "keycloak-subject").claim("appUserId", appUserId.toString()).build();
+        // The link KeycloakHospitalContextResolver makes once it has checked
+        // the account carries this token's username: an ownership guard reads
+        // that, never the claim.
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(appUserId)
+            .principalUsername("keycloak-subject")
+            .build());
         ProcedureOrderRequestDTO request = new ProcedureOrderRequestDTO();
         when(service.createProcedureOrder(request, appUserId)).thenReturn(new ProcedureOrderResponseDTO());
 

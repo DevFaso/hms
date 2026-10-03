@@ -72,6 +72,29 @@ describe('apiPrefixInterceptor', () => {
     req.flush([]);
   });
 
+  it('sends the token but never X-Hospital-Id on the scope-establishing calls', () => {
+    auth.getToken.and.returnValue('t1');
+    auth.isExpired.and.returnValue(false);
+    for (const url of [
+      'auth/session/bootstrap',
+      'auth/logout',
+      'auth/token/refresh',
+      'me/assignments',
+    ]) {
+      http.get(url).subscribe();
+      const req = httpMock.expectOne('/api/' + url);
+      expect(req.request.headers.get('Authorization')).withContext(url).toBe('Bearer t1');
+      expect(req.request.headers.has('X-Hospital-Id')).withContext(url).toBeFalse();
+      req.flush({});
+    }
+    for (const url of ['me/hospital', 'me/assignments/extra', 'auth/sessionless']) {
+      http.get(url).subscribe();
+      const req = httpMock.expectOne('/api/' + url);
+      expect(req.request.headers.get('X-Hospital-Id')).withContext(url).toBe('h1');
+      req.flush({});
+    }
+  });
+
   it('normalizes a leading /api/ so the prefix is never doubled', () => {
     auth.getToken.and.returnValue('t1');
     auth.isExpired.and.returnValue(false);

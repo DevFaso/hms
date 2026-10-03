@@ -2,6 +2,8 @@ package com.example.hms.service;
 
 import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.security.ActingContext;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PatientInsuranceMapper;
@@ -57,6 +59,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
      * refused a Keycloak patient their own insurance.
      */
     private final PatientSubjectReadGuard subjectReadGuard;
+    private final ActingScopeResolver actingScopeResolver;
 
     @Override
     @Transactional
@@ -200,7 +203,19 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
      * method; if you are adding a write, do not change the rule on your own.
      */
     private Patient getPatientScoped(UUID patientId) {
-        return patientChartAccess.require(patientId, roleValidator.requireActiveHospitalId());
+        // A patient-only caller is bounded by ownership and has no hospital to
+        // measure against (design Q1), so the adapter refuses them outright —
+        // and the argument is evaluated before the call, so the owner branch
+        // inside PatientChartAccess could never run: a patient was refused
+        // their OWN coverage with 403 PATIENT_OWNED. Pass no hospital for that
+        // one scope; the chart helper then admits the caller's own chart and
+        // answers every other exactly as a missing one. Every other scope still
+        // goes through the adapter, so a staff caller who named no hospital is
+        // still told to select one.
+        UUID hospitalId = actingScopeResolver.current() instanceof ActingScope.PatientOwned
+            ? null
+            : roleValidator.requireActiveHospitalId();
+        return patientChartAccess.require(patientId, hospitalId);
     }
 
     private Patient getPatientOrThrow(UUID patientId, Locale locale) {

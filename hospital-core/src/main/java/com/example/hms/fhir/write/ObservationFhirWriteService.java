@@ -1,5 +1,6 @@
 package com.example.hms.fhir.write;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
 import ca.uhn.fhir.rest.server.exceptions.MethodNotAllowedException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
@@ -113,7 +114,7 @@ public class ObservationFhirWriteService {
         }
 
         UUID labResultId = parseLabResultUuid(fhirIdPart);
-        UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
+        UUID hospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
         if (hospitalId == null) {
             throw forbidden(
                 "FHIR PUT /Observation requires an active hospital scope; supply X-Hospital-Id "

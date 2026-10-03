@@ -28,6 +28,8 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.service.support.HospitalScopeUtils;
 import com.example.hms.specification.AppointmentSpecification;
 import jakarta.persistence.EntityManager;
@@ -1007,13 +1009,15 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Transactional(readOnly = true)
     public List<AppointmentResponseDTO> getAppointmentsByDoctorId(UUID staffId, Locale locale) {
         // ── Hospital scope enforcement: filter results to the caller's hospital scope ──
-        HospitalContext context = HospitalContextHolder.getContextOrEmpty();
-        if (context.isSuperAdmin()) {
+        // Global view only for a verified super-admin who named no hospital; a
+        // super-admin who named one reads it like anyone else.
+        ActingScope scope = ActingScopeResolver.currentScope();
+        if (scope instanceof ActingScope.Global) {
             return appointmentRepository.findByStaff_Id(staffId).stream()
                 .map(appointmentMapper::toAppointmentResponseDTO)
                 .toList();
         }
-        UUID activeHospitalId = context.getActiveHospitalId();
+        UUID activeHospitalId = scope instanceof ActingScope.Pinned pinned ? pinned.hospitalId() : null;
         if (activeHospitalId == null) {
             log.warn("getAppointmentsByDoctorId: no active hospital context, returning empty");
             return List.of();
@@ -1063,7 +1067,12 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private Set<UUID> resolveHospitalScope(User user) {
         HospitalContext context = HospitalContextHolder.getContextOrEmpty();
-        if (context.isSuperAdmin()) {
+        UUID pinnedHospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
+        if (context.isSuperAdmin() && pinnedHospitalId != null) {
+            // A super-admin who named a hospital reads that one (D1).
+            return Set.of(pinnedHospitalId);
+        }
+        if (context.isGlobalView()) {
             LinkedHashSet<UUID> superAdminScope = hospitalRepository.findAll().stream()
                 .map(Hospital::getId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
@@ -1078,10 +1087,10 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         if (log.isDebugEnabled()) {
             log.debug("resolveScope → context snapshot for {}: activeHospital={} permitted={} actual={}", user.getUsername(),
-                context.getActiveHospitalId(), context.getPermittedHospitalIds(), actualHospitalIds);
+                pinnedHospitalId, context.getPermittedHospitalIds(), actualHospitalIds);
             logHospitalLookup("assignments", actualHospitalIds);
         }
-        UUID activeCandidate = resolveActiveHospitalCandidate(context, actualHospitalIds);
+        UUID activeCandidate = resolveActiveHospitalCandidate(actualHospitalIds);
         if (activeCandidate != null) {
             return Set.of(activeCandidate);
         }
@@ -1116,8 +1125,8 @@ public class AppointmentServiceImpl implements AppointmentService {
         logHospitalLookup("scope", hospitalScope);
     }
 
-    private UUID resolveActiveHospitalCandidate(HospitalContext context, Set<UUID> actualHospitalIds) {
-        UUID activeHospitalId = context.getActiveHospitalId();
+    private UUID resolveActiveHospitalCandidate(Set<UUID> actualHospitalIds) {
+        UUID activeHospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
         if (activeHospitalId == null) {
             return null;
         }

@@ -2,9 +2,11 @@ package com.example.hms.security.audit;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.AuditEventType;
-import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.CustomUserDetails;
+import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import com.example.hms.service.AuditEventLogService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -90,7 +92,7 @@ class WriteAuditDispatchTest {
         when(provider.getIfAvailable()).thenReturn(auditService);
         @SuppressWarnings("unchecked")
         ObjectProvider<ControllerAuthUtils> authUtils = mock(ObjectProvider.class);
-        when(authUtils.getIfAvailable()).thenReturn(new ControllerAuthUtils(mock(UserRoleHospitalAssignmentRepository.class)));
+        when(authUtils.getIfAvailable()).thenReturn(new ControllerAuthUtils(ActingScopeTestSupport.resolver()));
         @SuppressWarnings("unchecked")
         ObjectProvider<UserRoleHospitalAssignmentRepository> assignments = mock(ObjectProvider.class);
         when(assignments.getIfAvailable()).thenReturn(null);
@@ -106,6 +108,7 @@ class WriteAuditDispatchTest {
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
+        HospitalContextHolder.clear();
     }
 
     private AuditEventRequestDTO emitted() {
@@ -150,9 +153,9 @@ class WriteAuditDispatchTest {
     @Test
     @DisplayName("a Keycloak-authenticated write is recorded through the OIDC principal")
     void recordsThroughAnOidcPrincipal() throws Exception {
-        Jwt jwt = Jwt.withTokenValue("t").header("alg", "none").claim("uid", DOCTOR.toString()).subject("dr.kabore").build();
-        SecurityContextHolder.getContext().setAuthentication(
-            new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("ROLE_DOCTOR"))));
+        Jwt jwt = Jwt.withTokenValue("t").header("alg", "none").claim("appUserId", DOCTOR.toString()).subject("dr.kabore").build();
+        ActingScopeTestSupport.signInLinked(
+            new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("ROLE_DOCTOR"))), DOCTOR);
 
         mockMvc.perform(post("/labor/episodes/{patientId}", PATIENT)).andExpect(status().isCreated());
 

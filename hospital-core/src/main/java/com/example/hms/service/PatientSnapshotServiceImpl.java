@@ -32,6 +32,8 @@ import com.example.hms.service.recordaccess.CrossHospitalRows;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import com.example.hms.service.recordaccess.SensitivityClassifier;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.PatientAllergy;
 import java.util.HashMap;
@@ -64,7 +66,7 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
  * <p>The legacy {@code clinical.patient_diagnoses} rows in
  * {@link #buildActiveDiagnoses} are scoped to the readable set since V171
  * gave the table a {@code hospital_id}; the rows written before it carry
- * none and are shown only to a verified super-admin.
+ * none and are shown only to a verified super-admin in global view.
  *
  * <p>Scoped to the readable set, but <b>with no sensitivity test</b>: active
  * medications, recent vitals, latest labs, pending orders and legacy diagnoses.
@@ -321,10 +323,13 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             // class. Now it is scoped to `readable` and accounted like the
             // problems above. The rows written before V171 carry no hospital:
             // they cannot be scoped or named in the reach, so they reach this
-            // drawer only for a verified super-admin (the JWT claim, never the
-            // inflated authorities) — and the patient still sees them on their
-            // own record through the portal. The hospital is never derived from
-            // diagnosedBy: that is the subject's, and scope is the caller's.
+            // drawer only for a verified super-admin in global view (the one
+            // resolver's Global scope: a live SUPER_ADMIN assignment, never the
+            // inflated authorities; a super-admin pinned to one hospital acts
+            // at that hospital and does not get them) — and the patient still
+            // sees them on their own record through the portal. The hospital
+            // is never derived from diagnosedBy: that is the subject's, and
+            // scope is the caller's.
             // No sensitivity test: SensitivityClassifier has no overload for a
             // diagnosis row, the same stated gap as medications and labs.
             List<PatientDiagnosis> legacy = new ArrayList<>(patientDiagnosisRepository
@@ -332,7 +337,8 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                             patientId, DIAGNOSIS_STATUS_ACTIVE, readable));
             account(reach, hospitalId, legacy.stream()
                     .map(d -> CrossHospitalReachRecorder.hospitalIdOf(d.getHospital())).toList());
-            if (HospitalContextHolder.getContextOrEmpty().isSuperAdmin()) {
+            if (ActingScopeResolver.scopeOf(HospitalContextHolder.getContextOrEmpty())
+                    instanceof ActingScope.Global) {
                 legacy.addAll(patientDiagnosisRepository
                         .findByPatient_IdAndStatusAndHospitalIsNullOrderByDiagnosedAtDesc(
                                 patientId, DIAGNOSIS_STATUS_ACTIVE));

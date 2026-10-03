@@ -35,9 +35,8 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
           AND (:active IS NULL OR p.active = :active)
           AND r.active = true
           AND (
-                :#{@tenantContext.isSuperAdmin()} = true OR (
-                    (p.organizationId IS NOT NULL AND p.organizationId IN :#{@tenantContext.effectiveOrganizationIds()})
-                    OR (p.hospitalId IS NOT NULL AND p.hospitalId IN :#{@tenantContext.effectiveHospitalIds()})
+                :#{@tenantContext.isGlobalView()} = true OR (
+                    (p.hospitalId IS NOT NULL AND p.hospitalId IN :#{@tenantContext.effectiveHospitalIds()})
                     OR (r.hospital.id IS NOT NULL AND r.hospital.id IN :#{@tenantContext.effectiveHospitalIds()})
                 )
               )
@@ -59,9 +58,8 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
           AND (:active IS NULL OR p.active = :active)
           AND r.active = true
           AND (
-                :#{@tenantContext.isSuperAdmin()} = true OR (
-                    (p.organizationId IS NOT NULL AND p.organizationId IN :#{@tenantContext.effectiveOrganizationIds()})
-          OR (p.hospitalId IS NOT NULL AND p.hospitalId IN :#{@tenantContext.effectiveHospitalIds()})
+                :#{@tenantContext.isGlobalView()} = true OR (
+          (p.hospitalId IS NOT NULL AND p.hospitalId IN :#{@tenantContext.effectiveHospitalIds()})
           OR (r.hospital.id IS NOT NULL AND r.hospital.id IN :#{@tenantContext.effectiveHospitalIds()})
                 )
               )
@@ -210,9 +208,8 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
           AND (:active IS NULL OR p.active = :active)
           AND r.active = true
           AND (
-                :#{@tenantContext.isSuperAdmin()} = true OR (
-                    (p.organizationId IS NOT NULL AND p.organizationId IN :#{@tenantContext.effectiveOrganizationIds()})
-                    OR (p.hospitalId IS NOT NULL AND p.hospitalId IN :#{@tenantContext.effectiveHospitalIds()})
+                :#{@tenantContext.isGlobalView()} = true OR (
+                    (p.hospitalId IS NOT NULL AND p.hospitalId IN :#{@tenantContext.effectiveHospitalIds()})
                     OR (r.hospital.id IS NOT NULL AND r.hospital.id IN :#{@tenantContext.effectiveHospitalIds()})
                 )
               )
@@ -231,9 +228,8 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
           AND (:active IS NULL OR p.active = :active)
           AND r.active = true
           AND (
-                :#{@tenantContext.isSuperAdmin()} = true OR (
-                    (p.organizationId IS NOT NULL AND p.organizationId IN :#{@tenantContext.effectiveOrganizationIds()})
-                    OR (p.hospitalId IS NOT NULL AND p.hospitalId IN :#{@tenantContext.effectiveHospitalIds()})
+                :#{@tenantContext.isGlobalView()} = true OR (
+                    (p.hospitalId IS NOT NULL AND p.hospitalId IN :#{@tenantContext.effectiveHospitalIds()})
                     OR (r.hospital.id IS NOT NULL AND r.hospital.id IN :#{@tenantContext.effectiveHospitalIds()})
                 )
               )

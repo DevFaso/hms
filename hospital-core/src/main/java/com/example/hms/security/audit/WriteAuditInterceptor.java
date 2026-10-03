@@ -1,12 +1,12 @@
 package com.example.hms.security.audit;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
-import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.AuditEventLogService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -211,10 +211,10 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
     }
 
     /**
-     * The actor's active assignment at the hospital this request is scoped to
-     * (X-Hospital-Id, or the JWT's primary hospital as the filter resolved
-     * it). Null for a super-admin in global view or an actor with no
-     * assignment there — the row is then global, which is the truth.
+     * The actor's active assignment at the hospital this request is pinned
+     * to (the one resolver's answer: the hospital named, else the only one
+     * held). Null for a super-admin in global view or an actor with no
+     * hospital — the row is then global, which is the truth.
      *
      * <p>This runs in {@code afterCompletion}, with no persistence context:
      * only the assignment's own columns and its EAGER role may be read here.
@@ -222,7 +222,7 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
      * name from {@code assignmentId} under its own transaction.</p>
      */
     private UserRoleHospitalAssignment resolveAssignment(UUID actorId) {
-        UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
+        UUID hospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
         UserRoleHospitalAssignmentRepository repository = assignmentRepositoryProvider.getIfAvailable();
         if (hospitalId == null || repository == null) {
             return null;

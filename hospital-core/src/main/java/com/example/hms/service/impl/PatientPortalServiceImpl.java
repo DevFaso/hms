@@ -112,6 +112,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import com.example.hms.service.i18n.NotificationLocales;
 
 /**
@@ -267,9 +268,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public com.example.hms.payload.dto.roi.RoiRequestResponseDTO createRoiRequest(
             Authentication auth, com.example.hms.payload.dto.roi.RoiSelfRequestCreateDTO dto) {
         Patient patient = findPatient(auth);
-        // Filed against the patient's registered hospital: the request lands
-        // on that facility's triage worklist.
-        UUID hospitalId = resolvePatientHospitalId(patient);
+        // Filed at the hospital the request names (checked against the
+        // patient's registrations), else at the patient's own hospital: the
+        // request lands on that facility's triage worklist. Never a guess.
+        UUID hospitalId = writeHospitalFor(patient, dto.getHospitalId());
         return roiRequestService.createForSelf(patient, hospitalId, dto);
     }
 
@@ -314,7 +316,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public HealthSummaryDTO getHealthSummary(Authentication auth, Locale locale) {
         Patient patient = findPatient(auth);
         UUID patientId = patient.getId();
-        UUID hospitalId = resolvePatientHospitalId(patient);
+        // The patient's own chart, at every hospital that holds it (design
+        // Q1): no hospital scope, ownership is the bound.
+        UUID hospitalId = null;
 
         return HealthSummaryDTO.builder()
                 .profile(toProfileDTO(patient))
@@ -333,8 +337,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<PatientLabResultResponseDTO> getMyLabResults(Authentication auth, int limit) {
         Patient patient = findPatient(auth);
-        UUID hospitalId = resolvePatientHospitalId(patient);
-        return labResultService.getLabResultsForPatientPortal(patient.getId(), hospitalId, limit);
+        // Own results at every hospital (design Q1); PatientChartAccess admits
+        // the owner with no hospital.
+        return labResultService.getLabResultsForPatientPortal(patient.getId(), null, limit);
     }
 
     // ── Medications ──────────────────────────────────────────────────────
@@ -343,8 +348,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<PatientMedicationResponseDTO> getMyMedications(Authentication auth, int limit) {
         Patient patient = findPatient(auth);
-        UUID hospitalId = resolvePatientHospitalId(patient);
-        return medicationService.getMedicationsForPatientPortal(patient.getId(), hospitalId, limit);
+        // Own medications at every hospital (design Q1): the portal variant
+        // resolves the patient by ownership, so no hospital scope is needed.
+        return medicationService.getMedicationsForPatientPortal(patient.getId(), null, limit);
     }
 
     // ── Prescriptions ────────────────────────────────────────────────────
@@ -355,7 +361,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         UUID patientId = resolvePatientId(auth);
         // Same DTO as the clinician surface; the pharmacist-to-prescriber
         // clarification exchange comes off the patient's copy (gap G7).
-        return prescriptionService.getPrescriptionsByPatientId(patientId, locale).stream()
+        return prescriptionService.getPrescriptionsForPortalPatient(patientId, locale).stream()
                 .map(PrescriptionResponseDTO::withoutClarificationExchange)
                 .toList();
     }
@@ -375,7 +381,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<EncounterResponseDTO> getMyEncounters(Authentication auth, Locale locale) {
         UUID patientId = resolvePatientId(auth);
-        return encounterService.getEncountersByPatientId(patientId, locale);
+        return encounterService.getEncountersForPortalPatient(patientId);
     }
 
     // ── Appointments ─────────────────────────────────────────────────────
@@ -394,7 +400,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public Page<BillingInvoiceResponseDTO> getMyInvoices(Authentication auth, Pageable pageable, Locale locale) {
         UUID patientId = resolvePatientId(auth);
-        return billingInvoiceService.getInvoicesByPatientId(patientId, pageable, locale);
+        return billingInvoiceService.getInvoicesForPortalPatient(patientId, pageable, locale);
     }
 
     // ── Pay an invoice ───────────────────────────────────────────────────
@@ -430,7 +436,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<ConsultationResponseDTO> getMyConsultations(Authentication auth) {
         UUID patientId = resolvePatientId(auth);
-        return consultationService.getConsultationsForPatient(patientId);
+        return consultationService.getConsultationsForPortalPatient(patientId);
     }
 
     // ── Treatment plans ──────────────────────────────────────────────────
@@ -439,7 +445,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public Page<TreatmentPlanResponseDTO> getMyTreatmentPlans(Authentication auth, Pageable pageable) {
         UUID patientId = resolvePatientId(auth);
-        return treatmentPlanService.listByPatient(patientId, pageable);
+        return treatmentPlanService.listForPortalPatient(patientId, pageable);
     }
 
     // ── Referrals ────────────────────────────────────────────────────────
@@ -448,7 +454,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<GeneralReferralResponseDTO> getMyReferrals(Authentication auth) {
         UUID patientId = resolvePatientId(auth);
-        return referralService.getReferralsByPatient(patientId);
+        return referralService.getReferralsForPortalPatient(patientId);
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -895,6 +901,50 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     }
 
     /**
+     * The hospital a patient-initiated write is filed at, when the record it
+     * acts on does not carry one: the hospital the request names, checked
+     * against the patient's active registrations; else their only active
+     * registration; else the patient record's own hospital when it is still
+     * an active registration. A patient registered at several hospitals who
+     * names none, and whose record's hospital is no longer one of them, is
+     * asked to choose. Never the newest assignment.
+     */
+    private UUID writeHospitalFor(Patient patient, UUID requestedHospitalId) {
+        if (requestedHospitalId != null) {
+            if (!isRegisteredAt(patient.getId(), requestedHospitalId)) {
+                throw new BusinessException(portalMessage("patientPortal.request.hospitalNotRegistered"));
+            }
+            return requestedHospitalId;
+        }
+        List<UUID> active = registrationRepository.findByPatientId(patient.getId()).stream()
+                .filter(reg -> reg.isActive() && reg.getHospital() != null)
+                .map(reg -> reg.getHospital().getId())
+                .distinct()
+                .toList();
+        if (active.size() == 1) {
+            return active.get(0);
+        }
+        if (patient.getHospitalId() != null && active.contains(patient.getHospitalId())) {
+            return patient.getHospitalId();
+        }
+        throw new BusinessException(portalMessage(active.isEmpty()
+                ? "patientPortal.request.noHospitalRegistration"
+                : "patientPortal.request.chooseHospital"));
+    }
+
+    /** Whether the patient has an active registration at that hospital. */
+    private boolean isRegisteredAt(UUID patientId, UUID hospitalId) {
+        return registrationRepository
+                .findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId)
+                .isPresent();
+    }
+
+    /** A patient-facing refusal in the request's language. */
+    private String portalMessage(String key) {
+        return messageSource.getMessage(key, null, LocaleContextHolder.getLocale());
+    }
+
+    /**
      * Resolve the patient's primary hospital ID.
      * Tries {@code patient.getHospitalId()} first, then falls back to the first
      * active hospital registration. Returns {@code null} if no hospital context is
@@ -1017,10 +1067,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
      * @throws BusinessException (HTTP 400) when no active registration is found.
      */
     private void requireHospitalRegistration(UUID patientId, UUID hospitalId) {
-        boolean registered = registrationRepository
-                .findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId)
-                .isPresent();
-        if (!registered) {
+        if (!isRegisteredAt(patientId, hospitalId)) {
             throw new BusinessException(
                     "You are not registered at the specified source hospital and cannot manage consent on its behalf.");
         }
@@ -1363,7 +1410,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public Page<BillingInvoiceResponseDTO> getProxyBilling(Authentication auth, UUID patientId, Pageable pageable, Locale locale) {
         Patient patient = verifyProxyAccess(auth, patientId, "VIEW_BILLING");
-        return billingInvoiceService.getInvoicesByPatientId(patient.getId(), pageable, locale);
+        return billingInvoiceService.getInvoicesForPortalPatient(patient.getId(), pageable, locale);
     }
 
     @Override
@@ -1520,10 +1567,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             PatientEducationProgress progress = requireAssignedEducation(patient.getId(), dto.getResourceId());
             hospitalId = progress.getHospitalId();
         } else {
-            hospitalId = resolvePatientHospitalId(patient);
-            if (hospitalId == null) {
-                throw new BusinessException("No hospital registration found for this patient");
-            }
+            hospitalId = writeHospitalFor(patient, dto.getHospitalId());
         }
 
         PatientEducationQuestion question = PatientEducationQuestion.builder()
