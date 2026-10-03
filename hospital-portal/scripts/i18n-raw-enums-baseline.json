@@ -80,6 +80,7 @@
     "src/app/lab/lab-outbox/lab-outbox.html::d.message.messageType",
     "src/app/lab/lab-outbox/lab-outbox.html::row.messageType",
     "src/app/lab/lab-outbox/lab-outbox.html::sibling.messageType",
+    "src/app/lab/lab-release-worklist/lab-release-worklist.html::row.observationResultStatus",
     "src/app/lab/lab-results/lab-results.html::meta.significanceLevel",
     "src/app/lab/lab-results/lab-results.html::pt.severityFlag",
     "src/app/lab/lab-results/lab-results.html::r.severityFlag",
