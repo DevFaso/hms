@@ -2005,10 +2005,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 Role role = assignment.getRole();
                 Hospital hospital = assignment.getHospital();
 
-                String displayName = String.format("%s - %s",
-                    resolveUserDisplayName(user),
-                    resolveRoleDisplayName(role)
-                );
+                String displayName = resolveUserDisplayName(user) + " - " + resolveRoleDisplayName(role);
                 String description = (hospital != null && StringUtils.hasText(hospital.getName()))
                     ? hospital.getName()
                     : messageSource.getMessage("assignment.scope.global", null, LocaleContextHolder.getLocale());

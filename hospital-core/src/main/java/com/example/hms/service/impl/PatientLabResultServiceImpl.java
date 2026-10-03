@@ -259,13 +259,10 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             return results.stream().limit(limit).toList();
         }
 
-        List<LabResult> survivors = new java.util.ArrayList<>(results.size());
         Set<UUID> present = new java.util.HashSet<>();
-        for (LabResult result : results) {
-            if (!replacements.containsKey(result.getId()) && present.add(result.getId())) {
-                survivors.add(result);
-            }
-        }
+        List<LabResult> survivors = new java.util.ArrayList<>(results.stream()
+            .filter(result -> !replacements.containsKey(result.getId()) && present.add(result.getId()))
+            .toList());
         // Only the rows on this page can pull a survivor in with them; a
         // sibling fetched purely to judge them is not something the patient
         // asked for.
@@ -278,13 +275,11 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         // them adjacent, so a tie can fall either side of the edge — and
         // dropping one without adding the other would take the test out of the
         // patient's view altogether.
-        for (LabResult winner : pageWinners) {
-            if (winner.getId() != null
+        survivors.addAll(pageWinners.stream()
+            .filter(winner -> winner.getId() != null
                 && !replacements.containsKey(winner.getId())
-                && present.add(winner.getId())) {
-                survivors.add(winner);
-            }
-        }
+                && present.add(winner.getId()))
+            .toList());
         survivors.sort(NEWEST_FIRST);
         return survivors.stream().limit(limit).toList();
     }

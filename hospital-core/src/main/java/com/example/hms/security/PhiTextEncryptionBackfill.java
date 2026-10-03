@@ -9,7 +9,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -139,10 +138,9 @@ public class PhiTextEncryptionBackfill {
         if (rows.isEmpty()) {
             return 0;
         }
-        List<Object[]> args = new ArrayList<>(rows.size());
-        for (LegacyValue row : rows) {
-            args.add(new Object[] {converter.convertToDatabaseColumn(row.value()), row.id()});
-        }
+        List<Object[]> args = rows.stream()
+            .map(row -> new Object[] {converter.convertToDatabaseColumn(row.value()), row.id()})
+            .toList();
         int updated = 0;
         for (int count : jdbcTemplate.batchUpdate(target.updateSql(), args)) {
             // A driver may report SUCCESS_NO_INFO (-2) for a batched row.

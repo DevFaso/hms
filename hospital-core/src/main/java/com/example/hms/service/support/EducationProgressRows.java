@@ -55,12 +55,6 @@ public final class EducationProgressRows {
         List<PatientEducationProgress> sorted = new ArrayList<>(rows);
         sorted.sort(CANONICAL_FIRST);
         Set<UUID> seen = new HashSet<>();
-        List<PatientEducationProgress> kept = new ArrayList<>();
-        for (PatientEducationProgress row : sorted) {
-            if (seen.add(row.getResourceId())) {
-                kept.add(row);
-            }
-        }
-        return kept;
+        return sorted.stream().filter(row -> seen.add(row.getResourceId())).toList();
     }
 }
