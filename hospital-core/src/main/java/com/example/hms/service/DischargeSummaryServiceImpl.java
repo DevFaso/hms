@@ -487,16 +487,16 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     }
 
     private void incrementCounter(String name, String outcome) {
-        incrementCounter(name, outcome, 1);
+        incrementCounter(name, outcome, 1.0);
     }
 
-    private void incrementCounter(String name, String outcome, long amount) {
+    private void incrementCounter(String name, String outcome, double amount) {
         if (meterRegistry == null) return; // unit-test path
         try {
             Counter.builder(name)
                     .tag(TAG_OUTCOME, outcome)
                     .register(meterRegistry)
-                    .increment((double) amount);
+                    .increment(amount);
         } catch (Exception ex) {
             // Metrics must never fail the request.
             log.debug("Failed to record metric {}: {}", name, ex.getMessage());

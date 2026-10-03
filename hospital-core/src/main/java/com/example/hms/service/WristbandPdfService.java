@@ -234,10 +234,10 @@ public class WristbandPdfService {
         }
     }
 
-    private static void writeText(PDPageContentStream cs, int size, float x, float y, String text)
+    private static void writeText(PDPageContentStream cs, float size, float x, float y, String text)
             throws IOException {
         cs.beginText();
-        cs.setFont(PDType1Font.HELVETICA_BOLD, (float) size);
+        cs.setFont(PDType1Font.HELVETICA_BOLD, size);
         cs.newLineAtOffset(x, y);
         cs.showText(text != null ? text : "");
         cs.endText();
