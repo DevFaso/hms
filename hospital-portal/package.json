@@ -55,18 +55,18 @@
     }
   },
   "dependencies": {
-    "@angular/animations": "22.1.6",
-    "@angular/cdk": "22.1.7",
-    "@angular/common": "22.1.6",
-    "@angular/compiler": "22.1.6",
-    "@angular/core": "22.1.6",
-    "@angular/forms": "22.1.6",
-    "@angular/material": "22.1.7",
-    "@angular/platform-browser": "22.1.6",
-    "@angular/platform-browser-dynamic": "22.1.6",
-    "@angular/platform-server": "22.1.6",
-    "@angular/router": "22.1.6",
-    "@angular/ssr": "^22.1.8",
+    "@angular/animations": "22.2.0",
+    "@angular/cdk": "22.2.0",
+    "@angular/common": "22.2.0",
+    "@angular/compiler": "22.2.0",
+    "@angular/core": "22.2.0",
+    "@angular/forms": "22.2.0",
+    "@angular/material": "22.2.0",
+    "@angular/platform-browser": "22.2.0",
+    "@angular/platform-browser-dynamic": "22.2.0",
+    "@angular/platform-server": "22.2.0",
+    "@angular/router": "22.2.0",
+    "@angular/ssr": "^22.2.0",
     "@fullcalendar/angular": "^6.1.20",
     "@fullcalendar/core": "^6.1.20",
     "@fullcalendar/daygrid": "^6.1.20",
@@ -85,9 +85,9 @@
     "zone.js": "^0.16.3"
   },
   "devDependencies": {
-    "@angular/build": "^22.1.8",
-    "@angular/cli": "^22.1.8",
-    "@angular/compiler-cli": "22.1.6",
+    "@angular/build": "^22.2.0",
+    "@angular/cli": "^22.2.0",
+    "@angular/compiler-cli": "22.2.0",
     "@axe-core/playwright": "^4.11.3",
     "@playwright/test": "^1.63.0",
     "@types/express": "^5.0.6",
@@ -106,8 +106,8 @@
     "karma-jasmine": "5.1.0",
     "karma-jasmine-html-reporter": "^2.3.0",
     "prettier": "^3.9.9",
-    "puppeteer": "^25.11.0",
+    "puppeteer": "^25.12.0",
     "typescript": "6.0.3",
-    "typescript-eslint": "^8.70.1"
+    "typescript-eslint": "^8.71.0"
   }
 }
