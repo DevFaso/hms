@@ -152,8 +152,8 @@ subprojects {
             mavenBom "org.springframework.boot:spring-boot-dependencies:4.1.1"
         }
         dependencies {
-            dependency 'ch.qos.logback:logback-core:1.6.3'
-            dependency 'ch.qos.logback:logback-classic:1.6.3'
+            dependency 'ch.qos.logback:logback-core:1.6.4'
+            dependency 'ch.qos.logback:logback-classic:1.6.4'
             dependency 'org.assertj:assertj-core:3.27.7'
         }
     }
