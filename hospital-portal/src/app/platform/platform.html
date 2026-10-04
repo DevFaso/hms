@@ -724,7 +724,7 @@
                       @if (!row.link) {
                         <button
                           class="btn btn-sm btn-success"
-                          [disabled]="linkBusy() === row.hospitalId"
+                          [disabled]="isLinkBusy(row.hospitalId)"
                           (click)="linkHospital(row)"
                         >
                           {{ 'PLATFORM.LINK' | translate }}
@@ -733,7 +733,7 @@
                         @if (row.link.enabled) {
                           <button
                             class="btn btn-sm btn-outline"
-                            [disabled]="linkBusy() === row.hospitalId"
+                            [disabled]="isLinkBusy(row.hospitalId)"
                             (click)="setHospitalLinkEnabled(row, false)"
                           >
                             {{ 'PLATFORM.DISABLE_LINK' | translate }}
@@ -741,7 +741,7 @@
                         } @else {
                           <button
                             class="btn btn-sm btn-success"
-                            [disabled]="linkBusy() === row.hospitalId"
+                            [disabled]="isLinkBusy(row.hospitalId)"
                             (click)="setHospitalLinkEnabled(row, true)"
                           >
                             {{ 'PLATFORM.ENABLE_LINK' | translate }}
@@ -749,7 +749,7 @@
                         }
                         <button
                           class="btn btn-sm btn-danger"
-                          [disabled]="linkBusy() === row.hospitalId"
+                          [disabled]="isLinkBusy(row.hospitalId)"
                           (click)="unlinkHospital(row)"
                         >
                           {{ 'PLATFORM.UNLINK' | translate }}

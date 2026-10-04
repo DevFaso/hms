@@ -452,7 +452,39 @@ describe('PlatformComponent', () => {
       c.setHospitalLinkEnabled(row, true);
 
       expect(toast.error).toHaveBeenCalledWith('Hospital is in another organization.');
-      expect(c.linkBusy()).toBeNull();
+      expect(c.isLinkBusy('h1')).toBeFalse();
+    });
+
+    it('never applies a late answer to the drawer of another service', () => {
+      const answer = new Subject<HospitalServiceLink>();
+      platform.setHospitalLinkEnabled.and.returnValue(answer);
+      c.setHospitalLinkEnabled(row, true);
+
+      platform.listServiceHospitalLinks.and.returnValue(of([link('h1', false, 'Clinique A')]));
+      c.openServiceDetail(orgService({ id: 's2' }));
+      answer.next(link('h1', true, 'Clinique A'));
+
+      expect(c.hospitalRows()[0].link?.enabled).toBeFalse();
+    });
+
+    it('keeps each row busy until its own request answers', () => {
+      c.organizations.set([
+        org('o1', 'Alpha Health', [
+          { id: 'h1', name: 'Clinique A' },
+          { id: 'h2', name: 'Clinique B' },
+        ]),
+      ]);
+      const linkAnswer = new Subject<HospitalServiceLink>();
+      const switchAnswer = new Subject<HospitalServiceLink>();
+      platform.linkHospital.and.returnValue(linkAnswer);
+      platform.setHospitalLinkEnabled.and.returnValue(switchAnswer);
+
+      c.linkHospital({ hospitalId: 'h2', hospitalName: 'Clinique B', link: null });
+      c.setHospitalLinkEnabled(row, true);
+      linkAnswer.next(link('h2', true, 'Clinique B'));
+
+      expect(c.isLinkBusy('h2')).toBeFalse();
+      expect(c.isLinkBusy('h1')).toBeTrue();
     });
   });
 
@@ -468,6 +500,17 @@ describe('PlatformComponent', () => {
         }),
       );
       c.startEditService();
+    });
+
+    it('never switches the drawer back to a service whose save answers late', () => {
+      const answer = new Subject<OrgServiceResponse>();
+      platform.updateOrgService.and.returnValue(answer);
+      c.saveService();
+
+      c.openServiceDetail(orgService({ id: 's2', provider: 'Other' }));
+      answer.next(orgService({ provider: 'Saved' }));
+
+      expect(c.selectedService()?.id).toBe('s2');
     });
 
     it('sends an emptied field as "" so the server clears it', () => {

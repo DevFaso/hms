@@ -160,6 +160,10 @@ interface ApiErrorBody {
   fieldErrors?: Record<string, string> | null;
 }
 
+function linkKey(serviceId: string, hospitalId: string): string {
+  return serviceId + ':' + hospitalId;
+}
+
 @Component({
   selector: 'app-platform',
   standalone: true,
@@ -206,7 +210,32 @@ export class PlatformComponent implements OnInit {
   linksLoading = signal(false);
   linksError = signal(false);
   /** Hospital whose link is being changed, so only its buttons wait. */
-  linkBusy = signal<string | null>(null);
+  /**
+   * Link requests in flight, keyed by service and hospital: one per row, so
+   * one answer never re-enables another row's button while its own request
+   * is still running.
+   */
+  private readonly linkBusyKeys = signal<ReadonlySet<string>>(new Set());
+
+  isLinkBusy(hospitalId: string): boolean {
+    const svc = this.selectedService();
+    return !!svc && this.linkBusyKeys().has(linkKey(svc.id, hospitalId));
+  }
+
+  private setLinkBusy(serviceId: string, hospitalId: string, busy: boolean): void {
+    const key = linkKey(serviceId, hospitalId);
+    this.linkBusyKeys.update((keys) => {
+      const next = new Set(keys);
+      if (busy) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  }
+
+  /** True while the drawer still shows the service a request was sent for. */
+  private drawerShows(serviceId: string): boolean {
+    return this.selectedService()?.id === serviceId;
+  }
 
   /* Catalog */
   catalog = signal<CatalogItem[]>([]);
@@ -511,9 +540,12 @@ export class PlatformComponent implements OnInit {
     this.saving.set(true);
     this.platformSvc.updateOrgService(svc.organizationId, svc.id, request).subscribe({
       next: (updated) => {
-        this.selectedService.set(updated);
         this.orgServices.update((list) => list.map((s) => (s.id === updated.id ? updated : s)));
-        this.editingService.set(false);
+        // The drawer may show another service by now; never switch it back.
+        if (this.drawerShows(updated.id)) {
+          this.selectedService.set(updated);
+          this.editingService.set(false);
+        }
         this.saving.set(false);
         this.toast.success(this.translate.instant('PLATFORM.TOAST.SERVICE_UPDATED'));
       },
@@ -609,18 +641,20 @@ export class PlatformComponent implements OnInit {
   linkHospital(row: HospitalLinkRow): void {
     const svc = this.selectedService();
     if (!svc || row.link) return;
-    this.linkBusy.set(row.hospitalId);
+    this.setLinkBusy(svc.id, row.hospitalId, true);
     this.platformSvc.linkHospital(row.hospitalId, svc.id, { enabled: true }).subscribe({
       next: (created) => {
-        this.hospitalLinks.update((list) => [...list, created]);
+        if (this.drawerShows(svc.id)) {
+          this.hospitalLinks.update((list) => [...list, created]);
+        }
         this.adjustHospitalLinkCount(svc.id, 1);
-        this.linkBusy.set(null);
+        this.setLinkBusy(svc.id, row.hospitalId, false);
         this.toast.success(
           this.translate.instant('PLATFORM.TOAST.HOSPITAL_LINKED', { name: row.hospitalName }),
         );
       },
       error: (err) => {
-        this.linkBusy.set(null);
+        this.setLinkBusy(svc.id, row.hospitalId, false);
         this.toast.error(this.errorMessage(err, 'PLATFORM.TOAST.HOSPITAL_LINK_FAILED'));
       },
     });
@@ -630,13 +664,15 @@ export class PlatformComponent implements OnInit {
   setHospitalLinkEnabled(row: HospitalLinkRow, enabled: boolean): void {
     const svc = this.selectedService();
     if (!svc || !row.link) return;
-    this.linkBusy.set(row.hospitalId);
+    this.setLinkBusy(svc.id, row.hospitalId, true);
     this.platformSvc.setHospitalLinkEnabled(row.hospitalId, svc.id, enabled).subscribe({
       next: (updated) => {
-        this.hospitalLinks.update((list) =>
-          list.map((l) => (l.hospitalId === row.hospitalId ? updated : l)),
-        );
-        this.linkBusy.set(null);
+        if (this.drawerShows(svc.id)) {
+          this.hospitalLinks.update((list) =>
+            list.map((l) => (l.hospitalId === row.hospitalId ? updated : l)),
+          );
+        }
+        this.setLinkBusy(svc.id, row.hospitalId, false);
         this.toast.success(
           this.translate.instant(
             enabled
@@ -647,7 +683,7 @@ export class PlatformComponent implements OnInit {
         );
       },
       error: (err) => {
-        this.linkBusy.set(null);
+        this.setLinkBusy(svc.id, row.hospitalId, false);
         this.toast.error(this.errorMessage(err, 'PLATFORM.TOAST.HOSPITAL_LINK_UPDATE_FAILED'));
       },
     });
@@ -664,18 +700,20 @@ export class PlatformComponent implements OnInit {
     ) {
       return;
     }
-    this.linkBusy.set(row.hospitalId);
+    this.setLinkBusy(svc.id, row.hospitalId, true);
     this.platformSvc.unlinkHospital(row.hospitalId, svc.id).subscribe({
       next: () => {
-        this.hospitalLinks.update((list) => list.filter((l) => l.hospitalId !== row.hospitalId));
+        if (this.drawerShows(svc.id)) {
+          this.hospitalLinks.update((list) => list.filter((l) => l.hospitalId !== row.hospitalId));
+        }
         this.adjustHospitalLinkCount(svc.id, -1);
-        this.linkBusy.set(null);
+        this.setLinkBusy(svc.id, row.hospitalId, false);
         this.toast.success(
           this.translate.instant('PLATFORM.TOAST.HOSPITAL_UNLINKED', { name: row.hospitalName }),
         );
       },
       error: (err) => {
-        this.linkBusy.set(null);
+        this.setLinkBusy(svc.id, row.hospitalId, false);
         this.toast.error(this.errorMessage(err, 'PLATFORM.TOAST.HOSPITAL_UNLINK_FAILED'));
       },
     });
