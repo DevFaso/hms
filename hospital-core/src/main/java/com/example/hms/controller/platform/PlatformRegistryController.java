@@ -45,8 +45,12 @@ import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
  * <p>Every write is SUPER_ADMIN only. Links used to admit HOSPITAL_ADMIN with
  * no check that the hospital was theirs, so one hospital's administrator could
  * link, disable or delete another tenant's integration; the only screen that
- * drives these endpoints is the super-admin Platform Management page. Reads
- * keep their roles.
+ * drives these endpoints is the super-admin Platform Management page.
+ *
+ * <p>Reads that are not held to one hospital are SUPER_ADMIN only too: an
+ * organization's services and a department's links were readable by any
+ * HOSPITAL_ADMIN by id. HOSPITAL_ADMIN keeps the catalog and the per-hospital
+ * link list, which HospitalIdNarrowingInterceptor holds to their hospitals.
  */
 @RestController
 @WriteAudited(skip = true, reason = "service emits PLATFORM_REGISTRY_UPDATED for every registry write")
