@@ -2338,7 +2338,7 @@ the Angular 22 / Spring Boot 4.1 pins.
 
 **Batch 6 — data integrity and operations — done by #790 (2026-10-03)** and #791
 (the mobile release runbook); the dev orphans and the Play privacy-policy
-URL wait on the user. As planned: 37 tables with `patient_id` and
+URL wait on the user. As planned (V169's scan counts 36, not 37): 37 tables with `patient_id` and
 no foreign key, and the orphans already on dev; encounters outliving their
 attending's assignment; outbound mail on the request thread;
 `LoginAttemptService` per-JVM lockout; the Play Store privacy-policy URL; the
@@ -2876,9 +2876,9 @@ steps (see "Operational, open right now"). Next free migration: **V176**.
   self-revoke vs staff-revoke. No schema change.
 - **~~Nothing pairs a controller's `@PreAuthorize` with the SecurityConfig
   matcher that covers its path.~~ Closed by #789** (2026-09-29):
-  `PreAuthorizeMatcherPairingTest`. It found 12 handlers where the matcher is
-  narrower than the annotation and froze them as today's behaviour (new
-  bullet below). What it was: The record-sharing opt-out shipped admitting
+  `PreAuthorizeMatcherPairingTest`. It found 12 (verb, path, role) entries,
+  over 7 handlers, where the matcher is narrower than the annotation, and
+  froze them (new bullet below). What it was: The record-sharing opt-out shipped admitting
   ROLE_PATIENT at the annotation, with `requireSelfIfPatient` written and
   tested, while the `/patients/**` matchers refused a patient on GET and
   DELETE and let POST fall through — so the feature was half-reachable for
@@ -3032,11 +3032,14 @@ steps (see "Operational, open right now"). Next free migration: **V176**.
   task, not a code change.
 
 - **~~37 more tables carry `patient_id` with no foreign key to
-  `clinical.patients`.~~ Closed by #790** (V169, 2026-10-03): the patient FK on
-  the 31 tables V156 left open, NO ACTION, NOT VALID, orphans counted per
-  table and listed by `docs/runbooks/patient-fk-orphans.sql` (read only).
-  Excluded by recorded decision: `audit_event_logs` (V141), `roi_requests`
-  (V151), `empi.master_identities` and the `*_v2` tables. What it was: V156 constrained the ten core clinical ones
+  `clinical.patients`.~~ Closed by #790** (V169, 2026-10-03). V169's own
+  catalog scan of the migrated schema (2026-09-26) found 36 such tables, not
+  37, and it constrains 31 of them: the patient FK, NO ACTION, NOT VALID,
+  orphans counted per table and listed by
+  `docs/runbooks/patient-fk-orphans.sql` (read only). The other five are
+  excluded by recorded decision: `audit_event_logs` (V141), `roi_requests`
+  (V151), `empi.master_identities` and the two `*_v2` tables
+  (`patient_insurances_v2`, `patient_medical_histories_v2`). What it was: V156 constrained the ten core clinical ones
   (consultations, admissions, encounters, prescriptions, vital signs,
   allergies, problems, imaging orders, appointments, lab orders) after a hard
   `deleteById` orphaned three consultations and an admission on dev
@@ -4443,13 +4446,18 @@ steps (see "Operational, open right now"). Next free migration: **V176**.
   App ID, the `aps-environment` entitlement, and an APNs .p8 key and Key ID for
   the backend. The runbook's push section is a placeholder.
 
-- **Twelve handlers where the URL matcher is narrower than the annotation,
-  frozen by #789 (2026-10-04).** `PreAuthorizeMatcherPairingTest` found them
-  and froze them as today's behaviour: DELETE on patient allergies, diagnoses
-  and photo for clinician roles; PUT allergies for PHARMACIST; GET
-  `/lab-qc-events/summary` for ADMIN; GET the lab-specimen `label.pdf` for
-  HOSPITAL_ADMIN; PUT `/staff/{id}/lab-role` for LAB_DIRECTOR. Each is a
-  decision about which layer is right, not a fix.
+- **Twelve (verb, path, role) entries, over seven handlers, where the URL
+  matcher is narrower than the annotation, frozen by #789 (2026-10-04).**
+  `PreAuthorizeMatcherPairingTest` accepts them as today's behaviour, each
+  with a reason. Chart writes: DELETE `/patients/{id}/allergies/{allergyId}`
+  for DOCTOR, NURSE and PHARMACIST; DELETE
+  `/patients/{id}/diagnoses/{diagnosisId}` for DOCTOR; DELETE
+  `/patients/{patientId}/photo` for DOCTOR, MIDWIFE, NURSE and RECEPTIONIST;
+  PUT `/patients/{id}/allergies/{allergyId}` for PHARMACIST. These, and PUT
+  `/staff/{id}/lab-role` for LAB_DIRECTOR, are decisions about which layer
+  is right. The other two, GET `/lab-qc-events/summary` for ADMIN and GET
+  `/lab-specimens/{specimenId}/label.pdf` for HOSPITAL_ADMIN, are marked in
+  the test as owned by the batch's lab PR (#790), which left them in place.
 
 - **What #790's migrations leave for the user to decide (2026-10-04).** Each
   is fail-safe and counts or names what it would not touch: V167 leaves the
@@ -4485,17 +4493,28 @@ steps (see "Operational, open right now"). Next free migration: **V176**.
   marked NEEDS COPY REVIEW in its commit (Spanish had no wording to mirror).
 
 - **`ActingScopeCoverageTest` still carries the allowances #789 left for the
-  other PRs of its batch (2026-10-04).** Tagged for "the pharmacy/lab/HL7 PR":
-  three raw `getActiveHospitalId()` reads (`LabResultServiceImpl`,
-  `LabTestDefinitionServiceImpl`, `LabTestDefinitionController`, each a
-  one-line move to `ActingScopeResolver.pinnedHospitalIdOrNull()`), the
-  deprecated `isSuperAdminFromAuth()` in `LabOrderServiceImpl` and
-  `LabResultServiceImpl`, and a reconciled-authority check in
-  `PharmacyRegistryController`; tagged for "another PR of this batch": the
-  own-pin read in `UltrasoundServiceImpl` and the reconciled-authority checks
-  in `CdsAcknowledgementServiceImpl` and `PrescriptionSmsDispatchServiceImpl`.
-  #788 merged three minutes before #789 and #790 did not move them, so the
-  allowances stand on develop. Moving each and deleting its allowance is the whole job.
+  other PRs of its batch (2026-10-04).** Every allowance tagged for a sibling
+  PR, as the test reads on develop:
+  - Tagged for "the pharmacy/lab/HL7 PR" (#790):
+    - raw `getActiveHospitalId()` reads in `LabResultServiceImpl`,
+      `LabTestDefinitionServiceImpl` and `LabTestDefinitionController`, each
+      a one-line move to `ActingScopeResolver.pinnedHospitalIdOrNull()`;
+    - the deprecated `isSuperAdminFromAuth()` in `LabOrderServiceImpl` and
+      `LabResultServiceImpl`;
+    - a reconciled-authority check in `PharmacyRegistryController`;
+    - local `ctx.isSuperAdmin()` reads in `LabInstrumentServiceImpl`,
+      `LabInventoryServiceImpl` and `LabResultServiceImpl`.
+  - Tagged for "another PR of this batch":
+    - the own-pin read in `UltrasoundServiceImpl`;
+    - the reconciled-authority checks in `CdsAcknowledgementServiceImpl` and
+      `PrescriptionSmsDispatchServiceImpl`;
+    - a local `ctx.isSuperAdmin()` read in `ConsultationServiceImpl`.
+
+  #788 merged three minutes before #789, and #790 did not move them, so the
+  allowances stand on develop. The test's other allowances (the resolver
+  itself, the lifecycle gate, the deprecated adapters, the verified-signal
+  reads, the own-pin reads) carry permanent reasons and are not debt.
+  Moving each tagged call and deleting its allowance is the whole job.
 
 ## Open clinical questions — kept open on purpose, not forgotten
 
