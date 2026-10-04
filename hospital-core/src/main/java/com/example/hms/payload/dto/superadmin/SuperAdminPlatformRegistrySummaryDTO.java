@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -43,7 +44,6 @@ public class SuperAdminPlatformRegistrySummaryDTO {
         private String metricLabel;
         private String metricValue;
         private String nextAction;
-        private String lastRun;
     }
 
     public enum AutomationStatus {
@@ -61,6 +61,12 @@ public class SuperAdminPlatformRegistrySummaryDTO {
         private long pendingIntegrations;
         private long disabledLinks;
         private long activeReleaseWindows;
-        private String lastSnapshotGeneratedAt;
+        /**
+         * When a release window was last created or changed. It used to be
+         * served as {@code lastSnapshotGeneratedAt} under a "Last snapshot"
+         * label, but snapshots are not recorded anywhere; this is what the
+         * value always was.
+         */
+        private LocalDateTime lastReleaseWindowChangeAt;
     }
 }

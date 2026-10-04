@@ -22,4 +22,12 @@ public interface PlatformReleaseWindowRepository extends JpaRepository<PlatformR
     long countByEndsAtAfter(LocalDateTime instant);
 
     Optional<PlatformReleaseWindow> findFirstByOrderByUpdatedAtDesc();
+
+    /** Windows not cancelled and not yet over: scheduled or in progress by the clock (D7). */
+    long countByStatusNotAndEndsAtAfter(PlatformReleaseStatus status, LocalDateTime instant);
+
+    /** Windows not cancelled and not yet started (D7). */
+    long countByStatusNotAndStartsAtAfter(PlatformReleaseStatus status, LocalDateTime instant);
+
+    boolean existsByNameAndEnvironment(String name, String environment);
 }
