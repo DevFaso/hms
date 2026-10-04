@@ -77,6 +77,28 @@ class DashboardConfigurationServiceImplTest {
 
         assertThat(response.roles()).hasSize(1);
         assertThat(response.roles().get(0).roleCode()).isEqualTo("ROLE_UNKNOWN");
+        // Null, not the English "Unknown Role" sentence a French user would read.
+        assertThat(response.roles().get(0).roleName()).isNull();
         assertThat(response.mergedPermissions()).contains("View Dashboard");
+    }
+
+    @Test
+    void roleNamesReachTheClientBare() {
+        UUID userId = UUID.randomUUID();
+        when(authService.getCurrentUserId()).thenReturn(userId);
+        Role prefixed = Role.builder().code("ROLE_DOCTOR").name("ROLE_DOCTOR").build();
+        Role nameless = Role.builder().code("ROLE_NURSE").build();
+        when(assignmentRepository.findByUser_IdAndActiveTrue(userId)).thenReturn(List.of(
+            UserRoleHospitalAssignment.builder().role(prefixed).active(true).build(),
+            UserRoleHospitalAssignment.builder().role(nameless).active(true).build()));
+
+        DashboardConfigResponseDTO response = service.getDashboardForCurrentUser();
+
+        // The code keeps its prefix (permissions key on it); the name is display.
+        assertThat(response.roles())
+            .extracting(r -> r.roleCode(), r -> r.roleName())
+            .containsExactly(
+                org.assertj.core.groups.Tuple.tuple("ROLE_DOCTOR", "DOCTOR"),
+                org.assertj.core.groups.Tuple.tuple("ROLE_NURSE", null));
     }
 }

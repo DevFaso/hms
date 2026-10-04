@@ -17,6 +17,16 @@ public interface PrescriptionService {
     /**
      * The guarded read: hospital scope, and a patient principal may only read
      * their own prescription. This is the one to call for a READ.
+     *
+     * <p>A patient-only caller is bounded by ownership, not by a hospital: no
+     * scope is resolved, and they read their own prescription wherever it
+     * was written. For everyone else a {@code null} hospital scope reads
+     * across tenants only for a verified super-admin
+     * ({@code isSuperAdminFromJwtClaim()}); any other caller without a
+     * hospital is refused before the lookup. A staff member who holds
+     * {@code ROLE_PATIENT} and owns a prescription at another hospital reads
+     * it too, as its patient: the patient copy, without the clarification
+     * exchange. Every other refusal answers exactly as a missing id does.
      */
     PrescriptionResponseDTO getPrescriptionById(UUID id, Locale locale);
 
@@ -80,6 +90,15 @@ public interface PrescriptionService {
 
     // legacy convenience (optional)
     List<PrescriptionResponseDTO> getPrescriptionsByPatientId(UUID patientId, Locale locale);
+
+    /**
+     * The portal patient's own prescriptions, at every hospital that holds any
+     * (design Q1: a patient is bounded by ownership, not by a hospital). No
+     * hospital scope is read. Callers MUST have bound {{@code patientId}} to the
+     * principal first: PatientPortalServiceImpl resolves it from the caller
+     * (or verifies a proxy grant); nothing else calls this.
+     */
+    List<PrescriptionResponseDTO> getPrescriptionsForPortalPatient(UUID patientId, Locale locale);
     List<PrescriptionResponseDTO> getPrescriptionsByStaffId(UUID staffId, Locale locale);
     List<PrescriptionResponseDTO> getPrescriptionsByEncounterId(UUID encounterId, Locale locale);
 }

@@ -64,6 +64,13 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
     private final DigitalSignatureRepository digitalSignatureRepository;
     private final EncounterRepository encounterRepository;
     private final OnCallScheduleRepository onCallScheduleRepository;
+    /**
+     * Only {@link #getOnCallStatus} reads it (the on-call aggregate, shared with
+     * {@code OnCallScheduleServiceImpl}); the age, wait-time and today's
+     * appointment reads below belong to other aggregates and still use the
+     * system clock.
+     */
+    private final java.time.Clock clock;
 
     @Override
     public ClinicalDashboardResponseDTO getClinicalDashboard(UUID userId) {
@@ -233,7 +240,7 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
                 return OnCallStatusDTO.builder().isOnCall(false).build();
             }
             UUID staffId = staffOpt.get().getId();
-            java.time.OffsetDateTime now = java.time.OffsetDateTime.now();
+            java.time.OffsetDateTime now = java.time.OffsetDateTime.now(clock);
             var schedules = onCallScheduleRepository.findActiveByStaffIdAt(staffId, now);
             if (!schedules.isEmpty()) {
                 var entry = schedules.get(0);

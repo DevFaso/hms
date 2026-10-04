@@ -11,6 +11,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -34,6 +35,13 @@ public class InstrumentOutboxDispatchService {
     private final InstrumentOutboxRepository outboxRepository;
     private final MllpOutboundSender sender;
     private final MllpOutboundProperties properties;
+    /**
+     * The outbox clock: it writes {@code lastAttemptAt}/{@code sentAt} and the
+     * retry back-off ({@code findDispatchable}'s {@code retryBefore}) reads
+     * {@code lastAttemptAt} back. {@code InstrumentOutboxServiceImpl} only
+     * clears it on a manual retry.
+     */
+    private final Clock clock;
 
     /**
      * Send one batch of queued messages.
@@ -51,7 +59,7 @@ public class InstrumentOutboxDispatchService {
         }
 
         LocalDateTime retryBefore =
-            LocalDateTime.now().minusSeconds(properties.getRetryAfterSeconds());
+            LocalDateTime.now(clock).minusSeconds(properties.getRetryAfterSeconds());
         List<InstrumentOutbox> batch = outboxRepository.findDispatchable(
             InstrumentOutboxStatus.PENDING,
             properties.getMaxAttempts(),
@@ -69,14 +77,14 @@ public class InstrumentOutboxDispatchService {
 
     private boolean dispatchOne(InstrumentOutbox message) {
         message.setAttempts(message.getAttempts() + 1);
-        message.setLastAttemptAt(LocalDateTime.now());
+        message.setLastAttemptAt(LocalDateTime.now(clock));
 
         try {
             String ack = sender.send(message.getPayload());
 
             if (sender.isPositiveAck(ack)) {
                 message.setStatus(InstrumentOutboxStatus.ACK);
-                message.setSentAt(LocalDateTime.now());
+                message.setSentAt(LocalDateTime.now(clock));
                 message.setLastError(null);
                 outboxRepository.save(message);
                 return true;

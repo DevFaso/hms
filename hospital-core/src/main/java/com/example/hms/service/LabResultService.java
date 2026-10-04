@@ -55,8 +55,6 @@ public interface LabResultService {
 
     List<LabResultResponseDTO> getLabResultsByLabOrderId(UUID labOrderId, Locale locale);
 
-    List<LabResultResponseDTO> getLabResultsByPatientId(UUID patientId, Locale locale);
-
     void acknowledgeLabResult(UUID id, Locale locale);
 
     /**

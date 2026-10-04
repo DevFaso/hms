@@ -162,7 +162,7 @@ class PatientGuarantorServiceImplTest {
 
         assertThatThrownBy(() -> service.update(patientId, foreignId, hospitalId, dto))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Guarantor not found");
+            .hasFieldOrPropertyWithValue("messageKey", "guarantor.notFound");
     }
 
     @Test

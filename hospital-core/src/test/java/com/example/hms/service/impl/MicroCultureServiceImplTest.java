@@ -184,7 +184,7 @@ class MicroCultureServiceImplTest {
         // 404-not-403: the message must not reveal the order exists elsewhere.
         assertThatThrownBy(() -> service.createCulture(foreignScope, null, request))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Lab order not found");
+            .hasFieldOrPropertyWithValue("messageKey", "labOrder.notFound");
     }
 
     @Test
@@ -325,7 +325,7 @@ class MicroCultureServiceImplTest {
 
         assertThatThrownBy(() -> service.updateIsolate(cultureId, foreignIsolateId, hospitalId, request))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Isolate not found");
+            .hasFieldOrPropertyWithValue("messageKey", "microculture.isolate.notFound");
     }
 
     /* ── reads ─────────────────────────────────────────────────────────── */
@@ -336,7 +336,7 @@ class MicroCultureServiceImplTest {
 
         assertThatThrownBy(() -> service.getCulture(cultureId, foreignScope))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Culture report not found");
+            .hasFieldOrPropertyWithValue("messageKey", "microculture.culture.notFound");
     }
 
     @Test
@@ -497,7 +497,7 @@ class MicroCultureServiceImplTest {
 
         assertThatThrownBy(() -> service.deleteSusceptibility(cultureId, isolateId, rowId, hospitalId, null))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Susceptibility not found");
+            .hasFieldOrPropertyWithValue("messageKey", "microculture.susceptibility.notFound");
     }
 
     @Test

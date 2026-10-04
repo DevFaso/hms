@@ -35,9 +35,8 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
           AND (:active IS NULL OR p.active = :active)
           AND r.active = true
           AND (
-                :#{@tenantContext.isSuperAdmin()} = true OR (
-                    (p.organizationId IS NOT NULL AND p.organizationId IN :#{@tenantContext.effectiveOrganizationIds()})
-                    OR (p.hospitalId IS NOT NULL AND p.hospitalId IN :#{@tenantContext.effectiveHospitalIds()})
+                :#{@tenantContext.isGlobalView()} = true OR (
+                    (p.hospitalId IS NOT NULL AND p.hospitalId IN :#{@tenantContext.effectiveHospitalIds()})
                     OR (r.hospital.id IS NOT NULL AND r.hospital.id IN :#{@tenantContext.effectiveHospitalIds()})
                 )
               )
@@ -59,9 +58,8 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
           AND (:active IS NULL OR p.active = :active)
           AND r.active = true
           AND (
-                :#{@tenantContext.isSuperAdmin()} = true OR (
-                    (p.organizationId IS NOT NULL AND p.organizationId IN :#{@tenantContext.effectiveOrganizationIds()})
-          OR (p.hospitalId IS NOT NULL AND p.hospitalId IN :#{@tenantContext.effectiveHospitalIds()})
+                :#{@tenantContext.isGlobalView()} = true OR (
+          (p.hospitalId IS NOT NULL AND p.hospitalId IN :#{@tenantContext.effectiveHospitalIds()})
           OR (r.hospital.id IS NOT NULL AND r.hospital.id IN :#{@tenantContext.effectiveHospitalIds()})
                 )
               )
@@ -110,6 +108,14 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
      * </ul>
      */
     boolean existsByIdAndUserId(UUID id, UUID userId);
+
+    /**
+     * Does any patient row point at this user account? Same shape, and same
+     * reasons, as {@link #existsByIdAndUserId}: an authorisation check must not
+     * throw on duplicate rows nor decrypt a name to answer yes or no.
+     */
+    @Query("SELECT (COUNT(p) > 0) FROM Patient p WHERE p.user.id = :userId")
+    boolean existsByUserId(@Param("userId") UUID userId);
 
     /**
      * Fetches a Patient by primary key WITHOUT tenant-scope filtering.
@@ -202,9 +208,8 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
           AND (:active IS NULL OR p.active = :active)
           AND r.active = true
           AND (
-                :#{@tenantContext.isSuperAdmin()} = true OR (
-                    (p.organizationId IS NOT NULL AND p.organizationId IN :#{@tenantContext.effectiveOrganizationIds()})
-                    OR (p.hospitalId IS NOT NULL AND p.hospitalId IN :#{@tenantContext.effectiveHospitalIds()})
+                :#{@tenantContext.isGlobalView()} = true OR (
+                    (p.hospitalId IS NOT NULL AND p.hospitalId IN :#{@tenantContext.effectiveHospitalIds()})
                     OR (r.hospital.id IS NOT NULL AND r.hospital.id IN :#{@tenantContext.effectiveHospitalIds()})
                 )
               )
@@ -223,9 +228,8 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
           AND (:active IS NULL OR p.active = :active)
           AND r.active = true
           AND (
-                :#{@tenantContext.isSuperAdmin()} = true OR (
-                    (p.organizationId IS NOT NULL AND p.organizationId IN :#{@tenantContext.effectiveOrganizationIds()})
-                    OR (p.hospitalId IS NOT NULL AND p.hospitalId IN :#{@tenantContext.effectiveHospitalIds()})
+                :#{@tenantContext.isGlobalView()} = true OR (
+                    (p.hospitalId IS NOT NULL AND p.hospitalId IN :#{@tenantContext.effectiveHospitalIds()})
                     OR (r.hospital.id IS NOT NULL AND r.hospital.id IN :#{@tenantContext.effectiveHospitalIds()})
                 )
               )

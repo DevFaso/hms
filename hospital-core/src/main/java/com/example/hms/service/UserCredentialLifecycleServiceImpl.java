@@ -19,6 +19,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -46,6 +47,11 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
     private final UserRecoveryContactRepository recoveryContactRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+    /**
+     * Writes the recovery-code expiry and reads it back on verify; also stamps
+     * {@code lastLoginAt}/{@code verifiedAt}, which nothing compares in time.
+     */
+    private final Clock clock;
 
     @Override
     @Transactional
@@ -54,7 +60,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
             return;
         }
         userRepository.findById(userId).ifPresent(user -> {
-            user.setLastLoginAt(LocalDateTime.now());
+            user.setLastLoginAt(LocalDateTime.now(clock));
             userRepository.save(user);
         });
     }
@@ -204,7 +210,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
     @Transactional
     public String sendRecoveryContactVerificationCode(UUID userId, UUID contactId) {
         UserRecoveryContact contact = recoveryContactRepository.findById(contactId)
-            .orElseThrow(() -> new ResourceNotFoundException("Recovery contact not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("recoveryContact.notFound", contactId));
 
         if (!contact.getUser().getId().equals(userId)) {
             throw new IllegalArgumentException("Recovery contact does not belong to user");
@@ -219,7 +225,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
 
         // Store hashed code with expiry
         contact.setVerificationCodeHash(passwordEncoder.encode(code));
-        contact.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(VERIFICATION_CODE_EXPIRY_MINUTES));
+        contact.setVerificationCodeExpiresAt(LocalDateTime.now(clock).plusMinutes(VERIFICATION_CODE_EXPIRY_MINUTES));
         contact.setVerificationAttempts(0);
         recoveryContactRepository.save(contact);
 
@@ -236,7 +242,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
     @Transactional
     public UserRecoveryContactDTO verifyRecoveryContact(UUID userId, UUID contactId, String code) {
         UserRecoveryContact contact = recoveryContactRepository.findById(contactId)
-            .orElseThrow(() -> new ResourceNotFoundException("Recovery contact not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("recoveryContact.notFound", contactId));
 
         if (!contact.getUser().getId().equals(userId)) {
             throw new IllegalArgumentException("Recovery contact does not belong to user");
@@ -260,7 +266,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
         }
 
         if (contact.getVerificationCodeExpiresAt() != null
-                && contact.getVerificationCodeExpiresAt().isBefore(LocalDateTime.now())) {
+                && contact.getVerificationCodeExpiresAt().isBefore(LocalDateTime.now(clock))) {
             contact.setVerificationCodeHash(null);
             contact.setVerificationCodeExpiresAt(null);
             contact.setVerificationAttempts(0);
@@ -278,7 +284,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
 
         // Code matches — mark as verified
         contact.setVerified(true);
-        contact.setVerifiedAt(LocalDateTime.now());
+        contact.setVerifiedAt(LocalDateTime.now(clock));
         contact.setVerificationCodeHash(null);
         contact.setVerificationCodeExpiresAt(null);
         contact.setVerificationAttempts(0);

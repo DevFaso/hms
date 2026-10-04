@@ -6,13 +6,17 @@ import { BpaPanelComponent } from './bpa-panel.component';
 import { BpaService } from '../../services/bpa.service';
 import { CdsAcknowledgementService } from '../../services/cds-acknowledgement.service';
 import { CdsCard } from '../../shared/cds-card/cds-card.model';
+import { RoleContextService } from '../../core/role-context.service';
+import { RoleContextStub, roleContextStub } from '../../testing/role-context.stub';
 
 describe('BpaPanelComponent', () => {
   let fixture: ComponentFixture<BpaPanelComponent>;
   let bpaSpy: jasmine.SpyObj<BpaService>;
   let ackSpy: jasmine.SpyObj<CdsAcknowledgementService>;
+  let roles: RoleContextStub;
 
   beforeEach(async () => {
+    roles = roleContextStub({ superAdmin: false, hospitalId: 'h1', roles: ['ROLE_DOCTOR'] });
     bpaSpy = jasmine.createSpyObj<BpaService>('BpaService', ['evaluate']);
     ackSpy = jasmine.createSpyObj<CdsAcknowledgementService>('CdsAcknowledgementService', [
       'record',
@@ -24,6 +28,7 @@ describe('BpaPanelComponent', () => {
       providers: [
         { provide: BpaService, useValue: bpaSpy },
         { provide: CdsAcknowledgementService, useValue: ackSpy },
+        { provide: RoleContextService, useValue: roles },
       ],
     }).compileComponents();
 
@@ -41,6 +46,30 @@ describe('BpaPanelComponent', () => {
     // The whole panel is hidden when patientId is null.
     expect(root).toBeNull();
     expect(bpaSpy.evaluate).not.toHaveBeenCalled();
+  });
+
+  it('renders nothing and never calls the CDS service for a role the backend refuses', () => {
+    // POST /cds-services is CdsAcknowledgementController.CLINICIAN_ROLES only.
+    for (const role of [
+      'ROLE_RECEPTIONIST',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_LAB_SCIENTIST',
+      'ROLE_RADIOLOGIST',
+    ]) {
+      roles.set({ roles: [role] });
+      setPatient(`p-${role}`);
+      expect(fixture.nativeElement.querySelector('[data-testid="bpa-panel"]'))
+        .withContext(role)
+        .toBeNull();
+    }
+    expect(bpaSpy.evaluate).not.toHaveBeenCalled();
+  });
+
+  it('admits a surgeon, whom the backend expands to ROLE_DOCTOR', () => {
+    roles.set({ roles: ['ROLE_SURGEON'] });
+    bpaSpy.evaluate.and.returnValue(of([]));
+    setPatient('p-9');
+    expect(bpaSpy.evaluate).toHaveBeenCalledOnceWith('p-9', undefined);
   });
 
   it('calls the BPA service with the patientId on init and renders the cards', () => {

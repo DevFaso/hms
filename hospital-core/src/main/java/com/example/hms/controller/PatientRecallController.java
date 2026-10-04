@@ -1,10 +1,10 @@
 package com.example.hms.controller;
 
+import java.util.Optional;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.enums.RecallStatus;
 import com.example.hms.payload.dto.scheduling.RecallRequestDTO;
 import com.example.hms.payload.dto.scheduling.RecallResponseDTO;
-import com.example.hms.security.context.HospitalContext;
-import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.scheduling.PatientRecallService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -90,8 +90,7 @@ public class PatientRecallController {
     }
 
     private UUID resolveHospitalId() {
-        return HospitalContextHolder.getContext()
-                .map(HospitalContext::getActiveHospitalId)
+        return Optional.ofNullable(ActingScopeResolver.pinnedHospitalIdOrNull())
                 .orElse(null);
     }
 }

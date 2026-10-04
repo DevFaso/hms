@@ -142,9 +142,9 @@ public class EncounterServiceImpl implements EncounterService {
     @Override
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<EncounterResponseDTO> getEncountersByDoctorIdentifier(String identifier, Locale locale) {
-        UUID staffId = resolveStaffIdByIdentifier(identifier, locale);
+        UUID staffId = resolveStaffIdByIdentifier(identifier);
         Staff staff = staffRepository.findById(staffId)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_STAFF_NOT_FOUND, null, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_STAFF_NOT_FOUND, staffId));
 
         // Optional: validate role in hospital context
         UUID hospitalId = staff.getHospital() != null ? staff.getHospital().getId() : null;
@@ -164,7 +164,7 @@ public class EncounterServiceImpl implements EncounterService {
     }
 
     /** Accepts UUID | email | username | license/roleCode and returns Staff ID. */
-    private UUID resolveStaffIdByIdentifier(String identifier, Locale locale) {
+    private UUID resolveStaffIdByIdentifier(String identifier) {
         // UUID?
         try {
             return UUID.fromString(identifier);
@@ -181,7 +181,7 @@ public class EncounterServiceImpl implements EncounterService {
         // Username / license / role code
         return staffRepository.findByUsernameOrLicenseOrRoleCode(identifier)
             .map(Staff::getId)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_STAFF_NOT_FOUND, null, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notFoundByIdentifier", identifier));
     }
 
 
@@ -203,7 +203,7 @@ public class EncounterServiceImpl implements EncounterService {
         if (dto.getPatientId() != null) return dto.getPatientId();
         if (dto.getPatientIdentifier() != null) {
             Patient patient = patientRepository.findByUsernameOrEmail(dto.getPatientIdentifier())
-                .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_PATIENT_NOT_FOUND, null, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundByIdentifier", dto.getPatientIdentifier()));
             return patient.getId();
         }
         throw new IllegalArgumentException(messageSource.getMessage("patient.identifier.required", null, locale));
@@ -229,7 +229,7 @@ public class EncounterServiceImpl implements EncounterService {
         if (dto.getHospitalId() != null) return dto.getHospitalId();
         if (dto.getHospitalIdentifier() != null) {
             Hospital hospital = hospitalRepository.findByNameOrCodeOrEmail(dto.getHospitalIdentifier())
-                .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_HOSPITAL_NOT_FOUND, null, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", dto.getHospitalIdentifier()));
             return hospital.getId();
         }
         throw new IllegalArgumentException(messageSource.getMessage("hospital.identifier.required", null, locale));
@@ -242,7 +242,7 @@ public class EncounterServiceImpl implements EncounterService {
                 .filter(dep -> dep.getName().equalsIgnoreCase(dto.getDepartmentIdentifier()) ||
                                (dep.getCode() != null && dep.getCode().equalsIgnoreCase(dto.getDepartmentIdentifier())))
                 .findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage("department.notfound", null, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("department.notFoundByIdentifier", dto.getDepartmentIdentifier()));
             return department.getId();
         }
         throw new IllegalArgumentException(messageSource.getMessage("department.identifier.required", null, locale));
@@ -273,11 +273,11 @@ public class EncounterServiceImpl implements EncounterService {
     private final ObgynReferralRepository obgynReferralRepository;
     private final PatientLocaleResolver patientLocaleResolver;
     /**
-     * Resolves a user id from either principal shape (CustomUserDetails or a
-     * Keycloak {@code JwtAuthenticationToken}); see
+     * Who is a patient on a read, and whether the encounter is theirs: the one
+     * ownership check every patient-subject read shares; see
      * {@link #resolveEncounterReadScope}.
      */
-    private final com.example.hms.controller.support.ControllerAuthUtils authUtils;
+    private final PatientSubjectReadGuard subjectReadGuard;
     private final UserRepository userRepository;
     private final DischargeSummaryRepository dischargeSummaryRepository;
     private final NotificationService notificationService;
@@ -461,7 +461,7 @@ public class EncounterServiceImpl implements EncounterService {
     @Transactional
     public void deleteEncounter(UUID id, Locale locale) {
         if (!encounterRepository.existsById(id)) {
-            throw new ResourceNotFoundException(messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, locale));
+            throw new ResourceNotFoundException(MSG_ENCOUNTER_NOT_FOUND, id);
         }
         Encounter existing = encounterRepository.findById(id).orElse(null);
         encounterRepository.deleteById(id);
@@ -570,7 +570,7 @@ public class EncounterServiceImpl implements EncounterService {
     @Override
     @Transactional
     public EncounterNoteResponseDTO signEncounterNote(UUID encounterId, Locale locale) {
-        EncounterNote note = loadNoteScoped(encounterId, locale);
+        EncounterNote note = loadNoteScoped(encounterId);
 
         if (note.isSigned() || note.getSignatureValue() != null) {
             throw new BusinessException(
@@ -615,7 +615,7 @@ public class EncounterServiceImpl implements EncounterService {
     @Override
     @Transactional
     public EncounterNoteResponseDTO cosignEncounterNote(UUID encounterId, Locale locale) {
-        EncounterNote note = loadNoteScoped(encounterId, locale);
+        EncounterNote note = loadNoteScoped(encounterId);
 
         if (!note.isRequiresCosign()) {
             throw new BusinessException("This note does not declare a co-signature requirement.");
@@ -654,18 +654,17 @@ public class EncounterServiceImpl implements EncounterService {
     }
 
     /** 404-not-403: a note at another hospital is indistinguishable from a missing one. */
-    private EncounterNote loadNoteScoped(UUID encounterId, Locale locale) {
+    private EncounterNote loadNoteScoped(UUID encounterId) {
         if (!encounterRepository.existsById(encounterId)) {
-            throw new ResourceNotFoundException(messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, locale));
+            throw new ResourceNotFoundException(MSG_ENCOUNTER_NOT_FOUND, encounterId);
         }
         EncounterNote note = encounterNoteRepository.findByEncounter_Id(encounterId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage("encounter.note.notfound", null, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("encounter.note.notfound"));
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null
             && note.getHospital() != null
             && !hospitalId.equals(note.getHospital().getId())) {
-            throw new ResourceNotFoundException(messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, locale));
+            throw new ResourceNotFoundException(MSG_ENCOUNTER_NOT_FOUND, encounterId);
         }
         return note;
     }
@@ -775,24 +774,24 @@ public class EncounterServiceImpl implements EncounterService {
         // their FIRST hospital, so the tenant-scoped findById misses them when accessed
         // from a different hospital. Security is enforced via registration check below.
         Patient patient = patientRepository.findByIdUnscoped(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_PATIENT_NOT_FOUND, null, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
 
         UUID staffId = resolveStaffId(request, locale);
         Staff staff = staffRepository.findById(staffId)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_STAFF_NOT_FOUND, null, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_STAFF_NOT_FOUND, staffId));
 
         UUID hospitalId = resolveHospitalId(request, locale);
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_HOSPITAL_NOT_FOUND, null, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND, hospitalId));
 
         // SECURITY: Verify the patient is registered at this hospital
         if (!patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)) {
-            throw new ResourceNotFoundException(messageSource.getMessage(MSG_PATIENT_NOT_FOUND, null, locale));
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
 
         ensureStaffHospitalAlignment(staff, hospitalId, locale);
 
-        Appointment appointment = findAppointment(request.getAppointmentId(), locale);
+        Appointment appointment = findAppointment(request.getAppointmentId());
         UUID departmentId = resolveDepartmentId(request, hospital, locale);
         Department department = findDepartmentInHospital(hospital, departmentId);
 
@@ -809,7 +808,7 @@ public class EncounterServiceImpl implements EncounterService {
             validateStaffRole(userId, hospitalId, locale);
             assignment = assignmentRepository
                 .findByUserIdAndHospitalId(userId, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_ASSIGNMENT_NOT_FOUND, null, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND));
         }
 
         return new EncounterResolution(patient, staff, hospital, appointment, department, assignment, hospitalId, userId);
@@ -827,12 +826,12 @@ public class EncounterServiceImpl implements EncounterService {
             && existing.getAssignment() != null;
     }
 
-    private Appointment findAppointment(UUID appointmentId, Locale locale) {
+    private Appointment findAppointment(UUID appointmentId) {
         if (appointmentId == null) {
             return null;
         }
         return appointmentRepository.findById(appointmentId)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage("appointment.notfound", null, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", appointmentId));
     }
 
     private Department findDepartmentInHospital(Hospital hospital, UUID departmentId) {
@@ -1031,7 +1030,7 @@ public class EncounterServiceImpl implements EncounterService {
                 continue;
             }
             LabOrder order = labOrderRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage("laborder.notfound", null, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("laborder.notfound"));
             validateArtifactScope(encounter, order.getPatient().getId(), order.getHospital().getId(), locale);
             note.addLink(EncounterNoteLink.builder()
                 .artifactType(EncounterNoteLinkType.LAB_ORDER)
@@ -1056,7 +1055,7 @@ public class EncounterServiceImpl implements EncounterService {
                 continue;
             }
             Prescription prescription = prescriptionRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage("prescription.notfound", null, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
             validateArtifactScope(encounter, prescription.getPatient().getId(), prescription.getHospital().getId(), locale);
             note.addLink(EncounterNoteLink.builder()
                 .artifactType(EncounterNoteLinkType.PRESCRIPTION)
@@ -1081,7 +1080,7 @@ public class EncounterServiceImpl implements EncounterService {
                 continue;
             }
             ObgynReferral referral = obgynReferralRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage("obgyn.referral.notfound", null, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("obgyn.referral.notfound"));
             validateArtifactScope(encounter, referral.getPatient().getId(), referral.getHospital().getId(), locale);
             note.addLink(EncounterNoteLink.builder()
                 .artifactType(EncounterNoteLinkType.REFERRAL)
@@ -1163,7 +1162,7 @@ public class EncounterServiceImpl implements EncounterService {
                                          String requestedDisplayName,
                                          Staff defaultStaff,
                                          Locale locale) {
-        Staff staff = resolveAuthorStaff(requestedStaffId, defaultStaff, locale);
+        Staff staff = resolveAuthorStaff(requestedStaffId, defaultStaff);
         User user = resolveAuthorUser(requestedUserId, staff, locale);
         String displayName = trimToNull(requestedDisplayName);
         if (displayName == null && user != null) {
@@ -1176,18 +1175,18 @@ public class EncounterServiceImpl implements EncounterService {
         return new NoteAuthor(user, staff, displayName, actorIdentifier);
     }
 
-    private Staff resolveAuthorStaff(UUID requestedStaffId, Staff defaultStaff, Locale locale) {
+    private Staff resolveAuthorStaff(UUID requestedStaffId, Staff defaultStaff) {
         if (requestedStaffId == null) {
             return defaultStaff;
         }
         return staffRepository.findById(requestedStaffId)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_STAFF_NOT_FOUND, null, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_STAFF_NOT_FOUND, requestedStaffId));
     }
 
     private User resolveAuthorUser(UUID requestedUserId, Staff authorStaff, Locale locale) {
         if (requestedUserId != null) {
             return userRepository.findById(requestedUserId)
-                .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage("user.notfound", null, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("user.notfound", requestedUserId));
         }
         if (authorStaff != null && authorStaff.getUser() != null) {
             return authorStaff.getUser();
@@ -1319,8 +1318,6 @@ public class EncounterServiceImpl implements EncounterService {
      *
      * @param subject        true when the caller is a patient principal and
      *                       nothing else, so ownership is the whole boundary
-     * @param callerUserId   the caller's HMS user id, {@code null} when the
-     *                       principal carries none (refused, not waved through)
      * @param hospitalId     the hospital bounding a non-subject caller
      * @param crossTenant    true only for a verified super-admin in global
      *                       view. An explicit decision, never inferred from a
@@ -1331,7 +1328,7 @@ public class EncounterServiceImpl implements EncounterService {
      *                       when the endpoint admits {@code ROLE_PATIENT} AND
      *                       the caller holds it
      */
-    private record EncounterReadScope(boolean subject, UUID callerUserId, UUID hospitalId,
+    private record EncounterReadScope(boolean subject, UUID hospitalId,
                                       boolean crossTenant, boolean ownerFallback) {}
 
     /**
@@ -1393,32 +1390,23 @@ public class EncounterServiceImpl implements EncounterService {
      *         it cannot serve as an existence oracle
      */
     private EncounterReadScope resolveEncounterReadScope(EncounterReaderRoles.ReadEndpoint endpoint) {
-        org.springframework.security.core.Authentication auth =
-            org.springframework.security.core.context.SecurityContextHolder
-                .getContext().getAuthentication();
-        // authUtils, not roleValidator.getCurrentUserId(): the latter resolves
-        // only a CustomUserDetails (or domain User) principal and returns null
-        // on a JwtAuthenticationToken, so on the OIDC path it would refuse the
-        // owner their own encounter. ControllerAuthUtils.resolveUserId reads
-        // the appUserId claim too, and is what
-        // PatientPortalServiceImpl.resolvePatientId uses. Resolved for staff
-        // as well: a nurse who is also a patient elsewhere owns her own visits.
-        UUID callerUserId = authUtils.resolveUserId(auth).orElse(null);
+        // Who is a patient here, and whose record it is, are asked of the one
+        // PatientSubjectReadGuard every patient-subject read uses: the caller
+        // is resolved through ControllerAuthUtils (the appUserId claim on a
+        // Keycloak token), never roleValidator.getCurrentUserId(), which is
+        // null on a JwtAuthenticationToken and would refuse the owner.
         // Both halves, or no fallback: the endpoint must admit patients, and
-        // the caller must hold the patient grant. A link to a patient row is
-        // a fact about the account, not a grant — a nurse linked to a row
-        // whose ROLE_PATIENT was never granted, or was revoked, must not read
-        // it across hospitals through ROLE_NURSE.
-        boolean ownerFallback = endpoint.admitsPatient() && ReaderRolePredicates.holdsPatientRole(auth);
-        if (EncounterReaderRoles.isPatientOnly(auth, endpoint.nonSubjectRoles())) {
-            return new EncounterReadScope(true, callerUserId, null, false, ownerFallback);
+        // the caller must hold the patient grant (the guard's ownsAsItsPatient).
+        boolean ownerFallback = endpoint.admitsPatient();
+        if (subjectReadGuard.isPatientOnly(endpoint.nonSubjectRoles())) {
+            return new EncounterReadScope(true, null, false, ownerFallback);
         }
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null) {
-            return new EncounterReadScope(false, callerUserId, hospitalId, false, ownerFallback);
+            return new EncounterReadScope(false, hospitalId, false, ownerFallback);
         }
         if (roleValidator.isSuperAdminFromJwtClaim()) {
-            return new EncounterReadScope(false, callerUserId, null, true, ownerFallback);
+            return new EncounterReadScope(false, null, true, ownerFallback);
         }
         // requireActiveHospitalId()'s step-4 null: the authorities say
         // super-admin and the verified flag does not. Refused, before the
@@ -1445,7 +1433,7 @@ public class EncounterServiceImpl implements EncounterService {
      */
     private void requireEncounterReadable(Encounter encounter, EncounterReadScope scope) {
         if (scope.subject()) {
-            if (!callerOwns(encounter, scope.callerUserId())) {
+            if (!subjectReadGuard.callerOwns(encounter.getPatient())) {
                 throw encounterNotFound(encounter.getId());
             }
             return;
@@ -1467,35 +1455,19 @@ public class EncounterServiceImpl implements EncounterService {
         // on an endpoint whose annotation admits ROLE_PATIENT: note history
         // does not, and ownership must not widen it. And only for a caller who
         // holds ROLE_PATIENT: the link alone is not the grant.
-        if (scope.ownerFallback() && callerOwns(encounter, scope.callerUserId())) {
+        if (scope.ownerFallback() && subjectReadGuard.ownsAsItsPatient(encounter.getPatient())) {
             return;
         }
         throw encounterNotFound(encounter.getId());
     }
 
     /**
-     * Is this encounter's patient row linked to this user account?
-     *
-     * <p>{@code existsByIdAndUserId}, not {@code findByUserId} — the reasoning
-     * #744 wrote down on {@code PatientRepository}: the single-result finder
-     * throws {@code IncorrectResultSizeDataAccessException} on a tenant that
-     * V113 left with duplicate {@code user_id} rows (a 500 where this check
-     * owes a decision), would refuse a user linked to two rows the encounters
-     * on the second, and decrypts every PHI column of a {@code Patient} just
-     * to compare two UUIDs.
-     */
-    private boolean callerOwns(Encounter encounter, UUID callerUserId) {
-        UUID subjectPatientId = encounter.getPatient() != null ? encounter.getPatient().getId() : null;
-        return callerUserId != null && subjectPatientId != null
-            && patientRepository.existsByIdAndUserId(subjectPatientId, callerUserId);
-    }
-
-    /**
      * The one hospital-boundary predicate, shared by every encounter read
      * ({@link #requireEncounterReadable}) and every scoped encounter write
-     * ({@link #requireEncounterInScope}) so the two cannot drift. Not every
-     * write is scoped: {@code updateEncounter} and {@code deleteEncounter}
-     * still bypass {@code requireEncounterInScope} (tracked in tasklist.md). A NULL on
+     * ({@link #requireEncounterInScope}) so the two cannot drift. Every
+     * mutating path but {@code deleteEncounter} goes through
+     * {@code requireEncounterInScope}; delete is {@code ROLE_SUPER_ADMIN}-only
+     * and global by design. A NULL on
      * either side is outside: an encounter we cannot place is exactly the one
      * not to hand out or write to, and a caller with no hospital has none to
      * be inside. {@code Encounter.hospital} is {@code nullable = false}, so no
@@ -1509,7 +1481,7 @@ public class EncounterServiceImpl implements EncounterService {
     @Transactional
     public List<EncounterResponseDTO> getEncountersByDoctorId(UUID staffId, Locale locale) {
         Staff staff = staffRepository.findById(staffId)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_STAFF_NOT_FOUND, null, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_STAFF_NOT_FOUND, staffId));
 
         if (staff.getUser() == null || !roleValidator.isDoctor(staff.getUser().getId(), null)) {
             throw new BusinessException(messageSource.getMessage(MSG_ENCOUNTER_STAFF_INVALID, null, locale));
@@ -1630,7 +1602,7 @@ public class EncounterServiceImpl implements EncounterService {
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<EncounterResponseDTO> getEncountersByPatientIdentifier(String identifier, Locale locale) {
         Patient patient = patientRepository.findByUsernameOrEmail(identifier)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_PATIENT_NOT_FOUND, null, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundByIdentifier", identifier));
 
         return readEncountersForPatient(patient.getId());
     }
@@ -1639,9 +1611,17 @@ public class EncounterServiceImpl implements EncounterService {
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<EncounterResponseDTO> getEncountersByPatientId(UUID patientId, Locale locale) {
         if (!patientRepository.existsById(patientId)) {
-            throw new ResourceNotFoundException(messageSource.getMessage(MSG_PATIENT_NOT_FOUND, null, locale));
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
         return readEncountersForPatient(patientId);
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<EncounterResponseDTO> getEncountersForPortalPatient(UUID patientId) {
+        return encounterRepository.findByPatient_Id(patientId).stream()
+            .map(encounterMapper::toEncounterResponseDTO)
+            .toList();
     }
 
     /**

@@ -40,10 +40,14 @@
         @if (assignment.hospitalName) {
           {{
             'ONBOARDING.ALREADY_CONFIRMED_BODY_ORG'
-              | translate: { role: assignment.roleName, organization: assignment.hospitalName }
+              | translate
+                : { role: (assignment.roleName | roleLabel), organization: assignment.hospitalName }
           }}
         } @else {
-          {{ 'ONBOARDING.ALREADY_CONFIRMED_BODY' | translate: { role: assignment.roleName } }}
+          {{
+            'ONBOARDING.ALREADY_CONFIRMED_BODY'
+              | translate: { role: (assignment.roleName | roleLabel) }
+          }}
         }
       </p>
       <button class="rw-btn rw-btn--primary" (click)="goToLogin()">
@@ -165,10 +169,13 @@
         @if (assignment.hospitalName) {
           {{
             'ONBOARDING.ROLE_ACTIVE_BODY_ORG'
-              | translate: { role: assignment.roleName, organization: assignment.hospitalName }
+              | translate
+                : { role: (assignment.roleName | roleLabel), organization: assignment.hospitalName }
           }}
         } @else {
-          {{ 'ONBOARDING.ROLE_ACTIVE_BODY' | translate: { role: assignment.roleName } }}
+          {{
+            'ONBOARDING.ROLE_ACTIVE_BODY' | translate: { role: (assignment.roleName | roleLabel) }
+          }}
         }
       </p>
 

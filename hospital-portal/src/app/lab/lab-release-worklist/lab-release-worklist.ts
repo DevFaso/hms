@@ -298,6 +298,36 @@ export class LabReleaseWorklistComponent implements OnInit {
     return `flag-badge flag-${key.toLowerCase()}`;
   }
 
+  /**
+   * Where the number came from. Every row on this queue is unreleased, so
+   * `released` cannot tell a reader anything here; the HL7 message id can:
+   * an analyzer's result carries one, a typed result never does.
+   */
+  isInstrumentResult(r: LabResultResponse): boolean {
+    return !!r.sourceMessageControlId;
+  }
+
+  /**
+   * OBX-11 as a label key, or null when there is nothing to say (a typed row,
+   * or an analyzer that did not send one). F / P / C are named; any other
+   * table-0085 code is shown as the code itself rather than guessed at.
+   */
+  resultStatusKey(r: LabResultResponse): string | null {
+    const code = (r.observationResultStatus ?? '').trim().toUpperCase();
+    switch (code) {
+      case '':
+        return null;
+      case 'F':
+        return 'LAB_RELEASE.STATUS_FINAL';
+      case 'P':
+        return 'LAB_RELEASE.STATUS_PRELIMINARY';
+      case 'C':
+        return 'LAB_RELEASE.STATUS_CORRECTED';
+      default:
+        return 'LAB_RELEASE.STATUS_OTHER';
+    }
+  }
+
   /** A critical result on this queue is the one a reader must release first. */
   isCritical(r: LabResultResponse): boolean {
     return !!r.criticalNotifiedAt;

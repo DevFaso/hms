@@ -401,11 +401,13 @@ export class PatientChartComponent implements OnInit, OnChanges {
    *
    * With no scope the client sends neither `hospitalId` nor `X-Hospital-Id`;
    * `ControllerAuthUtils.resolveHospitalScope` then hands
-   * `PatientLabResultServiceImpl.getLabResults` a null, which takes its
-   * `findByLabOrder_Patient_Id` branch — every tenant's rows, bypassing
-   * `RecordAccessPolicy.readableHospitalIds` — and skips
+   * `PatientLabResultServiceImpl.getLabResults` a null. That used to fall
+   * through to a patient-only query — every tenant's rows, bypassing
+   * `RecordAccessPolicy.readableHospitalIds` — and to skip
    * `reachRecorder.recordReach` entirely, because that is guarded on a
-   * non-null hospital. `/lab-orders` does the same: no predicate at all. So
+   * non-null hospital. The service now refuses a staff read with no scope
+   * (404 `patient.notFound`), and the patient-only finder no longer exists.
+   * `/lab-orders` read with no predicate at all as well. So
    * an account HOLDING ROLE_SUPER_ADMIN and acting as its inherited clinical
    * role (the chart gate asks `hasAnyActiveRole`, which passes) could read a
    * patient's labs across every hospital with no cross-hospital reach row,

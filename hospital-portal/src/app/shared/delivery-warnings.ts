@@ -5,8 +5,13 @@
  */
 export interface NotificationDeliveryStatus {
   channel: 'EMAIL' | 'SMS';
-  purpose?: 'ACTIVATION' | 'CREDENTIALS' | 'WELCOME';
-  outcome: 'SENT' | 'FAILED' | 'NOT_CONFIGURED' | 'MOCKED' | 'NO_CONTACT';
+  purpose?: 'ACTIVATION' | 'CREDENTIALS' | 'WELCOME' | 'EMAIL_CHANGE_CODE' | 'EMAIL_CHANGE_NOTICE';
+  /**
+   * QUEUED: an email accepted into the outbox, which the server sends within
+   * seconds and retries; mail is never sent on the request itself. SENT: an
+   * SMS handed to the carrier.
+   */
+  outcome: 'SENT' | 'QUEUED' | 'FAILED' | 'NOT_CONFIGURED' | 'MOCKED' | 'NO_CONTACT';
   target?: string;
   detail?: string;
 }
@@ -58,10 +63,14 @@ export function deliveryWarningKeys(
   return [...keys];
 }
 
+/** Outcomes that mean the message is on its way: sent (SMS) or queued (email). */
+const ON_ITS_WAY: readonly string[] = ['SENT', 'QUEUED'];
+
 /**
- * True only when the report proves an ACTIVATION message actually went out on
- * the given channel (any channel when omitted). An empty report means nothing
- * was attempted — success toasts must not treat that as delivered.
+ * True only when the report proves an ACTIVATION message went out on the given
+ * channel (any channel when omitted): sent, or queued for the mail sweep. An
+ * empty report means nothing was attempted — success toasts must not treat
+ * that as delivered.
  */
 export function hasActivationSent(
   report: NotificationDeliveryStatus[] | null | undefined,
@@ -69,7 +78,7 @@ export function hasActivationSent(
 ): boolean {
   return !!report?.some(
     (r) =>
-      r.outcome === 'SENT' &&
+      ON_ITS_WAY.includes(r.outcome) &&
       (r.purpose ?? 'ACTIVATION') === 'ACTIVATION' &&
       (!channel || r.channel === channel),
   );

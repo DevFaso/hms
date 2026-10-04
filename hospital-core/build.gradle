@@ -70,7 +70,7 @@ dependencies {
     // Apache Commons
     implementation 'commons-io:commons-io:2.22.0'
     implementation 'org.apache.commons:commons-csv:1.14.1'
-    implementation 'org.apache.commons:commons-lang3:3.20.0'
+    implementation 'org.apache.commons:commons-lang3:3.21.0'
 
     // Database
     runtimeOnly 'org.postgresql:postgresql'
@@ -81,15 +81,32 @@ dependencies {
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
 
     // Test
-    testImplementation 'org.springframework.boot:spring-boot-starter-test-classic'
+    // Boot 4's per-technology test starters, one per main starter above,
+    // instead of spring-boot-starter-test-classic (the pre-4.0 all-in-one
+    // bundle kept only for migration). Each pulls spring-boot-starter-test
+    // (JUnit, AssertJ, Mockito, spring-test) plus that technology's test
+    // auto-configuration and slices (@WebMvcTest, @DataJpaTest, ...).
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-restclient-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-mail-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-websocket-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-liquibase-test'
+    // TestRestTemplate (@AutoConfigureTestRestTemplate) lives in its own module.
+    testImplementation 'org.springframework.boot:spring-boot-resttestclient'
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.springframework.kafka:spring-kafka-test'
 
     // Testcontainers — drives LiquibaseSchemaIT against real PostgreSQL so
     // PG-specific migration bugs (PL/pgSQL DO blocks, dollar quoting,
     // splitStatements config) surface pre-merge instead of on dev deploy.
-    testImplementation platform('org.testcontainers:testcontainers-bom:2.0.5')
+    // Version from Boot 4's BOM (testcontainers.version, 2.0.x).
     testImplementation 'org.testcontainers:testcontainers'
-    testImplementation 'org.testcontainers:postgresql'
-    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:testcontainers-postgresql'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
 }

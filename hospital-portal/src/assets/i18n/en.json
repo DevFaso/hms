@@ -306,7 +306,6 @@
     "STAT": {
       "ORGANIZATIONS": "Organizations",
       "HOSPITALS": "Hospitals",
-      "USERS": "Users",
       "PATIENTS": "Patients",
       "TODAY_APPOINTMENTS": "Today's appointments",
       "DEPARTMENTS": "Departments",
@@ -316,7 +315,6 @@
       "ENCOUNTERS": "Encounters",
       "CONSULTATIONS": "Consultations",
       "ADMISSIONS": "Admissions",
-      "PRESCRIPTIONS": "Prescriptions",
       "LAB_ORDERS": "Lab orders",
       "LAB_RESULTS": "Lab results",
       "LAB_TEST_DEFINITIONS": "Lab test catalogue",
@@ -332,7 +330,6 @@
     "LINK": {
       "ORGANIZATIONS_TITLE": "Organizations",
       "ORGANIZATIONS_DESC": "Tenants, hospital assignments, contact info",
-      "USERS_TITLE": "Users",
       "USERS_DESC": "Cross-tenant user governance and provisioning",
       "ROLES_TITLE": "Roles",
       "ROLES_DESC": "Role catalogue and permission matrix",
@@ -1179,8 +1176,6 @@
       "TOTAL_PATIENTS": "Total Patients",
       "INVOICES": "Invoices",
       "LAB_ORDERS": "Lab Orders",
-      "PRESCRIPTIONS": "Prescriptions",
-      "USERS": "Users",
       "ACTIVE_HOSPITALS": "Active Hospitals"
     },
     "TREND_BAR_TITLE": "{{count}} appointments"
@@ -1451,11 +1446,14 @@
     "NEW_CONVERSATION": "New Conversation",
     "NO_CONVERSATIONS": "No conversations yet",
     "NO_MESSAGES": "No messages yet",
+    "NO_MESSAGE_RECIPIENTS": "No clinician to message yet. A conversation opens once you have a care team or an appointment.",
     "NO_USERS_FOUND": "No users found",
     "NO_USER_IDENTITY": "Unable to identify current user. Please log out and log back in.",
     "PHOTO": "photo",
     "PHOTO_TOO_LARGE": "Photo must be 10 MB or smaller.",
     "PHOTO_UPLOAD_FAILED": "Failed to upload photo.",
+    "RECIPIENTS_LOAD_FAILED": "Your clinicians could not be loaded. Please try again.",
+    "RECIPIENTS_PARTIAL_LOAD": "Some of your clinicians could not be loaded. The list may be incomplete.",
     "RECORDING": "Recording",
     "RECORD_VOICE_MEMO": "Record voice memo",
     "REFRESH_MESSAGES": "Refresh messages",
@@ -1566,7 +1564,11 @@
     "UPLOAD": "Upload",
     "VIEW": "View",
     "VIEW_ALL": "View All",
-    "YES": "Yes"
+    "YES": "Yes",
+    "LABEL": {
+      "PRESCRIPTIONS": "Prescriptions",
+      "USERS": "Users"
+    }
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acknowledge",
@@ -1780,9 +1782,11 @@
     "LAB_MODULE": "Lab Module",
     "LAB_MODULE_DESC": "Access lab orders, submit results, and track specimens from the lab module.",
     "LAB_ORDERS": "Lab Orders",
+    "LAB_ORDER": "Lab Order",
     "LAB_ORDERS_TODAY": "Lab Orders Today",
     "LAB_WORK_QUEUE": "Lab Work Queue",
     "LATEST_LABS": "Latest Labs",
+    "LAB_TEST": "Lab Test",
     "LICENSE_ALERTS": "License Alerts",
     "LICENSE_EXPIRY_ALERTS": "License Expiry Alerts",
     "LOW": "Low",
@@ -1862,7 +1866,6 @@
     "PHARMACY_CLARIFICATIONS": "Pharmacy Clarifications",
     "PHARMACY_MODULE": "Pharmacy Module",
     "PHARMACY_MODULE_DESC": "Manage all prescriptions and dispense medications from the pharmacy module.",
-    "PRESCRIPTIONS": "Prescriptions",
     "PRESCRIPTION_QUEUE": "Prescription Queue",
     "PROGRESS": "Progress",
     "PROVIDER": "Provider",
@@ -2018,7 +2021,6 @@
     "UPCOMING_APPOINTMENTS": "Upcoming Appointments",
     "URGENT": "Urgent",
     "USER": "User",
-    "USERS": "Users",
     "VALIDATION_STUDIES": "Validation Studies",
     "VALIDATION_STUDIES_30D": "Studies (Last 30d)",
     "VALIDATION_STUDIES_PENDING": "Pending Approval",
@@ -2947,6 +2949,14 @@
     "COL_TEST": "Test",
     "COL_VALUE": "Value",
     "COL_FLAG": "Flag",
+    "COL_SOURCE": "Source",
+    "SOURCE_INSTRUMENT": "Instrument",
+    "SOURCE_MANUAL": "Entered manually",
+    "CONTROL_ID": "HL7 message control ID",
+    "STATUS_FINAL": "Final",
+    "STATUS_PRELIMINARY": "Preliminary",
+    "STATUS_CORRECTED": "Corrected",
+    "STATUS_OTHER": "Status {{code}}",
     "COL_RESULT_DATE": "Result date",
     "COL_RECEIVED": "Received",
     "COL_ACTIONS": "Actions",
@@ -3973,6 +3983,7 @@
     "NO_PATIENTS": "No patients found",
     "NO_VITALS": "No vitals recorded",
     "NO_VITALS_DESC": "Vital signs will appear here when recorded.",
+    "VITALS_NO_HOSPITAL": "Vital signs are shown one hospital at a time, and no hospital is in scope for this account. They appear once a hospital scope is set.",
     "NO_VITAL_METRICS": "No numeric vital metrics were recorded — only notes.",
     "OPTIONAL": "Optional",
     "ORGANISATION": "Organisation",
@@ -4008,7 +4019,7 @@
     "REGISTER": "Register Patient",
     "REGISTERED": "Registered",
     "REGISTERED_AT": "registered at",
-    "REGISTERED_EMAIL_SENT": "Patient registered successfully. A verification email has been sent.",
+    "REGISTERED_EMAIL_SENT": "Patient registered successfully. A verification email is on its way.",
     "REGISTERED_SMS_SENT": "Patient registered successfully. Login details will be sent by SMS.",
     "REGISTERED_SUCCESS": "Patient registered successfully.",
     "REGISTER_FAILED": "Failed to register patient",
@@ -4075,8 +4086,11 @@
     "CHANGE_FREEZE": "Change Freeze",
     "CHECK_UPDATES": "Check for Updates",
     "CLEANUP": "Cleanup",
+    "CLEAR_API_KEY": "Remove the stored API key reference",
+    "CLEAR_FIELD_HINT": "Empty a field and save to clear it.",
     "CONFIGURE": "Configure",
     "CONFIRM_RESET": "Are you sure you want to reset to defaults?",
+    "CONFIRM_UNLINK": "Delete the link between {{hospital}} and this service? Its settings are removed. Disable it instead to keep them.",
     "CONTACT_EMAIL": "Contact Email",
     "CORS_SETTINGS": "CORS Settings",
     "CPU_USAGE": "CPU Usage",
@@ -4096,6 +4110,7 @@
     "DEVELOPMENT": "Development",
     "DISABLED": "Disabled",
     "DISABLED_LINKS": "Disabled Links",
+    "DISABLE_LINK": "Disable",
     "DISABLE_MAINTENANCE": "Disable Maintenance Mode",
     "DISK_USAGE": "Disk Usage",
     "DOCS": "Docs",
@@ -4105,6 +4120,7 @@
     "EDIT_SERVICE": "Edit Service",
     "EMAIL_SETTINGS": "Email Settings",
     "ENABLED": "Enabled",
+    "ENABLE_LINK": "Enable",
     "ENABLE_MAINTENANCE": "Enable Maintenance Mode",
     "ENDS_AT": "Ends At",
     "ENVIRONMENT": "Environment",
@@ -4128,14 +4144,19 @@
     "INTEGRATION_SETTINGS": "Integration Settings",
     "JAVA_VERSION": "Java Version",
     "KB": "KB",
-    "LAST_RUN": "Last Run",
-    "LAST_SNAPSHOT": "Last Snapshot",
+    "LAST_RELEASE_WINDOW_CHANGE": "Last release-window change",
     "LDAP_CONFIG": "LDAP Configuration",
     "LICENSE": "License",
     "LICENSE_KEY": "License Key",
     "LICENSE_TYPE": "License Type",
     "LINK": "Link",
+    "LINK_STATE": {
+      "DISABLED": "Disabled",
+      "ENABLED": "Enabled",
+      "NOT_LINKED": "Not linked"
+    },
     "LOADING": "Loading platform...",
+    "LOADING_RELEASES": "Loading release windows…",
     "LOADING_SERVICES": "Loading services...",
     "LOCALE": "Locale",
     "LOCKOUT_DURATION": "Lockout Duration",
@@ -4160,6 +4181,7 @@
     "NO_CATALOG": "No catalog entries",
     "NO_CATALOG_HINT": "Register a service to get started",
     "NO_HOSPITAL_LINKS": "No hospital links",
+    "NO_ORG_HOSPITALS": "This organization has no hospitals yet.",
     "NO_RELEASES": "No releases scheduled",
     "NO_RELEASES_HINT": "Schedule a release to get started",
     "NO_SERVICES": "No services found",
@@ -4179,10 +4201,15 @@
       "RELEASE_NAME": "e.g. Q1 2025 Platform Release",
       "RELEASE_NOTES": "Additional release notes…"
     },
+    "PLACEHOLDER_URL": "Example address, not a working link",
     "PLATFORM_MANAGED": "Platform Managed",
     "PRODUCTION": "Production",
     "PROVIDER": "Provider",
     "PROVISION": "Provision",
+    "PROVISION_CHOOSE_ORG": "Choose an organization…",
+    "PROVISION_DISABLED_HINT": "This integration is disabled in the catalog and cannot be provisioned.",
+    "PROVISION_TARGET_ORG": "Organization to provision to",
+    "PROVISION_TO_NAMED_ORG": "Provision to {{org}}",
     "PROVISION_TO_ORG": "Provision to Organization",
     "QUICK_ACTIONS": "Quick Actions",
     "RATE_LIMITING": "Rate Limiting",
@@ -4239,10 +4266,8 @@
     "SYSTEM_LOGS": "System Logs",
     "SYSTEM_SETTINGS": "System Settings",
     "TASK_ACTION": {
-      "RUN_NOW": "Run Now",
-      "INVESTIGATE": "Investigate",
-      "UNBLOCK": "Unblock",
-      "RUN": "Run"
+      "OPEN_RELEASES": "Open Releases",
+      "OPEN_SERVICES": "Open Services"
     },
     "TEST_CONNECTION": "Test Connection",
     "TIMEZONE": "Timezone",
@@ -4250,16 +4275,20 @@
     "TOAST": {
       "CATALOG_LOAD_FAILED": "Failed to load catalog",
       "HOSPITAL_LINKED": "Linked hospital \"{{name}}\"",
+      "HOSPITAL_LINKS_LOAD_FAILED": "Failed to load hospital links",
+      "HOSPITAL_LINK_DISABLED": "Link to \"{{name}}\" disabled",
+      "HOSPITAL_LINK_ENABLED": "Link to \"{{name}}\" enabled",
       "HOSPITAL_LINK_FAILED": "Failed to link hospital",
+      "HOSPITAL_LINK_UPDATE_FAILED": "Failed to update the hospital link",
       "HOSPITAL_UNLINKED": "Unlinked hospital \"{{name}}\"",
       "HOSPITAL_UNLINK_FAILED": "Failed to unlink hospital",
       "NO_DOCS_URL": "No documentation URL available",
-      "NO_ORGS_AVAILABLE": "No organizations available to provision to",
       "NO_SANDBOX": "No sandbox environment available",
       "ORGS_LOAD_FAILED": "Failed to load organizations",
       "ORG_SERVICES_LOAD_FAILED": "Failed to load organization services",
-      "PROVISIONED": "\"{{name}}\" provisioned to organization",
+      "PROVISIONED_TO_ORG": "\"{{name}}\" provisioned to {{org}}",
       "PROVISION_FAILED": "Failed to provision service",
+      "RELEASES_LOAD_FAILED": "Failed to load release windows",
       "RELEASE_REQUIRED_FIELDS": "Name, environment, start and end times are required",
       "RELEASE_SCHEDULED": "Release window \"{{name}}\" scheduled",
       "RELEASE_SCHEDULE_FAILED": "Failed to schedule release window",
@@ -4271,7 +4300,8 @@
       "SNAPSHOT_EXPORT_FAILED": "Failed to export snapshot",
       "STATUS_CHANGED": "Service status changed to {{status}}",
       "STATUS_CHANGE_FAILED": "Failed to change status",
-      "TASK_DETAILS": "{{title}}: {{nextAction}} | {{metricLabel}}: {{metricValue}} | Last run: {{lastRun}}"
+      "TASK_DETAILS": "{{title}}: {{nextAction}} | {{metricLabel}}: {{metricValue}}",
+      "VALIDATION_FAILED": "Please correct these fields: {{errors}}"
     },
     "TOTAL_INTEGRATIONS": "Total Integrations",
     "UAT": "UAT",
@@ -4464,7 +4494,10 @@
       "LOADING": "Loading care team...",
       "EMPTY_TITLE": "No care team members",
       "EMPTY_DESC": "Your care team information will appear here.",
-      "PRIMARY_PROVIDER": "Primary Care Provider"
+      "PRIMARY_PROVIDER": "Primary Care Provider",
+      "SINCE": "Since {{date}}",
+      "HISTORY_TITLE": "Previous primary care providers",
+      "LOAD_ERROR": "Your care team could not be loaded. Try again."
     },
     "RECORDS": {
       "TITLE": "Health Summary",
@@ -5421,18 +5454,9 @@
         "PAIN": "Pain",
         "PSYCHOSOCIAL": "Psychosocial"
       },
-      "SNAPSHOT_ITEM_TYPE": {
-        "LAB": "Lab",
-        "VITALS": "Vitals"
-      },
       "VITAL_TASK_TYPE": {
         "FULL_SET": "Full Set",
         "ROUTINE": "Routine"
-      },
-      "ORDER_TASK_TYPE": {
-        "IMAGING": "Imaging",
-        "LAB": "Lab",
-        "PROCEDURE": "Procedure"
       },
       "NEWBORN_ALERT_TYPE": {
         "APGAR": "Apgar",
@@ -5494,6 +5518,35 @@
       "PRESCRIPTION_DISPATCH_STATUS": {
         "SENT": "Sent",
         "FAILED": "Failed"
+      },
+      "ORDER_SOURCE_TYPE": {
+        "IMAGING": "Imaging",
+        "LAB": "Lab",
+        "PROCEDURE": "Procedure",
+        "VITALS": "Vitals"
+      },
+      "SHIFT_TYPE": {
+        "MORNING": "Morning",
+        "AFTERNOON": "Afternoon",
+        "EVENING": "Evening",
+        "NIGHT": "Night",
+        "ON_CALL": "On-Call",
+        "FLEX": "Flex"
+      },
+      "LEAVE_TYPE": {
+        "VACATION": "Vacation",
+        "SICK": "Sick Leave",
+        "EMERGENCY": "Emergency",
+        "TRAINING": "Training",
+        "UNPAID": "Unpaid Leave",
+        "OTHER": "Other"
+      },
+      "EMPLOYMENT_TYPE": {
+        "FULL_TIME": "Full-Time",
+        "PART_TIME": "Part-Time",
+        "CONTRACT": "Contract",
+        "LOCUM": "Locum",
+        "INTERN": "Intern"
       }
     },
     "DOCUMENTS": {
@@ -5513,6 +5566,7 @@
       "UPLOAD_FAILED": "Failed to upload document",
       "LOAD_FAILED": "Failed to load documents",
       "FILE_REQUIRED": "Please select a file to upload",
+      "FILE_TOO_LARGE": "The file must be 10 MB or smaller.",
       "DELETE": "Delete",
       "DELETE_CONFIRM": "Are you sure you want to delete this document?",
       "DELETE_SUCCESS": "Document deleted",
@@ -5934,6 +5988,12 @@
     "UP_TO_DATE": "Up to date",
     "USERNAME": "Username",
     "USERNAME_HINT": "Your username cannot be changed",
+    "EMAIL_CHANGE_PASSWORD_HINT": "Changing your email address requires your current password.",
+    "EMAIL_CHANGE_PASSWORD_REQUIRED": "Enter your current password to change your email address.",
+    "EMAIL_MANAGED_BY_SSO": "Your email address is managed by single sign-on.",
+    "EMAIL_CODE_SENT": "A verification code is on its way to {{email}}. Your email address changes only once you enter it.",
+    "EMAIL_CHANGE_PENDING_TITLE": "Confirm your new email address",
+    "EMAIL_CHANGED": "Your email address was changed.",
     "USER_ID": "User ID",
     "VERIFICATION_CODE": "Verification Code",
     "VERIFICATION_CODE_SENT": "Verification code sent to {{contact}}",
@@ -9963,8 +10023,5 @@
     "STATUS_PIPELINE": "Order Status Pipeline",
     "THROUGHPUT": "Throughput",
     "TITLE": "Lab Operations Dashboard"
-  },
-  "SNAPSHOT": {
-    "ORDER": "Order"
   }
 }

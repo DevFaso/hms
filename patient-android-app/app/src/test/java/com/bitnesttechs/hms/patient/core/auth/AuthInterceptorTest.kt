@@ -1,5 +1,6 @@
 package com.bitnesttechs.hms.patient.core.auth
 
+import com.bitnesttechs.hms.patient.core.network.AcceptLanguageInterceptor
 import com.squareup.moshi.Moshi
 import io.mockk.every
 import io.mockk.mockk
@@ -30,7 +31,7 @@ class AuthInterceptorTest {
         every { storage.accessToken } returns "legacy-abc"
         every { storage.refreshToken } returns null
 
-        val interceptor = AuthInterceptor(storage, moshi, keycloakProvider)
+        val interceptor = AuthInterceptor(storage, moshi, keycloakProvider, AcceptLanguageInterceptor { "en" })
         val header = captureAuthHeader(interceptor)
 
         assertEquals("Bearer oidc-xyz", header)
@@ -43,7 +44,7 @@ class AuthInterceptorTest {
         every { storage.accessToken } returns "legacy-abc"
         every { storage.refreshToken } returns null
 
-        val interceptor = AuthInterceptor(storage, moshi, keycloakProvider)
+        val interceptor = AuthInterceptor(storage, moshi, keycloakProvider, AcceptLanguageInterceptor { "en" })
         val header = captureAuthHeader(interceptor)
 
         assertEquals("Bearer legacy-abc", header)
@@ -56,10 +57,33 @@ class AuthInterceptorTest {
         every { storage.accessToken } returns null
         every { storage.refreshToken } returns null
 
-        val interceptor = AuthInterceptor(storage, moshi, keycloakProvider)
+        val interceptor = AuthInterceptor(storage, moshi, keycloakProvider, AcceptLanguageInterceptor { "en" })
         val header = captureAuthHeader(interceptor)
 
         assertEquals(null, header)
+    }
+
+    @Test
+    fun `a request with its own bearer goes out untouched and a 401 never enters the refresh path`() {
+        val storage = mockk<TokenStorage>(relaxed = true)
+        every { storage.oidcAccessToken } returns null
+        every { storage.accessToken } returns "stored-token"
+        every { storage.refreshToken } returns "stored-refresh"
+        val keycloak = mockk<KeycloakAuthService>(relaxed = true)
+
+        val interceptor = AuthInterceptor(storage, moshi, Provider { keycloak }, AcceptLanguageInterceptor { "en" })
+        val chain = com.bitnesttechs.hms.patient.core.network.FakeChain(
+            original = Request.Builder().url("https://example.invalid/api/auth/logout")
+                .header("Authorization", "Bearer captured-token").build(),
+            codes = listOf(401)
+        )
+        val response = interceptor.intercept(chain)
+
+        assertEquals(401, response.code)
+        assertEquals(listOf("Bearer captured-token"), chain.proceeded.map { it.header("Authorization") })
+        io.mockk.verify(exactly = 0) { storage.refreshToken }
+        io.mockk.verify(exactly = 0) { storage.clearAll() }
+        io.mockk.coVerify(exactly = 0) { keycloak.freshAccessToken() }
     }
 
     private fun captureAuthHeader(interceptor: AuthInterceptor): String? {

@@ -29,6 +29,11 @@
           @if (selectedFile()) {
             <span class="file-name">{{ selectedFile()!.name }}</span>
           }
+          @if (fileTooLarge()) {
+            <span class="file-error" role="alert" data-testid="file-too-large">
+              {{ 'PORTAL.DOCUMENTS.FILE_TOO_LARGE' | translate }}
+            </span>
+          }
         </label>
         <label>
           {{ 'PORTAL.DOCUMENTS.DOCUMENT_TYPE' | translate }}

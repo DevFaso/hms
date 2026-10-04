@@ -15,7 +15,7 @@
 //
 // How to run (locally against a seeded dev environment):
 //   k6 run \
-//     -e BASE_URL=https://api.dev.e-keneya.com \
+//     -e BASE_URL=https://dev.e-keneya.com/api \
 //     -e AUTH_TOKEN="$KC_PHARMACIST_JWT" \
 //     -e PRESCRIPTION_ID=00000000-0000-0000-0000-000000000001 \
 //     -e PATIENT_ID=00000000-0000-0000-0000-000000000002 \
@@ -43,11 +43,13 @@ const PATIENT_ID = __ENV.PATIENT_ID || '';
 const PHARMACY_ID = __ENV.PHARMACY_ID || '';
 const STOCK_LOT_ID = __ENV.STOCK_LOT_ID || '';
 const MEDICATION_CATALOG_ITEM_ID = __ENV.MEDICATION_CATALOG_ITEM_ID || '';
+const HOSPITAL_ID = __ENV.HOSPITAL_ID || '';
 
 const HEADERS = {
   'Content-Type': 'application/json',
   Accept: 'application/json',
   ...(AUTH_TOKEN ? { Authorization: `Bearer ${AUTH_TOKEN}` } : {}),
+  ...(HOSPITAL_ID ? { 'X-Hospital-Id': HOSPITAL_ID } : {}),
 };
 
 const writeScenarioEnabled = Boolean(

@@ -1,16 +1,20 @@
-import { DOCTOR_EQUIVALENT_ROLES } from '../../core/role-equivalence';
+import {
+  DOCTOR_EQUIVALENT_ROLES,
+  expandRoleEquivalents,
+  roleSatisfies,
+} from '../../core/role-equivalence';
 
 /**
  * ROLE_DOCTOR and the authorities the BACKEND expands into it (role audit
  * decision C2, mirrored by JwtTokenProvider / SecurityConfig's authorities
  * mapper): a physician and a surgeon are doctors to every endpoint below.
  *
- * Spelled out in the lists rather than left to `roleSatisfies`, because these
- * lists are read through `RoleContextService.hasAnyActiveRole`, which compares
- * raw strings and does NOT expand — so a list naming only ROLE_DOCTOR is
- * narrower than the endpoint it claims to mirror, and hides the chart from a
- * surgeon the backend admits. B7's in-basket category routes exactly that
- * surgeon here.
+ * Spelled out in the lists as well: they were written when
+ * `RoleContextService.hasAnyActiveRole` compared raw strings and did not
+ * expand, so a list naming only ROLE_DOCTOR hid the chart from a surgeon the
+ * backend admits (B7's in-basket category routes exactly that surgeon here).
+ * The service now applies the equivalence itself; the explicit names are
+ * harmless and keep each list a literal mirror of its endpoint.
  */
 const DOCTOR_ROLES: string[] = ['ROLE_DOCTOR', ...DOCTOR_EQUIVALENT_ROLES];
 
@@ -30,6 +34,43 @@ const DOCTOR_ROLES: string[] = ['ROLE_DOCTOR', ...DOCTOR_EQUIVALENT_ROLES];
  * Single source of truth for PatientChartComponent and the Chart tab gate in
  * PatientDetailComponent — update here when the backend gates change.
  */
+/**
+ * Mirrors the backend `CdsAcknowledgementController.CLINICIAN_ROLES`, which
+ * gates BOTH `POST /cds-services/{id}` (the BPA panel's evaluate call) and
+ * `/cds-acknowledgements`: the roles that may dismiss a card are the roles
+ * that receive one. Every other role that opens a patient page — reception,
+ * hospital admin, the lab bench, the consulting clinicians — is refused with
+ * 403, so the panel must not render (nor call) for them. Physicians and
+ * surgeons are admitted through `roleSatisfies` / `expandRoleEquivalents`,
+ * as the backend's RoleExpansion admits them.
+ */
+export const CDS_CLINICIAN_ROLES: readonly string[] = [
+  'ROLE_DOCTOR',
+  'ROLE_NURSE',
+  'ROLE_MIDWIFE',
+  'ROLE_PHARMACIST',
+  'ROLE_SUPER_ADMIN',
+];
+
+/**
+ * True when the caller may invoke a CDS service. The single active role
+ * decides when one is pinned (a multi-role user scoped to reception gets no
+ * panel); otherwise any held role does.
+ */
+export function canInvokeCds(roleContext: {
+  activeRole: string | null;
+  activeRoles: string[];
+}): boolean {
+  const required = [...CDS_CLINICIAN_ROLES];
+  const active = roleContext.activeRole;
+  if (active) {
+    return roleSatisfies(required, active);
+  }
+  return expandRoleEquivalents(roleContext.activeRoles ?? []).some((role) =>
+    required.includes(role),
+  );
+}
+
 export const CHART_ROLES = {
   // E9 #69: every clinical role reads allergies (contrast, induction, therapy).
   viewAllergies: [

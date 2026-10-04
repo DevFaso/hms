@@ -86,7 +86,7 @@ struct PharmacyPaymentDTO: Codable, Identifiable, Hashable {
     let updatedAt: String?
 
     var displayMethod: String {
-        (paymentMethod ?? "Payment").replacingOccurrences(of: "_", with: " ").capitalized
+        EnumLabel.label(.paymentMethod, paymentMethod) ?? "payment".localized
     }
 
     var displayCurrency: String { currency ?? "XOF" }
@@ -109,7 +109,7 @@ struct PharmacyClaimDTO: Codable, Identifiable, Hashable {
     let updatedAt: String?
 
     var displayStatus: String {
-        (claimStatus ?? "Pending").replacingOccurrences(of: "_", with: " ").capitalized
+        EnumLabel.text(.claimStatus, claimStatus ?? "SUBMITTED")
     }
 
     var displayCurrency: String { currency ?? "XOF" }

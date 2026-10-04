@@ -19,7 +19,10 @@ import com.example.hms.repository.PatientAllergyRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.i18n.TestMessageSources;
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.RoleValidator;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,6 +30,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -39,6 +43,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.as;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.assertj.core.api.InstanceOfAssertFactories;
@@ -128,8 +133,22 @@ class PrescriptionServiceImplTest {
     private Encounter encounter;
     private UserRoleHospitalAssignment assignment;
 
+    @AfterEach
+    void resetLocale() {
+        LocaleContextHolder.resetLocaleContext();
+    }
+
     @BeforeEach
     void setUp() {
+        // BusinessException resolves its key through MessageUtil, so the
+        // refusals below are asserted as the English a clinician reads.
+        MessageUtil.setMessageSource(TestMessageSources.bundles());
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        // The services ask the one PatientSubjectReadGuard; it is built here over
+        // this class's authUtils and patientRepository so ownership is decided
+        // exactly as before, by those two.
+        org.springframework.test.util.ReflectionTestUtils.setField(prescriptionService, "subjectReadGuard",
+            new PatientSubjectReadGuard(authUtils, patientRepository));
         patientId = UUID.randomUUID();
         staffId = UUID.randomUUID();
         encounterId = UUID.randomUUID();
@@ -211,7 +230,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("prescription.only.doctor.admin");
+            .hasMessage("Only a doctor, nurse, nurse practitioner, or hospital admin can create or update prescriptions.");
 
         verify(prescriptionRepository, never()).save(any());
     }
@@ -383,7 +402,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("prescription.encounter.patient.mismatch");
+            .hasMessage("Encounter does not belong to the specified patient.");
     }
 
     @Test
@@ -486,6 +505,8 @@ class PrescriptionServiceImplTest {
         prescription.setId(id);
         PrescriptionResponseDTO dto = PrescriptionResponseDTO.builder().id(id).build();
 
+        // A null scope reads across tenants only for a VERIFIED super-admin.
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
         when(prescriptionRepository.findById(id)).thenReturn(Optional.of(prescription));
         when(prescriptionMapper.toResponseDTO(prescription)).thenReturn(dto);
 
@@ -495,6 +516,7 @@ class PrescriptionServiceImplTest {
     @Test
     void getPrescriptionByIdThrowsWhenNotFound() {
         UUID id = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(prescriptionRepository.findById(id)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> prescriptionService.getPrescriptionById(id, Locale.ENGLISH))
@@ -699,7 +721,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("prescription.patient.required");
+            .hasMessage("A patient is required to create a prescription.");
     }
 
     // ═══════════════ ensureContextConsistency edge cases ═══════════════
@@ -715,7 +737,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("prescription.hospital.link.required");
+            .hasMessage("Prescriptions must be linked to a hospital via an encounter.");
     }
 
     @Test
@@ -731,7 +753,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("prescription.encounter.staff.mismatch");
+            .hasMessage("The encounter belongs to a different staff member.");
     }
 
     @Test
@@ -747,7 +769,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("prescription.encounter.staff.hospital.mismatch");
+            .hasMessage("The prescriber does not belong to the encounter's hospital.");
     }
 
     // ═══════════════ resolveStaffContext edge cases ═══════════════
@@ -776,7 +798,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("prescription.staff.context.missing");
+            .hasMessage("No prescriber could be determined for the current user.");
     }
 
     @Test
@@ -795,7 +817,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("prescription.staff.context.missing");
+            .hasMessage("No prescriber could be determined for the current user.");
     }
 
     // ═══════════════ resolveEncounterContext edge cases ═══════════════
@@ -1197,7 +1219,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("prescription.assignment.missing");
+            .hasMessage("The prescriber has no active doctor assignment at this hospital.");
     }
 
     @Test
@@ -1217,7 +1239,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("prescription.assignment.missing.staff.user");
+            .hasMessage("The prescriber's staff record is not linked to a user account.");
     }
 
     // ═══════════════ updatePrescription not found ═══════════════
@@ -1288,6 +1310,85 @@ class PrescriptionServiceImplTest {
         // staff hospital null → createEncounterSnapshot throws
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class);
+    }
+
+    // ═══════════════ updatePrescription is held to the acting hospital ═══════════════
+
+    @Test
+    void updateOfAnotherHospitalsPrescriptionAnswersExactlyAsAMissingOne() {
+        UUID prescriptionId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        PrescriptionRequestDTO request = buildRequest();
+
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.empty());
+        ResourceNotFoundException missing = catchThrowableOfType(ResourceNotFoundException.class,
+            () -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH));
+
+        Prescription foreign = new Prescription();
+        foreign.setId(prescriptionId);
+        foreign.setHospital(encounter.getHospital());
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(foreign));
+        ResourceNotFoundException refused = catchThrowableOfType(ResourceNotFoundException.class,
+            () -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH));
+
+        assertThat(refused.getMessageKey()).isEqualTo(missing.getMessageKey());
+        assertThat(refused.getMessage()).isEqualTo(missing.getMessage());
+        verify(prescriptionRepository, never()).save(any());
+        verifyNoInteractions(prescriptionMapper);
+    }
+
+    @Test
+    void updateCannotMoveAPrescriptionOntoAnotherHospitalsEncounter() {
+        UUID prescriptionId = UUID.randomUUID();
+        UUID actingHospitalId = UUID.randomUUID();
+        Hospital acting = new Hospital();
+        acting.setId(actingHospitalId);
+        Prescription own = new Prescription();
+        own.setId(prescriptionId);
+        own.setHospital(acting);
+        PrescriptionRequestDTO request = buildRequest();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(actingHospitalId);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(own));
+        when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        // The request's encounter belongs to another hospital, not the acting one.
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH))
+            .isInstanceOfSatisfying(ResourceNotFoundException.class,
+                e -> assertThat(e.getMessageKey()).isEqualTo("encounter.notfound"));
+        assertThat(own.getHospital().getId()).isEqualTo(actingHospitalId);
+        verify(prescriptionRepository, never()).save(any());
+        verify(roleValidator, never()).canCreatePrescription(any(), any());
+    }
+
+    @Test
+    void updateAtTheActingHospitalStillWorks() {
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription own = new Prescription();
+        own.setId(prescriptionId);
+        own.setHospital(encounter.getHospital());
+        PrescriptionRequestDTO request = buildRequest();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(own));
+        when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(roleValidator.canCreatePrescription(any(), eq(hospitalId))).thenReturn(true);
+        when(urhaRepository.findByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(
+            any(), eq(hospitalId), eq("DOCTOR")))
+            .thenReturn(Optional.of(assignment));
+        when(prescriptionRepository.save(any())).thenReturn(own);
+        when(prescriptionMapper.toResponseDTO(any())).thenReturn(
+            PrescriptionResponseDTO.builder().id(prescriptionId).build());
+
+        assertThat(prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH).getId())
+            .isEqualTo(prescriptionId);
+        verify(prescriptionRepository).save(own);
     }
 
     // ═══════════════ updatePrescription full path ═══════════════
@@ -2780,7 +2881,9 @@ class PrescriptionServiceImplTest {
 
         UUID rxId = rx.getId();
         assertThatThrownBy(() -> prescriptionService.cosignPrescription(rxId, Locale.ENGLISH))
-            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class)
+            // Client-safe: the row was already resolved in scope, so the
+            // caller is told what they would need (GlobalExceptionHandler).
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
             .hasMessageContaining("active prescribing assignment");
         assertThat(rx.getCosignedAt()).isNull();
         assertThat(rx.getCosignedBy()).isNull();
@@ -2868,7 +2971,9 @@ class PrescriptionServiceImplTest {
 
         UUID rxId = rx.getId();
         assertThatThrownBy(() -> prescriptionService.cosignPrescription(rxId, Locale.ENGLISH))
-            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class)
+            // Client-safe: the row was already resolved in scope, so the
+            // caller is told what they would need (GlobalExceptionHandler).
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
             .hasMessageContaining("active prescribing assignment");
         assertThat(rx.getCosignedBy()).isNull();
     }
@@ -3112,7 +3217,8 @@ class PrescriptionServiceImplTest {
 
         UUID rxId = rx.getId();
         assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, java.util.Locale.ENGLISH))
-            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+            .hasMessage("Only the prescribing clinician can sign this prescription.");
         assertThat(rx.getSignatureValue()).isNull();
     }
 

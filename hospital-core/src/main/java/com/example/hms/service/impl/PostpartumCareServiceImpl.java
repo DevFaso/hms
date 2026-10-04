@@ -219,7 +219,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
     private PatientHospitalRegistration resolveRegistration(Patient patient, UUID registrationId, UUID hospitalId) {
         if (registrationId != null) {
             PatientHospitalRegistration registration = registrationRepository.findById(registrationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Registration not found with ID: " + registrationId));
+                .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", registrationId));
             if (!registration.getPatient().getId().equals(patient.getId())) {
                 throw new BusinessException("Registration does not belong to the specified patient.");
             }
@@ -253,7 +253,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
     private Staff resolveRecorderStaff(UUID staffId, UUID recorderUserId, Hospital hospital) {
         if (staffId != null) {
             Staff staff = staffRepository.findByIdAndActiveTrue(staffId)
-                .orElseThrow(() -> new ResourceNotFoundException("Staff not found or inactive with ID: " + staffId));
+                .orElseThrow(() -> new ResourceNotFoundException("staff.not.found.or.inactive", staffId));
             if (hospital != null && staff.getHospital() != null
                 && !hospital.getId().equals(staff.getHospital().getId())) {
                 throw new BusinessException("Recorder staff assignment does not match resolved hospital context.");
@@ -283,7 +283,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         if (request.getCarePlanId() != null) {
             return carePlanRepository.findByIdAndPatient_IdAndHospital_Id(
                     request.getCarePlanId(), patient.getId(), hospital.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Postpartum care plan not found for supplied identifiers."));
+                .orElseThrow(() -> new ResourceNotFoundException("postpartum.carePlan.notFound", request.getCarePlanId()));
         }
         Optional<PostpartumCarePlan> existing = carePlanRepository
             .findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patient.getId(), hospital.getId());
@@ -654,7 +654,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
     private PostpartumCarePlan resolvePlanForRead(UUID patientId, UUID hospitalId, UUID carePlanId) {
         if (carePlanId != null) {
             return carePlanRepository.findByIdAndPatient_IdAndHospital_Id(carePlanId, patientId, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Postpartum care plan not found."));
+                .orElseThrow(() -> new ResourceNotFoundException("postpartum.carePlan.notFound", carePlanId));
         }
         if (hospitalId != null) {
             return carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId)

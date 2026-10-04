@@ -75,6 +75,7 @@
             <th scope="col">{{ 'LAB_RELEASE.COL_TEST' | translate }}</th>
             <th scope="col">{{ 'LAB_RELEASE.COL_VALUE' | translate }}</th>
             <th scope="col">{{ 'LAB_RELEASE.COL_FLAG' | translate }}</th>
+            <th scope="col">{{ 'LAB_RELEASE.COL_SOURCE' | translate }}</th>
             <th scope="col">{{ 'LAB_RELEASE.COL_RESULT_DATE' | translate }}</th>
             <th scope="col">{{ 'LAB_RELEASE.COL_RECEIVED' | translate }}</th>
             <th scope="col">{{ 'LAB_RELEASE.COL_ACTIONS' | translate }}</th>
@@ -107,6 +108,40 @@
                 <span [class]="severityClass(row)">
                   {{ 'LAB_RELEASE.FLAG_' + severityKey(row) | translate }}
                 </span>
+              </td>
+              <!-- Provenance: an analyzer's number or a typed one, and — for
+                   an analyzer's — whether it said preliminary or final. The
+                   message control id is the sender's own text, shown as text. -->
+              <td>
+                @if (isInstrumentResult(row)) {
+                  <span
+                    class="source-tag"
+                    [attr.data-testid]="'release-source-instrument-' + row.id"
+                  >
+                    {{ 'LAB_RELEASE.SOURCE_INSTRUMENT' | translate }}
+                  </span>
+                  <span
+                    class="order-code mono control-id"
+                    [title]="'LAB_RELEASE.CONTROL_ID' | translate"
+                    >{{ row.sourceMessageControlId }}</span
+                  >
+                } @else {
+                  <span
+                    class="source-tag source-manual"
+                    [attr.data-testid]="'release-source-manual-' + row.id"
+                  >
+                    {{ 'LAB_RELEASE.SOURCE_MANUAL' | translate }}
+                  </span>
+                }
+                @if (resultStatusKey(row); as statusKey) {
+                  <span
+                    class="status-tag"
+                    [class.status-preliminary]="statusKey === 'LAB_RELEASE.STATUS_PRELIMINARY'"
+                    [attr.data-testid]="'release-status-' + row.id"
+                  >
+                    {{ statusKey | translate: { code: row.observationResultStatus } }}
+                  </span>
+                }
               </td>
               <!-- Two different times, and the difference is the point. The
                    result date is OBX-14 from the analyzer, or whatever the

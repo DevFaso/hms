@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>Fixture</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.example.fixture</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>MEDIHUB_API_BASE_URL</key>
+	<string>$(MEDIHUB_API_BASE_URL)</string>
+	<key>MEDIHUB_KEYCLOAK_ISSUER</key>
+	<string>$(MEDIHUB_KEYCLOAK_ISSUER)</string>
+	<key>MEDIHUB_KEYCLOAK_REDIRECT_URI</key>
+	<string>$(MEDIHUB_KEYCLOAK_REDIRECT_URI)</string>
+	<key>MEDIHUB_KEYCLOAK_SSO_ENABLED</key>
+	<string>$(MEDIHUB_KEYCLOAK_SSO_ENABLED)</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Use Face ID: quoted, with a colon</string>
+</dict>
+</plist>

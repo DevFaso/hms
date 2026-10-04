@@ -191,14 +191,14 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
         String normalized = identifier.trim();
         return organizationRepository.findByCode(normalized.toUpperCase(Locale.ENGLISH))
             .or(() -> organizationRepository.findByNameIgnoreCase(normalized))
-            .orElseThrow(() -> new ResourceNotFoundException("organization.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException("organization.notfound", normalized));
     }
 
     private Hospital resolveHospital(String identifier, Organization organization) {
         String normalized = identifier.trim();
         Hospital hospital = hospitalRepository.findByCodeIgnoreCase(normalized)
             .or(() -> hospitalRepository.findByNameIgnoreCase(normalized))
-            .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", normalized));
 
         log.debug("resolveHospital matched hospital {} with organization {} (expected {})",
             hospital.getId(),
@@ -219,7 +219,7 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
         );
 
         if (matches.isEmpty()) {
-            throw new ResourceNotFoundException("patient.notfound");
+            throw new ResourceNotFoundException("patient.notFoundByIdentifier", normalized);
         }
 
         if (matches.size() > 1) {
@@ -240,7 +240,7 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
         );
 
         if (matches.isEmpty()) {
-            throw new ResourceNotFoundException("staff.notfound");
+            throw new ResourceNotFoundException("staff.notFoundByIdentifier", normalizedIdentifier);
         }
 
         if (matches.size() > 1) {

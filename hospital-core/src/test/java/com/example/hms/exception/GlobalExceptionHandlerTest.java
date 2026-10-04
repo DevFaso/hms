@@ -28,6 +28,45 @@ class GlobalExceptionHandlerTest {
     }
 
     // =========================================================================
+    // handleAccessDenied
+    // =========================================================================
+
+    @Nested
+    @DisplayName("handleAccessDenied")
+    class HandleAccessDenied {
+
+        @SuppressWarnings("unchecked")
+        private Map<String, Object> bodyOf(ResponseEntity<Object> response) {
+            return (Map<String, Object>) response.getBody();
+        }
+
+        @Test
+        @DisplayName("a plain AccessDeniedException keeps the opaque default — its message could disclose a tenant")
+        void plainAccessDeniedIsOpaque() {
+            var ex = new org.springframework.security.access.AccessDeniedException(
+                "Prescription belongs to hospital B");
+
+            ResponseEntity<Object> response = handler.handleAccessDenied(ex, request);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(bodyOf(response)).containsEntry("message", "Access denied");
+        }
+
+        @Test
+        @DisplayName("a ClientSafeAccessDeniedException reaches the caller with its sentence")
+        void clientSafeMessageIsShown() {
+            var ex = new ClientSafeAccessDeniedException(
+                "Only the prescribing clinician can sign this prescription.");
+
+            ResponseEntity<Object> response = handler.handleAccessDenied(ex, request);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(bodyOf(response))
+                .containsEntry("message", "Only the prescribing clinician can sign this prescription.");
+        }
+    }
+
+    // =========================================================================
     // handleNotificationTransportUnavailable
     // =========================================================================
 
@@ -483,6 +522,55 @@ class GlobalExceptionHandlerTest {
             assertThat(annotation).isNotNull();
             assertThat(annotation.value()).containsExactly(
                 ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException.class);
+        }
+    }
+
+    // =========================================================================
+    // handleBusinessRuleException (D10)
+    // =========================================================================
+
+    @Nested
+    @DisplayName("handleBusinessRuleException")
+    class HandleBusinessRuleException {
+
+        @org.springframework.web.bind.annotation.RestController
+        static class Thrower {
+            @org.springframework.web.bind.annotation.GetMapping("/rule")
+            String rule() {
+                throw new BusinessRuleException("Purge cannot be scheduled in the past.");
+            }
+        }
+
+        @Test
+        @DisplayName("a rule refusal is a 400 with its sentence, through MVC dispatch — it used to fall to the 500 handler")
+        void dispatchesTo400() throws Exception {
+            org.springframework.test.web.servlet.MockMvc mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders
+                .standaloneSetup(new Thrower())
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/rule"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isBadRequest())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.message")
+                    .value("Purge cannot be scheduled in the past."));
+        }
+
+        @Test
+        @DisplayName("a keyed refusal is resolved in the caller's locale")
+        void keyIsResolved() {
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            try {
+                ResponseEntity<Object> response = handler.handleBusinessRuleException(
+                    BusinessRuleException.ofKey("platform.department.noHospital"), request);
+
+                assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> body = (Map<String, Object>) response.getBody();
+                assertThat(body).containsEntry("message", "Le service hospitalier n'est rattaché à aucun hôpital.");
+            } finally {
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
         }
     }
 }

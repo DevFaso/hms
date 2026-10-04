@@ -78,10 +78,10 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
     @Transactional(readOnly = true)
     public LabSpecimenResponseDTO getSpecimenById(UUID specimenId, Locale locale) {
         LabSpecimen specimen = labSpecimenRepository.findById(specimenId)
-            .orElseThrow(() -> new ResourceNotFoundException("labspecimen.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException("labspecimen.notfound", specimenId));
 
         if (!specimen.getLabOrder().isHandledBy(roleValidator.requireActiveHospitalId())) {
-            throw new ResourceNotFoundException("labspecimen.notfound");
+            throw new ResourceNotFoundException("labspecimen.notfound", specimenId);
         }
         return labSpecimenMapper.toResponseDTO(specimen);
     }
@@ -105,10 +105,10 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
     @Transactional
     public LabSpecimenResponseDTO receiveSpecimen(UUID specimenId, Locale locale) {
         LabSpecimen specimen = labSpecimenRepository.findById(specimenId)
-            .orElseThrow(() -> new ResourceNotFoundException("labspecimen.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException("labspecimen.notfound", specimenId));
 
         if (!specimen.getLabOrder().isHandledBy(roleValidator.requireActiveHospitalId())) {
-            throw new ResourceNotFoundException("labspecimen.notfound");
+            throw new ResourceNotFoundException("labspecimen.notfound", specimenId);
         }
 
         if (specimen.getStatus() != LabSpecimenStatus.COLLECTED

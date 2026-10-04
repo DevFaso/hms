@@ -93,7 +93,7 @@ public class PatientDisclosureController {
             return;
         }
         if (!registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)) {
-            throw new ResourceNotFoundException("Patient not found.");
+            throw new ResourceNotFoundException("patient.notFound", patientId);
         }
     }
 }

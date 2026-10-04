@@ -2,8 +2,6 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, map, catchError, of } from 'rxjs';
 
-import { bareRole } from '../core/role-token';
-
 /* ── DTOs matching backend PatientPortalController ── */
 
 export interface PatientProfileDTO {
@@ -249,6 +247,8 @@ interface AppointmentApiResponse {
   startTime: string;
   endTime: string;
   staffName: string;
+  /** The clinician's USER id — what the chat send API addresses. */
+  staffUserId?: string | null;
   departmentName: string;
   reason: string;
   status: string;
@@ -402,17 +402,50 @@ export interface PortalInvoice {
   description: string;
 }
 
-export interface CareTeamMember {
-  name: string;
-  role: string;
-  specialty: string;
-  phone: string;
-  email: string;
-  isPrimary: boolean;
+/**
+ * One primary-care link (CareTeamDTO.PrimaryCareEntry on the backend). The
+ * care team the endpoint returns IS the primary-care history: the current
+ * provider and every earlier one, with dates. It is also the chat picker's
+ * source ({@link PatientPortalService.getMyCareTeamClinicians}).
+ */
+export interface PrimaryCareEntry {
+  id: string;
+  hospitalId: string | null;
+  hospitalName: string | null;
+  doctorUserId: string | null;
+  doctorDisplay: string | null;
+  /** ISO local date (yyyy-MM-dd). */
+  startDate: string | null;
+  endDate: string | null;
+  current: boolean;
 }
 
+/** GET /me/patient/care-team — CareTeamDTO { primaryCare, primaryCareHistory }. */
 export interface CareTeamDTO {
-  members: CareTeamMember[];
+  primaryCare: PrimaryCareEntry | null;
+  /** Newest first; includes the current link. */
+  primaryCareHistory: PrimaryCareEntry[];
+}
+
+/** A clinician a patient can address a chat message to. */
+export interface MessageableClinician {
+  /** The clinician's user id — the chat send API's `recipientId`. */
+  userId: string;
+  name: string;
+  hospitalName: string | null;
+}
+
+/**
+ * Keeps only entries that can address a message (a user id and a name),
+ * first occurrence wins, so the order of the input is the order shown.
+ */
+function distinctClinicians(list: MessageableClinician[]): MessageableClinician[] {
+  const seen = new Set<string>();
+  return list.filter((c) => {
+    if (!c.userId || !c.name.trim() || seen.has(c.userId)) return false;
+    seen.add(c.userId);
+    return true;
+  });
 }
 
 export interface PortalPrescription {
@@ -672,7 +705,8 @@ export interface SchedulingProvider {
   id: string;
   name: string;
   fullName?: string;
-  role?: string;
+  /** Bare role token (DOCTOR), or null/absent when the provider has none. */
+  role?: string | null;
 }
 
 export interface PatientPaymentRequest {
@@ -1004,10 +1038,59 @@ export class PatientPortalService {
       .pipe(map((r) => r.data));
   }
 
+  /**
+   * Errors propagate: an outage must not read as "no care team" (the page
+   * shows its error state, the dashboard simply leaves the card out).
+   */
   getMyCareTeam(): Observable<CareTeamDTO> {
     return this.http.get<ApiWrapper<CareTeamDTO>>(`${this.base}/care-team`).pipe(
-      map((r) => r.data),
-      catchError(() => of({ members: [] })),
+      map((r) => ({
+        primaryCare: r.data?.primaryCare ?? null,
+        primaryCareHistory: r.data?.primaryCareHistory ?? [],
+      })),
+    );
+  }
+
+  /**
+   * The patient's primary-care providers, current first, as chat recipients.
+   * Errors propagate: the chat picker has to tell "you have no care team"
+   * from "the care team could not be loaded".
+   */
+  getMyCareTeamClinicians(): Observable<MessageableClinician[]> {
+    return this.http.get<ApiWrapper<Partial<CareTeamDTO> | null>>(`${this.base}/care-team`).pipe(
+      map((r) => {
+        const team = r.data;
+        const entries = [
+          ...(team?.primaryCare ? [team.primaryCare] : []),
+          ...(team?.primaryCareHistory ?? []),
+        ];
+        return distinctClinicians(
+          entries.map((e) => ({
+            userId: e.doctorUserId ?? '',
+            name: e.doctorDisplay ?? '',
+            hospitalName: e.hospitalName ?? null,
+          })),
+        );
+      }),
+    );
+  }
+
+  /**
+   * The clinicians of the patient's appointments, as chat recipients — what
+   * the native apps offer when starting a conversation. Errors propagate, as
+   * for {@link getMyCareTeamClinicians}.
+   */
+  getMyAppointmentClinicians(): Observable<MessageableClinician[]> {
+    return this.http.get<ApiWrapper<AppointmentApiResponse[]>>(`${this.base}/appointments`).pipe(
+      map((r) =>
+        distinctClinicians(
+          (r.data ?? []).map((a) => ({
+            userId: a.staffUserId ?? '',
+            name: a.staffName ?? '',
+            hospitalName: a.hospitalName ?? null,
+          })),
+        ),
+      ),
     );
   }
 
@@ -1118,15 +1201,15 @@ export class PatientPortalService {
         params: { page: 0, size: 50 },
       })
       .pipe(
+        // actorRole arrives bare, or null for an unresolvable role:
+        // DisclosureAccountingServiceImpl.toEntry normalises every row,
+        // legacy spellings included, so the portal no longer maps it.
         map((r) => {
           const d = r.data;
           if (!d) {
             throw new Error('empty disclosure accounting response');
           }
-          return {
-            ...d,
-            entries: (d.entries ?? []).map((e) => ({ ...e, actorRole: bareRole(e.actorRole) })),
-          };
+          return { ...d, entries: d.entries ?? [] };
         }),
       );
   }
@@ -1180,9 +1263,9 @@ export class PatientPortalService {
         `${this.base}/booking/hospitals/${hospitalId}/departments/${departmentId}/providers`,
       )
       .pipe(
-        // getProvidersForDepartment sends assignment.getRole().getName(), so
-        // every row arrives prefixed.
-        map((r) => (r.data ?? []).map((p) => ({ ...p, role: bareRole(p.role) ?? undefined }))),
+        // role arrives bare, or null when the provider has no role:
+        // PatientPortalServiceImpl.getProvidersForDepartment strips the prefix.
+        map((r) => r.data ?? []),
         catchError(() => of([])),
       );
   }

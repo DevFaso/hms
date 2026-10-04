@@ -306,7 +306,6 @@
     "STAT": {
       "ORGANIZATIONS": "Organizaciones",
       "HOSPITALS": "Hospitales",
-      "USERS": "Usuarios",
       "PATIENTS": "Pacientes",
       "TODAY_APPOINTMENTS": "Citas de hoy",
       "DEPARTMENTS": "Departamentos",
@@ -316,7 +315,6 @@
       "ENCOUNTERS": "Encuentros",
       "CONSULTATIONS": "Consultas",
       "ADMISSIONS": "Ingresos",
-      "PRESCRIPTIONS": "Prescripciones",
       "LAB_ORDERS": "Solicitudes de laboratorio",
       "LAB_RESULTS": "Resultados de laboratorio",
       "LAB_TEST_DEFINITIONS": "Catálogo de pruebas",
@@ -332,7 +330,6 @@
     "LINK": {
       "ORGANIZATIONS_TITLE": "Organizaciones",
       "ORGANIZATIONS_DESC": "Inquilinos, asignaciones de hospitales, contactos",
-      "USERS_TITLE": "Usuarios",
       "USERS_DESC": "Gobernanza y aprovisionamiento multi-inquilino",
       "ROLES_TITLE": "Roles",
       "ROLES_DESC": "Catálogo de roles y matriz de permisos",
@@ -1179,8 +1176,6 @@
       "TOTAL_PATIENTS": "Total de pacientes",
       "INVOICES": "Facturas",
       "LAB_ORDERS": "Solicitudes de laboratorio",
-      "PRESCRIPTIONS": "Prescripciones",
-      "USERS": "Usuarios",
       "ACTIVE_HOSPITALS": "Hospitales activos"
     },
     "TREND_BAR_TITLE": "{{count}} citas"
@@ -1451,11 +1446,14 @@
     "NEW_CONVERSATION": "New Conversation",
     "NO_CONVERSATIONS": "No conversations yet",
     "NO_MESSAGES": "No messages yet",
+    "NO_MESSAGE_RECIPIENTS": "Todavía no hay ningún profesional sanitario al que escribir. Podrá iniciar una conversación cuando tenga un equipo de atención o una cita.",
     "NO_USERS_FOUND": "No users found",
     "NO_USER_IDENTITY": "No se puede identificar al usuario actual. Cierre la sesión y vuelva a iniciarla.",
     "PHOTO": "foto",
     "PHOTO_TOO_LARGE": "La foto no puede superar 10 MB.",
     "PHOTO_UPLOAD_FAILED": "Fallo al subir la foto.",
+    "RECIPIENTS_LOAD_FAILED": "No se pudieron cargar sus profesionales sanitarios. Inténtelo de nuevo.",
+    "RECIPIENTS_PARTIAL_LOAD": "No se pudieron cargar algunos de sus profesionales sanitarios. Es posible que la lista esté incompleta.",
     "RECORDING": "Grabando",
     "RECORD_VOICE_MEMO": "Grabar nota de voz",
     "REFRESH_MESSAGES": "Refresh messages",
@@ -1566,7 +1564,11 @@
     "UPLOAD": "Subir",
     "VIEW": "Ver",
     "VIEW_ALL": "View All",
-    "YES": "Sí"
+    "YES": "Sí",
+    "LABEL": {
+      "PRESCRIPTIONS": "Prescripciones",
+      "USERS": "Usuarios"
+    }
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acknowledge",
@@ -1780,9 +1782,11 @@
     "LAB_MODULE": "Lab Module",
     "LAB_MODULE_DESC": "Access lab orders, submit results, and track specimens from the lab module.",
     "LAB_ORDERS": "Órdenes de Laboratorio",
+    "LAB_ORDER": "Orden de laboratorio",
     "LAB_ORDERS_TODAY": "Pedidos de Laboratorio Hoy",
     "LAB_WORK_QUEUE": "Lab Work Queue",
     "LATEST_LABS": "Latest Labs",
+    "LAB_TEST": "Prueba de laboratorio",
     "LICENSE_ALERTS": "Alertas de Licencia",
     "LICENSE_EXPIRY_ALERTS": "License Expiry Alerts",
     "LOW": "Low",
@@ -1862,7 +1866,6 @@
     "PHARMACY_CLARIFICATIONS": "Aclaraciones de Farmacia",
     "PHARMACY_MODULE": "Pharmacy Module",
     "PHARMACY_MODULE_DESC": "Manage all prescriptions and dispense medications from the pharmacy module.",
-    "PRESCRIPTIONS": "Prescripciones",
     "PRESCRIPTION_QUEUE": "Prescription Queue",
     "PROGRESS": "Progress",
     "PROVIDER": "Provider",
@@ -2018,7 +2021,6 @@
     "UPCOMING_APPOINTMENTS": "Próximas Citas",
     "URGENT": "Urgent",
     "USER": "User",
-    "USERS": "Usuarios",
     "VALIDATION_STUDIES": "Estudios de Validación",
     "VALIDATION_STUDIES_30D": "Estudios (Últimos 30 Días)",
     "VALIDATION_STUDIES_PENDING": "Pendiente de Aprobación",
@@ -2947,6 +2949,14 @@
     "COL_TEST": "Prueba",
     "COL_VALUE": "Valor",
     "COL_FLAG": "Indicador",
+    "COL_SOURCE": "Origen",
+    "SOURCE_INSTRUMENT": "Analizador",
+    "SOURCE_MANUAL": "Introducido manualmente",
+    "CONTROL_ID": "ID de control del mensaje HL7",
+    "STATUS_FINAL": "Definitivo",
+    "STATUS_PRELIMINARY": "Preliminar",
+    "STATUS_CORRECTED": "Corregido",
+    "STATUS_OTHER": "Estado {{code}}",
     "COL_RESULT_DATE": "Fecha del resultado",
     "COL_RECEIVED": "Recibido",
     "COL_ACTIONS": "Acciones",
@@ -3973,6 +3983,7 @@
     "NO_PATIENTS": "No patients found",
     "NO_VITALS": "No vitals recorded",
     "NO_VITALS_DESC": "Vital signs will appear here when recorded.",
+    "VITALS_NO_HOSPITAL": "Los signos vitales se muestran de un hospital a la vez, y esta cuenta no tiene ninguno definido. Aparecerán en cuanto se defina un ámbito hospitalario.",
     "NO_VITAL_METRICS": "No se registraron métricas numéricas — solo notas.",
     "OPTIONAL": "Opcional",
     "ORGANISATION": "Organisation",
@@ -4008,7 +4019,7 @@
     "REGISTER": "Register Patient",
     "REGISTERED": "Registered",
     "REGISTERED_AT": "registrado en",
-    "REGISTERED_EMAIL_SENT": "Paciente registrado con éxito. Se ha enviado un correo de verificación.",
+    "REGISTERED_EMAIL_SENT": "Paciente registrado con éxito. Se está enviando un correo de verificación.",
     "REGISTERED_SMS_SENT": "Paciente registrado con éxito. Las credenciales se enviarán por SMS.",
     "REGISTERED_SUCCESS": "Paciente registrado con éxito.",
     "REGISTER_FAILED": "Error al registrar al paciente",
@@ -4075,8 +4086,11 @@
     "CHANGE_FREEZE": "Congelamiento de cambios",
     "CHECK_UPDATES": "Check for Updates",
     "CLEANUP": "Cleanup",
+    "CLEAR_API_KEY": "Eliminar la referencia de clave API guardada",
+    "CLEAR_FIELD_HINT": "Vacíe un campo y guarde para borrarlo.",
     "CONFIGURE": "Configurar",
     "CONFIRM_RESET": "Are you sure you want to reset to defaults?",
+    "CONFIRM_UNLINK": "¿Eliminar el vínculo entre {{hospital}} y este servicio? Se borrará su configuración. Desactívelo para conservarla.",
     "CONTACT_EMAIL": "Email de contacto",
     "CORS_SETTINGS": "CORS Settings",
     "CPU_USAGE": "CPU Usage",
@@ -4096,6 +4110,7 @@
     "DEVELOPMENT": "Desarrollo",
     "DISABLED": "Disabled",
     "DISABLED_LINKS": "Enlaces desactivados",
+    "DISABLE_LINK": "Desactivar",
     "DISABLE_MAINTENANCE": "Disable Maintenance Mode",
     "DISK_USAGE": "Disk Usage",
     "DOCS": "Docs",
@@ -4105,6 +4120,7 @@
     "EDIT_SERVICE": "Editar servicio",
     "EMAIL_SETTINGS": "Email Settings",
     "ENABLED": "Enabled",
+    "ENABLE_LINK": "Activar",
     "ENABLE_MAINTENANCE": "Enable Maintenance Mode",
     "ENDS_AT": "Termina a las",
     "ENVIRONMENT": "Environment",
@@ -4128,14 +4144,19 @@
     "INTEGRATION_SETTINGS": "Integration Settings",
     "JAVA_VERSION": "Java Version",
     "KB": "KB",
-    "LAST_RUN": "Última ejecución",
-    "LAST_SNAPSHOT": "Última instantánea",
+    "LAST_RELEASE_WINDOW_CHANGE": "Último cambio en una ventana de despliegue",
     "LDAP_CONFIG": "LDAP Configuration",
     "LICENSE": "License",
     "LICENSE_KEY": "License Key",
     "LICENSE_TYPE": "License Type",
     "LINK": "Vincular",
+    "LINK_STATE": {
+      "DISABLED": "Desactivado",
+      "ENABLED": "Activado",
+      "NOT_LINKED": "Sin vincular"
+    },
     "LOADING": "Loading platform...",
+    "LOADING_RELEASES": "Cargando ventanas de despliegue…",
     "LOADING_SERVICES": "Cargando servicios...",
     "LOCALE": "Locale",
     "LOCKOUT_DURATION": "Lockout Duration",
@@ -4160,6 +4181,7 @@
     "NO_CATALOG": "Sin entradas en el catálogo",
     "NO_CATALOG_HINT": "Registre un servicio para comenzar",
     "NO_HOSPITAL_LINKS": "Sin enlaces de hospital",
+    "NO_ORG_HOSPITALS": "Esta organización aún no tiene hospitales.",
     "NO_RELEASES": "Sin versiones programadas",
     "NO_RELEASES_HINT": "Programe una versión para comenzar",
     "NO_SERVICES": "No se encontraron servicios",
@@ -4179,10 +4201,15 @@
       "RELEASE_NAME": "p. ej. Lanzamiento Q1 2025",
       "RELEASE_NOTES": "Notas de versión adicionales…"
     },
+    "PLACEHOLDER_URL": "Dirección de ejemplo, enlace no operativo",
     "PLATFORM_MANAGED": "Administrado por plataforma",
     "PRODUCTION": "Producción",
     "PROVIDER": "Proveedor",
     "PROVISION": "Aprovisionar",
+    "PROVISION_CHOOSE_ORG": "Elija una organización…",
+    "PROVISION_DISABLED_HINT": "Esta integración está desactivada en el catálogo y no se puede aprovisionar.",
+    "PROVISION_TARGET_ORG": "Organización de destino",
+    "PROVISION_TO_NAMED_ORG": "Aprovisionar en {{org}}",
     "PROVISION_TO_ORG": "Aprovisionar a la organización",
     "QUICK_ACTIONS": "Acciones rápidas",
     "RATE_LIMITING": "Rate Limiting",
@@ -4239,10 +4266,8 @@
     "SYSTEM_LOGS": "System Logs",
     "SYSTEM_SETTINGS": "System Settings",
     "TASK_ACTION": {
-      "RUN_NOW": "Ejecutar ahora",
-      "INVESTIGATE": "Investigar",
-      "UNBLOCK": "Desbloquear",
-      "RUN": "Ejecutar"
+      "OPEN_RELEASES": "Abrir despliegues",
+      "OPEN_SERVICES": "Abrir servicios"
     },
     "TEST_CONNECTION": "Test Connection",
     "TIMEZONE": "Timezone",
@@ -4250,16 +4275,20 @@
     "TOAST": {
       "CATALOG_LOAD_FAILED": "Error al cargar el catálogo",
       "HOSPITAL_LINKED": "Hospital «{{name}}» vinculado",
+      "HOSPITAL_LINKS_LOAD_FAILED": "No se pudieron cargar los vínculos de hospitales",
+      "HOSPITAL_LINK_DISABLED": "Vínculo con «{{name}}» desactivado",
+      "HOSPITAL_LINK_ENABLED": "Vínculo con «{{name}}» activado",
       "HOSPITAL_LINK_FAILED": "Error al vincular el hospital",
+      "HOSPITAL_LINK_UPDATE_FAILED": "No se pudo actualizar el vínculo del hospital",
       "HOSPITAL_UNLINKED": "Hospital «{{name}}» desvinculado",
       "HOSPITAL_UNLINK_FAILED": "Error al desvincular el hospital",
       "NO_DOCS_URL": "No hay URL de documentación disponible",
-      "NO_ORGS_AVAILABLE": "No hay organizaciones disponibles para aprovisionar",
       "NO_SANDBOX": "No hay entorno de pruebas disponible",
       "ORGS_LOAD_FAILED": "Error al cargar las organizaciones",
       "ORG_SERVICES_LOAD_FAILED": "Error al cargar los servicios de la organización",
-      "PROVISIONED": "«{{name}}» aprovisionado en la organización",
+      "PROVISIONED_TO_ORG": "«{{name}}» aprovisionado en {{org}}",
       "PROVISION_FAILED": "Error al aprovisionar el servicio",
+      "RELEASES_LOAD_FAILED": "No se pudieron cargar las ventanas de despliegue",
       "RELEASE_REQUIRED_FIELDS": "Nombre, entorno y horas de inicio y fin son obligatorios",
       "RELEASE_SCHEDULED": "Ventana de versión «{{name}}» programada",
       "RELEASE_SCHEDULE_FAILED": "Error al programar la ventana de versión",
@@ -4271,7 +4300,8 @@
       "SNAPSHOT_EXPORT_FAILED": "Error al exportar la instantánea",
       "STATUS_CHANGED": "Estado del servicio cambiado a {{status}}",
       "STATUS_CHANGE_FAILED": "Error al cambiar el estado",
-      "TASK_DETAILS": "{{title}}: {{nextAction}} | {{metricLabel}}: {{metricValue}} | Última ejecución: {{lastRun}}"
+      "TASK_DETAILS": "{{title}}: {{nextAction}} | {{metricLabel}}: {{metricValue}}",
+      "VALIDATION_FAILED": "Corrija estos campos: {{errors}}"
     },
     "TOTAL_INTEGRATIONS": "Total de integraciones",
     "UAT": "UAT",
@@ -4464,7 +4494,10 @@
       "LOADING": "Cargando equipo de atención…",
       "EMPTY_TITLE": "Sin miembros del equipo de atención",
       "EMPTY_DESC": "La información de su equipo de atención aparecerá aquí.",
-      "PRIMARY_PROVIDER": "Médico de cabecera"
+      "PRIMARY_PROVIDER": "Médico de cabecera",
+      "SINCE": "Desde el {{date}}",
+      "HISTORY_TITLE": "Médicos de cabecera anteriores",
+      "LOAD_ERROR": "No se pudo cargar su equipo de atención. Reintente."
     },
     "RECORDS": {
       "TITLE": "Resumen de salud",
@@ -5421,18 +5454,9 @@
         "PAIN": "Dolor",
         "PSYCHOSOCIAL": "Psicosocial"
       },
-      "SNAPSHOT_ITEM_TYPE": {
-        "LAB": "Laboratorio",
-        "VITALS": "Constantes vitales"
-      },
       "VITAL_TASK_TYPE": {
         "FULL_SET": "Conjunto completo",
         "ROUTINE": "Rutina"
-      },
-      "ORDER_TASK_TYPE": {
-        "IMAGING": "Imagenología",
-        "LAB": "Laboratorio",
-        "PROCEDURE": "Procedimiento"
       },
       "NEWBORN_ALERT_TYPE": {
         "APGAR": "Apgar",
@@ -5494,6 +5518,35 @@
       "PRESCRIPTION_DISPATCH_STATUS": {
         "SENT": "Enviada",
         "FAILED": "Fallida"
+      },
+      "ORDER_SOURCE_TYPE": {
+        "IMAGING": "Imagenología",
+        "LAB": "Laboratorio",
+        "PROCEDURE": "Procedimiento",
+        "VITALS": "Constantes vitales"
+      },
+      "SHIFT_TYPE": {
+        "MORNING": "Mañana",
+        "AFTERNOON": "Tarde",
+        "EVENING": "Noche",
+        "NIGHT": "Nocturno",
+        "ON_CALL": "De guardia",
+        "FLEX": "Flexible"
+      },
+      "LEAVE_TYPE": {
+        "VACATION": "Vacaciones",
+        "SICK": "Baja por enfermedad",
+        "EMERGENCY": "Emergencia",
+        "TRAINING": "Formación",
+        "UNPAID": "Permiso sin sueldo",
+        "OTHER": "Otro"
+      },
+      "EMPLOYMENT_TYPE": {
+        "FULL_TIME": "Tiempo completo",
+        "PART_TIME": "Tiempo parcial",
+        "CONTRACT": "Contrato",
+        "LOCUM": "Suplente",
+        "INTERN": "Interno"
       }
     },
     "DOCUMENTS": {
@@ -5513,6 +5566,7 @@
       "UPLOAD_FAILED": "Error al subir el documento",
       "LOAD_FAILED": "Error al cargar los documentos",
       "FILE_REQUIRED": "Por favor seleccione un archivo",
+      "FILE_TOO_LARGE": "El archivo no puede superar 10 MB.",
       "DELETE": "Eliminar",
       "DELETE_CONFIRM": "¿Está seguro de que desea eliminar este documento?",
       "DELETE_SUCCESS": "Documento eliminado",
@@ -5798,7 +5852,7 @@
     "CONNECTED_DEVICES": "Connected Devices",
     "COPY_CODES": "Copiar los códigos",
     "CREDENTIAL_HEALTH": "Estado de credenciales",
-    "CURRENT_PASSWORD": "Current Password",
+    "CURRENT_PASSWORD": "Contraseña actual",
     "DANGER_ZONE": "Danger Zone",
     "DARK": "Dark",
     "DATE_FORMAT": "Date Format",
@@ -5934,6 +5988,12 @@
     "UP_TO_DATE": "Actualizado",
     "USERNAME": "Username",
     "USERNAME_HINT": "Su nombre de usuario no se puede cambiar",
+    "EMAIL_CHANGE_PASSWORD_HINT": "Para cambiar su dirección de correo se necesita su contraseña actual.",
+    "EMAIL_CHANGE_PASSWORD_REQUIRED": "Introduzca su contraseña actual para cambiar su dirección de correo.",
+    "EMAIL_MANAGED_BY_SSO": "Su dirección de correo la gestiona el inicio de sesión único.",
+    "EMAIL_CODE_SENT": "Se está enviando un código de verificación a {{email}}. Su dirección de correo solo cambiará cuando lo introduzca.",
+    "EMAIL_CHANGE_PENDING_TITLE": "Confirme su nueva dirección de correo",
+    "EMAIL_CHANGED": "Su dirección de correo ha cambiado.",
     "USER_ID": "ID de usuario",
     "VERIFICATION_CODE": "Código de verificación",
     "VERIFICATION_CODE_SENT": "Código de verificación enviado a {{contact}}",
@@ -9963,8 +10023,5 @@
     "STATUS_PIPELINE": "Flujo de estados de las solicitudes",
     "THROUGHPUT": "Rendimiento",
     "TITLE": "Panel de operaciones del laboratorio"
-  },
-  "SNAPSHOT": {
-    "ORDER": "Orden"
   }
 }

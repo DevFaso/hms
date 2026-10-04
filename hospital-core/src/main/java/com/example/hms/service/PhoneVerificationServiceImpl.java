@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -35,19 +36,28 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
     private final AuditEventLogService auditService;
     private final String defaultCountryNumberCode;
     private final long otpTtlSeconds;
+    /**
+     * The OTP clock: it writes {@code expiresAt} and reads it back on confirm,
+     * and bounds the resend cooldown and the hourly cap against
+     * {@code createdAt}, which {@code BaseEntity}'s {@code @PrePersist} stamps
+     * from the system default zone — the same zone {@code TimeConfig}'s bean uses.
+     */
+    private final Clock clock;
 
     public PhoneVerificationServiceImpl(
         PhoneOtpChallengeRepository challengeRepository,
         IkoddiGateway ikoddiGateway,
         AuditEventLogService auditService,
         @Value("${app.ikoddi.country-number-code:226}") String defaultCountryNumberCode,
-        @Value("${app.ikoddi.otp-ttl-seconds:300}") long otpTtlSeconds
+        @Value("${app.ikoddi.otp-ttl-seconds:300}") long otpTtlSeconds,
+        Clock clock
     ) {
         this.challengeRepository = challengeRepository;
         this.ikoddiGateway = ikoddiGateway;
         this.auditService = auditService;
         this.defaultCountryNumberCode = defaultCountryNumberCode;
         this.otpTtlSeconds = otpTtlSeconds;
+        this.clock = clock;
     }
 
     @Override
@@ -63,14 +73,14 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
         // ── Send-abuse guards: SMS dispatches cost money and can harass a
         // victim's phone. Cooldown per number + hourly cap per staff account. ──
         if (challengeRepository.countByRequestedByUserIdAndCreatedAtAfter(
-                requestedByUserId, LocalDateTime.now().minusHours(1)) >= MAX_SENDS_PER_USER_PER_HOUR) {
+                requestedByUserId, LocalDateTime.now(clock).minusHours(1)) >= MAX_SENDS_PER_USER_PER_HOUR) {
             throw new BusinessException("Verification-code limit reached — try again later.");
         }
         List<PhoneOtpChallenge> active = challengeRepository
             .findByPhoneNumberAndPurposeAndConsumedFalse(phone, PhoneOtpPurpose.REGISTRATION_PHONE_VERIFICATION);
         boolean withinCooldown = active.stream()
             .anyMatch(c -> c.getCreatedAt() != null
-                && c.getCreatedAt().isAfter(LocalDateTime.now().minusSeconds(RESEND_COOLDOWN_SECONDS)));
+                && c.getCreatedAt().isAfter(LocalDateTime.now(clock).minusSeconds(RESEND_COOLDOWN_SECONDS)));
         if (withinCooldown) {
             throw new BusinessException("A code was just sent to this number — wait a moment before resending.");
         }
@@ -91,7 +101,7 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
             .phoneNumber(phone)
             .purpose(PhoneOtpPurpose.REGISTRATION_PHONE_VERIFICATION)
             .verificationKey(sent.otpToken())
-            .expiresAt(LocalDateTime.now().plusSeconds(otpTtlSeconds))
+            .expiresAt(LocalDateTime.now(clock).plusSeconds(otpTtlSeconds))
             .consumed(false)
             .verified(false)
             .usedForRegistration(false)
@@ -112,12 +122,12 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
     public ChallengeView confirmRegistrationVerification(UUID challengeId, String code, UUID requestedByUserId) {
         PhoneOtpChallenge challenge = challengeRepository
             .findByIdAndRequestedByUserId(challengeId, requestedByUserId)
-            .orElseThrow(() -> new ResourceNotFoundException("Verification challenge not found: " + challengeId));
+            .orElseThrow(() -> new ResourceNotFoundException("phoneVerification.challenge.notFound", challengeId));
 
         if (challenge.isConsumed()) {
             throw new BusinessException("This verification code was already used — request a new one.");
         }
-        if (challenge.getExpiresAt().isBefore(LocalDateTime.now())) {
+        if (challenge.getExpiresAt().isBefore(LocalDateTime.now(clock))) {
             throw new BusinessException("The verification code expired — request a new one.");
         }
         if (challenge.getAttempts() >= MAX_ATTEMPTS) {

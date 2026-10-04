@@ -34,7 +34,6 @@ import java.util.UUID;
 @Transactional
 public class PatientPhotoServiceImpl implements PatientPhotoService {
 
-    private static final String MSG_PATIENT_NOT_FOUND = "Patient not found with ID: ";
     private static final long MAX_PHOTO_SIZE = 5L * 1024 * 1024;
     private static final Set<String> ALLOWED_EXTENSIONS =
         Set.of(".jpg", ".jpeg", ".png", ".gif", ".webp");
@@ -54,7 +53,7 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
             throw new BusinessException("An active hospital is required to store a patient photo.");
         }
         Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new BusinessException("Patient is not registered at this hospital.");
         }
@@ -104,11 +103,11 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
         Patient patient = loadScoped(patientId, hospitalId);
         String storedName = patient.getPhotoFilePath();
         if (storedName == null || storedName.isBlank()) {
-            throw new ResourceNotFoundException("No photo on file for patient " + patientId);
+            throw new ResourceNotFoundException("patientPhoto.notFound", patientId);
         }
         Path path = photoDir.resolve(storedName).normalize();
         if (!path.startsWith(photoDir) || !Files.exists(path)) {
-            throw new ResourceNotFoundException("No photo on file for patient " + patientId);
+            throw new ResourceNotFoundException("patientPhoto.notFound", patientId);
         }
         try {
             return new PhotoPayload(Files.readAllBytes(path),
@@ -136,10 +135,10 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
 
     private Patient loadScoped(UUID patientId, UUID hospitalId) {
         Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         // 404-not-403: an unregistered patient looks exactly like a missing one.
         if (hospitalId != null && !patient.isRegisteredInHospital(hospitalId)) {
-            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId);
+            throw new ResourceNotFoundException("patient.notFound", patientId);
         }
         return patient;
     }

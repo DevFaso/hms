@@ -23,8 +23,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.locale.LocaleHelper
 import com.bitnesttechs.hms.patient.core.models.CareTeamMemberDto
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
-import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
+import com.bitnesttechs.hms.patient.ui.theme.BrandSoft
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,14 +44,14 @@ fun CareTeamScreen(onBack: () -> Unit = {}, viewModel: CareTeamViewModel = hiltV
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandBlue, titleContentColor = Color.White
+                    containerColor = BrandPrimary, titleContentColor = Color.White
                 )
             )
         }
     ) { padding ->
         if (isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BrandBlue)
+                CircularProgressIndicator(color = BrandPrimary)
             }
             return@Scaffold
         }
@@ -72,7 +72,7 @@ fun CareTeamScreen(onBack: () -> Unit = {}, viewModel: CareTeamViewModel = hiltV
                     Card(
                         shape = RoundedCornerShape(16.dp),
                         elevation = CardDefaults.cardElevation(2.dp),
-                        colors = CardDefaults.cardColors(containerColor = BrandLightBlue)
+                        colors = CardDefaults.cardColors(containerColor = BrandSoft)
                     ) {
                         Row(
                             Modifier.padding(16.dp).fillMaxWidth(),
@@ -81,7 +81,7 @@ fun CareTeamScreen(onBack: () -> Unit = {}, viewModel: CareTeamViewModel = hiltV
                         ) {
                             Surface(
                                 shape = CircleShape,
-                                color = BrandBlue,
+                                color = BrandPrimary,
                                 modifier = Modifier.size(52.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
@@ -100,14 +100,14 @@ fun CareTeamScreen(onBack: () -> Unit = {}, viewModel: CareTeamViewModel = hiltV
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 primary.startDate?.let {
                                     Text(stringResource(R.string.since_date, it.take(10)), style = MaterialTheme.typography.labelSmall,
-                                        color = BrandBlue)
+                                        color = BrandPrimary)
                                 }
                             }
                             primary.phone?.let { phone ->
                                 IconButton(onClick = {
                                     context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone")))
                                 }) {
-                                    Icon(Icons.Default.Phone, stringResource(R.string.call), tint = BrandBlue)
+                                    Icon(Icons.Default.Phone, stringResource(R.string.call), tint = BrandPrimary)
                                 }
                             }
                         }
@@ -162,7 +162,7 @@ private fun CareTeamMemberRow(member: CareTeamMemberDto, onCallPhone: (String) -
                 modifier = Modifier.size(44.dp)) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(name.take(1).uppercase(), fontWeight = FontWeight.Bold,
-                        color = BrandBlue)
+                        color = BrandPrimary)
                 }
             }
             Column(Modifier.weight(1f)) {
@@ -178,7 +178,7 @@ private fun CareTeamMemberRow(member: CareTeamMemberDto, onCallPhone: (String) -
             }
             member.phone?.let { phone ->
                 IconButton(onClick = { onCallPhone(phone) }) {
-                    Icon(Icons.Default.Phone, stringResource(R.string.call), tint = BrandBlue, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Default.Phone, stringResource(R.string.call), tint = BrandPrimary, modifier = Modifier.size(20.dp))
                 }
             }
         }

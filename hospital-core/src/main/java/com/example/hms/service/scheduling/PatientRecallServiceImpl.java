@@ -25,6 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
@@ -46,16 +47,17 @@ public class PatientRecallServiceImpl implements PatientRecallService {
     private final StaffRepository staffRepository;
     private final AppointmentRepository appointmentRepository;
     private final RoleValidator roleValidator;
+    /** Same clock as {@code RecallReminderService}'s notice window (TimeConfig). */
+    private final Clock clock;
 
     @Override
     @Transactional
     public RecallResponseDTO createRecall(RecallRequestDTO request, UUID hospitalId,
                                           String actorUsername) {
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         Patient patient = patientRepository.findById(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Patient not found with ID: " + request.getPatientId()));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
         if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new BusinessException("The patient is not registered at this hospital.");
         }
@@ -64,7 +66,7 @@ public class PatientRecallServiceImpl implements PatientRecallService {
         if (request.getDepartmentId() != null) {
             department = departmentRepository.findById(request.getDepartmentId())
                 .filter(d -> d.getHospital() != null && hospitalId.equals(d.getHospital().getId()))
-                .orElseThrow(() -> new ResourceNotFoundException("Department not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", request.getDepartmentId()));
         }
         Staff provider = request.getPreferredProviderId() != null
             ? staffRepository.findById(request.getPreferredProviderId()).orElse(null)
@@ -123,8 +125,7 @@ public class PatientRecallServiceImpl implements PatientRecallService {
         }
         Appointment appointment = appointmentRepository.findById(appointmentId)
             .filter(a -> a.getHospital() != null && hospitalId.equals(a.getHospital().getId()))
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Appointment not found with ID: " + appointmentId));
+            .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", appointmentId));
         if (appointment.getPatient() == null
             || !recall.getPatient().getId().equals(appointment.getPatient().getId())) {
             throw new BusinessException("That appointment belongs to a different patient.");
@@ -138,15 +139,14 @@ public class PatientRecallServiceImpl implements PatientRecallService {
 
     private PatientRecall finish(PatientRecall recall, RecallStatus status) {
         recall.setStatus(status);
-        recall.setClosedAt(LocalDateTime.now());
+        recall.setClosedAt(LocalDateTime.now(clock));
         recall.setClosedByUserId(roleValidator.getCurrentUserId());
         return recallRepository.save(recall);
     }
 
     private PatientRecall loadScoped(UUID recallId, UUID hospitalId) {
         return recallRepository.findByIdAndHospital_Id(recallId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Recall not found with ID: " + recallId));
+            .orElseThrow(() -> new ResourceNotFoundException("recall.notFound", recallId));
     }
 
     private RecallResponseDTO toDto(PatientRecall recall, UUID hospitalId) {

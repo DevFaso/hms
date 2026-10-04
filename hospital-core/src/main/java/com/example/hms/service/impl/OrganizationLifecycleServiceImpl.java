@@ -23,6 +23,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.EnumSet;
@@ -68,6 +69,12 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
     private final AuditEventLogService auditEventLogService;
     private final OrganizationLifecycleStatusService lifecycleStatusService;
     private final MfaService mfaService;
+    /**
+     * The tenant-lifecycle clock: it stamps suspend/archive and writes
+     * {@code purgeScheduledFor}, which {@code TenantPurgeJob} compares against
+     * the same bean when it picks the orgs due for purge.
+     */
+    private final Clock clock;
 
     /**
      * When true, destructive transitions (suspend/archive/schedule-purge) require
@@ -107,7 +114,7 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
         // suspended tenant disappears from default org lists immediately,
         // not only from the JWT login path.
         org.setActive(false);
-        org.setSuspendedAt(Instant.now());
+        org.setSuspendedAt(Instant.now(clock));
         org.setSuspendedBy(currentActorId());
         org.setSuspensionReason(reason);
         organizationRepository.save(org);
@@ -149,7 +156,7 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
         // Same rationale as suspend — flip the legacy `active` flag so
         // archived tenants are also hidden from any default-visibility query.
         org.setActive(false);
-        org.setArchivedAt(Instant.now());
+        org.setArchivedAt(Instant.now(clock));
         org.setArchivedBy(currentActorId());
         org.setArchiveReason(reason);
         organizationRepository.save(org);
@@ -170,9 +177,9 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
         // otherwise. Only the per-call override on getPurgeScheduledFor() is optional.
         Instant scheduledFor = request.getPurgeScheduledFor() != null
             ? request.getPurgeScheduledFor()
-            : Instant.now().plus(DEFAULT_PURGE_GRACE_DAYS, ChronoUnit.DAYS);
+            : Instant.now(clock).plus(DEFAULT_PURGE_GRACE_DAYS, ChronoUnit.DAYS);
 
-        if (scheduledFor.isBefore(Instant.now())) {
+        if (scheduledFor.isBefore(Instant.now(clock))) {
             throw new BusinessRuleException("Purge cannot be scheduled in the past.");
         }
 
@@ -210,8 +217,7 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
 
     private Organization loadOrThrow(UUID organizationId) {
         return organizationRepository.findById(organizationId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Organization not found: " + organizationId));
+            .orElseThrow(() -> new ResourceNotFoundException("organization.notFound", organizationId));
     }
 
     private void requireTransition(Organization org, Set<OrganizationLifecycleState> allowed, String action) {

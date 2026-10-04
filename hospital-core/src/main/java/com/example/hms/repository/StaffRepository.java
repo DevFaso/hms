@@ -34,6 +34,9 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
 
     List<Staff> findByUserId(UUID userId);
 
+    /** Is any staff row linked to this account? Answered without loading (and decrypting) a Staff row. */
+    boolean existsByUserId(UUID userId);
+
     @Query("select s.licenseNumber from Staff s where s.user.id = :userId order by s.createdAt asc")
     Optional<String> findAnyLicenseByUserId(@Param("userId") UUID userId);
 

@@ -7,7 +7,7 @@ import { LabReleaseWorklistComponent } from './lab-release-worklist';
 import { LabResultResponse } from '../../services/lab.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
-import { RoleContextStubState, roleContextStub } from '../../testing/role-context.stub';
+import { RoleContextStub, roleContextStub } from '../../testing/role-context.stub';
 
 /**
  * The release worklist (B14).
@@ -22,7 +22,7 @@ describe('LabReleaseWorklistComponent', () => {
   let component: LabReleaseWorklistComponent;
   let httpMock: HttpTestingController;
   let toast: jasmine.SpyObj<ToastService>;
-  let scope: RoleContextStubState;
+  let scope: RoleContextStub;
 
   function result(overrides: Partial<LabResultResponse> = {}): LabResultResponse {
     return {
@@ -57,7 +57,7 @@ describe('LabReleaseWorklistComponent', () => {
   }
 
   function setup(roles: string[], superAdmin = false): void {
-    scope = { superAdmin, hospitalId: 'h-1', roles: [...roles] };
+    scope = roleContextStub({ superAdmin, hospitalId: 'h-1', roles });
     toast = jasmine.createSpyObj<ToastService>('ToastService', [
       'success',
       'error',
@@ -70,7 +70,7 @@ describe('LabReleaseWorklistComponent', () => {
       providers: [
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
-        { provide: RoleContextService, useValue: roleContextStub(scope) },
+        { provide: RoleContextService, useValue: scope },
         { provide: ToastService, useValue: toast },
       ],
     });
@@ -138,6 +138,38 @@ describe('LabReleaseWorklistComponent', () => {
     expect(cells.some((t) => t.includes('2:30'))).toBeTrue();
   });
 
+  it("tells an analyzer's preliminary from its final, and both from a typed result", () => {
+    // Every row here is unreleased, so `released` cannot tell them apart; the
+    // HL7 message id and OBX-11 can.
+    setup(['ROLE_LAB_SCIENTIST']);
+    fixture.detectChanges();
+    flushWorklist([
+      result({ id: 'prelim', sourceMessageControlId: 'MSG-1', observationResultStatus: 'P' }),
+      result({ id: 'final', sourceMessageControlId: 'MSG-2', observationResultStatus: 'F' }),
+      result({ id: 'odd', sourceMessageControlId: 'MSG-3', observationResultStatus: 'x' }),
+      result({ id: 'typed' }),
+    ]);
+
+    expect(host().querySelector('[data-testid="release-source-instrument-prelim"]')).not.toBeNull();
+    expect(host().querySelector('[data-testid="release-source-manual-typed"]')).not.toBeNull();
+    expect(host().querySelector('[data-testid="release-source-instrument-typed"]')).toBeNull();
+    expect(host().querySelector('[data-testid="release-row-prelim"]')?.textContent).toContain(
+      'MSG-1',
+    );
+    expect(host().querySelector('[data-testid="release-status-prelim"]')?.textContent?.trim()).toBe(
+      'LAB_RELEASE.STATUS_PRELIMINARY',
+    );
+    expect(host().querySelector('[data-testid="release-status-final"]')?.textContent?.trim()).toBe(
+      'LAB_RELEASE.STATUS_FINAL',
+    );
+    // A code the screen does not name is shown as a code, not guessed at.
+    expect(component.resultStatusKey(result({ observationResultStatus: 'x' }))).toBe(
+      'LAB_RELEASE.STATUS_OTHER',
+    );
+    // A typed row has no analyzer status to show.
+    expect(host().querySelector('[data-testid="release-status-typed"]')).toBeNull();
+  });
+
   it('withholds the release control from a role the release endpoint refuses', () => {
     // A technician and a quality manager are on the worklist's @PreAuthorize
     // but not on LabResultAuthority.RELEASE_ROLES: they read the queue and
@@ -174,7 +206,7 @@ describe('LabReleaseWorklistComponent', () => {
 
     expect(component.canReleaseResult(result())).toBeTrue();
 
-    scope.roles = ['ROLE_LAB_TECHNICIAN'];
+    scope.set({ roles: ['ROLE_LAB_TECHNICIAN'] });
 
     expect(component.canReleaseResult(result())).toBeFalse();
   });

@@ -9,6 +9,14 @@ import {
 } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
 
+/**
+ * The largest file the upload endpoint accepts: spring.servlet.multipart
+ * max-file-size is 10MB (the backend is being aligned on this one number).
+ * Checked here so a patient is told before sending the bytes, not after a
+ * rejected upload.
+ */
+export const MAX_PATIENT_DOCUMENT_BYTES = 10 * 1024 * 1024;
+
 const DOCUMENT_TYPES: { value: PatientDocumentType; labelKey: string }[] = [
   { value: 'LAB_RESULT', labelKey: 'PORTAL.DOCUMENTS.TYPE_LAB_RESULT' },
   { value: 'IMAGING_REPORT', labelKey: 'PORTAL.DOCUMENTS.TYPE_IMAGING_REPORT' },
@@ -45,6 +53,8 @@ export class MyDocumentsComponent implements OnInit {
 
   filterType = signal<PatientDocumentType | ''>('');
   selectedFile = signal<File | null>(null);
+  /** Set when the picked file is over MAX_PATIENT_DOCUMENT_BYTES; shown under the picker. */
+  fileTooLarge = signal(false);
   selectedDocumentType = signal<PatientDocumentType>('OTHER');
   collectionDate = signal('');
   notes = signal('');
@@ -63,7 +73,7 @@ export class MyDocumentsComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('PORTAL.DOCUMENTS.LOAD_FAILED');
+        this.toast.error(this.translate.instant('PORTAL.DOCUMENTS.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -75,13 +85,27 @@ export class MyDocumentsComponent implements OnInit {
 
   onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
-    this.selectedFile.set(input.files?.[0] ?? null);
+    const file = input.files?.[0] ?? null;
+    if (file && file.size > MAX_PATIENT_DOCUMENT_BYTES) {
+      // Refuse it here: clear the picker so the same file can be picked
+      // again after it is shrunk, and keep the upload button disabled.
+      this.fileTooLarge.set(true);
+      this.selectedFile.set(null);
+      input.value = '';
+      return;
+    }
+    this.fileTooLarge.set(false);
+    this.selectedFile.set(file);
   }
 
   uploadDocument(): void {
     const file = this.selectedFile();
     if (!file) {
-      this.toast.error('PORTAL.DOCUMENTS.FILE_REQUIRED');
+      this.toast.error(this.translate.instant('PORTAL.DOCUMENTS.FILE_REQUIRED'));
+      return;
+    }
+    if (file.size > MAX_PATIENT_DOCUMENT_BYTES) {
+      this.fileTooLarge.set(true);
       return;
     }
     this.uploading.set(true);
@@ -98,11 +122,11 @@ export class MyDocumentsComponent implements OnInit {
           this.totalElements.update((n) => n + 1);
           this.resetForm();
           this.uploading.set(false);
-          this.toast.success('PORTAL.DOCUMENTS.UPLOAD_SUCCESS');
+          this.toast.success(this.translate.instant('PORTAL.DOCUMENTS.UPLOAD_SUCCESS'));
         },
         error: () => {
           this.uploading.set(false);
-          this.toast.error('PORTAL.DOCUMENTS.UPLOAD_FAILED');
+          this.toast.error(this.translate.instant('PORTAL.DOCUMENTS.UPLOAD_FAILED'));
         },
       });
   }
@@ -129,7 +153,7 @@ export class MyDocumentsComponent implements OnInit {
       },
       error: () => {
         this.downloading.set(null);
-        this.toast.error('PORTAL.DOCUMENTS.DOWNLOAD_FAILED');
+        this.toast.error(this.translate.instant('PORTAL.DOCUMENTS.DOWNLOAD_FAILED'));
       },
     });
   }
@@ -142,11 +166,11 @@ export class MyDocumentsComponent implements OnInit {
         this.documents.update((list) => list.filter((d) => d.id !== docId));
         this.totalElements.update((n) => Math.max(n - 1, 0));
         this.deleting.set(null);
-        this.toast.success('PORTAL.DOCUMENTS.DELETE_SUCCESS');
+        this.toast.success(this.translate.instant('PORTAL.DOCUMENTS.DELETE_SUCCESS'));
       },
       error: () => {
         this.deleting.set(null);
-        this.toast.error('PORTAL.DOCUMENTS.DELETE_FAILED');
+        this.toast.error(this.translate.instant('PORTAL.DOCUMENTS.DELETE_FAILED'));
       },
     });
   }
@@ -157,6 +181,7 @@ export class MyDocumentsComponent implements OnInit {
 
   private resetForm(): void {
     this.selectedFile.set(null);
+    this.fileTooLarge.set(false);
     this.selectedDocumentType.set('OTHER');
     this.collectionDate.set('');
     this.notes.set('');

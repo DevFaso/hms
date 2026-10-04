@@ -50,7 +50,6 @@ public class WebhookEndpointService {
 
     static final int MAX_DELIVERY_PAGE = 200;
 
-    private static final String NOT_FOUND = "Webhook endpoint not found.";
     private static final String SECRET_PREFIX = "whsec_";
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -211,7 +210,7 @@ public class WebhookEndpointService {
     private WebhookEndpoint requireInTenant(UUID endpointId, UUID hospitalId) {
         return endpointRepository.findById(endpointId)
             .filter(e -> e.getHospital() != null && hospitalId.equals(e.getHospital().getId()))
-            .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException("webhook.endpoint.notFound", endpointId));
     }
 
     /**

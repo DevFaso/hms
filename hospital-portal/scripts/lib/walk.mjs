@@ -3,11 +3,8 @@ import { resolve } from 'node:path';
 
 /**
  * Every file under `dir` whose name ends in one of `extensions`, recursively.
- *
- * check-i18n-referenced-keys.mjs still has its own `readdirSync` + `statSync`
- * copy; folding it in belongs in the same pass that widens the lint glob over
- * scripts/, so for now this is the newer of two implementations rather than the
- * consolidation it ought to be. `withFileTypes` avoids a `statSync` per entry.
+ * The one walker every gate script shares; `withFileTypes` avoids a
+ * `statSync` per entry.
  */
 export function walk(dir, extensions = ['.html'], out = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {

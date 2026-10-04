@@ -102,7 +102,7 @@ class RegionPolicyServiceImplTest {
 
         assertThatThrownBy(() -> service.get(OrganizationRegion.OTHER))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("not seeded");
+            .hasFieldOrPropertyWithValue("messageKey", "regionPolicy.notSeeded");
     }
 
     @Test

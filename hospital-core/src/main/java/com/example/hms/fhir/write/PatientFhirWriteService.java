@@ -54,6 +54,13 @@ import java.util.UUID;
  * unknown id and another tenant's id are indistinguishable (the rule HL7
  * settled in #715/#738).
  *
+ * <p>Both return the FHIR resource, mapped before the transaction ends: the
+ * mapper walks the LAZY {@code Patient.hospitalRegistrations}, which neither
+ * operation loads (and a PUT that changes nothing leaves even the patient an
+ * uninitialised proxy). Mapped by the provider after the commit, both
+ * answered 500 with the write already done. The resource carries the MRN of
+ * the write's hospital only, as a read does.
+ *
  * <p>Feature-flagged via {@link FhirWriteProperties#isEnabled()};
  * disabled state surfaces as {@code 405 Method Not Allowed} from the
  * provider.
@@ -118,16 +125,22 @@ public class PatientFhirWriteService {
      * unscoped, as before this gate; see {@link #resolveWriteScope}.
      */
     @Transactional
-    public Patient update(UUID patientId, org.hl7.fhir.r4.model.Patient fhirIn) {
+    public org.hl7.fhir.r4.model.Patient update(UUID patientId, org.hl7.fhir.r4.model.Patient fhirIn) {
         ensureEnabled();
         UUID hospitalId = resolveWriteScope();
         Patient existing = findWritable(patientId, hospitalId)
             .orElseThrow(() -> patientNotFound(patientId));
         patientMapper.applyFhirUpdates(existing, fhirIn);
         Patient saved = patientRepository.save(existing);
+        // Flushed before the audit: the audit commits on its own
+        // (REQUIRES_NEW), so a flush failure after it (a length, a constraint)
+        // would leave a SUCCESS row for an update that rolled back. And before
+        // mapping, so the resource carries what the row now holds: @PreUpdate
+        // lower-cases the email and stamps updatedAt only at flush.
+        patientRepository.flush();
         emitAudit(AuditEventType.PATIENT_UPDATE, saved,
             "FHIR PUT applied contact/address updates to Patient/" + saved.getId());
-        return saved;
+        return toFhir(saved, hospitalId);
     }
 
     /**
@@ -140,7 +153,9 @@ public class PatientFhirWriteService {
      * search parameter is rejected as 422.
      */
     @Transactional(readOnly = true)
-    public Patient conditionalCreate(String ifNoneExistRaw, org.hl7.fhir.r4.model.Patient fhirIn) {
+    public org.hl7.fhir.r4.model.Patient conditionalCreate(
+        String ifNoneExistRaw, org.hl7.fhir.r4.model.Patient fhirIn
+    ) {
         ensureEnabled();
         // Request-shape validation reads no data, so it cannot be an existence
         // oracle and keeps its documented 422 answers. The scope is resolved
@@ -169,10 +184,9 @@ public class PatientFhirWriteService {
         // The hospital in the identifier system comes from the REQUEST. Only the
         // caller's own active hospital may be searched: another hospital's MRN
         // space answers exactly like an MRN that matches nothing, never with the
-        // other hospital's patient. A verified super-admin in global view
-        // (null) may name any hospital.
+        // other hospital's patient.
         List<PatientHospitalRegistration> matches =
-            callerHospitalId == null || callerHospitalId.equals(mrn.hospitalId())
+            callerHospitalId.equals(mrn.hospitalId())
                 ? registrationRepository.findActiveByHospitalIdAndIdentifier(mrn.hospitalId(), mrn.mrn())
                 : List.of();
 
@@ -211,32 +225,34 @@ public class PatientFhirWriteService {
         emitAudit(AuditEventType.PATIENT_ACCESS, resolved,
             "FHIR conditional-create matched an active MRN — returned existing Patient/"
                 + resolved.getId());
-        return resolved;
+        return toFhir(resolved, callerHospitalId);
     }
 
     /**
-     * The hospital this write is scoped to, or {@code null} for a verified
-     * super-admin in global view.
-     *
-     * <p>Resolved through {@code RoleValidator.requireActiveHospitalId()}, not
-     * the raw {@code HospitalContext}: for a super-admin with no
-     * {@code X-Hospital-Id} the raw context still carries a JWT-derived home
-     * hospital, which would silently scope a global-view super-admin to it (and
-     * refuse one with no home hospital outright). A null is honoured as global
-     * view only when {@code isSuperAdminFromJwtClaim()} agrees - the precedent
-     * of #746 and the pharmacy services; the authorities alone are not enough.
-     * Anyone else with no hospital gets a 403 that names no identifier.
+     * The answer's resource, mapped inside the write transaction, with the MRN
+     * of the hospital the write is scoped to only.
+     */
+    private org.hl7.fhir.r4.model.Patient toFhir(Patient patient, UUID writeScope) {
+        return patientMapper.toFhir(patient, writeScope);
+    }
+
+    /**
+     * The hospital a FHIR Patient write acts at: the request's PINNED hospital
+     * from the one tenant resolver ({@code RoleValidator.requireActiveHospitalId()}).
+     * A super-admin in global view is refused like anyone with no hospital:
+     * every write needs one hospital (design Q9, option A; the FhirTenancy
+     * must-pin rule). The 403 names no identifier.
      */
     private UUID resolveWriteScope() {
         UUID hospitalId;
         try {
             hospitalId = roleValidator.requireActiveHospitalId();
         } catch (BusinessException ex) {
-            // Nothing resolved for a non-super-admin: HAPI would render the
-            // BusinessException as a 500. It is the "pin a hospital" answer.
+            // Nothing resolved: HAPI would render the BusinessException as a
+            // 500. It is the "pin a hospital" answer.
             throw noHospitalScope();
         }
-        if (hospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
+        if (hospitalId == null) {
             throw noHospitalScope();
         }
         return hospitalId;
@@ -254,13 +270,9 @@ public class PatientFhirWriteService {
 
     /**
      * The patient, only when ACTIVELY registered at {@code hospitalId}; one
-     * query whether the id is missing, foreign or discharged. For a verified
-     * super-admin in global view ({@code null}), any patient.
+     * query whether the id is missing, foreign or discharged.
      */
     private Optional<Patient> findWritable(UUID patientId, UUID hospitalId) {
-        if (hospitalId == null) {
-            return patientRepository.findById(patientId);
-        }
         return registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId)
             .map(PatientHospitalRegistration::getPatient);
     }

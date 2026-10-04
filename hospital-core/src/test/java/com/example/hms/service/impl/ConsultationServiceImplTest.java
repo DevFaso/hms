@@ -1,5 +1,7 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.service.PatientSubjectReadGuard;
 import java.time.Clock;
 import com.example.hms.enums.ConsultationStatus;
 import com.example.hms.enums.ConsultationUrgency;
@@ -40,6 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -63,7 +66,19 @@ class ConsultationServiceImplTest {
     /** Real system clock — the production bean is Clock.systemDefaultZone(). */
     @Spy private Clock clock = Clock.systemDefaultZone();
 
+    @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
+
     @InjectMocks private ConsultationServiceImpl service;
+
+    /**
+     * The real subject guard. These tests set no authentication, so it waves
+     * every read through, as it does for any caller that is not patient-only;
+     * the patient cases are in PatientSubjectReadGuardTest and the
+     * per-service ownership tests.
+     */
+    @Spy
+    private PatientSubjectReadGuard subjectReadGuard =
+        new PatientSubjectReadGuard(mock(ControllerAuthUtils.class), mock(PatientRepository.class));
 
     private UUID patientId, hospitalId, staffId, consultationId;
     private Patient patient;
@@ -72,6 +87,11 @@ class ConsultationServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // Consultants in these fixtures hold an active assignment at the
+        // consultation's hospital unless a test says otherwise.
+        org.mockito.Mockito.lenient().when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+            .thenReturn(java.util.Optional.of(new com.example.hms.model.UserRoleHospitalAssignment()));
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
         staffId = UUID.randomUUID();
@@ -115,6 +135,7 @@ class ConsultationServiceImplTest {
     @Test void createConsultation_patientNotFound() {
         ConsultationRequestDTO r = new ConsultationRequestDTO();
         r.setPatientId(patientId); r.setHospitalId(hospitalId); r.setUrgency(ConsultationUrgency.URGENT);
+        when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.createConsultation(r, staffId)).isInstanceOf(ResourceNotFoundException.class);
     }

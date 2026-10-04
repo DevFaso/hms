@@ -46,23 +46,23 @@
  *     ACTIVE / COMPLETED / DISCONTINUED / ON_HOLD from a PrescriptionStatus, so
  *     no enum holds that vocabulary. Those domains carry a `reason` naming the
  *     deriving method.
- *   - a field rendered RAW, with no pipe at all. See the standing-debt bullet
- *     in tasklist.md; this gate checks piped domains, not unpiped fields.
+ *   - a field rendered RAW, with no pipe at all. check-i18n-raw-enums.mjs
+ *     covers that half; this gate checks piped domains, not unpiped fields.
  *
- * Pure Node, no dependencies — same shape as the sibling gates.
+ * Node plus the `typescript` devDependency, which reads inline templates.
  *
  * Usage:
  *   node scripts/check-i18n-enum-coverage.mjs
  *   node scripts/check-i18n-enum-coverage.mjs --report-only   # never exit non-zero
  */
-import { readFileSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { walk } from './lib/walk.mjs';
+import { templatesIn } from './lib/inline-templates.mjs';
 import { javaEnumConstants, groupOf } from './lib/java-enum.mjs';
 import { validateDeclaration, enumNameOf } from './lib/enum-domains.mjs';
-import { roleNamesFrom, READABLE } from './lib/role-registry.mjs';
+import { roleNamesFrom, roleSourcesFrom } from './lib/role-registry.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const PORTAL_DIR = resolve(SCRIPT_DIR, '..');
@@ -88,14 +88,12 @@ function main() {
 
   /** domain -> the templates that pipe it, so a failure names somewhere to go. */
   const used = new Map();
-  // .html only. Scanning .ts for an inline `template:` was tried twice and
-  // withdrawn: raw, it recorded the pipe's own TSDoc examples as call sites;
-  // blanked, it erased the single-quoted domain argument the regex needs and
-  // matched nothing at all. No component in src/app carries an `enumLabel:` in
-  // an inline template today, so the blind spot is real but empty — it is
-  // recorded in tasklist.md rather than guarded by a check that does not work.
-  for (const file of walk(SRC)) {
-    const text = readFileSync(file, 'utf8');
+  // Every `.html` template and every inline `template:` of a `@Component`,
+  // the latter found by the TypeScript parser (lib/inline-templates.mjs) — a
+  // regex over the whole `.ts` file counted the pipe's own TSDoc examples as
+  // call sites, and blanking comments by hand lost its place at the first
+  // apostrophe in French markup.
+  for (const { file, text } of templatesIn(SRC)) {
     for (const [, domain] of text.matchAll(PIPE_CALL)) {
       if (!used.has(domain)) used.set(domain, new Set());
       used.get(domain).add(relative(PORTAL_DIR, file).replaceAll('\\', '/'));
@@ -142,37 +140,20 @@ function main() {
       // Not a Java type: the vocabulary is `security.roles`, read out of the
       // migrations that create it. See lib/role-registry.mjs for why DELETEs
       // are not subtracted and why the names come back bare.
-      const sources = [];
-      for (const path of entry.roles) {
-        const full = resolve(REPO_DIR, path);
-        if (!existsSync(full)) {
-          errors.push(`MISSING ROLE SOURCE ${domain} -> ${path} does not exist.`);
-          broken = true;
-          continue;
-        }
-        const isDir = statSync(full).isDirectory();
-        // An extensionless regular file passes the declaration check as though
-        // it were a folder, reaches the parser and falls out of its extension
-        // switch with no message — and UNPARSEABLE ROLE REGISTRY only fires on
-        // a grand total of zero, which 160 migrations prevent forever.
-        if (!isDir && !READABLE.some((ext) => full.endsWith(ext))) {
-          errors.push(
-            `UNREADABLE ROLE SOURCE ${domain} -> ${path} is a file the registry ` +
-              `parser cannot read (${READABLE.join(', ')}).`,
-          );
-          broken = true;
-          continue;
-        }
-        for (const file of isDir ? walk(full, READABLE) : [full]) {
-          sources.push({ path: file, text: readFileSync(file, 'utf8') });
-        }
-      }
-      if (!broken) {
+      const { groups, errors: sourceErrors } = roleSourcesFrom(entry.roles, REPO_DIR);
+      for (const message of sourceErrors) errors.push(`${domain}: ${message}`);
+      broken = sourceErrors.length > 0;
+      // Every declared path accounts for itself. A check on the grand total
+      // only fires at zero, which 160 migrations prevent forever — so a
+      // declared folder holding no .sql/.java, or a seeder whose literals
+      // moved, would drop out in silence.
+      for (const { path, sources } of broken ? [] : groups) {
         const found = roleNamesFrom(sources);
         if (found.length === 0) {
           errors.push(
-            `UNPARSEABLE ROLE REGISTRY ${domain} -> ${entry.roles.join(', ')} ` +
-              `produced no role names; the INSERTs moved or the parser broke.`,
+            `UNPARSEABLE ROLE SOURCE ${domain} -> ${path} (${sources.length} file(s)) ` +
+              `produced no role names; the INSERTs moved, the path is wrong, or the ` +
+              `parser broke.`,
           );
           broken = true;
         }

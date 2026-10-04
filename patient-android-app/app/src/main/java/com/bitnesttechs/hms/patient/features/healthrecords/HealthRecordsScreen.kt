@@ -78,11 +78,12 @@ import com.bitnesttechs.hms.patient.core.models.CurrentMedicationDto
 import com.bitnesttechs.hms.patient.core.models.HealthSummaryDto
 import com.bitnesttechs.hms.patient.core.models.ImmunizationDto
 import com.bitnesttechs.hms.patient.core.models.LabResultDto
+import com.bitnesttechs.hms.patient.core.models.PatientGender
 import com.bitnesttechs.hms.patient.core.models.ReferralDto
 import com.bitnesttechs.hms.patient.core.models.TreatmentPlanDto
 import com.bitnesttechs.hms.patient.core.models.VitalSignDto
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
-import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
+import com.bitnesttechs.hms.patient.ui.theme.BrandSoft
 import com.bitnesttechs.hms.patient.ui.theme.onBadge
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -113,7 +114,7 @@ fun HealthRecordsScreen(onBack: () -> Unit = {}, viewModel: HealthRecordsViewMod
                         Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue, titleContentColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandPrimary, titleContentColor = Color.White)
             )
         }
     ) { padding ->
@@ -131,7 +132,7 @@ fun HealthRecordsScreen(onBack: () -> Unit = {}, viewModel: HealthRecordsViewMod
 
             if (isLoading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = BrandBlue)
+                    CircularProgressIndicator(color = BrandPrimary)
                 }
                 return@Column
             }
@@ -155,20 +156,23 @@ private fun PatientIdentityHeader(summary: HealthSummaryDto?) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(16.dp),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = BrandLightBlue)
+        colors = CardDefaults.cardColors(containerColor = BrandSoft)
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
                 profile?.fullName?.takeIf { it.isNotBlank() } ?: stringResource(R.string.my_chart),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = BrandBlue
+                color = BrandPrimary
             )
             val mrn = profile?.medicalRecordNumber ?: profile?.mrn
             if (!mrn.isNullOrBlank()) {
                 Text(stringResource(R.string.mrn_prefix, mrn), style = MaterialTheme.typography.bodySmall)
             }
-            val details = listOfNotNull(profile?.dateOfBirth?.let { stringResource(R.string.dob_prefix, it.take(10)) }, profile?.gender, profile?.bloodType)
+            val gender = profile?.gender?.takeIf { it.isNotBlank() }?.let { raw ->
+                PatientGender.fromWire(raw)?.let { stringResource(it.labelRes) } ?: raw
+            }
+            val details = listOfNotNull(profile?.dateOfBirth?.let { stringResource(R.string.dob_prefix, it.take(10)) }, gender, profile?.bloodType)
             if (details.isNotEmpty()) {
                 Text(details.joinToString("  |  "), style = MaterialTheme.typography.bodySmall)
             }
@@ -342,25 +346,32 @@ private fun TreatmentPlansTab(treatmentPlans: List<TreatmentPlanDto>) {
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         lazyItems(treatmentPlans, key = { it.id }) { plan ->
+            val status = stringResource(plan.statusEnum.labelRes)
             ExpandableClinicalCard(
                 icon = Icons.Default.Assignment,
-                sourceParts = listOfNotNull(plan.createdBy?.let { stringResource(R.string.created_by_with_value, it) }),
+                sourceParts = listOfNotNull(
+                    plan.authorStaffName?.let { stringResource(R.string.created_by_with_value, it) },
+                    plan.hospitalName
+                ),
                 details = {
                     DetailGrid(
-                        DetailItem(stringResource(R.string.status), plan.status, Icons.Default.Warning),
-                        DetailItem(stringResource(R.string.start), plan.startDate?.take(10), Icons.Default.CalendarMonth),
-                        DetailItem(stringResource(R.string.end), plan.endDate?.take(10), Icons.Default.CalendarMonth),
-                        DetailItem(stringResource(R.string.created_by), plan.createdBy, Icons.Default.Person)
+                        DetailItem(stringResource(R.string.status), status, Icons.Default.Warning),
+                        DetailItem(stringResource(R.string.start), plan.timelineStartDate?.take(10), Icons.Default.CalendarMonth),
+                        DetailItem(stringResource(R.string.treatment_plan_review_date), plan.timelineReviewDate?.take(10), Icons.Default.CalendarMonth),
+                        DetailItem(stringResource(R.string.created_by), plan.authorStaffName, Icons.Default.Person)
                     )
-                    DetailNote(stringResource(R.string.description), plan.description)
-                    plan.goals?.takeIf { it.isNotEmpty() }?.let { goals ->
+                    plan.therapeuticGoals?.takeIf { it.isNotEmpty() }?.let { goals ->
                         DetailNote(stringResource(R.string.goals), goals.joinToString("\n"))
                     }
+                    DetailNote(stringResource(R.string.treatment_plan_timeline), plan.timelineSummary)
+                    DetailNote(stringResource(R.string.treatment_plan_follow_up), plan.followUpSummary)
                 }
             ) {
-                Text(plan.title ?: stringResource(R.string.treatment_plan), fontWeight = FontWeight.SemiBold)
-                plan.description?.let { SecondaryText(it) }
-                FlowText(listOfNotNull(plan.status, plan.startDate?.take(10), plan.endDate?.take(10)))
+                Text(
+                    plan.problemStatement?.takeIf { it.isNotBlank() } ?: stringResource(R.string.treatment_plan),
+                    fontWeight = FontWeight.SemiBold
+                )
+                FlowText(listOfNotNull(status, plan.timelineStartDate?.take(10), plan.timelineReviewDate?.take(10)))
             }
         }
         item { Spacer(Modifier.height(16.dp)) }
@@ -373,30 +384,37 @@ private fun ReferralsTab(referrals: List<ReferralDto>) {
         EmptyState(stringResource(R.string.no_referrals))
         return
     }
-    val context = LocalContext.current
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         lazyItems(referrals, key = { it.id }) { referral ->
-            val specialty = LocaleHelper.translateProviderDescriptor(context, referral.specialty)
+            val status = stringResource(referral.statusEnum.labelRes)
+            val type = referral.typeEnum?.let { stringResource(it.labelRes) }
+            val specialty = referral.specialtyEnum?.let { stringResource(it.labelRes) }
+            val urgency = referral.urgencyEnum?.let { stringResource(it.labelRes) }
             ExpandableClinicalCard(
                 icon = Icons.Default.Description,
-                sourceParts = listOfNotNull(referral.referredTo?.let { context.getString(R.string.referred_to) + " " + it }, referral.specialistName),
+                sourceParts = listOfNotNull(
+                    referral.destination?.let { stringResource(R.string.referred_to) + " " + it },
+                    referral.referringProviderName?.let { stringResource(R.string.referred_by_with_value, it) }
+                ),
                 details = {
                     DetailGrid(
-                        DetailItem(stringResource(R.string.type_label), referral.referralType, Icons.Default.Description),
-                        DetailItem(stringResource(R.string.status), referral.status, Icons.Default.Warning),
-                        DetailItem(stringResource(R.string.specialist), referral.specialistName, Icons.Default.Person),
+                        DetailItem(stringResource(R.string.type_label), type, Icons.Default.Description),
+                        DetailItem(stringResource(R.string.status), status, Icons.Default.Warning),
+                        DetailItem(stringResource(R.string.referral_urgency), urgency, Icons.Default.Warning),
+                        DetailItem(stringResource(R.string.specialist), referral.receivingProviderName, Icons.Default.Person),
                         DetailItem(stringResource(R.string.specialty), specialty, Icons.Default.MedicalInformation),
-                        DetailItem(stringResource(R.string.referred_to), referral.referredTo, Icons.Default.LocalHospital),
-                        DetailItem(stringResource(R.string.date_label), referral.referralDate?.take(10), Icons.Default.CalendarMonth)
+                        DetailItem(stringResource(R.string.referred_to), referral.destination, Icons.Default.LocalHospital),
+                        DetailItem(stringResource(R.string.date_label), referral.submittedAt?.take(10), Icons.Default.CalendarMonth),
+                        DetailItem(stringResource(R.string.referral_appointment), referral.scheduledAppointmentAt?.take(10), Icons.Default.CalendarMonth)
                     )
-                    DetailNote(stringResource(R.string.reason), referral.reason)
-                    DetailNote(stringResource(R.string.notes), referral.notes)
+                    DetailNote(stringResource(R.string.reason), referral.referralReason)
+                    DetailNote(stringResource(R.string.referral_appointment_location), referral.appointmentLocation)
                 }
             ) {
-                Text(referral.referralType ?: stringResource(R.string.referral), fontWeight = FontWeight.SemiBold)
-                FlowText(listOfNotNull(referral.specialistName, specialty, referral.status))
-                referral.reason?.let { SecondaryText(it) }
-                referral.referralDate?.let { SecondaryText(it.take(10)) }
+                Text(type ?: stringResource(R.string.referral), fontWeight = FontWeight.SemiBold)
+                FlowText(listOfNotNull(referral.receivingProviderName, specialty, status))
+                referral.referralReason?.let { SecondaryText(it) }
+                referral.submittedAt?.let { SecondaryText(it.take(10)) }
             }
         }
         item { Spacer(Modifier.height(16.dp)) }
@@ -423,9 +441,9 @@ private fun ClinicalCard(icon: ImageVector, content: @Composable ColumnScope.() 
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Surface(shape = RoundedCornerShape(8.dp), color = BrandLightBlue, modifier = Modifier.size(40.dp)) {
+            Surface(shape = RoundedCornerShape(8.dp), color = BrandSoft, modifier = Modifier.size(40.dp)) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, null, tint = BrandBlue, modifier = Modifier.size(20.dp))
+                    Icon(icon, null, tint = BrandPrimary, modifier = Modifier.size(20.dp))
                 }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp), content = content)
@@ -455,9 +473,9 @@ private fun ExpandableClinicalCard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.Top
             ) {
-                Surface(shape = RoundedCornerShape(8.dp), color = BrandLightBlue, modifier = Modifier.size(40.dp)) {
+                Surface(shape = RoundedCornerShape(8.dp), color = BrandSoft, modifier = Modifier.size(40.dp)) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(icon, null, tint = BrandBlue, modifier = Modifier.size(20.dp))
+                        Icon(icon, null, tint = BrandPrimary, modifier = Modifier.size(20.dp))
                     }
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -498,12 +516,12 @@ private fun FlowText(values: List<String>) {
 private fun SourceText(values: List<String>) {
     val text = values.filter { it.isNotBlank() }.distinct().joinToString("  |  ")
     if (text.isNotBlank()) {
-        Surface(shape = RoundedCornerShape(6.dp), color = BrandLightBlue) {
+        Surface(shape = RoundedCornerShape(6.dp), color = BrandSoft) {
             Text(
                 stringResource(R.string.source_with_value, text),
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                 style = MaterialTheme.typography.labelSmall,
-                color = BrandBlue,
+                color = BrandPrimary,
                 fontWeight = FontWeight.Medium
             )
         }
@@ -539,7 +557,7 @@ private fun DetailGrid(vararg items: DetailItem) {
 
 @Composable
 private fun DetailTile(item: DetailItem) {
-    Surface(shape = RoundedCornerShape(8.dp), color = BrandLightBlue.copy(alpha = 0.55f)) {
+    Surface(shape = RoundedCornerShape(8.dp), color = BrandSoft.copy(alpha = 0.55f)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(8.dp),
             horizontalArrangement = Arrangement.spacedBy(7.dp),
@@ -547,7 +565,7 @@ private fun DetailTile(item: DetailItem) {
         ) {
             Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.surface, modifier = Modifier.size(28.dp)) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(item.icon, null, tint = BrandBlue, modifier = Modifier.size(16.dp))
+                    Icon(item.icon, null, tint = BrandPrimary, modifier = Modifier.size(16.dp))
                 }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -567,7 +585,7 @@ private fun DetailNote(label: String, value: String?) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.Top
         ) {
-            Icon(Icons.Default.Description, null, tint = BrandBlue, modifier = Modifier.size(18.dp))
+            Icon(Icons.Default.Description, null, tint = BrandPrimary, modifier = Modifier.size(18.dp))
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)

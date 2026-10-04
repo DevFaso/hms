@@ -21,18 +21,13 @@ import com.example.hms.payload.dto.CriticalValueReadBackRequestDTO;
 import com.example.hms.payload.dto.LabOrderRequestDTO;
 import com.example.hms.payload.dto.LabResultRequestDTO;
 import com.example.hms.payload.dto.LabSpecimenRequestDTO;
-import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.repository.HospitalRepository;
-import com.example.hms.repository.InstrumentOutboxRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabResultRepository;
-import com.example.hms.repository.LabSpecimenRepository;
 import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.NotificationRepository;
 import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
-import com.example.hms.repository.PatientProblemHistoryRepository;
-import com.example.hms.repository.PatientProblemRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.StaffRepository;
@@ -46,6 +41,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -109,6 +105,7 @@ class LabOrderEndToEndIT extends BaseIT {
 
     private final AtomicInteger sequence = new AtomicInteger();
 
+    @Autowired private ApplicationContext applicationContext;
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
     @Autowired private OrganizationRepository organizationRepository;
@@ -119,15 +116,10 @@ class LabOrderEndToEndIT extends BaseIT {
     @Autowired private StaffRepository staffRepository;
     @Autowired private PatientRepository patientRepository;
     @Autowired private PatientHospitalRegistrationRepository registrationRepository;
-    @Autowired private PatientProblemRepository patientProblemRepository;
-    @Autowired private PatientProblemHistoryRepository patientProblemHistoryRepository;
     @Autowired private LabTestDefinitionRepository labTestDefinitionRepository;
     @Autowired private LabOrderRepository labOrderRepository;
-    @Autowired private LabSpecimenRepository labSpecimenRepository;
     @Autowired private LabResultRepository labResultRepository;
-    @Autowired private InstrumentOutboxRepository instrumentOutboxRepository;
     @Autowired private NotificationRepository notificationRepository;
-    @Autowired private AuditEventLogRepository auditEventLogRepository;
 
     private Organization organization;
     private Hospital hospital;
@@ -441,26 +433,7 @@ class LabOrderEndToEndIT extends BaseIT {
     // ── seeding ──────────────────────────────────────────────────────────
 
     private void wipe() {
-        auditEventLogRepository.deleteAllInBatch();
-        notificationRepository.deleteAll();
-        instrumentOutboxRepository.deleteAll();
-        labResultRepository.deleteAll();
-        labSpecimenRepository.deleteAll();
-        labOrderRepository.deleteAll();
-        labTestDefinitionRepository.deleteAll();
-        registrationRepository.deleteAll();
-        // patient_problems (and their history) reference staff: a sibling IT
-        // that records a diagnosis leaves rows here, and deleting staff under
-        // them fails on fk_problem_staff. Children first.
-        patientProblemHistoryRepository.deleteAllInBatch();
-        patientProblemRepository.deleteAllInBatch();
-        patientRepository.deleteAll();
-        staffRepository.deleteAll();
-        assignmentRepository.deleteAll();
-        userRepository.deleteAll();
-        roleRepository.deleteAll();
-        hospitalRepository.deleteAll();
-        organizationRepository.deleteAll();
+        SharedClinicalRowsCleanup.deleteAll(applicationContext);
     }
 
     private Hospital saveHospital(String name) {

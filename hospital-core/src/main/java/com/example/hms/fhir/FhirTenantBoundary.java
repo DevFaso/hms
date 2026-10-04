@@ -2,10 +2,11 @@ package com.example.hms.fhir;
 
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,7 +15,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -86,8 +86,6 @@ public class FhirTenantBoundary {
     /** {@code $export}: the hospital admin its service admits (a super-admin is global). */
     static final Set<String> EXPORT_ROLE_CODES = Set.of("HOSPITAL_ADMIN");
 
-    /** Keycloak's per-hospital roles: {@code "<ROLE>@<hospital-uuid>"} entries (KeycloakHospitalContextResolver). */
-    static final String CLAIM_ROLE_ASSIGNMENTS = "role_assignments";
     private static final String ROLE_PREFIX = "ROLE_";
 
     private static final int UUID_LENGTH = 36;
@@ -140,29 +138,23 @@ public class FhirTenantBoundary {
     }
 
     /**
-     * The hospital a FHIR request is bounded to, taken from the authenticated
-     * principal — never from the request alone. {@code X-Hospital-Id} only
-     * SELECTS among the hospitals the principal already holds:
-     * {@code HospitalContextRequestOverrides} accepts the header for any
-     * hospital when the principal has no permitted hospital at all, so a
-     * header-chosen hospital is honoured here only when it is one of the
-     * principal's own, or when the principal is a super-admin (who must pin
-     * one — {@link HospitalContext#pinnedHospitalId()} is null in global view).
+     * The hospital a FHIR request is bounded to: the request's scope from the
+     * one tenant resolver ({@link ActingScopeResolver}), when it is pinned. The
+     * producers only pin a hospital the principal holds live, or one a verified
+     * super-admin named; {@code X-Hospital-Id} naming any other hospital was
+     * refused with 403 before this ran. A context built by hand (a test, a
+     * worker thread) is held to the same rule here. A super-admin in global
+     * view, a caller holding several hospitals who named none and a caller
+     * holding none are not bound.
      *
      * @return the bound hospital, or {@code null} when the request has none
      */
     public static UUID boundHospital(HospitalContext context) {
-        if (context == null) {
+        if (context == null || !(ActingScopeResolver.scopeOf(context) instanceof ActingScope.Pinned pinned)) {
             return null;
         }
-        UUID pinned = context.pinnedHospitalId();
-        if (pinned == null) {
-            return null;
-        }
-        if (context.isSuperAdmin()) {
-            return pinned;
-        }
-        return context.getPermittedHospitalIds().contains(pinned) ? pinned : null;
+        UUID hospitalId = pinned.hospitalId();
+        return context.isSuperAdmin() || context.getPermittedHospitalIds().contains(hospitalId) ? hospitalId : null;
     }
 
     /**
@@ -171,14 +163,11 @@ public class FhirTenantBoundary {
      * <p>Spring Security's authorities are the union of the caller's roles at
      * every hospital, so a DOCTOR at A who is a RECEPTIONIST at B passes any
      * path matcher while acting at B. This asks about the one hospital the
-     * request is bound to, from the principal:
-     * <ul>
-     *   <li>a super-admin is global: true;</li>
-     *   <li>a Keycloak token: its {@code role_assignments} claim, the
-     *       {@code ROLE@hospital} pairs the realm issued;</li>
-     *   <li>an HMS token: the LIVE active assignments of the user at that
-     *       hospital, so a role revoked after sign-in stops counting at once.</li>
-     * </ul>
+     * request is bound to, from the LIVE active assignments of the principal's
+     * local account, on both auth paths (the Keycloak {@code role_assignments}
+     * claim is no longer read: a role revoked in HMS stops counting on the next
+     * request, not when the realm attributes are rewritten). A verified
+     * super-admin is global: true. A principal with no local account: false.
      * Codes compare bare and upper-case: {@code ROLE_DOCTOR} and {@code DOCTOR}
      * are the same role, as {@code RoleValidator} treats them.
      */
@@ -191,13 +180,6 @@ public class FhirTenantBoundary {
         if (context.isSuperAdmin()) {
             return true;
         }
-        if (authentication instanceof JwtAuthenticationToken jwt) {
-            Object claim = jwt.getToken().getClaim(CLAIM_ROLE_ASSIGNMENTS);
-            // Set.of(...).contains(null) throws: an entry for another hospital maps to null.
-            return claim instanceof Collection<?> entries && entries.stream()
-                .map(entry -> roleAt(entry, hospitalId))
-                .anyMatch(role -> role != null && roleCodes.contains(role));
-        }
         UUID userId = context.getPrincipalUserId();
         if (userId == null) {
             return false;
@@ -208,22 +190,6 @@ public class FhirTenantBoundary {
             stored.add(ROLE_PREFIX + code);
         }
         return assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(userId, hospitalId, stored);
-    }
-
-    /** The bare role of a {@code "ROLE@hospital"} entry naming {@code hospitalId}, else {@code null}. */
-    private static String roleAt(Object entry, UUID hospitalId) {
-        if (entry == null) {
-            return null;
-        }
-        String value = entry.toString().trim();
-        // indexOf, as KeycloakHospitalContextResolver parses the same claim:
-        // the two must agree on which hospital an entry names.
-        int at = value.indexOf('@');
-        if (at <= 0 || !hospitalId.toString().equalsIgnoreCase(value.substring(at + 1).trim())) {
-            return null;
-        }
-        String role = value.substring(0, at).trim().toUpperCase(Locale.ROOT);
-        return role.startsWith(ROLE_PREFIX) ? role.substring(ROLE_PREFIX.length()) : role;
     }
 
     /** Is the resource {@code resourceType/idPart} visible at {@code hospitalId}? */

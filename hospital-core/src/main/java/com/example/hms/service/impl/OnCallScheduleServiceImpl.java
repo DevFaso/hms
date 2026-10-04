@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -30,6 +31,12 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
     private final StaffRepository staffRepository;
     private final DepartmentRepository departmentRepository;
     private final RoleValidator roleValidator;
+    /**
+     * The rota clock: "currently on call" and the default listing window.
+     * {@code ClinicalDashboardServiceImpl.getOnCallStatus} asks the same
+     * question ({@code findActiveByStaffIdAt}) with the same bean.
+     */
+    private final Clock clock;
 
     @Override
     @Transactional(readOnly = true)
@@ -38,7 +45,7 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
         if (hospitalId == null) {
             throw new BusinessException("An active hospital is required to read the on-call rota.");
         }
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = OffsetDateTime.now(clock);
         OffsetDateTime start = from != null ? from : now.minusDays(1);
         OffsetDateTime end = to != null ? to : now.plusDays(7);
         if (end.isBefore(start)) {
@@ -53,7 +60,7 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
     @Transactional(readOnly = true)
     public List<OnCallScheduleResponseDTO> listForStaff(UUID staffId) {
         requireStaffInTenant(staffId);
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = OffsetDateTime.now(clock);
         return onCallRepository.findByStaff_IdOrderByStartTimeDesc(staffId).stream()
             .map(entry -> toResponse(entry, now))
             .toList();
@@ -73,7 +80,7 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
         entry.setEndTime(request.getEndTime());
         entry.setNotes(request.getNotes());
 
-        return toResponse(onCallRepository.save(entry), OffsetDateTime.now());
+        return toResponse(onCallRepository.save(entry), OffsetDateTime.now(clock));
     }
 
     @Override
@@ -90,7 +97,7 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
         entry.setEndTime(request.getEndTime());
         entry.setNotes(request.getNotes());
 
-        return toResponse(onCallRepository.save(entry), OffsetDateTime.now());
+        return toResponse(onCallRepository.save(entry), OffsetDateTime.now(clock));
     }
 
     @Override
@@ -103,12 +110,12 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
 
     private OnCallSchedule loadScoped(UUID id) {
         OnCallSchedule entry = onCallRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("On-call entry not found with ID: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException("onCall.entry.notFound", id));
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null && (entry.getStaff() == null || entry.getStaff().getHospital() == null
             || !hospitalId.equals(entry.getStaff().getHospital().getId()))) {
             // Cross-hospital rows read as absent, matching the house convention.
-            throw new ResourceNotFoundException("On-call entry not found with ID: " + id);
+            throw new ResourceNotFoundException("onCall.entry.notFound", id);
         }
         return entry;
     }

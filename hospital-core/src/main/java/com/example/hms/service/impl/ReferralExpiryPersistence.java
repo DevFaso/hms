@@ -50,7 +50,7 @@ public class ReferralExpiryPersistence {
     public boolean tryExpire(UUID referralId, String reason, String eventSource) {
         GeneralReferral referral = referralRepository.findById(referralId)
             .orElseThrow(() -> new ResourceNotFoundException(
-                "generalReferral.notFound", referralId));
+                "generalReferral.notFound"));
         ReferralStatus before = referral.getStatus();
         try {
             referral.expire(reason);

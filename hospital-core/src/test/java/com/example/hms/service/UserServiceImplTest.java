@@ -21,6 +21,8 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
+import com.example.hms.exception.BusinessException;
+import com.example.hms.service.support.UserAccountAccess;
 import com.example.hms.utility.UserDisplayUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -44,11 +46,15 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceImplTest {
@@ -69,6 +75,7 @@ class UserServiceImplTest {
     @Mock private PasswordHistoryService passwordHistoryService;
     @Mock private com.example.hms.security.LoginAttemptService loginAttemptService;
     @Mock private AssignmentLinkService assignmentLinkService;
+    @Mock private UserAccountAccess accountAccess;
 
     @InjectMocks
     private UserServiceImpl userService;
@@ -97,6 +104,17 @@ class UserServiceImplTest {
         superAdminRole.setId(UUID.randomUUID());
         superAdminRole.setCode("ROLE_SUPER_ADMIN");
         superAdminRole.setName("ROLE_SUPER_ADMIN");
+
+        // The behaviour tests below run as an administrator of the account;
+        // the guard itself is exercised in AccountAccessGuard and in
+        // UserAccountAccessTest / UserEndpointAuthorizationIT.
+        lenient().when(accountAccess.canAdminister(any())).thenReturn(true);
+        lenient().when(accountAccess.canView(any())).thenReturn(true);
+        lenient().when(accountAccess.canDelete(any())).thenReturn(true);
+        // Registration runs as a super-admin: the grant check resolves the hospital and allows.
+        UserAccountAccess.Grant anywhere = org.mockito.Mockito.mock(UserAccountAccess.Grant.class);
+        lenient().when(anywhere.requireAt(any())).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(accountAccess.requireMayGrant(any())).thenReturn(anywhere);
     }
 
     @Test
@@ -1218,7 +1236,7 @@ class UserServiceImplTest {
             assertThat(target.isActive()).isTrue();
             // No transaction is active in a unit test, so the after-commit
             // callback runs inline — the assertion still pins the behaviour.
-            verify(loginAttemptService).resetAttempts("someone");
+            verify(loginAttemptService).resetAttempts(userId);
         }
 
         @Test
@@ -1229,12 +1247,12 @@ class UserServiceImplTest {
             userService.updateUser(userId, activeFlag(true));
 
             assertThat(target.isActive()).isTrue();
-            verify(loginAttemptService).resetAttempts("someone");
+            verify(loginAttemptService).resetAttempts(userId);
         }
 
         @Test
-        @DisplayName("a new account does not inherit a lockout probed against its name")
-        void creationClearsAnyPreExistingLockout() {
+        @DisplayName("creating an account clears nothing: its id has no lockout to inherit")
+        void creationNeedsNoClear() {
             when(userRepository.findByUsername("newstaff")).thenReturn(Optional.empty());
             when(userRepository.findByEmail("staff@hospital.com")).thenReturn(Optional.empty());
             when(userRepository.findByPhoneNumber("+1234567899")).thenReturn(Optional.empty());
@@ -1273,11 +1291,11 @@ class UserServiceImplTest {
 
             userService.createUserWithRolesAndHospital(req);
 
-            // Failures are recorded for usernames that do not exist, and the
-            // lockout check in /auth/login returns 423 before authentication —
-            // so without this the new holder is refused on their first login
-            // with the credentials just mailed to them.
-            verify(loginAttemptService).resetAttempts("newstaff");
+            // The throttle is keyed on the account id: failures probed against
+            // this name before it existed sit on the name's key, which the
+            // name stops using once an account holds it (pinned in
+            // LoginAttemptServiceTest). Nothing to clear here.
+            verify(loginAttemptService, never()).resetAttempts(any());
         }
 
         @Test
@@ -1295,20 +1313,17 @@ class UserServiceImplTest {
         }
 
         @Test
-        @DisplayName("updateUser clears the key the account will be locked under after a rename")
-        void updateUsesTheRenamedUsername() {
+        @DisplayName("a rename + reactivate clears the account's own lockout, by id")
+        void updateClearsByIdAcrossARename() {
             reactivationTarget(false);
             UpdateUserRequestDTO dto = activeFlag(true);
             dto.setUsername("renamed");
 
             userService.updateUser(userId, dto);
 
-            // The key the account will be locked under from now on — read
-            // after the rename merge, not before. Only that one: the old name
-            // may belong to another account, since the throttle map lowercases
-            // while uq_user_username does not.
-            verify(loginAttemptService).resetAttempts("renamed");
-            verify(loginAttemptService, never()).resetAttempts("someone");
+            // By id: the lockout collected under the old name is the
+            // account's own and is cleared with it; no other account's can be.
+            verify(loginAttemptService).resetAttempts(userId);
         }
 
         private User reactivationTarget(boolean alreadyActive) {
@@ -1327,6 +1342,365 @@ class UserServiceImplTest {
             UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
             dto.setActive(active);
             return dto;
+        }
+    }
+
+    // =====================================================================
+    // The caller guard (UserAccountAccess) as the service applies it
+    // =====================================================================
+
+    @Nested
+    @DisplayName("account access guard")
+    class AccountAccessGuard {
+
+        private static final String EXISTING_HASH = "$2a$10$existingHash";
+
+        @BeforeEach
+        void target() {
+            user.setPasswordHash(EXISTING_HASH);
+            user.setActive(true);
+            user.setDeleted(false);
+        }
+
+        private void refuseAdministration() {
+            when(accountAccess.canAdminister(user)).thenReturn(false);
+        }
+
+        @Test
+        @DisplayName("PUT on someone else's account without administering it: 404, nothing saved, hash unchanged")
+        void updateByStrangerIsRefusedAsMissing() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            refuseAdministration();
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setPassword("Attacker-Chosen-1");
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessage(new ResourceNotFoundException("user.notFound", userId).getMessage());
+
+            assertThat(user.getPasswordHash()).isEqualTo(EXISTING_HASH);
+            verify(userRepository, never()).save(any());
+            verifyNoInteractions(passwordEncoder);
+        }
+
+        @Test
+        @DisplayName("a refused PUT writes exactly one FAILURE row, actor and target ids only, and saves nothing")
+        void refusedWriteLeavesOneFailureRow() {
+            UUID actorId = UUID.randomUUID();
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            refuseAdministration();
+            when(accountAccess.currentUserId()).thenReturn(Optional.of(actorId));
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setPassword("Attacker-Chosen-1");
+            dto.setEmail("attacker@evil.test");
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(ResourceNotFoundException.class);
+
+            ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> row =
+                    ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+            verify(auditEventLogService).logEvent(row.capture());
+            assertThat(row.getValue().getStatus()).isEqualTo(com.example.hms.enums.AuditStatus.FAILURE);
+            assertThat(row.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.USER_UPDATE);
+            assertThat(row.getValue().getUserId()).isEqualTo(actorId);
+            assertThat(row.getValue().getResourceId()).isEqualTo(userId.toString());
+            // Never the submitted values, nor any name.
+            assertThat(row.getValue().getDetails()).isNull();
+            assertThat(row.getValue().getUserName()).isNull();
+            assertThat(row.getValue().getResourceName()).isNull();
+            assertThat(row.getValue().getEventDescription())
+                    .doesNotContain("Attacker").doesNotContain("evil").doesNotContain("testuser");
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("an admin rename to a case variant of another account's username: 400, nothing saved, other account not named")
+        void adminRenameToCaseVariantIsRefused() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.existsUsernameOnOtherAccount("SuperAdmin", userId)).thenReturn(true);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setUsername("SuperAdmin");
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessageNotContaining("SuperAdmin");
+            assertThat(user.getUsername()).isEqualTo("testuser");
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("an admin re-email to one another account holds: 400, nothing saved")
+        void adminReEmailToTakenAddressIsRefused() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.existsEmailOnOtherAccount("Boss@Example.com", userId)).thenReturn(true);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setEmail("Boss@Example.com");
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessageNotContaining("Boss");
+            assertThat(user.getEmail()).isEqualTo("test@example.com");
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a self-edit may not set a password: it goes through /auth/me/change-password")
+        void selfEditCannotSetPassword() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.isSelf(user)).thenReturn(true);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setPassword("New-Password-1");
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("user.update.self.password"));
+            assertThat(user.getPasswordHash()).isEqualTo(EXISTING_HASH);
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a self-edit may not switch its own account off")
+        void selfEditCannotChangeActive() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.isSelf(user)).thenReturn(true);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setActive(false);
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            assertThat(user.isActive()).isTrue();
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a self-edit may not rename: it goes through /auth/me/change-username")
+        void selfEditCannotRename() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.isSelf(user)).thenReturn(true);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setUsername("someone-else");
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("user.update.self.username"));
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a self-edit may not change the email: it goes through /auth/me/change-email, which needs the password")
+        void selfEditCannotChangeEmail() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.isSelf(user)).thenReturn(true);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setFirstName("Awa");
+            dto.setEmail("stolen-session@evil.test");
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("user.update.self.email"));
+            assertThat(user.getEmail()).isEqualTo("test@example.com");
+            assertThat(user.getFirstName()).isEqualTo("Test");
+            verify(userRepository, never()).save(any());
+            verify(userRepository, never()).existsEmailOnOtherAccount(any(), any());
+        }
+
+        @Test
+        @DisplayName("an administrator (not self) may still change an account's email on PUT")
+        void administratorMayStillChangeEmail() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.isSelf(user)).thenReturn(false);
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(assignmentRepository.findByUser(any())).thenReturn(Set.of());
+            when(userMapper.toResponseDTO(any(), any())).thenReturn(new UserResponseDTO());
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setEmail("new-address@example.com");
+
+            userService.updateUser(userId, dto);
+
+            assertThat(user.getEmail()).isEqualTo("new-address@example.com");
+        }
+
+        @Test
+        @DisplayName("the profile form's self-edit — names, the unchanged email and username, phone, active flag — saves")
+        void profileSelfEditSaves() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.isSelf(user)).thenReturn(true);
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(assignmentRepository.findByUser(any())).thenReturn(Set.of());
+            when(userMapper.toResponseDTO(any(), any())).thenReturn(new UserResponseDTO());
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setFirstName("Awa");
+            dto.setLastName("Traore");
+            dto.setEmail("test@example.com");
+            dto.setPhoneNumber("+22670111111");
+            dto.setUsername("testuser");
+            dto.setActive(true);
+
+            userService.updateUser(userId, dto);
+
+            assertThat(user.getFirstName()).isEqualTo("Awa");
+            assertThat(user.getEmail()).isEqualTo("test@example.com");
+            assertThat(user.getPasswordHash()).isEqualTo(EXISTING_HASH);
+            verify(userRepository).save(user);
+            // The self path never consults the administrator rule.
+            verify(accountAccess, never()).canAdminister(any());
+        }
+
+        @Test
+        @DisplayName("DELETE by a registrar of the unclaimed account its failed registration made: soft-deleted")
+        void registrarDiscardsUnclaimedAccount() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.canDelete(user)).thenReturn(true);
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+
+            userService.deleteUser(userId);
+
+            assertThat(user.isDeleted()).isTrue();
+            verify(assignmentService).deleteAllAssignmentsForUser(userId);
+        }
+
+        @Test
+        @DisplayName("DELETE of any other account without administering it: 404, untouched")
+        void deleteByStrangerIsRefusedAsMissing() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.canDelete(user)).thenReturn(false);
+
+            assertThatThrownBy(() -> userService.deleteUser(userId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            assertThat(user.isDeleted()).isFalse();
+            verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(r ->
+                    r.getStatus() == com.example.hms.enums.AuditStatus.FAILURE
+                            && r.getEventType() == com.example.hms.enums.AuditEventType.USER_DELETE));
+            verify(userRepository, never()).save(any());
+            verifyNoInteractions(assignmentService);
+        }
+
+        @Test
+        @DisplayName("restore of an account the caller does not administer: 404, still deleted")
+        void restoreByNonAdministratorIsRefusedAsMissing() {
+            user.setDeleted(true);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            refuseAdministration();
+
+            assertThatThrownBy(() -> userService.restoreUser(userId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            assertThat(user.isDeleted()).isTrue();
+            verify(userRepository, never()).save(any());
+            verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(r ->
+                    r.getStatus() == com.example.hms.enums.AuditStatus.FAILURE));
+        }
+
+        @Test
+        @DisplayName("GET by id the caller may not view: 404, same as missing")
+        void getByIdNotViewableIsRefusedAsMissing() {
+            when(userRepository.findByIdWithRolesAndProfiles(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.canView(user)).thenReturn(false);
+
+            assertThatThrownBy(() -> userService.getUserById(userId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            verifyNoInteractions(userMapper);
+        }
+
+        @Test
+        @DisplayName("a registration the caller may not grant: 403, one FAILURE row with actor id and role codes only, nothing written")
+        void refusedGrantIsAuditedAndWritesNothing() {
+            UUID actorId = UUID.randomUUID();
+            when(accountAccess.requireMayGrant(any()))
+                    .thenThrow(new org.springframework.security.access.AccessDeniedException("Access denied"));
+            when(accountAccess.currentUserId()).thenReturn(Optional.of(actorId));
+            AdminSignupRequest request = new AdminSignupRequest();
+            request.setUsername("mint-admin");
+            request.setEmail("mint@evil.test");
+            request.setPassword("Chosen-Pass-1");
+            request.setFirstName("Mint");
+            request.setLastName("Admin");
+            request.setPhoneNumber("+22670999999");
+            request.setRoleNames(Set.of("SUPER_ADMIN"));
+
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(request))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+            ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> row =
+                    ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+            verify(auditEventLogService).logEvent(row.capture());
+            assertThat(row.getValue().getStatus()).isEqualTo(com.example.hms.enums.AuditStatus.FAILURE);
+            assertThat(row.getValue().getUserId()).isEqualTo(actorId);
+            assertThat(String.valueOf(row.getValue().getDetails())).contains("SUPER_ADMIN")
+                    .doesNotContain("mint").doesNotContain("Chosen").doesNotContain("+22670999999");
+            // Refused before any lookup: not even the duplicate checks ran.
+            verifyNoInteractions(userRepository, passwordEncoder, assignmentService);
+        }
+
+        @Test
+        @DisplayName("the directory refuses a non-staff caller before any query runs")
+        void directoryRefusalPrecedesTheQuery() {
+            doThrow(new org.springframework.security.access.AccessDeniedException("Access denied"))
+                    .when(accountAccess).requireDirectoryAccess();
+
+            assertThatThrownBy(() -> userService.getAllUsers(0, 10, false, false))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            assertThatThrownBy(() -> userService.searchUsers("a", null, null, 0, 10, false, false))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            verifyNoInteractions(userRepository);
+        }
+    }
+
+    @Nested
+    @DisplayName("the directory's hospital scope")
+    class DirectoryScoping {
+
+        private final org.springframework.data.domain.Page<User> onePage =
+                new org.springframework.data.domain.PageImpl<>(java.util.List.of());
+
+        @Test
+        @DisplayName("a scoped caller queries with its hospitals and scoped=true, never the deleted view")
+        void scopedCallerPassesItsHospitals() {
+            Set<UUID> hospitals = Set.of(UUID.randomUUID());
+            when(accountAccess.requireDirectoryAccess())
+                    .thenReturn(new UserAccountAccess.DirectoryScope(false, hospitals));
+            when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
+                    .thenReturn(onePage);
+            when(userRepository.searchUsers(any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(), any(),
+                    any())).thenReturn(onePage);
+
+            // Even if a deleted flag reached the service, the scoped path has no deleted view.
+            userService.getAllUsers(0, 10, true, true);
+            userService.searchUsers("ami", "ROLE_NURSE", "x@y", 0, 10, true, true);
+
+            verify(userRepository).findAllPaged(eq(false), eq(false), eq(true), eq(hospitals), any());
+            verify(userRepository).searchUsers(eq("ami"), eq("ROLE_NURSE"), eq("x@y"), eq(false), eq(false),
+                    eq(true), eq(hospitals), any());
+        }
+
+        @Test
+        @DisplayName("an empty scope is an empty page, and no query runs")
+        void emptyScopeIsAnEmptyPage() {
+            when(accountAccess.requireDirectoryAccess())
+                    .thenReturn(new UserAccountAccess.DirectoryScope(false, Set.of()));
+
+            assertThat(userService.getAllUsers(0, 10, false, false).getTotalElements()).isZero();
+            assertThat(userService.searchUsers("a", null, null, 0, 10, false, false).getTotalElements()).isZero();
+            verifyNoInteractions(userRepository);
+        }
+
+        @Test
+        @DisplayName("the super-admin queries unscoped, with the sentinel set and the deleted flags passed through")
+        void superAdminQueriesUnscoped() {
+            when(accountAccess.requireDirectoryAccess())
+                    .thenReturn(new UserAccountAccess.DirectoryScope(true, Set.of()));
+            when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
+                    .thenReturn(onePage);
+            when(userRepository.searchUsers(any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(), any(),
+                    any())).thenReturn(onePage);
+
+            userService.getAllUsers(0, 10, true, false);
+            userService.searchUsers("a", null, null, 0, 10, false, true);
+
+            verify(userRepository).findAllPaged(eq(true), eq(false), eq(false),
+                    eq(UserRepository.DIRECTORY_UNSCOPED), any());
+            verify(userRepository).searchUsers(eq("a"), any(), any(), eq(false), eq(true), eq(false),
+                    eq(UserRepository.DIRECTORY_UNSCOPED), any());
         }
     }
 }

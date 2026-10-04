@@ -21,6 +21,8 @@ import {
   CdsAcknowledgementService,
 } from '../../services/cds-acknowledgement.service';
 import { ToastService } from '../../core/toast.service';
+import { RoleContextService } from '../../core/role-context.service';
+import { canInvokeCds } from '../patient-chart/chart-access';
 
 /**
  * Best-Practice Advisory panel rendered at the top of the patient
@@ -56,12 +58,20 @@ export class BpaPanelComponent implements OnChanges, OnDestroy {
   private readonly ackService = inject(CdsAcknowledgementService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly roleContext = inject(RoleContextService);
   private readonly destroyed$ = new Subject<void>();
   private inFlight?: Subscription;
 
+  /**
+   * Defence in depth behind the host's `@if`: a role the backend refuses
+   * never issues the request (a 403 there would be a dead panel at best).
+   */
+  protected readonly permitted = signal(false);
+
   ngOnChanges(_changes: SimpleChanges): void {
+    this.permitted.set(canInvokeCds(this.roleContext));
     const id = this.patientId();
-    if (!id) {
+    if (!id || !this.permitted()) {
       this.cancelInFlight();
       this.cards.set([]);
       this.state.set('empty');

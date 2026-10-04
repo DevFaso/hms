@@ -1,5 +1,7 @@
 package com.example.hms.controller;
 
+import java.util.Optional;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Hospital;
@@ -11,8 +13,6 @@ import com.example.hms.payload.dto.reporting.ReportRunResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.ReportDefinitionRepository;
 import com.example.hms.repository.ReportRunRepository;
-import com.example.hms.security.context.HospitalContext;
-import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.reporting.ScheduledReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -67,7 +67,7 @@ public class ReportController {
             @AuthenticationPrincipal UserDetails principal) {
         UUID hospitalId = requireHospital();
         Hospital hospital = hospitalRepository.findById(hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         validateRecipients(request.getRecipients());
         ReportDefinition definition = definitionRepository.save(ReportDefinition.builder()
                 .hospital(hospital)
@@ -136,13 +136,11 @@ public class ReportController {
 
     private ReportDefinition loadScoped(UUID id) {
         return definitionRepository.findByIdAndHospital_Id(id, requireHospital())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                    "Report definition not found with ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("reportDefinition.notFound", id));
     }
 
     private static UUID requireHospital() {
-        UUID hospitalId = HospitalContextHolder.getContext()
-                .map(HospitalContext::getActiveHospitalId)
+        UUID hospitalId = Optional.ofNullable(ActingScopeResolver.pinnedHospitalIdOrNull())
                 .orElse(null);
         if (hospitalId == null) {
             throw new BusinessException(

@@ -30,6 +30,20 @@ function handleExpiredToken(
   return next(withExpiredBearer);
 }
 
+/**
+ * Calls the portal makes to (re)establish its hospital scope, or to leave.
+ * They carry the token but never `X-Hospital-Id`: a selection the user has
+ * lost must not travel on the very request that replaces it. Mirrors
+ * `ActingScopeResolver.SCOPE_ESTABLISHING_PATHS` on the backend, which
+ * ignores a stale header on these paths for callers that still send one.
+ */
+export const SCOPE_ESTABLISHING_PATTERNS: readonly RegExp[] = [
+  /\/auth\/session\/bootstrap(?:[/?#]|$)/i,
+  /\/auth\/logout(?:[/?#]|$)/i,
+  /\/auth\/token\/refresh(?:[/?#]|$)/i,
+  /\/me\/assignments(?:[?#]|$)/i,
+];
+
 export const apiPrefixInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
   const roleCtx = inject(RoleContextService);
@@ -84,7 +98,10 @@ export const apiPrefixInterceptor: HttpInterceptorFn = (req, next) => {
     // For non-super-admins this resolves to their active hospital,
     // preserving the existing single-tenant behaviour.
     const hid = roleCtx.effectiveHospitalIdForRequest();
-    if (hid) {
+    const establishesScope = SCOPE_ESTABLISHING_PATTERNS.some((pattern) =>
+      pattern.test(modified.url),
+    );
+    if (hid && !establishesScope) {
       headers['X-Hospital-Id'] = hid;
     }
     if (Object.keys(headers).length) {

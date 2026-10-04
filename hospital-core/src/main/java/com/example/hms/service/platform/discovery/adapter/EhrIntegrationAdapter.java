@@ -6,13 +6,14 @@ import com.example.hms.payload.dto.PlatformOwnershipDTO;
 import com.example.hms.payload.dto.PlatformServiceMetadataDTO;
 import java.util.List;
 import java.util.Locale;
+import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Component;
 
 @Component
 public class EhrIntegrationAdapter extends AbstractToggleableIntegrationAdapter {
 
-    public EhrIntegrationAdapter(PlatformIntegrationProperties properties) {
-        super(properties);
+    public EhrIntegrationAdapter(PlatformIntegrationProperties properties, MessageSource messageSource) {
+        super(properties, messageSource);
     }
 
     @Override
@@ -27,12 +28,12 @@ public class EhrIntegrationAdapter extends AbstractToggleableIntegrationAdapter 
 
     @Override
     protected String defaultDisplayName(Locale locale) {
-        return "EHR Core Interop";
+        return text("platform.catalog.ehr.displayName", locale);
     }
 
     @Override
     protected String defaultDescription(Locale locale) {
-        return "FHIR R4 sandbox connector for clinical charting and patient demographics.";
+        return text("platform.catalog.ehr.description", locale);
     }
 
     @Override
@@ -43,9 +44,9 @@ public class EhrIntegrationAdapter extends AbstractToggleableIntegrationAdapter 
     @Override
     protected List<String> defaultCapabilities(Locale locale) {
         return List.of(
-            "FHIR R4 patient read/write",
-            "HL7 v2 ADT event mirroring",
-            "Clinical document exchange stubs"
+            text("platform.catalog.ehr.capability.1", locale),
+            text("platform.catalog.ehr.capability.2", locale),
+            text("platform.catalog.ehr.capability.3", locale)
         );
     }
 
@@ -53,7 +54,7 @@ public class EhrIntegrationAdapter extends AbstractToggleableIntegrationAdapter 
     protected PlatformServiceMetadataDTO defaultMetadata(Locale locale) {
         return PlatformServiceMetadataDTO.builder()
             .ehrSystem("Stub EHR Sandbox")
-            .integrationNotes("Synthetic dataset with consent-safe fixtures for testing.")
+            .integrationNotes(text("platform.catalog.ehr.integrationNotes", locale))
             .build();
     }
 
@@ -63,7 +64,7 @@ public class EhrIntegrationAdapter extends AbstractToggleableIntegrationAdapter 
             .ownerTeam("Platform EHR Team")
             .ownerContactEmail("ehr-ops@example.com")
             .dataSteward("Clinical Informatics")
-            .serviceLevel("24x7")
+            .serviceLevel(text("platform.catalog.ehr.serviceLevel", locale))
             .build();
     }
 

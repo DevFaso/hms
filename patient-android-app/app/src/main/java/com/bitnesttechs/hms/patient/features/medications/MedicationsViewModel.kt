@@ -1,5 +1,6 @@
 package com.bitnesttechs.hms.patient.features.medications
 
+import com.bitnesttechs.hms.patient.core.network.FailureText
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -313,7 +314,7 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                     val detail = serverMessage(resp.errorBody()?.string())
                     awaitFreshLoad()
                     _outcome.value =
-                        Outcome(R.string.refill_cancel_failed, detail ?: "HTTP ${resp.code()}")
+                        Outcome(R.string.refill_cancel_failed, detail ?: FailureText.http(resp.code()))
                 }
             } catch (e: CancellationException) {
                 // `awaitFreshLoad` suspends in cancelAndJoin/join, both of
@@ -324,7 +325,7 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                 // is the same trap `load()` already rethrows out of.
                 throw e
             } catch (e: Exception) {
-                _outcome.value = Outcome(R.string.refill_cancel_failed, e.message)
+                _outcome.value = Outcome(R.string.refill_cancel_failed, FailureText.of(e))
             }
             }
         }
@@ -387,14 +388,14 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                         businessRefusal && openRefill != null -> Outcome(openRefillMessage(openRefill))
                         // Anything else: the server's own words are still
                         // better than nothing, even untranslated.
-                        else -> Outcome(R.string.refill_request_failed, detail ?: "HTTP ${resp.code()}")
+                        else -> Outcome(R.string.refill_request_failed, detail ?: FailureText.http(resp.code()))
                     }
                 }
             } catch (e: CancellationException) {
                 // See cancelRefill: a cancelled caller is not a failed request.
                 throw e
             } catch (e: Exception) {
-                _outcome.value = Outcome(R.string.refill_request_failed, e.message)
+                _outcome.value = Outcome(R.string.refill_request_failed, FailureText.of(e))
             }
             }
         }

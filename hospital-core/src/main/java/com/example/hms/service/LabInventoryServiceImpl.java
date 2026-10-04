@@ -47,8 +47,7 @@ public class LabInventoryServiceImpl implements LabInventoryService {
     @Override
     public LabInventoryItemResponseDTO getById(UUID id, Locale locale) {
         LabInventoryItem item = inventoryRepository.findByIdAndActiveTrue(id)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage(INVENTORY_NOT_FOUND_KEY, new Object[]{id}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(INVENTORY_NOT_FOUND_KEY, id));
         requireHospitalScope(item.getHospital().getId(), locale);
         return mapper.toDto(item);
     }
@@ -59,8 +58,7 @@ public class LabInventoryServiceImpl implements LabInventoryService {
         requireHospitalScope(hospitalId, locale);
 
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage("hospital.notfound", new Object[]{hospitalId}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", hospitalId));
 
         if (inventoryRepository.existsByHospitalIdAndItemCode(hospitalId, dto.getItemCode())) {
             throw new BusinessRuleException(
@@ -81,8 +79,7 @@ public class LabInventoryServiceImpl implements LabInventoryService {
     @Transactional
     public LabInventoryItemResponseDTO update(UUID id, LabInventoryItemRequestDTO dto, Locale locale) {
         LabInventoryItem item = inventoryRepository.findByIdAndActiveTrue(id)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage(INVENTORY_NOT_FOUND_KEY, new Object[]{id}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(INVENTORY_NOT_FOUND_KEY, id));
         requireHospitalScope(item.getHospital().getId(), locale);
 
         // Check item code uniqueness if changed
@@ -108,8 +105,7 @@ public class LabInventoryServiceImpl implements LabInventoryService {
     @Transactional
     public void deactivate(UUID id, Locale locale) {
         LabInventoryItem item = inventoryRepository.findByIdAndActiveTrue(id)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage(INVENTORY_NOT_FOUND_KEY, new Object[]{id}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(INVENTORY_NOT_FOUND_KEY, id));
         requireHospitalScope(item.getHospital().getId(), locale);
         item.setActive(false);
         inventoryRepository.save(item);

@@ -98,7 +98,16 @@ public class FileUploadService {
     @Value("${app.backend.base-url:http://localhost:8081}")
     private String backendBaseUrl;
 
-    private static final long MAX_REFERRAL_ATTACHMENT_SIZE = 20L * 1024 * 1024; // 20 MB
+    /**
+     * The one upload limit, in bytes: {@code spring.servlet.multipart.max-file-size}
+     * (10MB) rejects anything larger before this service runs, so a bigger number
+     * here was a promise the container never kept (it said 20MB for months).
+     * {@code UploadLimitConsistencyTest} fails if the two drift apart.
+     */
+    public static final long MAX_UPLOAD_BYTES = 10L * 1024 * 1024;
+    /** Shown in refusals; must describe {@link #MAX_UPLOAD_BYTES}. */
+    public static final String MAX_UPLOAD_LABEL = "10 MB";
+    private static final long MAX_REFERRAL_ATTACHMENT_SIZE = MAX_UPLOAD_BYTES;
     private static final Set<String> ALLOWED_ATTACHMENT_EXTENSIONS = Set.of(
         ".pdf", ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".txt", ".rtf", ".doc",
         ".docx"
@@ -245,14 +254,13 @@ public class FileUploadService {
         String marker = "/uploads/" + requiredSubdirectory + "/";
         int idx = storageKey == null ? -1 : storageKey.indexOf(marker);
         if (idx < 0) {
-            throw new ResourceNotFoundException(
-                "File is not stored under " + requiredSubdirectory + ".");
+            throw new ResourceNotFoundException("file.notStoredUnder", requiredSubdirectory);
         }
         String filename = storageKey.substring(idx + marker.length());
         Path base = Paths.get(uploadDir, requiredSubdirectory).toAbsolutePath().normalize();
         Path path = base.resolve(filename).normalize();
         if (!path.startsWith(base) || !Files.exists(path)) {
-            throw new ResourceNotFoundException("The stored file is no longer available.");
+            throw new ResourceNotFoundException("file.noLongerAvailable");
         }
         return path;
     }
@@ -313,7 +321,7 @@ public class FileUploadService {
         }
 
         if (file.getSize() > MAX_REFERRAL_ATTACHMENT_SIZE) {
-            throw new IllegalArgumentException("Attachment size cannot exceed 20MB");
+            throw new IllegalArgumentException("Attachment size cannot exceed " + MAX_UPLOAD_LABEL);
         }
 
         String extension = getFileExtension(file.getOriginalFilename()).toLowerCase();
@@ -392,7 +400,7 @@ public class FileUploadService {
         }
     }
 
-    private static final long MAX_PATIENT_DOCUMENT_SIZE = 20L * 1024 * 1024; // 20 MB
+    private static final long MAX_PATIENT_DOCUMENT_SIZE = MAX_UPLOAD_BYTES;
     private static final String PATIENT_DOCUMENTS_PATH = "patient-documents";
 
     /**
@@ -444,7 +452,7 @@ public class FileUploadService {
         }
 
         if (file.getSize() > MAX_PATIENT_DOCUMENT_SIZE) {
-            throw new IllegalArgumentException("Document size cannot exceed 20MB");
+            throw new IllegalArgumentException("Document size cannot exceed " + MAX_UPLOAD_LABEL);
         }
 
         String extension = getFileExtension(file.getOriginalFilename()).toLowerCase();

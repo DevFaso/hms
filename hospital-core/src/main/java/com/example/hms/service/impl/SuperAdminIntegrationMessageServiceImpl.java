@@ -66,8 +66,7 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
     @Override
     public IntegrationMessageEventDTO getById(UUID messageId) {
         IntegrationMessageEvent event = repository.findById(messageId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Integration message not found: " + messageId));
+            .orElseThrow(() -> new ResourceNotFoundException("integration.message.notFound", messageId));
         return toDto(event);
     }
 
@@ -79,8 +78,7 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
         // existsById round-trip; the lookup is also needed for the
         // status precondition.
         IntegrationMessageEvent original = repository.findById(originalMessageId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Integration message not found: " + originalMessageId));
+            .orElseThrow(() -> new ResourceNotFoundException("integration.message.notFound", originalMessageId));
 
         // Copilot review fix — only FAILED rows are eligible for replay.
         // Replaying a SENT/RECEIVED row would emit a duplicate to the

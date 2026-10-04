@@ -347,6 +347,16 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(routes).not.toContain('/lab-release-worklist');
   });
 
+  it('admin does not see Prescriptions: no backend read admits ROLE_ADMIN', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_ADMIN',
+      roles: ['ROLE_ADMIN'],
+      wildcardPermission: true,
+    });
+
+    expect(items.map((i) => i.route)).not.toContain('/prescriptions');
+  });
+
   it('pharmacy verifier reaches Dispensing, Stock Routing and Prescriptions', () => {
     const { items } = createComponent({
       activeRole: 'ROLE_PHARMACY_VERIFIER',
@@ -1097,6 +1107,18 @@ describe('ShellComponent — route-level hospital scope gate', () => {
         'lab-instruments',
         'lab-inventory',
         'lab-ops-dashboard',
+        // The ten that used to gate themselves (own chip + scopeReady +
+        // hint): moved onto the flag, their per-page block and chip deleted.
+        'bed-board',
+        'microbiology',
+        'on-call',
+        'panels',
+        'pharmacy/mtm',
+        'registries',
+        'roi',
+        'slot-admin',
+        'transfusions',
+        'webhooks',
         // The release worklist is one laboratory's queue: getPendingRelease
         // refuses a scopeless read outright rather than guessing a hospital,
         // so the page must not render until one is pinned.

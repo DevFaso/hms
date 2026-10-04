@@ -61,13 +61,13 @@ public class SuperAdminIntegrationHealthController {
 
     @PostMapping("/{integrationId}/resync")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @Operation(summary = "MVP-3b: Re-sync — dispatches an asynchronous re-sync; returns 422 if not supported")
+    @Operation(summary = "MVP-3b: Re-sync — dispatches an asynchronous re-sync; returns 400 if not supported")
     public ResponseEntity<Void> resync(
         @PathVariable String integrationId,
         @RequestParam(value = "organizationId", required = false) UUID organizationId
     ) {
         if (!actionService.isKnownIntegration(integrationId)) {
-            throw new ResourceNotFoundException("Unknown integration: " + integrationId);
+            throw new ResourceNotFoundException("integration.health.notfound", integrationId);
         }
         if (!actionService.supportsResync(integrationId)) {
             throw new BusinessRuleException(
@@ -89,7 +89,7 @@ public class SuperAdminIntegrationHealthController {
         // the same id. API consumers couldn't distinguish "no history
         // yet" from "integration does not exist". Now consistent.
         if (!actionService.isKnownIntegration(integrationId)) {
-            throw new ResourceNotFoundException("Unknown integration: " + integrationId);
+            throw new ResourceNotFoundException("integration.health.notfound", integrationId);
         }
         return ResponseEntity.ok(actionService.getHistory(integrationId, windowHours));
     }

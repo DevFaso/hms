@@ -129,6 +129,11 @@ class EncounterServiceImplTest {
 
     @BeforeEach
     void setUpCheckoutDefaults() {
+        // The services ask the one PatientSubjectReadGuard; it is built here over
+        // this class's authUtils and patientRepository so ownership is decided
+        // exactly as before, by those two.
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "subjectReadGuard",
+            new PatientSubjectReadGuard(authUtils, patientRepository));
         lenient().when(dischargeSummaryRepository.findByEncounter_Id(any(UUID.class))).thenReturn(Optional.empty());
         lenient().when(dischargeSummaryRepository.save(any(DischargeSummary.class))).thenAnswer(inv -> inv.getArgument(0));
     }
@@ -197,7 +202,6 @@ class EncounterServiceImplTest {
     void deleteEncounter_notFound() {
         UUID id = UUID.randomUUID();
         when(encounterRepository.existsById(id)).thenReturn(false);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
 
         assertThatThrownBy(() -> service.deleteEncounter(id, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -224,7 +228,6 @@ class EncounterServiceImplTest {
     void getEncountersByPatientId_patientNotFound() {
         UUID patientId = UUID.randomUUID();
         when(patientRepository.existsById(patientId)).thenReturn(false);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
 
         assertThatThrownBy(() -> service.getEncountersByPatientId(patientId, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -257,7 +260,6 @@ class EncounterServiceImplTest {
     void getEncountersByDoctorId_staffNotFound() {
         UUID staffId = UUID.randomUUID();
         when(staffRepository.findById(staffId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
 
         assertThatThrownBy(() -> service.getEncountersByDoctorId(staffId, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -316,7 +318,6 @@ class EncounterServiceImplTest {
     @Test
     void getEncountersByPatientIdentifier_patientNotFound() {
         when(patientRepository.findByUsernameOrEmail("unknown")).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
 
         assertThatThrownBy(() -> service.getEncountersByPatientIdentifier("unknown", locale))
             .isInstanceOf(ResourceNotFoundException.class);

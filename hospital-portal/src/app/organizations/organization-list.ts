@@ -1,12 +1,14 @@
 import {
   Component,
+  computed,
+  DestroyRef,
   inject,
-  OnDestroy,
   OnInit,
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { Subscription, merge } from 'rxjs';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { merge, scan } from 'rxjs';
 
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -31,12 +33,13 @@ import { EnumLabelService } from '../core/enum-label.service';
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './organization-list.scss',
 })
-export class OrganizationListComponent implements OnInit, OnDestroy {
+export class OrganizationListComponent implements OnInit {
   private readonly enumLabel = inject(EnumLabelService);
   private readonly orgService = inject(OrganizationService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
+  private readonly destroyRef = inject(DestroyRef);
 
   /**
    * Only super admins can open /organizations/:id (gated by RoleGuard).
@@ -46,9 +49,45 @@ export class OrganizationListComponent implements OnInit, OnDestroy {
   readonly isSuperAdmin = this.roleContext.isSuperAdmin;
 
   organizations = signal<OrganizationResponse[]>([]);
-  filtered = signal<OrganizationResponse[]>([]);
   loading = signal(true);
-  searchTerm = '';
+  searchTerm = signal('');
+
+  /**
+   * Bumps on every language switch AND every bundle merge, because the filter
+   * matches the Type column's TRANSLATED label: the rows that match change
+   * with the labels. Both events, for the same reason EnumLabelService clears
+   * its memo on both — a bundle merged after first paint changes the labels
+   * without changing the language. `toSignal` ties the subscription to this
+   * component's lifetime.
+   */
+  private readonly labelRevision = toSignal(
+    merge(this.translate.onLangChange, this.translate.onTranslationChange).pipe(
+      scan((n) => n + 1, 0),
+    ),
+    { initialValue: 0 },
+  );
+
+  /**
+   * Derived, never assigned: every writer of `organizations`, every keystroke
+   * and every label change re-filters without anyone remembering to call a
+   * refresh — the manual `applyFilter()` calls this replaces had already
+   * missed the language switch once.
+   */
+  readonly filtered = computed(() => {
+    this.labelRevision();
+    const all = this.organizations();
+    const term = this.searchTerm().toLowerCase().trim();
+    if (!term) return all;
+    return all.filter(
+      (o) =>
+        o.name.toLowerCase().includes(term) ||
+        o.code.toLowerCase().includes(term) ||
+        (o.type?.toLowerCase().includes(term) ?? false) ||
+        // The Type column renders a translated label; searching has to
+        // match what is on screen, not only the wire token behind it.
+        this.typeLabel(o.type).toLowerCase().includes(term),
+    );
+  });
 
   showCreate = signal(false);
   saving = signal(false);
@@ -108,70 +147,40 @@ export class OrganizationListComponent implements OnInit, OnDestroy {
     'UTC',
   ];
 
-  private langSub?: Subscription;
-
   currentPage = signal(0);
   totalPages = signal(0);
   totalElements = signal(0);
 
   ngOnInit(): void {
     this.loadOrganizations();
-    this.orgService.getTypes().subscribe({
-      next: (types) => this.orgTypes.set(types),
-    });
-    // The filter matches the Type column's TRANSLATED label, so the rows that
-    // match change with the language. Without this, a row matched under French
-    // labels stays listed once the cell reads English, and one that would now
-    // match stays hidden until the next keystroke.
-    //
-    // Both events, for the same reason EnumLabelService clears its memo on
-    // both: a bundle merged after first paint changes the labels without
-    // changing the language, and the cells re-render while the filter would
-    // not have.
-    this.langSub = merge(this.translate.onLangChange, this.translate.onTranslationChange).subscribe(
-      () => this.applyFilter(),
-    );
-  }
-
-  ngOnDestroy(): void {
-    this.langSub?.unsubscribe();
+    this.orgService
+      .getTypes()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (types) => this.orgTypes.set(types),
+      });
   }
 
   loadOrganizations(page = 0): void {
     this.loading.set(true);
-    this.orgService.list(page, 20).subscribe({
-      next: (res) => {
-        this.organizations.set(res.content);
-        this.currentPage.set(res.number);
-        this.totalPages.set(res.totalPages);
-        this.totalElements.set(res.totalElements);
-        this.applyFilter();
-        this.loading.set(false);
-      },
-      error: () => {
-        this.toast.error(this.translate.instant('ORGANIZATIONS.LOAD_FAILED'));
-        this.loading.set(false);
-      },
-    });
-  }
-
-  applyFilter(): void {
-    const term = this.searchTerm.toLowerCase().trim();
-    if (!term) {
-      this.filtered.set(this.organizations());
-      return;
-    }
-    this.filtered.set(
-      this.organizations().filter(
-        (o) =>
-          o.name.toLowerCase().includes(term) ||
-          o.code.toLowerCase().includes(term) ||
-          (o.type?.toLowerCase().includes(term) ?? false) ||
-          // The Type column renders a translated label; searching has to
-          // match what is on screen, not only the wire token behind it.
-          this.typeLabel(o.type).toLowerCase().includes(term),
-      ),
-    );
+    // Bound to the component: a page left before the response lands must not
+    // write its signals or toast a failure for a screen nobody is on.
+    this.orgService
+      .list(page, 20)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (res) => {
+          this.organizations.set(res.content);
+          this.currentPage.set(res.number);
+          this.totalPages.set(res.totalPages);
+          this.totalElements.set(res.totalElements);
+          this.loading.set(false);
+        },
+        error: () => {
+          this.toast.error(this.translate.instant('ORGANIZATIONS.LOAD_FAILED'));
+          this.loading.set(false);
+        },
+      });
   }
 
   openCreate(): void {

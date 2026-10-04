@@ -14,10 +14,13 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
+import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -45,28 +48,37 @@ class NotFoundMessageKeyTest {
         "staff.notFound",
         "user.notFound",
         "department.notFound",
-        "organization.notFound");
+        "organization.notFound",
+        // The lower-case twins: messages_en carried these three without the id
+        // placeholder while base, FR and ES rendered it, so an English 404
+        // dropped the id.
+        "patient.notfound",
+        "staff.notfound",
+        "hospital.notfound");
 
     /**
      * Prose-form {@code ResourceNotFoundException} constructions still in the
-     * tree. 319 before the conversion; the remaining ones pass no argument, so
-     * each needs an identifier found in its own scope rather than a rewrite
-     * rule. Lowering this number is the point; raising it is the regression.
+     * tree, per file. 319 literal ones before the first conversion, 219 after
+     * it, and ~170 more the old line scan never saw (a prose constant, or a
+     * message already resolved by {@code messageSource.getMessage} and then
+     * looked up a second time as a key). The last 26 (PatientEducationServiceImpl,
+     * FileUploadService) were converted in #791, so none is left: a file listed
+     * here would have to name the reason it cannot pass a key.
      */
-    private static final int PROSE_CALL_BUDGET = 219;
+    private static final Map<String, Integer> PROSE_RESIDUE = Map.of();
+
+    private static final Pattern STRING_CONSTANT =
+        Pattern.compile("static\\s+final\\s+String\\s+(\\w+)\\s*=\\s*\"((?:[^\"\\\\]|\\\\.)*)\"\\s*;");
+
+    /** A message resolved before it reaches the constructor, which then resolves it again. */
+    private static final Pattern PRE_RESOLVED =
+        Pattern.compile("(?:this\\.)?(?:messageSource\\.getMessage|getLocalizedMessage|getMessage|message)\\s*\\(.*", Pattern.DOTALL);
+
+    private static final Pattern MESSAGE_KEY = Pattern.compile("[A-Za-z][A-Za-z0-9_-]*(?:\\.[A-Za-z0-9_-]+)+");
+
+    private static final Pattern CONSTRUCTION = Pattern.compile("new\\s+ResourceNotFoundException\\s*\\(");
 
     private static final Path MAIN_JAVA = Paths.get("src/main/java");
-
-    /**
-     * Keys already carrying U+FFFD when this guard was added. Lower it, never raise it.
-     *
-     * <p>FR reached 0 on 2026-09-13: all 19 were retranslated from the English
-     * source during the French-completeness pass, rather than character-repaired,
-     * because a replacement glyph carries no information to repair from. ES keeps
-     * its budget — nobody has done that pass for Spanish yet.
-     */
-    private static final Map<String, Integer> MOJIBAKE_BUDGET =
-        Map.of("", 0, "_en", 0, "_fr", 0, "_es", 27);
 
     /**
      * A maximal run of apostrophes. MessageFormat reads a doubled pair as one
@@ -131,14 +143,15 @@ class NotFoundMessageKeyTest {
 
     @ParameterizedTest(name = "messages{0}.properties")
     @ValueSource(strings = {"", "_en", "_fr", "_es"})
-    @DisplayName("bundle mojibake does not spread")
+    @DisplayName("no bundle value carries mojibake")
     void bundleMojibakeDoesNotSpread(String suffix) throws IOException {
         // U+FFFD means the file was decoded with the wrong charset and the
-        // accent is gone for good — no runtime setting recovers it. These
-        // counts are damage that predates the guard: French and Spanish
-        // clinicians read a replacement glyph on those keys today. Ratcheted
-        // rather than asserted at zero because repairing them needs a native
-        // speaker per string, not a find-and-replace. It must not grow.
+        // accent is gone for good — no runtime setting recovers it. This was a
+        // ratchet (FR 19, ES 27) until both reached zero: FR was retranslated
+        // from the English source on 2026-09-13; ES was repaired word by word,
+        // each replacement glyph standing in a word that admits exactly one
+        // accented spelling ("n<U+FFFD>mero" can only be "número"), and the
+        // Spanish-only keys no code reads were removed rather than repaired.
         Properties bundle = load(suffix);
 
         List<String> corrupted = bundle.stringPropertyNames().stream()
@@ -150,7 +163,7 @@ class NotFoundMessageKeyTest {
             .as("New mojibake in messages%s.properties — copy the value from a "
                     + "clean source, never from a corrupted neighbour:%n%s",
                 suffix, String.join(System.lineSeparator(), corrupted))
-            .hasSizeLessThanOrEqualTo(MOJIBAKE_BUDGET.get(suffix));
+            .isEmpty();
     }
 
     @Test
@@ -167,20 +180,50 @@ class NotFoundMessageKeyTest {
     @Test
     @DisplayName("the prose-as-key surface has not grown back")
     void proseSurfaceHasNotGrown() throws IOException {
-        List<String> prose = proseConstructions();
+        Map<String, List<String>> prose = proseConstructions();
 
-        // A floor as well as a ceiling: if the scan ever stops matching, the
-        // count collapses to zero and this guards nothing while still passing.
-        assertThat(prose)
-            .as("The scan matched nothing — the detection is broken, not the surface")
-            .isNotEmpty()
+        List<String> overBudget = prose.entrySet().stream()
+            .filter(e -> e.getValue().size() > PROSE_RESIDUE.getOrDefault(e.getKey(), 0))
+            .flatMap(e -> e.getValue().stream())
+            .sorted()
+            .toList();
+
+        assertThat(overBudget)
             .as("New prose-as-message-key constructions were added:%n%s%n%n"
                     + "ResourceNotFoundException's first argument is a message key. "
-                    + "Passing a sentence renders '[Missing translation] <sentence>' "
-                    + "to the clinician and is never translated. Use a key from "
-                    + "messages.properties and pass the id as an argument.",
-                String.join("\n", prose.stream().limit(20).toList()))
-            .hasSizeLessThanOrEqualTo(PROSE_CALL_BUDGET);
+                    + "Passing a sentence - a literal, a String constant holding one, or "
+                    + "a message already resolved by messageSource - renders "
+                    + "'[Missing translation] <sentence>' to the clinician and is never "
+                    + "translated. Use a key from messages.properties and pass the id "
+                    + "as an argument.",
+                String.join("\n", overBudget.stream().limit(20).toList()))
+            .isEmpty();
+    }
+
+    @Test
+    @DisplayName("the prose detector sees every shape prose has taken")
+    void proseDetectorRecognisesEveryShape() {
+        // The floor for the scan above: its residue may reach zero, so the
+        // detector is proven on a fixture instead of on the tree's own count.
+        String fixture = String.join("\n",
+            "class Fixture {",
+            "    private static final String GONE = \"Ward not found: \";",
+            "    private static final String KEY = \"ward.notFound\";",
+            "    void a() { throw new ResourceNotFoundException(\"Ward not found\"); }",
+            "    void b() { throw new ResourceNotFoundException(",
+            "        \"Ward not found: \" + id); }",
+            "    void c() { throw new ResourceNotFoundException(GONE + id); }",
+            "    void d() { throw new ResourceNotFoundException(",
+            "        messageSource.getMessage(\"ward.notFound\", new Object[]{id}, locale)); }",
+            "    void e() { throw new ResourceNotFoundException(getLocalizedMessage(KEY, null, locale)); }",
+            "    void f() { throw new ResourceNotFoundException(KEY, id); }",
+            "    void g() { throw new ResourceNotFoundException(\"ward.notFound\", id); }",
+            "    void h() { throw new ResourceNotFoundException(messageKey, id); }",
+            "}");
+
+        assertThat(proseIn("Fixture.java", fixture))
+            .as("a, b, c, d and e are prose; f, g and h are keys")
+            .hasSize(5);
     }
 
     private static Properties load(String suffix) throws IOException {
@@ -207,40 +250,67 @@ class NotFoundMessageKeyTest {
         return false;
     }
 
-    /** {@code new ResourceNotFoundException("some sentence"...)} — prose, not a key. */
-    private static List<String> proseConstructions() throws IOException {
+    /** Every prose-form construction in the main tree, grouped by file name. */
+    private static Map<String, List<String>> proseConstructions() throws IOException {
+        Map<String, List<String>> byFile = new TreeMap<>();
         try (Stream<Path> files = Files.walk(MAIN_JAVA)) {
-            return files
-                .filter(p -> p.toString().endsWith(".java"))
-                .flatMap(NotFoundMessageKeyTest::proseIn)
-                .sorted()
-                .toList();
+            for (Path file : files.filter(p -> p.toString().endsWith(".java")).toList()) {
+                String source = Files.readString(file, StandardCharsets.UTF_8);
+                // HAPI FHIR has a ResourceNotFoundException of its own, which takes prose.
+                if (source.contains("import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;")) {
+                    continue;
+                }
+                String name = file.getFileName().toString();
+                List<String> prose = proseIn(name, source);
+                if (!prose.isEmpty()) {
+                    byFile.put(name, prose);
+                }
+            }
         }
-    }
-
-    private static Stream<String> proseIn(Path file) {
-        final String source;
-        try {
-            source = Files.readString(file, StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new IllegalStateException("Cannot read " + file, e);
-        }
-        String name = file.getFileName().toString();
-        return source.lines()
-            .map(String::trim)
-            .filter(line -> line.contains("new ResourceNotFoundException(\""))
-            .filter(NotFoundMessageKeyTest::firstArgumentIsProse)
-            .map(line -> name + " :: " + line);
+        return byFile;
     }
 
     /**
-     * A key looks like {@code patient.notFound}; prose contains a space. The
-     * space is what separates the two, because a key never carries one.
+     * The prose-form constructions in one source file. The first argument is
+     * prose when it is anything but a key: a string literal that is not
+     * key-shaped (or is concatenated), a same-file String constant whose value
+     * is not key-shaped, or a call that has already resolved a message. A
+     * variable or a key constant passes; the bundle tests hold those.
      */
-    private static boolean firstArgumentIsProse(String line) {
-        int open = line.indexOf("new ResourceNotFoundException(\"");
-        int start = open + "new ResourceNotFoundException(\"".length();
-        int close = line.indexOf('"', start);
-        return close > start && line.substring(start, close).contains(" ");
+    private static List<String> proseIn(String name, String source) {
+        Map<String, String> constants = new HashMap<>();
+        Matcher c = STRING_CONSTANT.matcher(source);
+        while (c.find()) {
+            constants.put(c.group(1), c.group(2));
+        }
+        List<String> prose = new ArrayList<>();
+        Matcher m = CONSTRUCTION.matcher(source);
+        while (m.find()) {
+            int close = MessageBundleParityTest.matchingParen(source, m.end());
+            if (close < 0) {
+                continue;
+            }
+            List<String> args = MessageBundleParityTest.topLevelArguments(source.substring(m.end(), close));
+            if (!args.isEmpty() && isProse(args.get(0), constants)) {
+                int line = 1 + (int) source.substring(0, m.start()).chars().filter(ch -> ch == '\n').count();
+                prose.add(name + ":" + line + " :: " + args.get(0).replaceAll("\\s+", " "));
+            }
+        }
+        return prose;
+    }
+
+    private static boolean isProse(String firstArgument, Map<String, String> constants) {
+        if (firstArgument.startsWith("\"")) {
+            boolean singleLiteral = firstArgument.endsWith("\"")
+                && firstArgument.indexOf('"', 1) == firstArgument.length() - 1;
+            return !(singleLiteral
+                && MESSAGE_KEY.matcher(firstArgument.substring(1, firstArgument.length() - 1)).matches());
+        }
+        if (PRE_RESOLVED.matcher(firstArgument).matches()) {
+            return true;
+        }
+        String head = firstArgument.split("[\\s+]", 2)[0];
+        String value = constants.get(head);
+        return value != null && (!MESSAGE_KEY.matcher(value).matches() || !head.equals(firstArgument));
     }
 }

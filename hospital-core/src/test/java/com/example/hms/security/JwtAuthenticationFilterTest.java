@@ -43,20 +43,13 @@ class JwtAuthenticationFilterTest {
     @Mock
     private HospitalUserDetailsService hospitalUserDetailsService;
 
-    /** PR #228 review fixup — JwtAuthenticationFilter now also depends on
-     *  OrganizationLifecycleStatusService and GlobalSessionRevocationService.
-     *  Both are mocked here so @InjectMocks can populate every constructor
-     *  parameter; the lifecycle service is only consulted post-auth and the
-     *  revocation service returns null by default which my filter check
-     *  treats as "not revoked". */
+    /** The tenant lifecycle gate, shared with the Keycloak filter; only consulted post-auth. */
     @Mock
-    private com.example.hms.service.OrganizationLifecycleStatusService lifecycleStatusService;
+    private TenantLifecycleGate tenantLifecycleGate;
 
-    /** MVP-c batch — JwtAuthenticationFilter now also depends on the
-     *  hospital-level lifecycle status service for the per-hospital
-     *  login block. Same posture as the org-level mock above. */
+    /** The one tenant resolver: the filter builds its context through it (header included). */
     @Mock
-    private com.example.hms.service.HospitalLifecycleStatusService hospitalLifecycleStatusService;
+    private com.example.hms.security.tenant.ActingScopeResolver actingScopeResolver;
 
     @Mock
     private GlobalSessionRevocationService globalSessionRevocationService;
@@ -85,6 +78,27 @@ class JwtAuthenticationFilterTest {
         request.setRequestURI("/feature-flags");
 
         assertThat(filter.shouldNotFilter(request)).isTrue();
+    }
+
+    @Test
+    void shouldLeaveLogoutToTheController() {
+        // A refused bearer (idle, suspended tenant, blacklisted) must not be
+        // answered 401 before logout revokes the refresh token it carries.
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/auth/logout");
+        request.setContextPath("/api");
+
+        assertThat(filter.shouldNotFilter(request)).isTrue();
+    }
+
+    @Test
+    void shouldStillFilterAnyOtherAuthRoute() {
+        MockHttpServletRequest get = new MockHttpServletRequest("GET", "/api/auth/logout");
+        get.setContextPath("/api");
+        MockHttpServletRequest bootstrap = new MockHttpServletRequest("GET", "/api/auth/session/bootstrap");
+        bootstrap.setContextPath("/api");
+
+        assertThat(filter.shouldNotFilter(get)).isFalse();
+        assertThat(filter.shouldNotFilter(bootstrap)).isFalse();
     }
 
     @Test

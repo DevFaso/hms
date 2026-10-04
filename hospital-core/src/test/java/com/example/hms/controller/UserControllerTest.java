@@ -55,6 +55,7 @@ class UserControllerTest {
     @MockitoBean private HospitalRepository hospitalRepository;
     @MockitoBean private UserRepository userRepository;
     @MockitoBean private UserRoleHospitalAssignmentRepository assignmentRepository;
+    @MockitoBean private com.example.hms.utility.RoleValidator roleValidator;
 
     // -------------------------------------------------------------------------
     // adminRegister — SUPER_ADMIN without hospitalId must succeed (201)
@@ -212,19 +213,40 @@ class UserControllerTest {
     // -------------------------------------------------------------------------
 
     private void authenticateAs(String username, String... authorities) {
-        // Directly on the holder: the slice runs with addFilters=false, so
+        // Directly on the holders: the slice runs with addFilters=false, so
         // neither request.getUserPrincipal() nor the request-post-processor
-        // route reaches the controller. Same thread, so this is what
-        // canSeeDeleted() reads.
+        // route reaches the controller. The super-admin signal canSeeDeleted()
+        // reads is RoleValidator's, stubbed as it answers for such a token.
+        authenticateAs(username,
+            java.util.Arrays.asList(authorities).contains("ROLE_SUPER_ADMIN"), authorities);
+    }
+
+    private void authenticateAs(String username, boolean superAdminFlag, String... authorities) {
         org.springframework.security.core.context.SecurityContextHolder.getContext()
             .setAuthentication(
                 new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
                     username, "n/a", AuthorityUtils.createAuthorityList(authorities)));
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(superAdminFlag);
     }
 
     @org.junit.jupiter.api.AfterEach
     void clearSecurityContext() {
         org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void inflatedSuperAdminAuthority_withoutTheVerifiedFlag_getsTheLiveView() throws Exception {
+        // canSeeDeleted() asks RoleValidator's super-admin signal, not the
+        // authorities collection.
+        when(userService.getAllUsers(0, 10, false, false))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+        authenticateAs("impostor", false, "ROLE_SUPER_ADMIN");
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .get("/users").param("onlyDeleted", "true"))
+            .andExpect(status().isOk());
+
+        verify(userService).getAllUsers(0, 10, false, false);
     }
 
     @Test

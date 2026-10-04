@@ -39,6 +39,10 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.service.support.UserAccountAccess;
+import com.example.hms.service.support.UserAccountAccess.DirectoryScope;
+import com.example.hms.utility.MessageUtil;
+import org.springframework.security.access.AccessDeniedException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -71,16 +75,17 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class UserServiceImpl implements UserService {
+    private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
+    private static final String USER_NOT_FOUND_KEY = "user.notFound";
+
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
     private static final String ROLE_PATIENT = "ROLE_PATIENT";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-    private static final String HOSPITAL_NOT_FOUND_PREFIX = "Hospital not found with ID: ";
     private static final String ROLE_NURSE = "ROLE_NURSE";
     private static final String ROLE_PHARMACIST = "ROLE_PHARMACIST";
     private static final String ROLE_HOSPITAL_ADMIN = "ROLE_HOSPITAL_ADMIN";
     private static final String ROLE_DOCTOR = "ROLE_DOCTOR";
     private static final String ROLE_LAB_SCIENTIST = "ROLE_LAB_SCIENTIST";
-    private static final String USER_NOT_FOUND_PREFIX = "User not found with ID: ";
 
 
     private final UserRepository userRepository;
@@ -99,6 +104,7 @@ public class UserServiceImpl implements UserService {
     private final StaffRepository staffRepository;
     private final PatientRepository patientRepository;
     private final PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
+    private final UserAccountAccess accountAccess;
 
     @Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -145,8 +151,7 @@ public class UserServiceImpl implements UserService {
             createAssignmentIfAbsent(saved.getId(), patient.getId(), targetHospitalId);
         }
 
-        final String activationLink = String.format(
-                "%s/verify?email=%s&token=%s",
+        final String activationLink = com.example.hms.utility.ActivationLinks.build(
                 frontendBaseUrl, saved.getEmail(), saved.getActivationToken());
         try {
             emailService.sendActivationEmail(saved.getEmail(), activationLink);
@@ -276,6 +281,16 @@ public class UserServiceImpl implements UserService {
                 .map(r -> r == null ? "" : r.trim().toUpperCase(Locale.ROOT))
                 .anyMatch(r -> r.equals("PATIENT") || r.equals(ROLE_PATIENT));
 
+        // ---- 0) Who may grant these roles, before anything about the request
+        // is looked up, so a refused caller learns nothing from a duplicate
+        // check either. The hospital half of the check is at step 1.
+        final UserAccountAccess.Grant grant;
+        try {
+            grant = accountAccess.requireMayGrant(roleNames);
+        } catch (AccessDeniedException denied) {
+            throw refusedGrant(roleNames, denied);
+        }
+
         // ---- 0a) Duplicate checks ----
         if (isPatient) {
             // Epic-style: patients can span multiple hospitals.
@@ -311,8 +326,13 @@ public class UserServiceImpl implements UserService {
             }
         }
 
-        // ---- 1) Resolve hospital for this registration ----
-        UUID staffContextHospitalId = resolveHospitalForRegistration(request, roleNames, isPatient);
+        // ---- 1) Resolve hospital for this registration, and hold the grant to it ----
+        final UUID staffContextHospitalId;
+        try {
+            staffContextHospitalId = grant.requireAt(resolveHospitalForRegistration(request, roleNames, isPatient));
+        } catch (AccessDeniedException denied) {
+            throw refusedGrant(roleNames, denied);
+        }
 
         // ---- 2) Resolve Roles ----
         final Set<Role> roles = roleNames.stream()
@@ -412,34 +432,18 @@ public class UserServiceImpl implements UserService {
             // closes ActivationDeliveryTracker, so the registrar still sees
             // the outcome.
             TransactionCallbacks.afterCommit(() -> {
-                try {
-                    emailService.sendAdminWelcomeEmail(
+                boolean sent = com.example.hms.utility.ActivationDeliveryTracker.sendEmailAndReport(
+                    com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME,
+                    user.getEmail(),
+                    () -> emailService.sendAdminWelcomeEmail(
                         user.getEmail(), displayName,
                         user.getUsername(), request.getPassword(),
-                        roleName, hospitalName, activationUrl);
-                    log.info("📧 Welcome email dispatched to new user '{}'", user.getUsername());
-                    com.example.hms.utility.ActivationDeliveryTracker.report(
-                        com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()
-                            .channel(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.CHANNEL_EMAIL)
-                            .purpose(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME)
-                            .outcome(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_SENT)
-                            .target(com.example.hms.utility.ActivationDeliveryTracker.maskEmail(user.getEmail()))
-                            .build());
-                } catch (Exception e) {
-                    log.warn("⚠️ Failed to send welcome email to '{}': {}", user.getUsername(), e.getMessage());
-                    // Fixed detail: exception messages can embed the raw address
-                    // (EmailServiceImpl.validateAddresses does) and this DTO
-                    // leaves the server; the transport error stays in the log.
-                    com.example.hms.utility.ActivationDeliveryTracker.report(
-                        com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()
-                            .channel(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.CHANNEL_EMAIL)
-                            .purpose(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME)
-                            .outcome(emailService.deliversRealEmail()
-                                ? com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_FAILED
-                                : com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_NOT_CONFIGURED)
-                            .target(com.example.hms.utility.ActivationDeliveryTracker.maskEmail(user.getEmail()))
-                            .detail("send failed — transport error in server logs")
-                            .build());
+                        roleName, hospitalName, activationUrl),
+                    emailService::deliversRealEmail);
+                if (sent) {
+                    log.info("📧 Welcome email queued for new user '{}'", user.getUsername());
+                } else {
+                    log.warn("⚠️ Failed to queue welcome email for '{}'", user.getUsername());
                 }
             });
         }
@@ -549,7 +553,7 @@ public class UserServiceImpl implements UserService {
     private void upsertStaff(User user, UUID hospitalId, String lic,
                          List<UserRoleHospitalAssignment> assignments, AdminSignupRequest request, Set<Role> roles) {
         final Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_PREFIX + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
         staffRepository.findByUserIdAndHospitalId(user.getId(), hospital.getId())
             .map(Staff::getLicenseNumber)
@@ -636,21 +640,12 @@ public class UserServiceImpl implements UserService {
         u.setLastName(request.getLastName());
         u.setPhoneNumber(phone);
 
-        // Failures are recorded for usernames that do not exist, so a name
-        // probed before the account was created is already locked — and the
-        // lockout check in /auth/login returns 423 BEFORE authentication, so
-        // nothing about being newly created clears it. Without this the holder
-        // is refused on their very first login with the credentials just
-        // mailed to them, for up to the lock duration.
-        //
-        // (An earlier round removed this on the reasoning that the disabled
-        // arm would keep re-locking the key until activation. That arm is
-        // never reached while the account is locked: the 423 comes first.)
-        //
-        // After commit, like every other throttle write here: a licence
-        // conflict in upsertStaff or the transaction timeout would otherwise
-        // clear the counter for a registration that rolled back.
-        TransactionCallbacks.afterCommit(() -> loginAttemptService.resetAttempts(username));
+        // No throttle clear here. The lockout is keyed on the account id
+        // (LoginAttemptService), and a new account's id has no history:
+        // failures a prober recorded against this name before it existed stay
+        // on the name's own key, which the name stops using the moment an
+        // account holds it. The holder's first login with the credentials just
+        // mailed to them is never refused for someone else's probing.
 
         boolean isPatient = roles.stream().anyMatch(r -> ROLE_PATIENT.equalsIgnoreCase(r.getCode()));
 
@@ -748,7 +743,7 @@ public class UserServiceImpl implements UserService {
         if (hospitalId != null) {
             final UUID resolvedHospitalId = hospitalId;
             hospitalRepository.findById(resolvedHospitalId)
-                    .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_PREFIX + resolvedHospitalId));
+                    .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, resolvedHospitalId));
         }
         return hospitalId;
     }
@@ -767,7 +762,7 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException("Hospital must be provided for non-SUPER_ADMIN staff/admin roles.");
         }
         return hospitalRepository.findById(provided)
-                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_PREFIX + provided))
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, provided))
                 .getId();
     }
 
@@ -968,8 +963,10 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public UserResponseDTO getUserById(UUID id) {
+        // Refused exactly like a missing id: no existence oracle.
         User user = userRepository.findByIdWithRolesAndProfiles(id)
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + id));
+                .filter(accountAccess::canView)
+                .orElseThrow(() -> userNotFound(id));
         Set<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUser(user);
         return userMapper.toResponseDTO(user, assignments);
     }
@@ -978,8 +975,15 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public Page<UserSummaryDTO> getAllUsers(int page, int size, boolean includeDeleted,
                                             boolean onlyDeleted) {
+        DirectoryScope scope = accountAccess.requireDirectoryAccess();
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<User> users = userRepository.findAllPaged(includeDeleted, onlyDeleted, pageable);
+        if (!scope.everyone() && scope.hospitalIds().isEmpty()) {
+            return Page.empty(pageable);
+        }
+        // The deleted view is the super-admin's: a scoped call never asks for it.
+        boolean scoped = !scope.everyone();
+        Page<User> users = userRepository.findAllPaged(
+            !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable);
         return users.map(userMapper::toSummaryDTO);
     }
 
@@ -987,10 +991,20 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public Page<UserSummaryDTO> searchUsers(String name, String role, String email, int page, int size,
                                             boolean includeDeleted, boolean onlyDeleted) {
+        DirectoryScope scope = accountAccess.requireDirectoryAccess();
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<User> users = userRepository.searchUsers(
-            name, role, email, includeDeleted, onlyDeleted, pageable);
+        if (!scope.everyone() && scope.hospitalIds().isEmpty()) {
+            return Page.empty(pageable);
+        }
+        boolean scoped = !scope.everyone();
+        Page<User> users = userRepository.searchUsers(name, role, email,
+            !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable);
         return users.map(userMapper::toSummaryDTO);
+    }
+
+    /** The caller's hospitals, or the repository's sentinel when the directory is unscoped. */
+    private static java.util.Collection<UUID> directoryHospitals(DirectoryScope scope) {
+        return scope.everyone() ? UserRepository.DIRECTORY_UNSCOPED : scope.hospitalIds();
     }
 
     /*
@@ -1001,8 +1015,15 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public void deleteUser(UUID id) {
+        // An administrator of the account, or a registrar discarding the
+        // unclaimed patient account its own failed registration just created
+        // (patient-form's compensation). Anyone else: the missing-user answer,
+        // and a FAILURE row.
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> userNotFound(id));
+        if (!accountAccess.canDelete(user)) {
+            throw refused(AuditEventType.USER_DELETE, "delete", id);
+        }
 
         user.setDeleted(true);
         user.setActive(false);
@@ -1026,8 +1047,16 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public void restoreUser(UUID id) {
+        // The same tenant rule as editing: a hospital admin restores only an
+        // account whose assignments are all at hospitals they administer. A
+        // soft delete now DEACTIVATES the assignments rather than deleting
+        // them, so they are still there to decide that by; they come back
+        // inactive, and an administrator reactivates the ones still wanted.
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> userNotFound(id));
+        if (!accountAccess.canAdminister(user)) {
+            throw refused(AuditEventType.USER_ENABLE, "restore", id);
+        }
 
         user.setDeleted(false);
         user.setActive(true);
@@ -1035,8 +1064,8 @@ public class UserServiceImpl implements UserService {
         // A lockout collected while the account was switched off must not
         // survive it being switched on. After commit: a rollback must not
         // leave the counter cleared for an account that stayed deactivated.
-        final String restoredUsername = user.getUsername();
-        TransactionCallbacks.afterCommit(() -> loginAttemptService.resetAttempts(restoredUsername));
+        final UUID restoredId = user.getId();
+        TransactionCallbacks.afterCommit(() -> loginAttemptService.resetAttempts(restoredId));
 
         // Reactivate Staff records that were deactivated when the user was deleted
         List<Staff> staffRecords = staffRepository.findByUserId(id);
@@ -1087,7 +1116,18 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponseDTO updateUser(UUID id, UpdateUserRequestDTO dto) {
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> userNotFound(id));
+
+        // Editing your own account is the profile page: contact fields only,
+        // whoever you are. Anyone else's account needs an administrator of it
+        // (UserAccountAccess.canAdminister) and is otherwise refused exactly
+        // like a missing id, with a FAILURE row.
+        if (accountAccess.isSelf(user)) {
+            requireSelfServiceChangesOnly(user, dto);
+        } else if (!accountAccess.canAdminister(user)) {
+            throw refused(AuditEventType.USER_UPDATE, "update", id);
+        }
+        requireIdentifiersFree(user, dto);
 
         // ── Merge-preserve: only overwrite fields that are explicitly provided ──
 
@@ -1114,39 +1154,20 @@ public class UserServiceImpl implements UserService {
         }
 
         // Reactivation clears the login lockout, so the holder is not refused
-        // at the moment their account is switched on. The name is read AFTER
-        // the merge above, so the key is the one the account will actually be
-        // locked under, and the clear runs after commit so a failed save
-        // cannot free an account that stayed inactive.
-        //
-        // ONLY that key. A combined rename + reactivate does strand the old
-        // name's record — the lockout collected while the account was inactive
-        // lives under the name it had then, and nothing evicts it until
-        // isLocked() is called for that name after expiry. Clearing it anyway
-        // is the worse trade: the old name may now answer for another account,
-        // since the throttle map lowercases while uq_user_username does not.
-        // The stranded record is covered by the rename entry in tasklist.md.
-        //
-        // Not claimed to be collision-proof. uq_user_username is case
-        // sensitive while the throttle map lowercases, and updateUser applies
-        // no uniqueness check at all, so a rename to a case variant of a live
-        // account is possible on an endpoint with no @PreAuthorize — and that
-        // clears the other account's counter. It also leaves two rows the
-        // case-insensitive findByUsername cannot resolve, which breaks login
-        // for both: the throttle is the smaller half of that bug. The
-        // uniqueness check and the missing guard are the fix; both are in
-        // tasklist.md.
+        // at the moment their account is switched on. The throttle is keyed on
+        // the account id, so the clear reaches the lockout whatever name it was
+        // collected under, a combined rename + reactivate included, and never
+        // touches another account's. After commit, so a failed save cannot
+        // free an account that stayed inactive.
         //
         // The transition guard is about not clearing on an ordinary edit; it
-        // is NOT an authorization control. PUT /users/{id} has no
-        // @PreAuthorize, so a caller who wants to clear someone's throttle can
-        // send {active:false} then {active:true} — and that endpoint already
-        // lets them set the password outright. The gap is the missing guard,
-        // and the rename leak it leaves behind; both are in tasklist.md.
-        final String usernameAfterUpdate = user.getUsername();
+        // is NOT an authorization control. Authorization is the caller check
+        // at the top of this method: only an administrator of the account
+        // reaches here with a status change, since a self-edit cannot make one.
+        final UUID reactivatedId = user.getId();
         if (reactivated) {
             TransactionCallbacks.afterCommit(
-                () -> loginAttemptService.resetAttempts(usernameAfterUpdate));
+                () -> loginAttemptService.resetAttempts(reactivatedId));
         }
 
         // Password: only update if a new non-blank password is explicitly provided
@@ -1194,6 +1215,104 @@ public class UserServiceImpl implements UserService {
         return userMapper.toResponseDTO(updated, assignments);
     }
 
+    /**
+     * The fields an account holder may change on their own account through
+     * {@code PUT /users/{id}}: names and phone. The rest have their own
+     * endpoints, which apply rules this one does not: the password needs the
+     * current one and the history check ({@code POST /auth/me/change-password}),
+     * the username the character and uniqueness rules
+     * ({@code POST /auth/me/change-username}), the email the current password
+     * and a code sent to the new address ({@code POST /auth/me/change-email},
+     * then {@code /confirm}: it is where a password reset is sent, so a
+     * session changing it with no re-authentication would turn a stolen
+     * short-lived token into a permanent takeover), and nobody switches their
+     * own account on or off. An administrator of another account still sets
+     * its email here (the {@code canAdminister} path).
+     * Sending the current value back unchanged is not a change, so the
+     * profile form, which always sends the username and email, still works.
+     */
+    private static void requireSelfServiceChangesOnly(User user, UpdateUserRequestDTO dto) {
+        if (dto.getActive() != null && !dto.getActive().equals(user.isActive())) {
+            throw new BusinessException(MessageUtil.resolve("user.update.self.active"));
+        }
+        if (hasText(dto.getPassword())) {
+            throw new BusinessException(MessageUtil.resolve("user.update.self.password"));
+        }
+        if (hasText(dto.getUsername()) && !dto.getUsername().equals(user.getUsername())) {
+            throw new BusinessException(MessageUtil.resolve("user.update.self.username"));
+        }
+        if (hasText(dto.getEmail()) && !dto.getEmail().equals(user.getEmail())) {
+            throw new BusinessException(MessageUtil.resolve("user.update.self.email"));
+        }
+    }
+
+    /**
+     * A changed username or email must not be held by ANOTHER account in any
+     * letter case, deleted accounts included. uq_user_username is case
+     * sensitive but login resolves usernames case-insensitively, so renaming
+     * a nurse to a case variant of the super-admin's username would leave the
+     * super-admin's login unresolvable: a tenant admin locking out the
+     * platform admin. The same query shape as {@code changeOwnUsername}'s
+     * check, excluding the account itself; the message never names the other
+     * account.
+     */
+    private void requireIdentifiersFree(User user, UpdateUserRequestDTO dto) {
+        if (hasText(dto.getUsername()) && !dto.getUsername().equals(user.getUsername())
+                && userRepository.existsUsernameOnOtherAccount(dto.getUsername(), user.getId())) {
+            throw new BusinessException(MessageUtil.resolve("user.update.username.taken"));
+        }
+        if (hasText(dto.getEmail()) && !dto.getEmail().equals(user.getEmail())
+                && userRepository.existsEmailOnOtherAccount(dto.getEmail(), user.getId())) {
+            throw new BusinessException(MessageUtil.resolve("user.update.email.taken"));
+        }
+    }
+
+    /**
+     * A refused cross-account write: recorded as a FAILURE (actor id and
+     * target id only: no names, never the submitted values), then answered
+     * exactly like a missing account. The audit service writes in its own
+     * transaction, so the row survives this one's rollback.
+     */
+    private ResourceNotFoundException refused(AuditEventType type, String action, UUID targetId) {
+        auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .userId(accountAccess.currentUserId().orElse(null))
+                .eventType(type)
+                .eventDescription("User " + action + " refused: the caller may not administer this account")
+                .resourceId(targetId.toString())
+                .entityType("USER")
+                .status(AuditStatus.FAILURE)
+                .build());
+        return userNotFound(targetId);
+    }
+
+    /**
+     * A registration the caller may not grant, recorded: one FAILURE row with
+     * the actor id and the requested role codes only (no username, email,
+     * phone or password from the request). Returned for the caller to throw,
+     * a 403: unlike an id-based refusal this is not an existence question.
+     */
+    private AccessDeniedException refusedGrant(Set<String> roleNames, AccessDeniedException denied) {
+        List<String> requested = roleNames.stream()
+                .filter(Objects::nonNull)
+                .map(r -> r.trim().toUpperCase(Locale.ROOT))
+                .sorted()
+                .toList();
+        auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .userId(accountAccess.currentUserId().orElse(null))
+                .eventType(AuditEventType.USER_CREATE)
+                .eventDescription("User registration refused: the caller may not grant these roles")
+                .details(Map.of("requestedRoles", requested))
+                .entityType("USER")
+                .status(AuditStatus.FAILURE)
+                .build());
+        return denied;
+    }
+
+    /** The one answer for a missing account and for one the caller may not touch. */
+    private static ResourceNotFoundException userNotFound(UUID id) {
+        return new ResourceNotFoundException(USER_NOT_FOUND_KEY, id);
+    }
+
     /** True when the string is non-null and non-blank. */
     private static boolean hasText(String value) {
         return value != null && !value.isBlank();
@@ -1208,7 +1327,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public boolean verifyEmail(String email, String token) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+                .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByEmail", email));
 
         if (user.getActivationToken() == null
                 || !token.equals(user.getActivationToken())
@@ -1231,8 +1350,8 @@ public class UserServiceImpl implements UserService {
         // stayed inactive. (Note for whoever wires it up: unlike
         // AuthController#verifyEmail this method does NOT activate the user's
         // ROLE_PATIENT assignments — it only flips the Patient row.)
-        final String verifiedUsername = user.getUsername();
-        TransactionCallbacks.afterCommit(() -> loginAttemptService.resetAttempts(verifiedUsername));
+        final UUID verifiedId = user.getId();
+        TransactionCallbacks.afterCommit(() -> loginAttemptService.resetAttempts(verifiedId));
 
         // Activate the Patient entity to match the now-verified User
         patientRepository.findByUserId(user.getId()).ifPresent(patient -> {
@@ -1253,7 +1372,7 @@ public class UserServiceImpl implements UserService {
      */
     private Role getRoleByCode(String code) {
         return roleRepository.findByCode(code)
-                .orElseThrow(() -> new ResourceNotFoundException("Role not found: " + code));
+                .orElseThrow(() -> new ResourceNotFoundException("role.notfound", code));
     }
 
     /** Create a global user-role link if it doesn't already exist. */
@@ -1290,7 +1409,7 @@ public class UserServiceImpl implements UserService {
 
     private Hospital getDefaultHospital() {
         return hospitalRepository.findByCodeIgnoreCase("Hospital Yalgado Ouedraogo")
-                .orElseThrow(() -> new ResourceNotFoundException("Default hospital not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", "Hospital Yalgado Ouedraogo"));
     }
 
     /** Map job title from request or role codes */
@@ -1318,7 +1437,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public UUID getUserIdByUsername(String username) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username));
+                .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByUsername", username));
         return user.getId();
     }
 
@@ -1326,7 +1445,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void changeOwnPassword(UUID userId, String newPassword) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + userId));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, userId));
         String encodedPassword = passwordEncoder.encode(newPassword);
         user.setPasswordHash(encodedPassword);
         user.setPasswordChangedAt(LocalDateTime.now());
@@ -1345,7 +1464,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void changeOwnUsername(UUID userId, String newUsername) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + userId));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, userId));
         if (userRepository.findByUsername(newUsername).filter(u -> !u.getId().equals(userId)).isPresent()) {
             throw new IllegalArgumentException("Username '" + newUsername + "' is already taken.");
         }
@@ -1359,7 +1478,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void updateProfileImage(UUID userId, String imageUrl) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, userId));
 
         String oldImageUrl = user.getProfileImageUrl();
         user.setProfileImageUrl(imageUrl);

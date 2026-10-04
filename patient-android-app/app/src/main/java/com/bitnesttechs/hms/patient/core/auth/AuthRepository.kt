@@ -1,7 +1,18 @@
 package com.bitnesttechs.hms.patient.core.auth
 
+import androidx.annotation.StringRes
+import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.models.*
+import com.bitnesttechs.hms.patient.core.di.ApplicationScope
 import com.bitnesttechs.hms.patient.core.network.ApiService
+import com.bitnesttechs.hms.patient.core.network.ServerMessage
+import com.bitnesttechs.hms.patient.core.network.SessionCookieJar
+import com.bitnesttechs.hms.patient.BuildConfig
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import com.bitnesttechs.hms.patient.core.push.PushRegistrar
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -10,64 +21,186 @@ import javax.inject.Singleton
 
 sealed class AuthResult {
     object Success : AuthResult()
-    data class Error(val message: String) : AuthResult()
+
+    /**
+     * A refusal the screen renders from resources ([messageRes]) so it is in
+     * the app language; [detail] is the server's own sentence where there is
+     * one worth showing (it is localised from Accept-Language).
+     */
+    data class Error(
+        @StringRes val messageRes: Int,
+        val detail: String? = null,
+        /**
+         * The refusal may be an account that is not active yet: the backend
+         * answers 401 for both that and a wrong password (on purpose), so the
+         * screen offers the activation flow next to the error.
+         */
+        val offerActivation: Boolean = false
+    ) : AuthResult()
+
+    /**
+     * The password was right and a second factor is required. [enrolled] is
+     * false when the account has no factor yet: enrolment happens on the web
+     * portal, so the app can only explain that.
+     */
+    data class MfaRequired(val mfaToken: String, val enrolled: Boolean) : AuthResult()
 }
 
 @Singleton
 class AuthRepository @Inject constructor(
     private val api: ApiService,
-    private val tokenStorage: TokenStorage
+    private val tokenStorage: TokenStorage,
+    private val keycloak: KeycloakAuthService,
+    private val pushRegistrar: PushRegistrar,
+    @ApplicationScope private val appScope: CoroutineScope,
+    private val cookieJar: SessionCookieJar
 ) {
     private val _currentUser = MutableStateFlow<UserDto?>(null)
     val currentUser: StateFlow<UserDto?> = _currentUser.asStateFlow()
 
     val isLoggedIn: Boolean get() = tokenStorage.isLoggedIn
 
+    /** The session came from Keycloak SSO (its password is not HMS's to change). */
+    val isSsoSession: Boolean get() = tokenStorage.hasOidcSession
+
+    /** Credentials to remember once an MFA challenge started by [login] succeeds. */
+    private var pendingSavedCredentials: Pair<String, String>? = null
+
     suspend fun login(username: String, password: String, saveCredentials: Boolean): AuthResult {
+        pendingSavedCredentials = null
         return try {
             val response = api.login(LoginRequest(username, password))
             val body = response.body()
-            if (response.isSuccessful && body != null) {
-                // ── Patient-only gate ──────────────────────────────────
-                // The mobile app is exclusively for patients.  Reject
-                // any user who does not hold ROLE_PATIENT.
-                val roles = body.roles.orEmpty().map { it.uppercase() }
-                if (!roles.any { it.contains("PATIENT") }) {
-                    return AuthResult.Error(
-                        "This app is for patients only. Please use the web portal to sign in."
-                    )
-                }
-
-                // Login response is FLAT — token + user fields at top level
-                tokenStorage.accessToken = body.accessToken
-                tokenStorage.refreshToken = body.refreshToken
-                tokenStorage.userId = body.id
-                if (saveCredentials) {
+            if (response.isSuccessful && body != null && body.mfaRequired) {
+                val token = body.mfaToken?.takeIf { it.isNotBlank() }
+                    ?: return AuthResult.Error(R.string.login_error_failed)
+                if (saveCredentials) pendingSavedCredentials = username to password
+                AuthResult.MfaRequired(token, body.mfaEnrolled)
+            } else if (response.isSuccessful && body != null) {
+                val result = acceptTokens(body)
+                if (result is AuthResult.Success && saveCredentials) {
                     tokenStorage.savedUsername = username
                     tokenStorage.savedPassword = password
                 }
-                _currentUser.value = body.user // computed property builds UserDto from flat fields
-                AuthResult.Success
+                result
+            } else if (response.isSuccessful) {
+                AuthResult.Error(R.string.login_error_failed)
             } else {
                 val errorBody = response.errorBody()?.string()
                 val parsedMessage = parseErrorMessage(errorBody)
-                val msg = when (response.code()) {
-                    401 -> "Invalid username or password"
-                    403 -> "Account locked or disabled"
-                    404 -> "Server not reachable"
+                when (response.code()) {
+                    // Also the answer for an account that is not active yet.
+                    401 -> AuthResult.Error(R.string.login_error_invalid_credentials, offerActivation = true)
+                    403 -> AuthResult.Error(R.string.login_error_locked)
+                    404 -> AuthResult.Error(R.string.login_error_unreachable)
                     // KC-3 cutover (S-03): once the backend flips
                     // app.auth.oidc.required=true, /auth/login responds 410 Gone
                     // with a JSON body steering the user to SSO. Surface that
-                    // message verbatim so the UI does not show a raw blob.
-                    410 -> parsedMessage
-                        ?: "Single sign-on is required. Please use the SSO button."
-                    else -> parsedMessage ?: "Login failed (${response.code()})"
+                    // message with our own headline so the UI does not show a raw blob.
+                    410 -> AuthResult.Error(R.string.login_error_sso_required, parsedMessage)
+                    else -> AuthResult.Error(R.string.login_error_failed, parsedMessage)
                 }
-                AuthResult.Error(msg)
             }
         } catch (e: Exception) {
-            AuthResult.Error(e.message ?: "Network error")
+            AuthResult.Error(R.string.login_error_unreachable)
         }
+    }
+
+    /**
+     * The second step of a sign-in that answered `mfaRequired`: a TOTP or a
+     * backup code with the challenge token. Its success body is a normal
+     * login response and is accepted exactly like one.
+     */
+    suspend fun verifyMfa(mfaToken: String, code: String): AuthResult {
+        return try {
+            val response = api.verifyMfa(MfaVerifyRequest(mfaToken, code.trim()))
+            val body = response.body()
+            if (response.isSuccessful && body != null) {
+                val result = acceptTokens(body)
+                if (result is AuthResult.Success) {
+                    pendingSavedCredentials?.let { (u, p) ->
+                        tokenStorage.savedUsername = u
+                        tokenStorage.savedPassword = p
+                    }
+                    pendingSavedCredentials = null
+                }
+                result
+            } else if (response.code() == 401 || response.code() == 400) {
+                AuthResult.Error(R.string.mfa_error_invalid_code, parseErrorMessage(response.errorBody()?.string()))
+            } else {
+                AuthResult.Error(R.string.login_error_failed, parseErrorMessage(response.errorBody()?.string()))
+            }
+        } catch (e: Exception) {
+            AuthResult.Error(R.string.login_error_unreachable)
+        }
+    }
+
+    /** A login-shaped body with tokens (password or MFA step): patient gate, store, bootstrap. */
+    private suspend fun acceptTokens(body: LoginResponse): AuthResult {
+        val accessToken = body.accessToken?.takeIf { it.isNotBlank() }
+            ?: return AuthResult.Error(R.string.login_error_failed)
+        // ── Patient-only gate ──────────────────────────────────
+        // The mobile app is exclusively for patients.  Reject
+        // any user who does not hold ROLE_PATIENT.
+        if (!isPatient(body.roles)) {
+            return AuthResult.Error(R.string.login_error_patients_only)
+        }
+        // Login response is FLAT — token + user fields at top level
+        tokenStorage.accessToken = accessToken
+        tokenStorage.refreshToken = body.refreshToken
+        return completeSignIn(sso = false, fallbackUserId = body.id)
+    }
+
+    /**
+     * The second half of every sign-in (password, MFA, SSO): resolve the HMS
+     * user id from `/auth/session/bootstrap` and persist it, so chat and the
+     * device-only notes find the same identity whichever button was used.
+     *
+     * The password login body already carries `users.id` ([fallbackUserId]),
+     * so a bootstrap that cannot be reached there still leaves a usable
+     * session. An SSO session has no other source — the token `sub` is the
+     * Keycloak id — so there a failed bootstrap ends the session rather than
+     * leave the patient signed in with chat and notes silently unusable.
+     */
+    suspend fun completeSignIn(sso: Boolean, fallbackUserId: String? = null): AuthResult {
+        val boot = runCatching { api.getSessionBootstrap() }.getOrNull()
+            ?.takeIf { it.isSuccessful }
+            ?.body()
+        if (boot != null && !isPatient(boot.roles)) {
+            tokenStorage.clearAll()
+            return AuthResult.Error(R.string.login_error_patients_only)
+        }
+        val userId = boot?.userId?.takeIf { it.isNotBlank() }
+            ?: fallbackUserId?.takeIf { !sso && it.isNotBlank() }
+        if (userId == null) {
+            tokenStorage.clearAll()
+            return AuthResult.Error(R.string.login_error_session)
+        }
+        tokenStorage.userId = userId
+        _currentUser.value = UserDto(
+            id = userId,
+            username = boot?.username.orEmpty(),
+            email = boot?.email.orEmpty(),
+            firstName = boot?.firstName.orEmpty(),
+            lastName = boot?.lastName.orEmpty(),
+            roles = boot?.roles.orEmpty()
+        )
+        // Bind this installation's push token to the patient (silent, one attempt).
+        pushRegistrar.registerAsync()
+        return AuthResult.Success
+    }
+
+    /**
+     * A session signed in before the bootstrap existed (an SSO session never
+     * stored a user id) resolves it once, quietly: a failure here leaves the
+     * session as it was and is retried at the next start.
+     */
+    suspend fun ensureUserId() {
+        if (!tokenStorage.isLoggedIn || !tokenStorage.userId.isNullOrBlank()) return
+        val boot = runCatching { api.getSessionBootstrap() }.getOrNull()
+            ?.takeIf { it.isSuccessful }
+            ?.body() ?: return
+        boot.userId?.takeIf { it.isNotBlank() }?.let { tokenStorage.userId = it }
     }
 
     suspend fun biometricLogin(): AuthResult {
@@ -76,14 +209,89 @@ class AuthRepository @Inject constructor(
         return if (username != null && password != null) {
             login(username, password, saveCredentials = false)
         } else {
-            AuthResult.Error("No saved credentials for biometric login")
+            AuthResult.Error(R.string.login_error_no_saved_credentials)
         }
     }
 
-    suspend fun logout() {
-        try { api.logout() } catch (_: Exception) {}
+    /**
+     * Ends the session on the device at once and on the server as far as it
+     * can be reached.
+     *
+     * The tokens are captured BEFORE the local state is cleared and the
+     * server calls carry them explicitly (see [AuthInterceptor]: a request
+     * that brings its own Authorization header never enters the
+     * refresh-on-401 path, so a 401 on the way out cannot loop or resurrect
+     * the session). Local state is cleared whatever the outcome, and the
+     * revocation runs on the application scope so an unreachable server
+     * never holds the patient on the sign-out screen.
+     */
+    suspend fun logout(): SignOut {
+        val ending = captureSessionEnd()
+        // Keycloak's end-session request is built from the stored AuthState,
+        // so it has to be read before that state is cleared.
+        val endSessionIntent = if (tokenStorage.hasOidcSession) {
+            runCatching { keycloak.buildEndSessionIntent() }.getOrNull()
+        } else null
         tokenStorage.clearAll()
+        cookieJar.clear()
         _currentUser.value = null
+        if (ending != null) appScope.launch { endSessionOnServer(ending) }
+        return SignOut(endSessionIntent)
+    }
+
+    /**
+     * What is left for the screen after sign-out: for an SSO session, the
+     * Keycloak end-session request to open (otherwise the browser keeps the
+     * Keycloak login and the next person on a shared phone walks straight in).
+     */
+    data class SignOut(val keycloakEndSession: android.content.Intent?)
+
+    /** What the server needs to revoke the session, read while it still exists. */
+    internal data class SessionEnd(
+        val bearer: String,
+        /** The HMS refresh token; null for an SSO session, whose token HMS cannot revoke. */
+        val hmsRefreshToken: String?,
+        val keycloakRevocation: KeycloakAuthService.Revocation?,
+        /** This session's XSRF-TOKEN, if the backend issued one: the logout sends it itself. */
+        val xsrfToken: String? = null
+    )
+
+    internal fun captureSessionEnd(): SessionEnd? {
+        val oidcToken = tokenStorage.oidcAccessToken
+        val accessToken = oidcToken ?: tokenStorage.accessToken ?: return null
+        return SessionEnd(
+            bearer = "Bearer $accessToken",
+            hmsRefreshToken = if (oidcToken == null) tokenStorage.refreshToken else null,
+            keycloakRevocation = if (oidcToken != null) keycloak.pendingRevocation() else null,
+            xsrfToken = runCatching { cookieJar.xsrfToken(apiUrl) }.getOrNull()
+        )
+    }
+
+    /**
+     * POST /auth/logout with the captured bearer and refresh token (the server
+     * blacklists both jtis), then, for an SSO session, the refresh token to
+     * Keycloak's revocation endpoint. Every step is best effort and bounded.
+     */
+    internal suspend fun endSessionOnServer(ending: SessionEnd) {
+        // Unbind the push token first, while the captured token still
+        // authenticates (the contract's order); silent, whatever happens.
+        withTimeoutOrNull(SERVER_SIGN_OUT_TIMEOUT_MS) { runCatching { pushRegistrar.unregister(ending.bearer) } }
+        withTimeoutOrNull(SERVER_SIGN_OUT_TIMEOUT_MS) {
+            runCatching {
+                // Only what was captured: the cookie jar skips this path, so a
+                // logout that lands after the next sign-in can neither send nor
+                // clear the new session's cookies.
+                api.logout(
+                    ending.bearer,
+                    LogoutRequest(ending.hmsRefreshToken),
+                    ending.xsrfToken,
+                    ending.xsrfToken?.let { "${SessionCookieJar.XSRF_COOKIE}=$it" }
+                )
+            }
+        }
+        ending.keycloakRevocation?.let { revocation ->
+            withTimeoutOrNull(SERVER_SIGN_OUT_TIMEOUT_MS) { runCatching { keycloak.revoke(revocation) } }
+        }
     }
 
     suspend fun loadCurrentUser(): UserDto? {
@@ -104,6 +312,14 @@ class AuthRepository @Inject constructor(
         } catch (_: Exception) { null }
     }
 
+    private companion object {
+        const val SERVER_SIGN_OUT_TIMEOUT_MS = 15_000L
+        val apiUrl = (BuildConfig.API_BASE_URL + "/").toHttpUrl()
+    }
+
+    private fun isPatient(roles: List<String>?): Boolean =
+        roles.orEmpty().any { it.uppercase().contains("PATIENT") }
+
     /**
      * Extract a user-readable message from a Spring `MessageResponse`-style
      * error body (`{"message": "..."}` or `{"error": "..."}`). Returns null
@@ -115,22 +331,5 @@ class AuthRepository @Inject constructor(
      * {@code org.json.JSONObject}. This is intentionally lenient: malformed
      * input simply returns null, never throws.
      */
-    internal fun parseErrorMessage(body: String?): String? {
-        if (body.isNullOrBlank()) return null
-        for (key in listOf("message", "error")) {
-            val match = Regex("\"$key\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").find(body)
-            val raw = match?.groupValues?.getOrNull(1)
-            if (!raw.isNullOrBlank()) {
-                return unescapeJsonString(raw)
-            }
-        }
-        return null
-    }
-
-    private fun unescapeJsonString(raw: String): String =
-        raw.replace("\\\"", "\"")
-            .replace("\\\\", "\\")
-            .replace("\\n", "\n")
-            .replace("\\r", "\r")
-            .replace("\\t", "\t")
+    internal fun parseErrorMessage(body: String?): String? = ServerMessage.parse(body)
 }

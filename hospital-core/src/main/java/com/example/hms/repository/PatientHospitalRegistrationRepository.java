@@ -75,6 +75,14 @@ public interface PatientHospitalRegistrationRepository extends JpaRepository<Pat
     // 🔍 Add a method to find active registrations by patient user ID(Could not create query for public abstract )
     List<PatientHospitalRegistration> findByPatientUserIdAndActiveTrue(UUID userId);
 
+    /**
+     * The hospital of every registration, in ANY status, of every patient
+     * record linked to this account. Ids only: an authorisation check has no
+     * business decrypting a patient row.
+     */
+    @Query("SELECT r.hospital.id FROM PatientHospitalRegistration r WHERE r.patient.user.id = :userId")
+    List<UUID> findHospitalIdsByPatientUserId(@Param("userId") UUID userId);
+
     // Add query to find by patient username and hospital name
     @Query("SELECT r FROM PatientHospitalRegistration r WHERE r.patient.user.username = :username AND r.hospital.name = :hospitalName")
     Optional<PatientHospitalRegistration> findByPatientUsernameAndHospitalName(@Param("username") String username, @Param("hospitalName") String hospitalName);

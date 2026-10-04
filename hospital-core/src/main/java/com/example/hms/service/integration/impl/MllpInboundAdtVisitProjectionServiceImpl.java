@@ -24,6 +24,7 @@ import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.integration.MllpInboundAdtVisitProjectionService;
 import com.example.hms.service.integration.message.MllpRecordingContext;
 import com.example.hms.utility.Hl7FieldBounds;
+import com.example.hms.utility.Hl7SenderText;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedAdtMessage;
 
 import java.time.LocalDateTime;
@@ -144,7 +145,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             log.warn("ADT visit-sync skipped — PV1-19 is wider than its column "
                     + "(sender={}/{} hospital={} msgCtrlId={})",
                 sendingApplication, sendingFacility, hospitalId, loggedControlId);
-            return VisitProjectionResult.SKIPPED;
+            return VisitProjectionResult.SKIPPED_OVER_WIDTH;
         }
 
         ProjectionContext ctx = new ProjectionContext(
@@ -155,7 +156,9 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             parsed.visitNumber().trim(),
             trimToNull(sendingApplication),
             trimToNull(sendingFacility),
-            trimToNull(messageControlId)
+            // Stored as sent (spaces aside), not trim()med: the same MSH-10
+            // rule as the ORU replay key, so ABC and ABC+BEL stay distinct.
+            MllpRecordingContext.messageControlIdKey(messageControlId)
         );
 
         Optional<VisitProjectionResult> reconciled = tryReconcileAdmission(ctx);
@@ -200,7 +203,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         admissionRepository.save(row);
         log.info("ADT visit-sync reconciled — admission={} visit={} sender={}/{} hospital={} event={} result={} msgCtrlId={}",
             row.getId(), ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
-            ctx.parsed.triggerEvent(), result, ctx.controlId);
+            ctx.parsed.triggerEvent(), result, ctx.loggedControlId);
         return Optional.of(result);
     }
 
@@ -235,8 +238,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
                 AuditEventType.ADMISSION_DISCHARGED, row, ctx,
                 String.format(
                     "ADT^A03 discharge — visit=%s sender=%s/%s hospital=%s patient=%s dischargeAt=%s msgCtrlId=%s",
-                    ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
-                    ctx.patient.getId(), dischargeAt, ctx.controlId));
+                    ctx.quotedVisitNumber(), ctx.quotedApp(), ctx.quotedFac(), ctx.hospitalId,
+                    ctx.patient.getId(), dischargeAt, ctx.quotedControlId()));
         }
         return VisitProjectionResult.ADMISSION_DISCHARGED;
     }
@@ -265,11 +268,16 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         // is handled as an unresolvable destination - the transfer is still
         // reconciled and audited - and the audit records that it was over
         // width instead of quoting it: never truncated, never stored whole.
+        //
+        // The marker is ours and unquoted; a destination the sender wrote is
+        // always quoted. That is what makes the marker unforgeable: a sender
+        // whose PV1-3 reads "(over 255 characters)" is audited as
+        // destination="(over 255 characters)", never as the marker itself.
         boolean destinationOverWidth =
             !Hl7FieldBounds.fits(destination, Hl7FieldBounds.ASSIGNED_LOCATION_MAX);
         String auditedDestination = destinationOverWidth
             ? "(over " + Hl7FieldBounds.ASSIGNED_LOCATION_MAX + " characters)"
-            : destination;
+            : Hl7SenderText.quote(destination);
 
         Department previous = row.getDepartment();
         Department resolved = destinationOverWidth
@@ -283,12 +291,12 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             AuditEventType.ADMISSION_TRANSFERRED, row, ctx,
             String.format(
                 "ADT^A02 transfer — visit=%s sender=%s/%s hospital=%s patient=%s destination=%s resolved=%s previous=%s msgCtrlId=%s",
-                ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
+                ctx.quotedVisitNumber(), ctx.quotedApp(), ctx.quotedFac(), ctx.hospitalId,
                 ctx.patient.getId(),
-                auditedDestination == null ? "" : auditedDestination,
+                auditedDestination,
                 resolved != null ? resolved.getId() : NULL_HOSPITAL_PLACEHOLDER,
                 previous != null ? previous.getId() : NULL_HOSPITAL_PLACEHOLDER,
-                ctx.controlId));
+                ctx.quotedControlId()));
         return VisitProjectionResult.ADMISSION_TRANSFERRED;
     }
 
@@ -309,8 +317,9 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         Optional<Department> byName =
             departmentRepository.findByHospitalIdAndNameIgnoreCase(hospitalId, token);
         if (byName.isPresent()) return byName.get();
-        log.warn("ADT^A02 transfer destination '{}' could not be resolved at hospital {} — department change skipped",
-            token, hospitalId);
+        String loggedDestination = Hl7SenderText.quote(token);
+        log.warn("ADT^A02 transfer destination {} could not be resolved at hospital {} — department change skipped",
+            loggedDestination, hospitalId);
         return null;
     }
 
@@ -357,7 +366,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         encounterRepository.save(row);
         log.info("ADT visit-sync reconciled — encounter={} visit={} sender={}/{} hospital={} event={} msgCtrlId={}",
             row.getId(), ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
-            ctx.parsed.triggerEvent(), ctx.controlId);
+            ctx.parsed.triggerEvent(), ctx.loggedControlId);
         return Optional.of(VisitProjectionResult.ENCOUNTER_RECONCILED);
     }
 
@@ -425,7 +434,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
 
         log.info("ADT visit-sync auto-created admission={} visit={} sender={}/{} hospital={} patient={} provider={} msgCtrlId={}",
             admission.getId(), ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
-            ctx.patient.getId(), ac.provider().getId(), ctx.controlId);
+            ctx.patient.getId(), ac.provider().getId(), ctx.loggedControlId);
         return Optional.of(VisitProjectionResult.ADMISSION_AUTOCREATED);
     }
 
@@ -585,7 +594,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
 
         log.info("ADT A04 auto-created encounter={} visit={} sender={}/{} hospital={} patient={} staff={} msgCtrlId={}",
             encounter.getId(), ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
-            ctx.patient.getId(), ac.provider().getId(), ctx.controlId);
+            ctx.patient.getId(), ac.provider().getId(), ctx.loggedControlId);
         return Optional.of(VisitProjectionResult.ENCOUNTER_AUTOCREATED);
     }
 
@@ -660,8 +669,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
                 .resourceId(encounter.getId().toString())
                 .eventDescription(String.format(
                     "ADT^A04 auto-create — visit=%s sender=%s/%s hospital=%s patient=%s msgCtrlId=%s",
-                    ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
-                    ctx.patient.getId(), ctx.controlId))
+                    ctx.quotedVisitNumber(), ctx.quotedApp(), ctx.quotedFac(), ctx.hospitalId,
+                    ctx.patient.getId(), ctx.quotedControlId()))
                 .build();
             auditEventLogService.logEvent(request);
         } catch (RuntimeException ex) {
@@ -684,8 +693,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
                 .resourceId(admission.getId().toString())
                 .eventDescription(String.format(
                     "ADT^A01 auto-create — visit=%s sender=%s/%s hospital=%s patient=%s msgCtrlId=%s",
-                    ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
-                    ctx.patient.getId(), ctx.controlId))
+                    ctx.quotedVisitNumber(), ctx.quotedApp(), ctx.quotedFac(), ctx.hospitalId,
+                    ctx.patient.getId(), ctx.quotedControlId()))
                 .build();
             auditEventLogService.logEvent(request);
         } catch (RuntimeException ex) {
@@ -737,6 +746,11 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         final String app;
         final String fac;
         final String controlId;
+        /**
+         * MSH-10 as the log lines show it: {@link MllpRecordingContext#quotedControlId},
+         * computed once so no log call evaluates a method in its arguments.
+         */
+        final String loggedControlId;
 
         ProjectionContext(
             ParsedAdtMessage parsed,
@@ -756,6 +770,31 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             this.app = app;
             this.fac = fac;
             this.controlId = controlId;
+            this.loggedControlId = MllpRecordingContext.quotedControlId(controlId);
+        }
+
+        /*
+         * The sender's text as the persisted audit descriptions show it:
+         * quoted and escaped (Hl7SenderText), so a visit number, a sender
+         * pair or an MSH-10 cannot end its slot and write text that reads as
+         * ours, nor carry an ANSI escape or a line separator into the audit
+         * trail. An absent value is Hl7SenderText.ABSENT, unquoted.
+         */
+
+        String quotedVisitNumber() {
+            return Hl7SenderText.quote(visitNumber);
+        }
+
+        String quotedApp() {
+            return Hl7SenderText.quote(app);
+        }
+
+        String quotedFac() {
+            return Hl7SenderText.quote(fac);
+        }
+
+        String quotedControlId() {
+            return Hl7SenderText.quote(controlId);
         }
     }
 }

@@ -30,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -123,6 +124,110 @@ class MllpInboundAdtServiceImplTest {
             hospital, "REG", "HOSP1"))
             .isEqualTo(MllpInboundOutcome.ACCEPTED);
         verify(patientRepository, never()).save(any());
+    }
+
+    private void knownRegisteredPatient() {
+        when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-1"))
+            .thenReturn(Optional.of(empiHit(patientId)));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospital.getId()))
+            .thenReturn(Optional.of(new PatientHospitalRegistration()));
+    }
+
+    @Test
+    @DisplayName("An over-width PV1-19 still ACKs AA (demographics landed) but leaves a dead letter naming MSH-10")
+    void anOverWidthVisitNumberLeavesADeadLetterButStillAccepts() {
+        knownRegisteredPatient();
+        when(visitProjection.projectVisit(any(), any(), any(), any(), any(), any()))
+            .thenReturn(MllpInboundAdtVisitProjectionService.VisitProjectionResult.SKIPPED_OVER_WIDTH);
+
+        MllpInboundOutcome outcome = service.processAdt(
+            adt("MRN-1", "Doe", "Jane", LocalDate.of(1985, 1, 1)), hospital, "REG", "HOSP1", "CTRL-9");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.ACCEPTED);
+        verify(patientRepository).save(patient);
+        ArgumentCaptor<String> correlation = ArgumentCaptor.forClass(String.class);
+        verify(messageRecorder).recordMessage(
+            eq("MLLP:REG/HOSP1"), any(),
+            eq(IntegrationMessageDirection.INBOUND),
+            eq("ADT^A08"), isNull(),
+            eq(IntegrationMessageStatus.FAILED),
+            eq("visit sync skipped: PV1-19 exceeds 255 characters (MSH-10 \"CTRL-9\")"),
+            correlation.capture());
+        assertThat(correlation.getValue()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("An ordinary skip (sync off, no PV1-19) records nothing")
+    void anOrdinarySkipRecordsNothing() {
+        knownRegisteredPatient();
+        when(visitProjection.projectVisit(any(), any(), any(), any(), any(), any()))
+            .thenReturn(MllpInboundAdtVisitProjectionService.VisitProjectionResult.SKIPPED);
+
+        assertThat(service.processAdt(
+            adt("MRN-1", "Doe", "Jane", LocalDate.of(1985, 1, 1)), hospital, "REG", "HOSP1", "CTRL-9"))
+            .isEqualTo(MllpInboundOutcome.ACCEPTED);
+        verify(messageRecorder, never()).recordMessage(
+            any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    private ParsedAdtMessage adtWith(String last, String sex, String city) {
+        return new ParsedAdtMessage(
+            "A08", "MRN-1", "AUTH",
+            last, "Jane", "",
+            LocalDate.of(1985, 1, 1), sex,
+            "1 Main St", city, "", "01000", "BF",
+            "I", "WARD-A", "VISIT-1", null, null);
+    }
+
+    @Test
+    @DisplayName("An over-width demographic is refused before any lookup, with a dead letter naming the field, not the value")
+    void anOverWidthDemographicIsRefusedWithADeadLetter() {
+        String longName = "N".repeat(101);
+
+        MllpInboundOutcome outcome = service.processAdt(
+            adtWith(longName, "F", "Ouagadougou"), hospital, "REG", "HOSP1", "CTRL-W");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+        // Decided on the message alone: nothing about any tenant is read.
+        org.mockito.Mockito.verifyNoInteractions(empiService, patientRepository, registrationRepository);
+        verify(messageRecorder).recordMessage(
+            eq("MLLP:REG/HOSP1"), any(),
+            eq(IntegrationMessageDirection.INBOUND),
+            eq("ADT^A08"), isNull(),
+            eq(IntegrationMessageStatus.FAILED),
+            eq("PID-5 family name exceeds 100 characters (MSH-10 \"CTRL-W\")"),
+            any());
+    }
+
+    @Test
+    @DisplayName("Every demographic is checked as written: sex against 10, a city against 100")
+    void eachDemographicHasItsOwnLimit() {
+        String emoji = new String(Character.toChars(0x1F3E5));
+        service.processAdt(adtWith("Doe", "X".repeat(11), "City"), hospital, "REG", "HOSP1", null);
+        service.processAdt(adtWith("Doe", "F", "C".repeat(101)), hospital, "REG", "HOSP1", null);
+        // Counted as @Size counts at flush: 51 emoji are 102 UTF-16 units.
+        service.processAdt(adtWith(emoji.repeat(51), "F", "City"), hospital, "REG", "HOSP1", null);
+
+        ArgumentCaptor<String> reasons = ArgumentCaptor.forClass(String.class);
+        verify(messageRecorder, times(3)).recordMessage(
+            any(), any(), any(), any(), any(), any(), reasons.capture(), any());
+        assertThat(reasons.getAllValues()).containsExactly(
+            "PID-8 exceeds 10 characters",
+            "PID-11 city exceeds 100 characters",
+            "PID-5 family name exceeds 100 characters");
+        org.mockito.Mockito.verifyNoInteractions(empiService);
+    }
+
+    @Test
+    @DisplayName("A demographic at its limit, padded, is not refused: it is written trimmed")
+    void aDemographicAtTheLimitPaddedPasses() {
+        when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-1")).thenReturn(Optional.empty());
+
+        // Past the width check, to the EMPI lookup (which does not know it).
+        assertThat(service.processAdt(adtWith("  " + "N".repeat(100) + "  ", "F", "C".repeat(100)),
+            hospital, "REG", "HOSP1", null))
+            .isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
     }
 
     @Test
@@ -228,7 +333,7 @@ class MllpInboundAdtServiceImplTest {
         service.processAdt(adt("MRN-X", "Doe", "Jane", null), hospital, "REG", "HOSP1", "M2");
 
         ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
-        verify(messageRecorder, org.mockito.Mockito.times(2)).recordMessage(
+        verify(messageRecorder, times(2)).recordMessage(
             any(), any(), any(), any(), any(), any(), any(), ids.capture());
         assertThat(ids.getAllValues().get(0))
             .isNotNull()
@@ -252,7 +357,7 @@ class MllpInboundAdtServiceImplTest {
         ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<IntegrationMessageStatus> statuses =
             ArgumentCaptor.forClass(IntegrationMessageStatus.class);
-        verify(messageRecorder, org.mockito.Mockito.times(2)).recordMessage(
+        verify(messageRecorder, times(2)).recordMessage(
             any(), any(), any(), any(), any(), statuses.capture(), any(), ids.capture());
 
         // An unknown identifier and a cross-tenant refusal are both refusals

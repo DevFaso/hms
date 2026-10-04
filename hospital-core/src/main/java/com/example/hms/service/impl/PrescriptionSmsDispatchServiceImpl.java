@@ -10,7 +10,6 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.User;
 import com.example.hms.model.pharmacy.Pharmacy;
-import com.example.hms.service.pharmacy.PartnerNoShowReason;
 import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
 import com.example.hms.model.prescription.PrescriptionTransmission;
 import com.example.hms.payload.dto.prescription.PrescriptionSmsDispatchRequestDTO;
@@ -104,10 +103,10 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
         // which a pharmacy could accept — the double fill SENT_TO_PARTNER
         // exists to prevent.
         Prescription rx = prescriptionRepository.findByIdForUpdate(prescriptionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Prescription not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("prescription.notFound", prescriptionId));
         requireCallerHospital(auth, rx);
         Pharmacy pharmacy = pharmacyRepository.findById(request.getPharmacyId())
-                .orElseThrow(() -> new ResourceNotFoundException("Pharmacy not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notFound", request.getPharmacyId()));
 
         refuseWhileAwaitingClarification(rx);
         validateScope(rx, pharmacy);
@@ -164,11 +163,11 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
             if (authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN)) {
                 return;
             }
-            throw new ResourceNotFoundException("Prescription not found");
+            throw new ResourceNotFoundException("prescription.notFound", rx.getId());
         }
         UUID rxHospitalId = rx.getHospital() != null ? rx.getHospital().getId() : null;
         if (!callerHospitalId.equals(rxHospitalId)) {
-            throw new ResourceNotFoundException("Prescription not found");
+            throw new ResourceNotFoundException("prescription.notFound", rx.getId());
         }
     }
 
@@ -307,19 +306,14 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
     }
 
     /**
-     * The routing decision's {@code reason} shares its column with the
-     * no-show marker, so a client's note is defused on the way in exactly as
-     * {@code routeToPartner} defuses its own. Without it a note reading
-     * {@code " | [PARTNER_NO_SHOW] …"} would land at a segment start, and
-     * once {@code supersedeOpenDecisions} cancels that PARTNER decision the
-     * prescriber's history would read "The partner never delivered" about a
-     * dispatch nobody recorded one for. Only the server may assert the fact,
-     * and that has to hold at EVERY write into the column, not just one.
+     * The routing decision's {@code reason} is prose only: the partner no-show
+     * fact has its own column (V167), so nothing a client types into a note
+     * can be read back as that fact.
      */
     private static String dispatchReason(Pharmacy pharmacy, String note) {
         String reason = "Dispatched by SMS to " + pharmacy.getPharmacyType() + " " + pharmacy.getName();
         if (note != null && !note.isBlank()) {
-            reason += ". Note: " + PartnerNoShowReason.defuseAuthoredReason(note.trim());
+            reason += ". Note: " + note.trim();
         }
         return reason.length() > 1024 ? reason.substring(0, 1024) : reason;
     }

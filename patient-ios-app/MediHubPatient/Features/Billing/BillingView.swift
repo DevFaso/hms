@@ -90,7 +90,7 @@ struct InvoiceRowView: View {
                 Text(invoice.displayBalance, format: .currency(code: BillingView.currencyCode))
                     .font(.headline)
                     .foregroundColor(invoice.isPaid ? .secondary : .primary)
-                StatusBadge(text: invoice.status?.capitalized ?? "Pending",
+                StatusBadge(text: EnumLabel.text(.invoiceStatus, invoice.status ?? "SENT"),
                             color: invoice.statusColor)
             }
         }
@@ -116,37 +116,40 @@ struct PaymentSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Invoice") {
+                Section("payment_invoice".localized) {
                     HStack {
-                        Text(invoice.invoiceNumber ?? "Invoice")
+                        Text(invoice.invoiceNumber ?? "payment_invoice".localized)
                         Spacer()
                         Text(invoice.displayBalance, format: .currency(code: BillingView.currencyCode)).bold()
                     }
                 }
 
-                Section("Payment Amount") {
-                    TextField("Amount", text: $amount)
+                Section("payment_amount".localized) {
+                    TextField("payment_amount_placeholder".localized, text: $amount)
                         .keyboardType(.decimalPad)
                         .onAppear {
                             amount = String(format: "%.2f", invoice.displayBalance)
                         }
                 }
 
-                Section("Payment Method") {
-                    Picker("Method", selection: $selectedMethod) {
+                Section("payment_method".localized) {
+                    Picker("payment_method".localized, selection: $selectedMethod) {
                         ForEach(methods, id: \.self) { m in
-                            Text(m.replacingOccurrences(of: "_", with: " ").capitalized).tag(m)
+                            Text(EnumLabel.text(.paymentMethod, m)).tag(m)
                         }
                     }
                     .pickerStyle(.segmented)
                 }
 
-                Section("Reference (Optional)") {
-                    TextField("Transaction Reference", text: $reference)
+                // Method, reference and notes are all stored with the
+                // payment now, so the cashier can match a mobile-money
+                // reference against the provider's statement.
+                Section("payment_reference_optional".localized) {
+                    TextField("payment_reference_placeholder".localized, text: $reference)
                 }
 
-                Section("Notes (Optional)") {
-                    TextField("Notes", text: $notes)
+                Section("notes_optional".localized) {
+                    TextField("notes".localized, text: $notes)
                 }
 
                 if let err = errorMsg {
@@ -155,14 +158,14 @@ struct PaymentSheet: View {
                     }
                 }
             }
-            .navigationTitle("Make Payment")
+            .navigationTitle("make_payment".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("cancel".localized) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Pay") {
+                    Button("pay_action".localized) {
                         Task { await submitPayment() }
                     }
                     .disabled(isSubmitting || (Double(amount) ?? 0) <= 0)

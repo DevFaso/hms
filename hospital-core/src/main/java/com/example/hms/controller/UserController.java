@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.config.SecurityConstants;
 import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.AdminSignupRequest;
 import com.example.hms.payload.dto.MessageResponse;
@@ -7,6 +8,7 @@ import com.example.hms.payload.dto.UpdateUserRequestDTO;
 import com.example.hms.payload.dto.UserResponseDTO;
 import com.example.hms.payload.dto.UserSummaryDTO;
 import com.example.hms.service.UserService;
+import com.example.hms.utility.RoleValidator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -48,6 +50,7 @@ public class UserController {
 
     private final UserService userService;
     private final com.example.hms.repository.HospitalRepository hospitalRepository;
+    private final RoleValidator roleValidator;
 
     @WriteAudited(skip = true, reason = "service emits USER_CREATE / USER_UPDATE / USER_DELETE")
     @Operation(
@@ -55,7 +58,7 @@ public class UserController {
         description = "SUPER/HOSPITAL_ADMIN can register any role. RECEPTIONIST can only register PATIENT; hospital is resolved from JWT."
     )
     @PostMapping("/admin-register")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority(" + SecurityConstants.USER_REGISTRAR_AUTHORITIES + ")")
     public ResponseEntity<UserResponseDTO> adminRegister(
         @Valid @RequestBody AdminSignupRequest request,
         Authentication auth // inject instead of pulling from SecurityContextHolder
@@ -141,18 +144,25 @@ public class UserController {
         return ResponseEntity.badRequest().build();
     }
 
-    @Operation(summary = "Get user by ID")
+    // Who may read, edit, delete and restore which account, and who may use the
+    // directory, is decided in the service (UserAccountAccess), so no other
+    // entry point over UserService can skip it. A refused id answers 404, the
+    // same as a missing one.
+    @Operation(summary = "Get user by ID",
+        description = "Your own account, or one you administer (super-admin; hospital admin of a "
+            + "hospital the account is assigned to). Anything else answers 404.")
     @GetMapping("/{id}")
     public ResponseEntity<UserResponseDTO> getUserById(@PathVariable UUID id) {
         return ResponseEntity.ok(userService.getUserById(id));
     }
 
     @Operation(summary = "Get all users with pagination (summary view)",
-        description = "includeDeleted=true also returns soft-deleted accounts; onlyDeleted=true "
-            + "returns only them (the restore worklist). Both are honoured only for SUPER_ADMIN "
-            + "- the user directory is global, so surfacing deleted identities to a "
-            + "hospital-scoped admin would let one tenant enumerate another tenant's account "
-            + "history. Everyone else silently gets the live-only view.")
+        description = "Staff only: a caller with no active non-patient assignment gets 403. "
+            + "A super-admin sees every account; anyone else sees the live accounts holding an "
+            + "assignment (any role, active or not) at a hospital where the caller holds an "
+            + "active non-patient assignment. includeDeleted=true also returns soft-deleted "
+            + "accounts; onlyDeleted=true returns only them (the restore worklist). Both are "
+            + "honoured only for SUPER_ADMIN; everyone else silently gets the live-only view.")
     @GetMapping
     public ResponseEntity<Page<UserSummaryDTO>> getAllUsers(
             @RequestParam(defaultValue = "0") int page,
@@ -165,24 +175,27 @@ public class UserController {
     }
 
     /**
-     * Deleted-account visibility is SUPER_ADMIN-only. The user directory is
-     * global (not hospital-scoped), so honouring this for HOSPITAL_ADMIN
-     * would let one tenant's admin enumerate another tenant's deleted
-     * identities; scoping the directory itself is the larger pre-existing
-     * question, and the deleted view must not widen it.
+     * Deleted-account visibility is SUPER_ADMIN-only. A soft delete removes
+     * the account's assignments, so a deleted account belongs to no hospital
+     * and the hospital-scoped directory has nothing to match it on: honouring
+     * this for a HOSPITAL_ADMIN would hand them every tenant's deleted
+     * identities. The scoped service query has no deleted view at all.
      */
     private boolean canSeeDeleted() {
-        // From the SecurityContext, not a method-injected Authentication: the
-        // latter rides request.getUserPrincipal(), which is only populated by
-        // the security filter chain and is null in filterless slices.
-        Set<String> authorities = extractAuthorities(
-            org.springframework.security.core.context.SecurityContextHolder
-                .getContext().getAuthentication());
-        return authorities.contains(SUPER_ADMIN_AUTHORITY);
+        // The same super-admin signal the rest of the /users rules use
+        // (UserAccountAccess), so the two cannot disagree.
+        return roleValidator.isSuperAdminFromJwtClaim();
     }
 
     @WriteAudited(skip = true, reason = "service emits USER_CREATE / USER_UPDATE / USER_DELETE")
-    @Operation(summary = "Update user by ID (partial update — only send fields you want to change)")
+    @Operation(summary = "Update user by ID (partial update — only send fields you want to change)",
+        description = "Your own account: names and phone only. The password and username have "
+            + "their own endpoints (POST /auth/me/change-password, /auth/me/change-username); "
+            + "your email goes through POST /auth/me/change-email and its code (400 on a self "
+            + "change here), and nobody "
+            + "switches their own account on or off. Another account: super-admin, or a hospital admin when "
+            + "every one of its assignments is at a hospital they administer and it is not a "
+            + "super-admin. Anything else answers 404.")
     @PutMapping("/{id}")
     public ResponseEntity<UserResponseDTO> updateUser(@PathVariable UUID id,
                                                       @Valid @RequestBody UpdateUserRequestDTO dto) {
@@ -190,8 +203,12 @@ public class UserController {
     }
 
     @WriteAudited(skip = true, reason = "service emits USER_CREATE / USER_UPDATE / USER_DELETE")
-    @Operation(summary = "Delete user by ID (Soft Delete)")
+    @Operation(summary = "Delete user by ID (Soft Delete)",
+        description = "Administrators of the account, as for update. A registrar (the roles "
+            + "admin-register admits) may also discard the unclaimed patient account its own "
+            + "failed patient registration just created. Anything else answers 404.")
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority(" + SecurityConstants.USER_REGISTRAR_AUTHORITIES + ")")
     public ResponseEntity<MessageResponse> deleteUser(@PathVariable UUID id) {
         userService.deleteUser(id);
         return ResponseEntity.ok(new MessageResponse("User deleted successfully."));
@@ -205,7 +222,9 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
-    @Operation(summary = "Search users by name, role, or email with pagination (summary view)")
+    @Operation(summary = "Search users by name, role, or email with pagination (summary view)",
+        description = "Staff only: a caller with no active non-patient assignment gets 403. "
+            + "Scoped to the caller's hospitals exactly as GET /users is.")
     @GetMapping("/search")
     public ResponseEntity<Page<UserSummaryDTO>> searchUsers(
             @RequestParam(required = false) String name,

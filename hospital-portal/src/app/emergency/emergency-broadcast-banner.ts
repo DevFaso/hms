@@ -9,7 +9,7 @@ import { EmergencyBroadcastService } from '../services/emergency-broadcast.servi
   standalone: true,
   imports: [CommonModule, TranslateModule, DatePipe],
   templateUrl: './emergency-broadcast-banner.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './emergency-broadcast-banner.scss',
 })
 export class EmergencyBroadcastBannerComponent {

@@ -6,10 +6,10 @@
  * on `GET /me/results/review-queue`, which has no SecurityConfig matcher of
  * its own, so that annotation is the whole gate.
  *
- * The three names are listed literally rather than relying on
- * `DOCTOR_EQUIVALENT_ROLES`: `RoleContextService.hasAnyActiveRole` compares
- * raw strings and does NOT expand physician/surgeon into doctor, so a list of
- * `['ROLE_DOCTOR']` would hide the category from a surgeon the backend admits.
+ * The three names are listed literally so the list reads exactly as the
+ * annotation does. (`RoleContextService.hasAnyActiveRole` now applies doctor
+ * equivalence itself, so `['ROLE_DOCTOR']` would also admit a surgeon; the
+ * literal list predates that and stays as the mirror.)
  *
  * The /in-basket route itself is wider — it also admits nurses, midwives and
  * two lab roles — so this category is gated separately inside the page: the

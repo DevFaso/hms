@@ -75,6 +75,8 @@ public class SecurityConfig {
     // Path constants — context-path is /api, so Spring Security sees paths
     // *after* the context-path is stripped. All matchers are relative.
     // -----------------------------------------------------------------------
+    private static final String API_AUTH_LOGOUT = "/auth/logout";
+
     private static final String API_FEATURE_FLAGS = "/feature-flags";
     private static final String API_FEATURE_FLAGS_PATTERN = API_FEATURE_FLAGS + "/**";
 
@@ -140,17 +142,17 @@ public class SecurityConfig {
      * the role held there.
      *
      * <p>No machine role is admitted. {@code ROLE_FHIR_CLIENT} (named by
-     * {@code IdleSessionGate}) cannot be granted today — no migration, realm
-     * role or service-account client provisions it — and the Keycloak
-     * converter maps a role of ANY realm client to {@code ROLE_*}, so listing
-     * it would let an unrelated client role named {@code fhir_client} grant
-     * the whole chart. It comes back with a real way to provision it.
+     * {@code IdleSessionGate}) is refused because nothing can grant it today:
+     * no migration, realm role or service-account client provisions it. It
+     * comes back with a real way to provision it. (The Keycloak converter
+     * reads realm roles only, so a client role named {@code fhir_client}
+     * could not grant it either.)
      *
-     * <p>{@code ROLE_PHYSICIAN} and {@code ROLE_SURGEON} are named on top:
-     * {@code RoleExpansion} grants them {@code ROLE_DOCTOR} only on tokens
-     * HMS mints ({@code JwtTokenProvider}), not on Keycloak tokens, whose
-     * converter does not expand. Every other {@code ROLE_DOCTOR} guard in the
-     * code carries the same SSO gap; it is closed here only for this gate.
+     * <p>{@code ROLE_PHYSICIAN} and {@code ROLE_SURGEON} are named on top, and
+     * are now redundant, not required: {@code RoleExpansion} grants them
+     * {@code ROLE_DOCTOR} on both auth paths ({@code JwtTokenProvider} and
+     * {@code KeycloakJwtAuthenticationConverter}). They were added while the
+     * Keycloak converter did not expand; removing them is a later cleanup.
      */
     static final String[] FHIR_READER_AUTHORITIES = {
         ROLE_DOCTOR, RoleExpansion.ROLE_PHYSICIAN, ROLE_SURGEON, ROLE_NURSE, ROLE_MIDWIFE,
@@ -390,6 +392,22 @@ public class SecurityConfig {
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/register"),
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/bootstrap-signup"),
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/token/refresh"),
+                    // Logout from the native apps (Bearer + body refresh token, no
+                    // XSRF dance). A forged cross-site logout cannot carry the
+                    // SameSite=Strict refresh cookie, so it revokes nothing.
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, API_AUTH_LOGOUT),
+                    // MFA login step: authenticated by the one-time mfaToken in
+                    // the body, never by a cookie session.
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/mfa/verify"),
+                    // Change own password and the push-device registry: the
+                    // access token is read ONLY from the Authorization header
+                    // (JwtAuthenticationFilter.getJwtFromRequest, and the OIDC
+                    // resolver's default header-only delegate), never from a
+                    // cookie, so a cross-site request cannot carry credentials
+                    // and CSRF has nothing to protect. The native apps send no
+                    // XSRF header, which made these unreachable for them.
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/me/change-password"),
+                    PathPatternRequestMatcher.withDefaults().matcher("/me/push-devices/**"),
                     PathPatternRequestMatcher.withDefaults().matcher("/auth/password/**"),
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/resend-verification"),
                     // SockJS handshake & transport (xhr_send, xhr_streaming are POSTs
@@ -436,7 +454,12 @@ public class SecurityConfig {
                 // Refresh is public (access token may be expired)
                 .requestMatchers(HttpMethod.POST, "/auth/token/refresh").permitAll()
                 .requestMatchers("/auth/token/**").authenticated()
-                .requestMatchers("/auth/logout").authenticated()
+                // Logout is public: an idle client's access token has expired
+                // by the time it signs out, and it must still be able to hand
+                // back its refresh token for revocation. The endpoint only ever
+                // revokes the tokens presented to it (AuthController.logout).
+                .requestMatchers(HttpMethod.POST, API_AUTH_LOGOUT).permitAll()
+                .requestMatchers(API_AUTH_LOGOUT).authenticated()
                 .requestMatchers("/auth/verify-password").authenticated()
                 .requestMatchers("/auth/me/**").authenticated()
                 .requestMatchers("/auth/session/bootstrap").authenticated()
@@ -576,8 +599,10 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST)
 
                 // Allow all clinical staff to register users via admin-register
+                // The same list as UserController's two @PreAuthorize annotations;
+                // what each registrar may GRANT is UserAccountAccess.requireMayGrant.
                 .requestMatchers(HttpMethod.POST, "/users/admin-register")
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+                .hasAnyAuthority(SecurityConstants.authorities(SecurityConstants.USER_REGISTRAR_AUTHORITIES))
 
                 // -------------------- Hospitals (tenant-safe) --------------------
                 // /me/hospital and /me/hospitals return only the caller's assigned hospital(s).

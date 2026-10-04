@@ -33,6 +33,7 @@ import org.hl7.fhir.r4.model.OperationOutcome;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
@@ -41,6 +42,19 @@ import java.util.UUID;
 
 /**
  * FHIR R4 resource provider for {@code Patient}.
+ *
+ * <p>Every resource is mapped inside a transaction: {@link #read} and
+ * {@link #search} are read-only transactional (method by method: a
+ * class-level read-only transaction would also wrap the writes), and the
+ * writes are mapped by {@link PatientFhirWriteService} inside its own. The
+ * mapper walks the LAZY {@code Patient.hospitalRegistrations}, open-in-view
+ * is off and the HAPI servlet opens no transaction, so mapping outside one
+ * was a 500 for every caller.
+ *
+ * <p>A resource carries the MRN of the hospital the request is bound to
+ * ({@link FhirTenantBoundary#boundHospital}) and no other: every hospital's
+ * MRN would tell a reader at A where else the patient is registered, and
+ * under which record number.
  *
  * <p>Tenancy, stated as it is rather than as it was once described. Read and
  * {@code _id} search go through {@link PatientRepository#findById(Object)},
@@ -90,11 +104,13 @@ public class PatientFhirResourceProvider implements IResourceProvider {
     }
 
     @Read
+    @Transactional(readOnly = true)
     public org.hl7.fhir.r4.model.Patient read(@IdParam IdType id) {
         UUID uuid = parseUuid(id);
+        UUID boundHospital = FhirTenantBoundary.boundHospital(HospitalContextHolder.getContextOrEmpty());
         Patient entity = patientRepository.findById(uuid)
             .orElseThrow(() -> new ResourceNotFoundException(id));
-        return patientMapper.toFhir(entity);
+        return patientMapper.toFhir(entity, boundHospital);
     }
 
     /**
@@ -106,6 +122,7 @@ public class PatientFhirResourceProvider implements IResourceProvider {
      * parameter (which matches first / last / concatenated name).
      */
     @Search
+    @Transactional(readOnly = true)
     public List<org.hl7.fhir.r4.model.Patient> search(
         @OptionalParam(name = "_id") TokenParam idParam,
         @OptionalParam(name = "identifier") TokenParam identifier,
@@ -127,7 +144,7 @@ public class PatientFhirResourceProvider implements IResourceProvider {
                 return Collections.emptyList();
             }
             return patientRepository.findById(uuid)
-                .map(patientMapper::toFhir)
+                .map(patient -> patientMapper.toFhir(patient, boundHospital))
                 .map(List::of)
                 .orElseGet(Collections::emptyList);
         }
@@ -164,7 +181,7 @@ public class PatientFhirResourceProvider implements IResourceProvider {
         );
 
         return page.stream()
-            .map(patientMapper::toFhir)
+            .map(patient -> patientMapper.toFhir(patient, boundHospital))
             .toList();
     }
 
@@ -212,10 +229,10 @@ public class PatientFhirResourceProvider implements IResourceProvider {
                 OperationOutcome.IssueType.BUSINESSRULE
             );
         }
-        Patient saved = writeService.update(uuid, resource);
+        org.hl7.fhir.r4.model.Patient saved = writeService.update(uuid, resource);
         return new MethodOutcome()
-            .setId(new IdType("Patient", saved.getId().toString()))
-            .setResource(patientMapper.toFhir(saved));
+            .setId(new IdType("Patient", saved.getIdElement().getIdPart()))
+            .setResource(saved);
     }
 
     /**
@@ -242,10 +259,10 @@ public class PatientFhirResourceProvider implements IResourceProvider {
                 OperationOutcome.IssueType.STRUCTURE
             );
         }
-        Patient resolved = writeService.conditionalCreate(conditionalUrl, resource);
+        org.hl7.fhir.r4.model.Patient resolved = writeService.conditionalCreate(conditionalUrl, resource);
         return new MethodOutcome()
-            .setId(new IdType("Patient", resolved.getId().toString()))
-            .setResource(patientMapper.toFhir(resolved))
+            .setId(new IdType("Patient", resolved.getIdElement().getIdPart()))
+            .setResource(resolved)
             .setCreated(false);
     }
 

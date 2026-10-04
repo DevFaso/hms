@@ -17,7 +17,7 @@ import { RouterLink } from '@angular/router';
       </a>
     </div>
   `,
-  changeDetection: ChangeDetectionStrategy.Eager,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   styles: `
     .error-page {
       display: flex;

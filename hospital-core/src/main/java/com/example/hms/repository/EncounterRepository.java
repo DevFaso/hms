@@ -74,6 +74,9 @@ public interface EncounterRepository
 
     boolean existsById(UUID id);
 
+    /** Whether any encounter was recorded under this assignment (the attending's). */
+    boolean existsByAssignment_Id(UUID assignmentId);
+
     // Duplicate guards
     boolean existsByHospital_IdAndPatient_IdAndEncounterDate(
         UUID hospitalId, UUID patientId, LocalDateTime encounterDate

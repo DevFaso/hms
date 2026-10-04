@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.security.EncryptedStringConverter;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.tenant.TenantEntityListener;
@@ -31,6 +32,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.hibernate.annotations.BatchSize;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -259,8 +261,13 @@ public class Patient extends BaseEntity implements TenantScoped {
         foreignKey = @ForeignKey(name = "fk_patient_user"))
     private User user;
 
+    /**
+     * Batch-loaded: a FHIR Patient search maps a page of up to 50 patients,
+     * and each walks this collection (its MRN identifier).
+     */
     @Builder.Default
     @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 50)
     private Set<PatientHospitalRegistration> hospitalRegistrations = new HashSet<>();
 
     @Builder.Default
@@ -368,8 +375,8 @@ public class Patient extends BaseEntity implements TenantScoped {
         if (organizationId == null && effectiveContext.getActiveOrganizationId() != null) {
             organizationId = effectiveContext.getActiveOrganizationId();
         }
-        if (hospitalId == null && effectiveContext.getActiveHospitalId() != null) {
-            hospitalId = effectiveContext.getActiveHospitalId();
+        if (hospitalId == null && ActingScopeResolver.pinnedHospitalIdOf(effectiveContext) != null) {
+            hospitalId = ActingScopeResolver.pinnedHospitalIdOf(effectiveContext);
         }
         if (departmentId == null && !effectiveContext.getPermittedDepartmentIds().isEmpty()) {
             departmentId = effectiveContext.getPermittedDepartmentIds().iterator().next();

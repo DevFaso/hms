@@ -158,7 +158,7 @@
             · {{ 'LABOR.BLOOD_LOSS' | translate }}: {{ record.estimatedBloodLossMl }} ml
           }
         </p>
-        @for (alert of record.alerts ?? []; track $index) {
+        @for (alert of record.alerts; track $index) {
           <p>
             <span class="risk-badge risk-high" [title]="alert.triggeredBy">{{
               alert.message
@@ -217,7 +217,7 @@
                 {{ entry.pulseBpm ?? '—' }} · {{ entry.temperatureCelsius ?? '—' }}°C
               </td>
               <td>
-                @for (alert of entry.alerts ?? []; track $index) {
+                @for (alert of entry.alerts; track $index) {
                   <span
                     class="risk-badge {{
                       alert.severity === 'URGENT' ? 'risk-high' : 'risk-moderate'

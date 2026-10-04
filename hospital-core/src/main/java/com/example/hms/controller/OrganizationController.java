@@ -48,8 +48,9 @@ import org.springframework.context.i18n.LocaleContextHolder;
 @Tag(name = "Organization Management", description = "APIs for managing healthcare organizations")
 @SecurityRequirement(name = "Bearer Authentication")
 public class OrganizationController {
+    private static final String ORGANIZATION_NOT_FOUND_KEY = "organization.notFound";
 
-    private static final String ORGANIZATION_NOT_FOUND_MESSAGE = "Organization not found with ID: ";
+
 
     private final OrganizationRepository organizationRepository;
     private final OrganizationSecurityService organizationSecurityService;
@@ -90,7 +91,7 @@ public class OrganizationController {
             @RequestParam(defaultValue = "false") boolean includePolicies) {
         
         Organization organization = organizationRepository.findByIdWithHospitals(id)
-            .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_MESSAGE + id));
+            .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_KEY, id));
 
         OrganizationResponseDTO response;
         if (includePolicies) {
@@ -149,7 +150,7 @@ public class OrganizationController {
             @Valid @RequestBody OrganizationRequestDTO requestDTO) {
         
         Organization organization = organizationRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_MESSAGE + id));
+            .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_KEY, id));
 
         // Check if new code conflicts with existing organization (excluding current one)
         if (!organization.getCode().equals(requestDTO.getCode()) && 
@@ -180,7 +181,7 @@ public class OrganizationController {
             @Parameter(description = "Organization ID") @PathVariable UUID id) {
         
         Organization organization = organizationRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_MESSAGE + id));
+            .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_KEY, id));
 
         organization.setActive(false);
         organizationRepository.save(organization);
@@ -208,7 +209,7 @@ public class OrganizationController {
             @Parameter(description = "Organization ID") @PathVariable UUID id) {
         
         Organization organization = organizationRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_MESSAGE + id));
+            .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_KEY, id));
 
         organizationSecurityService.applyDefaultSecurityPolicies(id, organization.getType());
         

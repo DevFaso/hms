@@ -26,8 +26,6 @@ import {
 } from '../services/roi.service';
 import { PatientResponse } from '../services/patient.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
-import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
-import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 
@@ -49,15 +47,7 @@ type DecisionKind = 'fulfil' | 'deny' | 'cancel';
 @Component({
   selector: 'app-roi',
   standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    RouterModule,
-    TranslateModule,
-    PatientPickerComponent,
-    HospitalScopeChipComponent,
-    HospitalScopeHintComponent,
-  ],
+  imports: [CommonModule, FormsModule, RouterModule, TranslateModule, PatientPickerComponent],
   templateUrl: './roi.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './roi.scss',
@@ -101,7 +91,6 @@ export class RoiComponent implements OnInit, OnDestroy {
   private dialogOpener: HTMLElement | null = null;
 
   readonly pickerHospitalId = computed(() => this.roleCtx.effectiveHospitalIdForRequest());
-  readonly scopeReady = this.roleCtx.hasHospitalScope;
   /** Mirrors RoiWorklistController.DECISION_ROLES exactly. */
   readonly canDecide = computed(() =>
     this.roleCtx.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']),
@@ -115,14 +104,10 @@ export class RoiComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.loadSub = this.load$
       .pipe(
-        // switchMap: only the LATEST selection may update the view, and a
-        // push while unpinned CANCELS the in-flight request - a slow
-        // response for the previous hospital or status arriving after the
-        // table was cleared must be dropped, not rendered.
+        // switchMap: only the LATEST status selection may update the view -
+        // a slow response for the previous status must be dropped, not
+        // rendered. A scope change rebuilds the page (the route gate).
         switchMap((status) => {
-          if (!this.scopeReady()) {
-            return of({ rows: [] as RoiRequest[], total: 0, failed: false });
-          }
           this.loading.set(true);
           this.loadFailed.set(false);
           return this.roiService.worklist(status, 0, RoiComponent.PAGE_SIZE).pipe(
@@ -143,24 +128,11 @@ export class RoiComponent implements OnInit, OnDestroy {
         this.total.set(state.total);
         this.loadFailed.set(state.failed);
       });
-    this.reloadForScope();
+    this.load$.next(this.activeStatus());
   }
 
   ngOnDestroy(): void {
     this.loadSub?.unsubscribe();
-  }
-
-  onScopeChange(_hospitalId: string | null): void {
-    this.reloadForScope();
-  }
-
-  private reloadForScope(): void {
-    this.rows.set([]);
-    this.total.set(0);
-    this.loadFailed.set(false);
-    // Push even when unpinned: the emission is what cancels an in-flight
-    // response from the previously pinned hospital.
-    this.load$.next(this.activeStatus());
   }
 
   setStatus(status: RoiRequestStatus): void {

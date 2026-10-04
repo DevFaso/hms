@@ -5,6 +5,8 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.platform.PlatformReleaseStatus;
 import com.example.hms.enums.platform.PlatformServiceStatus;
 import com.example.hms.enums.platform.PlatformServiceType;
+import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ConflictException;
 import com.example.hms.model.platform.OrganizationPlatformService;
 import com.example.hms.model.platform.PlatformReleaseWindow;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
@@ -25,22 +27,24 @@ import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.SuperAdminPlatformRegistryService;
+import com.example.hms.utility.MessageUtil;
+import com.example.hms.utility.TransactionCallbacks;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
+import java.time.ZoneId;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.Optional;
-import java.util.function.Predicate;
-import org.springframework.context.MessageSource;
-import org.springframework.context.i18n.LocaleContextHolder;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -48,8 +52,40 @@ import org.springframework.context.i18n.LocaleContextHolder;
 @Transactional
 public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatformRegistryService {
 
-    private static final DateTimeFormatter DISPLAY_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final String SYSTEM_ACTOR = "system";
+
+    /** Default and ceiling for the release-window list (D6). */
+    static final int DEFAULT_RELEASE_WINDOW_LIMIT = 50;
+    static final int MAX_RELEASE_WINDOW_LIMIT = 200;
+
+    /*
+     * D8 — the module cards partition the service types, so every service is
+     * counted in exactly one card and each card counts what its title says.
+     * Before, "Communications" counted ANALYTICS and "Terminology packs"
+     * counted INVENTORY (there is no terminology service type at all); the
+     * third card is now named for what it holds.
+     */
+    private static final Set<PlatformServiceType> CLINICAL_TYPES = EnumSet.of(
+        PlatformServiceType.EHR,
+        PlatformServiceType.LIMS,
+        PlatformServiceType.ORTHO_IMAGING,
+        PlatformServiceType.REMOTE_MONITORING,
+        PlatformServiceType.RESP_TELEMED,
+        PlatformServiceType.CLINICAL_ANALYTICS);
+    private static final Set<PlatformServiceType> COMMUNICATION_TYPES = EnumSet.of(
+        PlatformServiceType.PEDIATRIC_MESSAGING);
+    private static final Set<PlatformServiceType> OPERATIONS_TYPES = EnumSet.of(
+        PlatformServiceType.BILLING,
+        PlatformServiceType.INVENTORY,
+        PlatformServiceType.ANALYTICS);
+
+    /**
+     * Release windows are stored without a zone (startsAt/endsAt are
+     * LocalDateTime) and read as the server's local time, so "now" is taken in
+     * that same zone. Moving to an explicit zone needs the stored values
+     * migrated with it.
+     */
+    private static final ZoneId RELEASE_WINDOW_ZONE = ZoneId.systemDefault();
 
     private final OrganizationPlatformServiceRepository organizationPlatformServiceRepository;
     private final HospitalPlatformServiceLinkRepository hospitalPlatformServiceLinkRepository;
@@ -67,16 +103,17 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
         long disabledDepartmentLinks = departmentPlatformServiceLinkRepository.countByEnabledFalse();
         long disabledLinks = disabledHospitalLinks + disabledDepartmentLinks;
 
-        long unreadAlerts = notificationRepository.countByReadFalse();
-        long staleAlerts = notificationRepository.countByReadFalseAndCreatedAtBefore(LocalDateTime.now().minusHours(4));
+        LocalDateTime now = LocalDateTime.now(RELEASE_WINDOW_ZONE);
+        long unreadNotifications = notificationRepository.countByReadFalse();
+        long staleNotifications = notificationRepository.countByReadFalseAndCreatedAtBefore(now.minusHours(4));
 
-        List<PlatformReleaseWindow> activeWindows = platformReleaseWindowRepository.findByStatusIn(List.of(
-            PlatformReleaseStatus.SCHEDULED,
-            PlatformReleaseStatus.IN_PROGRESS
-        ));
-        long upcomingReleases = platformReleaseWindowRepository.countByEndsAtAfter(LocalDateTime.now());
-        Optional<PlatformReleaseWindow> latestReleaseWindow = platformReleaseWindowRepository.findFirstByOrderByUpdatedAtDesc();
-        LocalDateTime latestWindowTimestamp = latestReleaseWindow
+        // D7: derived from the window's times at read, not from the status
+        // stamped at creation (which never advanced, so "active" only grew).
+        long activeWindows = platformReleaseWindowRepository
+            .countByStatusNotAndEndsAtAfter(PlatformReleaseStatus.CANCELLED, now);
+        long upcomingWindows = platformReleaseWindowRepository
+            .countByStatusNotAndStartsAtAfter(PlatformReleaseStatus.CANCELLED, now);
+        LocalDateTime lastReleaseWindowChange = platformReleaseWindowRepository.findFirstByOrderByUpdatedAtDesc()
             .map(window -> Optional.ofNullable(window.getUpdatedAt()).orElse(window.getCreatedAt()))
             .orElse(null);
 
@@ -84,94 +121,54 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
         // summary, so the request locale applies.
         Locale locale = LocaleContextHolder.getLocale();
 
-        ModuleCardDTO clinical = buildModule(
-            "platform.module.clinical",
-            services,
-            service -> EnumSet.of(PlatformServiceType.EHR, PlatformServiceType.LIMS).contains(service.getServiceType()),
-            locale
-        );
-        clinical.setMeta(text("platform.module.clinical.meta", locale));
+        ModuleCardDTO clinical = buildModule("platform.module.clinical", services, CLINICAL_TYPES, locale);
+        ModuleCardDTO communications = buildModule("platform.module.communications", services, COMMUNICATION_TYPES, locale);
+        ModuleCardDTO operations = buildModule("platform.module.operations", services, OPERATIONS_TYPES, locale);
 
-        ModuleCardDTO communications = buildModule(
-            "platform.module.communications",
-            services,
-            service -> {
-                String provider = Objects.toString(service.getProvider(), "").toLowerCase(Locale.ENGLISH);
-                String notes = Optional.ofNullable(service.getMetadata())
-                    .map(meta -> Objects.toString(meta.getIntegrationNotes(), ""))
-                    .orElse("")
-                    .toLowerCase(Locale.ENGLISH);
-                return provider.contains("sms")
-                    || provider.contains("smtp")
-                    || provider.contains("voice")
-                    || notes.contains("sms")
-                    || notes.contains("smtp")
-                    || notes.contains("push")
-                    || service.getServiceType() == PlatformServiceType.ANALYTICS;
-            },
-            locale
-        );
-        communications.setMeta(text("platform.module.communications.meta", locale));
-
-        ModuleCardDTO terminology = buildModule(
-            "platform.module.terminology",
-            services,
-            service -> service.getServiceType() == PlatformServiceType.INVENTORY
-                || Optional.ofNullable(service.getMetadata())
-                    .map(meta -> Objects.toString(meta.getInventorySystem(), ""))
-                    .map(value -> !value.isBlank())
-                    .orElse(false),
-            locale
-        );
-        terminology.setMeta(text("platform.module.terminology.meta", locale));
-
+        // D8: each task reports a metric this system really holds, under a
+        // name that says what it is. None of them is a job that runs, so none
+        // carries a "last run" time (the old values were now-5min / now-12min).
         List<AutomationTaskDTO> automation = List.of(
             buildAutomationTask(new AutomationTaskInput(
-                "queue-health",
-                text("platform.automation.queueHealth.title", locale),
-                text("platform.automation.queueHealth.description", locale),
-                unreadAlerts,
-                staleAlerts,
+                "unread-notifications",
+                text("platform.automation.unreadNotifications.title", locale),
+                text("platform.automation.unreadNotifications.description", locale),
+                unreadNotifications,
+                staleNotifications,
                 Thresholds.of(10, 30),
-                text("platform.automation.queueHealth.metricLabel", locale),
-                text("platform.automation.queueHealth.metricValue", locale, String.valueOf(unreadAlerts)),
-                text(unreadAlerts > 30
-                    ? "platform.automation.queueHealth.nextAction.critical"
-                    : "platform.automation.queueHealth.nextAction.normal", locale),
-                LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5)
+                text("platform.automation.unreadNotifications.metricLabel", locale),
+                text("platform.automation.unreadNotifications.metricValue", locale,
+                    String.valueOf(unreadNotifications), String.valueOf(staleNotifications)),
+                text(unreadNotifications > 30
+                    ? "platform.automation.unreadNotifications.nextAction.critical"
+                    : "platform.automation.unreadNotifications.nextAction.normal", locale)
             ), locale),
             buildAutomationTask(new AutomationTaskInput(
-                "retry-spikes",
-                text("platform.automation.retrySpikes.title", locale),
-                text("platform.automation.retrySpikes.description", locale),
+                "disabled-links",
+                text("platform.automation.disabledLinks.title", locale),
+                text("platform.automation.disabledLinks.description", locale),
                 disabledLinks,
                 disabledLinks,
                 Thresholds.of(5, 15),
-                text("platform.automation.retrySpikes.metricLabel", locale),
-                text("platform.automation.retrySpikes.metricValue", locale, String.valueOf(disabledLinks)),
+                text("platform.automation.disabledLinks.metricLabel", locale),
+                text("platform.automation.disabledLinks.metricValue", locale, String.valueOf(disabledLinks)),
                 text(disabledLinks > 15
-                    ? "platform.automation.retrySpikes.nextAction.critical"
-                    : "platform.automation.retrySpikes.nextAction.normal", locale),
-                LocalDateTime.now(ZoneOffset.UTC).minusMinutes(12)
+                    ? "platform.automation.disabledLinks.nextAction.critical"
+                    : "platform.automation.disabledLinks.nextAction.normal", locale)
             ), locale),
-            buildReleaseAutomationTask(
-                upcomingReleases,
-                activeWindows.size(),
-                Optional.ofNullable(latestWindowTimestamp).orElseGet(() -> LocalDateTime.now(ZoneOffset.UTC)),
-                locale
-            )
+            buildReleaseAutomationTask(upcomingWindows, activeWindows, locale)
         );
 
         ActionPanelDTO actions = ActionPanelDTO.builder()
             .totalIntegrations(services.size())
             .pendingIntegrations(services.stream().filter(s -> s.getStatus() == PlatformServiceStatus.PENDING).count())
             .disabledLinks(disabledLinks)
-            .activeReleaseWindows(activeWindows.size())
-            .lastSnapshotGeneratedAt(Optional.ofNullable(latestWindowTimestamp).map(DISPLAY_FORMAT::format).orElse(null))
+            .activeReleaseWindows(activeWindows)
+            .lastReleaseWindowChangeAt(lastReleaseWindowChange)
             .build();
 
         return SuperAdminPlatformRegistrySummaryDTO.builder()
-            .modules(List.of(clinical, communications, terminology))
+            .modules(List.of(clinical, communications, operations))
             .automationTasks(automation)
             .actions(actions)
             .build();
@@ -179,8 +176,16 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
 
     @Override
     public PlatformReleaseWindowResponseDTO scheduleReleaseWindow(PlatformReleaseWindowRequestDTO request) {
-        if (request.getEndsAt().isBefore(request.getStartsAt())) {
-            throw new IllegalArgumentException("Release window end time must be after the start time");
+        if (!request.getEndsAt().isAfter(request.getStartsAt())) {
+            throw new BusinessException("platform.releaseWindow.endBeforeStart");
+        }
+        // D7b: the unique (name, environment) constraint used to fire at
+        // flush, after the audit row had already committed in its own
+        // transaction — a refused schedule left an audit entry behind.
+        if (platformReleaseWindowRepository.existsByNameAndEnvironment(request.getName(), request.getEnvironment())) {
+            // No arguments: ConflictException's handler splits a message on its
+            // first ':' (a "field:" prefix), and a window name may contain one.
+            throw new ConflictException(MessageUtil.resolve("platform.releaseWindow.duplicate"));
         }
 
         PlatformReleaseWindow releaseWindow = PlatformReleaseWindow.builder()
@@ -189,54 +194,76 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
             .environment(request.getEnvironment())
             .startsAt(request.getStartsAt())
             .endsAt(request.getEndsAt())
-            .status(resolveStatusForWindow(request.getStartsAt(), request.getEndsAt()))
+            .status(statusAt(PlatformReleaseStatus.SCHEDULED, request.getStartsAt(), request.getEndsAt(), LocalDateTime.now(RELEASE_WINDOW_ZONE)))
             .freezeChanges(request.isFreezeChanges())
             .ownerTeam(request.getOwnerTeam())
             .notes(request.getNotes())
             .build();
 
-        PlatformReleaseWindow saved = platformReleaseWindowRepository.save(releaseWindow);
+        // Flushed here so a constraint the check above did not see (a
+        // concurrent insert) fails this call, before any audit is scheduled.
+        PlatformReleaseWindow saved = platformReleaseWindowRepository.saveAndFlush(releaseWindow);
         recordReleaseWindowAudit(saved);
-        return mapReleaseWindow(saved);
+        return mapReleaseWindow(saved, LocalDateTime.now(RELEASE_WINDOW_ZONE));
+    }
+
+    @Override
+    @Transactional(Transactional.TxType.SUPPORTS)
+    public List<PlatformReleaseWindowResponseDTO> listReleaseWindows(Integer limit) {
+        int size = limit == null || limit < 1
+            ? DEFAULT_RELEASE_WINDOW_LIMIT
+            : Math.min(limit, MAX_RELEASE_WINDOW_LIMIT);
+        LocalDateTime now = LocalDateTime.now(RELEASE_WINDOW_ZONE);
+        // Newest start first: upcoming windows lead, the oldest history drops
+        // off the end of the capped page.
+        return platformReleaseWindowRepository
+            .findAll(PageRequest.of(0, size, Sort.by(Sort.Direction.DESC, "startsAt")))
+            .stream()
+            .map(window -> mapReleaseWindow(window, now))
+            .toList();
     }
 
     /**
      * MVP-c3 — emit a {@link AuditEventType#PLATFORM_REGISTRY_UPDATED}
      * row so the platform-config audit-search tab picks up release-
-     * window scheduling. Audit failures must not roll back the
-     * release-window write — same posture as
-     * {@link com.example.hms.service.impl.RegionPolicyServiceImpl#recordAudit}.
+     * window scheduling. After commit (D7b): {@code logEvent} writes in its
+     * own transaction, so recording it inline kept the row even when this
+     * one rolled back. Audit failures never fail the schedule — same posture
+     * as {@link com.example.hms.service.impl.RegionPolicyServiceImpl#recordAudit}.
      */
     private void recordReleaseWindowAudit(PlatformReleaseWindow saved) {
-        try {
-            HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
-            String actor = ctx.getPrincipalUsername();
-            String description = String.format(
-                "Release window scheduled name=%s env=%s starts=%s ends=%s freeze=%s owner=%s",
-                saved.getName(), saved.getEnvironment(),
-                saved.getStartsAt(), saved.getEndsAt(),
-                saved.isFreezeChanges(), saved.getOwnerTeam());
-            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                .userId(ctx.getPrincipalUserId())
-                .userName(actor != null && !actor.isBlank() ? actor : SYSTEM_ACTOR)
-                .eventType(AuditEventType.PLATFORM_REGISTRY_UPDATED)
-                .eventDescription(description)
-                .resourceId(saved.getId() == null ? null : saved.getId().toString())
-                .resourceName(saved.getName())
-                .entityType("PLATFORM_RELEASE_WINDOW")
-                .status(AuditStatus.SUCCESS)
-                .build());
-        } catch (RuntimeException ex) {
-            log.error("[PLATFORM-REGISTRY] Failed to record audit for release window {}",
-                saved.getName(), ex);
-        }
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+        String actor = ctx.getPrincipalUsername();
+        String description = String.format(
+            "Release window scheduled name=%s env=%s starts=%s ends=%s freeze=%s owner=%s",
+            saved.getName(), saved.getEnvironment(),
+            saved.getStartsAt(), saved.getEndsAt(),
+            saved.isFreezeChanges(), saved.getOwnerTeam());
+        AuditEventRequestDTO event = AuditEventRequestDTO.builder()
+            .userId(ctx.getPrincipalUserId())
+            .userName(actor != null && !actor.isBlank() ? actor : SYSTEM_ACTOR)
+            .eventType(AuditEventType.PLATFORM_REGISTRY_UPDATED)
+            .eventDescription(description)
+            .resourceId(saved.getId() == null ? null : saved.getId().toString())
+            .resourceName(saved.getName())
+            .entityType("PLATFORM_RELEASE_WINDOW")
+            .status(AuditStatus.SUCCESS)
+            .build();
+        TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(event);
+            } catch (RuntimeException ex) {
+                log.error("[PLATFORM-REGISTRY] Failed to record audit for release window {}",
+                    saved.getName(), ex);
+            }
+        });
     }
 
     @Override
     @Transactional(Transactional.TxType.SUPPORTS)
     public PlatformRegistrySnapshotDTO getRegistrySnapshot() {
         return PlatformRegistrySnapshotDTO.builder()
-            .generatedAt(LocalDateTime.now())
+            .generatedAt(LocalDateTime.now(RELEASE_WINDOW_ZONE))
             .summary(getRegistrySummary())
             .build();
     }
@@ -250,8 +277,10 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
      *                  {@code .description} are resolved under it
      */
     private ModuleCardDTO buildModule(String moduleKey, List<OrganizationPlatformService> services,
-                                      Predicate<OrganizationPlatformService> filter, Locale locale) {
-        List<OrganizationPlatformService> scoped = services.stream().filter(filter).toList();
+                                      Set<PlatformServiceType> types, Locale locale) {
+        List<OrganizationPlatformService> scoped = services.stream()
+            .filter(service -> types.contains(service.getServiceType()))
+            .toList();
         long active = scoped.stream().filter(service -> service.getStatus() == PlatformServiceStatus.ACTIVE).count();
         long pending = scoped.stream().filter(service -> service.getStatus() == PlatformServiceStatus.PENDING).count();
         long managed = scoped.stream().filter(OrganizationPlatformService::isManagedByPlatform).count();
@@ -278,7 +307,6 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
             .metricLabel(input.metricLabel())
             .metricValue(input.metricValue())
             .nextAction(input.nextAction())
-            .lastRun(DISPLAY_FORMAT.format(input.lastRun()))
             .build();
     }
 
@@ -297,10 +325,9 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
         return text("platform.automation.status." + status.name(), locale);
     }
 
-    private AutomationTaskDTO buildReleaseAutomationTask(long upcomingReleases, long activeWindows,
-                                                         LocalDateTime lastRun, Locale locale) {
+    private AutomationTaskDTO buildReleaseAutomationTask(long upcomingWindows, long activeWindows, Locale locale) {
         AutomationStatus status;
-        if (upcomingReleases == 0) {
+        if (activeWindows == 0) {
             status = AutomationStatus.AT_RISK;
         } else if (activeWindows > 6) {
             status = AutomationStatus.BLOCKED;
@@ -315,26 +342,36 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
             .status(status)
             .statusLabel(toStatusLabel(status, locale))
             .metricLabel(text("platform.automation.releaseWindows.metricLabel", locale))
-            .metricValue(text("platform.automation.releaseWindows.metricValue", locale, String.valueOf(upcomingReleases)))
-            .nextAction(text(upcomingReleases == 0
+            .metricValue(text("platform.automation.releaseWindows.metricValue", locale,
+                String.valueOf(upcomingWindows), String.valueOf(activeWindows)))
+            .nextAction(text(activeWindows == 0
                 ? "platform.automation.releaseWindows.nextAction.none"
                 : "platform.automation.releaseWindows.nextAction.normal", locale))
-            .lastRun(DISPLAY_FORMAT.format(lastRun))
             .build();
     }
 
-    private PlatformReleaseStatus resolveStatusForWindow(LocalDateTime startsAt, LocalDateTime endsAt) {
-        LocalDateTime now = LocalDateTime.now();
+    /**
+     * D7 — a window's status at {@code now}: CANCELLED is a decision and
+     * stays; otherwise it follows the clock (SCHEDULED before the start,
+     * IN_PROGRESS between start and end inclusive, COMPLETED after the end).
+     */
+    static PlatformReleaseStatus statusAt(PlatformReleaseStatus stored,
+                                          LocalDateTime startsAt,
+                                          LocalDateTime endsAt,
+                                          LocalDateTime now) {
+        if (stored == PlatformReleaseStatus.CANCELLED) {
+            return PlatformReleaseStatus.CANCELLED;
+        }
         if (now.isAfter(endsAt)) {
             return PlatformReleaseStatus.COMPLETED;
         }
-        if (!now.isBefore(startsAt) && !now.isAfter(endsAt)) {
-            return PlatformReleaseStatus.IN_PROGRESS;
+        if (now.isBefore(startsAt)) {
+            return PlatformReleaseStatus.SCHEDULED;
         }
-        return PlatformReleaseStatus.SCHEDULED;
+        return PlatformReleaseStatus.IN_PROGRESS;
     }
 
-    private PlatformReleaseWindowResponseDTO mapReleaseWindow(PlatformReleaseWindow window) {
+    private PlatformReleaseWindowResponseDTO mapReleaseWindow(PlatformReleaseWindow window, LocalDateTime now) {
         return PlatformReleaseWindowResponseDTO.builder()
             .id(window.getId())
             .name(window.getName())
@@ -342,7 +379,7 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
             .environment(window.getEnvironment())
             .startsAt(window.getStartsAt())
             .endsAt(window.getEndsAt())
-            .status(window.getStatus())
+            .status(statusAt(window.getStatus(), window.getStartsAt(), window.getEndsAt(), now))
             .freezeChanges(window.isFreezeChanges())
             .ownerTeam(window.getOwnerTeam())
             .notes(window.getNotes())
@@ -366,7 +403,6 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
         Thresholds thresholds,
         String metricLabel,
         String metricValue,
-        String nextAction,
-        LocalDateTime lastRun
+        String nextAction
     ) {}
 }

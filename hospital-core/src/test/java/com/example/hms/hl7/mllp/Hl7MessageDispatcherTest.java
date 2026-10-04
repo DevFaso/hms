@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
@@ -122,16 +123,17 @@ class Hl7MessageDispatcherTest {
     }
 
     @Test
-    void noOutcomeFromAnyInboundHandlerProducesAnAr() {
+    void noOutcomeFromAnyInboundHandlerProducesAnArExceptTheTerminalNotOwner() {
         // AR is reserved for the dispatcher's own transport-level refusals
         // (bad MSH, sender not allowlisted, unsupported type) — none of which
-        // depend on tenant data. Every outcome ANY of the three domain
-        // handlers can return maps to AA or AE, so none of them can reopen
-        // the enumeration oracle by picking a different constant. All three
-        // handlers, not the lab one alone: the oracle this closes lived in
-        // the other two.
+        // depend on tenant data — and for ONE domain answer, NOT_OWNER, which
+        // the A40 path returns only after its registration gate has passed
+        // (see onlyTheA40MergePathReferencesTheTerminalOutcome). Every other
+        // outcome ANY of the three domain handlers can return maps to AA or
+        // AE, so none of them can reopen the enumeration oracle by picking a
+        // different constant.
         //
-        // The enum assertion is the other half of the guard. A fourth
+        // The enum assertion is the other half of the guard. A fifth
         // constant would not be covered by the loop, and
         // REJECTED_CROSS_TENANT is precisely the constant whose return this
         // is meant to prevent.
@@ -139,7 +141,8 @@ class Hl7MessageDispatcherTest {
             .containsExactlyInAnyOrder(
                 MllpInboundOutcome.ACCEPTED,
                 MllpInboundOutcome.REJECTED_NOT_FOUND,
-                MllpInboundOutcome.REJECTED_INVALID);
+                MllpInboundOutcome.REJECTED_INVALID,
+                MllpInboundOutcome.REJECTED_NOT_OWNER);
 
         allowSender();
         String oru = "MSH|^~\\&|MINDRAY|LAB1|HMS|HOSP1|20260428||ORU^R01|MSG-8|P|2.5\r"
@@ -150,6 +153,9 @@ class Hl7MessageDispatcherTest {
                    + "PID|1||MRN-ANY||DOE^JANE\r";
 
         for (MllpInboundOutcome outcome : MllpInboundOutcome.values()) {
+            if (outcome == MllpInboundOutcome.REJECTED_NOT_OWNER) {
+                continue;
+            }
             when(inboundLab.processOruR01(any(), eq(hospital), anyString(), anyString(),
                 any(), anyString())).thenReturn(outcome);
             when(inboundAdt.processAdt(any(), eq(hospital), anyString(), anyString(), any()))
@@ -161,6 +167,48 @@ class Hl7MessageDispatcherTest {
             assertThat(dispatcher.dispatch(adt, "10.0.0.1:1")).doesNotContain("MSA|AR|");
             assertThat(dispatcher.dispatch(A40, "10.0.0.1:1")).doesNotContain("MSA|AR|");
         }
+    }
+
+    @Test
+    void theTerminalNotOwnerOutcomeIsAnArThatNamesTheConditionAndNoPatient() {
+        allowSender();
+        when(inboundMerge.processMerge(any(), eq(hospital), anyString(), anyString(), any()))
+            .thenReturn(MllpInboundOutcome.REJECTED_NOT_OWNER);
+
+        assertThat(dispatcher.dispatch(A40, "10.0.0.1:1"))
+            .contains("MSA|AR|")
+            .contains("ADT^A40 not applied: a patient identity is owned by another hospital");
+    }
+
+    @Test
+    void onlyTheA40MergePathReferencesTheTerminalOutcome() throws java.io.IOException {
+        // NOT_OWNER is safe only where it is returned AFTER a registration
+        // gate for every patient named; anywhere else it is the old
+        // cross-tenant oracle under a new name. So only the A40 merge service
+        // (which has that gate), the enum and the dispatcher's mapping may
+        // refer to it. Read from the compiled main classes: a reference to an
+        // enum constant is a name in the referencing class's constant pool.
+        java.net.URL mainCode = Hl7MessageDispatcher.class.getProtectionDomain().getCodeSource().getLocation();
+        var resolver = new org.springframework.core.io.support.PathMatchingResourcePatternResolver(
+            getClass().getClassLoader());
+        java.util.Set<String> referrers = new java.util.TreeSet<>();
+        for (var resource : resolver.getResources("classpath*:com/example/hms/**/*.class")) {
+            String url = resource.getURL().toString();
+            if (!url.startsWith(mainCode.toString())) {
+                continue;
+            }
+            byte[] bytes;
+            try (var in = resource.getInputStream()) {
+                bytes = in.readAllBytes();
+            }
+            if (new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1).contains("REJECTED_NOT_OWNER")) {
+                referrers.add(resource.getFilename());
+            }
+        }
+        assertThat(referrers)
+            .isNotEmpty()
+            .allSatisfy(name -> assertThat(name).matches(
+                "MllpInboundOutcome\\.class|MllpInboundMergeServiceImpl\\.class|Hl7MessageDispatcher(\\$\\d+)?\\.class"));
     }
 
     @Test
@@ -313,7 +361,7 @@ class Hl7MessageDispatcherTest {
 
         ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> bodies = ArgumentCaptor.forClass(String.class);
-        verify(messageRecorder, org.mockito.Mockito.times(2)).recordRecurringFailure(
+        verify(messageRecorder, times(2)).recordRecurringFailure(
             any(), any(), any(), any(), bodies.capture(), any(), ids.capture());
 
         assertThat(ids.getAllValues().get(0))
@@ -343,7 +391,7 @@ class Hl7MessageDispatcherTest {
 
         ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> bodies = ArgumentCaptor.forClass(String.class);
-        verify(messageRecorder, org.mockito.Mockito.times(2)).recordRecurringFailure(
+        verify(messageRecorder, times(2)).recordRecurringFailure(
             any(), any(), any(), any(), bodies.capture(), any(), ids.capture());
         assertThat(ids.getAllValues().get(0))
             .isNotNull()
@@ -384,9 +432,33 @@ class Hl7MessageDispatcherTest {
         dispatcher.dispatch(unsupported, "10.0.0.51:1");
 
         ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
-        verify(messageRecorder, org.mockito.Mockito.times(2)).recordRecurringFailure(
+        verify(messageRecorder, times(2)).recordRecurringFailure(
             any(), any(), any(), any(), any(), any(), ids.capture());
         assertThat(ids.getAllValues().get(0)).isNotEqualTo(ids.getAllValues().get(1));
+    }
+
+    @Test
+    void theDispatchersReasonsQuoteTheSendersText() {
+        // The claimed sender pair and MSH-9 are the sender's text inside a
+        // reason an operator reads as ours: quoted and escaped, so neither can
+        // end its slot and write a finding of its own.
+        when(allowlist.resolveHospital(anyString(), anyString()))
+            .thenReturn(Optional.empty())
+            .thenReturn(Optional.of(hospital));
+        String esc = String.valueOf((char) 0x1B);
+        String lineSeparator = String.valueOf((char) 0x2028);
+        String rogue = "MSH|^~\\&|RO" + esc + "[2J|UNK) cross-tenant rejection (x|HMS|HOSP1|20260428||ORU^R01|M-1|P|2.5\r";
+        String unsupported = "MSH|^~\\&|X|Y|HMS|HOSP1|20260428||ZZZ^Z99" + lineSeparator + "forged|C-1|P|2.5\r";
+
+        dispatcher.dispatch(rogue, "10.0.0.1:1");
+        dispatcher.dispatch(unsupported, "10.0.0.1:1");
+
+        ArgumentCaptor<String> reasons = ArgumentCaptor.forClass(String.class);
+        verify(messageRecorder, times(2)).recordRecurringFailure(
+            any(), any(), any(), any(), any(), reasons.capture(), any());
+        assertThat(reasons.getAllValues()).containsExactly(
+            "sender \"RO\\u001b[2J\"/\"UNK) cross-tenant rejection (x\" not allowlisted",
+            "unsupported message type \"ZZZ^Z99\\u2028forged\"");
     }
 
     @Test
@@ -578,5 +650,31 @@ class Hl7MessageDispatcherTest {
             .contains("Invalid MSH: MSH-4 exceeds 180 characters")
             .doesNotContain("FFFF");
         verifyNoInteractions(allowlist, inboundLab, inboundAdt, inboundMerge);
+    }
+
+    @Test
+    void anOverWidthSenderFieldRowNamesTheControlIdTheArEchoes() {
+        // The AR echoes MSH-10, so the dead letter must name it too, or an
+        // operator cannot match the row to the refusal the sender received.
+        String adt = "MSH|^~\\&|" + "A".repeat(181) + "|HOSP1|HMS|HOSP1|20260428||ADT^A08|CTRL-ROW|P|2.5\r";
+
+        dispatcher.dispatch(adt, "10.0.0.74:1");
+
+        verify(messageRecorder).recordRecurringFailure(
+            eq("MLLP:?/?"), isNull(), eq(IntegrationMessageDirection.INBOUND), eq("UNKNOWN"), eq(adt),
+            eq("Invalid MSH: MSH-3 exceeds 180 characters (MSH-10 \"CTRL-ROW\")"),
+            isNull());
+    }
+
+    @Test
+    void anOverWidthControlIdRowNamesNoControlId() {
+        // MSH-10 itself refused: nothing to echo, so nothing in the reason.
+        String adt = "MSH|^~\\&|REG|HOSP1|HMS|HOSP1|20260428||ADT^A08|" + "C".repeat(256) + "|P|2.5\r";
+
+        dispatcher.dispatch(adt, "10.0.0.74:1");
+
+        verify(messageRecorder).recordRecurringFailure(
+            any(), any(), any(), any(), any(),
+            eq("Invalid MSH: MSH-10 exceeds 255 characters"), isNull());
     }
 }

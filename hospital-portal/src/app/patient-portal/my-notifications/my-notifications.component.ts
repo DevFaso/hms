@@ -1,6 +1,6 @@
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
-import { CommonModule, DatePipe } from '@angular/common';
-import { TranslateModule } from '@ngx-translate/core';
+import { DatePipe } from '@angular/common';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { PatientPortalService, PortalNotification } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
@@ -8,14 +8,15 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 @Component({
   selector: 'app-my-notifications',
   standalone: true,
-  imports: [CommonModule, DatePipe, TranslateModule, EnumLabelPipe],
+  imports: [DatePipe, TranslateModule, EnumLabelPipe],
   templateUrl: './my-notifications.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-notifications.component.scss', '../patient-portal-pages.scss'],
 })
 export class MyNotificationsComponent implements OnInit {
   private readonly portalService = inject(PatientPortalService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   notifications = signal<PortalNotification[]>([]);
   totalElements = signal(0);
@@ -39,7 +40,7 @@ export class MyNotificationsComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('PORTAL.NOTIFICATIONS.LOAD_FAILED');
+        this.toast.error(this.translate.instant('PORTAL.NOTIFICATIONS.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -65,7 +66,8 @@ export class MyNotificationsComponent implements OnInit {
         );
         this.unreadCount.update((c) => Math.max(c - 1, 0));
       },
-      error: () => this.toast.error('PORTAL.NOTIFICATIONS.MARK_READ_FAILED'),
+      error: () =>
+        this.toast.error(this.translate.instant('PORTAL.NOTIFICATIONS.MARK_READ_FAILED')),
     });
   }
 
@@ -76,11 +78,12 @@ export class MyNotificationsComponent implements OnInit {
         this.notifications.update((list) => list.map((n) => ({ ...n, read: true })));
         this.unreadCount.set(0);
         this.markingAll.set(false);
-        if (updated > 0) this.toast.success('PORTAL.NOTIFICATIONS.MARK_ALL_SUCCESS');
+        if (updated > 0)
+          this.toast.success(this.translate.instant('PORTAL.NOTIFICATIONS.MARK_ALL_SUCCESS'));
       },
       error: () => {
         this.markingAll.set(false);
-        this.toast.error('PORTAL.NOTIFICATIONS.MARK_READ_FAILED');
+        this.toast.error(this.translate.instant('PORTAL.NOTIFICATIONS.MARK_READ_FAILED'));
       },
     });
   }

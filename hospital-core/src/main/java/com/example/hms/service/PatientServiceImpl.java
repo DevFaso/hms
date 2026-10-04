@@ -127,6 +127,9 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
 @RequiredArgsConstructor
 @Slf4j
 public class PatientServiceImpl implements PatientService {
+    private static final String USER_NOT_FOUND_KEY = "user.notFound";
+    private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
+
 
     /**
      * Self-reference injected as a proxy so internal calls
@@ -156,9 +159,6 @@ public class PatientServiceImpl implements PatientService {
     }
 
     private static final String MSG_PATIENT_NOT_FOUND = "patient.notFound";
-    private static final String MSG_USER_NOT_FOUND_PREFIX = "User not found with ID: ";
-    private static final String MSG_HOSPITAL_NOT_FOUND = "Hospital not found with ID: ";
-    private static final String MSG_ALLERGY_NOT_FOUND = "Allergy entry not found for the specified context.";
     private static final String DEFAULT_UNKNOWN = "Unknown";
     private static final String DEFAULT_PREFIX = "MRX";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
@@ -322,10 +322,10 @@ public class PatientServiceImpl implements PatientService {
     @Transactional
     public PatientResponseDTO createPatient(PatientRequestDTO dto, Locale locale) {
         User user = userRepository.findById(dto.getUserId())
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_USER_NOT_FOUND_PREFIX + dto.getUserId()));
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, dto.getUserId()));
 
         Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND + dto.getHospitalId()));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, dto.getHospitalId()));
 
         Optional<Patient> existing = patientRepository.findByUserId(user.getId());
         Patient patient = existing
@@ -385,16 +385,14 @@ public class PatientServiceImpl implements PatientService {
     @Transactional
     public PatientResponseDTO updatePatient(UUID id, PatientRequestDTO dto, Locale locale) {
         Patient patient = patientRepository.findByIdUnscoped(id)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{id}, locale)
-            ));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, id));
 
         if (dto.getHospitalId() != null) {
             ensurePatientRegistered(id, dto.getHospitalId());
         }
 
         User user = userRepository.findById(dto.getUserId())
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_USER_NOT_FOUND_PREFIX + dto.getUserId()));
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, dto.getUserId()));
 
         PatientAddressHistoryRecorder.AddressSnapshot before = addressHistoryRecorder.snapshot(patient);
         patientMapper.updatePatientFromDto(dto, patient, user);
@@ -411,9 +409,7 @@ public class PatientServiceImpl implements PatientService {
             throw new BusinessException("Update payload is required.");
         }
         Patient patient = patientRepository.findByIdUnscoped(id)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{id}, locale)
-            ));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, id));
 
         if (hospitalId != null) {
             ensurePatientRegistered(id, hospitalId);
@@ -469,9 +465,7 @@ public class PatientServiceImpl implements PatientService {
     @Transactional
     public void deletePatient(UUID id, Locale locale) {
         if (!patientRepository.existsById(id)) {
-            throw new ResourceNotFoundException(
-                messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{id}, locale)
-            );
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, id);
         }
         // Remove non-cascaded child records before deleting the patient
         patientProxyRepository.deleteByGrantorPatient_Id(id);
@@ -595,10 +589,10 @@ public class PatientServiceImpl implements PatientService {
             throw new BusinessException("Hospital must be resolved from context for staff-created patients.");
         }
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
         User user = userRepository.findById(dto.getUserId())
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_USER_NOT_FOUND_PREFIX + dto.getUserId()));
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, dto.getUserId()));
 
         Optional<Patient> existing = patientRepository.findByUserId(user.getId());
         Patient patient = existing
@@ -821,9 +815,7 @@ public class PatientServiceImpl implements PatientService {
         }
 
         Patient patient = patientRepository.findByIdUnscoped(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{patientId}, Locale.getDefault())
-            ));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
 
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)) {
             throw new BusinessException("Patient is not registered in the requested hospital.");
@@ -848,7 +840,12 @@ public class PatientServiceImpl implements PatientService {
         List<PatientTimelineEntryDTO> aggregatedEntries = new ArrayList<>();
         aggregatedEntries.addAll(collectEncounterEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked, withheld));
         aggregatedEntries.addAll(collectPrescriptionEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked, withheld));
-        aggregatedEntries.addAll(collectLabResultEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked, withheld));
+        // #751 - the lab rows that surface only because this hospital's own
+        // laboratory performed them are a disclosure of their own, accounted
+        // apart from the treatment relationship's and never in both.
+        Set<String> performedHereLabEntryIds = new LinkedHashSet<>();
+        aggregatedEntries.addAll(collectLabResultEntries(patientId, readableHospitalIds, hospitalId, categoryFilters,
+            unlocked, withheld, performedHereLabEntryIds));
         // Not widened: allergies attach to patient + hospital with no encounter
         // link, so #51's category cannot be resolved for them. A row whose
         // category nobody can determine must not travel. Tracked as standing
@@ -858,7 +855,8 @@ public class PatientServiceImpl implements PatientService {
         aggregatedEntries.addAll(collectImagingEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked));
         aggregatedEntries.addAll(collectProcedureEntries(patientId, readableHospitalIds, hospitalId, categoryFilters));
 
-        recordCrossHospitalDisclosure(patientId, hospitalId, requesterUserId, assignment, aggregatedEntries);
+        recordCrossHospitalDisclosure(patientId, hospitalId, requesterUserId, assignment, aggregatedEntries,
+            performedHereLabEntryIds);
 
         List<PatientTimelineEntryDTO> entries = aggregatedEntries.stream()
             .filter(entry -> includeSensitive || !entry.isSensitive())
@@ -931,9 +929,7 @@ public class PatientServiceImpl implements PatientService {
         }
 
         Patient patient = patientRepository.findByIdUnscoped(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{patientId}, Locale.getDefault())
-            ));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
 
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, resolvedHospitalId)) {
             throw new BusinessException("Patient is not registered in the requested hospital.");
@@ -972,12 +968,16 @@ public class PatientServiceImpl implements PatientService {
             maxItems,
             sensitiveSections
         );
+        // #751 - the lab section's only foreign rows are the ones this
+        // hospital's laboratory performed; they are accounted on their own.
+        Map<String, Long> performedHereLabReach = new HashMap<>();
         List<LabResultResponseDTO> labResults = collectDoctorRecordLabResults(
             patientId,
             resolvedHospitalId,
             includeSensitive,
             maxItems,
-            sensitiveSections
+            sensitiveSections,
+            performedHereLabReach
         );
         ImagingBundle imagingBundle = collectDoctorRecordImaging(
             patientId,
@@ -1059,6 +1059,8 @@ public class PatientServiceImpl implements PatientService {
         CrossHospitalReachRecorder.merge(reach, imagingBundle.reach());
         recordCrossHospitalReach(patientId, resolvedHospitalId, requesterUserId, assignment, reach,
             "Cross-hospital doctor record read on the treatment relationship");
+        recordCrossHospitalReach(patientId, resolvedHospitalId, requesterUserId, assignment, performedHereLabReach,
+            CrossHospitalReachRecorder.LAB_RESULT_PERFORMED_HERE_DESCRIPTION);
         return response;
     }
 
@@ -1075,9 +1077,7 @@ public class PatientServiceImpl implements PatientService {
             throw new BusinessException("Requester context is required to load patient allergies.");
         }
         Patient patient = patientRepository.findByIdUnscoped(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{patientId}, Locale.getDefault())
-            ));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
 
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)) {
             throw new BusinessException("Patient is not registered in the requested hospital.");
@@ -1510,9 +1510,7 @@ public class PatientServiceImpl implements PatientService {
             throw new BusinessException("Patient identifier is required.");
         }
         return patientRepository.findByIdUnscoped(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{patientId}, Locale.getDefault())
-            ));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
     }
 
     private Hospital fetchHospital(UUID hospitalId) {
@@ -1520,7 +1518,7 @@ public class PatientServiceImpl implements PatientService {
             throw new BusinessException("Hospital identifier is required.");
         }
         return hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
     }
 
     private void ensurePatientRegistered(UUID patientId, UUID hospitalId) {
@@ -1540,7 +1538,7 @@ public class PatientServiceImpl implements PatientService {
             throw new BusinessException("Diagnosis identifier is required.");
         }
         PatientProblem problem = patientProblemRepository.findById(diagnosisId)
-            .orElseThrow(() -> new ResourceNotFoundException("Diagnosis not found with ID: " + diagnosisId));
+            .orElseThrow(() -> new ResourceNotFoundException("diagnosis.notFound", diagnosisId));
         if (problem.getPatient() == null || problem.getPatient().getId() == null
             || !problem.getPatient().getId().equals(patientId)
             || problem.getHospital() == null || problem.getHospital().getId() == null
@@ -1563,7 +1561,7 @@ public class PatientServiceImpl implements PatientService {
         }
         PatientAllergy allergy = patientAllergyRepository
             .findByIdAndPatient_IdAndHospital_Id(allergyId, patientId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_ALLERGY_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException("allergy.notFound", allergyId));
         ensurePatientRegistered(patientId, hospitalId);
         return allergy;
     }
@@ -1809,8 +1807,10 @@ public class PatientServiceImpl implements PatientService {
      */
     private void recordCrossHospitalDisclosure(UUID patientId, UUID actingHospitalId, UUID requesterUserId,
                                                UserRoleHospitalAssignment assignment,
-                                               List<PatientTimelineEntryDTO> entries) {
+                                               List<PatientTimelineEntryDTO> entries,
+                                               Set<String> performedHereLabEntryIds) {
         Map<String, Long> perSource = new HashMap<>();
+        Map<String, Long> performedHere = new HashMap<>();
         for (PatientTimelineEntryDTO entry : entries) {
             Map<String, Object> metadata = entry.getMetadata();
             if (metadata == null || !Boolean.TRUE.equals(metadata.get("foreign"))) {
@@ -1818,11 +1818,15 @@ public class PatientServiceImpl implements PatientService {
             }
             Object source = metadata.get(META_SOURCE_HOSPITAL_ID);
             if (source != null) {
-                perSource.merge(source.toString(), 1L, Long::sum);
+                boolean performedHereRow = CATEGORY_LAB_RESULT.equals(entry.getCategory())
+                    && performedHereLabEntryIds.contains(entry.getEntryId());
+                (performedHereRow ? performedHere : perSource).merge(source.toString(), 1L, Long::sum);
             }
         }
         recordCrossHospitalReach(patientId, actingHospitalId, requesterUserId, assignment, perSource,
             "Cross-hospital chart read on the treatment relationship");
+        recordCrossHospitalReach(patientId, actingHospitalId, requesterUserId, assignment, performedHere,
+            CrossHospitalReachRecorder.LAB_RESULT_PERFORMED_HERE_DESCRIPTION);
     }
 
     /** One RECORD_SHARE per source hospital in {@code perSource} (source hospital id -> rows surfaced). */
@@ -1895,17 +1899,28 @@ public class PatientServiceImpl implements PatientService {
 
     private List<PatientTimelineEntryDTO> collectLabResultEntries(UUID patientId, Set<UUID> readableHospitalIds,
                                                                    UUID actingHospitalId, Set<String> categoryFilters,
-                                                                   boolean unlocked, WithheldRows withheld) {
+                                                                   boolean unlocked, WithheldRows withheld,
+                                                                   Set<String> performedHereEntryIds) {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_LAB_RESULT)) {
             return List.of();
         }
-        return labResultRepository.findByLabOrder_Patient_Id(patientId).stream()
-            .filter(result -> result.getLabOrder() != null
-                && isReadableHospital(readableHospitalIds, result.getLabOrder().getHospital()))
+        // Readable where the order is handled (#751), read at the database:
+        // ordered in the readable set, or performed by the acting hospital's
+        // own laboratory for another hospital. A performed-here row is still
+        // the ordering hospital's record, so it carries that provenance and
+        // passes the same D3 filter as any other foreign row.
+        List<LabResult> admitted = labResultRepository.findPatientResultsReadableAt(patientId,
+                readableHospitalIds, actingHospitalId, false, Pageable.unpaged()).stream()
             // Same as prescriptions: the category rides on the lab order's encounter.
             .filter(result -> withheld.admit(result.getLabOrder().getHospital(),
                 departmentOf(result.getLabOrder().getEncounter()), actingHospitalId,
                 sensitivityClassifier.effectiveCategory(result.getLabOrder().getEncounter()), unlocked))
+            .toList();
+        admitted.stream()
+            .filter(result -> result.getId() != null
+                && CrossHospitalReachRecorder.isPerformedHere(result, actingHospitalId))
+            .forEach(result -> performedHereEntryIds.add(result.getId().toString()));
+        return admitted.stream()
             .map(result -> {
                 Map<String, Object> metadata = new HashMap<>();
                 putIfNotNull(metadata, "unit", result.getResultUnit());
@@ -2146,19 +2161,30 @@ public class PatientServiceImpl implements PatientService {
         UUID hospitalId,
         boolean includeSensitive,
         int limit,
-        Set<String> sensitiveSections
+        Set<String> sensitiveSections,
+        Map<String, Long> performedHereReach
     ) {
-        List<LabResult> results = labResultRepository.findByLabOrder_Patient_Id(patientId).stream()
-            .filter(result -> result.getLabOrder() != null
-                && result.getLabOrder().getHospital() != null
-                && hospitalId.equals(result.getLabOrder().getHospital().getId()))
+        // Handled by the acting hospital (#751), read at the database: ordered
+        // here, or performed by this hospital's own laboratory for another
+        // hospital. This section has always been acting-hospital only, unlike
+        // the medications and imaging beside it, which read the readable set;
+        // the treatment relationship still does not widen it.
+        List<LabResult> results = labResultRepository.findPatientResultsReadableAt(patientId, Set.of(hospitalId),
+                hospitalId, false, Pageable.unpaged()).stream()
             .sorted(Comparator.comparing(LabResult::getResultDate, Comparator.nullsLast(Comparator.reverseOrder())))
             .toList();
         boolean sectionSensitive = results.stream().anyMatch(this::isSensitiveLabResult);
-        List<LabResultResponseDTO> responses = results.stream()
+        List<LabResult> shown = results.stream()
             .filter(result -> includeSensitive || !isSensitiveLabResult(result))
-            .map(labResultMapper::toResponseDTO)
             .limit(limit)
+            .toList();
+        // Accounted on the rows the record shows, as every other section is.
+        CrossHospitalReachRecorder.merge(performedHereReach, CrossHospitalReachRecorder.reachOf(shown.stream()
+            .filter(result -> CrossHospitalReachRecorder.isPerformedHere(result, hospitalId))
+            .map(result -> CrossHospitalReachRecorder.hospitalIdOf(result.getLabOrder().getHospital()))
+            .toList(), hospitalId));
+        List<LabResultResponseDTO> responses = shown.stream()
+            .map(labResultMapper::toResponseDTO)
             .toList();
         if (sectionSensitive) {
             sensitiveSections.add(SECTION_LABS);

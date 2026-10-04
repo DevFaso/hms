@@ -10,6 +10,7 @@ import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -32,6 +33,12 @@ public class RecallReminderService {
     private final PatientOutreachNotifier outreachNotifier;
     private final MessageSource messageSource;
     private final PatientLocaleResolver patientLocaleResolver;
+    /**
+     * The recall clock: the notice window ({@code dueDate <= today + leadDays})
+     * and the {@code notifiedAt} stamp; {@code PatientRecallServiceImpl}
+     * stamps {@code closedAt} with the same bean.
+     */
+    private final Clock clock;
 
     /** Days before the due date at which the notice goes out. */
     @Value("${hms.recalls.notice.lead-days:14}")
@@ -44,18 +51,20 @@ public class RecallReminderService {
     public RecallReminderService(PatientRecallRepository recallRepository,
                                  PatientOutreachNotifier outreachNotifier,
                                  MessageSource messageSource,
-                                 PatientLocaleResolver patientLocaleResolver) {
+                                 PatientLocaleResolver patientLocaleResolver,
+                                 Clock clock) {
         this.recallRepository = recallRepository;
         this.outreachNotifier = outreachNotifier;
         this.messageSource = messageSource;
         this.patientLocaleResolver = patientLocaleResolver;
+        this.clock = clock;
     }
 
     /** @return number of recalls for which at least one channel dispatched */
     @Transactional
     public int sendDueRecallNotices() {
         List<PatientRecall> due =
-            recallRepository.findAwaitingNotification(LocalDate.now().plusDays(leadDays));
+            recallRepository.findAwaitingNotification(LocalDate.now(clock).plusDays(leadDays));
         int notified = 0;
         for (PatientRecall recall : due) {
             try {
@@ -64,7 +73,7 @@ public class RecallReminderService {
                 }
                 // Stamp even when both channels were skipped, so the sweep
                 // converges instead of re-evaluating the same row forever.
-                recall.setNotifiedAt(LocalDateTime.now());
+                recall.setNotifiedAt(LocalDateTime.now(clock));
                 recall.setStatus(RecallStatus.NOTIFIED);
                 recallRepository.save(recall);
             } catch (RuntimeException ex) {

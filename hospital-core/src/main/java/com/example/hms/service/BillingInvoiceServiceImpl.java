@@ -18,8 +18,11 @@ import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.InvoiceItemRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.PaymentTransactionRepository;
+import com.example.hms.enums.PaymentMethod;
+import com.example.hms.model.PaymentTransaction;
+import com.example.hms.payload.dto.portal.PatientPaymentRequestDTO;
 import com.example.hms.utility.RoleValidator;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -45,7 +48,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     private final PdfInvoiceService pdfInvoiceService;
     private final BillingInvoiceMapper invoiceMapper;
     private final RoleValidator roleValidator;
-    private final BillingInvoiceService self;
+    private final PaymentTransactionRepository paymentTransactionRepository;
 
     public BillingInvoiceServiceImpl(
             BillingInvoiceRepository invoiceRepository,
@@ -56,7 +59,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             PdfInvoiceService pdfInvoiceService,
             BillingInvoiceMapper invoiceMapper,
             RoleValidator roleValidator,
-            @Lazy BillingInvoiceService self) {
+            PaymentTransactionRepository paymentTransactionRepository) {
         this.invoiceRepository = invoiceRepository;
         this.patientRepository = patientRepository;
         this.hospitalRepository = hospitalRepository;
@@ -65,17 +68,17 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         this.pdfInvoiceService = pdfInvoiceService;
         this.invoiceMapper = invoiceMapper;
         this.roleValidator = roleValidator;
-        this.self = self;
+        this.paymentTransactionRepository = paymentTransactionRepository;
     }
 
     @Override
     @Transactional
     public BillingInvoiceResponseDTO createInvoice(BillingInvoiceRequestDTO dto, Locale locale) {
         Patient patient = patientRepository.findByUsernameOrEmail(dto.getPatientEmail())
-            .orElseThrow(() -> new ResourceNotFoundException("patient.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundByIdentifier", dto.getPatientEmail()));
 
         Hospital hospital = hospitalRepository.findByNameIgnoreCase(dto.getHospitalName())
-            .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", dto.getHospitalName()));
 
         Encounter encounter = (dto.getEncounterReference() != null)
             ? encounterRepository.findByCode(dto.getEncounterReference()).orElse(null)
@@ -96,12 +99,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Transactional(readOnly = true)
     public BillingInvoiceResponseDTO getInvoiceById(UUID id, Locale locale) {
         BillingInvoice invoice = invoiceRepository.findWithAllById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, id));
         // ── Tenant isolation: verify caller has access to this invoice's hospital ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && invoice.getHospital() != null
                 && !activeHospitalId.equals(invoice.getHospital().getId())) {
-            throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND); // 404, not 403
+            throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, id); // 404, not 403
         }
         return invoiceMapper.toBillingInvoiceResponseDTO(invoice);
     }
@@ -117,6 +120,13 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             return invoiceRepository.findByPatient_IdAndHospital_Id(patientId, activeHospitalId, pageable)
                 .map(invoiceMapper::toBillingInvoiceResponseDTO);
         }
+        return invoiceRepository.findByPatient_Id(patientId, pageable)
+            .map(invoiceMapper::toBillingInvoiceResponseDTO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<BillingInvoiceResponseDTO> getInvoicesForPortalPatient(UUID patientId, Pageable pageable, Locale locale) {
         return invoiceRepository.findByPatient_Id(patientId, pageable)
             .map(invoiceMapper::toBillingInvoiceResponseDTO);
     }
@@ -155,20 +165,20 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Transactional
     public BillingInvoiceResponseDTO updateInvoice(UUID id, BillingInvoiceRequestDTO dto, Locale locale) {
         BillingInvoice invoice = invoiceRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, id));
 
         // ── Tenant isolation ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && invoice.getHospital() != null
                 && !activeHospitalId.equals(invoice.getHospital().getId())) {
-            throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND);
+            throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, id);
         }
 
         Patient patient = patientRepository.findByUsernameOrEmail(dto.getPatientEmail())
-            .orElseThrow(() -> new ResourceNotFoundException("patient.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundByIdentifier", dto.getPatientEmail()));
 
         Hospital hospital = hospitalRepository.findByNameIgnoreCase(dto.getHospitalName())
-            .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", dto.getHospitalName()));
 
         Encounter encounter = (dto.getEncounterReference() != null)
             ? encounterRepository.findByCode(dto.getEncounterReference()).orElse(null)
@@ -194,12 +204,18 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Transactional
     public void deleteInvoice(UUID id, Locale locale) {
         BillingInvoice invoice = invoiceRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, id));
         // ── Tenant isolation ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && invoice.getHospital() != null
                 && !activeHospitalId.equals(invoice.getHospital().getId())) {
-            throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND);
+            throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, id);
+        }
+        // A payment row references the invoice (fk_pt_invoice, no cascade):
+        // an invoice somebody has paid against is a financial record, so it
+        // is refused with a reason rather than failing on the foreign key.
+        if (paymentTransactionRepository.existsByInvoice_Id(id)) {
+            throw new BusinessException("billing.invoice.hasPayments");
         }
         invoiceRepository.deleteById(id);
     }
@@ -208,7 +224,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Transactional
     public void recomputeAndPersistTotals(UUID invoiceId) {
         BillingInvoice invoice = invoiceRepository.findById(invoiceId)
-            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId));
         BigDecimal sum = invoiceRepository.sumItemsByInvoiceId(invoiceId);
         invoice.setTotalAmount(sum != null ? sum : BigDecimal.ZERO);
         invoiceRepository.save(invoice);
@@ -218,13 +234,13 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Transactional(readOnly = true)
     public InvoicePdfResponseDTO getInvoicePdf(UUID invoiceId, Locale locale) {
         BillingInvoice invoice = invoiceRepository.findByIdWithRefs(invoiceId)
-            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId));
 
         // ── Tenant isolation ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && invoice.getHospital() != null
                 && !activeHospitalId.equals(invoice.getHospital().getId())) {
-            throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND);
+            throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId);
         }
 
         List<InvoiceItem> items = invoiceItemRepository.findByBillingInvoiceId(invoiceId);
@@ -263,12 +279,59 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Override
     @Transactional
     public BillingInvoiceResponseDTO recordPayment(UUID invoiceId, UUID patientId, BigDecimal amount, Locale locale) {
+        return invoiceMapper.toBillingInvoiceResponseDTO(applyPayment(invoiceId, patientId, amount));
+    }
+
+    @Override
+    @Transactional
+    public BillingInvoiceResponseDTO recordPatientPayment(UUID invoiceId, UUID patientId, UUID recordedBy,
+            PatientPaymentRequestDTO payment, Locale locale) {
+        // Parse the method first: an unknown one must refuse the payment
+        // before the invoice total moves.
+        PaymentMethod method = parsePaymentMethod(payment.getPaymentMethod());
+        BillingInvoice saved = applyPayment(invoiceId, patientId, payment.getAmount());
+        savePaymentRow(saved, payment.getAmount(), method,
+            payment.getTransactionReference(), payment.getNotes(), recordedBy);
+        return invoiceMapper.toBillingInvoiceResponseDTO(saved);
+    }
+
+    /** The ledger row a cashier reconciles against: one per recorded payment, patient or staff. */
+    private void savePaymentRow(BillingInvoice invoice, BigDecimal amount, PaymentMethod method,
+            String reference, String notes, UUID recordedBy) {
+        paymentTransactionRepository.save(PaymentTransaction.builder()
+            .invoice(invoice)
+            .amount(amount)
+            .paymentDate(LocalDate.now(java.time.ZoneId.systemDefault()))
+            .paymentMethod(method)
+            .referenceNumber(blankToNull(reference))
+            .notes(blankToNull(notes))
+            .recordedBy(recordedBy)
+            .build());
+    }
+
+    private static PaymentMethod parsePaymentMethod(String raw) {
+        if (raw != null) {
+            for (PaymentMethod candidate : PaymentMethod.values()) {
+                if (candidate.name().equalsIgnoreCase(raw.trim())) {
+                    return candidate;
+                }
+            }
+        }
+        throw new BusinessException("Unsupported payment method.");
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    /** Validate the invoice is this patient's and payable, then add the amount and settle the status. */
+    private BillingInvoice applyPayment(UUID invoiceId, UUID patientId, BigDecimal amount) {
         BillingInvoice invoice = invoiceRepository.findById(invoiceId)
-            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId));
 
         // ── Ownership check: ensure invoice belongs to this patient ──
         if (!invoice.getPatient().getId().equals(patientId)) {
-            throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND);
+            throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId);
         }
 
         // ── Validate the invoice is payable ──
@@ -299,15 +362,22 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             invoice.setStatus(InvoiceStatus.PARTIALLY_PAID);
         }
 
-        BillingInvoice saved = invoiceRepository.save(invoice);
-        return invoiceMapper.toBillingInvoiceResponseDTO(saved);
+        return invoiceRepository.save(invoice);
     }
 
     @Override
     @Transactional
-    public BillingInvoiceResponseDTO recordStaffPayment(UUID invoiceId, BigDecimal amount, Locale locale) {
+    public BillingInvoiceResponseDTO recordStaffPayment(UUID invoiceId,
+            com.example.hms.payload.dto.StaffPaymentRequestDTO payment, UUID recordedBy, Locale locale) {
         BillingInvoice invoice = invoiceRepository.findById(invoiceId)
-            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND));
-        return self.recordPayment(invoiceId, invoice.getPatient().getId(), amount, locale);
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId));
+        // The staff form may omit the method (the portal sends the amount
+        // only): OTHER says "not stated" rather than guessing cash.
+        PaymentMethod method = payment.getMethod() == null || payment.getMethod().isBlank()
+            ? PaymentMethod.OTHER
+            : parsePaymentMethod(payment.getMethod());
+        BillingInvoice saved = applyPayment(invoiceId, invoice.getPatient().getId(), payment.getAmount());
+        savePaymentRow(saved, payment.getAmount(), method, payment.getReference(), payment.getNotes(), recordedBy);
+        return invoiceMapper.toBillingInvoiceResponseDTO(saved);
     }
 }

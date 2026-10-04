@@ -17,6 +17,7 @@ import com.example.hms.repository.PrescriptionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +32,8 @@ import com.example.hms.service.recordaccess.CrossHospitalRows;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import com.example.hms.service.recordaccess.SensitivityClassifier;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.PatientAllergy;
 import java.util.HashMap;
@@ -57,25 +60,22 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
  * sensitivity (D3) are two different filters, and the sections do not all get
  * both.
  *
- * <p>Patient-wide — not scoped at all:
- * <ul>
- *   <li>allergies — by design (E9 #56): an allergy is a property of the
- *       patient, not of the hospital that recorded it;</li>
- *   <li>the legacy {@code clinical.patient_diagnoses} rows in
- *       {@link #buildActiveDiagnoses} — <b>not</b> by design. That V14 table
- *       has no {@code hospital_id} column at all, so there is nothing to scope
- *       it by, nothing to test with {@code CrossHospitalRows.maySurface}, and
- *       nothing to name in the reach. Closing it needs a migration, which this
- *       change does not take.</li>
- * </ul>
+ * <p>Patient-wide — not scoped at all: allergies, by design (E9 #56): an
+ * allergy is a property of the patient, not of the hospital that recorded it.
+ *
+ * <p>The legacy {@code clinical.patient_diagnoses} rows in
+ * {@link #buildActiveDiagnoses} are scoped to the readable set since V171
+ * gave the table a {@code hospital_id}; the rows written before it carry
+ * none and are shown only to a verified super-admin in global view.
  *
  * <p>Scoped to the readable set, but <b>with no sensitivity test</b>: active
- * medications, recent vitals, latest labs and pending orders.
+ * medications, recent vitals, latest labs, pending orders and legacy diagnoses.
  * {@code SensitivityClassifier} has {@code effectiveCategory} overloads for
  * {@code Encounter}, {@code Admission}, {@code Consultation},
  * {@code PatientProblem} and {@code NursingNote} only, so there is nothing to
  * pass {@code CrossHospitalRows.maySurface} for a {@code Prescription},
- * {@code PatientVitalSign}, {@code LabResult} or {@code LabOrder}. The
+ * {@code PatientVitalSign}, {@code LabResult}, {@code LabOrder} or a legacy
+ * {@code PatientDiagnosis}. The
  * consequence, stated plainly because the omission is invisible at the call
  * site: a foreign row in a sensitive category (HIV, behavioural health,
  * substance use, reproductive health) is <b>withheld</b> when it is an
@@ -215,6 +215,9 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         // rows the D3 rule withholds; the ledger row names the session.
         boolean unlocked = breakGlassGate.isUnlocked(requesterUserId, patientId, hospitalId);
         Map<String, Long> reach = new HashMap<>();
+        // #751 — lab results this hospital's laboratory performed for another
+        // hospital are their own disclosure reason, never counted in both.
+        Map<String, Long> performedHereReach = new HashMap<>();
         List<Encounter> encounters = loadEncounters(patientId, hospitalId, readable, reach, unlocked);
         PatientSnapshotDTO snapshot = PatientSnapshotDTO.builder()
                 .patientId(patient.getId())
@@ -227,13 +230,15 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                 .activeDiagnoses(buildActiveDiagnoses(patientId, patient, hospitalId, readable, reach, unlocked))
                 .activeMedications(buildActiveMedications(patientId, hospitalId, readable, reach))
                 .recentVitals(buildRecentVitals(patientId, hospitalId, readable, reach))
-                .latestLabs(buildLatestLabs(patientId, hospitalId, readable, reach))
+                .latestLabs(buildLatestLabs(patientId, hospitalId, readable, reach, performedHereReach))
                 .pendingOrders(buildPendingOrders(patientId, hospitalId, readable, reach))
                 .recentNotes(buildRecentNotes(encounters))
                 .careTeam(buildCareTeam(encounters))
                 .build();
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null, reach,
                 "Cross-hospital patient snapshot read on the treatment relationship");
+        reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null, performedHereReach,
+                CrossHospitalReachRecorder.LAB_RESULT_PERFORMED_HERE_DESCRIPTION);
         return snapshot;
     }
 
@@ -313,16 +318,31 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             problems.stream()
                     .map(p -> formatDiagnosis(p.getProblemCode(), p.getProblemDisplay()))
                     .forEach(diagnoses::add);
-            // KNOWN, and the one patient-wide clinical read left in this class.
-            // clinical.patient_diagnoses (V14) carries no hospital_id, so these
-            // rows cannot be filtered to `readable`, cannot be tested by
-            // CrossHospitalRows.maySurface (a foreign row in a sensitive
-            // category surfaces) and cannot be accounted into `reach`. Deriving
-            // a hospital from diagnosedBy.getHospital() is not the answer: the
-            // column is nullable, and the SUBJECT's hospital is not the
-            // caller's scope. Scoping it needs a migration.
-            List<PatientDiagnosis> legacy = patientDiagnosisRepository
-                    .findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, DIAGNOSIS_STATUS_ACTIVE);
+            // clinical.patient_diagnoses (V14) had no hospital_id until V171,
+            // so this used to be the one patient-wide clinical read in this
+            // class. Now it is scoped to `readable` and accounted like the
+            // problems above. The rows written before V171 carry no hospital:
+            // they cannot be scoped or named in the reach, so they reach this
+            // drawer only for a verified super-admin in global view (the one
+            // resolver's Global scope: a live SUPER_ADMIN assignment, never the
+            // inflated authorities; a super-admin pinned to one hospital acts
+            // at that hospital and does not get them) — and the patient still
+            // sees them on their own record through the portal. The hospital
+            // is never derived from diagnosedBy: that is the subject's, and
+            // scope is the caller's.
+            // No sensitivity test: SensitivityClassifier has no overload for a
+            // diagnosis row, the same stated gap as medications and labs.
+            List<PatientDiagnosis> legacy = new ArrayList<>(patientDiagnosisRepository
+                    .findByPatient_IdAndStatusAndHospital_IdInOrderByDiagnosedAtDesc(
+                            patientId, DIAGNOSIS_STATUS_ACTIVE, readable));
+            account(reach, hospitalId, legacy.stream()
+                    .map(d -> CrossHospitalReachRecorder.hospitalIdOf(d.getHospital())).toList());
+            if (ActingScopeResolver.scopeOf(HospitalContextHolder.getContextOrEmpty())
+                    instanceof ActingScope.Global) {
+                legacy.addAll(patientDiagnosisRepository
+                        .findByPatient_IdAndStatusAndHospitalIsNullOrderByDiagnosedAtDesc(
+                                patientId, DIAGNOSIS_STATUS_ACTIVE));
+            }
             legacy.stream()
                     .map(d -> formatDiagnosis(d.getIcdCode(), d.getDescription()))
                     .forEach(diagnoses::add);
@@ -405,20 +425,33 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
     }
 
     private List<PatientSnapshotDTO.LabItem> buildLatestLabs(UUID patientId, UUID hospitalId,
-                                                            Set<UUID> readable, Map<String, Long> reach) {
+                                                            Set<UUID> readable, Map<String, Long> reach,
+                                                            Map<String, Long> performedHereReach) {
         List<PatientSnapshotDTO.LabItem> labs = new ArrayList<>();
         try {
             // Paged at the DB so the patient's full lab history is never loaded
-            // to trim to 10 after the fact.
-            List<LabResult> rows = labResultRepository
-                    .findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(patientId, readable, PageRequest.of(0, 10));
+            // to trim to 10 after the fact — the LATEST 10 (newest result first,
+            // id breaking ties; the page had no order, so "latest" was not
+            // guaranteed). Readable where its order is handled (#751): ordered
+            // in the readable set, or performed by this hospital's laboratory,
+            // as on the other staff lab views.
+            List<LabResult> rows = labResultRepository.findPatientResultsReadableAt(patientId, readable, hospitalId,
+                    false, PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "resultDate", "id")));
             account(reach, hospitalId, rows.stream()
-                    .map(r -> r.getLabOrder() == null ? null : CrossHospitalReachRecorder.hospitalIdOf(r.getLabOrder().getHospital()))
+                    .filter(r -> !CrossHospitalReachRecorder.isPerformedHere(r, hospitalId))
+                    .map(PatientSnapshotServiceImpl::orderingHospitalIdOf)
                     .toList());
+            account(performedHereReach, hospitalId, rows.stream()
+                    .filter(r -> CrossHospitalReachRecorder.isPerformedHere(r, hospitalId))
+                    .map(PatientSnapshotServiceImpl::orderingHospitalIdOf)
+                    .toList());
+            // No test definition (deleted, or never linked) sends null rather
+            // than an English word: the drawer renders its own translated
+            // fallback, as it already does for the pending order below.
             rows.forEach(r -> labs.add(PatientSnapshotDTO.LabItem.builder()
                             .test(r.getLabOrder().getLabTestDefinition() != null
                                     ? r.getLabOrder().getLabTestDefinition().getName()
-                                    : "Lab Test")
+                                    : null)
                             .value(r.getResultValue())
                             .flag(labResultFlag(r))
                             .abnormalDirection(r.getAbnormalFlag() != null ? r.getAbnormalFlag().direction() : null)
@@ -428,6 +461,11 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             log.debug("Lab results query error: {}", e.getMessage());
         }
         return labs;
+    }
+
+    private static UUID orderingHospitalIdOf(LabResult result) {
+        return result.getLabOrder() == null ? null
+                : CrossHospitalReachRecorder.hospitalIdOf(result.getLabOrder().getHospital());
     }
 
     /** The three-value family: the drawer colours on the literal ABNORMAL / CRITICAL. */

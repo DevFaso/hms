@@ -58,7 +58,8 @@ import com.example.hms.service.recordaccess.RecordAccessPolicy;
 @Service
 @RequiredArgsConstructor
 public class DischargeSummaryServiceImpl implements DischargeSummaryService {
-    private static final String DISCHARGE_SUMMARY_TYPE = "DischargeSummary";
+    private static final String DISCHARGE_SUMMARY_NOT_FOUND_KEY = "dischargeSummary.notFound";
+
 
 
     private final DischargeSummaryRepository dischargeSummaryRepository;
@@ -103,24 +104,24 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
 
         // Fetch required entities
         Patient patient = patientRepository.findById(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException("Patient", "id", request.getPatientId().toString()));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
         Encounter encounter = encounterRepository.findById(request.getEncounterId())
-            .orElseThrow(() -> new ResourceNotFoundException("Encounter", "id", request.getEncounterId().toString()));
+            .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", request.getEncounterId()));
 
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital", "id", request.getHospitalId().toString()));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         Staff dischargingProvider = staffRepository.findById(request.getDischargingProviderId())
-            .orElseThrow(() -> new ResourceNotFoundException("Staff", "id", request.getDischargingProviderId().toString()));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getDischargingProviderId()));
 
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(request.getAssignmentId())
-            .orElseThrow(() -> new ResourceNotFoundException("Assignment", "id", request.getAssignmentId().toString()));
+            .orElseThrow(() -> new ResourceNotFoundException("roleAssignment.notFound", request.getAssignmentId()));
 
         DischargeApproval approvalRecord = null;
         if (request.getApprovalRecordId() != null) {
             approvalRecord = dischargeApprovalRepository.findById(request.getApprovalRecordId())
-                .orElseThrow(() -> new ResourceNotFoundException("DischargeApproval", "id", request.getApprovalRecordId().toString()));
+                .orElseThrow(() -> new ResourceNotFoundException("dischargeApproval.notFound", request.getApprovalRecordId()));
         }
 
         // Build discharge summary entity
@@ -192,7 +193,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         log.info("Updating discharge summary: {}", summaryId);
 
         DischargeSummary existing = dischargeSummaryRepository.findById(summaryId)
-            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "id", summaryId.toString()));
+            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_NOT_FOUND_KEY, summaryId));
 
         enforceHospitalScope(existing, summaryId);
 
@@ -257,7 +258,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         log.info("Finalizing discharge summary: {}", summaryId);
 
         DischargeSummary dischargeSummary = dischargeSummaryRepository.findById(summaryId)
-            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "id", summaryId.toString()));
+            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_NOT_FOUND_KEY, summaryId));
 
         enforceHospitalScope(dischargeSummary, summaryId);
 
@@ -284,7 +285,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     @Transactional(readOnly = true)
     public DischargeSummaryResponseDTO getDischargeSummaryById(UUID summaryId, Locale locale) {
         DischargeSummary dischargeSummary = dischargeSummaryRepository.findById(summaryId)
-            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "id", summaryId.toString()));
+            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_NOT_FOUND_KEY, summaryId));
 
         enforceHospitalScope(dischargeSummary, summaryId);
 
@@ -295,7 +296,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     @Transactional(readOnly = true)
     public DischargeSummaryResponseDTO getDischargeSummaryByEncounter(UUID encounterId, Locale locale) {
         DischargeSummary dischargeSummary = dischargeSummaryRepository.findByEncounter_Id(encounterId)
-            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "encounter", encounterId.toString()));
+            .orElseThrow(() -> new ResourceNotFoundException("dischargeSummary.notFoundForEncounter", encounterId));
 
         enforceHospitalScope(dischargeSummary, dischargeSummary.getId());
 
@@ -383,7 +384,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         log.info("Deleting discharge summary: {}", summaryId);
 
         DischargeSummary dischargeSummary = dischargeSummaryRepository.findById(summaryId)
-            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "id", summaryId.toString()));
+            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_NOT_FOUND_KEY, summaryId));
 
         enforceHospitalScope(dischargeSummary, summaryId);
 
@@ -400,7 +401,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && summary.getHospital() != null
                 && !activeHospitalId.equals(summary.getHospital().getId())) {
-            throw new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "id", summaryId.toString());
+            throw new ResourceNotFoundException(DISCHARGE_SUMMARY_NOT_FOUND_KEY, summaryId);
         }
     }
 
@@ -486,10 +487,10 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     }
 
     private void incrementCounter(String name, String outcome) {
-        incrementCounter(name, outcome, 1);
+        incrementCounter(name, outcome, 1.0);
     }
 
-    private void incrementCounter(String name, String outcome, long amount) {
+    private void incrementCounter(String name, String outcome, double amount) {
         if (meterRegistry == null) return; // unit-test path
         try {
             Counter.builder(name)

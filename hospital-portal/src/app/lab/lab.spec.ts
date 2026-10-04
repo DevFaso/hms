@@ -14,7 +14,7 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
 import { PrintLabelService } from '../services/print-label.service';
-import { RoleContextStubState, roleContextStub } from '../testing/role-context.stub';
+import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
 
 /**
  * Audit gap B1 on the order form and the worklist: a provider can send an
@@ -29,7 +29,7 @@ describe('LabComponent — performing laboratory', () => {
   let component: LabComponent;
   let labService: jasmine.SpyObj<LabService>;
   let auth: jasmine.SpyObj<AuthService>;
-  let scope: RoleContextStubState;
+  let scope: RoleContextStub;
 
   const labs: PerformingLab[] = [
     { id: LAB_B, name: 'Central Laboratory B', code: 'LABB' },
@@ -64,7 +64,7 @@ describe('LabComponent — performing laboratory', () => {
   }
 
   async function setup(roles: string[], orders: LabOrderResponse[], hospitalId = HOSPITAL_A) {
-    scope = { superAdmin: false, hospitalId, roles };
+    scope = roleContextStub({ superAdmin: false, hospitalId, roles });
 
     labService = jasmine.createSpyObj<LabService>('LabService', [
       'listOrders',
@@ -120,7 +120,7 @@ describe('LabComponent — performing laboratory', () => {
         { provide: ToastService, useValue: toast },
         { provide: PrintLabelService, useValue: printService },
         { provide: AuthService, useValue: auth },
-        { provide: RoleContextService, useValue: roleContextStub(scope) },
+        { provide: RoleContextService, useValue: scope },
       ],
     }).compileComponents();
 
@@ -292,7 +292,7 @@ describe('LabComponent — performing laboratory', () => {
       performingHospitalName: 'Central Laboratory B',
     });
     await setup(['ROLE_SUPER_ADMIN'], [incoming], HOSPITAL_A);
-    scope.superAdmin = true;
+    scope.set({ superAdmin: true });
     TestBed.inject(RoleContextService).scopeToHospital(LAB_B);
     fixture.detectChanges();
 

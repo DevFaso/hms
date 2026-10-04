@@ -18,6 +18,9 @@
 
     <!-- Photo picker: uses Android system photo picker (PickVisualMedia), no READ_MEDIA_IMAGES needed -->
 
+    <!-- Push: asked for at run time (API 33+) the first time Messages opens. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:name=".MediHubApplication"
         android:allowBackup="true"
@@ -40,6 +43,34 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Push (FCM). FirebaseApp is initialised by MediHubApplication from
+             BuildConfig, and only when the build carries the Firebase values;
+             the library's own init provider (which looks for a
+             google-services.json that this app does not ship) is removed so
+             an unconfigured build starts without Firebase at all. -->
+        <provider
+            android:name="com.google.firebase.provider.FirebaseInitProvider"
+            android:authorities="${applicationId}.firebaseinitprovider"
+            tools:node="remove" />
+
+        <service
+            android:name=".core.push.EKeneyaMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="messages" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/brand_primary" />
 
         <!-- Allow cleartext only for local dev emulator (10.0.2.2) -->
         <activity

@@ -169,7 +169,8 @@ export class BillingService {
   }
 
   /** Backend rejects payments on DRAFT/CANCELLED/PAID invoices and amounts
-   *  above the balance due (400 with a message). Only amount is persisted. */
+   *  above the balance due (400 with a message). With no method sent, the
+   *  payment row records the method as OTHER. */
   recordPayment(invoiceId: string, amount: number): Observable<BillingInvoiceResponse> {
     return this.http.post<BillingInvoiceResponse>(`/billing-invoices/${invoiceId}/payments`, {
       amount,

@@ -13,10 +13,13 @@ import com.example.hms.payload.dto.procedure.ProcedureOrderResponseDTO;
 import com.example.hms.payload.dto.procedure.ProcedureOrderUpdateDTO;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.ProcedureOrderRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.ProcedureOrderService;
+import com.example.hms.service.PatientSubjectReadGuard;
+import com.example.hms.service.PatientSubjectReaderRoles;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,22 +47,44 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
     private final RoleValidator roleValidator;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    private final PatientSubjectReadGuard subjectReadGuard;
+    private final PatientHospitalRegistrationRepository registrationRepository;
 
     @Override
     public ProcedureOrderResponseDTO createProcedureOrder(ProcedureOrderRequestDTO request, UUID orderingProviderId) {
+        // Placed only at the hospital the caller acts at (update and cancel are
+        // already held there by requireInScope), for a patient registered
+        // there. Either refusal answers exactly as the missing row does, and
+        // both come before the patient is loaded.
+        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+        if (actingHospitalId != null) {
+            if (!actingHospitalId.equals(request.getHospitalId())) {
+                throw new ResourceNotFoundException("hospital.notFound", request.getHospitalId());
+            }
+            if (request.getPatientId() == null
+                    || !registrationRepository.existsByPatientIdAndHospitalId(request.getPatientId(), actingHospitalId)) {
+                throw new ResourceNotFoundException("patient.notFound", request.getPatientId());
+            }
+        }
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
+        // The controller hands over the caller's USER id; a staff id is still
+        // accepted. One staff row per user (uq_staff_user), so the user's row
+        // is found wherever it is filed.
         Staff orderingProvider = staffRepository.findById(orderingProviderId)
-            .orElseThrow(() -> new ResourceNotFoundException("Ordering provider not found with ID: " + orderingProviderId));
+            .or(() -> staffRepository.findByUserIdAndHospitalId(orderingProviderId, hospital.getId()))
+            .or(() -> staffRepository.findFirstByUserIdOrderByCreatedAtAsc(orderingProviderId))
+            .orElseThrow(() -> new ResourceNotFoundException("procedureOrder.orderingProvider.notFound", orderingProviderId));
 
         Encounter encounter = null;
         if (request.getEncounterId() != null) {
             encounter = encounterRepository.findById(request.getEncounterId())
-                .orElseThrow(() -> new ResourceNotFoundException("Encounter not found with ID: " + request.getEncounterId()));
+                .filter(e -> belongsTo(e, patient, hospital))
+                .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", request.getEncounterId()));
         }
 
         ProcedureOrder procedureOrder = ProcedureOrder.builder()
@@ -103,13 +128,43 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
     @Override
     @Transactional(readOnly = true)
     public ProcedureOrderResponseDTO getProcedureOrder(UUID orderId) {
-        ProcedureOrder procedureOrder = getProcedureOrderEntity(orderId);
-        return toResponseDTO(procedureOrder);
+        ProcedureOrder order = procedureOrderRepository.findById(orderId)
+            .orElseThrow(() -> procedureOrderNotFound(orderId));
+        // A patient caller is bounded by ownership, not by a hospital, as on
+        // the encounter, prescription and ultrasound reads: their own order
+        // wherever it was written, another patient's exactly as a missing id,
+        // and before the hospital check, which can answer differently. Staff
+        // are held to their hospital — and, staff who are also patients
+        // (#754's rule), read their own order elsewhere as its patient.
+        if (subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.PROCEDURE_ORDER_READS)) {
+            if (!subjectReadGuard.callerOwns(order.getPatient())) {
+                throw procedureOrderNotFound(orderId);
+            }
+            return toResponseDTO(order);
+        }
+        if (!inScope(order) && !subjectReadGuard.ownsAsItsPatient(order.getPatient())) {
+            throw procedureOrderNotFound(orderId);
+        }
+        return toResponseDTO(order);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ProcedureOrderResponseDTO> getProcedureOrdersForPatient(UUID patientId) {
+        // A patient caller reads only their own. Another patient's id answers
+        // exactly as an id that matches no row does -- an empty list -- and
+        // before the hospital lookup below, which can answer differently.
+        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.PROCEDURE_ORDER_READS, patientId)) {
+            return List.of();
+        }
+        if (subjectReadGuard.ownsAsItsPatient(patientId)) {
+            // Their own record, read as its patient wherever it was written
+            // (a patient, or staff who are also this patient, #754's rule).
+            // Reading one's own record is not a disclosure: no reach recorded.
+            return procedureOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId).stream()
+                .map(this::toResponseDTO)
+                .toList();
+        }
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         List<ProcedureOrder> orders;
         if (activeHospitalId != null) {
@@ -246,13 +301,27 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
 
     private ProcedureOrder getProcedureOrderEntity(UUID orderId) {
         ProcedureOrder order = procedureOrderRepository.findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException("Procedure order not found with ID: " + orderId));
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        if (activeHospitalId != null && order.getHospital() != null
-                && !activeHospitalId.equals(order.getHospital().getId())) {
-            throw new ResourceNotFoundException("Procedure order not found with ID: " + orderId);
+            .orElseThrow(() -> procedureOrderNotFound(orderId));
+        return requireInScope(order);
+    }
+
+    /** A procedure order outside the caller's active hospital answers as a missing one. */
+    private ProcedureOrder requireInScope(ProcedureOrder order) {
+        if (!inScope(order)) {
+            throw procedureOrderNotFound(order.getId());
         }
         return order;
+    }
+
+    /** Is the order at the caller's active hospital (a null scope reaches every hospital)? */
+    private boolean inScope(ProcedureOrder order) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        return activeHospitalId == null || order.getHospital() == null
+            || activeHospitalId.equals(order.getHospital().getId());
+    }
+
+    private static ResourceNotFoundException procedureOrderNotFound(UUID orderId) {
+        return new ResourceNotFoundException("procedureOrder.notFound", orderId);
     }
 
     private ProcedureOrderResponseDTO toResponseDTO(ProcedureOrder order) {
@@ -315,5 +384,17 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         if (dto.getConsentFormLocation() != null) {
             order.setConsentFormLocation(dto.getConsentFormLocation());
         }
+    }
+
+    /**
+     * The encounter an order or consultation is filed against must be this
+     * patient's, at this hospital. The lookup is a bare {@code findById}, so
+     * another hospital's (or another patient's) encounter used to be attached;
+     * it now answers exactly as an encounter id that matches no row.
+     */
+    private static boolean belongsTo(Encounter encounter, Patient patient, Hospital hospital) {
+        return encounter.getHospital() != null && encounter.getPatient() != null
+            && encounter.getHospital().getId().equals(hospital.getId())
+            && encounter.getPatient().getId().equals(patient.getId());
     }
 }

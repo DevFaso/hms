@@ -1,7 +1,7 @@
 import { isPlatformBrowser } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Injectable, inject, PLATFORM_ID, signal } from '@angular/core';
-import { Observable } from 'rxjs';
+import { EMPTY, Observable, catchError } from 'rxjs';
 
 import { RoleContextService } from '../core/role-context.service';
 import { expandRoleEquivalents } from '../core/role-equivalence';
@@ -435,6 +435,7 @@ export class AuthService {
   }
 
   logout(): void {
+    this.revokeServerSession();
     this.clearToken();
     this.clearRefreshToken();
     this.clearUserProfile();
@@ -447,5 +448,27 @@ export class AuthService {
         /* storage not available */
       }
     }
+  }
+
+  /**
+   * POST /api/auth/logout so the server revokes the session: the bearer it
+   * carries and the HttpOnly `hms_refresh` cookie (hence `withCredentials`).
+   * Clearing local storage alone left the refresh cookie able to mint a new
+   * access token until it expired.
+   *
+   * Fire-and-forget: the local sign-out never waits on or fails because of
+   * it. The token is read before local state is cleared and sent explicitly;
+   * the absolute URL skips the API-prefix interceptor (whose expired-token
+   * path would call logout() again), and the error interceptor never tries a
+   * refresh or a second logout on this call's 401.
+   */
+  private revokeServerSession(): void {
+    if (!this.isBrowser) return;
+    const token = this.getToken();
+    const headers = token ? new HttpHeaders({ Authorization: `Bearer ${token}` }) : undefined;
+    this.http
+      .post(`${globalThis.location.origin}/api/auth/logout`, {}, { headers, withCredentials: true })
+      .pipe(catchError(() => EMPTY))
+      .subscribe();
   }
 }

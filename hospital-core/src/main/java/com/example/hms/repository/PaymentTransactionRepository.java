@@ -15,6 +15,8 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
 
     Page<PaymentTransaction> findByInvoice_Id(UUID invoiceId, Pageable pageable);
 
+    boolean existsByInvoice_Id(UUID invoiceId);
+
     /**
      * Daily collection totals for a hospital within a date range.
      * Returns Object[]{java.sql.Date paymentDate, BigDecimal dailyTotal}.

@@ -28,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -320,5 +321,74 @@ class PatientMedicationServiceImplTest {
         assertThat(result.get(1).getHospitalName()).isEqualTo("Hôpital B");
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    // -- No hospital scope: the staff path refuses, the portal path reads the patient's own rows --
+
+    @Test
+    void staffRead_withNoHospitalScope_refusesInsteadOfReadingEveryHospital() {
+        Prescription foreign = new Prescription(); foreign.setId(UUID.randomUUID());
+        when(patientChartAccess.require(eq(patientId), isNull())).thenReturn(patient);
+        // Stubbed so the test would SEE the leak if the fallback ever ran again.
+        lenient().when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(foreign)));
+
+        assertThatThrownBy(() -> service.getMedicationsForPatient(patientId, null, 10))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
+            .isEqualTo("patient.notFound");
+
+        verify(prescriptionRepository, never()).findByPatient_Id(any(), any());
+        org.mockito.Mockito.verifyNoInteractions(reachRecorder);
+    }
+
+    @Test
+    void portalRead_withNoHospitalScope_returnsThePatientsOwnRows_withoutTheStaffGate() {
+        Prescription own = new Prescription(); own.setId(UUID.randomUUID());
+        own.setCreatedAt(LocalDateTime.now()); own.setMedicationName("Amlodipine");
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(own)));
+
+        List<PatientMedicationResponseDTO> result = service.getMedicationsForPatientPortal(patientId, null, 10);
+
+        assertThat(result).extracting(PatientMedicationResponseDTO::getMedicationName).containsExactly("Amlodipine");
+        verify(patientChartAccess, never()).require(any(), any());
+        org.mockito.Mockito.verifyNoInteractions(reachRecorder);
+    }
+
+    @Test
+    void portalRead_withAHospitalId_showsEveryHospitalsRows_andDisclosesNothing() {
+        // A patient registered at two hospitals, the portal passing one of
+        // them: the patient is not a staff reader of their own chart, so both
+        // hospitals' prescriptions come back, the record policy is never asked
+        // and no cross-hospital disclosure is written.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = Hospital.builder().name("Hôpital B").build(); other.setId(otherHospitalId);
+        Prescription local = new Prescription(); local.setId(UUID.randomUUID()); local.setHospital(hospital);
+        local.setCreatedAt(LocalDateTime.now()); local.setMedicationName("Amlodipine");
+        Prescription foreign = new Prescription(); foreign.setId(UUID.randomUUID()); foreign.setHospital(other);
+        foreign.setCreatedAt(LocalDateTime.now().minusDays(1)); foreign.setMedicationName("Metformin");
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(local, foreign)));
+
+        List<PatientMedicationResponseDTO> result = service.getMedicationsForPatientPortal(patientId, hospitalId, 10);
+
+        assertThat(result).extracting(PatientMedicationResponseDTO::getHospitalId)
+            .containsExactly(hospitalId, otherHospitalId);
+        verify(recordAccessPolicy, never()).readableHospitalIds(any(), any(), any());
+        org.mockito.Mockito.verifyNoInteractions(reachRecorder);
+    }
+
+    @Test
+    void staffRead_neverTakesTheOwnRecordResolver() {
+        when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of());
+
+        service.getMedicationsForPatient(patientId, hospitalId, 10);
+
+        verify(patientChartAccess, never()).requireOwnRecord(any());
     }
 }

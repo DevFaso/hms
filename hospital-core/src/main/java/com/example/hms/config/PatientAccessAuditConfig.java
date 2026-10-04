@@ -1,5 +1,6 @@
 package com.example.hms.config;
 
+import com.example.hms.security.audit.GlobalViewAuditInterceptor;
 import com.example.hms.security.audit.PatientAccessAuditInterceptor;
 import com.example.hms.security.audit.WriteAuditInterceptor;
 
@@ -45,12 +46,15 @@ public class PatientAccessAuditConfig implements WebMvcConfigurer {
 
     private final ObjectProvider<PatientAccessAuditInterceptor> interceptorProvider;
     private final ObjectProvider<WriteAuditInterceptor> writeInterceptorProvider;
+    private final ObjectProvider<GlobalViewAuditInterceptor> globalViewInterceptorProvider;
 
     public PatientAccessAuditConfig(
             ObjectProvider<PatientAccessAuditInterceptor> interceptorProvider,
-            ObjectProvider<WriteAuditInterceptor> writeInterceptorProvider) {
+            ObjectProvider<WriteAuditInterceptor> writeInterceptorProvider,
+            ObjectProvider<GlobalViewAuditInterceptor> globalViewInterceptorProvider) {
         this.interceptorProvider = interceptorProvider;
         this.writeInterceptorProvider = writeInterceptorProvider;
+        this.globalViewInterceptorProvider = globalViewInterceptorProvider;
     }
 
     @Override
@@ -77,6 +81,14 @@ public class PatientAccessAuditConfig implements WebMvcConfigurer {
         } else {
             // Same reasoning: no path pattern, the interceptor reads the handler.
             registry.addInterceptor(writeInterceptor);
+        }
+
+        GlobalViewAuditInterceptor globalViewInterceptor = globalViewInterceptorProvider.getIfAvailable();
+        if (globalViewInterceptor == null) {
+            log.warn("[GLOBAL-VIEW-AUDIT] No GlobalViewAuditInterceptor bean — super-admin global-view "
+                + "requests will NOT be recorded. Expected in @WebMvcTest slices; a defect anywhere else.");
+        } else {
+            registry.addInterceptor(globalViewInterceptor);
         }
     }
 }

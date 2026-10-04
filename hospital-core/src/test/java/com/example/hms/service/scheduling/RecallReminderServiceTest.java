@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.hms.enums.RecallStatus;
@@ -11,7 +12,9 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.scheduling.PatientRecall;
 import com.example.hms.repository.scheduling.PatientRecallRepository;
-import java.time.LocalDate;
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -34,13 +37,18 @@ class RecallReminderServiceTest {
 
     private RecallReminderService service;
 
+    /** Fixed instant: the notice window and the stamp come from the injected clock. */
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 3, 1, 6, 0);
+    private static final Clock FIXED =
+        Clock.fixed(NOW.atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
+
     private Patient patient;
     private PatientRecall recall;
 
     @BeforeEach
     void setUp() {
         service = new RecallReminderService(
-            recallRepository, outreachNotifier, messageSource, patientLocaleResolver);
+            recallRepository, outreachNotifier, messageSource, patientLocaleResolver, FIXED);
         ReflectionTestUtils.setField(service, "leadDays", 14L);
         ReflectionTestUtils.setField(service, "outreachLocale", "fr");
         org.mockito.Mockito.lenient()
@@ -58,7 +66,7 @@ class RecallReminderServiceTest {
         recall = PatientRecall.builder()
             .patient(patient)
             .hospital(hospital)
-            .dueDate(LocalDate.now().plusDays(7))
+            .dueDate(NOW.toLocalDate().plusDays(7))
             .reason("Post-op review")
             .build();
         recall.setId(UUID.randomUUID());
@@ -80,6 +88,18 @@ class RecallReminderServiceTest {
         assertThat(notified).isEqualTo(1);
         assertThat(recall.getNotifiedAt()).isNotNull();
         assertThat(recall.getStatus()).isEqualTo(RecallStatus.NOTIFIED);
+    }
+
+    @Test
+    void noticeWindowAndStampComeFromTheInjectedClock() {
+        when(recallRepository.findAwaitingNotification(NOW.toLocalDate().plusDays(14)))
+            .thenReturn(List.of(recall));
+        when(outreachNotifier.notifyPatient(eq(patient), any())).thenReturn(true);
+
+        assertThat(service.sendDueRecallNotices()).isEqualTo(1);
+
+        verify(recallRepository).findAwaitingNotification(NOW.toLocalDate().plusDays(14));
+        assertThat(recall.getNotifiedAt()).isEqualTo(NOW);
     }
 
     @Test

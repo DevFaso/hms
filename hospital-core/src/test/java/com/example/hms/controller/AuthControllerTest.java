@@ -184,6 +184,97 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.message").value("Logged out successfully."));
     }
 
+    // ───────────── logout revokes the refresh token the mobile apps hold ─────────────
+
+    private void givenToken(String token, String username, String jti) {
+        when(jwtTokenProvider.validateToken(token)).thenReturn(true);
+        when(jwtTokenProvider.getUsernameFromJWT(token)).thenReturn(username);
+        when(jwtTokenProvider.getJtiFromToken(token)).thenReturn(jti);
+        when(jwtTokenProvider.getExpiration(token)).thenReturn(new java.util.Date(4_102_444_800_000L));
+    }
+
+    @Test
+    void logout_withBodyRefreshTokenOfTheSameUser_revokesBothTokens() throws Exception {
+        givenToken("access.jwt", "patient1", "jti-access");
+        givenToken("refresh.jwt", "patient1", "jti-refresh");
+
+        mockMvc.perform(post("/auth/logout")
+                        .header("Authorization", "Bearer access.jwt")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"refresh.jwt\"}"))
+                .andExpect(status().isOk());
+
+        verify(tokenBlacklistService).blacklist("jti-access", 4_102_444_800_000L);
+        verify(tokenBlacklistService).blacklist("jti-refresh", 4_102_444_800_000L);
+    }
+
+    @Test
+    void logout_revokesBothTheCookieAndTheBodyRefreshToken() throws Exception {
+        // The Android cookie jar keeps the login-time refresh cookie while the
+        // app rotates the token it really uses in the body: the cookie can be
+        // stale, so the body token must be revoked too.
+        givenToken("access.jwt", "patient1", "jti-access");
+        givenToken("cookie.refresh", "patient1", "jti-cookie");
+        givenToken("body.refresh", "patient1", "jti-body");
+        when(refreshTokenCookieService.read(any())).thenReturn("cookie.refresh");
+
+        mockMvc.perform(post("/auth/logout")
+                        .header("Authorization", "Bearer access.jwt")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"body.refresh\"}"))
+                .andExpect(status().isOk());
+
+        verify(tokenBlacklistService).blacklist("jti-cookie", 4_102_444_800_000L);
+        verify(tokenBlacklistService).blacklist("jti-body", 4_102_444_800_000L);
+    }
+
+    @Test
+    void logout_neverRevokesAnotherUsersRefreshToken() throws Exception {
+        givenToken("access.jwt", "patient1", "jti-access");
+        givenToken("refresh.jwt", "patient2", "jti-other");
+
+        mockMvc.perform(post("/auth/logout")
+                        .header("Authorization", "Bearer access.jwt")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"refresh.jwt\"}"))
+                .andExpect(status().isOk());
+
+        verify(tokenBlacklistService).blacklist("jti-access", 4_102_444_800_000L);
+        verify(tokenBlacklistService, never()).blacklist(eq("jti-other"), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void logout_afterTheAccessTokenExpired_stillRevokesTheRefreshToken() throws Exception {
+        // An idle patient signs out with an expired access token: no bearer
+        // identity, but the refresh token they hand back must still die.
+        when(jwtTokenProvider.getJtiFromToken("expired.jwt"))
+                .thenThrow(new IllegalArgumentException("expired"));
+        givenToken("refresh.jwt", "patient1", "jti-refresh");
+
+        mockMvc.perform(post("/auth/logout")
+                        .header("Authorization", "Bearer expired.jwt")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"refresh.jwt\"}"))
+                .andExpect(status().isOk());
+
+        verify(tokenBlacklistService).blacklist("jti-refresh", 4_102_444_800_000L);
+    }
+
+    @Test
+    void logout_withAnExpiredRefreshToken_stillSucceeds() throws Exception {
+        givenToken("access.jwt", "patient1", "jti-access");
+        when(jwtTokenProvider.validateToken("stale.jwt")).thenReturn(false);
+
+        mockMvc.perform(post("/auth/logout")
+                        .header("Authorization", "Bearer access.jwt")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"stale.jwt\"}"))
+                .andExpect(status().isOk());
+
+        verify(tokenBlacklistService).blacklist("jti-access", 4_102_444_800_000L);
+        verify(jwtTokenProvider, never()).getJtiFromToken("stale.jwt");
+    }
+
     @Test
     void login_withBlankUsername_returns400() throws Exception {
         LoginRequest login = new LoginRequest();
@@ -777,6 +868,28 @@ class AuthControllerTest {
     }
 
     // =====================================================================
+    // Lockout
+    // =====================================================================
+
+    @Test
+    void login_locked_answers423BeforeAnyPasswordCheck() throws Exception {
+        when(loginAttemptService.remainingLockMs("someone")).thenReturn(90_000L);
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new LoginRequest("someone", "AnyPass1!", null))))
+                .andExpect(status().is(423))
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.containsString("2 minute(s)")));
+
+        // The lock is read once, and the password is never tried: the answer
+        // is the same whether "someone" exists or not.
+        verify(loginAttemptService).remainingLockMs("someone");
+        verify(authenticationManager, never()).authenticate(any());
+    }
+
+    // =====================================================================
     // Disabled-account guidance
     // =====================================================================
 
@@ -831,7 +944,7 @@ class AuthControllerTest {
         // The disabled arm of /auth/login counts failures, so trying the
         // password before verifying accumulates a lockout. Without this reset
         // the link "works" and the next sign-in is still refused with 423.
-        verify(loginAttemptService).resetAttempts("apatient");
+        verify(loginAttemptService).resetAttempts(user.getId());
     }
 
     @Test

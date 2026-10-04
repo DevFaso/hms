@@ -67,3 +67,20 @@ jobs:
         with:
           name: coverage-report
           path: hospital-core/build/reports/jacoco/test/html/
+
+      # The SonarQube job in project-quality.yml analyses THIS run's coverage
+      # and test results instead of re-running the whole suite. Uploaded only
+      # when the suite and the coverage gate passed: the Sonar job `needs`
+      # this one, so it never runs against a partial report. The common root
+      # of the two paths is hospital-core/build/, which is where the Sonar job
+      # downloads it back, so sonar.coverage.jacoco.xmlReportPaths and the
+      # default sonar.junit.reportPaths resolve unchanged.
+      - name: Upload Sonar inputs (JaCoCo XML + JUnit results)
+        uses: actions/upload-artifact@v7
+        with:
+          name: sonar-inputs
+          path: |
+            hospital-core/build/reports/jacoco/test/jacocoTestReport.xml
+            hospital-core/build/test-results/test/
+          if-no-files-found: error
+          retention-days: 3

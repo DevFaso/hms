@@ -124,7 +124,7 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
             adt("A01", "V".repeat(Hl7FieldBounds.VISIT_NUMBER_MAX + 1)),
             patient, hospital, "REG", "HOSP1", "MSG-1");
 
-        assertThat(result).isEqualTo(VisitProjectionResult.SKIPPED);
+        assertThat(result).isEqualTo(VisitProjectionResult.SKIPPED_OVER_WIDTH);
         verifyNoInteractions(admissionRepository, encounterRepository, auditEventLogService);
     }
 
@@ -175,6 +175,88 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         assertThat(audit.getValue().getEventDescription())
             .contains("destination=(over " + Hl7FieldBounds.ASSIGNED_LOCATION_MAX + " characters)")
             .doesNotContain("WWWW");
+    }
+
+    @Test
+    @DisplayName("A02: a sender cannot write the over-width marker itself - its destination is always quoted")
+    void theOverWidthMarkerCannotBeForged() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+        String marker = "(over " + Hl7FieldBounds.ASSIGNED_LOCATION_MAX + " characters)";
+
+        service.projectVisit(adt("A02", "V-1", marker + "^ROOM-1", null, null),
+            patient, hospital, "REG", "HOSP1", "MSG-1");
+
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventDescription())
+            .contains("destination=\"" + marker + "\"")
+            .doesNotContain("destination=" + marker);
+    }
+
+    @Test
+    @DisplayName("A02 with no PV1-3 records our absent marker, unquoted")
+    void aMissingDestinationIsOurMarker() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+
+        service.projectVisit(adt("A02", "V-1", "", null, null), patient, hospital, "REG", "HOSP1", "MSG-1");
+
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventDescription()).contains(" destination=(none) ");
+    }
+
+    @Test
+    @DisplayName("The A03 audit description quotes MSH-10, the visit and the sender pair, escaping line breaks and ANSI")
+    void theDischargeAuditQuotesTheSendersText() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+        String esc = String.valueOf((char) 0x1B);
+        String rlo = String.valueOf((char) 0x202E);
+        String forged = "M1\nADT^A03 discharge — visit=V-9 msgCtrlId=" + esc + "[2J";
+
+        service.projectVisit(adt("A03", "V\"-1", "WARD-A", null, LocalDateTime.of(2026, 5, 19, 10, 0)),
+            patient, hospital, "REG", "HO" + rlo + "SP1", forged);
+
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventDescription())
+            .startsWith("ADT^A03 discharge — visit=\"V\\\"-1\" sender=\"REG\"/\"HO\\u202eSP1\" hospital=")
+            .endsWith(" msgCtrlId=\"M1\\u000aADT^A03 discharge — visit=V-9 msgCtrlId=\\u001b[2J\"")
+            .doesNotContain("\n").doesNotContain(esc).doesNotContain(rlo);
+    }
+
+    @Test
+    @DisplayName("The stored MSH-10 is the ORU key's form: spaces stripped, a control character kept")
+    void theStoredControlIdKeepsAControlCharacter() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+        String bel = String.valueOf((char) 7);
+
+        service.projectVisit(adt("A08", "V-1"), patient, hospital, "REG", "HOSP1", "  M1" + bel + "  ");
+
+        assertThat(row.getExternalMessageControlId()).isEqualTo("M1" + bel);
     }
 
     @Test

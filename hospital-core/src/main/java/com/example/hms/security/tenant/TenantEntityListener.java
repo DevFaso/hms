@@ -10,6 +10,11 @@ import jakarta.persistence.PreUpdate;
 /**
  * JPA entity listener that populates tenant identifiers from the {@link HospitalContext} when a tenant-scoped
  * entity is persisted or updated. The listener skips entities that are not {@link TenantScoped}.
+ *
+ * <p>Each entity stamps the hospital the request is PINNED to
+ * ({@link ActingScopeResolver#pinnedHospitalIdOf}), never the raw active
+ * hospital: a super-admin in global view used to stamp new rows with an
+ * incidental clinical assignment (D2).
  */
 @Slf4j
 public class TenantEntityListener {

@@ -83,13 +83,13 @@ fun BillingScreen(onBack: () -> Unit = {}, viewModel: BillingViewModel = hiltVie
                         Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue, titleContentColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandPrimary, titleContentColor = Color.White)
             )
         }
     ) { padding ->
         if (isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BrandBlue)
+                CircularProgressIndicator(color = BrandPrimary)
             }
             return@Scaffold
         }
@@ -169,7 +169,7 @@ private fun InvoiceCard(invoice: InvoiceDto, payEnabled: Boolean, onPay: () -> U
                 verticalAlignment = Alignment.CenterVertically) {
                 Text(invoice.invoiceNumber, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 StatusBadge(
-                    text = invoice.statusDisplay,
+                    text = stringResource(invoice.statusEnum.labelRes),
                     color = when {
                         invoice.isPaid -> SuccessGreen
                         invoice.isCancelled -> NeutralGrey
@@ -200,7 +200,7 @@ private fun InvoiceCard(invoice: InvoiceDto, payEnabled: Boolean, onPay: () -> U
                     onClick = onPay,
                     enabled = payEnabled,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
                 ) {
                     Icon(Icons.Default.Payments, null)
                     Spacer(Modifier.width(8.dp))
@@ -224,11 +224,9 @@ private fun AmountRow(label: String, value: String, color: Color = Color.Unspeci
 /**
  * Records a payment made outside the app (mobile money, cash at the desk,
  * a card terminal, a transfer). There is no gateway here. The form matches
- * the web's, but the backend persists only the amount today: method,
- * reference and notes are accepted and dropped (PatientPortalController
- * .payMyInvoice forwards dto.getAmount() alone). The hint says so rather
- * than promising the cashier a reference they will never see; the backend
- * gap is recorded in tasklist.md.
+ * the web's, and the backend stores the method, the transaction reference
+ * and the notes with the amount, so the hint no longer warns that only the
+ * amount is kept.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -305,7 +303,7 @@ private fun PaymentSheet(
                 onClick = { onPay(amount ?: 0.0, method, reference, notes) },
                 enabled = amountValid && !isPaying,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+                colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
             ) {
                 if (isPaying) {
                     CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)

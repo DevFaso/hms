@@ -22,7 +22,7 @@ import com.example.hms.repository.ChatMessageRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
-import com.example.hms.security.CustomUserDetails;
+import com.example.hms.security.PrincipalUserIds;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
@@ -102,7 +102,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         UUID currentUserId = getCurrentUserId(); // Sender ID
 
         User sender = userRepository.findById(currentUserId)
-            .orElseThrow(() -> new ResourceNotFoundException("Sender not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("chat.sender.notFound", currentUserId));
 
         // Resolve recipient by UUID or email
         User recipient;
@@ -110,10 +110,10 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             recipient = userRepository.findById(dto.getRecipientId())
                 .orElseGet(() -> staffRepository.findById(dto.getRecipientId())
                     .map(Staff::getUser)
-                    .orElseThrow(() -> new ResourceNotFoundException("Recipient not found")));
+                    .orElseThrow(() -> new ResourceNotFoundException("chat.recipient.notFound", dto.getRecipientId())));
         } else if (dto.getRecipientEmail() != null && !dto.getRecipientEmail().isBlank()) {
             recipient = userRepository.findByEmail(dto.getRecipientEmail())
-                .orElseThrow(() -> new ResourceNotFoundException("Recipient not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("chat.recipient.notFound", dto.getRecipientEmail()));
         } else {
             throw new IllegalArgumentException("Either recipientId or recipientEmail is required");
         }
@@ -352,7 +352,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     private UserRoleHospitalAssignment getSenderAssignment(UUID userId, UUID hospitalId, String roleCode) {
         return userRoleHospitalAssignmentRepository
             .findByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, hospitalId, roleCode)
-            .orElseThrow(() -> new ResourceNotFoundException("No active assignment with role " + roleCode + " found for user in hospital"));
+            .orElseThrow(() -> new ResourceNotFoundException("chat.roleAssignment.notFound", roleCode));
     }
 
     protected UUID getCurrentUserId() {
@@ -361,23 +361,19 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             throw new SecurityException("Unauthorized: No authenticated user found");
         }
 
-        Object principal = authentication.getPrincipal();
-        if (principal instanceof CustomUserDetails userDetails) {
-            return userDetails.getUserId();
-        }
-
-        throw new SecurityException("Invalid principal type in security context");
+        // The one principal -> local user id rule: a password-path principal's
+        // id, or the account the Keycloak filter verified for this request.
+        return PrincipalUserIds.of(authentication)
+            .orElseThrow(() -> new SecurityException("Invalid principal type in security context"));
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ChatMessageResponseDTO> getChatHistory(UUID user1Id, UUID user2Id, int page, int size, Locale locale) {
         User user1 = userRepository.findById(user1Id)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(USER_NOT_FOUND_KEY, new Object[]{user1Id}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, user1Id));
         User user2 = userRepository.findById(user2Id)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(USER_NOT_FOUND_KEY, new Object[]{user2Id}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, user2Id));
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(TIMESTAMP_FIELD).descending());
         Page<ChatMessage> messages = chatMessageRepository.findChatBetweenUsers(user1, user2, pageable);
@@ -392,11 +388,9 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     @Transactional
     public void markMessagesAsRead(UUID senderId, UUID recipientId, Locale locale) {
         User sender = userRepository.findById(senderId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(USER_NOT_FOUND_KEY, new Object[]{senderId}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, senderId));
         User recipient = userRepository.findById(recipientId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(USER_NOT_FOUND_KEY, new Object[]{recipientId}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, recipientId));
 
         List<ChatMessage> messages = chatMessageRepository.findUnreadMessages(sender, recipient);
         messages.forEach(m -> m.setRead(true));
@@ -506,7 +500,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     @Transactional(readOnly = true)
     public ChatAttachmentPayload downloadAttachment(UUID attachmentId, String requesterUsername) {
         ChatAttachment attachment = chatAttachmentRepository.findById(attachmentId)
-            .orElseThrow(() -> new ResourceNotFoundException("Attachment not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("chat.attachment.notFound", attachmentId));
         ChatMessage message = attachment.getMessage();
         // Participant gate: only the carrying message's two parties may
         // read the bytes. Everyone else — including other staff at the
@@ -518,7 +512,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
                 || (message.getRecipient() != null
                     && requesterUsername.equals(message.getRecipient().getUsername())));
         if (!participant) {
-            throw new ResourceNotFoundException("Attachment not found");
+            throw new ResourceNotFoundException("chat.attachment.notFound", attachmentId);
         }
         java.nio.file.Path path =
             fileUploadService.resolveStoredFile(attachment.getStorageKey(), "chat-attachments");

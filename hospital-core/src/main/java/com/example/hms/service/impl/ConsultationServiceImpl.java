@@ -26,6 +26,8 @@ import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.ConsultationService;
 import com.example.hms.service.NotificationService;
+import com.example.hms.service.PatientSubjectReadGuard;
+import com.example.hms.service.PatientSubjectReaderRoles;
 import com.example.hms.utility.ElapsedTime;
 import com.example.hms.utility.RoleValidator;
 import jakarta.persistence.EntityNotFoundException;
@@ -63,8 +65,9 @@ import java.util.Locale;
 @RequiredArgsConstructor
 @Transactional
 public class ConsultationServiceImpl implements ConsultationService {
+    private static final String CONSULTATION_CONSULTANT_NOT_FOUND_KEY = "consultation.consultant.notFound";
 
-    private static final String MSG_CONSULTANT_NOT_FOUND = "Consultant not found with ID: ";
+
     /** Entity label carried into the {@code safeInit} lazy-load diagnostics. */
     private static final String ENTITY = "Consultation";
 
@@ -91,25 +94,39 @@ public class ConsultationServiceImpl implements ConsultationService {
     private final Clock clock;
     private final NotificationService notificationService;
     private final MessageSource messageSource;
+    private final PatientSubjectReadGuard subjectReadGuard;
+    private final com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
 
     @Override
     public ConsultationResponseDTO createConsultation(ConsultationRequestDTO request, UUID requestingProviderId) {
+        // A consultation is requested at the hospital the caller acts at, for
+        // a patient registered there. Another hospital answers exactly as a
+        // missing one, and a patient registered only elsewhere exactly as a
+        // missing patient: the registration is asked BEFORE the patient is
+        // loaded, so a real id and a made-up one cannot be told apart (it used
+        // to be a 400 "not registered" for a real patient, a 404 for a fake).
+        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+        if (actingHospitalId != null && !actingHospitalId.equals(request.getHospitalId())) {
+            throw new ResourceNotFoundException("hospital.notFound", request.getHospitalId());
+        }
+        if (!patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(
+                request.getPatientId(), request.getHospitalId())) {
+            throw new ResourceNotFoundException("patient.notFound", request.getPatientId());
+        }
+
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
-        if (!patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospital.getId())) {
-            throw new BusinessException("Patient is not registered with the specified hospital.");
-        }
-
         Staff requestingProvider = resolveRequestingProvider(requestingProviderId, hospital.getId());
 
         Encounter encounter = null;
         if (request.getEncounterId() != null) {
             encounter = encounterRepository.findById(request.getEncounterId())
-                .orElseThrow(() -> new ResourceNotFoundException("Encounter not found with ID: " + request.getEncounterId()));
+                .filter(e -> belongsTo(e, patient, hospital))
+                .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", request.getEncounterId()));
         }
 
         Staff consultant = null;
@@ -148,19 +165,28 @@ public class ConsultationServiceImpl implements ConsultationService {
     @Override
     @Transactional(readOnly = true)
     public ConsultationResponseDTO getConsultation(UUID consultationId) {
-        Consultation consultation = getConsultationEntity(consultationId);
-        // ── Tenant isolation ──
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        if (activeHospitalId != null && consultation.getHospital() != null
-                && !activeHospitalId.equals(consultation.getHospital().getId())) {
-            throw new ResourceNotFoundException("Consultation not found with ID: " + consultationId);
-        }
-        return toResponseDTO(consultation);
+        return toResponseDTO(getConsultationInScope(consultationId));
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ConsultationResponseDTO> getConsultationsForPatient(UUID patientId) {
+        // A patient caller reads only their own. Another patient's id answers
+        // exactly as an id that matches no row does -- an empty list -- and
+        // before the hospital lookup below, which can answer differently.
+        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.CONSULTATIONS_BY_PATIENT, patientId)) {
+            return List.of();
+        }
+        if (subjectReadGuard.ownsAsItsPatient(patientId)) {
+            // Their own record, read as its patient wherever it was written: a
+            // patient, or staff who are also this patient (#754's rule) — which
+            // is what /me/patient/consultations serves a nurse who was a
+            // patient at another hospital; the staff branch below held her to
+            // the hospital she works at. Not a disclosure: no reach recorded.
+            return consultationRepository.findByPatient_IdOrderByRequestedAtDesc(patientId).stream()
+                .map(this::toResponseDTO)
+                .toList();
+        }
         // ── Tenant isolation ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId == null) {
@@ -184,6 +210,14 @@ public class ConsultationServiceImpl implements ConsultationService {
             CrossHospitalReachRecorder.reachOf(consultations.stream().map(c -> CrossHospitalReachRecorder.hospitalIdOf(c.getHospital())).toList(), activeHospitalId),
             "Cross-hospital consultation read on the treatment relationship");
         return consultations.stream()
+            .map(this::toResponseDTO)
+            .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ConsultationResponseDTO> getConsultationsForPortalPatient(UUID patientId) {
+        return consultationRepository.findByPatient_IdOrderByRequestedAtDesc(patientId).stream()
             .map(this::toResponseDTO)
             .toList();
     }
@@ -322,7 +356,7 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     @Override
     public ConsultationResponseDTO acknowledgeConsultation(UUID consultationId, UUID consultantId) {
-        Consultation consultation = getConsultationEntity(consultationId);
+        Consultation consultation = getConsultationInScope(consultationId);
 
         if (consultation.getStatus() != ConsultationStatus.ASSIGNED &&
             consultation.getStatus() != ConsultationStatus.REQUESTED) {
@@ -337,7 +371,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         // shapes and is what the create path uses.
         Staff consultant = resolveStaff(consultantId, consultation.getHospital() != null
                 ? consultation.getHospital().getId() : null)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_CONSULTANT_NOT_FOUND + consultantId));
+            .orElseThrow(() -> new ResourceNotFoundException(CONSULTATION_CONSULTANT_NOT_FOUND_KEY, consultantId));
 
         consultation.setConsultant(consultant);
         consultation.setStatus(ConsultationStatus.ACKNOWLEDGED);
@@ -351,11 +385,12 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     @Override
     public ConsultationResponseDTO updateConsultation(UUID consultationId, ConsultationUpdateDTO updateDTO) {
-        Consultation consultation = getConsultationEntity(consultationId);
+        Consultation consultation = getConsultationInScope(consultationId);
 
         if (updateDTO.getConsultantId() != null && !updateDTO.getConsultantId().equals(consultation.getConsultant() != null ? consultation.getConsultant().getId() : null)) {
             Staff consultant = staffRepository.findById(updateDTO.getConsultantId())
-                .orElseThrow(() -> new ResourceNotFoundException(MSG_CONSULTANT_NOT_FOUND + updateDTO.getConsultantId()));
+                .orElseThrow(() -> new ResourceNotFoundException(CONSULTATION_CONSULTANT_NOT_FOUND_KEY, updateDTO.getConsultantId()));
+            requireConsultantAtHospital(consultant, consultation);
             consultation.setConsultant(consultant);
         }
 
@@ -390,7 +425,7 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     @Override
     public ConsultationResponseDTO completeConsultation(UUID consultationId, CompleteConsultationRequestDTO request) {
-        Consultation consultation = getConsultationEntity(consultationId);
+        Consultation consultation = getConsultationInScope(consultationId);
 
         if (consultation.getStatus() == ConsultationStatus.COMPLETED) {
             throw new BusinessException("Consultation is already completed");
@@ -442,7 +477,7 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     @Override
     public ConsultationResponseDTO cancelConsultation(UUID consultationId, String cancellationReason) {
-        Consultation consultation = getConsultationEntity(consultationId);
+        Consultation consultation = getConsultationInScope(consultationId);
 
         if (consultation.getStatus() == ConsultationStatus.COMPLETED) {
             throw new BusinessException("Cannot cancel a completed consultation");
@@ -464,7 +499,7 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     @Override
     public ConsultationResponseDTO scheduleConsultation(UUID consultationId, LocalDateTime scheduledAt, String scheduleNote) {
-        Consultation consultation = getConsultationEntity(consultationId);
+        Consultation consultation = getConsultationInScope(consultationId);
 
         if (consultation.getStatus() == ConsultationStatus.COMPLETED ||
             consultation.getStatus() == ConsultationStatus.CANCELLED ||
@@ -486,7 +521,7 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     @Override
     public ConsultationResponseDTO startConsultation(UUID consultationId) {
-        Consultation consultation = getConsultationEntity(consultationId);
+        Consultation consultation = getConsultationInScope(consultationId);
 
         if (consultation.getStatus() != ConsultationStatus.SCHEDULED &&
             consultation.getStatus() != ConsultationStatus.ACKNOWLEDGED &&
@@ -505,7 +540,7 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     @Override
     public ConsultationResponseDTO declineConsultation(UUID consultationId, String declineReason) {
-        Consultation consultation = getConsultationEntity(consultationId);
+        Consultation consultation = getConsultationInScope(consultationId);
 
         if (consultation.getStatus() == ConsultationStatus.COMPLETED) {
             throw new BusinessException("Cannot decline a completed consultation");
@@ -529,14 +564,15 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     @Override
     public ConsultationResponseDTO assignConsultation(UUID consultationId, UUID consultantId, UUID assignedById, String assignmentNote) {
-        Consultation consultation = getConsultationEntity(consultationId);
+        Consultation consultation = getConsultationInScope(consultationId);
 
         if (consultation.getStatus() != ConsultationStatus.REQUESTED) {
             throw new BusinessException("Only REQUESTED consultations can be assigned (current status: " + consultation.getStatus() + ")");
         }
 
         Staff consultant = staffRepository.findById(consultantId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_CONSULTANT_NOT_FOUND + consultantId));
+            .orElseThrow(() -> new ResourceNotFoundException(CONSULTATION_CONSULTANT_NOT_FOUND_KEY, consultantId));
+        requireConsultantAtHospital(consultant, consultation);
 
         consultation.setConsultant(consultant);
         consultation.setStatus(ConsultationStatus.ASSIGNED);
@@ -570,7 +606,7 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     @Override
     public ConsultationResponseDTO reassignConsultation(UUID consultationId, UUID consultantId, UUID assignedById, String reassignmentReason) {
-        Consultation consultation = getConsultationEntity(consultationId);
+        Consultation consultation = getConsultationInScope(consultationId);
 
         if (consultation.getStatus() == ConsultationStatus.COMPLETED) {
             throw new BusinessException("Cannot reassign a completed consultation");
@@ -580,7 +616,8 @@ public class ConsultationServiceImpl implements ConsultationService {
         }
 
         Staff consultant = staffRepository.findById(consultantId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_CONSULTANT_NOT_FOUND + consultantId));
+            .orElseThrow(() -> new ResourceNotFoundException(CONSULTATION_CONSULTANT_NOT_FOUND_KEY, consultantId));
+        requireConsultantAtHospital(consultant, consultation);
 
         UUID previousConsultantId = consultation.getConsultant() != null ? consultation.getConsultant().getId() : null;
         consultation.setConsultant(consultant);
@@ -713,7 +750,50 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     private Consultation getConsultationEntity(UUID consultationId) {
         return consultationRepository.findById(consultationId)
-            .orElseThrow(() -> new ResourceNotFoundException("Consultation not found with ID: " + consultationId));
+            .orElseThrow(() -> new ResourceNotFoundException("consultation.notFound", consultationId));
+    }
+
+    /**
+     * ── Tenant isolation ── the consultation, only when it belongs to the
+     * hospital the caller acts at; a foreign one answers exactly as a missing
+     * id. {@code requireActiveHospitalId} is null only for a super-admin in
+     * global view, who keeps unrestricted access.
+     *
+     * <p>The rule for every consultation write as well as the read: a
+     * consultation is acted on at its own hospital. A consultant working at
+     * another hospital is NOT meant to act on it from there — the portal
+     * assigns consultants from the consultation's own hospital's staff list
+     * ({@code consultations.ts} {@code loadAssignableStaff(c.hospitalId)}),
+     * and the consultant's own worklists ({@link #getConsultationsAssignedTo},
+     * {@link #getMyConsultations}) show only the active hospital's rows, so a
+     * cross-hospital action was never a flow, only an unchecked path.
+     */
+    private Consultation getConsultationInScope(UUID consultationId) {
+        Consultation consultation = getConsultationEntity(consultationId);
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && consultation.getHospital() != null
+                && !activeHospitalId.equals(consultation.getHospital().getId())) {
+            throw new ResourceNotFoundException("consultation.notFound", consultationId);
+        }
+        return consultation;
+    }
+
+    /**
+     * The consultant a consultation is given to must hold an active assignment
+     * at the consultation's hospital: the consultation is acted on there (see
+     * {@link #getConsultationInScope}), so a consultant from elsewhere could
+     * never see it in their worklist or act on it. Input validation, answered
+     * 400 with a translated message — the consultant id was the caller's own
+     * pick from that hospital's staff list, so nothing is disclosed.
+     */
+    private void requireConsultantAtHospital(Staff consultant, Consultation consultation) {
+        UUID hospitalId = consultation.getHospital() != null ? consultation.getHospital().getId() : null;
+        UUID userId = consultant.getUser() != null ? consultant.getUser().getId() : null;
+        if (hospitalId == null || userId == null
+                || assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId).isEmpty()) {
+            throw new BusinessException(messageSource.getMessage("consultation.consultant.notAtHospital", null,
+                org.springframework.context.i18n.LocaleContextHolder.getLocale()));
+        }
     }
 
     private LocalDateTime calculateSlaDueBy(ConsultationUrgency urgency) {
@@ -727,7 +807,7 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     private Staff resolveRequestingProvider(UUID identifier, UUID hospitalId) {
         return resolveStaff(identifier, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Requesting provider not found with ID: " + identifier));
+            .orElseThrow(() -> new ResourceNotFoundException("consultation.requestingProvider.notFound", identifier));
     }
 
     private Staff resolveConsultant(UUID identifier, UUID hospitalId) {
@@ -893,5 +973,17 @@ public class ConsultationServiceImpl implements ConsultationService {
                      parentEntity, parentId, association);
             return null;
         }
+    }
+
+    /**
+     * The encounter an order or consultation is filed against must be this
+     * patient's, at this hospital. The lookup is a bare {@code findById}, so
+     * another hospital's (or another patient's) encounter used to be attached;
+     * it now answers exactly as an encounter id that matches no row.
+     */
+    private static boolean belongsTo(Encounter encounter, Patient patient, Hospital hospital) {
+        return encounter.getHospital() != null && encounter.getPatient() != null
+            && encounter.getHospital().getId().equals(hospital.getId())
+            && encounter.getPatient().getId().equals(patient.getId());
     }
 }

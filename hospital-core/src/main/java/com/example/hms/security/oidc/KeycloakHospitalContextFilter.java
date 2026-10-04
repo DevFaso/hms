@@ -1,10 +1,13 @@
 package com.example.hms.security.oidc;
 
 import com.example.hms.repository.UserRepository;
+import com.example.hms.security.HospitalScopeResponses;
 import com.example.hms.security.IdleSessionGate;
+import com.example.hms.security.SuperAdminAuthorities;
+import com.example.hms.security.TenantLifecycleGate;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
-import com.example.hms.security.context.HospitalContextRequestOverrides;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,11 +26,12 @@ import java.io.IOException;
  * Servlet filter that mirrors the legacy
  * {@link com.example.hms.security.JwtAuthenticationFilter} contract for
  * Keycloak-issued JWTs: once OAuth2 resource-server has authenticated the
- * caller, this filter populates {@link HospitalContextHolder} from the
- * {@code hospital_id} / {@code role_assignments} claims so that all
- * downstream tenant-scoping (specifications, {@code @PreAuthorize},
- * SpEL queries) keeps working unchanged when
- * {@code app.auth.oidc.required=true}.
+ * caller, this filter populates {@link HospitalContextHolder} from the SAME
+ * live computation the password path uses ({@link KeycloakHospitalContextResolver}
+ * → {@link ActingScopeResolver#liveContext}), then applies the same gates in
+ * the same order: local account, idle window, tenant lifecycle (423 — until
+ * this filter enforced it a Keycloak user at a suspended hospital kept
+ * working, D14), and a refused {@code X-Hospital-Id} (403).
  *
  * <p>Wired in {@link com.example.hms.config.SecurityConfig} immediately
  * after Spring's {@code BearerTokenAuthenticationFilter} so the
@@ -46,14 +50,20 @@ import java.io.IOException;
 public class KeycloakHospitalContextFilter extends OncePerRequestFilter {
 
     private final KeycloakHospitalContextResolver resolver;
+    private final ActingScopeResolver actingScopeResolver;
     private final IdleSessionGate idleSessionGate;
+    private final TenantLifecycleGate tenantLifecycleGate;
     private final UserRepository userRepository;
 
     public KeycloakHospitalContextFilter(KeycloakHospitalContextResolver resolver,
+                                         ActingScopeResolver actingScopeResolver,
                                          IdleSessionGate idleSessionGate,
+                                         TenantLifecycleGate tenantLifecycleGate,
                                          UserRepository userRepository) {
         this.resolver = resolver;
+        this.actingScopeResolver = actingScopeResolver;
         this.idleSessionGate = idleSessionGate;
+        this.tenantLifecycleGate = tenantLifecycleGate;
         this.userRepository = userRepository;
     }
 
@@ -73,35 +83,25 @@ public class KeycloakHospitalContextFilter extends OncePerRequestFilter {
                 // Until Phase C mirrors enable/disable into the realm, an
                 // inactive or soft-deleted local account must be just as
                 // unusable under OIDC. No local row means a Keycloak-only
-                // identity (pre-provisioning) — allowed, as before.
+                // identity (pre-provisioning) — allowed, as before, but with
+                // no hospital scope (NO_LOCAL_USER).
                 if (localAccountBlocked(jwtAuth.getName())) {
                     log.warn("[OIDC] Refusing request — local account is inactive or deleted");
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                     return;
                 }
-                HospitalContext context = resolver.resolve(jwtAuth.getToken(), jwtAuth.getAuthorities());
-                // Apply the same X-Hospital-Id header override the legacy
-                // JwtAuthenticationFilter applies, so multi-hospital users
-                // who pick an active hospital in the portal still see it
-                // honoured under OIDC. Shared helper guarantees the two
-                // filters cannot drift.
-                context = HospitalContextRequestOverrides.applyRequestOverrides(context, request);
+                HospitalContext context = resolver.resolve(jwtAuth.getToken(), jwtAuth.getName());
+                context = actingScopeResolver.withHeader(context, request);
+                // Q10, option A: a SUPER_ADMIN realm role the assignment table
+                // does not back grants no authority either.
+                SecurityContextHolder.getContext().setAuthentication(SuperAdminAuthorities.reconcile(jwtAuth, context));
                 HospitalContextHolder.setContext(context);
                 populated = true;
 
                 // ── Idle session timeout gate (v1.0 row 7) ────────────────
-                // Mirrors the legacy JwtAuthenticationFilter wiring so
-                // row 8's OIDC_REQUIRED=true cutover does not silently
-                // disable the idle gate for OIDC clients.
-                //
-                // TODO(row 8 / Keycloak Phase C): the OIDC resolver does
-                // not currently populate principalUserId — the realm
-                // export emits hospital_id + role_assignments only. Until
-                // a `user_id` (or equivalent) custom claim is mapped on
-                // the realm, the gate short-circuits on null userId
-                // (no-op, matching pre-row-7 behaviour). This wiring is
-                // in place so the moment the resolver receives a userId,
-                // enforcement turns on without further code changes.
+                // principalUserId is the linked local account (appUserId), so
+                // the gate enforces here exactly as on the password path; an
+                // unlinked principal has none and the gate short-circuits.
                 if (idleSessionGate.shouldReject(context.getPrincipalUserId(), jwtAuth.getAuthorities())) {
                     log.warn("[OIDC] Refusing request — user has been idle past the configured window");
                     HospitalContextHolder.clear();
@@ -109,6 +109,25 @@ public class KeycloakHospitalContextFilter extends OncePerRequestFilter {
                     response.setHeader("WWW-Authenticate", IdleSessionGate.WWW_AUTHENTICATE_CHALLENGE);
                     return;
                 }
+
+                // ── Tenant lifecycle gate (MVP-2), same semantics as the password path ──
+                if (tenantLifecycleGate.isBlocked(context)) {
+                    log.warn("[OIDC] Refusing request — user's organization is blocked by tenant lifecycle");
+                    HospitalContextHolder.clear();
+                    SecurityContextHolder.clearContext();
+                    HospitalScopeResponses.writeTenantBlocked(response);
+                    return;
+                }
+
+                // ── Refused X-Hospital-Id (design Q3, option A) ───────────
+                if (ActingScopeResolver.isRefusedHeader(context)) {
+                    actingScopeResolver.auditRefusedHeader(context);
+                    HospitalContextHolder.clear();
+                    SecurityContextHolder.clearContext();
+                    HospitalScopeResponses.writeRefusal(response, context.getScopeRefusal(), context.getRefusedHospitalId());
+                    return;
+                }
+
                 // Touch on the way through so the OIDC user's window resets.
                 idleSessionGate.touchIfHuman(context.getPrincipalUserId(), jwtAuth.getAuthorities());
             }

@@ -13,7 +13,6 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
-import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.utility.RoleValidator;
@@ -21,6 +20,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -93,11 +93,17 @@ class PatientFhirWriteServiceTenancyTest {
         when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(mine.getId(), callerHospital))
             .thenReturn(Optional.of(registration(mine, true)));
 
+        org.hl7.fhir.r4.model.Patient mapped = mapsTo(mine, callerHospital);
         org.hl7.fhir.r4.model.Patient body = new org.hl7.fhir.r4.model.Patient();
-        assertThat(service.update(mine.getId(), body)).isSameAs(mine);
+        assertThat(service.update(mine.getId(), body)).isSameAs(mapped);
 
         verify(patientMapper).applyFhirUpdates(mine, body);
-        verify(patientRepository).save(mine);
+        // Flushed before the audit, which commits on its own (REQUIRES_NEW):
+        // a flush failure must not leave a SUCCESS row for a rolled-back update.
+        InOrder order = Mockito.inOrder(patientRepository, auditEventLogService);
+        order.verify(patientRepository).save(mine);
+        order.verify(patientRepository).flush();
+        order.verify(auditEventLogService).logEvent(any());
     }
 
     @Test
@@ -164,7 +170,6 @@ class PatientFhirWriteServiceTenancyTest {
     @Test
     void putWithANullScopeTheVerifiedFlagDoesNotBackIsForbidden() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
-        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
         UUID patientId = UUID.randomUUID();
 
         org.hl7.fhir.r4.model.Patient body = new org.hl7.fhir.r4.model.Patient();
@@ -183,23 +188,17 @@ class PatientFhirWriteServiceTenancyTest {
     }
 
     @Test
-    void aVerifiedSuperAdminInGlobalViewIsNotScopedToTheirJwtHomeHospital() {
-        // The raw HospitalContext still carries the JWT-derived home hospital
-        // for a super-admin with no X-Hospital-Id. Reading it scoped a
-        // global-view super-admin to that hospital; RoleValidator drops it.
-        UUID homeHospital = UUID.randomUUID();
-        HospitalContextHolder.setContext(HospitalContext.builder()
-            .superAdmin(true).activeHospitalId(homeHospital).build());
+    void aSuperAdminInGlobalViewMayNotWriteAPatient() {
+        // Design Q9, option A: every write needs one hospital. A verified
+        // super-admin in global view used to write any patient unscoped,
+        // against FhirTenancy's must-pin rule; now they pin a hospital first.
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
-        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
         Patient elsewhere = patient();
-        when(patientRepository.findById(elsewhere.getId())).thenReturn(Optional.of(elsewhere));
-
         org.hl7.fhir.r4.model.Patient body = new org.hl7.fhir.r4.model.Patient();
-        assertThat(service.update(elsewhere.getId(), body)).isSameAs(elsewhere);
+        UUID id = elsewhere.getId();
 
-        verify(registrationRepository, never()).findByPatientIdAndHospitalIdAndActiveTrue(any(), any());
-        verify(patientRepository).save(elsewhere);
+        assertThatThrownBy(() -> service.update(id, body)).isInstanceOf(ForbiddenOperationException.class);
+        verify(patientRepository, never()).save(any());
     }
 
     /* ── POST /Patient + If-None-Exist ─────────────────────────────────── */
@@ -211,9 +210,10 @@ class PatientFhirWriteServiceTenancyTest {
         stubMrnToken(callerHospital);
         when(registrationRepository.findActiveByHospitalIdAndIdentifier(callerHospital, MRN))
             .thenReturn(List.of(registration(mine, true)));
+        org.hl7.fhir.r4.model.Patient mapped = mapsTo(mine, callerHospital);
 
         assertThat(service.conditionalCreate(ifNoneExist(callerHospital), new org.hl7.fhir.r4.model.Patient()))
-            .isSameAs(mine);
+            .isSameAs(mapped);
     }
 
     @Test
@@ -238,23 +238,10 @@ class PatientFhirWriteServiceTenancyTest {
         assertThat(nowhere).isInstanceOf(ResourceNotFoundException.class);
     }
 
-    @Test
-    void aVerifiedSuperAdminInGlobalViewMayNameAnyHospitalsMrn() {
-        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
-        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
-        Patient theirs = patient();
-        stubMrnToken(otherHospital);
-        when(registrationRepository.findActiveByHospitalIdAndIdentifier(otherHospital, MRN))
-            .thenReturn(List.of(registration(theirs, true)));
-
-        assertThat(service.conditionalCreate(ifNoneExist(otherHospital), new org.hl7.fhir.r4.model.Patient()))
-            .isSameAs(theirs);
-    }
-
+    /** Q9: global view has no hospital to write at, so a conditional create is refused too. */
     @Test
     void conditionalCreateWithANullScopeTheVerifiedFlagDoesNotBackIsForbidden() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
-        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
         stubMrnToken(otherHospital);
         String header = ifNoneExist(otherHospital);
         org.hl7.fhir.r4.model.Patient body = new org.hl7.fhir.r4.model.Patient();
@@ -269,7 +256,6 @@ class PatientFhirWriteServiceTenancyTest {
         // Shape validation reads no data, so it runs before the scope: a
         // missing If-None-Exist is still 422, not "scope required".
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
-        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
         org.hl7.fhir.r4.model.Patient body = new org.hl7.fhir.r4.model.Patient();
 
         assertThatThrownBy(() -> service.conditionalCreate(null, body))
@@ -312,6 +298,25 @@ class PatientFhirWriteServiceTenancyTest {
         registration.setPatient(patient);
         registration.setActive(active);
         return registration;
+    }
+
+    /**
+     * The resource the mapper produces for {@code entity} as seen from
+     * {@code scope}: the service must return THIS, mapped inside its own
+     * transaction, never the entity for the provider to map after the commit
+     * (a LAZY registrations walk with no session - a 500 once the write was
+     * done). A scoped write maps with that hospital's MRN only; only a
+     * verified super-admin in global view ({@code null}) gets the unscoped form.
+     */
+    private org.hl7.fhir.r4.model.Patient mapsTo(Patient entity, UUID scope) {
+        org.hl7.fhir.r4.model.Patient mapped = new org.hl7.fhir.r4.model.Patient();
+        mapped.setId(entity.getId().toString());
+        if (scope == null) {
+            when(patientMapper.toFhir(entity)).thenReturn(mapped);
+        } else {
+            when(patientMapper.toFhir(entity, scope)).thenReturn(mapped);
+        }
+        return mapped;
     }
 
     private static Patient patient() {

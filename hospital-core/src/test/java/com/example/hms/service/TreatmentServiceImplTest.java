@@ -28,7 +28,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import java.util.Locale;
@@ -99,7 +98,6 @@ class TreatmentServiceImplTest {
         dto.setHospitalId(UUID.randomUUID());
 
         when(departmentRepository.findById(dto.getDepartmentId())).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
 
         assertThatThrownBy(() -> service.createTreatment(dto, locale, null))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -175,7 +173,6 @@ class TreatmentServiceImplTest {
         UUID id = UUID.randomUUID();
         TreatmentRequestDTO dto = new TreatmentRequestDTO();
         when(treatmentRepository.findWithAssignmentById(id)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
 
         assertThatThrownBy(() -> service.updateTreatment(id, dto, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -222,7 +219,6 @@ class TreatmentServiceImplTest {
     void getTreatmentById_notFound() {
         UUID id = UUID.randomUUID();
         when(treatmentRepository.findWithAssignmentAndUserById(id)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
 
         assertThatThrownBy(() -> service.getTreatmentById(id, locale, "en"))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -260,7 +256,6 @@ class TreatmentServiceImplTest {
 
         when(treatmentRepository.findWithAssignmentAndUserById(id)).thenReturn(Optional.of(treatment));
         when(roleValidator.requireActiveHospitalId()).thenReturn(otherHospitalId);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
 
         assertThatThrownBy(() -> service.getTreatmentById(id, locale, "en"))
             .isInstanceOf(ResourceNotFoundException.class);

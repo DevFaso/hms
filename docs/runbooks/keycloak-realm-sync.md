@@ -134,12 +134,12 @@ records in prod. Treat the checkbox as off-limits regardless.
 Run the packaged smoke check:
 
 ```bash
-API_BASE_URL=https://api.dev.e-keneya.com \
+API_BASE_URL=https://dev.e-keneya.com/api \
 ISSUER_URI=https://hms-keycloak-dev-dev.up.railway.app/realms/hms \
   scripts/keycloak/cutover-smoke.sh
 ```
 
-(For prod, use `API_BASE_URL=https://api.e-keneya.com` and the
+(For prod, use `API_BASE_URL=https://api.e-keneya.com/api` and the
 `hms-keycloak-prod-prod` issuer.)
 
 The smoke script does not yet diff the realm content against the

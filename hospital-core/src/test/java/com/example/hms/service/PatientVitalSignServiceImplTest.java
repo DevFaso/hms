@@ -24,11 +24,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -143,46 +141,10 @@ class PatientVitalSignServiceImplTest {
         assertEquals(98, saved.getSpo2Percent());
     }
 
-    @Test
-    void getRecentVitals_prefersHospitalScopedQueryWhenProvided() {
-        UUID patientId = UUID.randomUUID();
-        UUID hospitalId = UUID.randomUUID();
-        int limit = 5;
-
-        PatientVitalSign entity = PatientVitalSign.builder().build();
-        PatientVitalSignResponseDTO dto = PatientVitalSignResponseDTO.builder().id(UUID.randomUUID()).build();
-
-        when(vitalSignRepository.findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId, PageRequest.of(0, limit)))
-            .thenReturn(List.of(entity));
-        when(vitalSignMapper.toResponse(entity)).thenReturn(dto);
-
-        List<PatientVitalSignResponseDTO> result = patientVitalSignService.getRecentVitals(patientId, hospitalId, limit);
-
-    assertEquals(1, result.size());
-    assertEquals(dto, result.get(0));
-        verify(vitalSignRepository)
-            .findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId, PageRequest.of(0, limit));
-    }
-
-    @Test
-    void getRecentVitals_withoutHospitalFallsBackToGlobalQuery() {
-        UUID patientId = UUID.randomUUID();
-        int limit = 3;
-
-        PatientVitalSign entity = PatientVitalSign.builder().build();
-        PatientVitalSignResponseDTO dto = PatientVitalSignResponseDTO.builder().id(UUID.randomUUID()).build();
-
-        when(vitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(patientId, PageRequest.of(0, limit)))
-            .thenReturn(List.of(entity));
-        when(vitalSignMapper.toResponse(entity)).thenReturn(dto);
-
-        List<PatientVitalSignResponseDTO> result = patientVitalSignService.getRecentVitals(patientId, null, limit);
-
-    assertEquals(1, result.size());
-    assertEquals(dto, result.get(0));
-        verify(vitalSignRepository)
-            .findByPatient_IdOrderByRecordedAtDesc(patientId, PageRequest.of(0, limit));
-    }
+    // getRecentVitals is pinned in service.impl.PatientVitalSignServiceImplTest:
+    // the two cases that stood here asserted the unscoped, ungated read the
+    // staff path no longer performs (a null scope now refuses; a scoped read
+    // goes through the chart gate and the readable hospitals).
 
     @Test
     void getLatestSnapshot_returnsEmptyWhenNoVitalsPresent() {

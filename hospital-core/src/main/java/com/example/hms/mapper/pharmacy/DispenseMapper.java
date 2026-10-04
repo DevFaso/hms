@@ -41,6 +41,7 @@ public class DispenseMapper {
             .pharmacyId(entity.getPharmacy() != null ? entity.getPharmacy().getId() : null)
             .stockLotId(entity.getStockLot() != null ? entity.getStockLot().getId() : null)
             .dispensedBy(entity.getDispensedByUser() != null ? entity.getDispensedByUser().getId() : null)
+            .dispensedByName(displayNameOf(entity.getDispensedByUser()))
             .verifiedBy(entity.getVerifiedByUser() != null ? entity.getVerifiedByUser().getId() : null)
             .medicationCatalogItemId(entity.getMedicationCatalogItem() != null
                 ? entity.getMedicationCatalogItem().getId() : null)
@@ -61,6 +62,27 @@ public class DispenseMapper {
             .createdAt(entity.getCreatedAt())
             .updatedAt(entity.getUpdatedAt())
             .build();
+    }
+
+    /**
+     * First and last name, or null. The user is a LAZY association: inside
+     * the service's transaction reading it loads the row; on the idempotency
+     * replay path the entity is mapped outside any transaction, and a display
+     * name is not worth failing a dispense response over, so a detached proxy
+     * answers null there rather than throwing.
+     */
+    private static String displayNameOf(User user) {
+        if (user == null) {
+            return null;
+        }
+        try {
+            String first = user.getFirstName() != null ? user.getFirstName().trim() : "";
+            String last = user.getLastName() != null ? user.getLastName().trim() : "";
+            String full = (first + " " + last).trim();
+            return full.isEmpty() ? null : full;
+        } catch (org.hibernate.LazyInitializationException detached) {
+            return null;
+        }
     }
 
     /**

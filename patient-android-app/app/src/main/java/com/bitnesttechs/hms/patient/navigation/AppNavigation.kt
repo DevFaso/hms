@@ -9,7 +9,11 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.bitnesttechs.hms.patient.core.auth.AuthRepository
 import com.bitnesttechs.hms.patient.core.auth.TokenStorage
+import com.bitnesttechs.hms.patient.core.push.PushRegistrar
+import com.bitnesttechs.hms.patient.features.account.ActivationScreen
+import com.bitnesttechs.hms.patient.features.account.ForgotPasswordScreen
 import com.bitnesttechs.hms.patient.features.login.LoginScreen
 import dagger.hilt.android.EntryPointAccessors
 import androidx.compose.ui.platform.LocalContext
@@ -22,29 +26,43 @@ import kotlinx.coroutines.withContext
 sealed class Screen(val route: String) {
     object Login : Screen("login")
     object Main : Screen("main")
+    object ForgotPassword : Screen("forgot_password")
+    object Activation : Screen("activation")
 }
 
 @EntryPoint
 @InstallIn(ActivityComponent::class)
 interface TokenStorageEntryPoint {
     fun tokenStorage(): TokenStorage
+    fun authRepository(): AuthRepository
+    fun pushRegistrar(): PushRegistrar
 }
 
 @Composable
 fun AppNavigation() {
     val context = LocalContext.current
-    val tokenStorage = remember {
+    val entryPoint = remember {
         EntryPointAccessors.fromActivity(
             context as android.app.Activity,
             TokenStorageEntryPoint::class.java
-        ).tokenStorage()
+        )
     }
+    val tokenStorage = remember { entryPoint.tokenStorage() }
 
     // Check login state off the main thread to avoid blocking on EncryptedSharedPreferences
     var startDest by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         startDest = withContext(Dispatchers.IO) {
             if (tokenStorage.isLoggedIn) Screen.Main.route else Screen.Login.route
+        }
+        // A session from a build that never stored the HMS user id (every SSO
+        // session did so) resolves it now, so chat and notes work without a
+        // fresh sign-in.
+        if (startDest == Screen.Main.route) {
+            entryPoint.authRepository().ensureUserId()
+            // Once per cold start: a session from an older build never
+            // registered, and a token can rotate while the app is dead.
+            entryPoint.pushRegistrar().registerAsync()
         }
     }
 
@@ -66,8 +84,18 @@ fun AppNavigation() {
                     navController.navigate(Screen.Main.route) {
                         popUpTo(Screen.Login.route) { inclusive = true }
                     }
-                }
+                },
+                onForgotPassword = { navController.navigate(Screen.ForgotPassword.route) },
+                onActivateAccount = { navController.navigate(Screen.Activation.route) }
             )
+        }
+
+        composable(Screen.ForgotPassword.route) {
+            ForgotPasswordScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Activation.route) {
+            ActivationScreen(onBack = { navController.popBackStack() })
         }
 
         composable(Screen.Main.route) {

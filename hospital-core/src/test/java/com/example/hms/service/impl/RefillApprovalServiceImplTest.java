@@ -380,7 +380,7 @@ class RefillApprovalServiceImplTest {
     }
 
     @Test
-    @DisplayName("approve — tells the patient the medication is ready to collect")
+    @DisplayName("approve — tells the patient the fill went to the pharmacy, never that it is ready (G15)")
     void approve_notifiesPatientToCollect() {
         stubStaffResolution();
         when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pendingRefill()));
@@ -391,7 +391,12 @@ class RefillApprovalServiceImplTest {
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
         verify(notificationService)
                 .createNotification(message.capture(), eq("alice.patient"), eq("MEDICATION_REFILL"));
-        assertThat(message.getValue()).contains("ready to collect");
+        // Approval puts the fill back in the pharmacy's queue (SIGNED): nothing
+        // has been prepared yet, so "ready to collect" was a false promise that
+        // sent patients to a counter with nothing waiting for them.
+        assertThat(message.getValue())
+                .contains("sent to the pharmacy to prepare")
+                .doesNotContainIgnoringCase("ready");
     }
 
     @Test

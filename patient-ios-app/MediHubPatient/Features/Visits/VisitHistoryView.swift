@@ -73,9 +73,7 @@ struct EncounterRowView: View {
     let encounter: EncounterDTO
     
     private var statusText: String {
-        (encounter.status ?? "—")
-            .replacingOccurrences(of: "_", with: " ")
-            .capitalized
+        EnumLabel.text(.encounterStatus, encounter.status)
     }
     
     private var statusColor: String {
@@ -91,10 +89,10 @@ struct EncounterRowView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 if let type = encounter.type {
-                    Text(type.capitalized).font(.caption).bold()
+                    Text(type).font(.caption).bold()
                         .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Color.accentColor.opacity(0.1))
-                        .foregroundColor(.accentColor)
+                        .background(Color("BrandPrimary").opacity(0.1))
+                        .foregroundColor(Color("BrandPrimaryText"))
                         .cornerRadius(4)
                 }
                 Spacer()

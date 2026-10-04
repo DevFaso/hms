@@ -84,7 +84,7 @@ public class LabResultServiceImpl implements LabResultService {
 
     /** The one description every performing-laboratory result disclosure carries (Sonar S1192). */
     private static final String PERFORMED_HERE_REACH_DESCRIPTION =
-        "Cross-hospital lab result read at the performing laboratory";
+        com.example.hms.service.recordaccess.CrossHospitalReachRecorder.LAB_RESULT_PERFORMED_HERE_DESCRIPTION;
     /** The description PatientLabResultServiceImpl accounts the same kind of read under. */
     private static final String TREATMENT_REACH_DESCRIPTION =
         "Cross-hospital lab result read on the treatment relationship";
@@ -1038,14 +1038,6 @@ public class LabResultServiceImpl implements LabResultService {
         .toList();
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public List<LabResultResponseDTO> getLabResultsByPatientId(UUID patientId, Locale locale) {
-    return labResultRepository.findByLabOrder_Patient_Id(patientId).stream()
-        .map(labResultMapper::toResponseDTO)
-        .toList();
-    }
-
     private Hospital extractHospitalFromLabOrder(LabOrder labOrder) {
         if (labOrder.getHospital() != null) {
             return labOrder.getHospital();
@@ -1056,7 +1048,7 @@ public class LabResultServiceImpl implements LabResultService {
         } else if (labOrder.getPatient().getPrimaryHospital() != null) {
             return labOrder.getPatient().getPrimaryHospital();
         } else {
-            throw new ResourceNotFoundException("hospital.notfound");
+            throw new ResourceNotFoundException("labOrder.hospitalUnresolved", labOrder.getId());
         }
     }
 

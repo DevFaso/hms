@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
 import java.time.Clock;
 import com.example.hms.enums.ConsultationStatus;
 import com.example.hms.enums.ConsultationType;
@@ -47,12 +48,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.ArgumentMatchers.anyString;
 import java.util.Map;
 import java.util.Set;
@@ -69,6 +72,7 @@ class ConsultationServiceImplTest {
     @Mock private EncounterRepository encounterRepository;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
     @Mock private NotificationService notificationService;
+    @Mock private org.springframework.context.MessageSource messageSource;
     @Mock private com.example.hms.security.audit.CrossTenantReadAudit crossTenantReadAudit;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
@@ -77,8 +81,20 @@ class ConsultationServiceImplTest {
     /** Real system clock — the production bean is Clock.systemDefaultZone(). */
     @Spy private Clock clock = Clock.systemDefaultZone();
 
+    @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
+
     @InjectMocks
     private ConsultationServiceImpl service;
+
+    /**
+     * The real subject guard. These tests set no authentication, so it waves
+     * every read through, as it does for any caller that is not patient-only;
+     * the patient cases are in PatientSubjectReadGuardTest and the
+     * per-service ownership tests.
+     */
+    @Spy
+    private PatientSubjectReadGuard subjectReadGuard =
+        new PatientSubjectReadGuard(mock(ControllerAuthUtils.class), mock(PatientRepository.class));
 
     private final UUID patientId = UUID.randomUUID();
     private final UUID hospitalId = UUID.randomUUID();
@@ -95,6 +111,11 @@ class ConsultationServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // Consultants in these fixtures hold an active assignment at the
+        // consultation's hospital unless a test says otherwise.
+        org.mockito.Mockito.lenient().when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+            .thenReturn(java.util.Optional.of(new com.example.hms.model.UserRoleHospitalAssignment()));
         // HospitalContextHolder is a ThreadLocal and JUnit reuses the thread.
         // Several tests here read it without setting it, so a context left
         // behind by a sibling silently flips isSuperAdmin and changes the scope
@@ -118,6 +139,8 @@ class ConsultationServiceImplTest {
 
         encounter = new Encounter();
         encounter.setId(encounterId);
+        encounter.setHospital(hospital);
+        encounter.setPatient(patient);
     }
 
     private ConsultationRequestDTO buildRequest() {
@@ -228,6 +251,7 @@ class ConsultationServiceImplTest {
         @DisplayName("throws when patient not found")
         void throwsWhenPatientNotFound() {
             ConsultationRequestDTO request = buildRequest();
+            when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.createConsultation(request, staffId))
@@ -238,6 +262,7 @@ class ConsultationServiceImplTest {
         @DisplayName("throws when hospital not found")
         void throwsWhenHospitalNotFound() {
             ConsultationRequestDTO request = buildRequest();
+            when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
 
@@ -334,17 +359,114 @@ class ConsultationServiceImplTest {
         }
 
         @Test
-        @DisplayName("throws clear scope error when patient is not registered at hospital")
-        void throwsWhenPatientIsNotRegisteredAtHospital() {
+        @DisplayName("a patient not registered at the hospital answers exactly as a missing patient, before any load")
+        void patientNotRegisteredAtHospitalAnswersAsMissing() {
             ConsultationRequestDTO request = buildRequest();
-
-            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
             when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
 
             assertThatThrownBy(() -> service.createConsultation(request, staffId))
-                .isInstanceOf(BusinessException.class)
-                .hasMessage("Patient is not registered with the specified hospital.");
+                .isInstanceOfSatisfying(ResourceNotFoundException.class, e -> {
+                    assertThat(e.getMessageKey()).isEqualTo("patient.notFound");
+                    assertThat(e.getMessage()).isEqualTo(
+                        new ResourceNotFoundException("patient.notFound", patientId).getMessage());
+                });
+            verify(patientRepository, never()).findByIdUnscoped(any());
+            verify(consultationRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a consultation cannot be requested at a hospital other than the acting one: answered as a missing hospital")
+        void createAtAnotherHospitalAnswersAsMissingHospital() {
+            ConsultationRequestDTO request = buildRequest();
+            when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+            assertThatThrownBy(() -> service.createConsultation(request, staffId))
+                .isInstanceOfSatisfying(ResourceNotFoundException.class, e -> {
+                    assertThat(e.getMessageKey()).isEqualTo("hospital.notFound");
+                    assertThat(e.getMessage()).isEqualTo(
+                        new ResourceNotFoundException("hospital.notFound", hospitalId).getMessage());
+                });
+            verifyNoInteractions(patientHospitalRegistrationRepository);
+            verify(consultationRepository, never()).save(any());
+        }
+        @Test
+        @DisplayName("a consultation cannot be filed against another hospital's (or patient's) encounter: answered as a missing encounter")
+        void foreignEncounterAnswersAsMissing() {
+            ConsultationRequestDTO request = buildRequest();
+            request.setEncounterId(encounterId);
+            when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+            Hospital elsewhere = new Hospital();
+            elsewhere.setId(UUID.randomUUID());
+            Encounter foreign = new Encounter();
+            foreign.setId(encounterId);
+            foreign.setHospital(elsewhere);
+            foreign.setPatient(patient);
+
+            when(encounterRepository.findById(encounterId)).thenReturn(Optional.empty());
+            String missing = org.assertj.core.api.Assertions.catchThrowableOfType(ResourceNotFoundException.class,
+                () -> service.createConsultation(request, staffId)).getMessage();
+            when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(foreign));
+            String refused = org.assertj.core.api.Assertions.catchThrowableOfType(ResourceNotFoundException.class,
+                () -> service.createConsultation(request, staffId)).getMessage();
+
+            assertThat(refused).isEqualTo(missing);
+            verify(consultationRepository, never()).save(any());
+        }
+
+    }
+
+    // ── writes are held to the acting hospital ──────────────────────────────
+
+    @Nested
+    @DisplayName("writes on another hospital's consultation")
+    class ForeignConsultationWrites {
+
+        private String missingMessage;
+        private Consultation foreign;
+
+        @BeforeEach
+        void foreignConsultation() {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.empty());
+            missingMessage = catchNotFound(() -> service.startConsultation(consultationId));
+            foreign = Consultation.builder().hospital(hospital).patient(patient)
+                .status(ConsultationStatus.REQUESTED).build();
+            foreign.setId(consultationId);
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(foreign));
+        }
+
+        private String catchNotFound(Runnable call) {
+            try {
+                call.run();
+            } catch (ResourceNotFoundException e) {
+                return e.getMessage();
+            }
+            throw new AssertionError("expected a ResourceNotFoundException");
+        }
+
+        @Test
+        @DisplayName("every write answers exactly as a missing id and changes nothing")
+        void everyWriteAnswersAsMissing() {
+            UUID otherConsultantId = UUID.randomUUID();
+            List<Runnable> writes = List.of(
+                () -> service.acknowledgeConsultation(consultationId, otherConsultantId),
+                () -> service.updateConsultation(consultationId, new ConsultationUpdateDTO()),
+                () -> service.completeConsultation(consultationId, new CompleteConsultationRequestDTO()),
+                () -> service.cancelConsultation(consultationId, "x"),
+                () -> service.scheduleConsultation(consultationId, LocalDateTime.now(), null),
+                () -> service.startConsultation(consultationId),
+                () -> service.declineConsultation(consultationId, "x"),
+                () -> service.assignConsultation(consultationId, otherConsultantId, otherConsultantId, null),
+                () -> service.reassignConsultation(consultationId, otherConsultantId, otherConsultantId, null));
+            for (Runnable write : writes) {
+                assertThat(catchNotFound(write)).isEqualTo(missingMessage);
+            }
+            assertThat(foreign.getStatus()).isEqualTo(ConsultationStatus.REQUESTED);
+            verify(consultationRepository, never()).save(any());
+            verifyNoInteractions(staffRepository, notificationService);
         }
     }
 
@@ -537,6 +659,8 @@ class ConsultationServiceImplTest {
             UUID newConsultantId = UUID.randomUUID();
             Staff newConsultant = new Staff();
             newConsultant.setId(newConsultantId);
+            newConsultant.setUser(new com.example.hms.model.User());
+            newConsultant.getUser().setId(UUID.randomUUID());
 
             when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
             when(staffRepository.findById(newConsultantId)).thenReturn(Optional.of(newConsultant));
@@ -973,6 +1097,7 @@ class ConsultationServiceImplTest {
             Consultation consultation = buildConsultation(ConsultationStatus.REQUESTED);
             consultation.setConsultant(null);
             com.example.hms.model.User consultantUser = new com.example.hms.model.User();
+            consultantUser.setId(UUID.randomUUID());
             consultantUser.setUsername("dr.smith");
             consultant.setUser(consultantUser);
 
@@ -1012,6 +1137,51 @@ class ConsultationServiceImplTest {
         }
     }
 
+    // ── the consultant must work at the consultation's hospital ─────────────
+
+    @Nested
+    @DisplayName("a consultant from another hospital")
+    class ConsultantAtAnotherHospital {
+
+        private Staff elsewhere;
+
+        @BeforeEach
+        void consultantWithoutAnAssignmentHere() {
+            com.example.hms.model.User user = new com.example.hms.model.User();
+            user.setId(UUID.randomUUID());
+            elsewhere = new Staff();
+            elsewhere.setId(UUID.randomUUID());
+            elsewhere.setUser(user);
+            when(staffRepository.findById(elsewhere.getId())).thenReturn(Optional.of(elsewhere));
+            when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(user.getId(), hospitalId))
+                .thenReturn(Optional.empty());
+            when(messageSource.getMessage(eq("consultation.consultant.notAtHospital"), isNull(), any(java.util.Locale.class)))
+                .thenReturn("The consultant must hold an active assignment at the consultation's hospital.");
+        }
+
+        @Test
+        @DisplayName("is refused on assign, reassign and update with a 400, and nothing is saved")
+        void isRefusedEverywhere() {
+            Consultation requested = buildConsultation(ConsultationStatus.REQUESTED);
+            requested.setConsultant(null);
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(requested));
+            UUID assigner = UUID.randomUUID();
+            ConsultationUpdateDTO update = new ConsultationUpdateDTO();
+            update.setConsultantId(elsewhere.getId());
+
+            for (Runnable call : List.<Runnable>of(
+                    () -> service.assignConsultation(consultationId, elsewhere.getId(), assigner, null),
+                    () -> service.reassignConsultation(consultationId, elsewhere.getId(), assigner, "reason"),
+                    () -> service.updateConsultation(consultationId, update))) {
+                assertThatThrownBy(call::run)
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage("The consultant must hold an active assignment at the consultation's hospital.");
+            }
+            assertThat(requested.getConsultant()).isNull();
+            verify(consultationRepository, never()).save(any());
+        }
+    }
+
     // ── reassignConsultation ─────────────────────────────────────────────────
 
     @Nested
@@ -1025,6 +1195,8 @@ class ConsultationServiceImplTest {
             UUID newConsultantId = UUID.randomUUID();
             Staff newConsultant = new Staff();
             newConsultant.setId(newConsultantId);
+            newConsultant.setUser(new com.example.hms.model.User());
+            newConsultant.getUser().setId(UUID.randomUUID());
 
             when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
             when(staffRepository.findById(newConsultantId)).thenReturn(Optional.of(newConsultant));

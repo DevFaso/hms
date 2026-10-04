@@ -697,11 +697,8 @@
                 margin-top: 4px;
               "
             >
-              <span>{{ $safeNavigationMigration(paymentTrend()[0]?.date) | date: 'MMM d' }}</span>
-              <span>{{
-                $safeNavigationMigration(paymentTrend()[paymentTrend().length - 1]?.date)
-                  | date: 'MMM d'
-              }}</span>
+              <span>{{ paymentTrend()[0]?.date | date: 'MMM d' }}</span>
+              <span>{{ paymentTrend()[paymentTrend().length - 1]?.date | date: 'MMM d' }}</span>
             </div>
           </div>
         </section>
@@ -906,7 +903,7 @@
                 <div class="sched-info" style="flex: 1">
                   <span class="sched-name">{{ alert.staffName }}</span>
                   <span class="sched-reason"
-                    >{{ alert.jobTitle | titlecase }} — {{ alert.departmentName }}</span
+                    >{{ alert.jobTitle | enumLabel: 'jobTitle' }} — {{ alert.departmentName }}</span
                   >
                   <span class="sched-reason"
                     >{{ 'CREDENTIALING.LICENSE_NUMBER' | translate }}: {{ alert.licenseNumber }} —
@@ -1064,7 +1061,7 @@
                     <td style="padding: 8px 12px">
                       <div>{{ row.wardName }}</div>
                       <div style="font-size: 11px; color: #64748b">
-                        {{ row.wardType | titlecase }}
+                        {{ row.wardType | enumLabel: 'wardType' }}
                       </div>
                     </td>
                     <td style="padding: 8px 12px; text-align: center">{{ row.totalBeds }}</td>
@@ -2221,10 +2218,7 @@
               </div>
               <div class="stat-body">
                 <span class="stat-value">
-                  @if (
-                    $safeNavigationMigration(labDirectorDashboard()?.avgTurnaroundMinutesToday) !==
-                    null
-                  ) {
+                  @if ((labDirectorDashboard()?.avgTurnaroundMinutesToday ?? null) !== null) {
                     {{ labDirectorDashboard()!.avgTurnaroundMinutesToday! | number: '1.0-0' }}
                   } @else {
                     N/A
@@ -2351,9 +2345,7 @@
               </div>
               <div class="stat-body">
                 <span class="stat-value" style="color: #059669">
-                  @if (
-                    $safeNavigationMigration(qualityManagerDashboard()?.qualityPassRate) !== null
-                  ) {
+                  @if ((qualityManagerDashboard()?.qualityPassRate ?? null) !== null) {
                     {{ qualityManagerDashboard()!.qualityPassRate! | number: '1.1-1' }}%
                   } @else {
                     N/A
@@ -3039,9 +3031,10 @@
         </div>
       </section>
 
-      <!-- Care Team -->
-      @if (myCareTeam()?.members?.length) {
-        <section class="card patient-card patient-card-wide">
+      <!-- Care Team: the current primary care provider, as the care-team
+           endpoint defines it (the full history is on /my-care-team). -->
+      @if (myCareTeam()?.primaryCare; as pcp) {
+        <section class="card patient-card patient-card-wide" data-testid="dashboard-care-team">
           <div class="card-head">
             <div class="card-title-group">
               <span class="material-symbols-outlined card-title-icon" style="color: #ec4899"
@@ -3051,25 +3044,24 @@
             </div>
           </div>
           <div class="patient-card-body care-team-grid">
-            @for (member of myCareTeam()!.members.slice(0, 4); track member.name) {
-              <div class="care-team-member">
-                <div
-                  class="ctm-avatar"
-                  [style.background]="member.isPrimary ? 'var(--primary-tint)' : '#f1f5f9'"
-                >
-                  <span
-                    class="material-symbols-outlined"
-                    [style.color]="member.isPrimary ? 'var(--primary)' : '#64748b'"
-                  >
-                    {{ member.isPrimary ? 'star' : 'person' }}
-                  </span>
-                </div>
-                <div class="ctm-info">
-                  <span class="ctm-name">{{ member.name }}</span>
-                  <span class="ctm-role">{{ member.specialty || member.role }}</span>
-                </div>
+            <div class="care-team-member">
+              <div class="ctm-avatar" style="background: var(--primary-tint)">
+                <span class="material-symbols-outlined" style="color: var(--primary)">star</span>
               </div>
-            }
+              <div class="ctm-info">
+                <span class="ctm-name">{{ pcp.doctorDisplay || '—' }}</span>
+                <span class="ctm-role">{{ 'PORTAL.CARE_TEAM.PRIMARY_PROVIDER' | translate }}</span>
+                @if (pcp.hospitalName) {
+                  <span class="ctm-role">{{ pcp.hospitalName }}</span>
+                }
+                @if (pcp.startDate) {
+                  <span class="ctm-role">{{
+                    'PORTAL.CARE_TEAM.SINCE'
+                      | translate: { date: pcp.startDate | date: 'mediumDate' }
+                  }}</span>
+                }
+              </div>
+            </div>
           </div>
         </section>
       }

@@ -13,11 +13,11 @@ import com.example.hms.terminology.TerminologyCodes;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -57,8 +57,7 @@ public class DhisAdxAggregatorImpl implements DhisAdxAggregator {
                                                     LocalDate periodStart,
                                                     LocalDate periodEnd) {
         final Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Hospital not found: " + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
 
         final String orgUnitUid = hospital.getDhis2OrgUnitUid();
         if (orgUnitUid == null || orgUnitUid.isBlank()) {
@@ -76,10 +75,9 @@ public class DhisAdxAggregatorImpl implements DhisAdxAggregator {
         }
 
         // Batch resolve CVX -> DHIS2 dataElement UID in one query.
-        final Set<String> cvxCodes = new HashSet<>();
-        for (Object[] row : rawCounts) {
-            cvxCodes.add((String) row[0]);
-        }
+        final Set<String> cvxCodes = rawCounts.stream()
+            .map(row -> (String) row[0])
+            .collect(Collectors.toSet());
 
         final List<Dhis2DataElementMapping> mappings = mappingRepository
             .findByHospital_IdAndDatasetUidAndHmsConceptSystemAndHmsConceptCodeInAndActiveTrue(

@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
-import { MyDocumentsComponent } from './my-documents.component';
+import { MAX_PATIENT_DOCUMENT_BYTES, MyDocumentsComponent } from './my-documents.component';
 import { PatientPortalService } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
 
@@ -130,5 +130,96 @@ describe('MyDocumentsComponent', () => {
 
   it('fileSizeKb should format correctly', () => {
     expect(component.fileSizeKb(51200)).toBe('50.0');
+  });
+});
+
+/**
+ * The upload endpoint refuses anything over 10 MB (multipart max-file-size),
+ * but the web sent any file and let the server reject it. The picker now
+ * refuses it first, in the patient's language.
+ */
+describe('MyDocumentsComponent - file size', () => {
+  let fixture: ComponentFixture<MyDocumentsComponent>;
+  let portalService: jasmine.SpyObj<PatientPortalService>;
+  let toastService: jasmine.SpyObj<ToastService>;
+
+  const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
+
+  function pick(bytes: number): HTMLInputElement {
+    const input = host().querySelector('input[type="file"]') as HTMLInputElement;
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([new Uint8Array(bytes)], 'scan.pdf', { type: 'application/pdf' }));
+    input.files = transfer.files;
+    input.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    return input;
+  }
+
+  const uploadButton = (): HTMLButtonElement =>
+    host().querySelector('.upload-form .btn-primary') as HTMLButtonElement;
+
+  beforeEach(() => {
+    portalService = jasmine.createSpyObj('PatientPortalService', [
+      'listDocuments',
+      'uploadDocument',
+      'deleteDocument',
+    ]);
+    portalService.listDocuments.and.returnValue(of({ content: [], totalElements: 0 }));
+    toastService = jasmine.createSpyObj('ToastService', ['success', 'error']);
+    TestBed.configureTestingModule({
+      imports: [MyDocumentsComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: PatientPortalService, useValue: portalService },
+        { provide: ToastService, useValue: toastService },
+      ],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setFallbackLang('fr');
+    translate.use('fr');
+    translate.setTranslation('fr', {
+      PORTAL: {
+        DOCUMENTS: {
+          FILE_TOO_LARGE: 'Le fichier ne doit pas dépasser 10 Mo.',
+          UPLOAD_FAILED: 'Échec du téléversement du document',
+        },
+      },
+    });
+    fixture = TestBed.createComponent(MyDocumentsComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.showUploadForm.set(true);
+    fixture.detectChanges();
+  });
+
+  it('is 10 MB exactly', () => {
+    expect(MAX_PATIENT_DOCUMENT_BYTES).toBe(10 * 1024 * 1024);
+  });
+
+  it('refuses a file over 10 MB on screen, in French, and never sends it', () => {
+    const input = pick(MAX_PATIENT_DOCUMENT_BYTES + 1);
+
+    expect(host().querySelector('[data-testid="file-too-large"]')?.textContent?.trim()).toBe(
+      'Le fichier ne doit pas dépasser 10 Mo.',
+    );
+    expect(fixture.componentInstance.selectedFile()).toBeNull();
+    expect(input.value).toBe('');
+    expect(uploadButton().disabled).toBeTrue();
+    fixture.componentInstance.uploadDocument();
+    expect(portalService.uploadDocument).not.toHaveBeenCalled();
+  });
+
+  it('accepts a file of exactly 10 MB and clears an earlier refusal', () => {
+    pick(MAX_PATIENT_DOCUMENT_BYTES + 1);
+    pick(MAX_PATIENT_DOCUMENT_BYTES);
+
+    expect(host().querySelector('[data-testid="file-too-large"]')).toBeNull();
+    expect(fixture.componentInstance.selectedFile()?.size).toBe(MAX_PATIENT_DOCUMENT_BYTES);
+    expect(uploadButton().disabled).toBeFalse();
+  });
+
+  it('toasts the upload failure translated, not as a raw key', () => {
+    portalService.uploadDocument.and.returnValue(throwError(() => new Error('fail')));
+    pick(1024);
+    uploadButton().click();
+    expect(toastService.error).toHaveBeenCalledWith('Échec du téléversement du document');
   });
 });

@@ -15,6 +15,21 @@ public class ResourceNotFoundException extends RuntimeException {
         this.args = args;
     }
 
+    private ResourceNotFoundException(String resolvedMessage, String messageKey, Object[] args) {
+        super(resolvedMessage);
+        this.messageKey = messageKey;
+        this.args = args;
+    }
+
+    /**
+     * For a service that is handed its caller's locale explicitly (rather than
+     * relying on the request's {@code LocaleContextHolder}): the message is
+     * resolved in THAT locale, once.
+     */
+    public static ResourceNotFoundException inLocale(java.util.Locale locale, String messageKey, Object... args) {
+        return new ResourceNotFoundException(MessageUtil.resolve(locale, messageKey, args), messageKey, args);
+    }
+
     public String getMessageKey() {
         return messageKey;
     }

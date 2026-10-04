@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.ProcedureOrderStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -15,11 +16,13 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.ProcedureOrderRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.service.PatientSubjectReadGuard;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
@@ -30,7 +33,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -47,10 +52,21 @@ class ProcedureOrderServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private EncounterRepository encounterRepository;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
+    @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     @InjectMocks private ProcedureOrderServiceImpl service;
+
+    /**
+     * The real subject guard. These tests set no authentication, so it waves
+     * every read through, as it does for any caller that is not patient-only;
+     * the patient cases are in PatientSubjectReadGuardTest and the
+     * per-service ownership tests.
+     */
+    @Spy
+    private PatientSubjectReadGuard subjectReadGuard =
+        new PatientSubjectReadGuard(mock(ControllerAuthUtils.class), mock(PatientRepository.class));
 
     private UUID patientId, hospitalId, staffId, orderId;
     private Patient patient;
@@ -95,6 +111,106 @@ class ProcedureOrderServiceImplTest {
         r.setPatientId(patientId); r.setHospitalId(hospitalId);
         when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.createProcedureOrder(r, staffId)).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test void createProcedureOrder_atAnotherHospital_answersAsAMissingHospital() {
+        ProcedureOrderRequestDTO r = new ProcedureOrderRequestDTO();
+        r.setPatientId(patientId); r.setHospitalId(hospitalId);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        assertThatThrownBy(() -> service.createProcedureOrder(r, staffId))
+            .isInstanceOfSatisfying(ResourceNotFoundException.class, e -> {
+                assertThat(e.getMessageKey()).isEqualTo("hospital.notFound");
+                assertThat(e.getMessage()).isEqualTo(new ResourceNotFoundException("hospital.notFound", hospitalId).getMessage());
+            });
+        verify(patientRepository, never()).findById(any());
+        verify(procedureOrderRepository, never()).save(any());
+    }
+
+    @Test void createProcedureOrder_forAPatientRegisteredElsewhere_answersAsAMissingPatient() {
+        ProcedureOrderRequestDTO r = new ProcedureOrderRequestDTO();
+        r.setPatientId(patientId); r.setHospitalId(hospitalId);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
+        assertThatThrownBy(() -> service.createProcedureOrder(r, staffId))
+            .isInstanceOfSatisfying(ResourceNotFoundException.class, e -> {
+                assertThat(e.getMessageKey()).isEqualTo("patient.notFound");
+                assertThat(e.getMessage()).isEqualTo(new ResourceNotFoundException("patient.notFound", patientId).getMessage());
+            });
+        verify(patientRepository, never()).findById(any());
+        verify(procedureOrderRepository, never()).save(any());
+    }
+
+    @Test void createProcedureOrder_atTheActingHospital_forARegisteredPatient_proceeds() {
+        ProcedureOrderRequestDTO r = new ProcedureOrderRequestDTO();
+        r.setPatientId(patientId); r.setHospitalId(hospitalId);
+        r.setProcedureName("Appendectomy");
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(procedureOrderRepository.save(any())).thenAnswer(i -> { ProcedureOrder o = i.getArgument(0); o.setId(orderId); return o; });
+        assertThat(service.createProcedureOrder(r, staffId).getHospitalId()).isEqualTo(hospitalId);
+    }
+
+    @Test void createProcedureOrder_againstAnotherHospitalsEncounter_answersAsAMissingEncounter() {
+        ProcedureOrderRequestDTO r = new ProcedureOrderRequestDTO();
+        r.setPatientId(patientId); r.setHospitalId(hospitalId); r.setProcedureName("Appendectomy");
+        UUID encounterId = UUID.randomUUID();
+        r.setEncounterId(encounterId);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        com.example.hms.model.Hospital elsewhere = new com.example.hms.model.Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        com.example.hms.model.Encounter foreign = new com.example.hms.model.Encounter();
+        foreign.setId(encounterId); foreign.setHospital(elsewhere); foreign.setPatient(patient);
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.empty());
+        String missing = org.assertj.core.api.Assertions.catchThrowableOfType(ResourceNotFoundException.class,
+            () -> service.createProcedureOrder(r, staffId)).getMessage();
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(foreign));
+        String refused = org.assertj.core.api.Assertions.catchThrowableOfType(ResourceNotFoundException.class,
+            () -> service.createProcedureOrder(r, staffId)).getMessage();
+
+        assertThat(refused).isEqualTo(missing);
+        verify(procedureOrderRepository, never()).save(any());
+    }
+
+    @Test void createProcedureOrder_againstThePatientsOwnEncounterHere_attachesIt() {
+        ProcedureOrderRequestDTO r = new ProcedureOrderRequestDTO();
+        r.setPatientId(patientId); r.setHospitalId(hospitalId); r.setProcedureName("Appendectomy");
+        UUID encounterId = UUID.randomUUID();
+        r.setEncounterId(encounterId);
+        com.example.hms.model.Encounter own = new com.example.hms.model.Encounter();
+        own.setId(encounterId); own.setHospital(hospital); own.setPatient(patient);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(own));
+        when(procedureOrderRepository.save(any())).thenAnswer(i -> { ProcedureOrder o = i.getArgument(0); o.setId(orderId); return o; });
+
+        service.createProcedureOrder(r, staffId);
+        org.mockito.ArgumentCaptor<ProcedureOrder> saved = org.mockito.ArgumentCaptor.forClass(ProcedureOrder.class);
+        verify(procedureOrderRepository).save(saved.capture());
+        assertThat(saved.getValue().getEncounter()).isSameAs(own);
+    }
+
+    @Test void createProcedureOrder_resolvesTheOrderingClinicianFromTheirUserId() {
+        ProcedureOrderRequestDTO r = new ProcedureOrderRequestDTO();
+        r.setPatientId(patientId); r.setHospitalId(hospitalId); r.setProcedureName("Appendectomy");
+        UUID callerUserId = UUID.randomUUID();
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(callerUserId)).thenReturn(Optional.empty());
+        when(staffRepository.findByUserIdAndHospitalId(callerUserId, hospitalId)).thenReturn(Optional.of(staff));
+        when(procedureOrderRepository.save(any())).thenAnswer(i -> { ProcedureOrder o = i.getArgument(0); o.setId(orderId); return o; });
+
+        service.createProcedureOrder(r, callerUserId);
+
+        org.mockito.ArgumentCaptor<ProcedureOrder> saved = org.mockito.ArgumentCaptor.forClass(ProcedureOrder.class);
+        verify(procedureOrderRepository).save(saved.capture());
+        assertThat(saved.getValue().getOrderingProvider()).isSameAs(staff);
     }
 
     @Test void getProcedureOrder_success() {

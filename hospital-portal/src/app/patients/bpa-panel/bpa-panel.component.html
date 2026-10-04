@@ -1,4 +1,4 @@
-@if (patientId()) {
+@if (patientId() && permitted()) {
   <section class="bpa-panel" data-testid="bpa-panel" [attr.data-state]="state()">
     <header class="bpa-panel__header">
       <h2 class="bpa-panel__title">{{ 'BPA.HEADING' | translate }}</h2>
@@ -40,7 +40,7 @@
       @if (critical.detail) {
         <p class="bpa-modal__detail">{{ critical.detail }}</p>
       }
-      @if (critical.source?.label) {
+      @if (critical.source.label) {
         <p class="bpa-modal__source">
           {{ 'CDS.SECTION_LABEL' | translate }}: {{ critical.source.label }}
         </p>

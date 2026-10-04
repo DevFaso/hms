@@ -17,8 +17,62 @@ interface ApiService {
     @POST("auth/token/refresh")
     suspend fun refreshToken(@Body request: RefreshTokenRequest): Response<LoginResponse>
 
+    /** Second step of a sign-in that answered `mfaRequired`; success is a normal login body. */
+    @POST("auth/mfa/verify")
+    suspend fun verifyMfa(@Body request: MfaVerifyRequest): Response<LoginResponse>
+
+    /** 204 whether or not the address exists: the backend does not disclose it. */
+    @POST("auth/password/request")
+    suspend fun requestPasswordReset(@Body request: PasswordResetRequest): Response<Unit>
+
+    /** 204 whatever the token's validity (not disclosed either). */
+    @POST("auth/password/confirm")
+    suspend fun confirmPasswordReset(@Body request: PasswordResetConfirm): Response<Unit>
+
+    /** 200 with the same neutral message whatever the address. */
+    @POST("auth/resend-verification")
+    suspend fun resendVerification(@Query("email") email: String): Response<Unit>
+
+    /** 200 activates the account; 400 when the link is invalid or expired. */
+    @GET("auth/verify-email")
+    suspend fun verifyEmail(@Query("email") email: String, @Query("token") token: String): Response<Unit>
+
+    /** 200; 401 when the current password is wrong; 400 with a message for a refused new one. */
+    @POST("auth/me/change-password")
+    suspend fun changePassword(@Body request: ChangePasswordRequest): Response<Unit>
+
+    /** The HMS identity of the current token, for either sign-in path. */
+    @GET("auth/session/bootstrap")
+    suspend fun getSessionBootstrap(): Response<SessionBootstrapDto>
+
+    /**
+     * Sent with the bearer captured BEFORE the session was cleared: an
+     * explicit Authorization header makes AuthInterceptor pass the request
+     * through untouched and skip its refresh-on-401 path.
+     */
     @POST("auth/logout")
-    suspend fun logout(): Response<ApiResponse<Unit>>
+    suspend fun logout(
+        @Header("Authorization") bearer: String,
+        @Body request: LogoutRequest,
+        /** The ended session's XSRF pair, captured with the tokens (the jar skips this path). */
+        @Header("X-XSRF-TOKEN") xsrfHeader: String? = null,
+        @Header("Cookie") xsrfCookie: String? = null
+    ): Response<Unit>
+
+    // ── Push devices (idempotent; 204). The backend may not expose them yet:
+    // PushRegistrar treats every failure, 404/405 included, as silent. ──
+    @PUT("me/push-devices/{installationId}")
+    suspend fun registerPushDevice(
+        @Path("installationId") installationId: String,
+        @Body request: PushDeviceRequest
+    ): Response<Unit>
+
+    /** Sent at sign-out with the captured bearer, before /auth/logout. */
+    @DELETE("me/push-devices/{installationId}")
+    suspend fun unregisterPushDevice(
+        @Header("Authorization") bearer: String,
+        @Path("installationId") installationId: String
+    ): Response<Unit>
 
     // ── Patient Profile ───────────────────────────────────────────────────────
     @GET("me/patient/profile")
@@ -311,6 +365,22 @@ interface ApiService {
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 50
     ): Response<List<ChatMessageDto>>
+
+    /**
+     * Marks every message from [senderId] to [recipientId] read; 204 No Content
+     * (Retrofit's Unit converter takes the empty body). Feeds
+     * `ChatConversationSummaryDTO.unreadCount` and the portal's unread badge.
+     */
+    @PUT("chat/mark-read/{senderId}/{recipientId}")
+    suspend fun markChatRead(
+        @Path("senderId") senderId: String,
+        @Path("recipientId") recipientId: String
+    ): Response<Unit>
+
+    /** Participant-checked stream of a chat attachment's bytes (no public URL). */
+    @Streaming
+    @GET("chat/attachments/{attachmentId}/download")
+    suspend fun downloadChatAttachment(@Path("attachmentId") attachmentId: String): Response<ResponseBody>
 
     @POST("chat/send")
     suspend fun sendChatMessage(

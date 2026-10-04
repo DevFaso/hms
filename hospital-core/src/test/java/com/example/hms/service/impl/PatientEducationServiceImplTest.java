@@ -189,7 +189,8 @@ class PatientEducationServiceImplTest {
         // When & Then
         assertThatThrownBy(() -> service.createResource(requestDTO, hospitalId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Hospital not found");
+            .extracting(e -> ((ResourceNotFoundException) e).getMessageKey())
+            .isEqualTo("hospital.notFound");
     }
 
     @Test
@@ -319,7 +320,8 @@ class PatientEducationServiceImplTest {
         // When & Then
         assertThatThrownBy(() -> service.deleteResource(resourceId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Education resource not found");
+            .extracting(e -> ((ResourceNotFoundException) e).getMessageKey())
+            .isEqualTo("education.resource.notFound");
     }
 
     // ==================== Progress Tracking Tests ====================
@@ -336,8 +338,8 @@ class PatientEducationServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(progressRepository.findTopByPatientIdAndResourceIdOrderByCreatedAtDesc(patientId, resourceId))
-            .thenReturn(Optional.empty());
+        when(progressRepository.findByPatientIdAndResourceId(patientId, resourceId))
+            .thenReturn(java.util.List.of());
         when(progressRepository.save(any(PatientEducationProgress.class))).thenAnswer(invocation -> {
             PatientEducationProgress saved = invocation.getArgument(0);
             saved.setId(UUID.randomUUID());
@@ -375,8 +377,8 @@ class PatientEducationServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(progressRepository.findTopByPatientIdAndResourceIdOrderByCreatedAtDesc(patientId, resourceId))
-            .thenReturn(Optional.of(existingProgress));
+        when(progressRepository.findByPatientIdAndResourceId(patientId, resourceId))
+            .thenReturn(java.util.List.of(existingProgress));
         when(progressRepository.save(any(PatientEducationProgress.class))).thenAnswer(i -> i.getArgument(0));
         when(progressRepository.calculateAverageRating(resourceId)).thenReturn(4.0);
         when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
@@ -401,8 +403,8 @@ class PatientEducationServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(progressRepository.findTopByPatientIdAndResourceIdOrderByCreatedAtDesc(patientId, resourceId))
-            .thenReturn(Optional.empty());
+        when(progressRepository.findByPatientIdAndResourceId(patientId, resourceId))
+            .thenReturn(java.util.List.of());
         when(progressRepository.save(any(PatientEducationProgress.class))).thenAnswer(invocation -> {
             PatientEducationProgress saved = invocation.getArgument(0);
             saved.setId(UUID.randomUUID());
@@ -468,7 +470,8 @@ class PatientEducationServiceImplTest {
         // When & Then
         assertThatThrownBy(() -> service.updateProgress(progressId, requestDTO))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Progress record not found");
+            .extracting(e -> ((ResourceNotFoundException) e).getMessageKey())
+            .isEqualTo("education.progress.notFound");
     }
 
     @Test

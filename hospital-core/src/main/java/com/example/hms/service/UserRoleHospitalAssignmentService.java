@@ -64,7 +64,8 @@ public interface UserRoleHospitalAssignmentService {
     void deactivateAssignment(UUID id);
 
     /**
-     * Delete all assignments for a specific user.
+     * Retire all assignments of a specific user by DEACTIVATING them. The rows
+     * are kept: clinical records keep the assignment they were recorded under.
      */
     void deleteAllAssignmentsForUser(UUID userId);
 

@@ -73,33 +73,33 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         Staff referringProvider = staffRepository.findById(request.getReferringProviderId())
-            .orElseThrow(() -> new ResourceNotFoundException("Referring provider not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("generalReferral.referringProvider.notFound", request.getReferringProviderId()));
 
         Staff receivingProvider = null;
         if (request.getReceivingProviderId() != null) {
             receivingProvider = staffRepository.findById(request.getReceivingProviderId())
-                .orElseThrow(() -> new ResourceNotFoundException("Receiving provider not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("generalReferral.receivingProvider.notFound", request.getReceivingProviderId()));
         }
 
         Department targetDepartment = null;
         if (request.getTargetDepartmentId() != null) {
             targetDepartment = departmentRepository.findById(request.getTargetDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Target department not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("generalReferral.targetDepartment.notFound", request.getTargetDepartmentId()));
         }
 
         Hospital receivingHospital = null;
         if (request.getReceivingHospitalId() != null) {
             receivingHospital = hospitalRepository.findById(request.getReceivingHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("Receiving hospital not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("generalReferral.receivingHospital.notFound", request.getReceivingHospitalId()));
         }
 
         Department sourceDepartment = null;
         if (request.getSourceDepartmentId() != null) {
             sourceDepartment = departmentRepository.findById(request.getSourceDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Source department not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("generalReferral.sourceDepartment.notFound", request.getSourceDepartmentId()));
         }
 
         GeneralReferral referral = new GeneralReferral();
@@ -151,7 +151,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     public GeneralReferralResponseDTO acknowledgeReferral(UUID referralId, String notes, UUID receivingProviderId) {
         GeneralReferral referral = findReferral(referralId);
         Staff receivingProvider = staffRepository.findById(receivingProviderId)
-            .orElseThrow(() -> new ResourceNotFoundException("Receiving provider not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("generalReferral.receivingProvider.notFound", receivingProviderId));
         ReferralStatus before = referral.getStatus();
         referral.acknowledge(notes, receivingProvider);
         referral = referralRepository.save(referral);
@@ -307,6 +307,13 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             referrals = referralRepository.findByPatientIdOrderByCreatedAtDesc(patientId);
         }
         return referrals.stream()
+            .map(this::toResponse)
+            .toList();
+    }
+
+    @Override
+    public List<GeneralReferralResponseDTO> getReferralsForPortalPatient(UUID patientId) {
+        return referralRepository.findByPatientIdOrderByCreatedAtDesc(patientId).stream()
             .map(this::toResponse)
             .toList();
     }

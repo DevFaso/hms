@@ -354,6 +354,7 @@ export const routes: Routes = [
         path: 'registries',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () => import('./registries/registries').then((m) => m.RegistriesComponent),
@@ -366,6 +367,7 @@ export const routes: Routes = [
         path: 'panels',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: [
             'ROLE_NURSE',
             'ROLE_MIDWIFE',
@@ -384,6 +386,7 @@ export const routes: Routes = [
         path: 'roi',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: [
             'ROLE_RECEPTIONIST',
             'ROLE_NURSE',
@@ -403,6 +406,7 @@ export const routes: Routes = [
         path: 'webhooks',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () => import('./webhooks/webhooks').then((m) => m.WebhooksComponent),
@@ -468,6 +472,7 @@ export const routes: Routes = [
         path: 'on-call',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: [
             'ROLE_DOCTOR',
             'ROLE_NURSE',
@@ -580,6 +585,7 @@ export const routes: Routes = [
         path: 'transfusions',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: [
             'ROLE_DOCTOR',
             'ROLE_SURGEON',
@@ -602,6 +608,7 @@ export const routes: Routes = [
         path: 'microbiology',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: [
             'ROLE_LAB_SCIENTIST',
             'ROLE_LAB_TECHNICIAN',
@@ -922,6 +929,7 @@ export const routes: Routes = [
         path: 'bed-board',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: [
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_SUPER_ADMIN',
@@ -953,6 +961,7 @@ export const routes: Routes = [
         path: 'slot-admin',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () => import('./slot-admin/slot-admin').then((m) => m.SlotAdminComponent),
@@ -1032,7 +1041,10 @@ export const routes: Routes = [
             // the guard rejected it, so the role that exists to do this job
             // could not reach the page it is done on.
             'ROLE_PHARMACY_VERIFIER',
-            'ROLE_ADMIN',
+            // ROLE_ADMIN is not here: neither backend read admits it (GET
+            // /prescriptions and GET /prescriptions/{id}), and RoleExpansion
+            // grants it nothing, so the page could only toast "failed to
+            // load". Same fix as the lab-result entries (B16).
             'ROLE_SUPER_ADMIN',
           ],
         },
@@ -1378,6 +1390,7 @@ export const routes: Routes = [
         path: 'pharmacy/mtm',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: ['ROLE_PHARMACIST', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () => import('./pharmacy/mtm-review').then((m) => m.MtmReviewComponent),

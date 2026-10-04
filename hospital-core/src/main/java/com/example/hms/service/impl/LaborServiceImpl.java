@@ -299,7 +299,7 @@ public class LaborServiceImpl implements LaborService {
     public DeliveryRecordResponseDTO getDelivery(UUID patientId, UUID episodeId, UUID hospitalId) {
         LaborEpisode episode = loadEpisode(patientId, episodeId, hospitalId);
         DeliveryRecord record = deliveryRecordRepository.findByEpisode_Id(episode.getId())
-            .orElseThrow(() -> new ResourceNotFoundException("No delivery record for episode: " + episodeId));
+            .orElseThrow(() -> new ResourceNotFoundException("labor.deliveryRecord.notFoundForEpisode", episodeId));
         return laborMapper.toDeliveryResponse(record);
     }
 
@@ -458,9 +458,9 @@ public class LaborServiceImpl implements LaborService {
         LaborEpisode episode = (hospitalId != null
             ? episodeRepository.findByIdAndHospital_Id(episodeId, hospitalId)
             : episodeRepository.findById(episodeId))
-            .orElseThrow(() -> new ResourceNotFoundException("Labor episode not found: " + episodeId));
+            .orElseThrow(() -> new ResourceNotFoundException("labor.episode.notFound", episodeId));
         if (episode.getPatient() == null || !patientId.equals(episode.getPatient().getId())) {
-            throw new ResourceNotFoundException("Labor episode not found: " + episodeId);
+            throw new ResourceNotFoundException("labor.episode.notFound", episodeId);
         }
         return episode;
     }
@@ -470,7 +470,7 @@ public class LaborServiceImpl implements LaborService {
             return null;
         }
         return registrationRepository.findById(registrationId)
-            .orElseThrow(() -> new ResourceNotFoundException("Registration not found: " + registrationId));
+            .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", registrationId));
     }
 
     private Hospital resolveHospital(PatientHospitalRegistration registration, UUID requestedHospitalId) {
@@ -489,7 +489,7 @@ public class LaborServiceImpl implements LaborService {
             return null;
         }
         Staff staff = staffRepository.findById(staffId)
-            .orElseThrow(() -> new ResourceNotFoundException("Staff not found: " + staffId));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", staffId));
         if (hospital != null && staff.getHospital() != null
             && !hospital.getId().equals(staff.getHospital().getId())) {
             throw new BusinessException("Recorder staff assignment does not match resolved hospital context.");

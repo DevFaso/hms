@@ -1,5 +1,8 @@
 package com.example.hms.service;
 
+import com.example.hms.payload.dto.highrisk.HighRiskPregnancyCarePlanRequestDTO;
+import com.example.hms.payload.dto.highrisk.HighRiskCareTeamNoteRequestDTO;
+import com.example.hms.payload.dto.highrisk.HighRiskMedicationLogRequestDTO;
 import com.example.hms.enums.HighRiskMilestoneType;
 import com.example.hms.mapper.HighRiskPregnancyCarePlanMapper;
 import com.example.hms.model.Hospital;
@@ -71,6 +74,10 @@ class HighRiskPregnancyCarePlanServiceImplTest {
     @Mock
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
+    /** Unstubbed: a null scope (global view), so the existing cases read any hospital. */
+    @Mock
+    private com.example.hms.utility.RoleValidator roleValidator;
+
     private Clock fixedClock;
 
     private HighRiskPregnancyCarePlanServiceImpl service;
@@ -87,7 +94,8 @@ class HighRiskPregnancyCarePlanServiceImplTest {
             mapper,
             fixedClock,
             recordAccessPolicy,
-            reachRecorder
+            reachRecorder,
+            roleValidator
         );
     }
 
@@ -261,5 +269,155 @@ class HighRiskPregnancyCarePlanServiceImplTest {
         assertThat(service.getPlansForPatient(patientId, user.getUsername())).isEmpty();
         verify(carePlanRepository, never()).findByPatient_IdOrderByCreatedAtDesc(any());
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(user.getId()), isNull(), eq(Map.of()), anyString());
+    }
+
+    // ── A patient's refusals answer exactly like a miss ────────────────────
+
+    private User userWithRoles(String... codes) {
+        User user = new User();
+        user.setId(UUID.randomUUID());
+        user.setUsername(USERNAME);
+        for (String code : codes) {
+            Role role = new Role();
+            role.setId(UUID.randomUUID());
+            role.setCode(code);
+            UserRole link = new UserRole();
+            link.setId(new UserRoleId(user.getId(), role.getId()));
+            link.setUser(user);
+            link.setRole(role);
+            user.getUserRoles().add(link);
+        }
+        return user;
+    }
+
+    private static String notFoundMessage(Runnable call) {
+        try {
+            call.run();
+        } catch (com.example.hms.exception.ResourceNotFoundException e) {
+            return e.getMessage();
+        }
+        throw new AssertionError("expected a ResourceNotFoundException");
+    }
+
+    @Test
+    void aPatientReachingAnotherPatientsPlanIsAnsweredAsAMissingPlan() {
+        UUID planId = UUID.randomUUID();
+        User patientUser = userWithRoles("ROLE_PATIENT");
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(patientUser));
+        HighRiskPregnancyCarePlan foreign = basePlan(planId);
+        when(patientRepository.existsByIdAndUserId(foreign.getPatient().getId(), patientUser.getId())).thenReturn(false);
+
+        when(carePlanRepository.findById(planId)).thenReturn(Optional.empty());
+        String missing = notFoundMessage(() -> service.getPlan(planId, USERNAME));
+
+        when(carePlanRepository.findById(planId)).thenReturn(Optional.of(foreign));
+        HighRiskBloodPressureLogRequestDTO bp = new HighRiskBloodPressureLogRequestDTO();
+        HighRiskMedicationLogRequestDTO med = new HighRiskMedicationLogRequestDTO();
+        HighRiskCareTeamNoteRequestDTO note = new HighRiskCareTeamNoteRequestDTO();
+        assertThat(notFoundMessage(() -> service.getPlan(planId, USERNAME))).isEqualTo(missing);
+        assertThat(notFoundMessage(() -> service.addBloodPressureLog(planId, bp, USERNAME))).isEqualTo(missing);
+        assertThat(notFoundMessage(() -> service.addMedicationLog(planId, med, USERNAME))).isEqualTo(missing);
+        assertThat(notFoundMessage(() -> service.addCareTeamNote(planId, note, USERNAME))).isEqualTo(missing);
+        verify(carePlanRepository, never()).save(any());
+    }
+
+    @Test
+    void aPatientNamingAnotherPatientIsAnsweredAsAnUnknownPatient_beforeAnyLookup() {
+        User patientUser = userWithRoles("ROLE_PATIENT");
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(patientUser));
+        UUID otherPatientId = UUID.randomUUID();
+        UUID unknownPatientId = UUID.randomUUID();
+
+        // The message echoes the id the caller named, so compare with that id
+        // swapped out: another patient's row must read exactly like no row.
+        String foreign = notFoundMessage(() -> service.getPlansForPatient(otherPatientId, USERNAME));
+        String unknown = notFoundMessage(() -> service.getPlansForPatient(unknownPatientId, USERNAME));
+        String unknownAsForeign = unknown.replace(unknownPatientId.toString(), otherPatientId.toString());
+        assertThat(foreign).isEqualTo(unknownAsForeign);
+        assertThat(notFoundMessage(() -> service.getActivePlan(otherPatientId, USERNAME))).isEqualTo(unknownAsForeign);
+        verify(patientRepository, never()).findById(any());
+        verify(carePlanRepository, never()).findByPatient_IdOrderByCreatedAtDesc(any());
+    }
+
+    @Test
+    void aPatientReadsTheirOwnPlan() {
+        UUID planId = UUID.randomUUID();
+        User patientUser = userWithRoles("ROLE_PATIENT");
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(patientUser));
+        HighRiskPregnancyCarePlan own = basePlan(planId);
+        when(carePlanRepository.findById(planId)).thenReturn(Optional.of(own));
+        when(patientRepository.existsByIdAndUserId(own.getPatient().getId(), patientUser.getId())).thenReturn(true);
+
+        assertThat(service.getPlan(planId, USERNAME)).isNotNull();
+    }
+
+    @Test
+    void aCallerWhoIsNeitherProviderNorPatientIsRefusedBeforeTheLookup() {
+        UUID planId = UUID.randomUUID();
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(userWithRoles("ROLE_RECEPTIONIST")));
+
+        org.junit.jupiter.api.Assertions.assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> service.getPlan(planId, USERNAME));
+        org.junit.jupiter.api.Assertions.assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> service.getPlansForPatient(UUID.randomUUID(), USERNAME));
+        verify(carePlanRepository, never()).findById(any());
+        verify(patientRepository, never()).findById(any());
+    }
+
+    @Test
+    void aClinicianWhoIsAlsoAPatientIsStillAClinician() {
+        UUID planId = UUID.randomUUID();
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(userWithRoles("ROLE_NURSE", "ROLE_PATIENT")));
+        when(carePlanRepository.findById(planId)).thenReturn(Optional.of(basePlan(planId)));
+
+        assertThat(service.getPlan(planId, USERNAME)).isNotNull();
+        verify(patientRepository, never()).existsByIdAndUserId(any(), any());
+    }
+
+    // ── A provider reaches a plan only at the hospital they act at ─────────
+
+    @Test
+    void aProviderReachingAnotherHospitalsPlanIsAnsweredAsAMissingPlan() {
+        UUID planId = UUID.randomUUID();
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(providerUser()));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        when(carePlanRepository.findById(planId)).thenReturn(Optional.empty());
+        String missing = notFoundMessage(() -> service.getPlan(planId, USERNAME));
+
+        HighRiskPregnancyCarePlan foreign = basePlan(planId);
+        when(carePlanRepository.findById(planId)).thenReturn(Optional.of(foreign));
+        HighRiskPregnancyCarePlanRequestDTO update = new HighRiskPregnancyCarePlanRequestDTO();
+        HighRiskBloodPressureLogRequestDTO bp = new HighRiskBloodPressureLogRequestDTO();
+        UUID milestoneId = UUID.randomUUID();
+        assertThat(notFoundMessage(() -> service.getPlan(planId, USERNAME))).isEqualTo(missing);
+        assertThat(notFoundMessage(() -> service.updatePlan(planId, update, USERNAME))).isEqualTo(missing);
+        assertThat(notFoundMessage(() -> service.addBloodPressureLog(planId, bp, USERNAME))).isEqualTo(missing);
+        assertThat(notFoundMessage(() -> service.markMilestoneComplete(planId, milestoneId, null, USERNAME))).isEqualTo(missing);
+        verify(carePlanRepository, never()).save(any());
+    }
+
+    @Test
+    void aProviderReadsAPlanAtTheHospitalTheyActAt() {
+        UUID planId = UUID.randomUUID();
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(providerUser()));
+        HighRiskPregnancyCarePlan own = basePlan(planId);
+        when(carePlanRepository.findById(planId)).thenReturn(Optional.of(own));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(own.getHospital().getId());
+
+        assertThat(service.getPlan(planId, USERNAME)).isNotNull();
+    }
+
+    @Test
+    void aPatientsOwnPlanIsNotHeldToAHospital() {
+        UUID planId = UUID.randomUUID();
+        User patientUser = userWithRoles("ROLE_PATIENT");
+        when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(patientUser));
+        HighRiskPregnancyCarePlan own = basePlan(planId);
+        when(carePlanRepository.findById(planId)).thenReturn(Optional.of(own));
+        when(patientRepository.existsByIdAndUserId(own.getPatient().getId(), patientUser.getId())).thenReturn(true);
+
+        assertThat(service.getPlan(planId, USERNAME)).isNotNull();
+        verify(roleValidator, never()).requireActiveHospitalId();
     }
 }

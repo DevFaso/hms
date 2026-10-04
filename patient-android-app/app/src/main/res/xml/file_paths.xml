@@ -3,4 +3,6 @@
      cache/documents and are handed to a viewer via FileProvider. -->
 <paths>
     <cache-path name="documents" path="documents/" />
+    <!-- Chat attachments of a kind the app cannot show itself (ChatAttachmentCache). -->
+    <cache-path name="chat_attachments" path="chat_attachments/" />
 </paths>

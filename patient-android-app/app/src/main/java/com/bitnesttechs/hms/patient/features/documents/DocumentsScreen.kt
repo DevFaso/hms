@@ -30,8 +30,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.models.DocumentDto
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
-import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
+import com.bitnesttechs.hms.patient.ui.theme.BrandSoft
 import com.bitnesttechs.hms.patient.ui.theme.ErrorRed
 import java.time.Instant
 import java.time.LocalDate
@@ -118,7 +118,7 @@ fun DocumentsScreen(onBack: () -> Unit = {}, viewModel: DocumentsViewModel = hil
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandBlue, titleContentColor = Color.White
+                    containerColor = BrandPrimary, titleContentColor = Color.White
                 )
             )
         },
@@ -132,7 +132,7 @@ fun DocumentsScreen(onBack: () -> Unit = {}, viewModel: DocumentsViewModel = hil
                     onClick = { filePicker.launch(DocumentsViewModel.PICKER_MIME_TYPES) },
                     icon = { Icon(Icons.Default.UploadFile, null) },
                     text = { Text(stringResource(R.string.upload_document)) },
-                    containerColor = BrandBlue,
+                    containerColor = BrandPrimary,
                     contentColor = Color.White
                 )
             }
@@ -140,7 +140,7 @@ fun DocumentsScreen(onBack: () -> Unit = {}, viewModel: DocumentsViewModel = hil
     ) { padding ->
         if (isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BrandBlue)
+                CircularProgressIndicator(color = BrandPrimary)
             }
             return@Scaffold
         }
@@ -287,7 +287,7 @@ private fun UploadSheet(
             Text(stringResource(R.string.upload_document), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
 
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Icon(docIcon(file.name.substringAfterLast('.', "")), null, tint = BrandBlue)
+                Icon(docIcon(file.name.substringAfterLast('.', "")), null, tint = BrandPrimary)
                 Column(Modifier.weight(1f)) {
                     Text(file.name, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
                     file.sizeBytes?.let {
@@ -360,7 +360,7 @@ private fun UploadSheet(
             Button(
                 onClick = { onUpload(documentType, collectionDate, notes) },
                 enabled = canSubmit,
-                colors = ButtonDefaults.buttonColors(containerColor = BrandBlue),
+                colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 if (uploading) {
@@ -425,10 +425,10 @@ private fun DocumentRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(shape = RoundedCornerShape(10.dp), color = BrandLightBlue,
+            Surface(shape = RoundedCornerShape(10.dp), color = BrandSoft,
                 modifier = Modifier.size(44.dp)) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(docIcon(doc.kind), null, tint = BrandBlue, modifier = Modifier.size(22.dp))
+                    Icon(docIcon(doc.kind), null, tint = BrandPrimary, modifier = Modifier.size(22.dp))
                 }
             }
             Column(Modifier.weight(1f)) {
@@ -458,9 +458,9 @@ private fun DocumentRow(
                 }
             }
             if (isOpening) {
-                CircularProgressIndicator(Modifier.size(18.dp), color = BrandBlue, strokeWidth = 2.dp)
+                CircularProgressIndicator(Modifier.size(18.dp), color = BrandPrimary, strokeWidth = 2.dp)
             } else {
-                Icon(Icons.Default.OpenInNew, stringResource(R.string.open), tint = BrandBlue, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.OpenInNew, stringResource(R.string.open), tint = BrandPrimary, modifier = Modifier.size(18.dp))
             }
             // The web offers Delete on every row: the server only checks that
             // the document belongs to the signed-in patient.

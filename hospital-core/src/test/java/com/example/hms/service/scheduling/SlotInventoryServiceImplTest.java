@@ -28,10 +28,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -63,6 +65,11 @@ class SlotInventoryServiceImplTest {
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private RoleValidator roleValidator;
 
+    /** Fixed instant: holds, the reclaim sweep and the search all read the injected clock. */
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 3, 2, 9, 0);
+    private static final Clock FIXED =
+        Clock.fixed(NOW.atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
+
     private SlotInventoryServiceImpl service;
 
     private UUID hospitalId;
@@ -73,7 +80,7 @@ class SlotInventoryServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new SlotInventoryServiceImpl(templateRepository, slotRepository,
-            appointmentRepository, patientRepository, assignmentRepository, roleValidator);
+            appointmentRepository, patientRepository, assignmentRepository, roleValidator, FIXED);
 
         hospitalId = UUID.randomUUID();
         hospital = Hospital.builder().name("CHU").code("CHU").build();
@@ -172,9 +179,9 @@ class SlotInventoryServiceImplTest {
         AppointmentSlot slot = AppointmentSlot.builder()
             .hospital(hospital)
             .staff(staff)
-            .slotDate(LocalDate.now().plusDays(1))
-            .startAt(LocalDateTime.now().plusDays(1))
-            .endAt(LocalDateTime.now().plusDays(1).plusMinutes(30))
+            .slotDate(NOW.toLocalDate().plusDays(1))
+            .startAt(NOW.plusDays(1))
+            .endAt(NOW.plusDays(1).plusMinutes(30))
             .status(SlotStatus.OPEN)
             .build();
         slot.setId(UUID.randomUUID());
@@ -191,7 +198,7 @@ class SlotInventoryServiceImplTest {
         service.hold(slot.getId(), 10);
 
         assertThat(slot.getStatus()).isEqualTo(SlotStatus.HELD);
-        assertThat(slot.getHeldUntil()).isAfter(LocalDateTime.now());
+        assertThat(slot.getHeldUntil()).isAfter(NOW);
     }
 
     @Test
@@ -200,7 +207,7 @@ class SlotInventoryServiceImplTest {
         // slot out of circulation until the reclaim sweep happens to run.
         AppointmentSlot slot = openSlot();
         slot.setStatus(SlotStatus.HELD);
-        slot.setHeldUntil(LocalDateTime.now().minusMinutes(20));
+        slot.setHeldUntil(NOW.minusMinutes(20));
 
         service.hold(slot.getId(), 10);
 
@@ -211,7 +218,7 @@ class SlotInventoryServiceImplTest {
     void aLiveHoldCannotBeStolen() {
         AppointmentSlot slot = openSlot();
         slot.setStatus(SlotStatus.HELD);
-        slot.setHeldUntil(LocalDateTime.now().plusMinutes(5));
+        slot.setHeldUntil(NOW.plusMinutes(5));
 
         UUID id = slot.getId();
         assertThatThrownBy(() -> service.hold(id, 10))
@@ -222,7 +229,7 @@ class SlotInventoryServiceImplTest {
     @Test
     void aSlotInThePastCannotBeHeld() {
         AppointmentSlot slot = openSlot();
-        slot.setStartAt(LocalDateTime.now().minusHours(1));
+        slot.setStartAt(NOW.minusHours(1));
 
         UUID id = slot.getId();
         assertThatThrownBy(() -> service.hold(id, 10))
@@ -254,10 +261,38 @@ class SlotInventoryServiceImplTest {
     }
 
     @Test
+    void holdDeadlineAndReclaimCutoffComeFromTheInjectedClock() {
+        AppointmentSlot slot = openSlot();
+
+        service.hold(slot.getId(), 10);
+        assertThat(slot.getHeldUntil()).isEqualTo(NOW.plusMinutes(10));
+
+        when(slotRepository.findByStatusAndHeldUntilBefore(SlotStatus.HELD, NOW)).thenReturn(List.of());
+        service.reclaimExpiredHolds();
+        verify(slotRepository).findByStatusAndHeldUntilBefore(SlotStatus.HELD, NOW);
+    }
+
+    @Test
+    void aHoldEndingExactlyNowIsStillLiveAndOneNanosecondEarlierIsNot() {
+        AppointmentSlot slot = openSlot();
+        slot.setStatus(SlotStatus.HELD);
+        slot.setHeldUntil(NOW);
+
+        UUID id = slot.getId();
+        assertThatThrownBy(() -> service.hold(id, 10))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("no longer available");
+
+        slot.setHeldUntil(NOW.minusNanos(1));
+        service.hold(id, 10);
+        assertThat(slot.getHeldUntil()).isEqualTo(NOW.plusMinutes(10));
+    }
+
+    @Test
     void reclaimReturnsExpiredHoldsToOpen() {
         AppointmentSlot slot = openSlot();
         slot.setStatus(SlotStatus.HELD);
-        slot.setHeldUntil(LocalDateTime.now().minusMinutes(1));
+        slot.setHeldUntil(NOW.minusMinutes(1));
         slot.setHeldByUserId(UUID.randomUUID());
         when(slotRepository.findByStatusAndHeldUntilBefore(any(), any())).thenReturn(List.of(slot));
 
@@ -335,7 +370,7 @@ class SlotInventoryServiceImplTest {
         AppointmentSlot slot = bookableSlot();
         UUID callerId = UUID.randomUUID();
         slot.setStatus(SlotStatus.HELD);
-        slot.setHeldUntil(LocalDateTime.now().plusMinutes(5));
+        slot.setHeldUntil(NOW.plusMinutes(5));
         slot.setHeldByUserId(callerId);
         when(roleValidator.getCurrentUserId()).thenReturn(callerId);
 
@@ -350,7 +385,7 @@ class SlotInventoryServiceImplTest {
     void bookRefusesASlotHeldBySomeoneElse() {
         AppointmentSlot slot = bookableSlot();
         slot.setStatus(SlotStatus.HELD);
-        slot.setHeldUntil(LocalDateTime.now().plusMinutes(5));
+        slot.setHeldUntil(NOW.plusMinutes(5));
         slot.setHeldByUserId(UUID.randomUUID());
         when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
 
@@ -365,7 +400,7 @@ class SlotInventoryServiceImplTest {
     @Test
     void bookRefusesAPastSlot() {
         AppointmentSlot slot = bookableSlot();
-        slot.setStartAt(LocalDateTime.now().minusHours(1));
+        slot.setStartAt(NOW.minusHours(1));
 
         UUID slotId = slot.getId();
         UUID bookFor = patientId;
@@ -452,7 +487,7 @@ class SlotInventoryServiceImplTest {
         // OPEN would misstate it: searchOpen never returns past slots, but the
         // rota must read honestly to anyone looking at it directly.
         AppointmentSlot slot = openSlot();
-        slot.setStartAt(LocalDateTime.now().minusHours(2));
+        slot.setStartAt(NOW.minusHours(2));
         Appointment appointment = new Appointment();
         UUID appointmentId = UUID.randomUUID();
         appointment.setId(appointmentId);

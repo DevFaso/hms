@@ -45,9 +45,11 @@ class CrossHospitalReadFilterCoverageTest {
      * Finders actually routed through {@link RecordAccessPolicy#readableHospitalIds}
      * — they take a collection of hospital ids rather than one.
      *
-     * <p>The encounter and lab-result paths widen too, but they filter in memory
-     * over an already patient-scoped query, so they have no hospital-taking
-     * finder to list here. Allergies went patient-wide in E9 #56 (decision D3:
+     * <p>The encounter path widens too, but it filters in memory over an
+     * already patient-scoped query, so it has no hospital-taking finder to
+     * list here. The patient-wide lab-result reads used to do the same; the
+     * timeline's now reads the readable set at the database through
+     * {@code findPatientResultsReadableAt} (listed below). Allergies went patient-wide in E9 #56 (decision D3:
      * untagged travels); the chart domain — problems, surgical history,
      * directives, nursing notes, chart updates — in E9 #59a. Problems and
      * nursing notes carry a sensitivity tag and are filtered through
@@ -98,6 +100,13 @@ class CrossHospitalReadFilterCoverageTest {
         "PatientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc",
         "PatientVitalSignRepository.findPageByPatient_IdAndHospital_IdInOrderByRecordedAtDesc",
         "LabResultRepository.findPageByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn",
+        // Widened for the doctor timeline only, which passes the readable set.
+        // The same finder serves the doctor record's lab section with the
+        // acting hospital alone (not widened), and, through the
+        // findAllPatientResults default, the super-admin global chart review
+        // and the patient's own portal read (every hospital). Its javadoc
+        // names each caller and how wide it reads.
+        "LabResultRepository.findPatientResultsReadableAt",
         "DischargeSummaryRepository.findWithAssociationsByPatient_IdAndHospital_IdInOrderByDischargeDateDesc");
 
     /**

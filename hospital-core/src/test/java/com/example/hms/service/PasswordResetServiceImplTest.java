@@ -8,12 +8,16 @@ import com.example.hms.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -34,6 +38,10 @@ class PasswordResetServiceImplTest {
     @Mock private PasswordResetTokenRepository tokenRepository;
     @Mock private EmailService emailService;
     @Mock private PasswordEncoder passwordEncoder;
+
+    /** Fixed instant: token validity and cleanup are computed against the injected clock. */
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 3, 1, 10, 0);
+    @Spy private Clock clock = Clock.fixed(NOW.atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
 
     @InjectMocks private PasswordResetServiceImpl service;
 
@@ -85,7 +93,7 @@ class PasswordResetServiceImplTest {
         PasswordResetToken resetToken = PasswordResetToken.builder()
             .user(user)
             .tokenHash(rawToken.toLowerCase())
-            .expiration(LocalDateTime.now().plusHours(1))
+            .expiration(NOW.plusHours(1))
             .build();
 
         when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
@@ -109,7 +117,7 @@ class PasswordResetServiceImplTest {
         PasswordResetToken resetToken = PasswordResetToken.builder()
             .user(user)
             .tokenHash(rawToken.toLowerCase())
-            .expiration(LocalDateTime.now().plusHours(1))
+            .expiration(NOW.plusHours(1))
             .build();
 
         when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
@@ -127,7 +135,7 @@ class PasswordResetServiceImplTest {
         PasswordResetToken resetToken = PasswordResetToken.builder()
             .user(user)
             .tokenHash(rawToken.toLowerCase())
-            .expiration(LocalDateTime.now().plusHours(1))
+            .expiration(NOW.plusHours(1))
             .build();
 
         when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
@@ -145,7 +153,7 @@ class PasswordResetServiceImplTest {
         PasswordResetToken resetToken = PasswordResetToken.builder()
             .user(user)
             .tokenHash(rawToken.toLowerCase())
-            .expiration(LocalDateTime.now().plusHours(1))
+            .expiration(NOW.plusHours(1))
             .build();
 
         when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
@@ -163,7 +171,7 @@ class PasswordResetServiceImplTest {
         PasswordResetToken resetToken = PasswordResetToken.builder()
             .user(user)
             .tokenHash(rawToken.toLowerCase())
-            .expiration(LocalDateTime.now().minusHours(1))
+            .expiration(NOW.minusHours(1))
             .build();
 
         when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
@@ -190,7 +198,7 @@ class PasswordResetServiceImplTest {
         PasswordResetToken resetToken = PasswordResetToken.builder()
             .user(user)
             .tokenHash(rawToken.toLowerCase())
-            .expiration(LocalDateTime.now().minusHours(1))
+            .expiration(NOW.minusHours(1))
             .build();
 
         when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
@@ -205,7 +213,7 @@ class PasswordResetServiceImplTest {
         PasswordResetToken resetToken = PasswordResetToken.builder()
             .user(user)
             .tokenHash(rawToken.toLowerCase())
-            .expiration(LocalDateTime.now().plusHours(1))
+            .expiration(NOW.plusHours(1))
             .build();
 
         when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
@@ -221,9 +229,38 @@ class PasswordResetServiceImplTest {
 
     @Test
     void cleanupExpiredTokens_returnsCount() {
-        when(tokenRepository.deleteByExpirationBefore(any(LocalDateTime.class))).thenReturn(5L);
+        when(tokenRepository.deleteByExpirationBefore(NOW)).thenReturn(5L);
         int result = service.cleanupExpiredTokens();
         assertThat(result).isEqualTo(5);
+    }
+
+    @Test
+    void verifyToken_expiryBoundaryUsesInjectedClock() {
+        String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+        PasswordResetToken resetToken = PasswordResetToken.builder()
+            .user(user)
+            .tokenHash(rawToken.toLowerCase())
+            .expiration(NOW)
+            .build();
+        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+
+        // isAfter is strict: still valid at exactly the expiration instant ...
+        assertThat(service.verifyToken(rawToken)).isTrue();
+        // ... and expired one nanosecond before "now".
+        resetToken.setExpiration(NOW.minusNanos(1));
+        assertThat(service.verifyToken(rawToken)).isFalse();
+    }
+
+    @Test
+    void requestReset_stampsTwoHourExpiryFromInjectedClock() {
+        when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(user));
+        when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.requestReset("test@test.com", Locale.ENGLISH);
+
+        ArgumentCaptor<PasswordResetToken> captor = ArgumentCaptor.forClass(PasswordResetToken.class);
+        verify(tokenRepository).save(captor.capture());
+        assertThat(captor.getValue().getExpiration()).isEqualTo(NOW.plusHours(2));
     }
 
     @Test

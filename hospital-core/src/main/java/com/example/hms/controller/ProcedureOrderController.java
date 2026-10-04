@@ -36,6 +36,7 @@ import java.util.UUID;
 public class ProcedureOrderController {
 
     private final ProcedureOrderService procedureOrderService;
+    private final com.example.hms.controller.support.ControllerAuthUtils authUtils;
 
     @PostMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE')")
@@ -133,25 +134,14 @@ public class ProcedureOrderController {
     }
 
     // Helper method to extract user ID from authentication
+    /**
+     * The caller's HMS user id on either login path: a {@code CustomUserDetails}
+     * principal, or the {@code appUserId} claim of a Keycloak token. The old
+     * parser read the username as a UUID and rejected a Keycloak principal
+     * outright, so an order could not be placed over SSO at all.
+     */
     private UUID extractUserId(Authentication authentication) {
-        if (authentication == null || authentication.getPrincipal() == null) {
-            throw new IllegalArgumentException("Authentication required");
-        }
-        Object principal = authentication.getPrincipal();
-        if (principal instanceof org.springframework.security.core.userdetails.UserDetails userDetails) {
-            try {
-                return UUID.fromString(userDetails.getUsername());
-            } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid user ID format in authentication");
-            }
-        }
-        if (principal instanceof String principalString) {
-            try {
-                return UUID.fromString(principalString);
-            } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid user ID format in authentication");
-            }
-        }
-        throw new IllegalArgumentException("Unsupported authentication principal type");
+        return authUtils.resolveUserId(authentication)
+            .orElseThrow(() -> new IllegalArgumentException("Authentication required"));
     }
 }

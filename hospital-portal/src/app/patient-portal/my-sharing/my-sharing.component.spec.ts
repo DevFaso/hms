@@ -314,9 +314,9 @@ describe('MySharingComponent', () => {
 
   it('translates the actor role on an access-log row', () => {
     // `entry.actorRole` rendered raw, so a patient in Ouagadougou read
-    // DOCTOR beside the name of whoever opened their chart. The service
-    // normalises the two wire spellings to one bare token (see bareRole);
-    // the row translates it.
+    // DOCTOR beside the name of whoever opened their chart. The server
+    // sends one bare token (DisclosureAccountingServiceImpl.toEntry); the
+    // row translates it.
     const translate = TestBed.inject(TranslateService);
     translate.setFallbackLang('fr');
     translate.use('fr');

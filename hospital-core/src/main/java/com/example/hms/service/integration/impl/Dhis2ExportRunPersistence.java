@@ -10,11 +10,9 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.integration.Dhis2ExportOutboxRepository;
 import com.example.hms.repository.integration.Dhis2ExportRunRepository;
 import com.example.hms.repository.integration.Dhis2FacilityConfigRepository;
-import com.example.hms.service.integration.AggregatedDataValue;
 import com.example.hms.service.integration.DhisAdxAggregator;
 import com.example.hms.service.integration.DhisHttpResponse;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -56,8 +54,7 @@ public class Dhis2ExportRunPersistence {
                                          UUID staffId,
                                          DhisAdxAggregator.AggregationResult aggregated) {
         final var hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Hospital not found: " + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
 
         final Dhis2ExportRun run = Dhis2ExportRun.builder()
             .hospital(hospital)
@@ -72,9 +69,8 @@ public class Dhis2ExportRunPersistence {
             .build();
         runRepository.save(run);
 
-        final List<Dhis2ExportOutbox> outboxRows = new ArrayList<>(aggregated.values().size());
-        for (AggregatedDataValue v : aggregated.values()) {
-            outboxRows.add(Dhis2ExportOutbox.builder()
+        final List<Dhis2ExportOutbox> outboxRows = aggregated.values().stream()
+            .map(v -> Dhis2ExportOutbox.builder()
                 .run(run)
                 .periodIso(periodIso)
                 .orgUnitUid(v.orgUnitUid())
@@ -83,8 +79,8 @@ public class Dhis2ExportRunPersistence {
                 .value(v.value())
                 .status(Dhis2OutboxStatus.PENDING)
                 .attempts(0)
-                .build());
-        }
+                .build())
+            .toList();
         outboxRepository.saveAll(outboxRows);
         return run;
     }

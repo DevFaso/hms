@@ -168,17 +168,17 @@ public class StaffServiceImpl implements StaffService {
         validateBaseStaffRequirements(dto, locale);
 
         User user = userRepository.findByEmail(dto.getUserEmail())
-            .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("user.notFound", new Object[]{dto.getUserEmail()}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByEmail", dto.getUserEmail()));
 
         Hospital hospital = hospitalRepository.findByName(dto.getHospitalName())
-            .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage(HOSPITAL_NOT_FOUND_KEY, new Object[]{dto.getHospitalName()}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, dto.getHospitalName()));
 
         requireHospitalScope(hospital.getId(), locale);
 
         Department department = null;
         if (dto.getDepartmentName() != null && !dto.getDepartmentName().isBlank()) {
             department = departmentRepository.findByHospitalIdAndNameIgnoreCase(hospital.getId(), dto.getDepartmentName())
-                .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage(DEPARTMENT_NOT_FOUND_KEY, new Object[]{dto.getDepartmentName()}, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_KEY, dto.getDepartmentName()));
         }
 
         validateDepartmentHospitalConsistency(department, hospital, locale);
@@ -186,13 +186,13 @@ public class StaffServiceImpl implements StaffService {
         Role role = null;
         if (dto.getRoleName() != null && !dto.getRoleName().isBlank()) {
             role = roleRepository.findByCode(dto.getRoleName().toUpperCase())
-                .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("role.notFound", new Object[]{dto.getRoleName()}, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("role.notfound.byname", dto.getRoleName()));
         }
 
         UserRoleHospitalAssignment assignment;
         if (role != null) {
             assignment = assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(user.getId(), hospital.getId(), role.getId())
-                .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("assignment.notFound", null, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("assignment.notFound"));
         } else {
             // No role specified — resolve the user's active assignment at this hospital
             assignment = assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(user.getId(), hospital.getId())
@@ -219,17 +219,17 @@ public class StaffServiceImpl implements StaffService {
         validateBaseStaffRequirements(dto, locale);
 
         User user = userRepository.findByEmail(dto.getUserEmail())
-            .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("user.notFound", new Object[]{dto.getUserEmail()}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByEmail", dto.getUserEmail()));
 
         Hospital hospital = hospitalRepository.findByName(dto.getHospitalName())
-            .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage(HOSPITAL_NOT_FOUND_KEY, new Object[]{dto.getHospitalName()}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, dto.getHospitalName()));
 
         requireHospitalScope(hospital.getId(), locale);
 
         Department department = null;
         if (dto.getDepartmentName() != null && !dto.getDepartmentName().isBlank()) {
             department = departmentRepository.findByHospitalIdAndNameIgnoreCase(hospital.getId(), dto.getDepartmentName())
-                .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage(DEPARTMENT_NOT_FOUND_KEY, new Object[]{dto.getDepartmentName()}, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_KEY, dto.getDepartmentName()));
         }
 
         validateDepartmentHospitalConsistency(department, hospital, locale);
@@ -237,13 +237,13 @@ public class StaffServiceImpl implements StaffService {
         Role role = null;
         if (dto.getRoleName() != null && !dto.getRoleName().isBlank()) {
             role = roleRepository.findByCode(dto.getRoleName().toUpperCase())
-                .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("role.notFound", new Object[]{dto.getRoleName()}, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("role.notfound.byname", dto.getRoleName()));
         }
 
         UserRoleHospitalAssignment assignment;
         if (role != null) {
             assignment = assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(user.getId(), hospital.getId(), role.getId())
-                .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("assignment.notFound", null, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("assignment.notFound"));
         } else {
             // No role change requested — resolve the user's active assignment at this hospital
             assignment = assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(user.getId(), hospital.getId())
@@ -276,15 +276,15 @@ public class StaffServiceImpl implements StaffService {
     public void updateStaffDepartment(String staffEmail, String departmentName, String hospitalName, Locale locale) {
         Staff staff = userRepository.findByEmail(staffEmail)
             .flatMap(user -> staffRepository.findFirstByUserIdOrderByCreatedAtAsc(user.getId()))
-            .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage(STAFF_NOT_FOUND_KEY, new Object[]{staffEmail}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND_KEY, staffEmail));
 
         Hospital hospital = hospitalRepository.findByName(hospitalName)
-            .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage(HOSPITAL_NOT_FOUND_KEY, new Object[]{hospitalName}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalName));
 
         requireHospitalScope(hospital.getId(), locale);
 
         Department department = departmentRepository.findByHospitalIdAndNameIgnoreCase(hospital.getId(), departmentName)
-            .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage(DEPARTMENT_NOT_FOUND_KEY, new Object[]{departmentName}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_KEY, departmentName));
 
         if (!staff.getHospital().getId().equals(department.getHospital().getId())) {
             throw new BusinessRuleException(messageSource.getMessage("staff.department.wrongHospital", null, locale));
@@ -371,9 +371,7 @@ public class StaffServiceImpl implements StaffService {
 
     private Staff findStaffOrThrow(UUID id, Locale locale) {
         Staff staff = staffRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage(STAFF_NOT_FOUND_KEY, new Object[]{id}, locale)
-            ));
+            .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND_KEY, id));
         assertStaffAccessible(staff, locale);
         return staff;
     }
@@ -539,8 +537,7 @@ public class StaffServiceImpl implements StaffService {
         }
 
         Staff staff = staffRepository.findById(staffId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage(STAFF_NOT_FOUND_KEY, new Object[]{staffId}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND_KEY, staffId));
 
         // Verify the staff belongs to the caller's hospital scope
         requireHospitalScope(staff.getHospital().getId());
@@ -566,9 +563,7 @@ public class StaffServiceImpl implements StaffService {
 
         // Look up the new role entity
         Role newRole = roleRepository.findByCode(newRoleCode)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage("staff.lab.role.notFound",
-                    new Object[]{newRoleCode}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.lab.role.notFound", newRoleCode));
 
         // Update the assignment's role
         assignment.setRole(newRole);

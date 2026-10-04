@@ -22,6 +22,8 @@ import com.example.hms.repository.ImagingReportRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.ImagingCriticalNotificationService;
 import com.example.hms.service.ImagingReportService;
+import com.example.hms.service.PatientSubjectReadGuard;
+import com.example.hms.service.PatientSubjectReaderRoles;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -94,6 +96,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     private final ImagingReportMapper imagingReportMapper;
     private final RoleValidator roleValidator;
     private final ImagingCriticalNotificationService criticalNotificationService;
+    private final PatientSubjectReadGuard subjectReadGuard;
 
     // ── Authoring ────────────────────────────────────────────────────────
 
@@ -308,16 +311,54 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     @Override
     @Transactional(readOnly = true)
     public ImagingReportResponseDTO getReport(UUID reportId) {
-        return imagingReportMapper.toResponseDTO(loadReportScoped(reportId));
+        ImagingReport report = imagingReportRepository.findById(reportId)
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId));
+        // A patient caller reads only their own, released report, wherever it
+        // was written: another patient's, or one not yet signed, answers
+        // exactly as a missing id does, and before the hospital check, which
+        // can answer differently. Staff read their hospital's — and, staff who
+        // are also patients (#754's rule), their own released report elsewhere.
+        if (subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.IMAGING_REPORT_READS)) {
+            if (!releasedToCaller(report)) {
+                throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
+            }
+            return imagingReportMapper.toResponseDTO(report);
+        }
+        if (!reportInScope(report) && !releasedToCallerAsItsPatient(report)) {
+            throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
+        }
+        return imagingReportMapper.toResponseDTO(report);
     }
 
     @Override
     @Transactional(readOnly = true)
     public ImagingReportResponseDTO getLatestReportForOrder(UUID imagingOrderId) {
-        loadOrderScoped(imagingOrderId);
+        ImagingOrder order = imagingOrderRepository.findById(imagingOrderId)
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_ORDER_NOT_FOUND, imagingOrderId));
+        // A patient caller reads only their own: another patient's order
+        // answers exactly as a missing id does, and before the hospital check.
+        boolean asPatient = subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.IMAGING_REPORT_READS);
+        if (asPatient) {
+            // Their own order wherever it was written; another's as missing.
+            if (!subjectReadGuard.callerOwns(order.getPatient())) {
+                throw new ResourceNotFoundException(MSG_ORDER_NOT_FOUND, imagingOrderId);
+            }
+        } else if (!orderInScope(order)) {
+            // Staff who are also patients read their own order elsewhere, as
+            // its patient (#754's rule): released reports only, below.
+            asPatient = subjectReadGuard.ownsAsItsPatient(order.getPatient());
+            if (!asPatient) {
+                throw new ResourceNotFoundException(MSG_ORDER_NOT_FOUND, imagingOrderId);
+            }
+        }
         ImagingReport report = imagingReportRepository.findFirstByImagingOrder_IdAndLatestVersionIsTrue(imagingOrderId)
             .orElseGet(() -> imagingReportRepository.findTopByImagingOrder_IdOrderByReportVersionDesc(imagingOrderId)
                 .orElseThrow(() -> new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, imagingOrderId)));
+        // Their own order, but the latest read is not signed yet: the patient
+        // is answered as though the study had no report.
+        if (asPatient && !report.isReleasedToPatient()) {
+            throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, imagingOrderId);
+        }
         return imagingReportMapper.toResponseDTO(report);
     }
 
@@ -367,25 +408,53 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     private ImagingReport loadReportScoped(UUID reportId) {
         ImagingReport report = imagingReportRepository.findById(reportId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId));
-        UUID scope = roleValidator.requireActiveHospitalId();
-        if (scope != null
-            && report.getHospital() != null
-            && !scope.equals(report.getHospital().getId())) {
-            throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
+        return requireReportInScope(report);
+    }
+
+    private ImagingReport requireReportInScope(ImagingReport report) {
+        if (!reportInScope(report)) {
+            throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, report.getId());
         }
         return report;
+    }
+
+    private boolean reportInScope(ImagingReport report) {
+        UUID scope = roleValidator.requireActiveHospitalId();
+        return scope == null || report.getHospital() == null || scope.equals(report.getHospital().getId());
     }
 
     private ImagingOrder loadOrderScoped(UUID imagingOrderId) {
         ImagingOrder order = imagingOrderRepository.findById(imagingOrderId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_ORDER_NOT_FOUND, imagingOrderId));
-        UUID scope = roleValidator.requireActiveHospitalId();
-        if (scope != null
-            && order.getHospital() != null
-            && !scope.equals(order.getHospital().getId())) {
-            throw new ResourceNotFoundException(MSG_ORDER_NOT_FOUND, imagingOrderId);
+        return requireOrderInScope(order);
+    }
+
+    private ImagingOrder requireOrderInScope(ImagingOrder order) {
+        if (!orderInScope(order)) {
+            throw new ResourceNotFoundException(MSG_ORDER_NOT_FOUND, order.getId());
         }
         return order;
+    }
+
+    private boolean orderInScope(ImagingOrder order) {
+        UUID scope = roleValidator.requireActiveHospitalId();
+        return scope == null || order.getHospital() == null || scope.equals(order.getHospital().getId());
+    }
+
+    /**
+     * For a patient-only caller: is this report theirs and released to them?
+     * Release is asked first — it costs nothing — and ownership second, which
+     * initialises the report's order.
+     */
+    private boolean releasedToCaller(ImagingReport report) {
+        return report.isReleasedToPatient()
+            && subjectReadGuard.callerOwns(report.getImagingOrder().getPatient());
+    }
+
+    /** The same for staff who are also patients: released, theirs, and they hold ROLE_PATIENT. */
+    private boolean releasedToCallerAsItsPatient(ImagingReport report) {
+        return report.isReleasedToPatient()
+            && subjectReadGuard.ownsAsItsPatient(report.getImagingOrder().getPatient());
     }
 
     /**

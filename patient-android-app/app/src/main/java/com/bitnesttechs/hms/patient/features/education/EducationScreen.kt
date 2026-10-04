@@ -28,7 +28,7 @@ import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.models.EducationItemDto
 import com.bitnesttechs.hms.patient.core.models.EducationQuestionDto
 import com.bitnesttechs.hms.patient.features.dashboard.StatusBadge
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
 import com.bitnesttechs.hms.patient.ui.theme.ErrorRed
 import com.bitnesttechs.hms.patient.ui.theme.SuccessGreen
 import kotlinx.coroutines.launch
@@ -68,7 +68,7 @@ fun EducationScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue, titleContentColor = Color.White),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandPrimary, titleContentColor = Color.White),
                 actions = {
                     if (state.reading == null) {
                         TextButton(onClick = { viewModel.openAsk(null) }) {
@@ -83,7 +83,7 @@ fun EducationScreen(
         when {
             reading != null -> Reader(reading, state, viewModel, Modifier.padding(padding))
             state.loading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BrandBlue)
+                CircularProgressIndicator(color = BrandPrimary)
             }
             state.failed -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
@@ -187,7 +187,7 @@ private fun ItemCard(item: EducationItemDto, viewModel: EducationViewModel) {
                 Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         if (item.resourceType == "VIDEO") Icons.Default.PlayCircle else Icons.Default.Article,
-                        null, tint = if (item.isWarningSignContent == true) ErrorRed else BrandBlue
+                        null, tint = if (item.isWarningSignContent == true) ErrorRed else BrandPrimary
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(item.title ?: "", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
@@ -209,7 +209,7 @@ private fun ItemCard(item: EducationItemDto, viewModel: EducationViewModel) {
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = { viewModel.openAsk(item) }) { Text(stringResource(R.string.ask_about_this)) }
-                Button(onClick = { viewModel.openReader(item) }, colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)) {
+                Button(onClick = { viewModel.openReader(item) }, colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)) {
                     Text(stringResource(if (item.isCompleted) R.string.education_review else R.string.education_open))
                 }
             }
@@ -221,7 +221,7 @@ private fun ItemCard(item: EducationItemDto, viewModel: EducationViewModel) {
 private fun QuestionList(state: EducationViewModel.UiState, viewModel: EducationViewModel) {
     when {
         state.questionsLoading && !state.questionsLoaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = BrandBlue)
+            CircularProgressIndicator(color = BrandPrimary)
         }
         state.questionsFailed && !state.questionsLoaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
@@ -350,11 +350,11 @@ private fun Reader(item: EducationItemDto, state: EducationViewModel.UiState, vi
         when {
             !item.isCompleted -> Button(
                 onClick = { viewModel.markComplete(item) }, enabled = !state.savingProgress,
-                modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+                modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
             ) { Text(stringResource(R.string.mark_as_read)) }
             item.confirmedUnderstanding != true -> Button(
                 onClick = { viewModel.confirmUnderstanding(item) }, enabled = !state.savingProgress,
-                modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+                modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
             ) { Text(stringResource(R.string.i_understand_this)) }
             else -> Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Verified, null, tint = SuccessGreen)
@@ -417,7 +417,7 @@ private fun AskSheet(state: EducationViewModel.UiState, viewModel: EducationView
                 enabled = !state.askSubmitting && text.trim().length >= EducationViewModel.QUESTION_MIN &&
                     text.length <= EducationViewModel.QUESTION_MAX,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+                colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
             ) {
                 if (state.askSubmitting) {
                     CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
@@ -445,7 +445,7 @@ private fun statusRes(status: String): Int = when (status.uppercase()) {
 private fun statusColor(status: String): Color = when (status.uppercase()) {
     "COMPLETED", "CONFIRMED_UNDERSTANDING" -> SuccessGreen
     "NEEDS_CLARIFICATION" -> ErrorRed
-    else -> BrandBlue
+    else -> BrandPrimary
 }
 
 private fun categoryRes(category: String): Int = when (category.uppercase()) {

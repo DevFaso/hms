@@ -366,7 +366,7 @@ enum HistorySection: String, CaseIterable, Identifiable {
 
     var tint: Color {
         switch self {
-        case .medical: return Color("BrandBlue")
+        case .medical: return Color("BrandPrimary")
         case .surgical: return .purple
         case .family: return .green
         case .social: return .orange

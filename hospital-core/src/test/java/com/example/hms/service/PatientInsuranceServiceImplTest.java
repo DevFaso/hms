@@ -33,6 +33,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.never;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -49,6 +51,9 @@ class PatientInsuranceServiceImplTest {
     @Mock private MessageSource messageSource;
     @Mock private RoleValidator roleValidator;
     @Mock private PatientChartAccess patientChartAccess;
+    @Mock private PatientSubjectReadGuard subjectReadGuard;
+    /** A staff caller's scope: these cases resolve the hospital through the adapter. */
+    @Mock private com.example.hms.security.tenant.ActingScopeResolver actingScopeResolver;
 
     @InjectMocks private PatientInsuranceServiceImpl service;
 
@@ -124,7 +129,6 @@ class PatientInsuranceServiceImplTest {
     @Test
     void getPatientInsuranceById_notFound_throws() {
         when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class))).thenReturn("not found");
 
         assertThatThrownBy(() -> service.getPatientInsuranceById(insuranceId, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -191,15 +195,17 @@ class PatientInsuranceServiceImplTest {
 
         when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(insurance));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(subjectReadGuard.callerOwns(patient)).thenReturn(true);
         when(patientInsuranceRepository.save(insurance)).thenReturn(insurance);
         when(patientInsuranceMapper.toPatientInsuranceResponseDTO(insurance)).thenReturn(responseDTO);
 
         PatientInsuranceResponseDTO result = service.linkPatientInsurance(insuranceId, req, ctx, locale);
         assertThat(result).isEqualTo(responseDTO);
+        assertThat(insurance.getPatient()).isSameAs(patient);
     }
 
     @Test
-    void linkPatientInsurance_patientMode_wrongUser_throwsAccessDenied() {
+    void linkPatientInsurance_patientMode_wrongUser_answersAsAMissingPatient() {
         UUID otherUserId = UUID.randomUUID();
         PatientInsurance insurance = new PatientInsurance();
         insurance.setId(insuranceId);
@@ -209,10 +215,43 @@ class PatientInsuranceServiceImplTest {
 
         when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(insurance));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class))).thenReturn("denied");
+        when(subjectReadGuard.callerOwns(patient)).thenReturn(false);
 
-        assertThatThrownBy(() -> service.linkPatientInsurance(insuranceId, req, ctx, locale))
-            .isInstanceOf(AccessDeniedException.class);
+        String refused = catchThrowableOfType(ResourceNotFoundException.class,
+            () -> service.linkPatientInsurance(insuranceId, req, ctx, locale)).getMessage();
+        when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+        String missing = catchThrowableOfType(ResourceNotFoundException.class,
+            () -> service.linkPatientInsurance(insuranceId, req, ctx, locale)).getMessage();
+        assertThat(refused).isEqualTo(missing);
+        assertThat(insurance.getPatient()).isNull();
+        verify(patientInsuranceRepository, never()).save(any());
+    }
+
+    @Test
+    void linkPatientInsurance_patientMode_anotherPatientsInsurance_answersAsAMissingInsurance() {
+        Patient otherPatient = Patient.builder().build();
+        otherPatient.setId(UUID.randomUUID());
+        PatientInsurance foreign = new PatientInsurance();
+        foreign.setId(insuranceId);
+        foreign.setPatient(otherPatient);
+        LinkPatientInsuranceRequestDTO req = LinkPatientInsuranceRequestDTO.builder()
+            .patientId(patientId).build();
+        ActingContext ctx = new ActingContext(userId, null, ActingMode.PATIENT, null);
+
+        when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(foreign));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(subjectReadGuard.callerOwns(patient)).thenReturn(true);
+        when(subjectReadGuard.callerOwns(otherPatient)).thenReturn(false);
+
+        String refused = catchThrowableOfType(ResourceNotFoundException.class,
+            () -> service.linkPatientInsurance(insuranceId, req, ctx, locale)).getMessage();
+        when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.empty());
+        String missing = catchThrowableOfType(ResourceNotFoundException.class,
+            () -> service.linkPatientInsurance(insuranceId, req, ctx, locale)).getMessage();
+        assertThat(refused).isEqualTo(missing);
+        // Another patient's coverage is not re-pointed at the caller.
+        assertThat(foreign.getPatient()).isSameAs(otherPatient);
+        verify(patientInsuranceRepository, never()).save(any());
     }
 
     @Test
@@ -225,6 +264,7 @@ class PatientInsuranceServiceImplTest {
 
         when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(insurance));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(subjectReadGuard.callerOwns(patient)).thenReturn(true);
         when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class))).thenReturn("cannot link");
 
         assertThatThrownBy(() -> service.linkPatientInsurance(insuranceId, req, ctx, locale))
@@ -369,6 +409,7 @@ class PatientInsuranceServiceImplTest {
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
+        when(subjectReadGuard.callerOwns(patient)).thenReturn(true);
         when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class))).thenReturn("cannot link");
 
         assertThatThrownBy(() -> service.upsertAndLinkByNaturalKey(req, ctx, locale))
@@ -388,10 +429,14 @@ class PatientInsuranceServiceImplTest {
 
         when(patientRepository.findById(otherPatient.getId())).thenReturn(Optional.of(otherPatient));
         when(roleValidator.isPatientOnlyFromAuth()).thenReturn(true);
-        when(roleValidator.getCurrentUserId()).thenReturn(userId);
-        when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class))).thenReturn("denied");
+        when(subjectReadGuard.callerOwns(otherPatient)).thenReturn(false);
 
-        assertThatThrownBy(() -> service.addInsuranceToPatient(dto, locale))
-            .isInstanceOf(AccessDeniedException.class);
+        String refused = catchThrowableOfType(ResourceNotFoundException.class,
+            () -> service.addInsuranceToPatient(dto, locale)).getMessage();
+        when(patientRepository.findById(otherPatient.getId())).thenReturn(Optional.empty());
+        String missing = catchThrowableOfType(ResourceNotFoundException.class,
+            () -> service.addInsuranceToPatient(dto, locale)).getMessage();
+        assertThat(refused).isEqualTo(missing);
+        verify(patientInsuranceRepository, never()).save(any());
     }
 }

@@ -88,6 +88,16 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
     }
 
+    /**
+     * A domain rule refused the request. Same status as {@link BusinessException}
+     * (the two are the same kind of refusal); without this handler it fell
+     * through to {@link #handleRuntimeException} and reached the client as a 500.
+     */
+    @ExceptionHandler(BusinessRuleException.class)
+    public ResponseEntity<Object> handleBusinessRuleException(BusinessRuleException ex, WebRequest request) {
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Object> handleIllegalArgumentException(IllegalArgumentException ex, WebRequest request) {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
@@ -375,16 +385,46 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
     }
 
+    /**
+     * A hospital scope the request cannot have (design §3.6). 403 with a code
+     * and the reason, so the portal re-reads its scope on a stale chip
+     * ({@code NO_LONGER_PERMITTED}) instead of showing the forbidden page.
+     */
+    @ExceptionHandler(HospitalScopeRefusedException.class)
+    public ResponseEntity<Object> handleHospitalScopeRefused(HospitalScopeRefusedException ex, WebRequest request) {
+        if (log.isWarnEnabled()) {
+            log.warn("Hospital scope refused ({}) at path {}", ex.getReason(), request.getDescription(false));
+        }
+        Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+        body.put("code", HospitalScopeRefusedException.CODE);
+        body.put("reason", ex.getReason());
+        if (ex.getRefusedHospitalId() != null) {
+            body.put("hospitalId", ex.getRefusedHospitalId().toString());
+        }
+        return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
+    }
+
+    /**
+     * 403. The message is the literal "Access denied" unless the thrower opted
+     * in with {@link ClientSafeAccessDeniedException}, whose contract is that
+     * its message is written for the caller and discloses nothing across
+     * tenants. Every other message — a {@code @PreAuthorize} refusal, or a
+     * sentence composed deep in a service — stays in the log.
+     */
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     public ResponseEntity<Object> handleAccessDenied(AccessDeniedException ex, WebRequest req) {
         log.warn("Access denied: {}", ex.getMessage());
-        return buildErrorResponse(HttpStatus.FORBIDDEN, "Access denied", req);
+        String message = ex instanceof ClientSafeAccessDeniedException && ex.getMessage() != null
+            ? ex.getMessage()
+            : "Access denied";
+        return buildErrorResponse(HttpStatus.FORBIDDEN, message, req);
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Object> handleMaxUploadSize(MaxUploadSizeExceededException ex, WebRequest request) {
         log.warn("File upload too large: {}", ex.getMessage());
-        return buildErrorResponse(HttpStatus.PAYLOAD_TOO_LARGE, "File size exceeds the maximum allowed limit of 5MB", request);
+        return buildErrorResponse(HttpStatus.PAYLOAD_TOO_LARGE, "File size exceeds the maximum allowed limit of "
+                + com.example.hms.service.FileUploadService.MAX_UPLOAD_LABEL, request);
     }
 
 

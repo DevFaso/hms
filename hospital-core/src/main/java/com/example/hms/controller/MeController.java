@@ -4,7 +4,10 @@ import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.User;
-import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.exception.HospitalScopeRefusedException;
+import com.example.hms.security.PrincipalUserIds;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.DashboardConfigResponseDTO;
 import com.example.hms.payload.dto.StaffResponseDTO;
@@ -35,8 +38,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -51,7 +52,6 @@ import org.springframework.format.annotation.DateTimeFormat.ISO;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 @RestController
@@ -70,6 +70,7 @@ public class MeController {
     private final PatientFlowService patientFlowService;
     private final ResultReviewService resultReviewService;
     private final PatientSnapshotService patientSnapshotService;
+    private final ActingScopeResolver actingScopeResolver;
 
     public record HospitalMinimalDTO(UUID id, String name) {
     }
@@ -99,8 +100,12 @@ public class MeController {
     @Transactional(readOnly = true)
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<HospitalMinimalDTO> myHospital(Authentication auth) {
-        UUID hospitalId = resolveHospitalId(auth)
-                .orElseThrow(() -> new BusinessException("Unable to resolve hospital from your context."));
+        UUID hospitalId = actingScopeResolver.current() instanceof ActingScope.Pinned pinned
+                ? pinned.hospitalId()
+                : null;
+        if (hospitalId == null) {
+            throw new BusinessException("Unable to resolve hospital from your context.");
+        }
 
         Hospital h = hospitalRepository.findById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
@@ -253,110 +258,65 @@ public class MeController {
     }
 
     @Operation(summary = "Get lab/imaging results review queue",
-               description = "Scoped to the hospital the caller is acting at, resolved as X-Hospital-Id and then the "
-                   + "caller's newest active assignment. A caller with a staff row for whom neither resolves is "
-                   + "refused with 404 rather than served that clinician's orders from every hospital, because a "
-                   + "cross-hospital disclosure cannot be recorded without an acting hospital to record it against. "
-                   + "Note that a super-admin in global view who also holds a clinical assignment is scoped to it by "
-                   + "the fallback and is never refused.")
+               description = "Scoped to the hospital the caller is acting at: the X-Hospital-Id hospital, or the only "
+                   + "one they hold. A caller with a staff row and no such hospital is refused with 404 rather than "
+                   + "served that clinician's orders from every hospital, because a cross-hospital disclosure cannot "
+                   + "be recorded without an acting hospital to record it against. A super-admin in global view is "
+                   + "asked to select a hospital (403).")
     @GetMapping("/results/review-queue")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON')")
     public ResponseEntity<ApiResponseWrapper<List<DoctorResultQueueItemDTO>>> getResultReviewQueue(Authentication auth) {
         UUID userId = resolveUserId(auth);
         // The same resolution getPatientSnapshot below uses: one scope for the
-        // whole controller, so two panels on one page cannot disagree about
+        // whole platform, so two panels on one page cannot disagree about
         // which hospital the caller is at.
-        UUID hospitalId = resolveHospitalId(auth).orElse(null);
+        UUID hospitalId = perPatientScope();
         List<DoctorResultQueueItemDTO> items = resultReviewService.getResultReviewQueue(userId, hospitalId);
         return ResponseEntity.ok(ApiResponseWrapper.success(items));
     }
 
     @Operation(summary = "Get compact patient snapshot for drawer",
-               description = "Requires a hospital scope, resolved as X-Hospital-Id and then the caller's newest "
-                   + "active assignment. A caller for whom neither resolves is refused with 404, with the same "
-                   + "answer a missing patient gives, rather than served the patient's record from every tenant "
-                   + "with no disclosure recorded. A restricted chart is refused with 403. Note that a super-admin "
-                   + "in global view who also holds a clinical assignment is scoped to it by the fallback and is "
-                   + "never refused.")
+               description = "Requires a hospital scope: the X-Hospital-Id hospital, or the only one the caller "
+                   + "holds. A caller with none is refused with 404, with the same answer a missing patient gives, "
+                   + "rather than served the patient's record from every tenant with no disclosure recorded. A "
+                   + "restricted chart is refused with 403. A super-admin in global view is asked to select a "
+                   + "hospital (403) instead of being told the patient does not exist.")
     @GetMapping("/patients/{patientId}/snapshot")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<ApiResponseWrapper<PatientSnapshotDTO>> getPatientSnapshot(
             @PathVariable UUID patientId, Authentication auth) {
-        UUID hospitalId = resolveHospitalId(auth).orElse(null);
+        UUID hospitalId = perPatientScope();
         PatientSnapshotDTO snapshot = patientSnapshotService.getSnapshot(patientId, hospitalId);
         return ResponseEntity.ok(ApiResponseWrapper.success(snapshot));
     }
 
     /* ---------- Resolution chain ---------- */
     /**
-     * The one scope resolution for this controller. Both {@code /results/review-queue}
-     * and {@code /patients/{id}/snapshot} refuse when it comes back empty, so what it
-     * does on the way there is part of their contract.
+     * The hospital a per-patient read acts at (design Q1, option B). Both
+     * {@code /results/review-queue} and {@code /patients/{id}/snapshot} refuse
+     * when it is {@code null}, with the 404 a missing patient gives.
      *
-     * <p>Worth being exact, because "a super-admin in global view is refused" is the
-     * obvious reading and it is wrong: step 2 falls back to the caller's <b>newest</b>
-     * active assignment ({@code findAllDetailedByUserId} is {@code ORDER BY createdAt
-     * DESC}), and it does that for a super-admin too. So a platform admin who also
-     * holds any clinical assignment is silently scoped to it rather than refused, and
-     * only one with no assignment at all — or an ordinary caller whose context carries
-     * no active hospital and who has no active assignment either — reaches the guards.
+     * <p>It used to fall back to the caller's NEWEST active assignment, a
+     * super-admin included: a platform admin holding any clinical assignment
+     * was silently scoped to it, and the snapshot's by-design 404 then told
+     * them a patient registered elsewhere did not exist (D3). A super-admin in
+     * global view is now asked to select a hospital instead.
      */
-    private Optional<UUID> resolveHospitalId(Authentication auth) {
-        // 1) The request context: live permitted set + X-Hospital-Id (E9 #55).
-        //    A super-admin in global view carries no active hospital here on
-        //    purpose; only an explicit header scope pins them.
-        UUID active = HospitalContextHolder.getContextOrEmpty().pinnedHospitalId();
-        if (active != null) {
-            return Optional.of(active);
-        }
-        // 2) Most recent active assignment for the user
-        return activeAssignmentHospital(auth);
-    }
-
-    private Optional<UUID> activeAssignmentHospital(Authentication auth) {
-        UUID userId = tryUserIdFromJwt(auth).orElse(null);
-        if (userId == null) {
-            String principal = (auth != null ? auth.getName() : null);
-            if (principal != null && !principal.isBlank()) {
-                userId = userRepository
-                        .findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(principal, principal, principal)
-                        .map(User::getId)
-                        .orElse(null);
-            }
-        }
-        if (userId == null)
-            return Optional.empty();
-
-        return assignmentRepository.findAllDetailedByUserId(userId).stream()
-                .filter(a -> Boolean.TRUE.equals(a.getActive()))
-                .filter(a -> a.getHospital() != null)
-                .map(a -> a.getHospital().getId())
-                .findFirst();
-    }
-
-    private Optional<UUID> tryUserIdFromJwt(Authentication auth) {
-        if (auth instanceof JwtAuthenticationToken jat) {
-            Jwt jwt = jat.getToken();
-            // Try uid claim first (set by JwtTokenProvider), then sub
-            for (String claim : List.of("uid", "userId", "id", "sub")) {
-                String raw = jwt.getClaimAsString(claim);
-                if (raw != null && !raw.isBlank()) {
-                    try {
-                        return Optional.of(UUID.fromString(raw));
-                    } catch (RuntimeException ignored) {
-                        // not a UUID — try next claim key
-                    }
-                }
-            }
-        }
-        return Optional.empty();
+    private UUID perPatientScope() {
+        return switch (actingScopeResolver.current()) {
+            case ActingScope.Pinned pinned -> pinned.hospitalId();
+            case ActingScope.Global global -> throw new HospitalScopeRefusedException(
+                "Select a hospital: a patient's record is read at one hospital, and this request is in global view.");
+            case ActingScope.Refused refused -> null;
+            case ActingScope.PatientOwned owned -> throw HospitalScopeRefusedException.patientOwned();
+        };
     }
 
     /**
      * Resolve the current user ID from authentication
      */
     private UUID resolveUserId(Authentication auth) {
-        return tryUserIdFromJwt(auth)
+        return PrincipalUserIds.of(auth)
                 .orElseGet(() -> {
                     String principal = (auth != null ? auth.getName() : null);
                     if (principal != null && !principal.isBlank()) {

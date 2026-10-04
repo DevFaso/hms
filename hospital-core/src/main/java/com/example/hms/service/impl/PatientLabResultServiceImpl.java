@@ -99,9 +99,15 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
                                                             boolean portalView) {
         log.info("Fetching lab results for patient {} in hospital {}", patientId, hospitalId);
 
-        // See PatientChartAccess — cross-hospital safe, and adds the hospital
-        // authorization this read previously relied on the finder for.
-        Patient patient = patientChartAccess.require(patientId, hospitalId);
+        // Staff: the chart gate — cross-hospital safe, and the hospital
+        // authorization this read previously relied on the finder for. Portal:
+        // the caller already established whose record it is, and the staff
+        // gate is the wrong question for the patient themselves (with a scope
+        // it refuses a patient their own restricted chart, and with none it
+        // refuses a proxy) — see PatientChartAccess.requireOwnRecord.
+        Patient patient = portalView
+            ? patientChartAccess.requireOwnRecord(patientId)
+            : patientChartAccess.require(patientId, hospitalId);
 
         int effectiveLimit = limit > 0 ? Math.min(limit, MAX_LIMIT) : DEFAULT_LIMIT;
         // Read the caller's limit first. If the pairing then removes rows —
@@ -117,8 +123,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         List<LabResult> visible = resolvePairs(results, portalView, effectiveLimit);
         // Only worth reading again if there are rows we have not seen AND the
         // wider read would actually be wider — at the cap it would repeat the
-        // identical query, and on the unscoped path that means loading the
-        // patient's whole result set a second time for nothing.
+        // identical query for nothing.
         if (visible.size() < effectiveLimit
             && results.size() >= effectiveLimit
             && effectiveLimit < MAX_LIMIT) {
@@ -126,14 +131,26 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             visible = resolvePairs(results, portalView, effectiveLimit);
         }
 
-        if (hospitalId != null) {
-            // Accounted on what the patient is actually shown, not on the wider
-            // window the pairing needed.
+        if (!portalView && hospitalId != null) {
+            // Accounted on what the staff caller is actually shown, not on the
+            // wider window the pairing needed. Never on the portal: the patient
+            // reading their own results, from every hospital, discloses
+            // nothing to anyone. On the staff path a row this hospital's
+            // laboratory performed for another hospital is its own disclosure
+            // reason (#751) and is counted there alone.
             UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+            java.util.function.Predicate<LabResult> performedHere =
+                r -> !portalView && CrossHospitalReachRecorder.isPerformedHere(r, hospitalId);
             reachRecorder.recordReach(patient.getId(), hospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(
-                    visible.stream().map(r -> hospitalIdOf(r.getLabOrder())).toList(), hospitalId),
+                    visible.stream().filter(performedHere.negate())
+                        .map(r -> hospitalIdOf(r.getLabOrder())).toList(), hospitalId),
                 "Cross-hospital lab result read on the treatment relationship");
+            reachRecorder.recordReach(patient.getId(), hospitalId, requesterUserId, null,
+                CrossHospitalReachRecorder.reachOf(
+                    visible.stream().filter(performedHere)
+                        .map(r -> hospitalIdOf(r.getLabOrder())).toList(), hospitalId),
+                CrossHospitalReachRecorder.LAB_RESULT_PERFORMED_HERE_DESCRIPTION);
         }
 
         return visible.stream()
@@ -145,14 +162,24 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
      * The newest {@code window} rows for this patient, within the readable
      * hospitals when a hospital scope is in play.
      *
-     * <p>With no hospital scope there are exactly two cases and they are not
-     * the same: the portal, where the patient owns every row and the
-     * patient-only query is correct, and a staff read whose scope failed to
-     * resolve, which is refused.
+     * <p>The portal (the patient's own record) always reads every row of the
+     * patient, whatever hospital id it passes. A staff read is scoped to the
+     * readable hospitals, and a staff read with no scope is refused.
      */
     private List<LabResult> fetchRows(Patient patient, UUID hospitalId, int window, boolean portalView) {
-        Pageable pageable = PageRequest.of(0, window, Sort.by(Sort.Direction.DESC, "resultDate"));
+        // id breaks resultDate ties: the second, wider read must put the same
+        // rows first, or a tie at the boundary could swap between the two.
+        Pageable pageable = PageRequest.of(0, window, Sort.by(Sort.Direction.DESC, "resultDate", "id"));
         List<LabResult> results;
+        if (portalView) {
+            // Patient portal: the caller IS the patient (or a proxy the portal
+            // already authorized) and every row belongs to them, from every
+            // hospital. The hospital id the portal resolved is deliberately NOT
+            // a scope: scoping it made the patient a staff reader of their own
+            // chart (foreign rows dropped by consent or restriction). Newest
+            // first, limited at the database; resultDate is NOT NULL.
+            return labResultRepository.findAllPatientResults(patient.getId(), pageable);
+        }
         if (hospitalId != null) {
             Hospital hospital = hospitalRepository.findById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
@@ -161,9 +188,14 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             // foreign row surfaced is accounted.
             UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patient.getId(), hospital.getId());
+            // #751 on the staff path: a result is readable where its order is
+            // handled, so staff also see what this hospital's own laboratory
+            // performed for another hospital. (Portal already returned above,
+            // reading every row the patient has from every hospital,
+            // unscoped.)
             results = labResultRepository
-                .findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(patient.getId(), readable, pageable);
-        } else if (!portalView) {
+                .findPatientResultsReadableAt(patient.getId(), readable, hospital.getId(), false, pageable);
+        } else {
             // A staff read with no hospital scope. This used to fall through to
             // the patient-only query below, which returns EVERY hospital's rows
             // for the patient: RecordAccessPolicy.readableHospitalIds never ran,
@@ -203,19 +235,6 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             log.warn("Staff lab-result read refused: no hospital scope resolved for patient {}",
                 patient.getId());
             throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patient.getId());
-        } else {
-            // Patient portal only: the caller IS the patient (or a proxy the
-            // portal already authorized), the portal has no hospital scope to
-            // offer, and every row belongs to them. Patient-only query.
-            results = labResultRepository.findByLabOrder_Patient_Id(patient.getId()).stream()
-                .sorted((a, b) -> {
-                    if (a.getResultDate() == null && b.getResultDate() == null) return 0;
-                    if (a.getResultDate() == null) return 1;
-                    if (b.getResultDate() == null) return -1;
-                    return b.getResultDate().compareTo(a.getResultDate());
-                })
-                .limit(window)
-                .toList();
         }
         return results;
     }
@@ -240,13 +259,10 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             return results.stream().limit(limit).toList();
         }
 
-        List<LabResult> survivors = new java.util.ArrayList<>(results.size());
         Set<UUID> present = new java.util.HashSet<>();
-        for (LabResult result : results) {
-            if (!replacements.containsKey(result.getId()) && present.add(result.getId())) {
-                survivors.add(result);
-            }
-        }
+        List<LabResult> survivors = new java.util.ArrayList<>(results.stream()
+            .filter(result -> !replacements.containsKey(result.getId()) && present.add(result.getId()))
+            .toList());
         // Only the rows on this page can pull a survivor in with them; a
         // sibling fetched purely to judge them is not something the patient
         // asked for.
@@ -259,13 +275,11 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         // them adjacent, so a tie can fall either side of the edge — and
         // dropping one without adding the other would take the test out of the
         // patient's view altogether.
-        for (LabResult winner : pageWinners) {
-            if (winner.getId() != null
+        survivors.addAll(pageWinners.stream()
+            .filter(winner -> winner.getId() != null
                 && !replacements.containsKey(winner.getId())
-                && present.add(winner.getId())) {
-                survivors.add(winner);
-            }
-        }
+                && present.add(winner.getId()))
+            .toList());
         survivors.sort(NEWEST_FIRST);
         return survivors.stream().limit(limit).toList();
     }
@@ -300,7 +314,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         return response
             .value(result.getResultValue())
             .unit(unit)
-            .referenceRange(formatReferenceRange(mapped != null ? mapped.getReferenceRanges() : null, unit))
+            .referenceRange(formatReferenceRange(labResultMapper.gradedReferenceRange(result)))
             .performedBy(resolveAssignmentUser(result.getAssignment()))
             .notes(result.getNotes())
             .build();
@@ -488,18 +502,27 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         return null;
     }
 
-    private String formatReferenceRange(List<LabResultReferenceRangeDTO> ranges, String fallbackUnit) {
-        if (ranges == null || ranges.isEmpty()) {
+    /**
+     * The range the row was graded against — {@link LabResultMapper#gradedReferenceRange},
+     * the same selection that produced its severity — labelled ONLY with the
+     * unit configured on that range.
+     *
+     * <p>This used to format the first configured range whatever the grading
+     * had picked, and to stamp the RESULT's unit onto a range that carried
+     * none. The first showed a value graded in mmol/L beside mg/dL limits; the
+     * second asserted a unit nobody configured, and made the mismatch
+     * undetectable to a client that checks the displayed unit against the
+     * row's. A unitless range is therefore shown as bare numbers: the limits
+     * are real, the unit is not known, and a client can see that it is not.
+     */
+    private String formatReferenceRange(LabResultReferenceRangeDTO range) {
+        if (range == null) {
             return null;
         }
-        LabResultReferenceRangeDTO range = ranges.get(0);
         Double min = range.getMinValue();
         Double max = range.getMaxValue();
         String unit = range.getUnit();
-        if (unit == null || unit.isBlank()) {
-            unit = fallbackUnit;
-        }
-        String unitSuffix = unit != null && !unit.isBlank() ? " " + unit : "";
+        String unitSuffix = unit != null && !unit.isBlank() ? " " + unit.trim() : "";
 
         if (min != null && max != null) {
             return formatNumber(min) + " - " + formatNumber(max) + unitSuffix;

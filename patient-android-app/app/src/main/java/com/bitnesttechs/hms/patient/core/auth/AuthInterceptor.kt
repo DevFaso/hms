@@ -13,6 +13,7 @@ import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
 import com.bitnesttechs.hms.patient.BuildConfig
+import com.bitnesttechs.hms.patient.core.network.AcceptLanguageInterceptor
 import com.bitnesttechs.hms.patient.core.network.ApiService
 import com.squareup.moshi.Moshi
 
@@ -25,7 +26,8 @@ import com.squareup.moshi.Moshi
 class AuthInterceptor @Inject constructor(
     private val tokenStorage: TokenStorage,
     private val moshi: Moshi,
-    private val keycloakAuthServiceProvider: Provider<KeycloakAuthService>
+    private val keycloakAuthServiceProvider: Provider<KeycloakAuthService>,
+    private val acceptLanguage: AcceptLanguageInterceptor
 ) : Interceptor {
 
     private val refreshMutex = Mutex()
@@ -36,7 +38,9 @@ class AuthInterceptor @Inject constructor(
         Retrofit.Builder()
             .baseUrl(BuildConfig.API_BASE_URL + "/")
             .client(
-                okhttp3.OkHttpClient.Builder().build() // plain client — no interceptor
+                // No auth interceptor (that is the point of this client), but the
+                // language still goes out: a refusal's message is shown.
+                okhttp3.OkHttpClient.Builder().addInterceptor(acceptLanguage).build()
             )
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
@@ -44,6 +48,14 @@ class AuthInterceptor @Inject constructor(
     }
 
     override fun intercept(chain: Interceptor.Chain): Response {
+        // A request that carries its own bearer (sign-out, which captured the
+        // token before clearing the session) goes out exactly as built: no
+        // token from storage, and no refresh on a 401 — a refresh there would
+        // loop or bring the session it is ending back to life.
+        if (chain.request().header("Authorization") != null) {
+            return chain.proceed(chain.request())
+        }
+
         // Prefer the Keycloak OIDC access token when a Keycloak session is active
         // (KC-3). Falls back to the legacy username/password access token otherwise.
         val oidcToken = tokenStorage.oidcAccessToken

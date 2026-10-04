@@ -49,8 +49,10 @@ struct AppointmentDTO: Codable, Identifiable, Hashable {
         return "\(fmt(s)) – \(fmt(e))"
     }
 
+    /// In the app's language (`PORTAL.ENUM.APPOINTMENT_STATUS`), never the
+    /// wire value: `.capitalized` turned NO_SHOW into "No_show".
     var statusDisplay: String {
-        status?.capitalized ?? "Unknown"
+        EnumLabel.label(.appointmentStatus, status) ?? EnumLabel.text(.appointmentStatus, "UNKNOWN")
     }
 
     var statusColor: String {

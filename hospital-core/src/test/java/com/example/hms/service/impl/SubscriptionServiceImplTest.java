@@ -358,7 +358,7 @@ class SubscriptionServiceImplTest {
 
         assertThatThrownBy(() -> service.assignPlan(orgId, req))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("SubscriptionPlan not found");
+            .hasFieldOrPropertyWithValue("messageKey", "subscription.plan.notFound");
     }
 
     @Test

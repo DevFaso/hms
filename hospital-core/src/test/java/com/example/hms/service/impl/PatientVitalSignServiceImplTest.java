@@ -60,6 +60,15 @@ class PatientVitalSignServiceImplTest {
     @Mock
     private PatientVitalSignRepository vitalSignRepository;
 
+    @Mock
+    private com.example.hms.service.support.PatientChartAccess patientChartAccess;
+
+    @Mock
+    private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+
+    @Mock
+    private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+
     private PatientVitalSignServiceImpl service;
 
     private final PatientVitalSignMapper mapper = new PatientVitalSignMapper();
@@ -73,7 +82,10 @@ class PatientVitalSignServiceImplTest {
             staffRepository,
             assignmentRepository,
             vitalSignRepository,
-            mapper
+            mapper,
+            patientChartAccess,
+            recordAccessPolicy,
+            reachRecorder
         );
     }
 
@@ -324,7 +336,7 @@ class PatientVitalSignServiceImplTest {
 
         assertThatThrownBy(() -> service.recordVital(patientId, request, recorderUserId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Assignment not found");
+            .hasFieldOrPropertyWithValue("messageKey", "roleAssignment.notFound");
     }
 
     @Test
@@ -351,7 +363,7 @@ class PatientVitalSignServiceImplTest {
         UUID randomId = UUID.randomUUID();
         assertThatThrownBy(() -> service.recordVital(patientId, request, randomId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Staff not found or inactive");
+            .hasFieldOrPropertyWithValue("messageKey", "staff.not.found.or.inactive");
     }
 
     @Test
@@ -372,49 +384,108 @@ class PatientVitalSignServiceImplTest {
         UUID randomId = UUID.randomUUID();
         assertThatThrownBy(() -> service.recordVital(patientId, request, randomId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Registration not found");
+            .hasFieldOrPropertyWithValue("messageKey", "registration.notFound");
     }
 
     @Test
-    void getRecentVitalsFallsBackToPatientOnlyWhenHospitalMissing() {
+    void getRecentVitals_staffWithNoHospitalScope_refusesInsteadOfReadingEveryHospital() {
         UUID patientId = UUID.randomUUID();
-        int limit = 0;
+        when(patientChartAccess.require(patientId, null)).thenReturn(minimalPatient(patientId));
+        // Stubbed so the test would SEE the leak if the fallback ever ran again.
+        org.mockito.Mockito.lenient().when(vitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(any(), any()))
+            .thenReturn(List.of(PatientVitalSign.builder().build()));
+
+        assertThatThrownBy(() -> service.getRecentVitals(patientId, null, 5))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
+            .isEqualTo("patient.notFound");
+
+        verify(vitalSignRepository, never()).findByPatient_IdOrderByRecordedAtDesc(any(), any());
+        org.mockito.Mockito.verifyNoInteractions(reachRecorder, recordAccessPolicy);
+    }
+
+    @Test
+    void getRecentVitals_staffRead_goesThroughTheChartGateFirst() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        when(patientChartAccess.require(patientId, hospitalId))
+            .thenThrow(new ResourceNotFoundException("patient.notFound", patientId));
+
+        assertThatThrownBy(() -> service.getRecentVitals(patientId, hospitalId, 5))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        org.mockito.Mockito.verifyNoInteractions(vitalSignRepository);
+    }
+
+    @Test
+    void getRecentVitals_readsTheReadableHospitalsAndAccountsTheForeignRows() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID otherHospitalId = UUID.randomUUID();
+        Patient patient = minimalPatient(patientId);
+        PatientVitalSign local = PatientVitalSign.builder()
+            .patient(patient).hospital(minimalHospital(hospitalId)).recordedAt(LocalDateTime.now()).build();
+        local.setId(UUID.randomUUID());
+        PatientVitalSign foreign = PatientVitalSign.builder()
+            .patient(patient).hospital(minimalHospital(otherHospitalId)).recordedAt(LocalDateTime.now().minusHours(1)).build();
+        foreign.setId(UUID.randomUUID());
+        when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
+        when(recordAccessPolicy.readableHospitalIds(any(), org.mockito.ArgumentMatchers.eq(patientId),
+            org.mockito.ArgumentMatchers.eq(hospitalId))).thenReturn(java.util.Set.of(hospitalId, otherHospitalId));
+        when(vitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(patientId,
+            java.util.Set.of(hospitalId, otherHospitalId), PageRequest.of(0, 3)))
+            .thenReturn(List.of(local, foreign));
+
+        List<PatientVitalSignResponseDTO> responses = service.getRecentVitals(patientId, hospitalId, 3);
+
+        assertThat(responses).extracting(PatientVitalSignResponseDTO::getHospitalId)
+            .containsExactly(hospitalId, otherHospitalId);
+        verify(reachRecorder).recordReach(org.mockito.ArgumentMatchers.eq(patientId),
+            org.mockito.ArgumentMatchers.eq(hospitalId), any(), org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.eq(java.util.Map.of(otherHospitalId.toString(), 1L)),
+            org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void getRecentVitalsForPatientPortal_readsThePatientsOwnRows_withoutTheStaffGate() {
+        UUID patientId = UUID.randomUUID();
         PatientVitalSign vitalSign = PatientVitalSign.builder()
             .patient(minimalPatient(patientId))
             .recordedAt(LocalDateTime.now())
             .build();
         vitalSign.setId(UUID.randomUUID());
-
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(minimalPatient(patientId));
         when(vitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(patientId, PageRequest.of(0, 1)))
             .thenReturn(List.of(vitalSign));
 
-        List<PatientVitalSignResponseDTO> responses = service.getRecentVitals(patientId, null, limit);
+        List<PatientVitalSignResponseDTO> responses = service.getRecentVitalsForPatientPortal(patientId, 0);
 
         assertThat(responses).hasSize(1);
         assertThat(responses.get(0).getPatientId()).isEqualTo(patientId);
+        verify(patientChartAccess, never()).require(any(), any());
+        org.mockito.Mockito.verifyNoInteractions(reachRecorder);
     }
 
     @Test
-    void getRecentVitalsFiltersByHospital() {
+    void getVitals_staffWithNoHospitalScope_refusesBeforeTheRangeQuery() {
+        UUID patientId = UUID.randomUUID();
+        when(patientChartAccess.require(patientId, null)).thenReturn(minimalPatient(patientId));
+
+        assertThatThrownBy(() -> service.getVitals(patientId, null, null, null, 0, 20))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(vitalSignRepository, never()).findWithinRange(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void getVitals_scopedRead_isGatedAndStaysAtTheCallersHospital() {
         UUID patientId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
+        when(patientChartAccess.require(patientId, hospitalId)).thenReturn(minimalPatient(patientId));
+        when(vitalSignRepository.findWithinRange(patientId, hospitalId, null, null, PageRequest.of(0, 20)))
+            .thenReturn(List.of());
 
-        Patient patient = minimalPatient(patientId);
-        Hospital hospital = minimalHospital(hospitalId);
-        PatientVitalSign vitalSign = PatientVitalSign.builder()
-            .patient(patient)
-            .hospital(hospital)
-            .recordedAt(LocalDateTime.now())
-            .build();
-        vitalSign.setId(UUID.randomUUID());
-
-        when(vitalSignRepository.findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId, PageRequest.of(0, 3)))
-            .thenReturn(List.of(vitalSign));
-
-        List<PatientVitalSignResponseDTO> responses = service.getRecentVitals(patientId, hospitalId, 3);
-
-        assertThat(responses).hasSize(1);
-        assertThat(responses.get(0).getHospitalId()).isEqualTo(hospitalId);
+        assertThat(service.getVitals(patientId, hospitalId, null, null, 0, 20)).isEmpty();
     }
 
     @Test

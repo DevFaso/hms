@@ -17,12 +17,13 @@ import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { currentLocale } from '../shared/i18n/app-locale';
 
 @Component({
   selector: 'app-scheduling',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, RoleLabelPipe],
   templateUrl: './scheduling.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './scheduling.scss',
@@ -404,14 +405,6 @@ export class SchedulingComponent implements OnInit {
       month: 'short',
       day: 'numeric',
     });
-  }
-
-  formatShiftType(type: string): string {
-    return type.charAt(0) + type.slice(1).toLowerCase();
-  }
-
-  formatLeaveType(type: string): string {
-    return type.charAt(0) + type.slice(1).toLowerCase();
   }
 
   shiftTypeIcon(type: string): string {

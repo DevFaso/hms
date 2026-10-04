@@ -88,16 +88,13 @@ public class EligibilityServiceImpl implements EligibilityService {
             throw new BusinessException("EligibilityCheckRequest is required");
         }
         Patient patient = patientRepository.findById(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Patient not found: " + request.getPatientId()));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Hospital not found: " + request.getHospitalId()));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
         PatientInsurance insurance = null;
         if (request.getPatientInsuranceId() != null) {
             insurance = patientInsuranceRepository.findById(request.getPatientInsuranceId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                    "PatientInsurance not found: " + request.getPatientInsuranceId()));
+                .orElseThrow(() -> new ResourceNotFoundException("patientinsurance.notfound", request.getPatientInsuranceId()));
             if (insurance.getPatient() != null
                 && !insurance.getPatient().getId().equals(patient.getId())) {
                 throw new BusinessException(
@@ -188,8 +185,7 @@ public class EligibilityServiceImpl implements EligibilityService {
     public EligibilityResponseDTO get(UUID checkId) {
         return checkRepository.findById(checkId)
             .map(this::toDto)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "EligibilityCheck not found: " + checkId));
+            .orElseThrow(() -> new ResourceNotFoundException("eligibilityCheck.notFound", checkId));
     }
 
     @Override

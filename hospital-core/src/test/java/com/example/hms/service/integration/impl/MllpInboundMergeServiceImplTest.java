@@ -8,6 +8,7 @@ import com.example.hms.exception.BusinessException;
 import com.example.hms.model.Hospital;
 import com.example.hms.payload.dto.empi.EmpiIdentityResponseDTO;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
+import com.example.hms.service.empi.EmpiAuthorisedMergePort;
 import com.example.hms.service.empi.EmpiService;
 import com.example.hms.service.integration.MllpInboundOutcome;
 import com.example.hms.service.integration.message.IntegrationMessageRecorder;
@@ -30,6 +31,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -38,12 +40,17 @@ import static org.mockito.Mockito.when;
 /**
  * Inbound {@code ADT^A40} patient merge (Tier 2 item 41).
  *
- * <p><b>The cross-tenant tests are the point of this class.</b> Every tenant
- * guard inside {@code EmpiServiceImpl} resolves the caller's hospital from the
- * security context, and {@code isVisibleToCaller} reads a null active hospital
- * as "unscoped, allow". There is no security context on an MLLP worker thread,
- * so those guards pass unconditionally on this path — the gate has to live
- * here, and these pin that it does.
+ * <p><b>The cross-tenant tests are the point of this class.</b> EMPI's
+ * request-scoped merge resolves the caller's hospital from the security
+ * context, and there is none on an MLLP worker thread, so nothing EMPI could
+ * read there says which patients a sender may merge. The gate lives here;
+ * these pin that it does, and that the merge it lets through is handed the
+ * receiving hospital explicitly ({@code mergePatientsAtAuthorisedHospital})
+ * rather than sent to the request-scoped {@code mergePatients}.
+ *
+ * <p>EMPI is mocked here, so none of this proves the merge actually applies
+ * on a context-free thread; {@code AdtA40MergeEndToEndIT} runs the real chain
+ * for that.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -52,6 +59,7 @@ class MllpInboundMergeServiceImplTest {
     @Mock private EmpiService empiService;
     @Mock private PatientHospitalRegistrationRepository registrationRepository;
     @Mock private IntegrationMessageRecorder messageRecorder;
+    @Mock private EmpiAuthorisedMergePort authorisedMerge;
 
     private MllpInboundMergeServiceImpl service;
 
@@ -66,7 +74,7 @@ class MllpInboundMergeServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new MllpInboundMergeServiceImpl(
-            empiService, registrationRepository, messageRecorder);
+            empiService, registrationRepository, messageRecorder, authorisedMerge);
 
         hospitalId = UUID.randomUUID();
         hospital = new Hospital();
@@ -82,9 +90,15 @@ class MllpInboundMergeServiceImplTest {
     }
 
     private void empiKnows(String mrn, UUID patientId) {
+        empiKnows(mrn, patientId, hospitalId);
+    }
+
+    /** Known to EMPI, with its master identity owned (stamped) by {@code owner}. */
+    private void empiKnows(String mrn, UUID patientId, UUID owner) {
         // @Value @Builder — immutable, no setters.
         EmpiIdentityResponseDTO dto = EmpiIdentityResponseDTO.builder()
             .patientId(patientId)
+            .hospitalId(owner)
             .build();
         when(empiService.findIdentityByAlias(EmpiAliasType.MRN, mrn)).thenReturn(Optional.of(dto));
     }
@@ -114,8 +128,11 @@ class MllpInboundMergeServiceImplTest {
         assertThat(process()).isEqualTo(MllpInboundOutcome.ACCEPTED);
 
         // Argument ORDER is the whole risk: primary (survivor) first.
-        verify(empiService).mergePatients(
-            eq(survivingPatientId), eq(retiringPatientId), any(), anyString());
+        verify(authorisedMerge).mergePatientsAtAuthorisedHospital(
+            eq(hospitalId), eq(survivingPatientId), eq(retiringPatientId), any(), anyString());
+        // Never the request-scoped entry point: it has no scope to resolve on
+        // this thread and refuses every merge.
+        verify(empiService, never()).mergePatients(any(), any(), any(), any());
     }
 
     @Test
@@ -128,7 +145,7 @@ class MllpInboundMergeServiceImplTest {
         process();
 
         ArgumentCaptor<EmpiMergeType> type = ArgumentCaptor.forClass(EmpiMergeType.class);
-        verify(empiService).mergePatients(any(), any(), type.capture(), anyString());
+        verify(authorisedMerge).mergePatientsAtAuthorisedHospital(any(), any(), any(), type.capture(), anyString());
         // No human made this call and the merge event must not read as
         // though one did — mergedBy is null on this path.
         assertThat(type.getValue()).isEqualTo(EmpiMergeType.AUTOMATED);
@@ -144,7 +161,7 @@ class MllpInboundMergeServiceImplTest {
         process();
 
         ArgumentCaptor<String> notes = ArgumentCaptor.forClass(String.class);
-        verify(empiService).mergePatients(any(), any(), any(), notes.capture());
+        verify(authorisedMerge).mergePatientsAtAuthorisedHospital(any(), any(), any(), any(), notes.capture());
         // mergedBy is null on an MLLP thread, so this note is the merge row's
         // only provenance.
         assertThat(notes.getValue())
@@ -153,6 +170,21 @@ class MllpInboundMergeServiceImplTest {
             .contains(PRIOR_MRN)
             .contains(SURVIVING_MRN)
             .contains("MSG-A40-1");
+    }
+
+    @Test
+    void everySenderValueInTheNotesIsQuotedSoNoneCanWriteTheNextSlot() {
+        // The note is persisted text an operator reads as ours. Each value in
+        // it is the sender's: quoted, escaped, never able to end its slot.
+        String esc = String.valueOf((char) 0x1B);
+        String lineSeparator = String.valueOf((char) 0x2028);
+        String notes = MllpInboundMergeServiceImpl.buildNotes(
+            "S\"1", "P\n1", "LIS" + esc + "[2J", "HOSP1", "  M) merged into X" + lineSeparator + "  ");
+
+        assertThat(notes).isEqualTo("HL7 ADT^A40 from \"LIS\\u001b[2J\"/\"HOSP1\": MRN \"P\\u000a1\" "
+            + "merged into \"S\\\"1\" (MSH-10 \"M) merged into X\\u2028\")");
+        assertThat(MllpInboundMergeServiceImpl.buildNotes("S", "P", "LIS", "HOSP1", null))
+            .isEqualTo("HL7 ADT^A40 from \"LIS\"/\"HOSP1\": MRN \"P\" merged into \"S\"");
     }
 
     /* ── The cross-tenant gate ───────────────────────────────────────── */
@@ -168,7 +200,7 @@ class MllpInboundMergeServiceImplTest {
         // sender could otherwise pair its own local MRN with any candidate
         // identifier and read off whether that candidate exists elsewhere.
         assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
-        verify(empiService, never()).mergePatients(any(), any(), any(), anyString());
+        verify(authorisedMerge, never()).mergePatientsAtAuthorisedHospital(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -181,7 +213,7 @@ class MllpInboundMergeServiceImplTest {
         registeredHere(retiringPatientId, false);
 
         assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
-        verify(empiService, never()).mergePatients(any(), any(), any(), anyString());
+        verify(authorisedMerge, never()).mergePatientsAtAuthorisedHospital(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -236,6 +268,72 @@ class MllpInboundMergeServiceImplTest {
             any(), any(), any(), any(), any(), any(), any(), any());
     }
 
+    /* ── Ownership: registered here, but the identity is another hospital's ── */
+
+    @Test
+    void aPairRegisteredHereButOwnedElsewhereIsATerminalRefusalNotAMerge() {
+        // A referred patient: registered at the receiving hospital, so the
+        // gate passes, but its master identity is stamped with its home
+        // hospital, which EMPI would refuse on every retry.
+        empiKnows(SURVIVING_MRN, survivingPatientId);
+        empiKnows(PRIOR_MRN, retiringPatientId, UUID.randomUUID());
+        registeredHere(survivingPatientId, true);
+        registeredHere(retiringPatientId, true);
+
+        assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_NOT_OWNER);
+        verify(authorisedMerge, never()).mergePatientsAtAuthorisedHospital(any(), any(), any(), any(), any());
+        verify(messageRecorder).recordMessage(
+            eq("MLLP:LIS/HOSP1"), any(),
+            eq(IntegrationMessageDirection.INBOUND),
+            eq("ADT^A40"), isNull(),
+            eq(IntegrationMessageStatus.FAILED),
+            eq(MllpInboundMergeServiceImpl.REASON_NOT_OWNER + " (MSH-10 \"MSG-A40-1\")"),
+            any());
+    }
+
+    @Test
+    void anUnstampedIdentityIsNotOwnedHereEither() {
+        // A legacy identity with no hospital stamp: EMPI admits it to no
+        // pinned caller, so it is not this hospital's to merge.
+        empiKnows(SURVIVING_MRN, survivingPatientId, null);
+        empiKnows(PRIOR_MRN, retiringPatientId);
+        registeredHere(survivingPatientId, true);
+        registeredHere(retiringPatientId, true);
+
+        assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_NOT_OWNER);
+    }
+
+    @Test
+    void ownershipIsAskedOnlyAfterTheRegistrationGateSoItCannotBeAnOracle() {
+        // Owned elsewhere AND not registered here: the answer must be the
+        // cross-tenant one, identical to an unknown MRN, never NOT_OWNER.
+        empiKnows(SURVIVING_MRN, survivingPatientId);
+        empiKnows(PRIOR_MRN, retiringPatientId, UUID.randomUUID());
+        registeredHere(survivingPatientId, true);
+        registeredHere(retiringPatientId, false);
+
+        assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
+    }
+
+    @Test
+    void aMergeEmpiRefusesLeavesADeadLetterWithoutTheExceptionText() {
+        empiKnows(SURVIVING_MRN, survivingPatientId);
+        empiKnows(PRIOR_MRN, retiringPatientId);
+        registeredHere(survivingPatientId, true);
+        registeredHere(retiringPatientId, true);
+        when(authorisedMerge.mergePatientsAtAuthorisedHospital(any(), any(), any(), any(), anyString()))
+            .thenThrow(new BusinessException("constraint failed for notes MRN " + PRIOR_MRN));
+
+        assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+        verify(messageRecorder).recordMessage(
+            eq("MLLP:LIS/HOSP1"), any(),
+            eq(IntegrationMessageDirection.INBOUND),
+            eq("ADT^A40"), isNull(),
+            eq(IntegrationMessageStatus.FAILED),
+            eq(MllpInboundMergeServiceImpl.REASON_EMPI_REFUSED + " (MSH-10 \"MSG-A40-1\")"),
+            any());
+    }
+
     /* ── Unknown identifiers ─────────────────────────────────────────── */
 
     @Test
@@ -244,7 +342,7 @@ class MllpInboundMergeServiceImplTest {
         empiDoesNotKnow(PRIOR_MRN);
 
         assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
-        verify(empiService, never()).mergePatients(any(), any(), any(), anyString());
+        verify(authorisedMerge, never()).mergePatientsAtAuthorisedHospital(any(), any(), any(), any(), any());
         // Not even the tenant check ran — nothing to check.
         verifyNoInteractions(registrationRepository);
     }
@@ -255,7 +353,7 @@ class MllpInboundMergeServiceImplTest {
         empiKnows(PRIOR_MRN, retiringPatientId);
 
         assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
-        verify(empiService, never()).mergePatients(any(), any(), any(), anyString());
+        verify(authorisedMerge, never()).mergePatientsAtAuthorisedHospital(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -280,6 +378,25 @@ class MllpInboundMergeServiceImplTest {
         assertThat(service.processMerge(sameBothSides, hospital, "LIS", "HOSP1", "MSG-1"))
             .isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
         verifyNoInteractions(empiService);
+        // A refusal like any other: a FAILED row naming MSH-10, never the MRN.
+        verifyDeadLetter("PID-3 and MRG-1 are the same identifier (MSH-10 \"MSG-1\")");
+    }
+
+    /**
+     * Exactly one FAILED row with this reason, no payload, filed under the
+     * sender with a stable correlation id - the shape of every A40 refusal.
+     */
+    private void verifyDeadLetter(String reason) {
+        ArgumentCaptor<String> correlation = ArgumentCaptor.forClass(String.class);
+        verify(messageRecorder).recordMessage(
+            eq("MLLP:LIS/HOSP1"), any(),
+            eq(IntegrationMessageDirection.INBOUND),
+            eq("ADT^A40"), isNull(),
+            eq(IntegrationMessageStatus.FAILED),
+            eq(reason),
+            correlation.capture());
+        assertThat(correlation.getValue()).isNotNull();
+        assertThat(reason).doesNotContain(SURVIVING_MRN).doesNotContain(PRIOR_MRN);
     }
 
     @Test
@@ -295,7 +412,7 @@ class MllpInboundMergeServiceImplTest {
         registeredHere(survivingPatientId, true);
 
         assertThat(process()).isEqualTo(MllpInboundOutcome.ACCEPTED);
-        verify(empiService, never()).mergePatients(any(), any(), any(), anyString());
+        verify(authorisedMerge, never()).mergePatientsAtAuthorisedHospital(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -310,7 +427,7 @@ class MllpInboundMergeServiceImplTest {
         registeredHere(survivingPatientId, false);
 
         assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
-        verify(empiService, never()).mergePatients(any(), any(), any(), anyString());
+        verify(authorisedMerge, never()).mergePatientsAtAuthorisedHospital(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -319,7 +436,7 @@ class MllpInboundMergeServiceImplTest {
         empiKnows(PRIOR_MRN, retiringPatientId);
         registeredHere(survivingPatientId, true);
         registeredHere(retiringPatientId, true);
-        when(empiService.mergePatients(any(), any(), any(), anyString()))
+        when(authorisedMerge.mergePatientsAtAuthorisedHospital(any(), any(), any(), any(), anyString()))
             .thenThrow(new BusinessException("already merged"));
 
         // The sender's request was not applied; their queue should say so.
@@ -342,6 +459,34 @@ class MllpInboundMergeServiceImplTest {
             .isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
 
         verifyNoInteractions(empiService);
+        // Each one leaves its dead letter, all three under one correlation id:
+        // one problem, one counted entry, however often the sender retries.
+        ArgumentCaptor<String> correlation = ArgumentCaptor.forClass(String.class);
+        verify(messageRecorder, times(3)).recordMessage(
+            eq("MLLP:LIS/HOSP1"), any(),
+            eq(IntegrationMessageDirection.INBOUND),
+            eq("ADT^A40"), isNull(),
+            eq(IntegrationMessageStatus.FAILED),
+            eq("missing PID-3 or MRG-1 (MSH-10 \"M1\")"),
+            correlation.capture());
+        assertThat(correlation.getAllValues()).doesNotContainNull().containsOnly(correlation.getValue());
+    }
+
+    @Test
+    void theRefusalsBeforeTheGateKeepOneCorrelationIdAcrossRetries() {
+        // A retry carries a new MSH-10; the correlation id must not change
+        // with it, or every retry stacks a new unresolved dead letter.
+        ParsedMergeMessage same = new ParsedMergeMessage(SURVIVING_MRN, "HOSP1", SURVIVING_MRN, "HOSP1");
+        service.processMerge(same, hospital, "LIS", "HOSP1", "MSG-1");
+        service.processMerge(same, hospital, "LIS", "HOSP1", "MSG-2");
+        service.processMerge(message(), null, "LIS", "HOSP1", "MSG-3");
+
+        ArgumentCaptor<String> correlation = ArgumentCaptor.forClass(String.class);
+        verify(messageRecorder, times(3)).recordMessage(
+            any(), any(), any(), any(), any(), any(), any(), correlation.capture());
+        assertThat(correlation.getAllValues().get(0)).isEqualTo(correlation.getAllValues().get(1));
+        // A different problem is a different entry.
+        assertThat(correlation.getAllValues().get(2)).isNotEqualTo(correlation.getAllValues().get(0));
     }
 
     @Test
@@ -351,6 +496,7 @@ class MllpInboundMergeServiceImplTest {
         assertThat(service.processMerge(message(), null, "LIS", "HOSP1", "M1"))
             .isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
         verifyNoInteractions(empiService);
+        verifyDeadLetter("no resolved hospital (MSH-10 \"M1\")");
     }
 
     @Test

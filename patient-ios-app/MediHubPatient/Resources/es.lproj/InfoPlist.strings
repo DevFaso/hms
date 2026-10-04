@@ -1,0 +1,4 @@
+/* Purpose strings iOS shows in its own permission dialogs. The base
+   (English) value lives in project.yml; every key there has a line here in
+   each language. */
+"NSFaceIDUsageDescription" = "Use Face ID para iniciar sesión en e-Keneya sin escribir su contraseña.";

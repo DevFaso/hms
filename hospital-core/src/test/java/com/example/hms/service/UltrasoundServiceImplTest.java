@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.UltrasoundOrderStatus;
 import com.example.hms.enums.UltrasoundScanType;
 import com.example.hms.exception.BusinessException;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
@@ -38,6 +40,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -71,9 +74,24 @@ class UltrasoundServiceImplTest {
     private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    /** Unstubbed: a null scope, the global view, so the by-id reads keep their unscoped answer here. */
+    @Mock
+    private com.example.hms.utility.RoleValidator roleValidator;
+    @Mock
+    private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
 
     @InjectMocks
     private UltrasoundServiceImpl ultrasoundService;
+
+    /**
+     * The real subject guard. These tests set no authentication, so it waves
+     * every read through, as it does for any caller that is not patient-only;
+     * the patient cases are in PatientSubjectReadGuardTest and the
+     * per-service ownership tests.
+     */
+    @Spy
+    private PatientSubjectReadGuard subjectReadGuard =
+        new PatientSubjectReadGuard(mock(ControllerAuthUtils.class), mock(PatientRepository.class));
 
     private UUID patientId;
     private UUID hospitalId;
@@ -616,7 +634,7 @@ class UltrasoundServiceImplTest {
 
         assertThatThrownBy(() -> ultrasoundService.getOrderById(orderId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Ultrasound order not found");
+            .hasFieldOrPropertyWithValue("messageKey", "ultrasound.order.notFound");
     }
 
     @Test
@@ -625,7 +643,7 @@ class UltrasoundServiceImplTest {
 
         assertThatThrownBy(() -> ultrasoundService.getReportById(reportId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Ultrasound report not found");
+            .hasFieldOrPropertyWithValue("messageKey", "ultrasound.report.notFound");
     }
 
     @Test
@@ -634,7 +652,7 @@ class UltrasoundServiceImplTest {
 
         assertThatThrownBy(() -> ultrasoundService.getReportByOrderId(orderId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Ultrasound report not found for order");
+            .hasFieldOrPropertyWithValue("messageKey", "ultrasound.report.notFoundForOrder");
     }
 
     @AfterEach
@@ -671,5 +689,171 @@ class UltrasoundServiceImplTest {
         verify(orderRepository, never()).findAllByPatientId(any());
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(requesterId), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    // ── Writes are held to the acting hospital (a foreign row answers as a miss) ──
+
+    private UltrasoundOrder orderAt(UUID atHospitalId, UltrasoundOrderStatus status) {
+        Hospital at = new Hospital();
+        at.setId(atHospitalId);
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setPatient(patient);
+        order.setHospital(at);
+        order.setStatus(status);
+        return order;
+    }
+
+    private UltrasoundReport reportAt(UUID atHospitalId) {
+        Hospital at = new Hospital();
+        at.setId(atHospitalId);
+        UltrasoundReport report = new UltrasoundReport();
+        report.setId(reportId);
+        report.setHospital(at);
+        report.setUltrasoundOrder(orderAt(atHospitalId, UltrasoundOrderStatus.IN_PROGRESS));
+        return report;
+    }
+
+    private static String catchNotFound(Runnable call) {
+        try {
+            call.run();
+        } catch (ResourceNotFoundException e) {
+            return e.getMessage();
+        }
+        throw new AssertionError("expected a ResourceNotFoundException");
+    }
+
+    @Test
+    void orderWritesRefuseAnotherHospitalsOrderExactlyAsAMissingOne() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        when(orderRepository.findById(orderId)).thenReturn(Optional.empty());
+        String missing = catchNotFound(() -> ultrasoundService.cancelOrder(orderId, "x"));
+
+        UltrasoundOrder foreign = orderAt(hospitalId, UltrasoundOrderStatus.ORDERED);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(foreign));
+        UltrasoundOrderRequestDTO edit = UltrasoundOrderRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId).scanType(UltrasoundScanType.GROWTH_SCAN).build();
+        UltrasoundReportRequestDTO report = UltrasoundReportRequestDTO.builder().build();
+
+        assertThat(catchNotFound(() -> ultrasoundService.updateOrder(orderId, edit))).isEqualTo(missing);
+        assertThat(catchNotFound(() -> ultrasoundService.cancelOrder(orderId, "x"))).isEqualTo(missing);
+        assertThat(catchNotFound(() -> ultrasoundService.createOrUpdateReport(orderId, report, null))).isEqualTo(missing);
+
+        assertThat(foreign.getStatus()).isEqualTo(UltrasoundOrderStatus.ORDERED);
+        verify(orderRepository, never()).save(any());
+        verify(reportRepository, never()).save(any());
+        verifyNoInteractions(ultrasoundMapper);
+    }
+
+    @Test
+    void reportWritesRefuseAnotherHospitalsReportExactlyAsAMissingOne() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        when(reportRepository.findById(reportId)).thenReturn(Optional.empty());
+        String missing = catchNotFound(() -> ultrasoundService.markPatientNotified(reportId));
+
+        UltrasoundReport foreign = reportAt(hospitalId);
+        when(reportRepository.findById(reportId)).thenReturn(Optional.of(foreign));
+
+        assertThat(catchNotFound(() -> ultrasoundService.markReportReviewed(reportId, null))).isEqualTo(missing);
+        assertThat(catchNotFound(() -> ultrasoundService.markPatientNotified(reportId))).isEqualTo(missing);
+        assertThat(foreign.getReportReviewedByProvider()).isNotEqualTo(Boolean.TRUE);
+        assertThat(foreign.getPatientNotifiedAt()).isNull();
+        verify(reportRepository, never()).save(any());
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void reportWritesAtTheActingHospitalStillWork() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        UltrasoundReport own = reportAt(hospitalId);
+        when(reportRepository.findById(reportId)).thenReturn(Optional.of(own));
+        when(reportRepository.save(own)).thenReturn(own);
+        UltrasoundReportResponseDTO dto = UltrasoundReportResponseDTO.builder().id(reportId).build();
+        when(ultrasoundMapper.toReportResponseDTO(own)).thenReturn(dto);
+
+        assertThat(ultrasoundService.markReportReviewed(reportId, null)).isSameAs(dto);
+        assertThat(ultrasoundService.markPatientNotified(reportId)).isSameAs(dto);
+        assertThat(own.getReportReviewedByProvider()).isTrue();
+        assertThat(own.getPatientNotifiedAt()).isNotNull();
+    }
+
+    @Test
+    void anOrderIsNeverMovedToAnotherHospital() {
+        UUID elsewhere = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        UltrasoundOrder own = orderAt(hospitalId, UltrasoundOrderStatus.ORDERED);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(own));
+        UUID missingHospital = UUID.randomUUID();
+
+        String moved = catchNotFound(() -> ultrasoundService.updateOrder(orderId, UltrasoundOrderRequestDTO.builder()
+            .patientId(patientId).hospitalId(elsewhere).scanType(UltrasoundScanType.GROWTH_SCAN).build()));
+        String absent = new ResourceNotFoundException("hospital.notFound", missingHospital).getMessage();
+
+        assertThat(moved.replace(elsewhere.toString(), "<id>"))
+            .isEqualTo(absent.replace(missingHospital.toString(), "<id>"));
+        assertThat(own.getHospital().getId()).isEqualTo(hospitalId);
+        verify(hospitalRepository, never()).findById(any());
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void createIsRefusedAtAnotherHospitalAndForAPatientRegisteredElsewhere() {
+        UUID actingHospitalId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(actingHospitalId);
+
+        UltrasoundOrderRequestDTO atOtherHospital = UltrasoundOrderRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId).scanType(UltrasoundScanType.GROWTH_SCAN).build();
+        assertThatThrownBy(() -> ultrasoundService.createOrder(atOtherHospital, null))
+            .isInstanceOfSatisfying(ResourceNotFoundException.class,
+                e -> assertThat(e.getMessageKey()).isEqualTo("hospital.notFound"));
+
+        UltrasoundOrderRequestDTO foreignPatient = UltrasoundOrderRequestDTO.builder()
+            .patientId(patientId).hospitalId(actingHospitalId).scanType(UltrasoundScanType.GROWTH_SCAN).build();
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, actingHospitalId)).thenReturn(false);
+        assertThatThrownBy(() -> ultrasoundService.createOrder(foreignPatient, null))
+            .isInstanceOfSatisfying(ResourceNotFoundException.class,
+                e -> assertThat(e.getMessageKey()).isEqualTo("patient.notFound"));
+
+        verify(patientRepository, never()).findById(any());
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void createForAPatientRegisteredAtTheActingHospitalProceeds() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        UltrasoundOrderRequestDTO request = UltrasoundOrderRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId).scanType(UltrasoundScanType.GROWTH_SCAN).build();
+        UltrasoundOrder entity = new UltrasoundOrder();
+        UltrasoundOrderResponseDTO dto = UltrasoundOrderResponseDTO.builder().id(orderId).build();
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(ultrasoundMapper.toOrderEntity(request, patient, hospital)).thenReturn(entity);
+        when(orderRepository.save(entity)).thenReturn(entity);
+        when(ultrasoundMapper.toOrderResponseDTO(entity)).thenReturn(dto);
+
+        assertThat(ultrasoundService.createOrder(request, null)).isSameAs(dto);
+    }
+
+    @Test
+    void hospitalWorklistsOfAnotherHospitalAnswerAsAnEmptyOne() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        assertThat(ultrasoundService.getOrdersByHospitalId(hospitalId)).isEmpty();
+        assertThat(ultrasoundService.getPendingOrders(hospitalId)).isEmpty();
+        assertThat(ultrasoundService.getHighRiskOrders(hospitalId)).isEmpty();
+        assertThat(ultrasoundService.getReportsRequiringFollowUp(hospitalId)).isEmpty();
+        assertThat(ultrasoundService.getReportsWithAnomalies(hospitalId)).isEmpty();
+        verifyNoInteractions(orderRepository, reportRepository);
+    }
+
+    @Test
+    void hospitalWorklistsOfTheActingHospitalAreRead() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        UltrasoundOrder own = orderAt(hospitalId, UltrasoundOrderStatus.ORDERED);
+        when(orderRepository.findAllByHospitalId(hospitalId)).thenReturn(List.of(own));
+        when(ultrasoundMapper.toOrderResponseDTO(own)).thenReturn(UltrasoundOrderResponseDTO.builder().id(orderId).build());
+
+        assertThat(ultrasoundService.getOrdersByHospitalId(hospitalId)).hasSize(1);
     }
 }

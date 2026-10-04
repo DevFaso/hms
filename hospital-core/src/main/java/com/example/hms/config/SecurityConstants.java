@@ -55,6 +55,28 @@ public class SecurityConstants {
     public static final String CONSULTING_CLINICIANS_ROLES =
         "'RADIOLOGIST','ANESTHESIOLOGIST','PHYSIOTHERAPIST'";
     public static final String ROLE_MIDWIFE = "ROLE_MIDWIFE";
+
+    /**
+     * Who may register an account ({@code POST /users/admin-register}) and so
+     * also send the patient-registration form's compensation delete. A SpEL
+     * fragment for {@code hasAnyAuthority(...)}, written once: both
+     * {@code UserController} annotations and {@code UserAccountAccess} read it.
+     */
+    public static final String USER_REGISTRAR_AUTHORITIES =
+        "'ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE'";
+
+    /**
+     * The authorities of a quoted SpEL fragment such as
+     * {@link #USER_REGISTRAR_AUTHORITIES}, for the places that need them as
+     * values (a {@code requestMatchers(...).hasAnyAuthority(...)} rule), so
+     * the annotation and the filter chain read one list.
+     */
+    public static String[] authorities(String quotedFragment) {
+        return java.util.Arrays.stream(quotedFragment.split(","))
+            .map(part -> part.replace("'", "").trim())
+            .filter(part -> !part.isEmpty())
+            .toArray(String[]::new);
+    }
     public static final String ROLE_BILLING_SPECIALIST = "ROLE_BILLING_SPECIALIST";
 
     // Pharmacy sub-roles

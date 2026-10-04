@@ -42,12 +42,10 @@ public class StaffAvailabilityServiceImpl implements StaffAvailabilityService {
     public StaffAvailabilityResponseDTO create(StaffAvailabilityRequestDTO dto, Locale locale) {
 
         Hospital hospital = hospitalRepository.findById(dto.hospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage("hospital.not.found", new Object[]{dto.hospitalId()}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.not.found", dto.hospitalId()));
 
         Staff staff = staffRepository.findById(dto.staffId())
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage("staff.not.found", new Object[]{dto.staffId()}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.not.found", dto.staffId()));
 
         if (!staff.isActive()) {
             throw new BusinessRuleException(getLocalizedMessage("staff.inactive", new Object[]{dto.staffId()}, locale));
@@ -59,8 +57,7 @@ public class StaffAvailabilityServiceImpl implements StaffAvailabilityService {
         }
 
         Department department = departmentRepository.findById(dto.departmentId())
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage("department.not.found", new Object[]{dto.departmentId()}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("department.not.found", dto.departmentId()));
 
         if (!department.getHospital().getId().equals(hospital.getId())) {
             throw new BusinessRuleException(getLocalizedMessage("department.hospital.mismatch", null, locale));

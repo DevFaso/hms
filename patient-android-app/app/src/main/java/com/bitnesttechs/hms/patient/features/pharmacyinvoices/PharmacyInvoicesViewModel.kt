@@ -1,6 +1,7 @@
 package com.bitnesttechs.hms.patient.features.pharmacyinvoices
 
-import android.content.Context
+import com.bitnesttechs.hms.patient.core.network.AppText
+import com.bitnesttechs.hms.patient.core.network.FailureText
 import com.bitnesttechs.hms.patient.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -8,7 +9,6 @@ import com.bitnesttechs.hms.patient.core.models.PharmacyClaimDto
 import com.bitnesttechs.hms.patient.core.models.PharmacyPaymentDto
 import com.bitnesttechs.hms.patient.core.network.ApiService
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,8 +17,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class PharmacyInvoicesViewModel @Inject constructor(
-    private val api: ApiService,
-    @ApplicationContext private val context: Context
+    private val api: ApiService
 ) : ViewModel() {
 
     private val _payments = MutableStateFlow<List<PharmacyPaymentDto>>(emptyList())
@@ -50,11 +49,11 @@ class PharmacyInvoicesViewModel @Inject constructor(
                     _payments.value = paymentsResp.body()?.data?.content ?: emptyList()
                 } else {
                     _payments.value = emptyList()
-                    failures += context.getString(R.string.pharmacy_payments_load_failed, "HTTP ${paymentsResp.code()}")
+                    failures += AppText.get(R.string.pharmacy_payments_load_failed, FailureText.http(paymentsResp.code()))
                 }
             } catch (ex: Exception) {
                 _payments.value = emptyList()
-                failures += context.getString(R.string.pharmacy_payments_load_failed, ex.localizedMessage ?: context.getString(R.string.error_generic))
+                failures += AppText.get(R.string.pharmacy_payments_load_failed, FailureText.of(ex))
             }
 
             try {
@@ -63,11 +62,11 @@ class PharmacyInvoicesViewModel @Inject constructor(
                     _claims.value = claimsResp.body()?.data?.content ?: emptyList()
                 } else {
                     _claims.value = emptyList()
-                    failures += context.getString(R.string.pharmacy_claims_load_failed, "HTTP ${claimsResp.code()}")
+                    failures += AppText.get(R.string.pharmacy_claims_load_failed, FailureText.http(claimsResp.code()))
                 }
             } catch (ex: Exception) {
                 _claims.value = emptyList()
-                failures += context.getString(R.string.pharmacy_claims_load_failed, ex.localizedMessage ?: context.getString(R.string.error_generic))
+                failures += AppText.get(R.string.pharmacy_claims_load_failed, FailureText.of(ex))
             } finally {
                 _error.value = failures.takeIf { it.isNotEmpty() }?.joinToString("\n")
                 _isLoading.value = false

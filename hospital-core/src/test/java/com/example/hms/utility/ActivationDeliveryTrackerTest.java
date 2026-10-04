@@ -50,6 +50,33 @@ class ActivationDeliveryTrackerTest {
         assertThat(ActivationDeliveryTracker.maskPhone(null)).isNull();
     }
 
+    @Test
+    void sendEmailAndReportSaysQueuedFailedOrNotConfigured() {
+        ActivationDeliveryTracker.open();
+        assertThat(ActivationDeliveryTracker.sendEmailAndReport("P", "jdoe@hospital.com", () -> { }, () -> true))
+            .isTrue();
+        Runnable boom = () -> {
+            throw new IllegalArgumentException("Invalid email format: jdoe@hospital.com");
+        };
+        assertThat(ActivationDeliveryTracker.sendEmailAndReport("P", "jdoe@hospital.com", boom, () -> true))
+            .isFalse();
+        assertThat(ActivationDeliveryTracker.sendEmailAndReport("P", "jdoe@hospital.com", boom, () -> false))
+            .isFalse();
+
+        var reported = ActivationDeliveryTracker.close();
+        // QUEUED, not SENT: a send that returned only reached the outbox (V173).
+        assertThat(reported).extracting(NotificationDeliveryStatusDTO::getOutcome).containsExactly(
+            NotificationDeliveryStatusDTO.OUTCOME_QUEUED,
+            NotificationDeliveryStatusDTO.OUTCOME_FAILED,
+            NotificationDeliveryStatusDTO.OUTCOME_NOT_CONFIGURED);
+        assertThat(reported).allSatisfy(d -> {
+            assertThat(d.getTarget()).isEqualTo("j***@hospital.com");
+            assertThat(d.getChannel()).isEqualTo(NotificationDeliveryStatusDTO.CHANNEL_EMAIL);
+            // The exception message embeds the raw address; it must not leave the server.
+            assertThat(String.valueOf(d.getDetail())).doesNotContain("jdoe@");
+        });
+    }
+
     private static NotificationDeliveryStatusDTO status(String channel) {
         return NotificationDeliveryStatusDTO.builder()
             .channel(channel)

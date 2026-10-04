@@ -1,5 +1,7 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.support.EducationProgressRows;
+import com.example.hms.service.support.LinkedPatientLookup;
 import com.example.hms.config.SecurityConstants;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.EducationComprehensionStatus;
@@ -110,7 +112,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import com.example.hms.service.i18n.NotificationLocales;
+import com.example.hms.utility.RoleNames;
 
 /**
  * Patient-portal service — resolves the authenticated user's Patient record
@@ -120,6 +124,8 @@ import com.example.hms.service.i18n.NotificationLocales;
 @RequiredArgsConstructor
 @Slf4j
 public class PatientPortalServiceImpl implements PatientPortalService {
+    private static final String APPOINTMENT_NOT_FOUND_KEY = "appointment.notFound";
+
 
     private static final String MSG_UNABLE_RESOLVE_USER = "Unable to resolve user from authentication";
     private static final String MEDICATION_REFILL_NOTIFICATION_TYPE = "MEDICATION_REFILL";
@@ -210,10 +216,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public UUID resolvePatientId(Authentication auth) {
         UUID userId = authUtils.resolveUserId(auth)
                 .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
-        return patientRepository.findByUserId(userId)
+        return LinkedPatientLookup.linkedPatient(patientRepository, userId)
                 .map(Patient::getId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "No patient record linked to your account. Contact your care team."));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.portal.noRecord"));
     }
 
     // ── Profile ──────────────────────────────────────────────────────────
@@ -265,9 +270,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public com.example.hms.payload.dto.roi.RoiRequestResponseDTO createRoiRequest(
             Authentication auth, com.example.hms.payload.dto.roi.RoiSelfRequestCreateDTO dto) {
         Patient patient = findPatient(auth);
-        // Filed against the patient's registered hospital: the request lands
-        // on that facility's triage worklist.
-        UUID hospitalId = resolvePatientHospitalId(patient);
+        // Filed at the hospital the request names (checked against the
+        // patient's registrations), else at the patient's own hospital: the
+        // request lands on that facility's triage worklist. Never a guess.
+        UUID hospitalId = writeHospitalFor(patient, dto.getHospitalId());
         return roiRequestService.createForSelf(patient, hospitalId, dto);
     }
 
@@ -312,7 +318,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public HealthSummaryDTO getHealthSummary(Authentication auth, Locale locale) {
         Patient patient = findPatient(auth);
         UUID patientId = patient.getId();
-        UUID hospitalId = resolvePatientHospitalId(patient);
+        // The patient's own chart, at every hospital that holds it (design
+        // Q1): no hospital scope, ownership is the bound.
+        UUID hospitalId = null;
 
         return HealthSummaryDTO.builder()
                 .profile(toProfileDTO(patient))
@@ -331,8 +339,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<PatientLabResultResponseDTO> getMyLabResults(Authentication auth, int limit) {
         Patient patient = findPatient(auth);
-        UUID hospitalId = resolvePatientHospitalId(patient);
-        return labResultService.getLabResultsForPatientPortal(patient.getId(), hospitalId, limit);
+        // Own results at every hospital (design Q1); PatientChartAccess admits
+        // the owner with no hospital.
+        return labResultService.getLabResultsForPatientPortal(patient.getId(), null, limit);
     }
 
     // ── Medications ──────────────────────────────────────────────────────
@@ -341,8 +350,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<PatientMedicationResponseDTO> getMyMedications(Authentication auth, int limit) {
         Patient patient = findPatient(auth);
-        UUID hospitalId = resolvePatientHospitalId(patient);
-        return medicationService.getMedicationsForPatient(patient.getId(), hospitalId, limit);
+        // Own medications at every hospital (design Q1): the portal variant
+        // resolves the patient by ownership, so no hospital scope is needed.
+        return medicationService.getMedicationsForPatientPortal(patient.getId(), null, limit);
     }
 
     // ── Prescriptions ────────────────────────────────────────────────────
@@ -353,7 +363,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         UUID patientId = resolvePatientId(auth);
         // Same DTO as the clinician surface; the pharmacist-to-prescriber
         // clarification exchange comes off the patient's copy (gap G7).
-        return prescriptionService.getPrescriptionsByPatientId(patientId, locale).stream()
+        return prescriptionService.getPrescriptionsForPortalPatient(patientId, locale).stream()
                 .map(PrescriptionResponseDTO::withoutClarificationExchange)
                 .toList();
     }
@@ -364,7 +374,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<PatientVitalSignResponseDTO> getMyVitals(Authentication auth, int limit) {
         UUID patientId = resolvePatientId(auth);
-        return vitalSignService.getRecentVitals(patientId, null, limit);
+        return vitalSignService.getRecentVitalsForPatientPortal(patientId, limit);
     }
 
     // ── Encounters / visit history ───────────────────────────────────────
@@ -373,7 +383,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<EncounterResponseDTO> getMyEncounters(Authentication auth, Locale locale) {
         UUID patientId = resolvePatientId(auth);
-        return encounterService.getEncountersByPatientId(patientId, locale);
+        return encounterService.getEncountersForPortalPatient(patientId);
     }
 
     // ── Appointments ─────────────────────────────────────────────────────
@@ -392,16 +402,19 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public Page<BillingInvoiceResponseDTO> getMyInvoices(Authentication auth, Pageable pageable, Locale locale) {
         UUID patientId = resolvePatientId(auth);
-        return billingInvoiceService.getInvoicesByPatientId(patientId, pageable, locale);
+        return billingInvoiceService.getInvoicesForPortalPatient(patientId, pageable, locale);
     }
 
     // ── Pay an invoice ───────────────────────────────────────────────────
 
     @Override
     @Transactional
-    public BillingInvoiceResponseDTO recordMyPayment(Authentication auth, UUID invoiceId, java.math.BigDecimal amount, Locale locale) {
+    public BillingInvoiceResponseDTO recordMyPayment(Authentication auth, UUID invoiceId,
+            com.example.hms.payload.dto.portal.PatientPaymentRequestDTO payment, Locale locale) {
+        UUID userId = authUtils.resolveUserId(auth)
+                .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
         UUID patientId = resolvePatientId(auth);
-        return billingInvoiceService.recordPayment(invoiceId, patientId, amount, locale);
+        return billingInvoiceService.recordPatientPayment(invoiceId, patientId, userId, payment, locale);
     }
 
     // ── Consents ─────────────────────────────────────────────────────────
@@ -428,7 +441,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<ConsultationResponseDTO> getMyConsultations(Authentication auth) {
         UUID patientId = resolvePatientId(auth);
-        return consultationService.getConsultationsForPatient(patientId);
+        return consultationService.getConsultationsForPortalPatient(patientId);
     }
 
     // ── Treatment plans ──────────────────────────────────────────────────
@@ -437,7 +450,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public Page<TreatmentPlanResponseDTO> getMyTreatmentPlans(Authentication auth, Pageable pageable) {
         UUID patientId = resolvePatientId(auth);
-        return treatmentPlanService.listByPatient(patientId, pageable);
+        return treatmentPlanService.listForPortalPatient(patientId, pageable);
     }
 
     // ── Referrals ────────────────────────────────────────────────────────
@@ -446,7 +459,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<GeneralReferralResponseDTO> getMyReferrals(Authentication auth) {
         UUID patientId = resolvePatientId(auth);
-        return referralService.getReferralsByPatient(patientId);
+        return referralService.getReferralsForPortalPatient(patientId);
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -462,16 +475,16 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                                         Locale locale) {
         UUID patientId = resolvePatientId(auth);
         Patient patientEntity = patientRepository.findById(patientId)
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
 
         // Verify patient is registered at this hospital
         requireHospitalRegistration(patientId, dto.getHospitalId());
 
         Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalId()));
 
         Department department = departmentRepository.findById(dto.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Department not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", dto.getDepartmentId()));
         if (!department.getHospital().getId().equals(dto.getHospitalId())) {
             throw new BusinessException("Department does not belong to the selected hospital");
         }
@@ -480,7 +493,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         Staff staff;
         if (dto.getStaffId() != null) {
             staff = staffRepository.findByIdAndActiveTrue(dto.getStaffId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Provider not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("provider.notFound", dto.getStaffId()));
             if (!staff.getHospital().getId().equals(dto.getHospitalId())) {
                 throw new BusinessException("Provider does not belong to the selected hospital");
             }
@@ -597,7 +610,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                         m.put("fullName", fullName.trim());
                     }
                     if (s.getAssignment() != null && s.getAssignment().getRole() != null) {
-                        m.put("role", s.getAssignment().getRole().getName());
+                        // Bare token (DOCTOR, not ROLE_DOCTOR) or null, as every read path sends it.
+                        m.put("role", RoleNames.bareRole(s.getAssignment().getRole().getName()));
                     }
                     return m;
                 })
@@ -613,7 +627,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                                       Locale locale) {
         UUID patientId = resolvePatientId(auth);
         Appointment appointment = appointmentRepository.findById(dto.getAppointmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, dto.getAppointmentId()));
 
         requirePatientOwnership(appointment, patientId);
 
@@ -658,7 +672,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                                           Locale locale) {
         UUID patientId = resolvePatientId(auth);
         Appointment appointment = appointmentRepository.findById(dto.getAppointmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, dto.getAppointmentId()));
 
         requirePatientOwnership(appointment, patientId);
 
@@ -733,11 +747,13 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         Patient patient = findPatient(auth);
 
         Prescription prescription = prescriptionRepository.findById(dto.getPrescriptionId())
-                .orElseThrow(() -> new ResourceNotFoundException("Prescription not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("prescription.notFound", dto.getPrescriptionId()));
 
-        // Verify the prescription belongs to this patient
+        // Verify the prescription belongs to this patient. Another patient's
+        // answers exactly as a missing one: a 403 here told a patient which
+        // prescription ids exist.
         if (!prescription.getPatient().getId().equals(patient.getId())) {
-            throw new AccessDeniedException("You do not have access to this prescription");
+            throw new ResourceNotFoundException("prescription.notFound", dto.getPrescriptionId());
         }
 
         // Refuse up front what approval would refuse anyway. Without this the
@@ -798,10 +814,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         UUID patientId = resolvePatientId(auth);
 
         RefillRequest refill = refillRequestRepository.findById(refillId)
-                .orElseThrow(() -> new ResourceNotFoundException("Refill request not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("refillRequest.notFound", refillId));
 
         if (!refill.getPatient().getId().equals(patientId)) {
-            throw new AccessDeniedException("You do not have access to this refill request");
+            // Another patient's request answers exactly as a missing one.
+            throw new ResourceNotFoundException("refillRequest.notFound", refillId);
         }
         // A request the provider has put on hold has not been decided yet, so the
         // patient can still withdraw it.
@@ -831,13 +848,25 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public CareTeamDTO getMyCareTeam(Authentication auth) {
         UUID patientId = resolvePatientId(auth);
 
-        CareTeamDTO.PrimaryCareEntry currentPcp = primaryCareService.getCurrentPrimaryCare(patientId)
-                .map(this::toCareTeamEntry)
+        java.util.Optional<PatientPrimaryCareResponseDTO> current = primaryCareService.getCurrentPrimaryCare(patientId);
+        List<PatientPrimaryCareResponseDTO> past = primaryCareService.getPrimaryCareHistory(patientId);
+
+        // The entries carry a hospital id only; one lookup names them all, so
+        // the patient reads where their doctor practises, not a blank line.
+        Set<UUID> hospitalIds = new java.util.HashSet<>();
+        current.map(PatientPrimaryCareResponseDTO::getHospitalId).ifPresent(hospitalIds::add);
+        past.stream().map(PatientPrimaryCareResponseDTO::getHospitalId)
+                .filter(java.util.Objects::nonNull).forEach(hospitalIds::add);
+        Map<UUID, String> hospitalNames = hospitalIds.isEmpty() ? Map.of()
+                : hospitalRepository.findAllById(hospitalIds).stream()
+                        .collect(java.util.stream.Collectors.toMap(Hospital::getId, Hospital::getName, (a, b) -> a));
+
+        CareTeamDTO.PrimaryCareEntry currentPcp = current
+                .map(pcp -> toCareTeamEntry(pcp, hospitalNames))
                 .orElse(null);
 
-        List<CareTeamDTO.PrimaryCareEntry> history = primaryCareService.getPrimaryCareHistory(patientId)
-                .stream()
-                .map(this::toCareTeamEntry)
+        List<CareTeamDTO.PrimaryCareEntry> history = past.stream()
+                .map(pcp -> toCareTeamEntry(pcp, hospitalNames))
                 .toList();
 
         return CareTeamDTO.builder()
@@ -884,9 +913,52 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private Patient findPatient(Authentication auth) {
         UUID userId = authUtils.resolveUserId(auth)
                 .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
-        return patientRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "No patient record linked to your account. Contact your care team."));
+        return LinkedPatientLookup.linkedPatient(patientRepository, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("patient.portal.noRecord"));
+    }
+
+    /**
+     * The hospital a patient-initiated write is filed at, when the record it
+     * acts on does not carry one: the hospital the request names, checked
+     * against the patient's active registrations; else their only active
+     * registration; else the patient record's own hospital when it is still
+     * an active registration. A patient registered at several hospitals who
+     * names none, and whose record's hospital is no longer one of them, is
+     * asked to choose. Never the newest assignment.
+     */
+    private UUID writeHospitalFor(Patient patient, UUID requestedHospitalId) {
+        if (requestedHospitalId != null) {
+            if (!isRegisteredAt(patient.getId(), requestedHospitalId)) {
+                throw new BusinessException(portalMessage("patientPortal.request.hospitalNotRegistered"));
+            }
+            return requestedHospitalId;
+        }
+        List<UUID> active = registrationRepository.findByPatientId(patient.getId()).stream()
+                .filter(reg -> reg.isActive() && reg.getHospital() != null)
+                .map(reg -> reg.getHospital().getId())
+                .distinct()
+                .toList();
+        if (active.size() == 1) {
+            return active.get(0);
+        }
+        if (patient.getHospitalId() != null && active.contains(patient.getHospitalId())) {
+            return patient.getHospitalId();
+        }
+        throw new BusinessException(portalMessage(active.isEmpty()
+                ? "patientPortal.request.noHospitalRegistration"
+                : "patientPortal.request.chooseHospital"));
+    }
+
+    /** Whether the patient has an active registration at that hospital. */
+    private boolean isRegisteredAt(UUID patientId, UUID hospitalId) {
+        return registrationRepository
+                .findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId)
+                .isPresent();
+    }
+
+    /** A patient-facing refusal in the request's language. */
+    private String portalMessage(String key) {
+        return messageSource.getMessage(key, null, LocaleContextHolder.getLocale());
     }
 
     /**
@@ -958,7 +1030,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     private List<PatientMedicationResponseDTO> safeMedications(UUID patientId, UUID hospitalId) {
         try {
-            return medicationService.getMedicationsForPatient(patientId, hospitalId, 10);
+            return medicationService.getMedicationsForPatientPortal(patientId, hospitalId, 10);
         } catch (Exception e) {
             log.warn("Failed to fetch medications for health summary: {}", e.getMessage());
             return Collections.emptyList();
@@ -967,7 +1039,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     private List<PatientVitalSignResponseDTO> safeVitals(UUID patientId) {
         try {
-            return vitalSignService.getRecentVitals(patientId, null, 5);
+            return vitalSignService.getRecentVitalsForPatientPortal(patientId, 5);
         } catch (Exception e) {
             log.warn("Failed to fetch vitals for health summary: {}", e.getMessage());
             return Collections.emptyList();
@@ -991,10 +1063,15 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .toList();
     }
 
-    /** Verify that the appointment belongs to the given patient. */
+    /**
+     * Verify that the appointment belongs to the given patient. Another
+     * patient's appointment answers exactly as a missing one (the callers'
+     * "Appointment not found"), not 403: the 403 told a patient which
+     * appointment ids exist.
+     */
     private void requirePatientOwnership(Appointment appointment, UUID patientId) {
         if (!appointment.getPatient().getId().equals(patientId)) {
-            throw new AccessDeniedException("This appointment does not belong to you");
+            throw new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, appointment.getId());
         }
     }
 
@@ -1007,10 +1084,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
      * @throws BusinessException (HTTP 400) when no active registration is found.
      */
     private void requireHospitalRegistration(UUID patientId, UUID hospitalId) {
-        boolean registered = registrationRepository
-                .findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId)
-                .isPresent();
-        if (!registered) {
+        if (!isRegisteredAt(patientId, hospitalId)) {
             throw new BusinessException(
                     "You are not registered at the specified source hospital and cannot manage consent on its behalf.");
         }
@@ -1154,10 +1228,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     }
 
     /** Map a PrimaryCareResponseDTO to a CareTeam entry. */
-    private CareTeamDTO.PrimaryCareEntry toCareTeamEntry(PatientPrimaryCareResponseDTO pcp) {
+    private static CareTeamDTO.PrimaryCareEntry toCareTeamEntry(PatientPrimaryCareResponseDTO pcp,
+                                                                Map<UUID, String> hospitalNames) {
         return CareTeamDTO.PrimaryCareEntry.builder()
                 .id(pcp.getId())
                 .hospitalId(pcp.getHospitalId())
+                .hospitalName(pcp.getHospitalId() == null ? null : hospitalNames.get(pcp.getHospitalId()))
                 .doctorUserId(pcp.getDoctorUserId())
                 .doctorDisplay(pcp.getDoctorDisplay())
                 .startDate(pcp.getStartDate())
@@ -1218,10 +1294,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public void revokeProxy(Authentication auth, UUID proxyId) {
         UUID patientId = resolvePatientId(auth);
         PatientProxy proxy = patientProxyRepository.findById(proxyId)
-                .orElseThrow(() -> new ResourceNotFoundException("Proxy grant not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("proxyGrant.notFound", proxyId));
 
         if (!proxy.getGrantorPatient().getId().equals(patientId)) {
-            throw new AccessDeniedException("You can only revoke proxies you have granted");
+            // Somebody else's grant answers exactly as a missing one.
+            throw new ResourceNotFoundException("proxyGrant.notFound", proxyId);
         }
 
         proxy.setStatus(ProxyStatus.REVOKED);
@@ -1285,7 +1362,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
 
         return patientRepository.findById(patientId)
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
     }
 
     private static boolean isProxyExpired(PatientProxy proxy) {
@@ -1337,7 +1414,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public List<PatientMedicationResponseDTO> getProxyMedications(Authentication auth, UUID patientId, int limit) {
         Patient patient = verifyProxyAccess(auth, patientId, "VIEW_MEDICATIONS");
         UUID hospitalId = resolvePatientHospitalId(patient);
-        return medicationService.getMedicationsForPatient(patient.getId(), hospitalId, limit);
+        return medicationService.getMedicationsForPatientPortal(patient.getId(), hospitalId, limit);
     }
 
     @Override
@@ -1352,7 +1429,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public Page<BillingInvoiceResponseDTO> getProxyBilling(Authentication auth, UUID patientId, Pageable pageable, Locale locale) {
         Patient patient = verifyProxyAccess(auth, patientId, "VIEW_BILLING");
-        return billingInvoiceService.getInvoicesByPatientId(patient.getId(), pageable, locale);
+        return billingInvoiceService.getInvoicesForPortalPatient(patient.getId(), pageable, locale);
     }
 
     @Override
@@ -1384,8 +1461,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<PatientEducationItemDTO> getMyEducation(Authentication auth) {
         UUID patientId = resolvePatientId(auth);
-        List<PatientEducationProgress> progressRows =
-                educationProgressRepository.findByPatientIdOrderByLastAccessedAtDesc(patientId);
+        // One row per resource, chosen on the server exactly as the write
+        // chooses it; the clients used to dedupe, each its own way (#708).
+        List<PatientEducationProgress> progressRows = EducationProgressRows.onePerResource(
+                educationProgressRepository.findByPatientIdOrderByLastAccessedAtDesc(patientId));
         if (progressRows.isEmpty()) {
             return List.of();
         }
@@ -1507,10 +1586,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             PatientEducationProgress progress = requireAssignedEducation(patient.getId(), dto.getResourceId());
             hospitalId = progress.getHospitalId();
         } else {
-            hospitalId = resolvePatientHospitalId(patient);
-            if (hospitalId == null) {
-                throw new BusinessException("No hospital registration found for this patient");
-            }
+            hospitalId = writeHospitalFor(patient, dto.getHospitalId());
         }
 
         PatientEducationQuestion question = PatientEducationQuestion.builder()
@@ -1531,18 +1607,18 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     /** The assignment check: no progress row for (patient, resource) means not assigned. */
     private PatientEducationProgress requireAssignedEducation(UUID patientId, UUID resourceId) {
-        return educationProgressRepository
-                .findTopByPatientIdAndResourceIdOrderByCreatedAtDesc(patientId, resourceId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "No education resource assigned to you with id " + resourceId));
+        // The row the list shows for this resource, not merely the newest one:
+        // with duplicates the two used to differ (#708).
+        return EducationProgressRows.canonical(
+                        educationProgressRepository.findByPatientIdAndResourceId(patientId, resourceId))
+                .orElseThrow(() -> new ResourceNotFoundException("educationResource.notAssigned", resourceId));
     }
 
     private EducationResource requireActiveEducationResource(UUID resourceId) {
         EducationResource resource = educationResourceRepository.findById(resourceId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Education resource not found: " + resourceId));
+                .orElseThrow(() -> new ResourceNotFoundException("educationResource.notFound", resourceId));
         if (Boolean.FALSE.equals(resource.getIsActive())) {
-            throw new ResourceNotFoundException("Education resource not found: " + resourceId);
+            throw new ResourceNotFoundException("educationResource.notFound", resourceId);
         }
         return resource;
     }
@@ -1674,11 +1750,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public List<QuestionnaireDTO> getQuestionnairesForAppointment(Authentication auth, UUID appointmentId) {
         UUID patientId = resolvePatientId(auth);
         Appointment appointment = appointmentRepository.findById(appointmentId)
-                .orElseThrow(() -> new ResourceNotFoundException("appointment.notfound", appointmentId));
+                .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, appointmentId));
 
-        // Ownership check — patient can only see their own appointment's questionnaires
+        // Ownership check — patient can only see their own appointment's
+        // questionnaires; another's answers exactly as a missing appointment.
         if (!appointment.getPatient().getId().equals(patientId)) {
-            throw new BusinessException("You do not have access to this appointment.");
+            throw new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, appointmentId);
         }
 
         // Find active questionnaires for the appointment's hospital + department
@@ -1726,11 +1803,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", patientId));
 
         Appointment appointment = appointmentRepository.findById(dto.getAppointmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("appointment.notfound", dto.getAppointmentId()));
+                .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, dto.getAppointmentId()));
 
-        // Ownership check
+        // Ownership check: another patient's appointment answers exactly as a
+        // missing one.
         if (!appointment.getPatient().getId().equals(patientId)) {
-            throw new BusinessException("You do not have access to this appointment.");
+            throw new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, dto.getAppointmentId());
         }
 
         // Only allow pre-check-in for upcoming SCHEDULED/CONFIRMED appointments

@@ -257,7 +257,9 @@ public class FhirBulkExportRunner {
         }
         UUID patientId = patient.getId();
         if (types.contains(TYPE_PATIENT) && passesSince(patient.getUpdatedAt(), since)) {
-            sink.write(TYPE_PATIENT, patientMapper.toFhir(patient));
+            // The job's hospital's MRN only (the kickoff refuses a job
+            // without one) — never where else the patient is registered.
+            sink.write(TYPE_PATIENT, patientMapper.toFhir(patient, hospitalId));
         }
         if (types.contains(TYPE_ENCOUNTER)) {
             pageThrough(p -> encounterRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId, p),

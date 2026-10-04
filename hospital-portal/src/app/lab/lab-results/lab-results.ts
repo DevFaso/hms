@@ -74,7 +74,11 @@ export class LabResultsComponent implements OnInit {
    * knows. The backend decides, and its refusal explains itself.
    */
   protected canEnterResults(): boolean {
-    return this.roleContext.hasAnyActiveRole([
+    // Exactly, not with doctor equivalence: LabResultServiceImpl
+    // .validateLabResultAuthor checks RoleValidator.isDoctor, which matches
+    // the assignment code DOCTOR only, so a surgeon would pass the annotation
+    // and be refused on submit.
+    return this.roleContext.hasAnyActiveRoleExactly([
       ...LabResultsComponent.LABORATORY_ROLES,
       ...LabResultsComponent.POINT_OF_CARE_ROLES,
     ]);
@@ -143,7 +147,8 @@ export class LabResultsComponent implements OnInit {
    * as the one control in this file that answers from a snapshot.
    */
   canSign(): boolean {
-    return this.roleContext.hasAnyActiveRole(LabResultsComponent.SIGN_ROLES);
+    // Exactly — see SIGN_ROLES: validateSignPermissions is isDoctor-only.
+    return this.roleContext.hasAnyActiveRoleExactly(LabResultsComponent.SIGN_ROLES);
   }
   /** POST /lab-results/{id}/release backend role list (LabResultAuthority.RELEASE_EXPRESSION). */
   private static readonly RELEASE_ROLES = [
@@ -153,22 +158,22 @@ export class LabResultsComponent implements OnInit {
     'ROLE_SUPER_ADMIN',
   ];
   /** GET /lab-results/hospital/{id}/critical/unacknowledged backend role list. */
-  readonly canSeeCritical = this.roleContext.hasAnyActiveRole([
+  private static readonly CRITICAL_QUEUE_ROLES = [
     'ROLE_DOCTOR',
     'ROLE_NURSE',
     'ROLE_MIDWIFE',
     'ROLE_LAB_SCIENTIST',
     'ROLE_LAB_DIRECTOR',
     'ROLE_QUALITY_MANAGER',
-  ]);
+  ];
   /** POST /{id}/acknowledge — intersection of @PreAuthorize and SecurityConfig matcher. */
-  readonly canAcknowledge = this.roleContext.hasAnyActiveRole([
+  private static readonly ACKNOWLEDGE_ROLES = [
     'ROLE_DOCTOR',
     'ROLE_NURSE',
     'ROLE_MIDWIFE',
     'ROLE_LAB_SCIENTIST',
     'ROLE_LAB_MANAGER',
-  ]);
+  ];
   /**
    * POST /{id}/critical-read-back — deliberately NOT the acknowledge list.
    * Read-back is the ordering clinician confirming what they were told; the
@@ -176,12 +181,31 @@ export class LabResultsComponent implements OnInit {
    * so showing them the button meant a control that always 403'd. Hospital
    * admins lost this with E9 #67: read-back is a clinician's act.
    */
-  readonly canReadBack = this.roleContext.hasAnyActiveRole([
+  private static readonly READ_BACK_ROLES = [
     'ROLE_DOCTOR',
     'ROLE_NURSE',
     'ROLE_MIDWIFE',
     'ROLE_SUPER_ADMIN',
-  ]);
+  ];
+
+  /*
+   * The three below are methods, read live on every check — never fields
+   * captured while the component was being constructed. A field is a role
+   * snapshot: it survives a change of active role or hospital scope in place
+   * and then answers for a context the user has left (the defect #722/#724
+   * fixed for release and sign on this screen).
+   */
+  canSeeCritical(): boolean {
+    return this.roleContext.hasAnyActiveRole(LabResultsComponent.CRITICAL_QUEUE_ROLES);
+  }
+
+  canAcknowledge(): boolean {
+    return this.roleContext.hasAnyActiveRole(LabResultsComponent.ACKNOWLEDGE_ROLES);
+  }
+
+  canReadBack(): boolean {
+    return this.roleContext.hasAnyActiveRole(LabResultsComponent.READ_BACK_ROLES);
+  }
 
   private hospitalId(): string | null {
     return this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
@@ -422,7 +446,7 @@ export class LabResultsComponent implements OnInit {
 
   loadCritical(): void {
     const hospitalId = this.hospitalId();
-    if (!hospitalId || !this.canSeeCritical) return;
+    if (!hospitalId || !this.canSeeCritical()) return;
     this.criticalLoading.set(true);
     this.labService.criticalUnacknowledged(hospitalId).subscribe({
       next: (list) => {

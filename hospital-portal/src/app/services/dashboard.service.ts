@@ -243,7 +243,8 @@ export interface PatientSnapshot {
   activeDiagnoses: string[];
   activeMedications: { name: string; dose: string; frequency: string }[];
   recentVitals: { type: string; value: string; timestamp: string }[];
-  latestLabs: { test: string; value: string; flag: string; date: string }[];
+  // `test` is null when the result's lab order has no test definition.
+  latestLabs: { test: string | null; value: string; flag: string; date: string }[];
   // `description` is null when the lab order has no test definition.
   pendingOrders: { type: string; description: string | null; orderedAt: string }[];
   // `type` is null when the encounter has no type, and `author` when the

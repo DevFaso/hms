@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -36,7 +37,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  *   <li>an HMS-minted JWT ({@code JwtTokenProvider}), read back by
  *       {@code JwtAuthenticationFilter}, which applies {@code RoleExpansion};</li>
  *   <li>a Keycloak-shaped RS256 JWT, decoded by the resource server and mapped
- *       by the real {@code KeycloakJwtAuthenticationConverter}, which does not.</li>
+ *       by the real {@code KeycloakJwtAuthenticationConverter}, which applies it
+ *       too and reads realm roles only.</li>
  * </ul>
  * Only the authorization decision is asserted: 401/403 means the chain
  * refused; anything else means the request got past it (MockMvc has no HAPI
@@ -59,8 +61,11 @@ class FhirRoleGateIT extends BaseIT {
     @Autowired private IdleSessionTracker idleSessionTracker;
     @Autowired private UserRepository userRepository;
     @Autowired private KeycloakJwtFixture keycloak;
+    @Autowired private com.example.hms.repository.RoleRepository roleRepository;
+    @Autowired private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
 
     private User user;
+    private final List<UUID> assignments = new java.util.ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -78,11 +83,36 @@ class FhirRoleGateIT extends BaseIT {
 
     @AfterEach
     void tearDown() {
+        assignmentRepository.deleteAllByIdInBatch(assignments);
         userRepository.deleteAllByIdInBatch(List.of(user.getId()));
+    }
+
+    /**
+     * A SUPER_ADMIN role counts only when the assignment table backs it (design
+     * Q4 B, Q10 A: the filters strip an unbacked one), so the super-admin
+     * cases hold a live global SUPER_ADMIN assignment, as a real one does.
+     */
+    private void backedBy(String role) {
+        if (!"ROLE_SUPER_ADMIN".equals(role) || !assignments.isEmpty()) {
+            return;
+        }
+        com.example.hms.model.Role superAdmin = roleRepository.findByCode(role)
+            .orElseGet(() -> roleRepository.save(com.example.hms.model.Role.builder()
+                .name(role).code(role).description("Super admin role").build()));
+        assignments.add(assignmentRepository.save(com.example.hms.model.UserRoleHospitalAssignment.builder()
+            .assignmentCode("ASSIGN-GATE-" + UUID.randomUUID().toString().substring(0, 8))
+            .description("Super admin assignment")
+            .user(user)
+            .role(superAdmin)
+            .startDate(java.time.LocalDate.now())
+            .assignedAt(java.time.LocalDateTime.now())
+            .active(true)
+            .build()).getId());
     }
 
     /** An HMS-minted token: the roles ride in the token, as they do after a password login. */
     private String hms(String role) {
+        backedBy(role);
         // A login touches the idle tracker; a token minted here must too, or
         // the idle gate answers 401 before authorization is decided.
         idleSessionTracker.touch(user.getId());
@@ -92,9 +122,16 @@ class FhirRoleGateIT extends BaseIT {
 
     /** A Keycloak token carrying the role as a realm role, as the realm export defines them. */
     private String keycloak(String role) {
-        return keycloak.mintToken(KeycloakJwtFixture.TokenSpec
+        backedBy(role);
+        KeycloakJwtFixture.TokenSpec spec = KeycloakJwtFixture.TokenSpec
             .defaults(TEST_ISSUER, OidcResourceServerIntegrationTest.TEST_AUDIENCE)
-            .withRealmRoles(List.of(role)));
+            .withRealmRoles(List.of(role));
+        if ("ROLE_SUPER_ADMIN".equals(role)) {
+            // Linked to the account whose assignment backs the role.
+            idleSessionTracker.touch(user.getId());
+            spec = spec.linkedTo(user.getId(), user.getUsername());
+        }
+        return keycloak.mintToken(spec);
     }
 
     private int status(MockHttpServletRequestBuilder request, String bearer) throws Exception {
@@ -130,6 +167,21 @@ class FhirRoleGateIT extends BaseIT {
         }
     }
 
+    @Test
+    @DisplayName("a Keycloak client role grants nothing - an unrelated client's super_admin or doctor least of all")
+    void clientRolesGrantNothing() throws Exception {
+        String token = keycloak.mintToken(KeycloakJwtFixture.TokenSpec
+            .defaults(TEST_ISSUER, OidcResourceServerIntegrationTest.TEST_AUDIENCE)
+            .withRealmRoles(List.of("PATIENT"))
+            .withClientRoles(Map.of(
+                "billing-app", List.of("super_admin", "doctor"),
+                "hms-portal", List.of("ROLE_DOCTOR"),
+                "hms-backend", List.of("ROLE_SUPER_ADMIN"))));
+
+        assertThat(status(get(ENCOUNTER), token)).isEqualTo(403);
+        assertThat(status(get("/fhir/Patient"), token)).isEqualTo(403);
+    }
+
     @ParameterizedTest(name = "{0} reads")
     @ValueSource(strings = {
         "ROLE_DOCTOR", "ROLE_PHYSICIAN", "ROLE_SURGEON", "ROLE_NURSE", "ROLE_MIDWIFE",
@@ -137,7 +189,7 @@ class FhirRoleGateIT extends BaseIT {
     @DisplayName("the chart readers get past the chain on both paths — named, not inherited")
     void readersAreAdmitted(String role) throws Exception {
         assertThat(status(get(ENCOUNTER), hms(role))).as(role).isNotIn(401, 403);
-        // The Keycloak converter does not run RoleExpansion: the role alone must suffice.
+        // The role alone must suffice on the Keycloak path as well.
         assertThat(status(get(ENCOUNTER), keycloak(role))).as("%s (Keycloak)", role).isNotIn(401, 403);
         assertThat(status(post(ENCOUNTER_SEARCH + "/_search"), keycloak(role))).as("%s _search", role)
             .isNotIn(401, 403);

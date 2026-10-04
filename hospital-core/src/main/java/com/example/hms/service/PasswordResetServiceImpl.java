@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.Locale;
@@ -32,6 +33,14 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     private final PasswordResetTokenRepository tokenRepository;
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
+    /**
+     * The reset-token clock: it writes {@code expiration} and every validity
+     * check and the expired-token cleanup read it back. {@code passwordChangedAt}
+     * below is NOT on it — it belongs to the password-rotation aggregate
+     * ({@code PasswordRotationScheduler}, {@code UserServiceImpl}), which still
+     * reads the system clock.
+     */
+    private final Clock clock;
 
     @Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -59,7 +68,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
             log.trace("Password reset requested for {} (locale={}, ip={})", email, locale, requestIp);
         }
         User user = userRepository.findByEmail(email)
-            .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+            .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByEmail", email));
 
         // Enforce "one active token per user"
         tokenRepository.deleteByUser_IdAndConsumedAtIsNull(user.getId());
@@ -71,7 +80,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         PasswordResetToken resetToken = PasswordResetToken.builder()
             .user(user)
             .tokenHash(tokenHash)
-            .expiration(LocalDateTime.now().plusHours(2)) // 2h TTL
+            .expiration(LocalDateTime.now(clock).plusHours(2)) // 2h TTL
             .ipAddress(requestIp)
             .build();
 
@@ -96,9 +105,9 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         String tokenHash = resolveTokenHash(token);
 
         PasswordResetToken resetToken = tokenRepository.findByTokenHash(tokenHash)
-            .orElseThrow(() -> new ResourceNotFoundException("Invalid or expired reset token."));
+            .orElseThrow(() -> new ResourceNotFoundException("passwordReset.token.invalid"));
 
-        if (!resetToken.isValid()) {
+        if (!resetToken.isValidAt(LocalDateTime.now(clock))) {
             throw new IllegalStateException("Reset token is invalid (expired or already used).");
         }
 
@@ -111,7 +120,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         userRepository.save(user);
 
         // Mark token consumed (preserve audit trail)
-        resetToken.setConsumedAt(LocalDateTime.now());
+        resetToken.setConsumedAt(LocalDateTime.now(clock));
         tokenRepository.save(resetToken);
 
         // Send confirmation email so the user knows their password changed
@@ -128,14 +137,14 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     public boolean verifyToken(String token) {
         String tokenHash = resolveTokenHash(token);
         return tokenRepository.findByTokenHash(tokenHash)
-            .map(PasswordResetToken::isValid)
+            .map(t -> t.isValidAt(LocalDateTime.now(clock)))
             .orElse(false);
     }
 
     @Override
     @Transactional
     public int cleanupExpiredTokens() {
-        long deleted = tokenRepository.deleteByExpirationBefore(LocalDateTime.now());
+        long deleted = tokenRepository.deleteByExpirationBefore(LocalDateTime.now(clock));
         return Math.toIntExact(deleted);
     }
 

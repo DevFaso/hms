@@ -91,7 +91,7 @@ public class ReferenceCatalogServiceImpl implements ReferenceCatalogService {
         }
 
         ReferenceCatalog catalog = catalogRepository.findById(catalogId)
-            .orElseThrow(() -> new ResourceNotFoundException("Catalog not found: " + catalogId));
+            .orElseThrow(() -> new ResourceNotFoundException("referenceCatalog.notFound", catalogId));
 
         try (BufferedReader reader = new BufferedReader(
             new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8));
@@ -129,7 +129,7 @@ public class ReferenceCatalogServiceImpl implements ReferenceCatalogService {
     @Transactional
     public ReferenceCatalogResponseDTO schedulePublish(UUID catalogId, SchedulePublishRequestDTO requestDTO) {
         ReferenceCatalog catalog = catalogRepository.findById(catalogId)
-            .orElseThrow(() -> new ResourceNotFoundException("Catalog not found: " + catalogId));
+            .orElseThrow(() -> new ResourceNotFoundException("referenceCatalog.notFound", catalogId));
 
         LocalDateTime publishAt = requestDTO.getPublishAt();
         LocalDateTime now = LocalDateTime.now();

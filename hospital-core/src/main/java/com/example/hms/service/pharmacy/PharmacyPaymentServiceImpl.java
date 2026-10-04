@@ -74,7 +74,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", dto.getPatientId()));
 
         Hospital hospital = hospitalRepository.findById(hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", hospitalId));
 
         // The payer of record is the authenticated cashier/pharmacist.
         UUID currentUserId = roleValidator.getCurrentUserId();

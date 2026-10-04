@@ -138,7 +138,7 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         UUID staffId = resolveStaffId(auth);
 
         RefillRequest refill = refillRequestRepository.findById(refillId)
-                .orElseThrow(() -> new ResourceNotFoundException("Refill request not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("refillRequest.notFound", refillId));
 
         Prescription prescription = refill.getPrescription();
         Staff prescriber = prescription != null ? prescription.getStaff() : null;

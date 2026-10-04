@@ -9,7 +9,6 @@ import { PanelAssignment, PanelPage, PanelService } from '../services/panel.serv
 import { StaffService } from '../services/staff.service';
 import { PatientService } from '../services/patient.service';
 import { HospitalService } from '../services/hospital.service';
-import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 
@@ -73,7 +72,6 @@ describe('PanelComponent', () => {
       'getMyHospitalAsResponse',
     ]);
     hospitalSpy.list.and.returnValue(of([]));
-    const scopeUrlSpy = jasmine.createSpyObj('HospitalScopeUrlService', ['applyUrlScopeSync']);
 
     await TestBed.configureTestingModule({
       imports: [PanelComponent, TranslateModule.forRoot()],
@@ -86,7 +84,6 @@ describe('PanelComponent', () => {
           useValue: { search: () => of([]), lookup: () => of([]), list: () => of([]) },
         },
         { provide: HospitalService, useValue: hospitalSpy },
-        { provide: HospitalScopeUrlService, useValue: scopeUrlSpy },
         {
           provide: RoleContextService,
           useValue: {
@@ -129,13 +126,13 @@ describe('PanelComponent', () => {
     expect(component.overviewRows().length).toBe(0);
   });
 
-  it('a super-admin in GLOBAL view gets the pick-a-hospital state — no requests, no false hints', () => {
-    scopedHospitalId = null;
+  it('carries no scope chip or hint of its own: the route gate owns them', () => {
+    // The route is flagged requiresHospitalScope: the shell shows the one
+    // chip and builds this page only with a hospital pinned.
     fixture.detectChanges();
-    expect(panelService.myPanel).not.toHaveBeenCalled();
-    expect(panelService.overview).not.toHaveBeenCalled();
-    expect(component.noStaffProfile()).toBeFalse();
-    expect(component.scopeReady()).toBeFalse();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('app-hospital-scope-chip')).toBeNull();
+    expect(el.querySelector('app-hospital-scope-hint')).toBeNull();
   });
 
   it('the overview drilldown passes the row role so the cohort matches the count', () => {

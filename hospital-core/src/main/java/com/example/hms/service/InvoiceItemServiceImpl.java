@@ -54,13 +54,14 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
 
         // Ensure assignment hospital matches invoice hospital
         if (!assignment.getHospital().getId().equals(invoice.getHospital().getId())) {
-            throw new BusinessException("assignment.hospital.mismatch");
+            throw new BusinessException("assignment.hospital.mismatch",
+                assignment.getHospital().getId(), invoice.getHospital().getId());
         }
 
         Treatment related = null;
         if (dto.getRelatedServiceId() != null) {
             related = treatmentRepository.findById(dto.getRelatedServiceId())
-                .orElseThrow(() -> new ResourceNotFoundException("treatment.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException("treatment.notfound", dto.getRelatedServiceId()));
         }
 
         InvoiceItem item = invoiceItemMapper.toInvoiceItem(dto, invoice, assignment, related);
@@ -77,13 +78,13 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     @Transactional(readOnly = true)
     public InvoiceItemResponseDTO getInvoiceItemById(UUID id, Locale locale) {
         InvoiceItem item = invoiceItemRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY));
+            .orElseThrow(() -> new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY, id));
         // ── Tenant isolation ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && item.getBillingInvoice() != null
                 && item.getBillingInvoice().getHospital() != null
                 && !activeHospitalId.equals(item.getBillingInvoice().getHospital().getId())) {
-            throw new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY);
+            throw new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY, id);
         }
         return invoiceItemMapper.toInvoiceItemResponseDTO(item);
     }
@@ -108,7 +109,7 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     @Transactional
     public InvoiceItemResponseDTO updateInvoiceItem(UUID id, InvoiceItemRequestDTO dto, Locale locale) {
         InvoiceItem item = invoiceItemRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY));
+            .orElseThrow(() -> new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY, id));
 
         BillingInvoice invoice = billingInvoiceRepository.findById(dto.getBillingInvoiceId())
             .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND_KEY, dto.getBillingInvoiceId()));
@@ -117,13 +118,14 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
             .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
 
         if (!assignment.getHospital().getId().equals(invoice.getHospital().getId())) {
-            throw new BusinessException("assignment.hospital.mismatch");
+            throw new BusinessException("assignment.hospital.mismatch",
+                assignment.getHospital().getId(), invoice.getHospital().getId());
         }
 
         Treatment related = null;
         if (dto.getRelatedServiceId() != null) {
             related = treatmentRepository.findById(dto.getRelatedServiceId())
-                .orElseThrow(() -> new ResourceNotFoundException("treatment.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException("treatment.notfound", dto.getRelatedServiceId()));
         }
 
         // apply updates
@@ -148,7 +150,7 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     @Transactional
     public void deleteInvoiceItem(UUID id, Locale locale) {
         InvoiceItem item = invoiceItemRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY));
+            .orElseThrow(() -> new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY, id));
         UUID invoiceId = item.getBillingInvoice().getId();
         invoiceItemRepository.delete(item);
 

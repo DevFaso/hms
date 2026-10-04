@@ -7,12 +7,7 @@
         <p class="page-subtitle">{{ 'SLOT_ADMIN.SUBTITLE' | translate }}</p>
       </div>
     </div>
-    <div class="header-right">
-      <app-hospital-scope-chip (scopeChange)="onScopeChange()" />
-    </div>
   </header>
-
-  <app-hospital-scope-hint />
 
   <div class="section-tabs" role="tablist">
     <button
@@ -53,12 +48,7 @@
           />
           {{ 'SLOT_ADMIN.SHOW_INACTIVE' | translate }}
         </label>
-        <button
-          class="btn-primary"
-          (click)="openCreateVisitType()"
-          [disabled]="!scopeReady()"
-          data-testid="vt-add"
-        >
+        <button class="btn-primary" (click)="openCreateVisitType()" data-testid="vt-add">
           <span class="material-symbols-outlined">add</span>
           {{ 'SLOT_ADMIN.VT_ADD' | translate }}
         </button>
@@ -150,12 +140,7 @@
           />
           {{ 'SLOT_ADMIN.SHOW_INACTIVE' | translate }}
         </label>
-        <button
-          class="btn-primary"
-          (click)="openCreateTemplate()"
-          [disabled]="!scopeReady()"
-          data-testid="tpl-add"
-        >
+        <button class="btn-primary" (click)="openCreateTemplate()" data-testid="tpl-add">
           <span class="material-symbols-outlined">add</span>
           {{ 'SLOT_ADMIN.TPL_ADD' | translate }}
         </button>

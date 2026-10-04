@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.enums.UltrasoundFindingCategory;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.tenant.TenantEntityListener;
@@ -235,6 +236,18 @@ public class UltrasoundReport extends BaseEntity implements TenantScoped {
     @Column(name = "patient_notified_at")
     private LocalDateTime patientNotifiedAt;
 
+    /**
+     * May the patient themselves read this report? Only once a provider has
+     * reviewed it ({@code markReportReviewed} finalises it) AND someone has told the
+     * patient ({@code markPatientNotified}) — so a finding reaches the patient
+     * through their care team first, never by reading an unreviewed report.
+     * {@code patientNotifiedAt} is the field that endpoint writes. The lab
+     * counterpart is {@code LabResult.isReleased}.
+     */
+    public boolean isReleasedToPatient() {
+        return Boolean.TRUE.equals(reportReviewedByProvider) && patientNotifiedAt != null;
+    }
+
     @Override
     public UUID getTenantOrganizationId() {
         return hospital != null && hospital.getOrganization() != null ? hospital.getOrganization().getId() : null;
@@ -256,9 +269,9 @@ public class UltrasoundReport extends BaseEntity implements TenantScoped {
             return;
         }
         // Apply hospital scope from context if not already set
-        if (this.hospital == null && context.getActiveHospitalId() != null) {
+        if (this.hospital == null && ActingScopeResolver.pinnedHospitalIdOf(context) != null) {
             this.hospital = new Hospital();
-            this.hospital.setId(context.getActiveHospitalId());
+            this.hospital.setId(ActingScopeResolver.pinnedHospitalIdOf(context));
         }
     }
 }

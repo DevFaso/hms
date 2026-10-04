@@ -19,7 +19,8 @@ struct EncounterDTO: Codable, Identifiable, Hashable {
 
     // Computed aliases used by views
     var date: String? { encounterDate }
-    var type: String? { encounterType?.replacingOccurrences(of: "_", with: " ") }
+    /// The encounter type in the app's language, not the wire value.
+    var type: String? { EnumLabel.label(.encounterType, encounterType) }
     var providerName: String? { staffName }
     var department: String? { departmentName }
     var reason: String? { chiefComplaint ?? appointmentReason }
@@ -283,6 +284,47 @@ struct ChatMessageDTO: Codable, Identifiable, Hashable {
     let recipientName: String?
     let content: String?
     let read: Bool?
+    /// `ChatAttachmentDTO`s — a photo or a voice note. Absent on older
+    /// payloads, hence optional.
+    let attachments: [ChatAttachmentDTO]?
+
+    var attachmentList: [ChatAttachmentDTO] { attachments ?? [] }
+
+    /// The text to show, or nil for an attachment-only message (the server
+    /// allows a null content when attachments are present).
+    var displayText: String? {
+        guard let content, !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return content
+    }
+}
+
+/// Mirrors the backend `ChatAttachmentDTO` as it appears on a message. The
+/// bytes are fetched from `/chat/attachments/{id}/download`, never from
+/// `publicUrl`, which is not served to a patient.
+struct ChatAttachmentDTO: Codable, Hashable {
+    let id: String?
+    let displayName: String?
+    let contentType: String?
+    let sizeBytes: Int64?
+    /// `ChatAttachmentKind`: PHOTO or AUDIO today; kept a string so a kind
+    /// this build does not know still decodes (and shows as a file).
+    let kind: String?
+    /// Audio length in seconds (1..90); null for a photo.
+    let durationSeconds: Int?
+
+    var kindEnum: ChatAttachmentKind { ChatAttachmentKind(wire: kind) }
+}
+
+enum ChatAttachmentKind: Equatable {
+    case photo, audio, other
+
+    init(wire: String?) {
+        switch (wire ?? "").trimmingCharacters(in: .whitespaces).uppercased() {
+        case "PHOTO": self = .photo
+        case "AUDIO": self = .audio
+        default: self = .other
+        }
+    }
 }
 
 /// Mirrors the backend `ChatMessageRequestDTO` / Android `SendChatMessageRequest`.

@@ -146,6 +146,29 @@ class DisclosureAccountingServiceImplTest {
     }
 
     @Test
+    @DisplayName("legacy role spellings reach both audit surfaces bare, or null")
+    void legacyRoleSpellingsAreNormalised() {
+        // audit_event_logs.role_name holds ROLE_X from one writer, X from the
+        // other, and the "Unknown Role" sentence; rows written years ago keep
+        // theirs. toEntry() is the one choke point for the patient's access log
+        // and the disclosure accounting, so it normalises for every client.
+        AuditEventLog prefixed = row(AuditEventType.BREAK_GLASS_ACCESS, "BREAK_GLASS_SESSION", "a");
+        prefixed.setRoleName("ROLE_DOCTOR");
+        AuditEventLog bare = row(AuditEventType.BREAK_GLASS_ACCESS, "BREAK_GLASS_SESSION", "b");
+        bare.setRoleName("NURSE");
+        AuditEventLog sentence = row(AuditEventType.BREAK_GLASS_ACCESS, "BREAK_GLASS_SESSION", "c");
+        sentence.setRoleName("Unknown Role");
+        AuditEventLog missing = row(AuditEventType.BREAK_GLASS_ACCESS, "BREAK_GLASS_SESSION", "d");
+        missing.setRoleName(null);
+        when(auditRepository.findDisclosuresForPatient(any(), any(), any(), any(), any()))
+            .thenReturn(new PageImpl<>(List.of(prefixed, bare, sentence, missing)));
+
+        assertThat(service.getEntries(patientId, null, null, pageable).getContent())
+            .extracting(AccessLogEntryDTO::getActorRole)
+            .containsExactly("DOCTOR", "NURSE", null, null);
+    }
+
+    @Test
     @DisplayName("counts fold two group rows into one category without losing either")
     void countsFoldPatientAccessCorrectly() {
         // PATIENT_ACCESS groups separately per entity type, and two of those
