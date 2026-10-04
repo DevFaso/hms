@@ -88,6 +88,16 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
     }
 
+    /**
+     * A domain rule refused the request. Same status as {@link BusinessException}
+     * (the two are the same kind of refusal); without this handler it fell
+     * through to {@link #handleRuntimeException} and reached the client as a 500.
+     */
+    @ExceptionHandler(BusinessRuleException.class)
+    public ResponseEntity<Object> handleBusinessRuleException(BusinessRuleException ex, WebRequest request) {
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Object> handleIllegalArgumentException(IllegalArgumentException ex, WebRequest request) {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);

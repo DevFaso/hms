@@ -9,7 +9,7 @@ import java.util.UUID;
  * re-sync action (typically: re-fetch reference data from the partner
  * and reconcile with local state). Connectors that have no re-sync
  * concept simply do not implement this interface — the controller
- * responds 422 in that case rather than silently no-op'ing.
+ * responds 400 in that case rather than silently no-op'ing.
  *
  * <p>Implementations should run the work asynchronously (the controller
  * itself wraps the call in {@code @Async} when calling) and use

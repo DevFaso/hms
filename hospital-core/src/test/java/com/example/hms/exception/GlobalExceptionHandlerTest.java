@@ -524,4 +524,53 @@ class GlobalExceptionHandlerTest {
                 ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException.class);
         }
     }
+
+    // =========================================================================
+    // handleBusinessRuleException (D10)
+    // =========================================================================
+
+    @Nested
+    @DisplayName("handleBusinessRuleException")
+    class HandleBusinessRuleException {
+
+        @org.springframework.web.bind.annotation.RestController
+        static class Thrower {
+            @org.springframework.web.bind.annotation.GetMapping("/rule")
+            String rule() {
+                throw new BusinessRuleException("Purge cannot be scheduled in the past.");
+            }
+        }
+
+        @Test
+        @DisplayName("a rule refusal is a 400 with its sentence, through MVC dispatch — it used to fall to the 500 handler")
+        void dispatchesTo400() throws Exception {
+            org.springframework.test.web.servlet.MockMvc mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders
+                .standaloneSetup(new Thrower())
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/rule"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isBadRequest())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.message")
+                    .value("Purge cannot be scheduled in the past."));
+        }
+
+        @Test
+        @DisplayName("a keyed refusal is resolved in the caller's locale")
+        void keyIsResolved() {
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            try {
+                ResponseEntity<Object> response = handler.handleBusinessRuleException(
+                    new BusinessRuleException("platform.department.noHospital"), request);
+
+                assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> body = (Map<String, Object>) response.getBody();
+                assertThat(body).containsEntry("message", "Le service hospitalier n'est rattaché à aucun hôpital.");
+            } finally {
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
+        }
+    }
 }
