@@ -97,12 +97,18 @@ export interface OrgServiceRegisterRequest {
   metadata?: PlatformServiceMetadata;
 }
 
+/**
+ * Partial update. Text fields: omitted = unchanged, `''` = cleared, anything
+ * else replaces (ownership and metadata field by field). The API key is
+ * write-only, so a blank value keeps it and `clearApiKeyReference` removes it.
+ */
 export interface OrgServiceUpdateRequest {
   status?: PlatformServiceStatus;
   provider?: string;
   baseUrl?: string;
   documentationUrl?: string;
   apiKeyReference?: string;
+  clearApiKeyReference?: boolean;
   managedByPlatform?: boolean;
   ownership?: PlatformOwnership;
   metadata?: PlatformServiceMetadata;
@@ -168,7 +174,6 @@ export interface AutomationTask {
   metricLabel: string;
   metricValue: string;
   nextAction: string;
-  lastRun: string;
 }
 
 export interface ActionPanel {
@@ -176,7 +181,8 @@ export interface ActionPanel {
   pendingIntegrations: number;
   disabledLinks: number;
   activeReleaseWindows: number;
-  lastSnapshotGeneratedAt?: string;
+  /** When a release window was last created or changed (ISO local time); null when none exists. */
+  lastReleaseWindowChangeAt?: string | null;
 }
 
 export interface PlatformSummary {
@@ -304,6 +310,25 @@ export class PlatformService {
     );
   }
 
+  /** Enables or disables an existing link (POST would answer 409 for a link that exists). */
+  setHospitalLinkEnabled(
+    hospitalId: string,
+    serviceId: string,
+    enabled: boolean,
+  ): Observable<HospitalServiceLink> {
+    return this.http.put<HospitalServiceLink>(
+      `/platform/hospitals/${hospitalId}/services/${serviceId}`,
+      { enabled },
+    );
+  }
+
+  /** Every hospital link of one organization service, across all its hospitals. */
+  listServiceHospitalLinks(orgId: string, serviceId: string): Observable<HospitalServiceLink[]> {
+    return this.http.get<HospitalServiceLink[]>(
+      `/platform/organizations/${orgId}/services/${serviceId}/hospital-links`,
+    );
+  }
+
   unlinkHospital(hospitalId: string, serviceId: string): Observable<void> {
     return this.http.delete<void>(`/platform/hospitals/${hospitalId}/services/${serviceId}`);
   }
@@ -330,6 +355,15 @@ export class PlatformService {
   }
 
   /* ── Release Windows ── */
+
+  /** Newest start first; the server caps the page. */
+  listReleaseWindows(limit?: number): Observable<ReleaseWindowResponse[]> {
+    let params = new HttpParams();
+    if (limit) params = params.set('limit', String(limit));
+    return this.http.get<ReleaseWindowResponse[]>('/super-admin/platform/release-windows', {
+      params,
+    });
+  }
 
   scheduleReleaseWindow(request: ReleaseWindowRequest): Observable<ReleaseWindowResponse> {
     return this.http.post<ReleaseWindowResponse>('/super-admin/platform/release-windows', request);
