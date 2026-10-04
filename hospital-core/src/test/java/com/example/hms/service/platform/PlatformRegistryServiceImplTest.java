@@ -1,6 +1,7 @@
 package com.example.hms.service.platform;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -10,6 +11,21 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.platform.PlatformRegistryEventType;
+import com.example.hms.exception.BusinessException;
+import com.example.hms.model.embedded.PlatformServiceMetadata;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
+import com.example.hms.payload.dto.HospitalPlatformServiceLinkResponseDTO;
+import com.example.hms.payload.dto.PlatformServiceLinkUpdateRequestDTO;
+import com.example.hms.payload.dto.PlatformServiceMetadataDTO;
+import com.example.hms.payload.event.PlatformServiceEventPayload;
+import com.example.hms.service.platform.discovery.IntegrationDescriptor;
+import org.junit.jupiter.api.DisplayName;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verifyNoInteractions;
 import com.example.hms.enums.platform.PlatformServiceStatus;
 import com.example.hms.enums.platform.PlatformServiceType;
 import com.example.hms.exception.BusinessRuleException;
@@ -34,7 +50,11 @@ import com.example.hms.repository.platform.HospitalPlatformServiceLinkRepository
 import com.example.hms.repository.platform.OrganizationPlatformServiceRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.i18n.TestMessageSources;
+import com.example.hms.service.AuditEventLogService;
+import com.example.hms.service.platform.discovery.PlatformServiceRegistry;
 import com.example.hms.service.platform.event.PlatformRegistryEventPublisher;
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.service.platform.impl.PlatformRegistryServiceImpl;
 import com.example.hms.exception.ResourceNotFoundException;
 import java.util.List;
@@ -73,6 +93,12 @@ class PlatformRegistryServiceImplTest {
     @Mock
     private PlatformRegistryEventPublisher eventPublisher;
 
+    @Mock
+    private PlatformServiceRegistry platformServiceRegistry;
+
+    @Mock
+    private AuditEventLogService auditEventLogService;
+
     private PlatformRegistryServiceImpl platformRegistryService;
 
     private final PlatformServiceMapper mapper = new PlatformServiceMapper();
@@ -87,8 +113,11 @@ class PlatformRegistryServiceImplTest {
             departmentRepository,
             departmentPlatformServiceLinkRepository,
             mapper,
-            eventPublisher
+            eventPublisher,
+            platformServiceRegistry,
+            auditEventLogService
         );
+        MessageUtil.setMessageSource(TestMessageSources.bundles());
     }
 
     @AfterEach
@@ -201,7 +230,7 @@ class PlatformRegistryServiceImplTest {
         assertThatThrownBy(() -> platformRegistryService
             .registerOrganizationService(organizationId, request, Locale.ENGLISH))
             .isInstanceOf(ConflictException.class)
-            .hasMessageContaining("already registered");
+            .hasMessageContaining("already has a BILLING service");
     }
 
     @Test
@@ -230,7 +259,7 @@ class PlatformRegistryServiceImplTest {
         assertThatThrownBy(() -> platformRegistryService
             .linkHospitalToService(hospitalId, serviceId, null, Locale.ENGLISH))
             .isInstanceOf(BusinessRuleException.class)
-            .hasMessageContaining("Hospital must belong");
+            .hasMessageContaining("hospital must belong to the same organization");
     }
 
     @Test
@@ -293,7 +322,7 @@ class PlatformRegistryServiceImplTest {
         assertThatThrownBy(() -> platformRegistryService
             .linkHospitalToService(hospitalId, serviceId, null, Locale.ENGLISH))
             .isInstanceOf(BusinessRuleException.class)
-            .hasMessageContaining("missing organization association");
+            .hasMessageContaining("has no organization");
     }
 
     @Test
@@ -454,7 +483,7 @@ class PlatformRegistryServiceImplTest {
         assertThatThrownBy(() -> platformRegistryService
             .linkDepartmentToService(departmentId, serviceId, null, Locale.ENGLISH))
             .isInstanceOf(BusinessRuleException.class)
-            .hasMessageContaining("Department is not associated");
+            .hasMessageContaining("not attached to a hospital");
     }
 
     @Test
@@ -616,7 +645,7 @@ class PlatformRegistryServiceImplTest {
         assertThatThrownBy(() -> platformRegistryService
             .getOrganizationService(organizationId, serviceId, Locale.ENGLISH))
             .isInstanceOf(BusinessRuleException.class)
-            .hasMessageContaining("missing organization association");
+            .hasMessageContaining("has no organization");
     }
 
     @Test
@@ -890,5 +919,359 @@ class PlatformRegistryServiceImplTest {
     assertThat(responses.get(0).getDepartmentId()).isEqualTo(departmentId);
     assertThat(responses.get(0).getOrganizationServiceId()).isEqualTo(serviceId);
     assertThat(responses.get(0).getOverrideEndpoint()).isEqualTo("https://dept");
+    }
+
+    // ── Platform Management defects (D2, D3, D5, D13, audit) ──────────────
+
+    private Organization org(UUID id) {
+        Organization organization = Organization.builder().build();
+        organization.setId(id);
+        return organization;
+    }
+
+    private OrganizationPlatformService ehrService(Organization organization, UUID serviceId) {
+        OrganizationPlatformService service = OrganizationPlatformService.builder()
+            .organization(organization)
+            .serviceType(PlatformServiceType.EHR)
+            .status(PlatformServiceStatus.ACTIVE)
+            .build();
+        service.setId(serviceId);
+        return service;
+    }
+
+    private static IntegrationDescriptor descriptor(PlatformServiceType type, boolean enabled) {
+        return IntegrationDescriptor.builder().serviceType(type).enabled(enabled).build();
+    }
+
+    @Test
+    @DisplayName("D13: a catalog entry that is disabled cannot be provisioned")
+    void registerRefusesADisabledCatalogEntry() {
+        UUID organizationId = UUID.randomUUID();
+        when(organizationRepository.findById(organizationId)).thenReturn(Optional.of(org(organizationId)));
+        when(platformServiceRegistry.findIntegration(PlatformServiceType.INVENTORY, Locale.ENGLISH))
+            .thenReturn(Optional.of(descriptor(PlatformServiceType.INVENTORY, false)));
+        PlatformServiceRegistrationRequestDTO request = PlatformServiceRegistrationRequestDTO.builder()
+            .serviceType(PlatformServiceType.INVENTORY)
+            .build();
+
+        assertThatThrownBy(() -> platformRegistryService.registerOrganizationService(organizationId, request, Locale.ENGLISH))
+            .isInstanceOf(ConflictException.class)
+            .hasMessage("The INVENTORY integration is disabled in this deployment's catalog and cannot be provisioned.");
+        verify(organizationPlatformServiceRepository, never()).save(any());
+        verifyNoInteractions(auditEventLogService);
+    }
+
+    @Test
+    @DisplayName("D13: the refusal is in the caller's language")
+    void registerRefusalIsLocalized() {
+        UUID organizationId = UUID.randomUUID();
+        when(organizationRepository.findById(organizationId)).thenReturn(Optional.of(org(organizationId)));
+        when(platformServiceRegistry.findIntegration(PlatformServiceType.INVENTORY, Locale.FRENCH))
+            .thenReturn(Optional.of(descriptor(PlatformServiceType.INVENTORY, false)));
+        PlatformServiceRegistrationRequestDTO request = PlatformServiceRegistrationRequestDTO.builder()
+            .serviceType(PlatformServiceType.INVENTORY)
+            .build();
+
+        assertThatThrownBy(() -> platformRegistryService.registerOrganizationService(organizationId, request, Locale.FRENCH))
+            .isInstanceOf(ConflictException.class)
+            .hasMessageStartingWith("L'intégration INVENTORY est désactivée");
+    }
+
+    @Test
+    @DisplayName("D13: an enabled catalog entry still registers")
+    void registerAcceptsAnEnabledCatalogEntry() {
+        UUID organizationId = UUID.randomUUID();
+        when(organizationRepository.findById(organizationId)).thenReturn(Optional.of(org(organizationId)));
+        when(platformServiceRegistry.findIntegration(PlatformServiceType.EHR, Locale.ENGLISH))
+            .thenReturn(Optional.of(descriptor(PlatformServiceType.EHR, true)));
+        when(organizationPlatformServiceRepository.save(any(OrganizationPlatformService.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+        PlatformServiceRegistrationRequestDTO request = PlatformServiceRegistrationRequestDTO.builder()
+            .serviceType(PlatformServiceType.EHR)
+            .build();
+
+        PlatformServiceResponseDTO response = platformRegistryService.registerOrganizationService(organizationId,
+            request, Locale.ENGLISH);
+
+        assertThat(response.getServiceType()).isEqualTo(PlatformServiceType.EHR);
+    }
+
+    @Test
+    @DisplayName("D2: a disabled link is switched on in place, not re-created")
+    void updateHospitalServiceLinkEnablesTheExistingLink() {
+        UUID organizationId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        Organization organization = org(organizationId);
+        Hospital hospital = Hospital.builder().organization(organization).name("Clinique Nord").build();
+        hospital.setId(hospitalId);
+        OrganizationPlatformService service = ehrService(organization, serviceId);
+        HospitalPlatformServiceLink link = HospitalPlatformServiceLink.builder()
+            .hospital(hospital)
+            .organizationService(service)
+            .enabled(false)
+            .build();
+        when(hospitalPlatformServiceLinkRepository.findByHospitalIdAndOrganizationServiceId(hospitalId, serviceId))
+            .thenReturn(Optional.of(link));
+        when(hospitalPlatformServiceLinkRepository.save(link)).thenReturn(link);
+
+        HospitalPlatformServiceLinkResponseDTO response = platformRegistryService.updateHospitalServiceLink(hospitalId,
+            serviceId, PlatformServiceLinkUpdateRequestDTO.builder().enabled(true).build(), Locale.ENGLISH);
+
+        assertThat(response.isEnabled()).isTrue();
+        assertThat(link.isEnabled()).isTrue();
+        verify(hospitalPlatformServiceLinkRepository, never()).existsByHospitalIdAndOrganizationServiceId(any(), any());
+        ArgumentCaptor<PlatformServiceEventPayload> event = ArgumentCaptor.forClass(PlatformServiceEventPayload.class);
+        verify(eventPublisher).publish(event.capture());
+        assertThat(event.getValue().getEventType()).isEqualTo(PlatformRegistryEventType.HOSPITAL_SERVICE_LINK_UPDATED);
+        assertThat(event.getValue().getLinkEnabled()).isTrue();
+    }
+
+    @Test
+    @DisplayName("D2: the update keeps the create's organization-ownership rule")
+    void updateHospitalServiceLinkRefusesACrossOrganizationLink() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        Hospital hospital = Hospital.builder().organization(org(UUID.randomUUID())).build();
+        hospital.setId(hospitalId);
+        HospitalPlatformServiceLink link = HospitalPlatformServiceLink.builder()
+            .hospital(hospital)
+            .organizationService(ehrService(org(UUID.randomUUID()), serviceId))
+            .enabled(false)
+            .build();
+        when(hospitalPlatformServiceLinkRepository.findByHospitalIdAndOrganizationServiceId(hospitalId, serviceId))
+            .thenReturn(Optional.of(link));
+        PlatformServiceLinkUpdateRequestDTO request = PlatformServiceLinkUpdateRequestDTO.builder().enabled(true).build();
+
+        assertThatThrownBy(() -> platformRegistryService.updateHospitalServiceLink(hospitalId, serviceId, request, Locale.ENGLISH))
+            .isInstanceOf(BusinessRuleException.class);
+        assertThat(link.isEnabled()).isFalse();
+        verify(hospitalPlatformServiceLinkRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("D2: a link left spanning two organizations can still be switched off")
+    void updateHospitalServiceLinkDisablesACrossOrganizationLink() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        Hospital hospital = Hospital.builder().organization(org(UUID.randomUUID())).build();
+        hospital.setId(hospitalId);
+        HospitalPlatformServiceLink link = HospitalPlatformServiceLink.builder()
+            .hospital(hospital)
+            .organizationService(ehrService(org(UUID.randomUUID()), serviceId))
+            .enabled(true)
+            .build();
+        when(hospitalPlatformServiceLinkRepository.findByHospitalIdAndOrganizationServiceId(hospitalId, serviceId))
+            .thenReturn(Optional.of(link));
+        when(hospitalPlatformServiceLinkRepository.save(link)).thenReturn(link);
+        PlatformServiceLinkUpdateRequestDTO request = PlatformServiceLinkUpdateRequestDTO.builder().enabled(false).build();
+
+        platformRegistryService.updateHospitalServiceLink(hospitalId, serviceId, request, Locale.ENGLISH);
+
+        assertThat(link.isEnabled()).isFalse();
+        verify(hospitalPlatformServiceLinkRepository).save(link);
+    }
+
+    @Test
+    @DisplayName("Audit: a failed after-commit audit does not fail the committed write")
+    void auditFailureAfterCommitDoesNotReachTheCaller() {
+        UUID organizationId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        Organization organization = org(organizationId);
+        Hospital hospital = Hospital.builder().organization(organization).build();
+        hospital.setId(hospitalId);
+        HospitalPlatformServiceLink link = HospitalPlatformServiceLink.builder()
+            .hospital(hospital).organizationService(ehrService(organization, serviceId)).enabled(true).build();
+        when(hospitalPlatformServiceLinkRepository.findByHospitalIdAndOrganizationServiceId(hospitalId, serviceId))
+            .thenReturn(Optional.of(link));
+        when(hospitalPlatformServiceLinkRepository.save(link)).thenReturn(link);
+        doThrow(new IllegalStateException("audit store down"))
+            .when(auditEventLogService).logEvent(any());
+        PlatformServiceLinkUpdateRequestDTO request = PlatformServiceLinkUpdateRequestDTO.builder().enabled(false).build();
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            platformRegistryService.updateHospitalServiceLink(hospitalId, serviceId, request, Locale.ENGLISH);
+            assertThatCode(() ->
+                    TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit))
+                .doesNotThrowAnyException();
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+        verify(auditEventLogService).logEvent(any());
+    }
+
+    @Test
+    void updateHospitalServiceLinkWhenMissingIsNotFound() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        when(hospitalPlatformServiceLinkRepository.findByHospitalIdAndOrganizationServiceId(hospitalId, serviceId))
+            .thenReturn(Optional.empty());
+        PlatformServiceLinkUpdateRequestDTO request = PlatformServiceLinkUpdateRequestDTO.builder().enabled(false).build();
+
+        assertThatExceptionOfType(ResourceNotFoundException.class)
+            .isThrownBy(() -> platformRegistryService.updateHospitalServiceLink(hospitalId, serviceId, request, Locale.ENGLISH))
+            .satisfies(e -> assertThat(e.getMessageKey()).isEqualTo("platform.hospitalLink.notFound"));
+    }
+
+    @Test
+    void updateHospitalServiceLinkRequiresEnabled() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        PlatformServiceLinkUpdateRequestDTO request = new PlatformServiceLinkUpdateRequestDTO();
+        assertThatThrownBy(() -> platformRegistryService.updateHospitalServiceLink(hospitalId, serviceId, request, Locale.ENGLISH))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("D3: one call lists the service's links across every hospital of the organization")
+    void listServiceHospitalLinksSpansHospitals() {
+        UUID organizationId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        Organization organization = org(organizationId);
+        OrganizationPlatformService service = ehrService(organization, serviceId);
+        Hospital zeta = Hospital.builder().organization(organization).name("Zeta").build();
+        zeta.setId(UUID.randomUUID());
+        Hospital alpha = Hospital.builder().organization(organization).name("alpha").build();
+        alpha.setId(UUID.randomUUID());
+        when(organizationPlatformServiceRepository.findById(serviceId)).thenReturn(Optional.of(service));
+        when(hospitalPlatformServiceLinkRepository.findByOrganizationServiceId(serviceId)).thenReturn(List.of(
+            HospitalPlatformServiceLink.builder().hospital(zeta).organizationService(service).enabled(true).build(),
+            HospitalPlatformServiceLink.builder().hospital(alpha).organizationService(service).enabled(false).build()));
+
+        List<HospitalPlatformServiceLinkResponseDTO> links =
+            platformRegistryService.listServiceHospitalLinks(organizationId, serviceId, Locale.ENGLISH);
+
+        assertThat(links).extracting(HospitalPlatformServiceLinkResponseDTO::getHospitalName).containsExactly("alpha", "Zeta");
+        assertThat(links).extracting(HospitalPlatformServiceLinkResponseDTO::isEnabled).containsExactly(false, true);
+    }
+
+    @Test
+    void listServiceHospitalLinksRefusesAnotherOrganizationsService() {
+        UUID serviceId = UUID.randomUUID();
+        when(organizationPlatformServiceRepository.findById(serviceId))
+            .thenReturn(Optional.of(ehrService(org(UUID.randomUUID()), serviceId)));
+        UUID otherOrganization = UUID.randomUUID();
+
+        assertThatThrownBy(() -> platformRegistryService.listServiceHospitalLinks(otherOrganization, serviceId, Locale.ENGLISH))
+            .isInstanceOf(BusinessRuleException.class)
+            .hasMessageContaining("does not belong to this organization");
+        verify(hospitalPlatformServiceLinkRepository, never()).findByOrganizationServiceId(any());
+    }
+
+    @Test
+    @DisplayName("D5: a request that both sets and clears the API key is refused")
+    void updateRefusesSettingAndClearingTheApiKey() {
+        PlatformServiceUpdateRequestDTO request = PlatformServiceUpdateRequestDTO.builder()
+            .apiKeyReference("vault://new")
+            .clearApiKeyReference(true)
+            .build();
+        UUID organizationId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> platformRegistryService.updateOrganizationService(organizationId, serviceId, request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage("Send a new API key reference or ask to clear it, not both.");
+        verify(organizationPlatformServiceRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("D4: an update naming only integration notes keeps the other metadata")
+    void updateMergesMetadataThroughTheService() {
+        UUID organizationId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        OrganizationPlatformService service = ehrService(org(organizationId), serviceId);
+        service.setMetadata(PlatformServiceMetadata.builder()
+            .ehrSystem("OpenMRS")
+            .billingSystem("Odoo")
+            .inventorySystem("mSupply")
+            .integrationNotes("old")
+            .build());
+        when(organizationPlatformServiceRepository.findById(serviceId)).thenReturn(Optional.of(service));
+        when(organizationPlatformServiceRepository.save(service)).thenReturn(service);
+        PlatformServiceUpdateRequestDTO request = PlatformServiceUpdateRequestDTO.builder()
+            .metadata(PlatformServiceMetadataDTO.builder().integrationNotes("new").build())
+            .build();
+
+        PlatformServiceResponseDTO response = platformRegistryService.updateOrganizationService(organizationId, serviceId,
+            request, Locale.ENGLISH);
+
+        assertThat(response.getMetadata().getEhrSystem()).isEqualTo("OpenMRS");
+        assertThat(response.getMetadata().getBillingSystem()).isEqualTo("Odoo");
+        assertThat(response.getMetadata().getInventorySystem()).isEqualTo("mSupply");
+        assertThat(response.getMetadata().getIntegrationNotes()).isEqualTo("new");
+    }
+
+    @Test
+    @DisplayName("audit: a registry write records PLATFORM_REGISTRY_UPDATED once, after commit, without names")
+    void registryWritesAreAuditedAfterCommit() {
+        UUID organizationId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        Organization organization = org(organizationId);
+        Hospital hospital = Hospital.builder().organization(organization).name("Clinique Nord").build();
+        hospital.setId(hospitalId);
+        OrganizationPlatformService service = ehrService(organization, serviceId);
+        HospitalPlatformServiceLink link = HospitalPlatformServiceLink.builder()
+            .hospital(hospital).organizationService(service).enabled(true).build();
+        when(hospitalPlatformServiceLinkRepository.findByHospitalIdAndOrganizationServiceId(hospitalId, serviceId))
+            .thenReturn(Optional.of(link));
+        when(hospitalPlatformServiceLinkRepository.save(link)).thenReturn(link);
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(UUID.randomUUID())
+            .principalUsername("superadmin")
+            .build());
+        PlatformServiceLinkUpdateRequestDTO request = PlatformServiceLinkUpdateRequestDTO.builder().enabled(false).build();
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            platformRegistryService.updateHospitalServiceLink(hospitalId, serviceId, request, Locale.ENGLISH);
+            verifyNoInteractions(auditEventLogService);
+
+            TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.PLATFORM_REGISTRY_UPDATED);
+        assertThat(audit.getValue().getEntityType()).isEqualTo("PLATFORM_SERVICE");
+        assertThat(audit.getValue().getUserName()).isEqualTo("superadmin");
+        assertThat(audit.getValue().getEventDescription())
+            .contains("hospital link disabled", "type=EHR", hospitalId.toString())
+            .doesNotContain("Clinique Nord");
+    }
+
+    @Test
+    void unlinkAndRegisterAreAuditedToo() {
+        UUID organizationId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        Organization organization = org(organizationId);
+        Hospital hospital = Hospital.builder().organization(organization).build();
+        hospital.setId(hospitalId);
+        OrganizationPlatformService service = ehrService(organization, serviceId);
+        HospitalPlatformServiceLink link = HospitalPlatformServiceLink.builder()
+            .hospital(hospital).organizationService(service).enabled(true).build();
+        when(hospitalPlatformServiceLinkRepository.findByHospitalIdAndOrganizationServiceId(hospitalId, serviceId))
+            .thenReturn(Optional.of(link));
+        when(organizationRepository.findById(organizationId)).thenReturn(Optional.of(organization));
+        when(organizationPlatformServiceRepository.save(any(OrganizationPlatformService.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+        PlatformServiceRegistrationRequestDTO register = PlatformServiceRegistrationRequestDTO.builder()
+            .serviceType(PlatformServiceType.LIMS)
+            .build();
+
+        platformRegistryService.unlinkHospitalFromService(hospitalId, serviceId, Locale.ENGLISH);
+        platformRegistryService.registerOrganizationService(organizationId, register, Locale.ENGLISH);
+
+        // No transaction in a unit test: TransactionCallbacks runs the audit inline.
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService, times(2)).logEvent(audit.capture());
+        assertThat(audit.getAllValues()).extracting(AuditEventRequestDTO::getEventDescription)
+            .anySatisfy(d -> assertThat(d).startsWith("Platform hospital unlinked"))
+            .anySatisfy(d -> assertThat(d).startsWith("Platform service registered type=LIMS"));
     }
 }

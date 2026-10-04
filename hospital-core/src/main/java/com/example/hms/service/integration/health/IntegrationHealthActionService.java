@@ -96,7 +96,7 @@ public class IntegrationHealthActionService {
 
     /**
      * Trigger an asynchronous re-sync for {@code integrationId}. Throws
-     * {@link BusinessRuleException} (HTTP 422 via the ControllerAdvice
+     * {@link BusinessRuleException} (HTTP 400 via the ControllerAdvice
      * mapping) when the integration is registered but has no Resyncable
      * impl — the operator can then decide whether to wait for the spec
      * or skip the action. {@link ResourceNotFoundException} (404) when

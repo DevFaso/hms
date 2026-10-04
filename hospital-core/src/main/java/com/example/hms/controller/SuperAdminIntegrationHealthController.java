@@ -61,7 +61,7 @@ public class SuperAdminIntegrationHealthController {
 
     @PostMapping("/{integrationId}/resync")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @Operation(summary = "MVP-3b: Re-sync — dispatches an asynchronous re-sync; returns 422 if not supported")
+    @Operation(summary = "MVP-3b: Re-sync — dispatches an asynchronous re-sync; returns 400 if not supported")
     public ResponseEntity<Void> resync(
         @PathVariable String integrationId,
         @RequestParam(value = "organizationId", required = false) UUID organizationId

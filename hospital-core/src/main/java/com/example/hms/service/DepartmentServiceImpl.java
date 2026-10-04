@@ -390,8 +390,8 @@ public class DepartmentServiceImpl implements DepartmentService {
         if (dto.getHospitalId() != null && !dto.getHospitalId().equals(activeHospitalId)) {
             log.warn("[dept:tenantGuard] User {} attempted cross-hospital operation: dto.hospitalId={} activeHospital={}",
                     roleValidator.getCurrentUserId(), dto.getHospitalId(), activeHospitalId);
-            // 403 — handled by GlobalExceptionHandler#handleAccessDenied. BusinessRuleException
-            // is unmapped and would surface as a 500.
+            // 403 — handled by GlobalExceptionHandler#handleAccessDenied. A cross-hospital
+            // attempt is a refusal, not a business rule, so not BusinessRuleException (400).
             throw new AccessDeniedException("You may only manage departments within your assigned hospital.");
         }
 
