@@ -4447,7 +4447,7 @@ steps (see "Operational, open right now"). Next free migration: **V176**.
   the backend. The runbook's push section is a placeholder.
 
 - **Twelve (verb, path, role) entries, over seven handlers, where the URL
-  matcher is narrower than the annotation, frozen by #789 (2026-10-04).**
+  matcher is narrower than the annotation, frozen by #789 (2026-09-29).**
   `PreAuthorizeMatcherPairingTest` accepts them as today's behaviour, each
   with a reason. Chart writes: DELETE `/patients/{id}/allergies/{allergyId}`
   for DOCTOR, NURSE and PHARMACIST; DELETE
