@@ -18,7 +18,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @WriteAudited(skip = true, reason = "service emits PLATFORM_REGISTRY_UPDATED")
@@ -45,6 +48,16 @@ public class SuperAdminPlatformRegistryController {
     ) {
         PlatformReleaseWindowResponseDTO response = registryService.scheduleReleaseWindow(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /** D6: the release-window list survives a reload; newest start first, capped. */
+    @GetMapping("/release-windows")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "List platform release windows, newest start first")
+    public ResponseEntity<List<PlatformReleaseWindowResponseDTO>> listReleaseWindows(
+        @RequestParam(name = "limit", required = false) Integer limit
+    ) {
+        return ResponseEntity.ok(registryService.listReleaseWindows(limit));
     }
 
     @GetMapping("/registry/snapshot")

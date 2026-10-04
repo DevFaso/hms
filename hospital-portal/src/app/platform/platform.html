@@ -116,7 +116,6 @@
               <div class="module-card">
                 <div class="module-header">
                   <h3>{{ mod.title }}</h3>
-                  <span class="module-meta">{{ mod.meta }}</span>
                 </div>
                 <p class="module-desc">{{ mod.description }}</p>
                 <div class="module-stats">
@@ -172,16 +171,14 @@
                     <span class="metric-label">{{ 'PLATFORM.NEXT_ACTION' | translate }}</span>
                     <span class="metric-value">{{ task.nextAction }}</span>
                   </div>
-                  <div class="metric">
-                    <span class="metric-label">{{ 'PLATFORM.LAST_RUN' | translate }}</span>
-                    <span class="metric-value">{{ task.lastRun }}</span>
-                  </div>
                 </div>
                 <div class="automation-actions">
-                  <button class="btn btn-sm btn-primary" (click)="runAutomationTask(task)">
-                    <span class="material-icons">{{ taskActionIcon(task.status) }}</span>
-                    {{ taskActionLabel(task.status) }}
-                  </button>
+                  @if (taskAction(task); as action) {
+                    <button class="btn btn-sm btn-primary" (click)="switchView(action.view)">
+                      <span class="material-icons">{{ action.icon }}</span>
+                      {{ action.labelKey | translate }}
+                    </button>
+                  }
                   <button class="btn btn-sm btn-outline" (click)="viewAutomationDetails(task)">
                     <span class="material-icons">info</span> {{ 'PLATFORM.DETAILS' | translate }}
                   </button>
@@ -416,18 +413,20 @@
             <div class="catalog-actions">
               <button
                 class="btn btn-sm btn-primary"
-                (click)="provisionCatalogItem(item)"
-                [disabled]="saving()"
+                data-test="catalog-provision"
+                (click)="openCatalogDetail(item)"
+                [disabled]="!item.enabled"
+                [title]="item.enabled ? '' : ('PLATFORM.PROVISION_DISABLED_HINT' | translate)"
               >
                 <span class="material-icons">add_circle</span>
                 {{ 'PLATFORM.PROVISION' | translate }}
               </button>
-              @if (item.documentationUrl || item.onboardingGuideUrl || item.baseUrl) {
+              @if (docsUrl(item)) {
                 <button class="btn btn-sm btn-outline" (click)="openDocs(item)">
                   <span class="material-icons">description</span> {{ 'PLATFORM.DOCS' | translate }}
                 </button>
               }
-              @if (item.sandboxUrl) {
+              @if (isLiveUrl(item.sandboxUrl)) {
                 <button class="btn btn-sm btn-outline" (click)="openSandbox(item)">
                   <span class="material-icons">science</span> {{ 'PLATFORM.SANDBOX' | translate }}
                 </button>
@@ -466,19 +465,34 @@
             <span class="kpi-label">{{ 'PLATFORM.ACTIVE_WINDOWS' | translate }}</span>
           </div>
         </div>
-        @if (s.actions.lastSnapshotGeneratedAt) {
+        @if (s.actions.lastReleaseWindowChangeAt) {
           <div class="kpi-card kpi-secondary kpi-sm">
-            <span class="material-icons">photo_camera</span>
+            <span class="material-icons">history</span>
             <div class="kpi-body">
-              <span class="kpi-value snapshot-val">{{ s.actions.lastSnapshotGeneratedAt }}</span>
-              <span class="kpi-label">{{ 'PLATFORM.LAST_SNAPSHOT' | translate }}</span>
+              <span class="kpi-value snapshot-val">{{
+                s.actions.lastReleaseWindowChangeAt | date: 'short'
+              }}</span>
+              <span class="kpi-label">{{ 'PLATFORM.LAST_RELEASE_WINDOW_CHANGE' | translate }}</span>
             </div>
           </div>
         }
       </div>
     }
 
-    @if (releases().length === 0) {
+    @if (releasesLoading()) {
+      <div class="loading-state loading-sm">
+        <div class="spinner spinner-sm"></div>
+        <p>{{ 'PLATFORM.LOADING_RELEASES' | translate }}</p>
+      </div>
+    } @else if (releasesError()) {
+      <div class="error-banner" data-test="releases-error">
+        <span class="material-icons">error_outline</span>
+        <span>{{ 'PLATFORM.TOAST.RELEASES_LOAD_FAILED' | translate }}</span>
+        <button class="btn btn-sm" (click)="loadReleases()">
+          {{ 'PLATFORM.RETRY' | translate }}
+        </button>
+      </div>
+    } @else if (releases().length === 0) {
       <div class="empty-state">
         <span class="material-icons empty-icon">event_busy</span>
         <h3>{{ 'PLATFORM.NO_RELEASES' | translate }}</h3>
@@ -489,7 +503,7 @@
       </div>
     }
 
-    @if (releases().length > 0) {
+    @if (!releasesLoading() && !releasesError() && releases().length > 0) {
       <div class="releases-list">
         @for (rel of releases(); track rel.id) {
           <div class="release-card">
@@ -509,7 +523,7 @@
               </div>
               <div class="release-detail">
                 <span class="material-icons">schedule</span>
-                <span>{{ rel.startsAt }} → {{ rel.endsAt }}</span>
+                <span>{{ rel.startsAt | date: 'short' }} → {{ rel.endsAt | date: 'short' }}</span>
               </div>
               @if (rel.ownerTeam) {
                 <div class="release-detail">
@@ -570,7 +584,7 @@
                 <span
                   class="status-pill"
                   [ngClass]="serviceStatusClass(selectedService()!.status)"
-                  >{{ selectedService()!.status }}</span
+                  >{{ selectedService()!.status | enumLabel: 'platformServiceStatus' }}</span
                 >
               </div>
               <div class="detail-item">
@@ -583,10 +597,18 @@
               </div>
               <div class="detail-item">
                 <span class="detail-label">{{ 'PLATFORM.DOCUMENTATION' | translate }}</span>
-                @if (selectedService()!.documentationUrl) {
-                  <a [href]="selectedService()!.documentationUrl" target="_blank" class="link">{{
-                    'PLATFORM.VIEW_DOCS' | translate
-                  }}</a>
+                @if (isLiveUrl(selectedService()!.documentationUrl)) {
+                  <a
+                    [href]="selectedService()!.documentationUrl"
+                    target="_blank"
+                    rel="noopener"
+                    class="link"
+                    >{{ 'PLATFORM.VIEW_DOCS' | translate }}</a
+                  >
+                } @else if (selectedService()!.documentationUrl) {
+                  <span class="url-text" [title]="'PLATFORM.PLACEHOLDER_URL' | translate">{{
+                    selectedService()!.documentationUrl
+                  }}</span>
                 } @else {
                   <span>—</span>
                 }
@@ -665,28 +687,75 @@
               <div class="loading-state loading-sm">
                 <div class="spinner spinner-sm"></div>
               </div>
-            } @else if (hospitalLinks().length === 0) {
-              <p class="muted-text">{{ 'PLATFORM.NO_HOSPITAL_LINKS' | translate }}</p>
+            } @else if (linksError()) {
+              <div class="error-banner" data-test="links-error">
+                <span class="material-icons">error_outline</span>
+                <span>{{ 'PLATFORM.TOAST.HOSPITAL_LINKS_LOAD_FAILED' | translate }}</span>
+                <button
+                  class="btn btn-sm"
+                  (click)="loadHospitalLinksForService(selectedService()!)"
+                >
+                  {{ 'PLATFORM.RETRY' | translate }}
+                </button>
+              </div>
+            } @else if (hospitalRows().length === 0) {
+              <p class="muted-text">{{ 'PLATFORM.NO_ORG_HOSPITALS' | translate }}</p>
             } @else {
               <div class="link-list">
-                @for (link of hospitalLinks(); track link.id) {
-                  <div class="link-item">
+                @for (row of hospitalRows(); track row.hospitalId) {
+                  <div class="link-item" data-test="hospital-link-row">
                     <div class="link-info">
                       <span class="material-icons">local_hospital</span>
-                      <span>{{ link.hospitalName }}</span>
+                      <span>{{ row.hospitalName }}</span>
+                      <span
+                        class="link-state"
+                        [class.link-state-enabled]="row.link?.enabled"
+                        [class.link-state-disabled]="row.link && !row.link.enabled"
+                        >{{
+                          !row.link
+                            ? ('PLATFORM.LINK_STATE.NOT_LINKED' | translate)
+                            : row.link.enabled
+                              ? ('PLATFORM.LINK_STATE.ENABLED' | translate)
+                              : ('PLATFORM.LINK_STATE.DISABLED' | translate)
+                        }}</span
+                      >
                     </div>
-                    <button
-                      class="btn btn-sm"
-                      [class.btn-danger]="link.enabled"
-                      [class.btn-success]="!link.enabled"
-                      (click)="toggleHospitalLink(link)"
-                    >
-                      {{
-                        link.enabled
-                          ? ('PLATFORM.UNLINK' | translate)
-                          : ('PLATFORM.LINK' | translate)
-                      }}
-                    </button>
+                    <div class="link-actions">
+                      @if (!row.link) {
+                        <button
+                          class="btn btn-sm btn-success"
+                          [disabled]="isLinkBusy(row.hospitalId)"
+                          (click)="linkHospital(row)"
+                        >
+                          {{ 'PLATFORM.LINK' | translate }}
+                        </button>
+                      } @else {
+                        @if (row.link.enabled) {
+                          <button
+                            class="btn btn-sm btn-outline"
+                            [disabled]="isLinkBusy(row.hospitalId)"
+                            (click)="setHospitalLinkEnabled(row, false)"
+                          >
+                            {{ 'PLATFORM.DISABLE_LINK' | translate }}
+                          </button>
+                        } @else {
+                          <button
+                            class="btn btn-sm btn-success"
+                            [disabled]="isLinkBusy(row.hospitalId)"
+                            (click)="setHospitalLinkEnabled(row, true)"
+                          >
+                            {{ 'PLATFORM.ENABLE_LINK' | translate }}
+                          </button>
+                        }
+                        <button
+                          class="btn btn-sm btn-danger"
+                          [disabled]="isLinkBusy(row.hospitalId)"
+                          (click)="unlinkHospital(row)"
+                        >
+                          {{ 'PLATFORM.UNLINK' | translate }}
+                        </button>
+                      }
+                    </div>
                   </div>
                 }
               </div>
@@ -701,6 +770,7 @@
         } @else {
           <!-- Edit form -->
           <form class="edit-form" (ngSubmit)="saveService()">
+            <p class="muted-text form-hint">{{ 'PLATFORM.CLEAR_FIELD_HINT' | translate }}</p>
             <div class="form-group">
               <label for="editProvider">{{ 'PLATFORM.PROVIDER' | translate }}</label>
               <input
@@ -743,9 +813,22 @@
                 [ngModel]="serviceForm().apiKeyReference"
                 (ngModelChange)="updateServiceField('apiKeyReference', $event)"
                 [attr.placeholder]="'PLATFORM.API_KEY_KEEP' | translate"
+                [disabled]="serviceForm().clearApiKey"
                 name="apiKeyRef"
               />
             </div>
+            @if (selectedService()!.apiKeyReferenceSet) {
+              <div class="form-group form-check">
+                <input
+                  type="checkbox"
+                  id="editClearApiKey"
+                  [ngModel]="serviceForm().clearApiKey"
+                  (ngModelChange)="updateServiceField('clearApiKey', $event)"
+                  name="clearApiKey"
+                />
+                <label for="editClearApiKey">{{ 'PLATFORM.CLEAR_API_KEY' | translate }}</label>
+              </div>
+            }
             <div class="form-group form-check">
               <input
                 type="checkbox"
@@ -1093,28 +1176,39 @@
             </div>
             <div class="detail-item full-width">
               <span class="detail-label">{{ 'PLATFORM.DOCUMENTATION' | translate }}</span>
-              @if (item.documentationUrl) {
-                <a [href]="item.documentationUrl" target="_blank" class="link">{{
+              @if (isLiveUrl(item.documentationUrl)) {
+                <a [href]="item.documentationUrl" target="_blank" rel="noopener" class="link">{{
                   item.documentationUrl
                 }}</a>
+              } @else if (item.documentationUrl) {
+                <span class="url-text">{{ item.documentationUrl }}</span>
+                <span class="muted-text">{{ 'PLATFORM.PLACEHOLDER_URL' | translate }}</span>
               } @else {
                 <span>—</span>
               }
             </div>
             <div class="detail-item full-width">
               <span class="detail-label">{{ 'PLATFORM.SANDBOX' | translate }}</span>
-              @if (item.sandboxUrl) {
-                <a [href]="item.sandboxUrl" target="_blank" class="link">{{ item.sandboxUrl }}</a>
+              @if (isLiveUrl(item.sandboxUrl)) {
+                <a [href]="item.sandboxUrl" target="_blank" rel="noopener" class="link">{{
+                  item.sandboxUrl
+                }}</a>
+              } @else if (item.sandboxUrl) {
+                <span class="url-text">{{ item.sandboxUrl }}</span>
+                <span class="muted-text">{{ 'PLATFORM.PLACEHOLDER_URL' | translate }}</span>
               } @else {
                 <span>—</span>
               }
             </div>
             <div class="detail-item full-width">
               <span class="detail-label">{{ 'PLATFORM.ONBOARDING_GUIDE' | translate }}</span>
-              @if (item.onboardingGuideUrl) {
-                <a [href]="item.onboardingGuideUrl" target="_blank" class="link">{{
+              @if (isLiveUrl(item.onboardingGuideUrl)) {
+                <a [href]="item.onboardingGuideUrl" target="_blank" rel="noopener" class="link">{{
                   item.onboardingGuideUrl
                 }}</a>
+              } @else if (item.onboardingGuideUrl) {
+                <span class="url-text">{{ item.onboardingGuideUrl }}</span>
+                <span class="muted-text">{{ 'PLATFORM.PLACEHOLDER_URL' | translate }}</span>
               } @else {
                 <span>—</span>
               }
@@ -1146,16 +1240,50 @@
           </div>
         }
 
+        <div class="detail-section">
+          <h3>{{ 'PLATFORM.PROVISION' | translate }}</h3>
+          @if (item.enabled) {
+            <div class="form-group">
+              <label for="provisionOrg">{{ 'PLATFORM.PROVISION_TARGET_ORG' | translate }} *</label>
+              <select
+                id="provisionOrg"
+                class="form-select"
+                data-test="provision-org"
+                [ngModel]="provisionOrgId()"
+                (ngModelChange)="provisionOrgId.set($event || null)"
+                name="provisionOrg"
+                required
+              >
+                <option [ngValue]="null">{{ 'PLATFORM.PROVISION_CHOOSE_ORG' | translate }}</option>
+                @for (org of organizations(); track org.id) {
+                  <option [ngValue]="org.id">{{ org.name }}</option>
+                }
+              </select>
+            </div>
+          } @else {
+            <p class="muted-text" data-test="provision-disabled">
+              {{ 'PLATFORM.PROVISION_DISABLED_HINT' | translate }}
+            </p>
+          }
+        </div>
+
         <div class="drawer-footer">
           <button
             class="btn btn-primary"
+            data-test="provision-submit"
             (click)="provisionCatalogItem(item)"
-            [disabled]="saving()"
+            [disabled]="saving() || !item.enabled || !provisionOrgId()"
           >
             <span class="material-icons">add_circle</span>
-            {{ 'PLATFORM.PROVISION_TO_ORG' | translate }}
+            @if (provisionOrgId()) {
+              {{
+                'PLATFORM.PROVISION_TO_NAMED_ORG' | translate: { org: getOrgName(provisionOrgId()) }
+              }}
+            } @else {
+              {{ 'PLATFORM.PROVISION_TO_ORG' | translate }}
+            }
           </button>
-          @if (item.documentationUrl || item.onboardingGuideUrl) {
+          @if (docsUrl(item)) {
             <button class="btn btn-outline" (click)="openDocs(item)">
               <span class="material-icons">description</span> {{ 'PLATFORM.OPEN_DOCS' | translate }}
             </button>

@@ -6,13 +6,14 @@ import com.example.hms.payload.dto.PlatformOwnershipDTO;
 import com.example.hms.payload.dto.PlatformServiceMetadataDTO;
 import java.util.List;
 import java.util.Locale;
+import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Component;
 
 @Component
 public class BillingIntegrationAdapter extends AbstractToggleableIntegrationAdapter {
 
-    public BillingIntegrationAdapter(PlatformIntegrationProperties properties) {
-        super(properties);
+    public BillingIntegrationAdapter(PlatformIntegrationProperties properties, MessageSource messageSource) {
+        super(properties, messageSource);
     }
 
     @Override
@@ -27,12 +28,12 @@ public class BillingIntegrationAdapter extends AbstractToggleableIntegrationAdap
 
     @Override
     protected String defaultDisplayName(Locale locale) {
-        return "Revenue cycle & billing";
+        return text("platform.catalog.billing.displayName", locale);
     }
 
     @Override
     protected String defaultDescription(Locale locale) {
-        return "Claims submission stub with ERA/EDI test flows and reconciliation dashboards.";
+        return text("platform.catalog.billing.description", locale);
     }
 
     @Override
@@ -43,9 +44,9 @@ public class BillingIntegrationAdapter extends AbstractToggleableIntegrationAdap
     @Override
     protected List<String> defaultCapabilities(Locale locale) {
         return List.of(
-            "837 claim batching",
-            "835 remittance ingest",
-            "Denial workflow webhooks"
+            text("platform.catalog.billing.capability.1", locale),
+            text("platform.catalog.billing.capability.2", locale),
+            text("platform.catalog.billing.capability.3", locale)
         );
     }
 
@@ -53,7 +54,7 @@ public class BillingIntegrationAdapter extends AbstractToggleableIntegrationAdap
     protected PlatformServiceMetadataDTO defaultMetadata(Locale locale) {
         return PlatformServiceMetadataDTO.builder()
             .billingSystem("RevenueCycle Stub")
-            .integrationNotes("Sandbox limited to synthetic providers and payers.")
+            .integrationNotes(text("platform.catalog.billing.integrationNotes", locale))
             .build();
     }
 
@@ -62,7 +63,7 @@ public class BillingIntegrationAdapter extends AbstractToggleableIntegrationAdap
         return PlatformOwnershipDTO.builder()
             .ownerTeam("Finance Ops Guild")
             .ownerContactEmail("billing-ops@example.com")
-            .serviceLevel("Business hours")
+            .serviceLevel(text("platform.catalog.billing.serviceLevel", locale))
             .build();
     }
 

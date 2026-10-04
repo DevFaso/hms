@@ -14,6 +14,9 @@ public enum PlatformRegistryEventType {
     /** A hospital was linked to an organization platform service. */
     HOSPITAL_LINKED_TO_SERVICE,
 
+    /** An existing hospital link was enabled or disabled (it still exists). */
+    HOSPITAL_SERVICE_LINK_UPDATED,
+
     /** A hospital was unlinked from an organization platform service. */
     HOSPITAL_UNLINKED_FROM_SERVICE,
 

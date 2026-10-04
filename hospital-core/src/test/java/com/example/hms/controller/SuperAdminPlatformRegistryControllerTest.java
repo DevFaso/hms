@@ -40,7 +40,7 @@ class SuperAdminPlatformRegistryControllerTest {
                 .pendingIntegrations(2)
                 .disabledLinks(1)
                 .activeReleaseWindows(3)
-                .lastSnapshotGeneratedAt("2025-10-02T10:00:00Z")
+                .lastReleaseWindowChangeAt(LocalDateTime.of(2025, 10, 2, 10, 0))
                 .build())
             .build();
 
@@ -84,6 +84,20 @@ class SuperAdminPlatformRegistryControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody()).isEqualTo(responseDto);
         verify(registryService).scheduleReleaseWindow(request);
+    }
+
+    @Test
+    void listReleaseWindowsPassesTheLimitThrough() {
+        List<PlatformReleaseWindowResponseDTO> windows = List.of(PlatformReleaseWindowResponseDTO.builder()
+            .id(UUID.randomUUID())
+            .name("Q4 Freeze")
+            .build());
+        when(registryService.listReleaseWindows(20)).thenReturn(windows);
+
+        ResponseEntity<List<PlatformReleaseWindowResponseDTO>> response = controller.listReleaseWindows(20);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isEqualTo(windows);
     }
 
     @Test

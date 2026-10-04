@@ -329,4 +329,71 @@ class PlatformRegistryControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$[0].serviceType").value(PlatformServiceType.BILLING.name()));
     }
+
+    @Test
+    void updateHospitalServiceLinkReturnsTheLink() throws Exception {
+        HospitalPlatformServiceLinkResponseDTO link = HospitalPlatformServiceLinkResponseDTO.builder()
+            .hospitalId(hospitalId)
+            .organizationServiceId(serviceId)
+            .enabled(true)
+            .build();
+        when(platformRegistryService.updateHospitalServiceLink(eq(hospitalId), eq(serviceId),
+            any(com.example.hms.payload.dto.PlatformServiceLinkUpdateRequestDTO.class), any(Locale.class)))
+            .thenReturn(link);
+
+        mockMvc.perform(put("/platform/hospitals/{hospitalId}/services/{serviceId}", hospitalId, serviceId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"enabled\":true}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.enabled").value(true));
+    }
+
+    @Test
+    void updateHospitalServiceLinkWithoutEnabledIsAFieldError() throws Exception {
+        mockMvc.perform(put("/platform/hospitals/{hospitalId}/services/{serviceId}", hospitalId, serviceId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.fieldErrors.enabled").exists());
+        Mockito.verifyNoInteractions(platformRegistryService);
+    }
+
+    @Test
+    void listServiceHospitalLinksReturnsEveryHospital() throws Exception {
+        UUID second = UUID.randomUUID();
+        when(platformRegistryService.listServiceHospitalLinks(eq(organizationId), eq(serviceId), any(Locale.class)))
+            .thenReturn(List.of(
+                HospitalPlatformServiceLinkResponseDTO.builder().hospitalId(hospitalId).enabled(true).build(),
+                HospitalPlatformServiceLinkResponseDTO.builder().hospitalId(second).enabled(false).build()));
+
+        mockMvc.perform(get("/platform/organizations/{organizationId}/services/{serviceId}/hospital-links",
+                organizationId, serviceId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].hospitalId").value(hospitalId.toString()))
+            .andExpect(jsonPath("$[1].hospitalId").value(second.toString()))
+            .andExpect(jsonPath("$[1].enabled").value(false));
+    }
+
+    @Test
+    void anOverlongFieldIsAFieldErrorNotADatabaseFailure() throws Exception {
+        String tooLong = "x".repeat(121);
+        mockMvc.perform(put("/platform/organizations/{organizationId}/services/{serviceId}", organizationId, serviceId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"provider\":\"" + tooLong + "\",\"ownership\":{\"ownerContactEmail\":\"not-an-email\"}}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.fieldErrors.provider").exists())
+            .andExpect(jsonPath("$['fieldErrors']['ownership.ownerContactEmail']").exists());
+        Mockito.verifyNoInteractions(platformRegistryService);
+    }
+
+    @Test
+    void anOverlongLinkFieldIsAFieldErrorNotADatabaseFailure() throws Exception {
+        mockMvc.perform(post("/platform/hospitals/{hospitalId}/services/{serviceId}", hospitalId, serviceId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"overrideEndpoint\":\"" + "x".repeat(256) + "\",\"ownership\":{\"ownerContactEmail\":\"nope\"}}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.fieldErrors.overrideEndpoint").exists())
+            .andExpect(jsonPath("$['fieldErrors']['ownership.ownerContactEmail']").exists());
+        Mockito.verifyNoInteractions(platformRegistryService);
+    }
 }
