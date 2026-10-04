@@ -1,3 +1,4 @@
+import { Subscription } from 'rxjs';
 import {
   Component,
   inject,
@@ -412,27 +413,37 @@ export class PlatformComponent implements OnInit {
   }
 
   closeServiceDrawer(): void {
+    this.linksSub?.unsubscribe();
+    this.linksLoading.set(false);
     this.serviceDrawerOpen.set(false);
     this.selectedService.set(null);
     this.editingService.set(false);
   }
 
+  private linksSub?: Subscription;
+
   /** D3: one call for every hospital's link to this service. */
   loadHospitalLinksForService(service: OrgServiceResponse): void {
+    // One drawer, one request: a slower answer for the service opened before
+    // must never fill this one, or Disable/Unlink would act on links it shows
+    // but this service does not have.
+    this.linksSub?.unsubscribe();
     this.linksLoading.set(true);
     this.linksError.set(false);
     this.hospitalLinks.set([]);
-    this.platformSvc.listServiceHospitalLinks(service.organizationId, service.id).subscribe({
-      next: (links) => {
-        this.hospitalLinks.set(links);
-        this.linksLoading.set(false);
-      },
-      error: (err) => {
-        this.linksLoading.set(false);
-        this.linksError.set(true);
-        this.toast.error(this.errorMessage(err, 'PLATFORM.TOAST.HOSPITAL_LINKS_LOAD_FAILED'));
-      },
-    });
+    this.linksSub = this.platformSvc
+      .listServiceHospitalLinks(service.organizationId, service.id)
+      .subscribe({
+        next: (links) => {
+          this.hospitalLinks.set(links);
+          this.linksLoading.set(false);
+        },
+        error: (err) => {
+          this.linksLoading.set(false);
+          this.linksError.set(true);
+          this.toast.error(this.errorMessage(err, 'PLATFORM.TOAST.HOSPITAL_LINKS_LOAD_FAILED'));
+        },
+      });
   }
 
   startEditService(): void {

@@ -32,10 +32,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * method security — the {@code addFilters = false} controller slices cannot
  * see a dropped or widened {@code @PreAuthorize}.
  *
- * <p>Every registry write, the cross-hospital link list and the whole
- * {@code /super-admin/platform/**} surface are SUPER_ADMIN only. Hospital
- * links used to admit HOSPITAL_ADMIN with no check that the hospital was
- * theirs.
+ * <p>Every registry write, every read that is not scoped to one hospital
+ * (an organization's services, a department's links, the cross-hospital link
+ * list) and the whole {@code /super-admin/platform/**} surface are
+ * SUPER_ADMIN only. Hospital links used to admit HOSPITAL_ADMIN with no check
+ * that the hospital was theirs, and the organization and department reads let
+ * one tenant's administrator read another's by id. The per-hospital link list
+ * stays theirs: HospitalIdNarrowingInterceptor holds it to their hospitals.
  */
 @AutoConfigureMockMvc
 class PlatformRegistrySecurityIT extends BaseIT {
@@ -69,6 +72,9 @@ class PlatformRegistrySecurityIT extends BaseIT {
             post(API + "/platform/organizations/{o}/services", orgId).contentType(MediaType.APPLICATION_JSON).content(body),
             put(API + "/platform/organizations/{o}/services/{s}", orgId, serviceId).contentType(MediaType.APPLICATION_JSON).content("{}"),
             get(API + "/platform/organizations/{o}/services/{s}/hospital-links", orgId, serviceId),
+            get(API + "/platform/organizations/{o}/services", orgId),
+            get(API + "/platform/organizations/{o}/services/{s}", orgId, serviceId),
+            get(API + "/platform/departments/{d}/services", departmentId),
             post(API + "/platform/hospitals/{h}/services/{s}", hospitalId, serviceId).contentType(MediaType.APPLICATION_JSON).content("{}"),
             put(API + "/platform/hospitals/{h}/services/{s}", hospitalId, serviceId).contentType(MediaType.APPLICATION_JSON).content("{\"enabled\":true}"),
             delete(API + "/platform/hospitals/{h}/services/{s}", hospitalId, serviceId),
@@ -82,7 +88,7 @@ class PlatformRegistrySecurityIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("a HOSPITAL_ADMIN is refused every registry write and the whole super-admin platform surface")
+    @DisplayName("a HOSPITAL_ADMIN is refused every registry write, every cross-tenant read and the whole super-admin platform surface")
     void hospitalAdminIsRefused() throws Exception {
         for (MockHttpServletRequestBuilder request : superAdminOnly()) {
             mockMvc.perform(request.contextPath(API).with(signedInAs("ROLE_HOSPITAL_ADMIN")).with(csrf()))

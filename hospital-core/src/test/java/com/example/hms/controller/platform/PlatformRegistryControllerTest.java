@@ -385,4 +385,15 @@ class PlatformRegistryControllerTest {
             .andExpect(jsonPath("$['fieldErrors']['ownership.ownerContactEmail']").exists());
         Mockito.verifyNoInteractions(platformRegistryService);
     }
+
+    @Test
+    void anOverlongLinkFieldIsAFieldErrorNotADatabaseFailure() throws Exception {
+        mockMvc.perform(post("/platform/hospitals/{hospitalId}/services/{serviceId}", hospitalId, serviceId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"overrideEndpoint\":\"" + "x".repeat(256) + "\",\"ownership\":{\"ownerContactEmail\":\"nope\"}}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.fieldErrors.overrideEndpoint").exists())
+            .andExpect(jsonPath("$['fieldErrors']['ownership.ownerContactEmail']").exists());
+        Mockito.verifyNoInteractions(platformRegistryService);
+    }
 }

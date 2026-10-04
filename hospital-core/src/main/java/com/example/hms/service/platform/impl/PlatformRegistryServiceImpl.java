@@ -220,7 +220,11 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
         OrganizationPlatformService service = link.getOrganizationService();
         // The ownership rule that guards creating a link guards switching one
         // back on: a link that spans two organizations is refused, not enabled.
-        validateHospitalBelongsToServiceOrganization(link.getHospital(), service);
+        // Switching one off is always allowed: that is how a link left behind
+        // when a hospital moved organization is retired without deleting it.
+        if (Boolean.TRUE.equals(request.getEnabled())) {
+            validateHospitalBelongsToServiceOrganization(link.getHospital(), service);
+        }
 
         link.setEnabled(request.getEnabled());
         HospitalPlatformServiceLink saved = hospitalPlatformServiceLinkRepository.save(link);
@@ -428,7 +432,15 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
             .entityType(AUDIT_ENTITY_TYPE)
             .status(AuditStatus.SUCCESS)
             .build();
-        TransactionCallbacks.afterCommit(() -> auditEventLogService.logEvent(event));
+        // The write has committed by now; an audit failure must not turn it
+        // into a 500 the caller would retry into a 409.
+        TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(event);
+            } catch (RuntimeException ex) {
+                log.error("[PLATFORM-REGISTRY] Failed to record audit for platform service {}", service.getId(), ex);
+            }
+        });
     }
 
     private void publishServiceEvent(PlatformRegistryEventType eventType,

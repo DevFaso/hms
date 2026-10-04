@@ -39,6 +39,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -78,6 +79,14 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
         PlatformServiceType.INVENTORY,
         PlatformServiceType.ANALYTICS);
 
+    /**
+     * Release windows are stored without a zone (startsAt/endsAt are
+     * LocalDateTime) and read as the server's local time, so "now" is taken in
+     * that same zone. Moving to an explicit zone needs the stored values
+     * migrated with it.
+     */
+    private static final ZoneId RELEASE_WINDOW_ZONE = ZoneId.systemDefault();
+
     private final OrganizationPlatformServiceRepository organizationPlatformServiceRepository;
     private final HospitalPlatformServiceLinkRepository hospitalPlatformServiceLinkRepository;
     private final DepartmentPlatformServiceLinkRepository departmentPlatformServiceLinkRepository;
@@ -94,7 +103,7 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
         long disabledDepartmentLinks = departmentPlatformServiceLinkRepository.countByEnabledFalse();
         long disabledLinks = disabledHospitalLinks + disabledDepartmentLinks;
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(RELEASE_WINDOW_ZONE);
         long unreadNotifications = notificationRepository.countByReadFalse();
         long staleNotifications = notificationRepository.countByReadFalseAndCreatedAtBefore(now.minusHours(4));
 
@@ -185,7 +194,7 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
             .environment(request.getEnvironment())
             .startsAt(request.getStartsAt())
             .endsAt(request.getEndsAt())
-            .status(statusAt(PlatformReleaseStatus.SCHEDULED, request.getStartsAt(), request.getEndsAt(), LocalDateTime.now()))
+            .status(statusAt(PlatformReleaseStatus.SCHEDULED, request.getStartsAt(), request.getEndsAt(), LocalDateTime.now(RELEASE_WINDOW_ZONE)))
             .freezeChanges(request.isFreezeChanges())
             .ownerTeam(request.getOwnerTeam())
             .notes(request.getNotes())
@@ -195,7 +204,7 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
         // concurrent insert) fails this call, before any audit is scheduled.
         PlatformReleaseWindow saved = platformReleaseWindowRepository.saveAndFlush(releaseWindow);
         recordReleaseWindowAudit(saved);
-        return mapReleaseWindow(saved, LocalDateTime.now());
+        return mapReleaseWindow(saved, LocalDateTime.now(RELEASE_WINDOW_ZONE));
     }
 
     @Override
@@ -204,7 +213,7 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
         int size = limit == null || limit < 1
             ? DEFAULT_RELEASE_WINDOW_LIMIT
             : Math.min(limit, MAX_RELEASE_WINDOW_LIMIT);
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(RELEASE_WINDOW_ZONE);
         // Newest start first: upcoming windows lead, the oldest history drops
         // off the end of the capped page.
         return platformReleaseWindowRepository
@@ -254,7 +263,7 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
     @Transactional(Transactional.TxType.SUPPORTS)
     public PlatformRegistrySnapshotDTO getRegistrySnapshot() {
         return PlatformRegistrySnapshotDTO.builder()
-            .generatedAt(LocalDateTime.now())
+            .generatedAt(LocalDateTime.now(RELEASE_WINDOW_ZONE))
             .summary(getRegistrySummary())
             .build();
     }

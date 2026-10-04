@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of, throwError, Observable } from 'rxjs';
+import { of, throwError, Observable, Subject } from 'rxjs';
 
 import { PlatformComponent, HospitalLinkRow } from './platform';
 import {
@@ -365,6 +365,21 @@ describe('PlatformComponent', () => {
 
       expect(c.linksError()).toBeTrue();
       expect(toast.error).toHaveBeenCalledWith('boom');
+    });
+
+    it('never fills the drawer with a slower answer for the service opened before', () => {
+      const first = new Subject<HospitalServiceLink[]>();
+      const second = new Subject<HospitalServiceLink[]>();
+      platform.listServiceHospitalLinks.and.returnValues(first, second);
+
+      c.openServiceDetail(orgService({ id: 's1' }));
+      c.closeServiceDrawer();
+      c.openServiceDetail(orgService({ id: 's2' }));
+      second.next([link('h2', false)]);
+      first.next([link('h1', true)]);
+
+      expect(c.hospitalLinks().map((l) => l.hospitalId)).toEqual(['h2']);
+      expect(c.hospitalRows().find((r) => r.hospitalId === 'h1')?.link).toBeNull();
     });
   });
 

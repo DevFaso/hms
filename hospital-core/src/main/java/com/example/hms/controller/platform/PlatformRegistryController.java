@@ -100,7 +100,7 @@ public class PlatformRegistryController {
     }
 
     @GetMapping("/organizations/{organizationId}/services/{serviceId}")
-    @PreAuthorize("hasAnyAuthority('" + ROLE_SUPER_ADMIN + "','" + ROLE_HOSPITAL_ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + ROLE_SUPER_ADMIN + "')")
     public ResponseEntity<PlatformServiceResponseDTO> getOrganizationService(@PathVariable UUID organizationId,
                                                                              @PathVariable UUID serviceId,
                                                                              Locale locale) {
@@ -109,7 +109,7 @@ public class PlatformRegistryController {
     }
 
     @GetMapping("/organizations/{organizationId}/services")
-    @PreAuthorize("hasAnyAuthority('" + ROLE_SUPER_ADMIN + "','" + ROLE_HOSPITAL_ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + ROLE_SUPER_ADMIN + "')")
     public ResponseEntity<List<PlatformServiceResponseDTO>> listOrganizationServices(@PathVariable UUID organizationId,
                                                                                       @RequestParam(name = "status", required = false) PlatformServiceStatus status,
                                                                                       Locale locale) {
@@ -187,7 +187,7 @@ public class PlatformRegistryController {
     }
 
     @GetMapping("/departments/{departmentId}/services")
-    @PreAuthorize("hasAnyAuthority('" + ROLE_SUPER_ADMIN + "','" + ROLE_HOSPITAL_ADMIN + "')")
+    @PreAuthorize("hasAnyAuthority('" + ROLE_SUPER_ADMIN + "')")
     public ResponseEntity<List<DepartmentPlatformServiceLinkResponseDTO>> listDepartmentServiceLinks(@PathVariable UUID departmentId,
                                                                                                       Locale locale) {
         List<DepartmentPlatformServiceLinkResponseDTO> responses = platformRegistryService.listDepartmentServiceLinks(departmentId, locale);

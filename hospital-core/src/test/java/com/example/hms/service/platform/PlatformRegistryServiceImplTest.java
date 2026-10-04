@@ -1,6 +1,7 @@
 package com.example.hms.service.platform;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -1046,6 +1047,59 @@ class PlatformRegistryServiceImplTest {
             .isInstanceOf(BusinessRuleException.class);
         assertThat(link.isEnabled()).isFalse();
         verify(hospitalPlatformServiceLinkRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("D2: a link left spanning two organizations can still be switched off")
+    void updateHospitalServiceLinkDisablesACrossOrganizationLink() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        Hospital hospital = Hospital.builder().organization(org(UUID.randomUUID())).build();
+        hospital.setId(hospitalId);
+        HospitalPlatformServiceLink link = HospitalPlatformServiceLink.builder()
+            .hospital(hospital)
+            .organizationService(ehrService(org(UUID.randomUUID()), serviceId))
+            .enabled(true)
+            .build();
+        when(hospitalPlatformServiceLinkRepository.findByHospitalIdAndOrganizationServiceId(hospitalId, serviceId))
+            .thenReturn(Optional.of(link));
+        when(hospitalPlatformServiceLinkRepository.save(link)).thenReturn(link);
+        PlatformServiceLinkUpdateRequestDTO request = PlatformServiceLinkUpdateRequestDTO.builder().enabled(false).build();
+
+        platformRegistryService.updateHospitalServiceLink(hospitalId, serviceId, request, Locale.ENGLISH);
+
+        assertThat(link.isEnabled()).isFalse();
+        verify(hospitalPlatformServiceLinkRepository).save(link);
+    }
+
+    @Test
+    @DisplayName("Audit: a failed after-commit audit does not fail the committed write")
+    void auditFailureAfterCommitDoesNotReachTheCaller() {
+        UUID organizationId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID serviceId = UUID.randomUUID();
+        Organization organization = org(organizationId);
+        Hospital hospital = Hospital.builder().organization(organization).build();
+        hospital.setId(hospitalId);
+        HospitalPlatformServiceLink link = HospitalPlatformServiceLink.builder()
+            .hospital(hospital).organizationService(ehrService(organization, serviceId)).enabled(true).build();
+        when(hospitalPlatformServiceLinkRepository.findByHospitalIdAndOrganizationServiceId(hospitalId, serviceId))
+            .thenReturn(Optional.of(link));
+        when(hospitalPlatformServiceLinkRepository.save(link)).thenReturn(link);
+        doThrow(new IllegalStateException("audit store down"))
+            .when(auditEventLogService).logEvent(any());
+        PlatformServiceLinkUpdateRequestDTO request = PlatformServiceLinkUpdateRequestDTO.builder().enabled(false).build();
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            platformRegistryService.updateHospitalServiceLink(hospitalId, serviceId, request, Locale.ENGLISH);
+            assertThatCode(() ->
+                    TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit))
+                .doesNotThrowAnyException();
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+        verify(auditEventLogService).logEvent(any());
     }
 
     @Test
