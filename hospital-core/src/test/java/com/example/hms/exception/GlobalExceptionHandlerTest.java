@@ -562,7 +562,7 @@ class GlobalExceptionHandlerTest {
             org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
             try {
                 ResponseEntity<Object> response = handler.handleBusinessRuleException(
-                    new BusinessRuleException("platform.department.noHospital"), request);
+                    BusinessRuleException.ofKey("platform.department.noHospital"), request);
 
                 assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
                 @SuppressWarnings("unchecked")

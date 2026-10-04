@@ -357,10 +357,10 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
 
         UUID serviceOrganizationId = Optional.ofNullable(service.getOrganization())
             .map(Organization::getId)
-            .orElseThrow(() -> new BusinessRuleException(MISSING_ORGANIZATION_KEY));
+            .orElseThrow(() -> BusinessRuleException.ofKey(MISSING_ORGANIZATION_KEY));
 
         if (!serviceOrganizationId.equals(organizationId)) {
-            throw new BusinessRuleException("platform.service.wrongOrganization");
+            throw BusinessRuleException.ofKey("platform.service.wrongOrganization");
         }
         return service;
     }
@@ -368,14 +368,14 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
     private void validateHospitalBelongsToServiceOrganization(Hospital hospital, OrganizationPlatformService service) {
         Organization organization = hospital == null ? null : hospital.getOrganization();
         if (organization == null || !Objects.equals(organization.getId(), getOrganizationId(service))) {
-            throw new BusinessRuleException("platform.hospital.wrongOrganization");
+            throw BusinessRuleException.ofKey("platform.hospital.wrongOrganization");
         }
     }
 
     private void validateDepartmentBelongsToServiceOrganization(Department department, OrganizationPlatformService service) {
         Hospital hospital = department.getHospital();
         if (hospital == null) {
-            throw new BusinessRuleException("platform.department.noHospital");
+            throw BusinessRuleException.ofKey("platform.department.noHospital");
         }
         validateHospitalBelongsToServiceOrganization(hospital, service);
     }
@@ -384,7 +384,7 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
         return Optional.ofNullable(service)
             .map(OrganizationPlatformService::getOrganization)
             .map(Organization::getId)
-            .orElseThrow(() -> new BusinessRuleException(MISSING_ORGANIZATION_KEY));
+            .orElseThrow(() -> BusinessRuleException.ofKey(MISSING_ORGANIZATION_KEY));
     }
 
     /**
