@@ -8,7 +8,8 @@
 -- default 180). A failed message keeps it at most
 -- hms.integration.retention.unresolved-max-days (default 365), resolved
 -- or not; a resolved one loses it that many payload-days after
--- resolution if that is sooner.
+-- resolution if that is sooner. A replay writes a new copy, which follows
+-- payload-days from the replay date.
 -- The sweep is IntegrationMessageRetentionScheduler.
 --
 -- Strictly additive:

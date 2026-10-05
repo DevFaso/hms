@@ -657,7 +657,7 @@
     "PAGER": "Página {{ current }} de {{ total }}",
     "CONTENT_PURGED": "Contenido eliminado (política de conservación)",
     "CONTENT_PURGED_TITLE": "Contenido del mensaje eliminado el {{ date }} según la política de conservación; el registro del evento se conserva.",
-    "RETENTION_NOTE": "El contenido de los mensajes se conserva {{ days }} días, y el de un mensaje fallido como máximo {{ maxDays }} días (uno resuelto lo pierde {{ days }} días después de su resolución si es antes). Los registros de eventos se conservan indefinidamente.",
+    "RETENTION_NOTE": "El contenido de los mensajes se conserva {{ days }} días, y el de un mensaje fallido como máximo {{ maxDays }} días (uno resuelto lo pierde {{ days }} días después de su resolución si es antes). Un reenvío es una copia nueva, conservada {{ days }} días desde el reenvío. Los registros de eventos se conservan indefinidamente.",
     "RETENTION_OFF": "La retención del contenido de los mensajes está DESACTIVADA: el contenido se conserva hasta que se active.",
     "FILTER": {
       "INTEGRATION_ID": "Integración",

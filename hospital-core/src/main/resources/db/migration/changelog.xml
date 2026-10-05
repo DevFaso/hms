@@ -2615,8 +2615,9 @@
          partial index on the rows still holding a body. The nightly
          IntegrationMessageRetentionScheduler erases message content after
          hms.integration.retention.payload-days (default 180; any failed
-         message at most unresolved-max-days, default 365); the rows
-         themselves are kept. V176 belongs to another PR.
+         message at most unresolved-max-days, default 365; a replay's copy
+         payload-days from the replay); the rows themselves are kept. V176
+         belongs to another PR.
          ================================================================= -->
     <changeSet id="V177-integration-message-payload-purge" author="hms-team" runOnChange="false">
         <sqlFile path="V177__integration_message_payload_purge.sql"

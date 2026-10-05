@@ -392,6 +392,15 @@ different clocks — user decision 2026-10-04, V177:
 | 1. Content (`payload`, the encrypted raw message, PID and all) of any row that is not `FAILED` | `hms.integration.retention.payload-days` (default **180**) after `received_at` |
 | 2. Content of **every** `FAILED` row, resolved or not | At most `hms.integration.retention.unresolved-max-days` (default **365**) after `received_at` — an absolute ceiling |
 | 3. Content of a **resolved** `FAILED` row (a later row shares its correlation id: a replay, or a newer occurrence of the same problem) | `payload-days` (**180**) after resolution — the first such later row — if that is sooner than rule 2 |
+| 4. Content of a `REPLAYED` row (the copy a replay writes) | `payload-days` (**180**) after the replay — rule 1, counted from the replay date |
+
+**A replay starts its own retention.** Replaying a failed message is a new,
+deliberate processing of it: the replay writes a new row with its own copy of
+the content and its own `received_at`, and that copy follows rule 1 from the
+replay date. So a message replayed on day 364 of its 365 has a copy that
+lasts until about 180 days after the replay; the ceiling in rule 2 bounds
+each failed row, not the message across replays (user decision, round 3 of
+PR #814).
 
 Nothing is kept for ever. While a failed message is replayable it keeps its
 content, but never past the ceiling. The ceiling is what bounds the rows that
