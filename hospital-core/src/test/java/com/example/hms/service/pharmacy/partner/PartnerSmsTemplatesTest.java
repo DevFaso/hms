@@ -121,7 +121,7 @@ class PartnerSmsTemplatesTest {
     @Test
     void withdrawnTellsThePharmacyNotToDispenseWithoutClaimingATimeoutOrAnotherPharmacy() {
         String msg = templates.withdrawn("ABC12");
-        assertThat(msg).contains("ABC12").contains("prescripteur").contains("Ne pas délivrer");
-        assertThat(msg).doesNotContain("délai").doesNotContain("autre pharmacie");
+        assertThat(msg).contains("ABC12").contains("prescripteur").contains("Ne pas délivrer")
+                .doesNotContain("délai").doesNotContain("autre pharmacie");
     }
 }

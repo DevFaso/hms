@@ -3388,6 +3388,23 @@ class PrescriptionServiceImplTest {
     }
 
     @Test
+    void movingBetweenWithdrawnStatesDoesNotTellThePartnersAgain() {
+        UUID cancelledId = UUID.randomUUID();
+        stubUpdateTo(cancelledId, com.example.hms.enums.PrescriptionStatus.CANCELLED,
+            com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        prescriptionService.updatePrescription(cancelledId,
+            requestWithStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED), Locale.ENGLISH);
+
+        UUID discontinuedId = UUID.randomUUID();
+        stubUpdateTo(discontinuedId, com.example.hms.enums.PrescriptionStatus.DISCONTINUED,
+            com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        prescriptionService.updatePrescription(discontinuedId,
+            requestWithStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED), Locale.ENGLISH);
+
+        verifyNoInteractions(withdrawnOrders);
+    }
+
+    @Test
     void reSavingAnAlreadyCancelledOrderDoesNotTellThePartnersAgain() {
         UUID prescriptionId = UUID.randomUUID();
         stubUpdateTo(prescriptionId, com.example.hms.enums.PrescriptionStatus.CANCELLED,

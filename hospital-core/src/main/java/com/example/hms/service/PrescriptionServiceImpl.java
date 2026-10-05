@@ -653,7 +653,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      */
     private void closePartnerOffersOnWithdrawal(Prescription prescription, PrescriptionStatus statusBefore) {
         PrescriptionStatus now = prescription.getStatus();
-        if (now == null || !now.isWithdrawn() || now == statusBefore) {
+        // Only on the way INTO withdrawal: CANCELLED -> DISCONTINUED (or back)
+        // is still the same withdrawn order, and its partners were already told.
+        if (now == null || !now.isWithdrawn() || (statusBefore != null && statusBefore.isWithdrawn())) {
             return;
         }
         withdrawnOrders.withdrawPartnerOffers(prescription);
