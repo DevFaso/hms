@@ -72,6 +72,21 @@ public class PrescriberPharmacyNotifier {
         afterCommit(prescriptionId, "PARTNER_TIMED_OUT", () -> writer.writePartnerTimedOut(prescriptionId));
     }
 
+    /**
+     * Queue a notification that the partner pharmacy reports it dispensed
+     * {@code prescription} after the prescriber withdrew it: the patient may
+     * be holding a medication the prescriber stopped. Same delivery rules as
+     * {@link #notifyPrescriber}.
+     */
+    public void notifyPrescriberOfDispenseAfterWithdrawal(Prescription prescription) {
+        if (prescription == null || prescription.getId() == null) {
+            return;
+        }
+        UUID prescriptionId = prescription.getId();
+        afterCommit(prescriptionId, "PARTNER_DISPENSED_WITHDRAWN",
+                () -> writer.writePartnerDispensedAfterWithdrawal(prescriptionId));
+    }
+
     private static void afterCommit(UUID prescriptionId, String event, Runnable write) {
         TransactionCallbacks.afterCommit(() -> {
             try {

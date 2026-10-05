@@ -142,4 +142,19 @@ class PrescriberPharmacyNotifierTest {
 
         assertThatCode(PrescriberPharmacyNotifierTest::commit).doesNotThrowAnyException();
     }
+
+    @Test
+    @DisplayName("a dispense of a withdrawn order is written after the commit, never on a rollback")
+    void withdrawnDispenseWritesAfterCommit() {
+        TransactionSynchronizationManager.initSynchronization();
+        Prescription p = prescription();
+
+        notifier().notifyPrescriberOfDispenseAfterWithdrawal(p);
+        notifier().notifyPrescriberOfDispenseAfterWithdrawal(null);
+        notifier().notifyPrescriberOfDispenseAfterWithdrawal(new Prescription());
+
+        verifyNoInteractions(writer);
+        commit();
+        verify(writer).writePartnerDispensedAfterWithdrawal(p.getId());
+    }
 }

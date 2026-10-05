@@ -108,6 +108,8 @@ class PrescriptionServiceImplTest {
     private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    @Mock
+    private com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository routingDecisionRepository;
     /**
      * Not optional: getPrescriptionById dereferences this whenever the thread's
      * SecurityContext holds a patient-only principal. No test here sets one
@@ -3313,5 +3315,101 @@ class PrescriptionServiceImplTest {
         assertThat(result).extracting(PrescriptionResponseDTO::getId).containsExactly(localRx.getId(), foreignRx.getId());
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    // ═══════════════ withdrawal closes unanswered partner offers ═══════════════
+
+    private Prescription stubUpdateTo(UUID prescriptionId, com.example.hms.enums.PrescriptionStatus from,
+                                      com.example.hms.enums.PrescriptionStatus to) {
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setStatus(from);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(existing));
+        when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(roleValidator.canCreatePrescription(any(), eq(hospitalId))).thenReturn(true);
+        when(urhaRepository.findByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(
+            any(), eq(hospitalId), eq("DOCTOR")))
+            .thenReturn(Optional.of(assignment));
+        // the mapper is a mock: copy the requested status as the real one does
+        org.mockito.Mockito.doAnswer(inv -> {
+            ((Prescription) inv.getArgument(0)).setStatus(to);
+            return null;
+        }).when(prescriptionMapper).updateEntity(any(), any(), any(), any(), any());
+        when(prescriptionRepository.save(any())).thenReturn(existing);
+        when(prescriptionMapper.toResponseDTO(any())).thenReturn(
+            PrescriptionResponseDTO.builder().id(prescriptionId).build());
+        return existing;
+    }
+
+    private PrescriptionRequestDTO requestWithStatus(com.example.hms.enums.PrescriptionStatus status) {
+        PrescriptionRequestDTO request = buildRequest();
+        request.setStatus(status);
+        return request;
+    }
+
+    private static com.example.hms.model.pharmacy.PrescriptionRoutingDecision decision(
+            com.example.hms.enums.RoutingType type, com.example.hms.enums.RoutingDecisionStatus status) {
+        var d = com.example.hms.model.pharmacy.PrescriptionRoutingDecision.builder()
+            .routingType(type).status(status).build();
+        d.setId(UUID.randomUUID());
+        return d;
+    }
+
+    @Test
+    void cancellingClosesPendingPartnerOffers() {
+        UUID prescriptionId = UUID.randomUUID();
+        stubUpdateTo(prescriptionId, com.example.hms.enums.PrescriptionStatus.SENT_TO_PARTNER,
+            com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        var pendingPartner = decision(com.example.hms.enums.RoutingType.PARTNER,
+            com.example.hms.enums.RoutingDecisionStatus.PENDING);
+        // accepted: the partner may already have handed it over, so its
+        // dispense confirmation must still match (and be surfaced)
+        var acceptedPartner = decision(com.example.hms.enums.RoutingType.PARTNER,
+            com.example.hms.enums.RoutingDecisionStatus.ACCEPTED);
+        var pendingBackorder = decision(com.example.hms.enums.RoutingType.BACKORDER,
+            com.example.hms.enums.RoutingDecisionStatus.PENDING);
+        when(routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescriptionId))
+            .thenReturn(List.of(pendingPartner, acceptedPartner, pendingBackorder));
+
+        prescriptionService.updatePrescription(prescriptionId,
+            requestWithStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED),
+            Locale.ENGLISH);
+
+        assertThat(pendingPartner.getStatus()).isEqualTo(com.example.hms.enums.RoutingDecisionStatus.CANCELLED);
+        assertThat(acceptedPartner.getStatus()).isEqualTo(com.example.hms.enums.RoutingDecisionStatus.ACCEPTED);
+        assertThat(pendingBackorder.getStatus()).isEqualTo(com.example.hms.enums.RoutingDecisionStatus.PENDING);
+        verify(routingDecisionRepository).save(pendingPartner);
+        verify(routingDecisionRepository, never()).save(acceptedPartner);
+    }
+
+    @Test
+    void discontinuingClosesPendingPartnerOffersToo() {
+        UUID prescriptionId = UUID.randomUUID();
+        stubUpdateTo(prescriptionId, com.example.hms.enums.PrescriptionStatus.SIGNED,
+            com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        var pendingPartner = decision(com.example.hms.enums.RoutingType.PARTNER,
+            com.example.hms.enums.RoutingDecisionStatus.PENDING);
+        when(routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescriptionId))
+            .thenReturn(List.of(pendingPartner));
+
+        prescriptionService.updatePrescription(prescriptionId,
+            requestWithStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED),
+            Locale.ENGLISH);
+
+        assertThat(pendingPartner.getStatus()).isEqualTo(com.example.hms.enums.RoutingDecisionStatus.CANCELLED);
+    }
+
+    @Test
+    void anEditThatDoesNotWithdrawLeavesPartnerOffersAlone() {
+        UUID prescriptionId = UUID.randomUUID();
+        stubUpdateTo(prescriptionId, com.example.hms.enums.PrescriptionStatus.SENT_TO_PARTNER,
+            com.example.hms.enums.PrescriptionStatus.SENT_TO_PARTNER);
+
+        prescriptionService.updatePrescription(prescriptionId, buildRequest(), Locale.ENGLISH);
+
+        verifyNoInteractions(routingDecisionRepository);
     }
 }

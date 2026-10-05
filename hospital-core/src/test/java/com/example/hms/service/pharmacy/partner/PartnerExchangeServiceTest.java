@@ -604,4 +604,86 @@ class PartnerExchangeServiceTest {
 
         verifyNoInteractions(writer);
     }
+
+    // ---------- an order the prescriber withdrew stays withdrawn ----------
+
+    @Test
+    @DisplayName("cancel then timeout: the order stays CANCELLED with its pharmacy, the offer closes, the prescriber hears nothing")
+    void withdrawnThenTimeout() {
+        prescription.setStatus(PrescriptionStatus.CANCELLED);
+        attachPartnerToPrescription();
+        stubStaleDecision();
+        when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        PartnerExchangeService.TimeoutSweepResult r = service.sweepTimeouts();
+
+        assertThat(r.autoRejected()).isEqualTo(1);
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.CANCELLED);
+        assertThat(prescription.getPharmacyId()).isEqualTo(partner.getId());
+        assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
+        verify(prescriptionRepository, never()).save(any());
+        verifyNoInteractions(prescriberNotifier);
+    }
+
+    @Test
+    @DisplayName("a late accept on a DISCONTINUED order changes nothing on it and tells neither patient nor prescriber")
+    void lateAcceptOnWithdrawnOrder() {
+        prescription.setStatus(PrescriptionStatus.DISCONTINUED);
+        stubPrefixLookup(decision);
+        when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        Optional<PrescriptionRoutingDecision> result = service.handleInboundReply(PARTNER_PHONE, "1 " + token);
+
+        assertThat(result).isPresent();
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISCONTINUED);
+        assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
+        verify(prescriptionRepository, never()).save(any());
+        verify(channel, never()).notifyPatientAccepted(any(), any());
+        verifyNoInteractions(prescriberNotifier);
+    }
+
+    @Test
+    @DisplayName("a late refusal on a CANCELLED order changes nothing on it — status and pharmacy stay")
+    void lateRejectOnWithdrawnOrder() {
+        prescription.setStatus(PrescriptionStatus.CANCELLED);
+        attachPartnerToPrescription();
+        stubPrefixLookup(decision);
+        when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.handleInboundReply(PARTNER_PHONE, "2 " + token);
+
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.CANCELLED);
+        assertThat(prescription.getPharmacyName()).isEqualTo(partner.getName());
+        assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
+        verify(prescriptionRepository, never()).save(any());
+        verifyNoInteractions(prescriberNotifier);
+    }
+
+    @Test
+    @DisplayName("a late dispense confirmation on a CANCELLED order is recorded, raised for staff and told to the prescriber")
+    void lateDispenseOnWithdrawnOrderIsSurfaced() {
+        prescription.setStatus(PrescriptionStatus.CANCELLED);
+        decision.setStatus(RoutingDecisionStatus.ACCEPTED);
+        stubPrefixLookup(decision);
+        when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        Optional<PrescriptionRoutingDecision> result = service.handleInboundReply(PARTNER_PHONE, "3 " + token);
+
+        assertThat(result).isPresent();
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.CANCELLED);
+        assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.COMPLETED);
+        verify(prescriptionRepository, never()).save(any());
+        verify(channel, never()).notifyPatientDispensed(any(), any());
+        verify(prescriberNotifier).notifyPrescriberOfDispenseAfterWithdrawal(prescription);
+        verify(prescriberNotifier, never()).notifyPrescriber(any(), any());
+        ArgumentCaptor<AuditEventRequestDTO> captor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(captor.capture());
+        AuditEventRequestDTO event = captor.getValue();
+        assertThat(event.getEventType()).isEqualTo(AuditEventType.SECURITY_ALERT_TRIGGERED);
+        assertThat(event.getStatus()).isEqualTo(AuditStatus.FAILURE);
+        assertThat(event.getResourceId()).isEqualTo(decisionId.toString());
+        assertThat(event.getEventDescription())
+                .contains(prescription.getId().toString())
+                .contains("CANCELLED");
+    }
 }

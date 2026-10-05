@@ -197,4 +197,17 @@ class PrescriberPharmacyNotificationWriterTest {
                         + "Amoxicilline 500 mg (Aminata Diallo) ; l'ordonnance doit être réorientée.",
                 "dr.awa", "PHARMACY_EVENT");
     }
+
+    @Test
+    @DisplayName("a dispense of a withdrawn order names the partner and asks the prescriber to check with the patient")
+    void partnerDispensedAfterWithdrawal() {
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+        assertThat(writer.writePartnerDispensedAfterWithdrawal(prescriptionId)).isTrue();
+
+        verify(notificationService).createNotification(
+                "Pharmacie : la pharmacie partenaire Pharmacie du Marché signale avoir délivré "
+                        + "Amoxicilline 500 mg (Aminata Diallo), qui avait été retiré. Vérifiez auprès du patient.",
+                "dr.awa", "PHARMACY_EVENT");
+    }
 }

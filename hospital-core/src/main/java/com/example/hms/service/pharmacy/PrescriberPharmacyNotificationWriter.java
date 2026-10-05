@@ -44,6 +44,8 @@ public class PrescriberPharmacyNotificationWriter {
     static final int MAX_MESSAGE_LENGTH = 255;
     /** The timeout has no status of its own (the row is PARTNER_REJECTED), so its key is named here. */
     static final String PARTNER_TIMED_OUT_KEY = KEY_PREFIX + "PARTNER_TIMED_OUT";
+    /** A partner's dispense of an order the prescriber had withdrawn; the row stays withdrawn. */
+    static final String PARTNER_DISPENSED_WITHDRAWN_KEY = KEY_PREFIX + "PARTNER_DISPENSED_WITHDRAWN";
     private static final String PATIENT_FALLBACK_KEY = "prescription.pharmacy.patientFallback";
 
     private final PrescriptionRepository prescriptionRepository;
@@ -70,6 +72,18 @@ public class PrescriberPharmacyNotificationWriter {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean writePartnerTimedOut(UUID prescriptionId) {
         return writeMessage(prescriptionId, PARTNER_TIMED_OUT_KEY, PrescriptionStatus.PARTNER_REJECTED);
+    }
+
+    /**
+     * The partner confirmed a dispense of an order the prescriber had already
+     * withdrawn. The prescription keeps its withdrawn status; the message
+     * names the partner and asks the prescriber to check with the patient.
+     *
+     * @return as {@link #write}
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean writePartnerDispensedAfterWithdrawal(UUID prescriptionId) {
+        return writeMessage(prescriptionId, PARTNER_DISPENSED_WITHDRAWN_KEY, PrescriptionStatus.PARTNER_DISPENSED);
     }
 
     private boolean writeMessage(UUID prescriptionId, String key, PrescriptionStatus event) {
