@@ -378,7 +378,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
             // The refusing partner is no longer this order's pharmacy: the
             // work queue groups the row under the in-house dispensary and
             // shows the refusal from the decision (lastRefusedBy).
-            clearPharmacy(prescription);
+            prescription.clearPharmacy();
         }
 
         prescriptionRepository.save(prescription);
@@ -484,7 +484,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         decision.setNoShowReason(words);
         prescription.setStatus(PrescriptionStatus.SIGNED);
         // The partner that did not deliver is no longer this order's pharmacy.
-        clearPharmacy(prescription);
+        prescription.clearPharmacy();
         prescriptionRepository.save(prescription);
         PrescriptionRoutingDecision saved = routingDecisionRepository.save(decision);
 
@@ -636,13 +636,6 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         BigDecimal dispensedToDate = dispenseRepository
                 .sumQuantityDispensedForPrescription(prescription.getId(), DispenseStatus.CANCELLED);
         return FillAccounting.remaining(prescription, dispensedToDate);
-    }
-
-    private static void clearPharmacy(Prescription prescription) {
-        prescription.setPharmacyId(null);
-        prescription.setPharmacyName(null);
-        prescription.setPharmacyContact(null);
-        prescription.setPharmacyAddress(null);
     }
 
     private void validateRoutableStatus(Prescription prescription) {

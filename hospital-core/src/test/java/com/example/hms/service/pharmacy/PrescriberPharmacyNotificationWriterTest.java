@@ -170,4 +170,31 @@ class PrescriberPharmacyNotificationWriterTest {
 
         verifyNoInteractions(notificationService);
     }
+
+    @Test
+    @DisplayName("a timed-out offer says the partner did not reply — not that it refused — and names it from the decision")
+    void partnerTimedOut() {
+        // The sweep clears the pharmacy columns as a refusal does, so the
+        // partner's name comes from the (REJECTED) decision.
+        prescription.setPharmacyName(null);
+        com.example.hms.model.pharmacy.Pharmacy partner =
+                com.example.hms.model.pharmacy.Pharmacy.builder().name("Pharmacie du Marché").build();
+        com.example.hms.model.pharmacy.PrescriptionRoutingDecision timedOut =
+                com.example.hms.model.pharmacy.PrescriptionRoutingDecision.builder()
+                        .prescription(prescription)
+                        .targetPharmacy(partner)
+                        .routingType(com.example.hms.enums.RoutingType.PARTNER)
+                        .status(com.example.hms.enums.RoutingDecisionStatus.REJECTED)
+                        .build();
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescriptionId))
+                .thenReturn(java.util.List.of(timedOut));
+
+        assertThat(writer.writePartnerTimedOut(prescriptionId)).isTrue();
+
+        verify(notificationService).createNotification(
+                "Pharmacie : la pharmacie partenaire Pharmacie du Marché n'a pas répondu à temps pour "
+                        + "Amoxicilline 500 mg (Aminata Diallo) ; l'ordonnance doit être réorientée.",
+                "dr.awa", "PHARMACY_EVENT");
+    }
 }

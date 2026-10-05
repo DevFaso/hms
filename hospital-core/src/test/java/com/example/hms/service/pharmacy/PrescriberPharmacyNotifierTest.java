@@ -105,4 +105,41 @@ class PrescriberPharmacyNotifierTest {
 
         verify(writer, never()).write(any(), any());
     }
+
+    @Test
+    @DisplayName("a partner timeout is written after the commit, never on a rollback, and a failure is swallowed")
+    void timeoutWritesAfterCommit() {
+        TransactionSynchronizationManager.initSynchronization();
+        Prescription p = prescription();
+
+        notifier().notifyPrescriberOfPartnerTimeout(p);
+
+        verifyNoInteractions(writer);
+        commit();
+        verify(writer).writePartnerTimedOut(p.getId());
+    }
+
+    @Test
+    @DisplayName("a partner timeout on a rolled-back sweep is never written")
+    void timeoutSkipsOnRollback() {
+        TransactionSynchronizationManager.initSynchronization();
+
+        notifier().notifyPrescriberOfPartnerTimeout(prescription());
+        rollback();
+        notifier().notifyPrescriberOfPartnerTimeout(null);
+        notifier().notifyPrescriberOfPartnerTimeout(new Prescription());
+
+        verifyNoInteractions(writer);
+    }
+
+    @Test
+    @DisplayName("a timeout writer failure after commit is swallowed")
+    void timeoutSwallowsWriterFailure() {
+        TransactionSynchronizationManager.initSynchronization();
+        doThrow(new IllegalStateException("no session")).when(writer).writePartnerTimedOut(any());
+
+        notifier().notifyPrescriberOfPartnerTimeout(prescription());
+
+        assertThatCode(PrescriberPharmacyNotifierTest::commit).doesNotThrowAnyException();
+    }
 }
