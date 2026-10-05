@@ -15,8 +15,8 @@ import java.util.UUID;
  * Which progress row IS a patient's progress on a resource, when there is
  * more than one.
  *
- * <p>{@code clinical.patient_education_progress} has no unique key on
- * (patient, resource), so duplicates exist. The list used to return every row
+ * <p>{@code clinical.patient_education_progress} had no unique key on
+ * (patient, resource) until V176, so duplicates existed. The list used to return every row
  * and let each client keep the most recently accessed one, while the write
  * ({@code PUT /me/patient/education/{id}/progress}) updated the NEWEST-CREATED
  * one - so with duplicates a rating on a completed item landed on a different
@@ -25,8 +25,12 @@ import java.util.UUID;
  * server: the most recently accessed, then the most recently created, then
  * the id - total, so the choice never depends on the order a query returned.
  *
- * <p>Nothing is merged or deleted: the other rows stay where they are, unread.
- * Collapsing them into one is a data decision this does not take.
+ * <p>Since V176 there is only ever one: the migration folded each group of
+ * duplicates into the row this rule picks (the same ordering, written in SQL,
+ * including {@code java.util.UUID}'s signed id order) and added
+ * {@code uk_patient_education_progress_patient_resource}. The readers keep
+ * going through here anyway; with one row it is the identity, and if this
+ * ordering ever changes, V176's comment records which row was kept.
  */
 public final class EducationProgressRows {
 

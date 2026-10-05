@@ -32,11 +32,13 @@ import com.example.hms.repository.PatientEducationQuestionRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.VisitEducationDocumentationRepository;
+import com.example.hms.service.EducationProgressWrites;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -47,6 +49,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -71,6 +74,8 @@ class PatientEducationServiceImplTest {
     private HospitalRepository hospitalRepository;
     @Mock
     private EncounterRepository encounterRepository;
+    @Mock
+    private EducationProgressWrites progressWrites;
 
     private EducationResourceMapper resourceMapper;
     private PatientEducationProgressMapper progressMapper;
@@ -106,6 +111,7 @@ class PatientEducationServiceImplTest {
             staffRepository,
             hospitalRepository,
             encounterRepository,
+            progressWrites,
             resourceMapper,
             progressMapper,
             documentationMapper,
@@ -338,13 +344,12 @@ class PatientEducationServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        // No row yet: the service inserts one in its own transaction, then
+        // reads back what the database now holds and updates it.
+        PatientEducationProgress inserted = freshlyInsertedRow(EducationComprehensionStatus.IN_PROGRESS);
         when(progressRepository.findByPatientIdAndResourceId(patientId, resourceId))
-            .thenReturn(java.util.List.of());
-        when(progressRepository.save(any(PatientEducationProgress.class))).thenAnswer(invocation -> {
-            PatientEducationProgress saved = invocation.getArgument(0);
-            saved.setId(UUID.randomUUID());
-            return saved;
-        });
+            .thenReturn(java.util.List.of(), java.util.List.of(inserted));
+        when(progressRepository.save(any(PatientEducationProgress.class))).thenAnswer(i -> i.getArgument(0));
 
         // When
         PatientEducationProgressResponseDTO result = service.trackProgress(patientId, requestDTO, hospitalId);
@@ -352,7 +357,96 @@ class PatientEducationServiceImplTest {
         // Then
         assertThat(result).isNotNull();
         assertThat(result.getProgressPercentage()).isEqualTo(50);
-        verify(progressRepository).save(any(PatientEducationProgress.class));
+        assertThat(result.getAccessCount()).isEqualTo(1);
+        verify(progressWrites).createRow(patientId, resourceId, hospitalId, EducationComprehensionStatus.IN_PROGRESS);
+        verify(progressRepository).save(inserted);
+    }
+
+    @Test
+    void trackProgress_whenAConcurrentRequestCreatedTheRowFirst_updatesThatRowInsteadOfFailing() {
+        // Both requests saw no row. The other one's insert won the unique key
+        // (uk_patient_education_progress_patient_resource, V176), so this
+        // insert is refused; the service must update the winner's row, not
+        // answer 500 and not create a second one.
+        PatientEducationProgressRequestDTO requestDTO = PatientEducationProgressRequestDTO.builder()
+            .resourceId(resourceId)
+            .progressPercentage(40)
+            .build();
+        PatientEducationProgress winner = freshlyInsertedRow(EducationComprehensionStatus.NOT_STARTED);
+        winner.setAccessCount(1);
+
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(progressRepository.findByPatientIdAndResourceId(patientId, resourceId))
+            .thenReturn(java.util.List.of(), java.util.List.of(winner));
+        doThrow(new DataIntegrityViolationException("uk_patient_education_progress_patient_resource"))
+            .when(progressWrites).createRow(patientId, resourceId, hospitalId, EducationComprehensionStatus.NOT_STARTED);
+        when(progressRepository.save(any(PatientEducationProgress.class))).thenAnswer(i -> i.getArgument(0));
+
+        PatientEducationProgressResponseDTO result = service.trackProgress(patientId, requestDTO, hospitalId);
+
+        assertThat(result.getId()).isEqualTo(winner.getId());
+        assertThat(result.getProgressPercentage()).isEqualTo(40);
+        assertThat(result.getAccessCount()).isEqualTo(2);
+        verify(progressRepository).save(winner);
+    }
+
+    @Test
+    void trackProgress_whenARowExists_neverInserts() {
+        PatientEducationProgress existing = freshlyInsertedRow(EducationComprehensionStatus.IN_PROGRESS);
+        PatientEducationProgressRequestDTO requestDTO = PatientEducationProgressRequestDTO.builder()
+            .resourceId(resourceId)
+            .progressPercentage(10)
+            .build();
+
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(progressRepository.findByPatientIdAndResourceId(patientId, resourceId))
+            .thenReturn(java.util.List.of(existing));
+        when(progressRepository.save(any(PatientEducationProgress.class))).thenAnswer(i -> i.getArgument(0));
+
+        service.trackProgress(patientId, requestDTO, hospitalId);
+
+        verify(progressWrites, never()).createRow(any(), any(), any(), any());
+        verify(progressRepository).save(existing);
+    }
+
+    @Test
+    void trackProgress_whenTheInsertIsRefusedAndNoRowAppears_rethrowsTheRefusal() {
+        // A refusal that left no row behind was not the (patient, resource)
+        // key losing a race: it is surfaced, not swallowed.
+        PatientEducationProgressRequestDTO requestDTO = PatientEducationProgressRequestDTO.builder()
+            .resourceId(resourceId)
+            .build();
+        DataIntegrityViolationException refusal = new DataIntegrityViolationException("some other constraint");
+
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(progressRepository.findByPatientIdAndResourceId(patientId, resourceId)).thenReturn(java.util.List.of());
+        doThrow(refusal).when(progressWrites)
+            .createRow(patientId, resourceId, hospitalId, EducationComprehensionStatus.NOT_STARTED);
+
+        assertThatThrownBy(() -> service.trackProgress(patientId, requestDTO, hospitalId)).isSameAs(refusal);
+        verify(progressRepository, never()).save(any(PatientEducationProgress.class));
+    }
+
+    /** The row EducationProgressWrites.createRow leaves, as the re-read returns it. */
+    private PatientEducationProgress freshlyInsertedRow(EducationComprehensionStatus status) {
+        PatientEducationProgress row = PatientEducationProgress.builder()
+            .patientId(patientId)
+            .resourceId(resourceId)
+            .hospitalId(hospitalId)
+            .comprehensionStatus(status)
+            .progressPercentage(0)
+            .accessCount(0)
+            .timeSpentSeconds(0L)
+            .startedAt(LocalDateTime.now())
+            .build();
+        row.setId(UUID.randomUUID());
+        return row;
     }
 
     @Test
@@ -404,12 +498,8 @@ class PatientEducationServiceImplTest {
         when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(progressRepository.findByPatientIdAndResourceId(patientId, resourceId))
-            .thenReturn(java.util.List.of());
-        when(progressRepository.save(any(PatientEducationProgress.class))).thenAnswer(invocation -> {
-            PatientEducationProgress saved = invocation.getArgument(0);
-            saved.setId(UUID.randomUUID());
-            return saved;
-        });
+            .thenReturn(java.util.List.of(), java.util.List.of(freshlyInsertedRow(EducationComprehensionStatus.NOT_STARTED)));
+        when(progressRepository.save(any(PatientEducationProgress.class))).thenAnswer(i -> i.getArgument(0));
 
         // When
         PatientEducationProgressResponseDTO result = service.trackProgress(patientId, requestDTO, hospitalId);
@@ -574,7 +664,7 @@ class PatientEducationServiceImplTest {
         PatientEducationServiceImpl serviceWithNullingMapper = new PatientEducationServiceImpl(
             resourceRepository, progressRepository, documentationRepository, questionRepository,
             patientRepository, staffRepository, hospitalRepository, encounterRepository,
-            resourceMapper, progressMapper, documentationMapper, nullingMapper);
+            progressWrites, resourceMapper, progressMapper, documentationMapper, nullingMapper);
 
         PatientEducationQuestionRequestDTO requestDTO = PatientEducationQuestionRequestDTO.builder()
             .questionText("Anything")
