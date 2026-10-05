@@ -3404,6 +3404,42 @@ class PrescriptionServiceImplTest {
         verifyNoInteractions(withdrawnOrders);
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "CANCELLED,DRAFT", "CANCELLED,PENDING_SIGNATURE", "CANCELLED,SIGNED",
+        "DISCONTINUED,DRAFT", "DISCONTINUED,PENDING_SIGNATURE", "DISCONTINUED,SIGNED"})
+    void aWithdrawnPrescriptionCannotBeReopened(com.example.hms.enums.PrescriptionStatus withdrawn,
+                                                com.example.hms.enums.PrescriptionStatus requested) {
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setStatus(withdrawn);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(existing));
+        PrescriptionRequestDTO request = requestWithStatus(requested);
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("prescription.withdrawn.final");
+        assertThat(existing.getStatus()).isEqualTo(withdrawn);
+        verify(prescriptionRepository, never()).save(any());
+        verifyNoInteractions(withdrawnOrders, prescriptionMapper);
+    }
+
+    @Test
+    void aWithdrawnPrescriptionMayMoveToTheOtherWithdrawnState() {
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = stubUpdateTo(prescriptionId,
+            com.example.hms.enums.PrescriptionStatus.CANCELLED,
+            com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+
+        prescriptionService.updatePrescription(prescriptionId,
+            requestWithStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED), Locale.ENGLISH);
+
+        assertThat(existing.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        verify(prescriptionRepository).save(existing);
+    }
+
     @Test
     void reSavingAnAlreadyCancelledOrderDoesNotTellThePartnersAgain() {
         UUID prescriptionId = UUID.randomUUID();

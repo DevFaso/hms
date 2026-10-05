@@ -610,6 +610,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (requested == null) {
             return;
         }
+        if (existing.getStatus() != null && existing.getStatus().isWithdrawn()) {
+            rejectReopeningWithdrawn(requested);
+            return;
+        }
         if (existing.getStatus() != PrescriptionStatus.PENDING_CLARIFICATION) {
             rejectClientAssertedWorkflowStatus(request);
             return;
@@ -625,6 +629,20 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             "This prescription is awaiting the prescriber's clarification; edit it and answer with "
                 + "POST /prescriptions/{id}/resolve-clarification, or cancel it, rather than changing "
                 + "its status.");
+    }
+
+    /**
+     * Withdrawal is final. A CANCELLED or DISCONTINUED order can move to the
+     * other withdrawn state and nowhere else: reopened (DRAFT is a status a
+     * client may assert), its partner offers would act live again — an
+     * ACCEPTED offer stays open after withdrawal so a late dispense is
+     * surfaced, and the partner holding it has been told not to dispense.
+     * A prescriber who wants the medication again writes a new prescription.
+     */
+    private static void rejectReopeningWithdrawn(PrescriptionStatus requested) {
+        if (!requested.isWithdrawn()) {
+            throw new BusinessException("prescription.withdrawn.final");
+        }
     }
 
     /**

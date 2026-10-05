@@ -689,4 +689,20 @@ class PartnerExchangeServiceTest {
                 .contains(prescription.getId().toString())
                 .contains("CANCELLED");
     }
+
+    @Test
+    @DisplayName("withdrawal is final: a late dispense on a DISCONTINUED order is still recorded and raised, never applied")
+    void lateDispenseOnDiscontinuedOrderIsSurfaced() {
+        prescription.setStatus(PrescriptionStatus.DISCONTINUED);
+        decision.setStatus(RoutingDecisionStatus.ACCEPTED);
+        stubPrefixLookup(decision);
+        when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.handleInboundReply(PARTNER_PHONE, "3 " + token);
+
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISCONTINUED);
+        assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.COMPLETED);
+        verify(channel, never()).notifyPatientDispensed(any(), any());
+        verify(prescriberNotifier).notifyPrescriberOfDispenseAfterWithdrawal(prescription);
+    }
 }
