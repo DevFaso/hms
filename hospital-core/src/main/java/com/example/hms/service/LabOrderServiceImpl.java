@@ -398,26 +398,30 @@ public class LabOrderServiceImpl implements LabOrderService {
      * and nothing more, so a caller could record an order under any
      * assignment in the system - someone else's, another hospital's, a
      * revoked one. The recorded assignment is now always one the ordering
-     * clinician holds, active, at the order's hospital:
+     * clinician holds, active, at the order's hospital, in a role that orders
+     * lab tests ({@link RoleValidator#isLabOrderingRole}):
      * <ul>
      *   <li>An edit that keeps the ordering clinician and leaves the
      *       assignment as it is keeps it, whoever is editing, as long as it is
      *       still at the order's hospital - the rule {@link #keptOrderingStaff}
      *       applies to the clinician.</li>
      *   <li>The named assignment is used when it is the ordering clinician's,
-     *       active, at the order's hospital.</li>
-     *   <li>The ordering clinician's own assignment that is inactive or at
-     *       another hospital is replaced by the one they hold here. The
-     *       portal sends the first active assignment of the signed-in user,
-     *       which for a clinician working at two hospitals is often the other
-     *       hospital's; that used to fail at flush
+     *       active, at the order's hospital, in a lab-ordering role.</li>
+     *   <li>The ordering clinician's own assignment that is inactive, at
+     *       another hospital or in another role is replaced by the one they
+     *       hold here. The portal sends the first active assignment of the
+     *       signed-in user, which for a clinician working at two hospitals is
+     *       often the other hospital's; that used to fail at flush
      *       ({@code LabOrder.validateHospitalScope}).</li>
+     *   <li>No id at all (an internal caller) is derived the same way.</li>
      *   <li>On an edit that keeps another clinician's order, the editor's own
      *       assignment is what a client naturally sends; it never becomes the
      *       order's context - the order keeps the one it has.</li>
-     *   <li>Anything else - an unknown id, another person's assignment - is
-     *       refused with {@code assignment.notfound}, exactly what an unknown
-     *       id gets, so the answer says nothing about whether the id exists.</li>
+     *   <li>Anything else - an id that does not exist, another person's
+     *       assignment, or the clinician holding no lab-ordering assignment
+     *       here - is refused with {@code assignment.notfound}. An unknown id
+     *       and another person's id get the same answer, so it says nothing
+     *       about whether the id exists.</li>
      * </ul>
      */
     private UserRoleHospitalAssignment resolveOrderingAssignment(
@@ -434,8 +438,9 @@ public class LabOrderServiceImpl implements LabOrderService {
         UserRoleHospitalAssignment named = requestedAssignmentId == null ? null
             : assignmentRepository.findById(requestedAssignmentId).orElse(null);
         UUID namedUserId = named != null && named.getUser() != null ? named.getUser().getId() : null;
-        if (named == null || orderingUserId.equals(namedUserId)) {
-            if (named != null && isActiveAt(named, hospital)) {
+        // A null id derives; an id that names nothing is refused below, like another person's.
+        if (requestedAssignmentId == null || orderingUserId.equals(namedUserId)) {
+            if (named != null && isOrderingContextAt(named, hospital)) {
                 return named;
             }
             return orderingClinicianAssignmentAt(staff, hospital).orElseThrow(() -> {
@@ -453,19 +458,21 @@ public class LabOrderServiceImpl implements LabOrderService {
     }
 
     /**
-     * The ordering clinician's active assignment at the order's hospital: the
-     * one their staff row there is bound to, else any active one they hold
-     * there (ordered by id, so the choice is stable).
+     * The ordering clinician's active lab-ordering assignment at the order's
+     * hospital: the one their staff row there is bound to, else any such one
+     * they hold there (ordered by id, so the choice is stable). Never an
+     * assignment in a role that does not order lab tests, such as an
+     * administrative one the same person also holds there.
      */
     private Optional<UserRoleHospitalAssignment> orderingClinicianAssignmentAt(Staff staff, Hospital hospital) {
         UUID userId = staff.getUser().getId();
         UserRoleHospitalAssignment ofRow = staff.getAssignment();
         if (ofRow != null && ofRow.getUser() != null && userId.equals(ofRow.getUser().getId())
-                && isActiveAt(ofRow, hospital)) {
+                && isOrderingContextAt(ofRow, hospital)) {
             return Optional.of(ofRow);
         }
         return assignmentRepository.findByUser_IdAndActiveTrue(userId).stream()
-            .filter(candidate -> isActiveAt(candidate, hospital))
+            .filter(candidate -> isOrderingContextAt(candidate, hospital))
             .min(Comparator.comparing(UserRoleHospitalAssignment::getId));
     }
 
@@ -473,8 +480,9 @@ public class LabOrderServiceImpl implements LabOrderService {
         return assignment.getHospital() != null && hospital.getId().equals(assignment.getHospital().getId());
     }
 
-    private static boolean isActiveAt(UserRoleHospitalAssignment assignment, Hospital hospital) {
-        return Boolean.TRUE.equals(assignment.getActive()) && isAtHospital(assignment, hospital);
+    private static boolean isOrderingContextAt(UserRoleHospitalAssignment assignment, Hospital hospital) {
+        return Boolean.TRUE.equals(assignment.getActive()) && isAtHospital(assignment, hospital)
+            && RoleValidator.isLabOrderingRole(assignment);
     }
 
     private UUID callerUserId() {

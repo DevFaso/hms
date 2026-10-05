@@ -624,14 +624,63 @@ class LabOrderServiceImplTest {
     }
 
     @Test
-    void createLabOrder_refusesAnUnknownAssignmentWhenThereIsNothingToFallBackOn() {
+    void createLabOrder_refusesAnUnknownAssignmentEvenWhenOneCouldBeDerived() {
+        // Same answer as another person's id: deriving here would tell a
+        // caller which ids exist (refused) and which do not (accepted).
         mockCommonLookups();
         UUID unknown = UUID.randomUUID();
         when(assignmentRepository.findById(unknown)).thenReturn(Optional.empty());
-        assignment.setActive(false);
-        when(assignmentRepository.findByUser_IdAndActiveTrue(orderingUserId)).thenReturn(List.of());
 
         assertCreateRefusedAsUnknownAssignment(unknown);
+    }
+
+    @Test
+    void createLabOrder_derivesTheAssignmentWhenNoneIsNamed() {
+        // Internal callers may pass no id; the DTO's @NotNull keeps HTTP callers out of this path.
+        mockCommonLookups();
+
+        assertThat(createWithAssignment(null).getAssignment()).isSameAs(assignment);
+        verify(assignmentRepository, never()).findById(any());
+    }
+
+    private UserRoleHospitalAssignment adminAssignmentHere(UUID id) {
+        Role admin = new Role();
+        admin.setCode("ROLE_HOSPITAL_ADMIN");
+        UserRoleHospitalAssignment row = assignmentOf(staff.getUser(), hospital, true);
+        row.setId(id);
+        row.setRole(admin);
+        return row;
+    }
+
+    @Test
+    void createLabOrder_replacesTheCliniciansOwnNonClinicalAssignmentHereWithTheLabOrderingOne() {
+        mockCommonLookups();
+        UserRoleHospitalAssignment adminHere = adminAssignmentHere(UUID.randomUUID());
+        when(assignmentRepository.findById(adminHere.getId())).thenReturn(Optional.of(adminHere));
+
+        assertThat(createWithAssignment(adminHere.getId()).getAssignment()).isSameAs(assignment);
+    }
+
+    @Test
+    void createLabOrder_theFallbackSkipsANonClinicalAssignmentEvenWhenItsIdSortsFirst() {
+        mockCommonLookups();
+        assignment.setActive(false);
+        UserRoleHospitalAssignment adminHere = adminAssignmentHere(new UUID(0L, 1L));
+        UserRoleHospitalAssignment doctorHere = assignmentOf(staff.getUser(), hospital, true);
+        doctorHere.setId(new UUID(0L, 2L));
+        when(assignmentRepository.findByUser_IdAndActiveTrue(orderingUserId)).thenReturn(List.of(adminHere, doctorHere));
+
+        assertThat(createWithAssignment(assignmentId).getAssignment()).isSameAs(doctorHere);
+    }
+
+    @Test
+    void createLabOrder_refusesWhenTheCliniciansOnlyActiveAssignmentHereIsNonClinical() {
+        mockCommonLookups();
+        assignment.setActive(false);
+        UserRoleHospitalAssignment adminHere = adminAssignmentHere(UUID.randomUUID());
+        when(assignmentRepository.findByUser_IdAndActiveTrue(orderingUserId)).thenReturn(List.of(adminHere));
+
+        assertCreateRefusedAsUnknownAssignment(assignmentId);
     }
 
     @Test

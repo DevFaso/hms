@@ -238,10 +238,27 @@ public class RoleValidator {
      * and widening that is not this change's call.
      */
     public boolean canOrderLabTests(UUID userId, UUID hospitalId) {
-        return isDoctor(userId, hospitalId)
-            || isPhysician(userId, hospitalId)
-            || isSurgeon(userId, hospitalId)
-            || isNurse(userId, hospitalId);
+        return LAB_ORDERING_ROLE_CODES.stream().anyMatch(code -> hasAnyCode(userId, hospitalId, code));
+    }
+
+    /** The role codes {@link #canOrderLabTests} admits, in the order it checks them. */
+    private static final java.util.List<String> LAB_ORDERING_ROLE_CODES =
+        java.util.List.of("DOCTOR", "PHYSICIAN", "SURGEON", "NURSE");
+
+    /**
+     * Whether this one assignment's role is one {@link #canOrderLabTests}
+     * admits - the same codes, matched the way the query matches them
+     * ({@code UPPER(role.code)}, bare or {@code ROLE_}-prefixed). Says nothing
+     * about whether the assignment is active or where it is.
+     */
+    public static boolean isLabOrderingRole(UserRoleHospitalAssignment assignment) {
+        String code = assignment == null || assignment.getRole() == null ? null : assignment.getRole().getCode();
+        if (code == null) {
+            return false;
+        }
+        String upper = code.toUpperCase(Locale.ROOT);
+        String bare = upper.startsWith("ROLE_") ? upper.substring(5) : upper;
+        return LAB_ORDERING_ROLE_CODES.contains(bare);
     }
 
     public void requireLabScientistOrAdmin(UUID userId, UUID hospitalId, Locale locale, MessageSource messageSource) {

@@ -343,4 +343,25 @@ class RoleValidatorTest {
         // established that a midwife orders lab tests.
         assertThat(roleValidator.canOrderLabTests(userId, hospitalId)).isFalse();
     }
+
+    private static com.example.hms.model.UserRoleHospitalAssignment assignmentInRole(String code) {
+        com.example.hms.model.Role role = new com.example.hms.model.Role();
+        role.setCode(code);
+        com.example.hms.model.UserRoleHospitalAssignment assignment = new com.example.hms.model.UserRoleHospitalAssignment();
+        assignment.setRole(role);
+        return assignment;
+    }
+
+    @Test
+    void isLabOrderingRole_matchesTheRolesCanOrderLabTestsAdmits() {
+        assertThat(RoleValidator.isLabOrderingRole(assignmentInRole("ROLE_DOCTOR"))).isTrue();
+        assertThat(RoleValidator.isLabOrderingRole(assignmentInRole("physician"))).isTrue();
+        assertThat(RoleValidator.isLabOrderingRole(assignmentInRole("ROLE_SURGEON"))).isTrue();
+        assertThat(RoleValidator.isLabOrderingRole(assignmentInRole("NURSE"))).isTrue();
+        assertThat(RoleValidator.isLabOrderingRole(assignmentInRole("ROLE_HOSPITAL_ADMIN"))).isFalse();
+        assertThat(RoleValidator.isLabOrderingRole(assignmentInRole("ROLE_MIDWIFE"))).isFalse();
+        assertThat(RoleValidator.isLabOrderingRole(assignmentInRole("ROLE_RECEPTIONIST"))).isFalse();
+        assertThat(RoleValidator.isLabOrderingRole(assignmentInRole(null))).isFalse();
+        assertThat(RoleValidator.isLabOrderingRole(new com.example.hms.model.UserRoleHospitalAssignment())).isFalse();
+    }
 }
