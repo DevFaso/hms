@@ -109,7 +109,7 @@ class PrescriptionServiceImplTest {
     @Mock
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock
-    private com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository routingDecisionRepository;
+    private com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler withdrawnOrders;
     /**
      * Not optional: getPrescriptionById dereferences this whenever the thread's
      * SecurityContext holds a patient-only principal. No test here sets one
@@ -3317,7 +3317,7 @@ class PrescriptionServiceImplTest {
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
 
-    // ═══════════════ withdrawal closes unanswered partner offers ═══════════════
+    // ═══════════════ withdrawal takes the partner offers with it ═══════════════
 
     private Prescription stubUpdateTo(UUID prescriptionId, com.example.hms.enums.PrescriptionStatus from,
                                       com.example.hms.enums.PrescriptionStatus to) {
@@ -3350,56 +3350,30 @@ class PrescriptionServiceImplTest {
         return request;
     }
 
-    private static com.example.hms.model.pharmacy.PrescriptionRoutingDecision decision(
-            com.example.hms.enums.RoutingType type, com.example.hms.enums.RoutingDecisionStatus status) {
-        var d = com.example.hms.model.pharmacy.PrescriptionRoutingDecision.builder()
-            .routingType(type).status(status).build();
-        d.setId(UUID.randomUUID());
-        return d;
-    }
-
     @Test
-    void cancellingClosesPendingPartnerOffers() {
+    void cancellingWithdrawsThePartnerOffers() {
         UUID prescriptionId = UUID.randomUUID();
-        stubUpdateTo(prescriptionId, com.example.hms.enums.PrescriptionStatus.SENT_TO_PARTNER,
+        Prescription existing = stubUpdateTo(prescriptionId,
+            com.example.hms.enums.PrescriptionStatus.SENT_TO_PARTNER,
             com.example.hms.enums.PrescriptionStatus.CANCELLED);
-        var pendingPartner = decision(com.example.hms.enums.RoutingType.PARTNER,
-            com.example.hms.enums.RoutingDecisionStatus.PENDING);
-        // accepted: the partner may already have handed it over, so its
-        // dispense confirmation must still match (and be surfaced)
-        var acceptedPartner = decision(com.example.hms.enums.RoutingType.PARTNER,
-            com.example.hms.enums.RoutingDecisionStatus.ACCEPTED);
-        var pendingBackorder = decision(com.example.hms.enums.RoutingType.BACKORDER,
-            com.example.hms.enums.RoutingDecisionStatus.PENDING);
-        when(routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescriptionId))
-            .thenReturn(List.of(pendingPartner, acceptedPartner, pendingBackorder));
 
         prescriptionService.updatePrescription(prescriptionId,
-            requestWithStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED),
-            Locale.ENGLISH);
+            requestWithStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED), Locale.ENGLISH);
 
-        assertThat(pendingPartner.getStatus()).isEqualTo(com.example.hms.enums.RoutingDecisionStatus.CANCELLED);
-        assertThat(acceptedPartner.getStatus()).isEqualTo(com.example.hms.enums.RoutingDecisionStatus.ACCEPTED);
-        assertThat(pendingBackorder.getStatus()).isEqualTo(com.example.hms.enums.RoutingDecisionStatus.PENDING);
-        verify(routingDecisionRepository).save(pendingPartner);
-        verify(routingDecisionRepository, never()).save(acceptedPartner);
+        verify(withdrawnOrders).withdrawPartnerOffers(existing);
     }
 
     @Test
-    void discontinuingClosesPendingPartnerOffersToo() {
+    void discontinuingWithdrawsThePartnerOffersToo() {
         UUID prescriptionId = UUID.randomUUID();
-        stubUpdateTo(prescriptionId, com.example.hms.enums.PrescriptionStatus.SIGNED,
+        Prescription existing = stubUpdateTo(prescriptionId,
+            com.example.hms.enums.PrescriptionStatus.PARTNER_ACCEPTED,
             com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
-        var pendingPartner = decision(com.example.hms.enums.RoutingType.PARTNER,
-            com.example.hms.enums.RoutingDecisionStatus.PENDING);
-        when(routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescriptionId))
-            .thenReturn(List.of(pendingPartner));
 
         prescriptionService.updatePrescription(prescriptionId,
-            requestWithStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED),
-            Locale.ENGLISH);
+            requestWithStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED), Locale.ENGLISH);
 
-        assertThat(pendingPartner.getStatus()).isEqualTo(com.example.hms.enums.RoutingDecisionStatus.CANCELLED);
+        verify(withdrawnOrders).withdrawPartnerOffers(existing);
     }
 
     @Test
@@ -3410,6 +3384,18 @@ class PrescriptionServiceImplTest {
 
         prescriptionService.updatePrescription(prescriptionId, buildRequest(), Locale.ENGLISH);
 
-        verifyNoInteractions(routingDecisionRepository);
+        verifyNoInteractions(withdrawnOrders);
+    }
+
+    @Test
+    void reSavingAnAlreadyCancelledOrderDoesNotTellThePartnersAgain() {
+        UUID prescriptionId = UUID.randomUUID();
+        stubUpdateTo(prescriptionId, com.example.hms.enums.PrescriptionStatus.CANCELLED,
+            com.example.hms.enums.PrescriptionStatus.CANCELLED);
+
+        prescriptionService.updatePrescription(prescriptionId,
+            requestWithStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED), Locale.ENGLISH);
+
+        verifyNoInteractions(withdrawnOrders);
     }
 }

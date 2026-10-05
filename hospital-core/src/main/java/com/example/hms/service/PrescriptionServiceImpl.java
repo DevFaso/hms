@@ -86,7 +86,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      */
     private final java.time.Clock clock;
     private final CrossHospitalReachRecorder reachRecorder;
-    private final com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository routingDecisionRepository;
+    private final com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler withdrawnOrders;
 
     @Override
     @Transactional
@@ -645,29 +645,18 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
-     * A withdrawn order takes its unanswered partner-pharmacy offers with it.
-     * Left PENDING, the partner timeout sweep would auto-reject the decision
-     * four hours later and stamp PARTNER_REJECTED back over the CANCELLED
-     * order, and a late SMS reply would do the same. CANCELLED is the status
-     * a superseded offer already gets, and a reply to a CANCELLED decision is
-     * ignored. An ACCEPTED offer is left open on purpose: the partner may
-     * already have handed the medication over, and its dispense confirmation
-     * must still match so it is recorded and surfaced rather than dropped
-     * (PartnerExchangeService). Same transaction as the status change.
+     * A withdrawn order takes its partner-pharmacy offers with it: unanswered
+     * ones are closed so the timeout sweep and a late reply cannot stamp a
+     * partner status back over it, and every partner holding one is told not
+     * to dispense (WithdrawnOrderPartnerHandler). Same transaction as the
+     * status change; the partner SMS goes out after it commits.
      */
-    private void closePendingPartnerOffersOnWithdrawal(Prescription prescription, PrescriptionStatus statusBefore) {
+    private void closePartnerOffersOnWithdrawal(Prescription prescription, PrescriptionStatus statusBefore) {
         PrescriptionStatus now = prescription.getStatus();
-        if (now == null || !now.isWithdrawn() || now == statusBefore || prescription.getId() == null) {
+        if (now == null || !now.isWithdrawn() || now == statusBefore) {
             return;
         }
-        for (com.example.hms.model.pharmacy.PrescriptionRoutingDecision decision
-                : routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescription.getId())) {
-            if (decision.getRoutingType() == com.example.hms.enums.RoutingType.PARTNER
-                    && decision.getStatus() == com.example.hms.enums.RoutingDecisionStatus.PENDING) {
-                decision.setStatus(com.example.hms.enums.RoutingDecisionStatus.CANCELLED);
-                routingDecisionRepository.save(decision);
-            }
-        }
+        withdrawnOrders.withdrawPartnerOffers(prescription);
     }
 
     /**
@@ -847,7 +836,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         PrescriptionStatus statusBefore = existing.getStatus();
         prescriptionMapper.updateEntity(existing, request, patient, staff, encounter);
         existing.setAssignment(prescriberAssignment);
-        closePendingPartnerOffersOnWithdrawal(existing, statusBefore);
+        closePartnerOffersOnWithdrawal(existing, statusBefore);
         // Tier 2 item 33: an edit invalidates any pharmacist verification.
         // updateEntity rewrites medicationName, dosage and frequency, and
         // there is no status guard above — so a SIGNED prescription's drug

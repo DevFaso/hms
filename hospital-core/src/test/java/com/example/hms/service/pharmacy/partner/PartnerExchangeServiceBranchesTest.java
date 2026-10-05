@@ -62,7 +62,8 @@ class PartnerExchangeServiceBranchesTest {
     void setUp() {
         service = new PartnerExchangeService(
                 routingDecisionRepository, prescriptionRepository,
-                channel, parser, auditEventLogService, prescriberNotifier, "226");
+                channel, parser, auditEventLogService, prescriberNotifier,
+                new WithdrawnOrderPartnerHandler(routingDecisionRepository, channel, auditEventLogService, prescriberNotifier), "226");
 
         decisionId = UUID.randomUUID();
         token = decisionId.toString().substring(0, 8).toUpperCase();

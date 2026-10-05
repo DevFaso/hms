@@ -68,7 +68,8 @@ class PartnerExchangeServiceTest {
     void setUp() {
         service = new PartnerExchangeService(
                 routingDecisionRepository, prescriptionRepository,
-                channel, parser, auditEventLogService, prescriberNotifier, "226");
+                channel, parser, auditEventLogService, prescriberNotifier,
+                new WithdrawnOrderPartnerHandler(routingDecisionRepository, channel, auditEventLogService, prescriberNotifier), "226");
 
         decisionId = UUID.randomUUID();
         token = decisionId.toString().substring(0, 8).toUpperCase();
@@ -438,7 +439,9 @@ class PartnerExchangeServiceTest {
     private PartnerExchangeService serviceWithRealNotifier(PrescriberPharmacyNotificationWriter writer) {
         return new PartnerExchangeService(
                 routingDecisionRepository, prescriptionRepository, channel, parser, auditEventLogService,
-                new PrescriberPharmacyNotifier(writer), "226");
+                new PrescriberPharmacyNotifier(writer),
+                new WithdrawnOrderPartnerHandler(routingDecisionRepository, channel, auditEventLogService,
+                        prescriberNotifier), "226");
     }
 
     @Test

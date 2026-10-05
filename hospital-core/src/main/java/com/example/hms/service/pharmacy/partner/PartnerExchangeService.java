@@ -62,6 +62,7 @@ public class PartnerExchangeService {
     private final PartnerSmsReplyParser replyParser;
     private final AuditEventLogService auditEventLogService;
     private final PrescriberPharmacyNotifier prescriberNotifier;
+    private final WithdrawnOrderPartnerHandler withdrawnOrders;
     /** The gateway's country code, so a locally stored number matches the international reply. */
     private final String countryNumberCode;
 
@@ -71,6 +72,7 @@ public class PartnerExchangeService {
                                   PartnerSmsReplyParser replyParser,
                                   AuditEventLogService auditEventLogService,
                                   PrescriberPharmacyNotifier prescriberNotifier,
+                                  WithdrawnOrderPartnerHandler withdrawnOrders,
                                   @Value("${app.ikoddi.country-number-code:226}") String countryNumberCode) {
         this.routingDecisionRepository = routingDecisionRepository;
         this.prescriptionRepository = prescriptionRepository;
@@ -78,6 +80,7 @@ public class PartnerExchangeService {
         this.replyParser = replyParser;
         this.auditEventLogService = auditEventLogService;
         this.prescriberNotifier = prescriberNotifier;
+        this.withdrawnOrders = withdrawnOrders;
         this.countryNumberCode = countryNumberCode;
     }
 
@@ -235,7 +238,7 @@ public class PartnerExchangeService {
                 .orElse("not identified");
         log.warn("Partner SMS reply from {} is not the instructed reply; ignored and left for staff. "
                 + "Prescription: {}", masked, prescription);
-        auditForStaff("Partner SMS reply from " + masked + " could not be read as an accept/refuse/dispense "
+        auditUnmatched("Partner SMS reply from " + masked + " could not be read as an accept/refuse/dispense "
                 + "reply and was not applied; a person must action it. Prescription: " + prescription,
                 about.map(d -> d.getId().toString()).orElse(null));
     }
@@ -255,12 +258,12 @@ public class PartnerExchangeService {
                 .collect(java.util.stream.Collectors.joining(", "));
         log.warn("Partner SMS reply for live token {} came from {}, which is not the pharmacy it was "
                         + "offered to; ignored. Prescription(s): {}", refToken, masked, prescriptions);
-        auditForStaff("Partner SMS reply for reference " + refToken + " from unrecognised sender "
+        auditUnmatched("Partner SMS reply for reference " + refToken + " from unrecognised sender "
                 + masked + " was ignored; offer still open for prescription(s) " + prescriptions,
                 byToken.get(0).getId().toString());
     }
 
-    private void auditForStaff(String description, String resourceId) {
+    private void auditUnmatched(String description, String resourceId) {
         try {
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .eventType(AuditEventType.SECURITY_ALERT_TRIGGERED)
@@ -270,7 +273,7 @@ public class PartnerExchangeService {
                     .entityType("PRESCRIPTION_ROUTING")
                     .build());
         } catch (Exception e) {
-            log.warn("Failed to log a partner-SMS event for staff: {}", e.getMessage());
+            log.warn("Failed to log unmatched partner-SMS sender: {}", e.getMessage());
         }
     }
 
@@ -299,8 +302,12 @@ public class PartnerExchangeService {
             return null;
         }
         Prescription rx = decision.getPrescription();
-        if (rx.getStatus() != null && rx.getStatus().isWithdrawn()) {
-            return applyReplyToWithdrawn(decision, rx, action);
+        if (WithdrawnOrderPartnerHandler.isWithdrawn(rx)) {
+            // The prescriber took the order back while this offer was open:
+            // the prescription is not moved and nobody is asked to re-route.
+            return action == PartnerSmsReplyParser.Action.CONFIRM_DISPENSE
+                    ? withdrawnOrders.recordDispenseOfWithdrawn(decision, rx, "Partner SMS")
+                    : withdrawnOrders.closeOffer(decision, rx, "Partner SMS " + action);
         }
         switch (action) {
             case ACCEPT -> {
@@ -340,53 +347,13 @@ public class PartnerExchangeService {
         return saved;
     }
 
-    /**
-     * A reply about an order the prescriber has since withdrawn (an offer
-     * still open from before withdrawal closed it). The prescription is not
-     * touched and the prescriber is not asked to re-route anything; the
-     * decision is closed. An accept or a refusal changes nothing clinically,
-     * so it is only audited. A dispense confirmation is different: the
-     * patient may now hold a medication the prescriber stopped, so it is
-     * recorded on the decision (COMPLETED — the partner did hand it over),
-     * raised for staff like any reply a person must action, and the
-     * prescriber is told.
-     */
-    private PrescriptionRoutingDecision applyReplyToWithdrawn(PrescriptionRoutingDecision decision,
-                                                             Prescription rx,
-                                                             PartnerSmsReplyParser.Action action) {
-        PrescriptionStatus withdrawn = rx.getStatus();
-        if (action == PartnerSmsReplyParser.Action.CONFIRM_DISPENSE) {
-            decision.setStatus(RoutingDecisionStatus.COMPLETED);
-            PrescriptionRoutingDecision saved = routingDecisionRepository.save(decision);
-            log.warn("Partner SMS confirmed a dispense of prescription {}, which is {}; left for staff",
-                    rx.getId(), withdrawn);
-            auditForStaff("Partner SMS confirmed dispensing prescription " + rx.getId() + ", which is "
-                    + withdrawn + "; the prescription was not changed. A person must check with the "
-                    + "patient and the partner.", decision.getId().toString());
-            tellPrescriber(rx, () -> prescriberNotifier.notifyPrescriberOfDispenseAfterWithdrawal(rx));
-            return saved;
-        }
-        decision.setStatus(RoutingDecisionStatus.CANCELLED);
-        PrescriptionRoutingDecision saved = routingDecisionRepository.save(decision);
-        audit(AuditEventType.PRESCRIPTION_ROUTED_EXTERNAL,
-                "Partner SMS " + action + " for prescription " + rx.getId() + " not applied: the "
-                        + "prescription is " + withdrawn + "; offer closed",
-                decision.getId().toString());
-        return saved;
-    }
-
     private void autoReject(PrescriptionRoutingDecision d) {
         Prescription rx = d.getPrescription();
-        if (rx != null && rx.getStatus() != null && rx.getStatus().isWithdrawn()) {
-            // Withdrawn while the offer was open: close the offer, leave the
-            // order as the prescriber left it, and ask nobody to re-route it.
-            d.setStatus(RoutingDecisionStatus.CANCELLED);
-            routingDecisionRepository.save(d);
+        if (WithdrawnOrderPartnerHandler.isWithdrawn(rx)) {
+            // An offer opened before withdrawal closed it: close it now, leave
+            // the order as the prescriber left it, and ask nobody to re-route.
+            withdrawnOrders.closeOffer(d, rx, "Partner timeout");
             channel.sendAutoRejected(d, d.getTargetPharmacy());
-            audit(AuditEventType.PRESCRIPTION_ROUTED_EXTERNAL,
-                    "Partner offer closed after timeout; prescription " + rx.getId() + " is "
-                            + rx.getStatus() + " and was not changed",
-                    d.getId().toString());
             return;
         }
         d.setStatus(RoutingDecisionStatus.REJECTED);

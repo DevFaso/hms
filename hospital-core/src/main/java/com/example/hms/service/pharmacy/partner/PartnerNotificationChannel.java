@@ -42,6 +42,14 @@ public interface PartnerNotificationChannel {
      */
     void sendSuperseded(PrescriptionRoutingDecision decision, Pharmacy partner);
 
+    /**
+     * Tell a pharmacy holding an offer (answered or not) that the prescriber
+     * withdrew the order: it must not be dispensed. Distinct from
+     * {@link #sendSuperseded} (another pharmacy has it) and
+     * {@link #sendAutoRejected} (nobody answered in time).
+     */
+    void sendWithdrawn(PrescriptionRoutingDecision decision, Pharmacy partner);
+
     /** Outbound to patient: partner accepted. */
     void notifyPatientAccepted(Patient patient, Pharmacy partner);
 
