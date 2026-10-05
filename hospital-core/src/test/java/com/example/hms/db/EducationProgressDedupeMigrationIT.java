@@ -268,8 +268,8 @@ class EducationProgressDedupeMigrationIT {
 
     @Test
     void theKeptRowIsTheOneEducationProgressRowsPicks() {
-        // The SQL ordering stands in for EducationProgressRows.CANONICAL_FIRST;
-        // the same fixture values, through the Java rule, pick the same rows.
+        // The migration orders rows the way the Java comparator does, so the
+        // Java rule given the same fixture values must keep the same rows
         assertThat(EducationProgressRows.canonical(List.of(
                 entity(A1, at("2026-01-03T10:00"), at("2026-01-01T09:00")),
                 entity(A2, at("2026-01-02T10:00"), at("2025-12-01T09:00")),
