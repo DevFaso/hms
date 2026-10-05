@@ -210,6 +210,38 @@ class EducationProgressDedupeMigrationIT {
     }
 
     @Test
+    void anOpenClarificationOnTheKeptRowIsNotHiddenByAFoldedConfirmation() throws Exception {
+        // The staff write sets the flags and the status separately, so the
+        // kept row can need clarification while its status says IN_PROGRESS.
+        // A folded row that confirmed understanding must not turn the merged
+        // status into CONFIRMED_UNDERSTANDING: the flag wins, as in the
+        // portal's derivation.
+        String kept = "eeeeeeee-0000-0000-0000-000000000001";
+        String folded = "eeeeeeee-0000-0000-0000-000000000002";
+        try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
+            plantFixtures(stmt);
+            stmt.execute("SET session_replication_role = replica");
+            insert(stmt, kept, PATIENT_2, RESOURCE_2, "'2026-04-02 09:00'", "'2026-04-01 09:00'");
+            stmt.executeUpdate("UPDATE clinical.patient_education_progress SET comprehension_status = 'IN_PROGRESS', "
+                + "progress_percentage = 50, needs_clarification = TRUE WHERE id = '" + kept + "'");
+            insert(stmt, folded, PATIENT_2, RESOURCE_2, "'2026-04-01 09:00'", "'2026-04-01 09:00'");
+            stmt.executeUpdate("UPDATE clinical.patient_education_progress SET "
+                + "comprehension_status = 'CONFIRMED_UNDERSTANDING', progress_percentage = 100, "
+                + "confirmed_understanding = TRUE WHERE id = '" + folded + "'");
+            stmt.execute("SET session_replication_role = origin");
+
+            runV176(stmt);
+
+            assertThat(ids(stmt)).contains(kept).doesNotContain(folded);
+            try (ResultSet k = row(stmt, kept)) {
+                assertThat(k.getBoolean("needs_clarification")).isTrue();
+                assertThat(k.getBoolean("confirmed_understanding")).isTrue();
+                assertThat(k.getString("comprehension_status")).isEqualTo("NEEDS_CLARIFICATION");
+            }
+        }
+    }
+
+    @Test
     void mergedTextThatDoesNotFitItsColumnStopsTheMigrationAndChangesNothing() throws Exception {
         try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
             plantFixtures(stmt);

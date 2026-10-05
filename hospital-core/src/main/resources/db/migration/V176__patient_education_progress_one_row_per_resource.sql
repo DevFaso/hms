@@ -47,11 +47,22 @@
 --                                 latest discussed_with_provider_at; when no
 --                                 row has a discussion date, from the first
 --                                 row (canonical order) that names a provider
---        comprehension_status     the kept row's, upgraded only when a merged
---                                 fact makes it stale, with the precedence of
---                                 the portal's derivation (needs clarification
---                                 > confirmed understanding > completed > in
---                                 progress)
+--        comprehension_status     derived from the MERGED flags, with the
+--                                 precedence of the portal's derivation, so
+--                                 it never contradicts them:
+--                                   merged needs_clarification -> NEEDS_CLARIFICATION
+--                                   (even if the kept row already had the flag
+--                                   under another status);
+--                                   else merged confirmed_understanding ->
+--                                   CONFIRMED_UNDERSTANDING when the kept status
+--                                   is NOT_STARTED, IN_PROGRESS or COMPLETED;
+--                                   else a completion -> COMPLETED when the kept
+--                                   status is NOT_STARTED or IN_PROGRESS;
+--                                   else any progress -> IN_PROGRESS when it is
+--                                   NOT_STARTED;
+--                                   otherwise the kept row's status (never
+--                                   downgraded: NEEDS_CLARIFICATION and
+--                                   FEEDBACK_PROVIDED stay as they are)
 --        hospital_id, id          the kept row's
 --      then deletes the folded rows. The ranking is computed once, into a
 --      temporary table, before anything is written (the merge rewrites
@@ -184,8 +195,6 @@ BEGIN
     SELECT k.id                      AS kept_id,
            k.patient_id,
            k.resource_id,
-           k.needs_clarification     AS kept_needs_clarification,
-           k.confirmed_understanding AS kept_confirmed_understanding,
            k.comprehension_status    AS kept_status,
            a.progress_percentage, a.started_at, a.completed_at, a.last_accessed_at,
            a.time_spent_seconds, a.access_count, a.needs_clarification,
@@ -236,10 +245,10 @@ BEGIN
            created_at                 = m.created_at,
            updated_at                 = m.updated_at,
            comprehension_status       = CASE
-               WHEN m.needs_clarification AND NOT m.kept_needs_clarification
+               WHEN m.needs_clarification
                    THEN 'NEEDS_CLARIFICATION'
-               WHEN m.confirmed_understanding AND NOT m.kept_confirmed_understanding
-                    AND m.kept_status <> 'NEEDS_CLARIFICATION'
+               WHEN m.confirmed_understanding
+                    AND m.kept_status IN ('NOT_STARTED', 'IN_PROGRESS', 'COMPLETED')
                    THEN 'CONFIRMED_UNDERSTANDING'
                WHEN m.completed_at IS NOT NULL
                     AND m.kept_status IN ('NOT_STARTED', 'IN_PROGRESS')
