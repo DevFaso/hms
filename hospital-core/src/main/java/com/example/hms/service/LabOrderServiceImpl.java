@@ -435,38 +435,72 @@ public class LabOrderServiceImpl implements LabOrderService {
      */
     private UserRoleHospitalAssignment resolveOrderingAssignment(
             LabOrder base, UUID requestedAssignmentId, Staff staff, Hospital hospital) {
-        // Non-null only on an edit that keeps the ordering clinician.
-        UserRoleHospitalAssignment current = base != null && base.getOrderingStaff() != null
-            && staff.getId() != null && staff.getId().equals(base.getOrderingStaff().getId())
-            ? base.getAssignment() : null;
-        if (current != null && current.getId() != null && current.getId().equals(requestedAssignmentId)
-                && isAtHospital(current, hospital)) {
+        UserRoleHospitalAssignment current = keptCurrentAssignment(base, staff);
+        if (isUnchangedOnKeptEdit(current, requestedAssignmentId, hospital)) {
             return current;
         }
-        UUID orderingUserId = staff.getUser().getId();
-        UserRoleHospitalAssignment named = requestedAssignmentId == null ? null
-            : assignmentRepository.findById(requestedAssignmentId).orElse(null);
-        UUID namedUserId = named != null && named.getUser() != null ? named.getUser().getId() : null;
+        UserRoleHospitalAssignment named = namedAssignment(requestedAssignmentId);
+        UUID namedUserId = userIdOf(named);
         // A null id derives; an id that names nothing is refused below, like another person's.
-        if (requestedAssignmentId == null || orderingUserId.equals(namedUserId)) {
-            if (current != null && isOrderingContextAt(current, hospital)) {
-                return current;
-            }
-            if (named != null && isOrderingContextAt(named, hospital)) {
-                return named;
-            }
-            return orderingClinicianAssignmentAt(staff, hospital).orElseThrow(() -> {
-                log.warn("Lab order refused: the ordering clinician holds no active assignment at hospital {}",
-                    hospital.getId());
-                return new ResourceNotFoundException(ASSIGNMENT_NOT_FOUND);
-            });
+        if (requestedAssignmentId == null || staff.getUser().getId().equals(namedUserId)) {
+            return namedOwnAssignment(current, named, staff, hospital);
         }
-        if (current != null && isAtHospital(current, hospital)
-                && namedUserId != null && namedUserId.equals(callerUserId())) {
+        if (isEditorsOwnAssignmentOnAnothersOrder(current, namedUserId, hospital)) {
             return current;
         }
         log.warn("Lab order refused: the assignment named is not the ordering clinician's");
         throw new ResourceNotFoundException(ASSIGNMENT_NOT_FOUND);
+    }
+
+    /** The order's current assignment, on an edit that keeps the ordering clinician; otherwise null. */
+    private static UserRoleHospitalAssignment keptCurrentAssignment(LabOrder base, Staff staff) {
+        if (base == null || base.getOrderingStaff() == null || staff.getId() == null) {
+            return null;
+        }
+        return staff.getId().equals(base.getOrderingStaff().getId()) ? base.getAssignment() : null;
+    }
+
+    /** The request echoes the kept order's assignment, which is still at the order's hospital. */
+    private static boolean isUnchangedOnKeptEdit(
+            UserRoleHospitalAssignment current, UUID requestedAssignmentId, Hospital hospital) {
+        return current != null && current.getId() != null && current.getId().equals(requestedAssignmentId)
+            && isAtHospital(current, hospital);
+    }
+
+    private UserRoleHospitalAssignment namedAssignment(UUID requestedAssignmentId) {
+        return requestedAssignmentId == null ? null
+            : assignmentRepository.findById(requestedAssignmentId).orElse(null);
+    }
+
+    private static UUID userIdOf(UserRoleHospitalAssignment assignment) {
+        return assignment != null && assignment.getUser() != null ? assignment.getUser().getId() : null;
+    }
+
+    /**
+     * The request names one of the ordering clinician's own assignments, or
+     * none: a kept order's still-valid assignment stays, else the named one
+     * if it is a valid ordering context, else the one derived here.
+     */
+    private UserRoleHospitalAssignment namedOwnAssignment(UserRoleHospitalAssignment current,
+            UserRoleHospitalAssignment named, Staff staff, Hospital hospital) {
+        if (current != null && isOrderingContextAt(current, hospital)) {
+            return current;
+        }
+        if (named != null && isOrderingContextAt(named, hospital)) {
+            return named;
+        }
+        return orderingClinicianAssignmentAt(staff, hospital).orElseThrow(() -> {
+            log.warn("Lab order refused: the ordering clinician holds no active assignment at hospital {}",
+                hospital.getId());
+            return new ResourceNotFoundException(ASSIGNMENT_NOT_FOUND);
+        });
+    }
+
+    /** On a kept order, the request names the editor's own assignment rather than the clinician's. */
+    private boolean isEditorsOwnAssignmentOnAnothersOrder(
+            UserRoleHospitalAssignment current, UUID namedUserId, Hospital hospital) {
+        return current != null && isAtHospital(current, hospital)
+            && namedUserId != null && namedUserId.equals(callerUserId());
     }
 
     /**
