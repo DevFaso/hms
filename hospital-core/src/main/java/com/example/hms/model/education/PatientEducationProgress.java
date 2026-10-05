@@ -34,8 +34,9 @@ import java.util.UUID;
         @Index(name = "idx_education_progress_resource", columnList = "resource_id"),
         @Index(name = "idx_education_progress_status", columnList = "comprehension_status")
     },
-    // One row per (patient, resource) since V176, which merged the duplicates
-    // the table had collected. Declared here too so the H2 test schema has it.
+    // One row per (patient, resource) since V176, which adds this key and
+    // stops the deploy (changing nothing) if duplicates exist; a person
+    // resolves them first. Declared here too so the H2 test schema has it.
     uniqueConstraints = @UniqueConstraint(
         name = "uk_patient_education_progress_patient_resource",
         columnNames = {"patient_id", "resource_id"})
