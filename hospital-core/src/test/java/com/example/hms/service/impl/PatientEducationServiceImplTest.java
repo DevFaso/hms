@@ -49,7 +49,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -344,11 +343,13 @@ class PatientEducationServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        // No row yet: the service inserts one in its own transaction, then
-        // reads back what the database now holds and updates it.
+        // No row yet: the service inserts one in this request's transaction,
+        // then reads back what the database now holds and updates it.
         PatientEducationProgress inserted = freshlyInsertedRow(EducationComprehensionStatus.IN_PROGRESS);
         when(progressRepository.findByPatientIdAndResourceId(patientId, resourceId))
             .thenReturn(java.util.List.of(), java.util.List.of(inserted));
+        when(progressWrites.insertIfAbsent(patientId, resourceId, hospitalId, EducationComprehensionStatus.IN_PROGRESS))
+            .thenReturn(true);
         when(progressRepository.save(any(PatientEducationProgress.class))).thenAnswer(i -> i.getArgument(0));
 
         // When
@@ -358,7 +359,7 @@ class PatientEducationServiceImplTest {
         assertThat(result).isNotNull();
         assertThat(result.getProgressPercentage()).isEqualTo(50);
         assertThat(result.getAccessCount()).isEqualTo(1);
-        verify(progressWrites).createRow(patientId, resourceId, hospitalId, EducationComprehensionStatus.IN_PROGRESS);
+        verify(progressWrites).insertIfAbsent(patientId, resourceId, hospitalId, EducationComprehensionStatus.IN_PROGRESS);
         verify(progressRepository).save(inserted);
     }
 
@@ -366,7 +367,7 @@ class PatientEducationServiceImplTest {
     void trackProgress_whenAConcurrentRequestCreatedTheRowFirst_updatesThatRowInsteadOfFailing() {
         // Both requests saw no row. The other one's insert won the unique key
         // (uk_patient_education_progress_patient_resource, V176), so this
-        // insert is refused; the service must update the winner's row, not
+        // insert is a no-op; the service must update the winner's row, not
         // answer 500 and not create a second one.
         PatientEducationProgressRequestDTO requestDTO = PatientEducationProgressRequestDTO.builder()
             .resourceId(resourceId)
@@ -380,8 +381,8 @@ class PatientEducationServiceImplTest {
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(progressRepository.findByPatientIdAndResourceId(patientId, resourceId))
             .thenReturn(java.util.List.of(), java.util.List.of(winner));
-        doThrow(new DataIntegrityViolationException("uk_patient_education_progress_patient_resource"))
-            .when(progressWrites).createRow(patientId, resourceId, hospitalId, EducationComprehensionStatus.NOT_STARTED);
+        when(progressWrites.insertIfAbsent(patientId, resourceId, hospitalId, EducationComprehensionStatus.NOT_STARTED))
+            .thenReturn(false);
         when(progressRepository.save(any(PatientEducationProgress.class))).thenAnswer(i -> i.getArgument(0));
 
         PatientEducationProgressResponseDTO result = service.trackProgress(patientId, requestDTO, hospitalId);
@@ -409,14 +410,15 @@ class PatientEducationServiceImplTest {
 
         service.trackProgress(patientId, requestDTO, hospitalId);
 
-        verify(progressWrites, never()).createRow(any(), any(), any(), any());
+        verify(progressWrites, never()).insertIfAbsent(any(), any(), any(), any());
         verify(progressRepository).save(existing);
     }
 
     @Test
-    void trackProgress_whenTheInsertIsRefusedAndNoRowAppears_rethrowsTheRefusal() {
-        // A refusal that left no row behind was not the (patient, resource)
-        // key losing a race: it is surfaced, not swallowed.
+    void trackProgress_whenTheInsertFailsForAnotherReason_propagatesIt() {
+        // Only the (patient, resource) key losing a race is absorbed (inside
+        // EducationProgressWrites); any other failure reaches the caller and
+        // rolls the request back, nothing is saved.
         PatientEducationProgressRequestDTO requestDTO = PatientEducationProgressRequestDTO.builder()
             .resourceId(resourceId)
             .build();
@@ -426,14 +428,14 @@ class PatientEducationServiceImplTest {
         when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(progressRepository.findByPatientIdAndResourceId(patientId, resourceId)).thenReturn(java.util.List.of());
-        doThrow(refusal).when(progressWrites)
-            .createRow(patientId, resourceId, hospitalId, EducationComprehensionStatus.NOT_STARTED);
+        when(progressWrites.insertIfAbsent(patientId, resourceId, hospitalId, EducationComprehensionStatus.NOT_STARTED))
+            .thenThrow(refusal);
 
         assertThatThrownBy(() -> service.trackProgress(patientId, requestDTO, hospitalId)).isSameAs(refusal);
         verify(progressRepository, never()).save(any(PatientEducationProgress.class));
     }
 
-    /** The row EducationProgressWrites.createRow leaves, as the re-read returns it. */
+    /** The row EducationProgressWrites.insertIfAbsent leaves, as the re-read returns it. */
     private PatientEducationProgress freshlyInsertedRow(EducationComprehensionStatus status) {
         PatientEducationProgress row = PatientEducationProgress.builder()
             .patientId(patientId)

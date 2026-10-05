@@ -37,13 +37,11 @@ import com.example.hms.service.EducationProgressWrites;
 import com.example.hms.service.PatientEducationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -255,35 +253,24 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     }
 
     /**
-     * The (patient, resource) progress row, created when there is none. Since
-     * V176 there is at most one ({@code uk_patient_education_progress_patient_resource}):
-     * when two first requests race, the loser's insert meets that key in its
-     * own transaction and this request updates the winner's row instead of
-     * answering 500 (EducationProgressWrites).
+     * The (patient, resource) progress row, created when there is none, in
+     * this request's transaction (it exists only if the request commits).
+     * Since V176 there is at most one
+     * ({@code uk_patient_education_progress_patient_resource}): when two first
+     * requests race, the loser's insert is a no-op (EducationProgressWrites)
+     * and this request updates the winner's row instead of answering 500.
      */
     private PatientEducationProgress progressRowFor(UUID patientId, UUID resourceId, UUID hospitalId,
                                                     EducationComprehensionStatus initialStatus) {
         List<PatientEducationProgress> rows = progressRepository.findByPatientIdAndResourceId(patientId, resourceId);
-        if (!rows.isEmpty()) {
-            return EducationProgressRows.canonical(rows).orElseThrow();
+        if (rows.isEmpty()) {
+            if (!progressWrites.insertIfAbsent(patientId, resourceId, hospitalId, initialStatus)) {
+                log.debug("education progress row for resource {} was created by a concurrent request", resourceId);
+            }
+            rows = progressRepository.findByPatientIdAndResourceId(patientId, resourceId);
         }
-        DataIntegrityViolationException refused = null;
-        try {
-            progressWrites.createRow(patientId, resourceId, hospitalId, initialStatus);
-        } catch (DataIntegrityViolationException raced) {
-            log.debug("education progress row for resource {} was created by a concurrent request", resourceId);
-            refused = raced;
-        }
-        Optional<PatientEducationProgress> row = EducationProgressRows.canonical(
-            progressRepository.findByPatientIdAndResourceId(patientId, resourceId));
-        if (row.isPresent()) {
-            return row.get();
-        }
-        // Refused by something other than the (patient, resource) key: not a race.
-        if (refused != null) {
-            throw refused;
-        }
-        throw new IllegalStateException("education progress row missing after insert");
+        return EducationProgressRows.canonical(rows)
+            .orElseThrow(() -> new IllegalStateException("education progress row missing after insert"));
     }
 
     @Override

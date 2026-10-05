@@ -64,6 +64,9 @@ class EducationProgressDedupeMigrationIT {
     private static final String RESOURCE_1 = "22222222-0000-0000-0000-000000000001";
     private static final String RESOURCE_2 = "22222222-0000-0000-0000-000000000002";
     private static final String PROVIDER = "44444444-0000-0000-0000-000000000001";
+    private static final String EARLIER_PROVIDER = "44444444-0000-0000-0000-000000000002";
+    /** V176's separator between merged texts: E'\n— ' (newline, em dash, space). */
+    private static final String JOIN = "\n— ";
 
     // Group A (patient 1, resource 1): three rows.
     private static final String A1 = "aaaaaaaa-0000-0000-0000-000000000001";
@@ -101,19 +104,24 @@ class EducationProgressDedupeMigrationIT {
     }
 
     @Test
-    void duplicatesAreFoldedIntoTheRowTheApplicationShowsAndNothingIsLost() throws Exception {
+    void eachGroupKeepsOneRowAndTheLogGivesCountsOnly() throws Exception {
         try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
-            plantFixtures(stmt);
-
-            List<String> notices = runV176(stmt);
+            List<String> notices = plantAndMigrate(stmt);
 
             assertThat(notices).anyMatch(n -> n.contains(
                 "2 duplicate group(s) merged, 3 row(s) folded into the kept row, 2 resource rating aggregate(s) recomputed"));
             assertThat(notices).anyMatch(n -> n.contains(KEY + " added"));
             assertThat(ids(stmt)).containsExactlyInAnyOrder(A1, B1, C1);
+        }
+    }
 
-            // Group A: kept A1 (most recently accessed; A3 was never accessed
-            // and sorts last). Everything A2 and A3 held is on it now.
+    @Test
+    void theKeptRowTakesTheFurthestProgressAndEveryCounter() throws Exception {
+        // Group A: kept A1 (most recently accessed; A3 was never accessed and
+        // sorts last). A2's completion and the counters of all three are on it.
+        try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
+            plantAndMigrate(stmt);
+
             try (ResultSet a = row(stmt, A1)) {
                 assertThat(a.getInt("progress_percentage")).isEqualTo(100);
                 assertThat(ts(a, "started_at")).isEqualTo(at("2025-12-01T09:00"));
@@ -123,51 +131,106 @@ class EducationProgressDedupeMigrationIT {
                 assertThat(a.getLong("time_spent_seconds")).isEqualTo(300L);
                 assertThat(a.getInt("access_count")).isEqualTo(5);
                 assertThat(a.getInt("rating")).isEqualTo(4);
-                assertThat(a.getString("feedback")).isEqualTo("clear");
                 assertThat(a.getBoolean("confirmed_understanding")).isTrue();
                 assertThat(a.getBoolean("needs_clarification")).isTrue();
-                assertThat(a.getString("clarification_request")).isEqualTo("what is a dose");
-                assertThat(a.getString("provider_id")).isEqualTo(PROVIDER);
-                assertThat(a.getString("provider_notes")).isEqualTo("went over it");
-                assertThat(ts(a, "discussed_with_provider_at")).isEqualTo(at("2025-12-06T09:00"));
                 assertThat(a.getString("comprehension_status")).isEqualTo("NEEDS_CLARIFICATION");
             }
+        }
+    }
 
-            // Group B: kept B1 by the id tie-break. Its own rating and feedback
-            // win; its blank clarification request does not hide B2's; B2's
-            // completion carries over and upgrades the status.
+    @Test
+    void everyDistinctTextAndTheLatestDiscussionSurvive() throws Exception {
+        try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
+            plantAndMigrate(stmt);
+
+            try (ResultSet a = row(stmt, A1)) {
+                assertThat(a.getString("feedback")).isEqualTo("clear");
+                // Both clarification requests and both providers' notes, the
+                // kept row's first; A3's copy of A2's note is not repeated.
+                assertThat(a.getString("clarification_request")).isEqualTo("is it safe" + JOIN + "what is a dose");
+                assertThat(a.getString("provider_notes")).isEqualTo("first talk" + JOIN + "went over it");
+                // The provider and date of the latest discussion (A2's), not the kept row's.
+                assertThat(a.getString("provider_id")).isEqualTo(PROVIDER);
+                assertThat(ts(a, "discussed_with_provider_at")).isEqualTo(at("2025-12-06T09:00"));
+            }
+        }
+    }
+
+    @Test
+    void aFullTimestampTieIsDecidedByTheSignedIdOrder() throws Exception {
+        // Group B: kept B1 by the id tie-break. Its own rating wins and its
+        // feedback comes first; its blank clarification request does not hide
+        // B2's; B2's completion carries over and upgrades the status.
+        try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
+            plantAndMigrate(stmt);
+
             try (ResultSet b = row(stmt, B1)) {
                 assertThat(b.getInt("rating")).isEqualTo(5);
-                assertThat(b.getString("feedback")).isEqualTo("mine");
+                assertThat(b.getString("feedback")).isEqualTo("mine" + JOIN + "other");
                 assertThat(b.getString("clarification_request")).isEqualTo("help");
                 assertThat(ts(b, "completed_at")).isEqualTo(at("2026-02-20T09:00"));
                 assertThat(b.getInt("progress_percentage")).isEqualTo(100);
                 assertThat(b.getString("comprehension_status")).isEqualTo("COMPLETED");
             }
+        }
+    }
 
-            // The lone row is exactly as it was.
+    @Test
+    void aLoneRowIsUntouchedAndRatingAggregatesAreRecomputed() throws Exception {
+        try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
+            plantAndMigrate(stmt);
+
             try (ResultSet c = row(stmt, C1)) {
                 assertThat(c.getInt("rating")).isEqualTo(2);
                 assertThat(ts(c, "updated_at")).isEqualTo(at("2026-01-10T09:00"));
                 assertThat(c.getString("comprehension_status")).isEqualTo("IN_PROGRESS");
             }
-
-            // Rating aggregates as the application computes them: resource 1
-            // has A1 (4) and C1 (2); resource 2 has B1 (5).
+            // As the application computes them: resource 1 has A1 (4) and C1
+            // (2); resource 2 has B1 (5).
             assertRatingAggregate(stmt, RESOURCE_1, 3.0, 2);
             assertRatingAggregate(stmt, RESOURCE_2, 5.0, 1);
+        }
+    }
 
-            // A second run finds nothing to do and changes nothing.
+    @Test
+    void aSecondRunChangesNothingAndTheKeyRefusesANewDuplicate() throws Exception {
+        try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
+            plantAndMigrate(stmt);
+
             List<String> again = runV176(stmt);
             assertThat(again).anyMatch(n -> n.contains("0 duplicate group(s) merged, 0 row(s) folded"));
             assertThat(again).anyMatch(n -> n.contains(KEY + " already present"));
             assertThat(ids(stmt)).containsExactlyInAnyOrder(A1, B1, C1);
 
-            // And the key now refuses a new duplicate.
             assertThatThrownBy(() -> insert(stmt, "dddddddd-0000-0000-0000-000000000001", PATIENT_1, RESOURCE_1,
                 "NULL", "'2026-03-01 09:00'"))
                 .isInstanceOf(SQLException.class)
                 .hasMessageContaining(KEY);
+        }
+    }
+
+    @Test
+    void mergedTextThatDoesNotFitItsColumnStopsTheMigrationAndChangesNothing() throws Exception {
+        try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
+            plantFixtures(stmt);
+            // Two requests of 600 characters each, joined, exceed the 1000 the column holds.
+            stmt.executeUpdate("UPDATE clinical.patient_education_progress SET clarification_request = repeat('x', 600) "
+                + "WHERE id = '" + B1 + "'");
+            stmt.executeUpdate("UPDATE clinical.patient_education_progress SET clarification_request = repeat('y', 600) "
+                + "WHERE id = '" + B2 + "'");
+
+            assertThatThrownBy(() -> runV176(stmt))
+                .isInstanceOf(SQLException.class)
+                .hasMessageContaining("merged text does not fit its column")
+                .hasMessageContaining("clarification_request: 1 group(s)");
+            assertThat(ids(stmt)).hasSize(6);
+            try (ResultSet a = row(stmt, A1)) {
+                assertThat(a.getInt("progress_percentage")).as("nothing was merged anywhere").isEqualTo(40);
+            }
+            try (ResultSet key = stmt.executeQuery("SELECT count(*) FROM pg_constraint WHERE conname = '" + KEY + "'")) {
+                assertThat(key.next()).isTrue();
+                assertThat(key.getInt(1)).isZero();
+            }
         }
     }
 
@@ -206,6 +269,11 @@ class EducationProgressDedupeMigrationIT {
 
     // ------------------------------------------------------------------
 
+    private static List<String> plantAndMigrate(Statement stmt) throws Exception {
+        plantFixtures(stmt);
+        return runV176(stmt);
+    }
+
     private static void plantFixtures(Statement stmt) throws SQLException {
         stmt.execute("SET session_replication_role = replica");
         resource(stmt, RESOURCE_1);
@@ -214,7 +282,9 @@ class EducationProgressDedupeMigrationIT {
         insert(stmt, A1, PATIENT_1, RESOURCE_1, "'2026-01-03 10:00'", "'2026-01-01 09:00'");
         stmt.executeUpdate("UPDATE clinical.patient_education_progress SET comprehension_status = 'IN_PROGRESS', "
             + "progress_percentage = 40, started_at = '2026-01-01 09:00', access_count = 2, "
-            + "time_spent_seconds = 100 WHERE id = '" + A1 + "'");
+            + "time_spent_seconds = 100, clarification_request = 'is it safe', provider_id = '"
+            + EARLIER_PROVIDER + "', provider_notes = 'first talk', discussed_with_provider_at = '2025-11-01 09:00' "
+            + "WHERE id = '" + A1 + "'");
         insert(stmt, A2, PATIENT_1, RESOURCE_1, "'2026-01-02 10:00'", "'2025-12-01 09:00'");
         stmt.executeUpdate("UPDATE clinical.patient_education_progress SET comprehension_status = 'COMPLETED', "
             + "progress_percentage = 100, started_at = '2025-12-01 09:00', completed_at = '2025-12-05 09:00', "
@@ -223,7 +293,8 @@ class EducationProgressDedupeMigrationIT {
             + "discussed_with_provider_at = '2025-12-06 09:00' WHERE id = '" + A2 + "'");
         insert(stmt, A3, PATIENT_1, RESOURCE_1, "NULL", "'2026-02-01 09:00'");
         stmt.executeUpdate("UPDATE clinical.patient_education_progress SET needs_clarification = TRUE, "
-            + "clarification_request = 'what is a dose' WHERE id = '" + A3 + "'");
+            + "clarification_request = 'what is a dose', provider_notes = '  went over it ' "
+            + "WHERE id = '" + A3 + "'");
 
         insert(stmt, B1, PATIENT_1, RESOURCE_2, "'2026-03-01 09:00'", "'2026-02-15 09:00'");
         stmt.executeUpdate("UPDATE clinical.patient_education_progress SET comprehension_status = 'IN_PROGRESS', "

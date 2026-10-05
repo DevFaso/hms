@@ -2613,8 +2613,9 @@
     <!-- =================================================================
          V176 — one patient education progress row per (patient, resource).
          Merges the duplicates #790 left in place into the row
-         EducationProgressRows.canonical picks (no completion, rating,
-         feedback, clarification or provider note lost; counters summed),
+         EducationProgressRows.canonical picks (no completion or rating
+         lost, every distinct text joined, counters summed; stops without
+         changing anything if a joined text would not fit its column),
          recomputes the affected resources' rating aggregates, then adds
          uk_patient_education_progress_patient_resource. Refuses to run if
          any FK references the table. Counts only in the log. One DO
