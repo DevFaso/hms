@@ -25,12 +25,10 @@ import java.util.UUID;
  * server: the most recently accessed, then the most recently created, then
  * the id - total, so the choice never depends on the order a query returned.
  *
- * <p>Since V176 there is only ever one: the migration folded each group of
- * duplicates into the row this rule picks (the same ordering, written in SQL,
- * including {@code java.util.UUID}'s signed id order) and added
- * {@code uk_patient_education_progress_patient_resource}. The readers keep
- * going through here anyway; with one row it is the identity, and if this
- * ordering ever changes, V176's comment records which row was kept.
+ * <p>Since V176 there is only ever one: the migration adds
+ * {@code uk_patient_education_progress_patient_resource}, and refuses to run
+ * while any duplicate exists. The readers keep going through here anyway;
+ * with one row it is the identity.
  */
 public final class EducationProgressRows {
 

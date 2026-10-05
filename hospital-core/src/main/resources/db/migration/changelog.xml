@@ -2612,14 +2612,13 @@
 
     <!-- =================================================================
          V176 — one patient education progress row per (patient, resource).
-         Merges the duplicates #790 left in place into the row
-         EducationProgressRows.canonical picks (no completion or rating
-         lost, every distinct text joined, counters summed; stops without
-         changing anything if a joined text would not fit its column),
-         recomputes the affected resources' rating aggregates, then adds
-         uk_patient_education_progress_patient_resource. Refuses to run if
-         any FK references the table. Counts only in the log. One DO
-         block: splitStatements="false". V174 stays unused.
+         Takes ACCESS EXCLUSIVE on the table; if any (patient, resource)
+         has more than one row it STOPS (count of groups only, nothing
+         changed: a person resolves the duplicates, then the deploy is
+         re-run); otherwise adds
+         uk_patient_education_progress_patient_resource. No environment has
+         duplicates today. One DO block: splitStatements="false". V174
+         stays unused.
          ================================================================= -->
     <changeSet id="V176-patient-education-progress-one-row-per-resource" author="hms-team" runOnChange="false">
         <sqlFile path="V176__patient_education_progress_one_row_per_resource.sql"
