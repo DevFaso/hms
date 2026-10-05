@@ -37,6 +37,11 @@ export interface IntegrationMessagePage {
   totalPages: number;
   /** DLQ badge — number of FAILED messages still awaiting replay. */
   deadLetterCount: number;
+  /**
+   * False when the retention sweep is disabled or refuses its configuration:
+   * the windows below are then not enforced and the page says so.
+   */
+  retentionActive: boolean;
   /** Configured content-retention window (`hms.integration.retention.payload-days`). */
   payloadRetentionDays: number;
   /** Ceiling for unresolved dead letters (`hms.integration.retention.unresolved-max-days`). */

@@ -10,6 +10,9 @@ import java.util.List;
  * configured content-retention window and the ceiling for unresolved dead
  * letters ({@code hms.integration.retention.payload-days} /
  * {@code unresolved-max-days}), so the page can state the policy.
+ * {@code retentionActive} is false when the sweep is disabled or refuses its
+ * configuration; the windows are then not being enforced and the page says
+ * retention is off instead of quoting them.
  */
 @Builder
 public record IntegrationMessagePageDTO(
@@ -19,6 +22,7 @@ public record IntegrationMessagePageDTO(
     long totalElements,
     int totalPages,
     long deadLetterCount,
+    boolean retentionActive,
     int payloadRetentionDays,
     int payloadUnresolvedMaxDays
 ) { }

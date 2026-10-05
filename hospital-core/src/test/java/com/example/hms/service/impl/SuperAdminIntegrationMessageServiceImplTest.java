@@ -9,6 +9,7 @@ import com.example.hms.payload.dto.superadmin.IntegrationMessageEventDTO;
 import com.example.hms.payload.dto.superadmin.IntegrationMessagePageDTO;
 import com.example.hms.repository.integration.IntegrationMessageEventRepository;
 import com.example.hms.service.integration.message.IntegrationMessageRecorder;
+import com.example.hms.service.integration.message.IntegrationMessageRetentionPolicy;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -18,7 +19,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
@@ -43,6 +43,9 @@ class SuperAdminIntegrationMessageServiceImplTest {
 
     @Mock
     private IntegrationMessageRecorder recorder;
+
+    @Mock
+    private IntegrationMessageRetentionPolicy retentionPolicy;
 
     @InjectMocks
     private SuperAdminIntegrationMessageServiceImpl service;
@@ -213,8 +216,9 @@ class SuperAdminIntegrationMessageServiceImplTest {
 
     @Test
     void thePurgeStampAndTheRetentionWindowReachThePage() {
-        ReflectionTestUtils.setField(service, "payloadRetentionDays", 90);
-        ReflectionTestUtils.setField(service, "payloadUnresolvedMaxDays", 400);
+        when(retentionPolicy.isActive()).thenReturn(true);
+        when(retentionPolicy.payloadDays()).thenReturn(90);
+        when(retentionPolicy.unresolvedMaxDays()).thenReturn(400);
         LocalDateTime purgedAt = LocalDateTime.of(2026, 9, 30, 3, 30);
         IntegrationMessageEvent event = failedRow(UUID.randomUUID());
         event.setPayload(null);
@@ -228,6 +232,7 @@ class SuperAdminIntegrationMessageServiceImplTest {
 
         assertThat(result.payloadRetentionDays()).isEqualTo(90);
         assertThat(result.payloadUnresolvedMaxDays()).isEqualTo(400);
+        assertThat(result.retentionActive()).isTrue();
         assertThat(result.content().get(0).payloadPurgedAt()).isEqualTo(purgedAt);
     }
 
@@ -244,5 +249,20 @@ class SuperAdminIntegrationMessageServiceImplTest {
 
         assertThat(dto.payload()).isNull();
         assertThat(dto.payloadPurgedAt()).isEqualTo(purgedAt);
+    }
+
+    @Test
+    void thePageSaysRetentionIsOffWhenThePolicyIsNotInForce() {
+        // Disabled, or a configuration the sweep refuses: the page must not
+        // quote windows nobody is enforcing.
+        when(retentionPolicy.isActive()).thenReturn(false);
+        when(repository.search(isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 25), 0L));
+        when(repository.countUnresolvedDeadLetters()).thenReturn(0L);
+
+        IntegrationMessagePageDTO result = service.search(
+            null, null, null, null, null, PageRequest.of(0, 25));
+
+        assertThat(result.retentionActive()).isFalse();
     }
 }

@@ -62,6 +62,9 @@ export class IntegrationMessagesComponent implements OnInit {
   readonly totalElements = computed(() => this.page()?.totalElements ?? 0);
   readonly totalPages = computed(() => this.page()?.totalPages ?? 0);
   readonly deadLetterCount = computed(() => this.page()?.deadLetterCount ?? 0);
+  /** True only when the server says the sweep is actually running (not just configured). */
+  readonly retentionActive = computed(() => this.page()?.retentionActive === true);
+  readonly retentionOff = computed(() => this.page()?.retentionActive === false);
   readonly retentionDays = computed(() => this.page()?.payloadRetentionDays ?? null);
   readonly unresolvedMaxDays = computed(() => this.page()?.payloadUnresolvedMaxDays ?? null);
   readonly hasPrev = computed(() => this.pageNumber() > 0);

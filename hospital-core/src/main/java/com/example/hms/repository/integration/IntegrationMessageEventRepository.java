@@ -114,22 +114,20 @@ public interface IntegrationMessageEventRepository
      *   {@code cutoff}. Resolved means what {@link #countUnresolvedDeadLetters}
      *   means - a later row shares its correlation id - so the clock starts
      *   at the first superseding attempt, not at receipt.</li>
-     *   <li>An <em>unresolved</em> {@code FAILED} row - one the badge still
-     *   counts and the replay endpoint would still accept - keeps its body
-     *   while it is replayable, but not forever: once {@code received_at} is
-     *   before {@code unresolvedCutoff} it goes too. A dead letter nobody
-     *   resolves (a one-off failure, a reject from a sender that was never
-     *   allowlisted, which gets a random correlation id and so can never be
-     *   superseded, a legacy row with none) would otherwise hold its raw
-     *   message for ever. {@code received_at} rather than first sight,
-     *   because a recurring failure is folded into its row and refreshes it:
-     *   a problem still happening keeps its current evidence.</li>
+     *   <li>Every {@code FAILED} row, resolved or not: received before
+     *   {@code unresolvedCutoff} - an absolute ceiling. Without it a dead
+     *   letter that is never resolved (a one-off failure, a reject from a
+     *   sender that was never allowlisted, which gets a random correlation id
+     *   and so can never be superseded, a legacy row with none) would hold
+     *   its raw message for ever - and so would a row superseded by a newer
+     *   {@code FAILED} row that keeps absorbing retries, because each fold
+     *   refreshes that row's {@code lastAttemptedAt} and the resolution
+     *   above never falls behind the cutoff. A resolved row may go earlier
+     *   under the resolution rule; nothing stays past the ceiling.
+     *   {@code received_at} rather than first sight, because a recurring
+     *   failure is folded into its row and refreshes it: a problem still
+     *   happening keeps its current evidence.</li>
      * </ul>
-     *
-     * <p>The ceiling applies to unresolved rows only: a resolved row keeps
-     * the resolution rule above even when it was received before
-     * {@code unresolvedCutoff}, so a dead letter resolved last week keeps its
-     * body for the full window after that.
      *
      * <p>{@code unresolvedCutoff} is never later than {@code cutoff} (the
      * scheduler refuses a ceiling shorter than the window). The partial index
@@ -140,12 +138,7 @@ public interface IntegrationMessageEventRepository
         + "WHERE m.payload IS NOT NULL AND m.payloadPurgedAt IS NULL "
         + "AND m.receivedAt < :cutoff "
         + "AND (m.status <> com.example.hms.enums.integration.IntegrationMessageStatus.FAILED "
-        + "  OR (m.receivedAt < :unresolvedCutoff AND NOT EXISTS ("
-        + "    SELECT 1 FROM IntegrationMessageEvent anyLater "
-        + "    WHERE anyLater.correlationId IS NOT NULL "
-        + "    AND anyLater.correlationId = m.correlationId "
-        + "    AND anyLater.lastAttemptedAt > m.lastAttemptedAt"
-        + "  )) "
+        + "  OR m.receivedAt < :unresolvedCutoff "
         + "  OR EXISTS ("
         + "    SELECT 1 FROM IntegrationMessageEvent later "
         + "    WHERE later.correlationId IS NOT NULL "
@@ -175,12 +168,7 @@ public interface IntegrationMessageEventRepository
         + "AND m.payload IS NOT NULL AND m.payloadPurgedAt IS NULL "
         + "AND m.receivedAt < :cutoff "
         + "AND (m.status <> com.example.hms.enums.integration.IntegrationMessageStatus.FAILED "
-        + "  OR (m.receivedAt < :unresolvedCutoff AND NOT EXISTS ("
-        + "    SELECT 1 FROM IntegrationMessageEvent anyLater "
-        + "    WHERE anyLater.correlationId IS NOT NULL "
-        + "    AND anyLater.correlationId = m.correlationId "
-        + "    AND anyLater.lastAttemptedAt > m.lastAttemptedAt"
-        + "  )) "
+        + "  OR m.receivedAt < :unresolvedCutoff "
         + "  OR EXISTS ("
         + "    SELECT 1 FROM IntegrationMessageEvent later "
         + "    WHERE later.correlationId IS NOT NULL "

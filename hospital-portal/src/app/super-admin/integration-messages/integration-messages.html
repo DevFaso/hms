@@ -3,7 +3,11 @@
     <div>
       <h1 class="page-title">{{ 'INTEGRATION_MESSAGES.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'INTEGRATION_MESSAGES.SUBTITLE' | translate }}</p>
-      @if (retentionDays(); as days) {
+      @if (retentionOff()) {
+        <p class="retention-note" data-test="retention-off">
+          {{ 'INTEGRATION_MESSAGES.RETENTION_OFF' | translate }}
+        </p>
+      } @else if (retentionActive() && retentionDays(); as days) {
         <p class="retention-note" data-test="retention-note">
           {{
             'INTEGRATION_MESSAGES.RETENTION_NOTE'

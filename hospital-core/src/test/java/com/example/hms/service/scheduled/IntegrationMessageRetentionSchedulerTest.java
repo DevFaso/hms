@@ -1,5 +1,6 @@
 package com.example.hms.service.scheduled;
 
+import com.example.hms.service.integration.message.IntegrationMessageRetentionPolicy;
 import com.example.hms.service.integration.message.IntegrationMessageRetentionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,7 +32,8 @@ class IntegrationMessageRetentionSchedulerTest {
     private IntegrationMessageRetentionService service;
 
     private IntegrationMessageRetentionScheduler scheduler(boolean enabled, int days, int batch, int maxBatches) {
-        return new IntegrationMessageRetentionScheduler(service, CLOCK, enabled, days, 365, batch, maxBatches);
+        return new IntegrationMessageRetentionScheduler(
+            service, new IntegrationMessageRetentionPolicy(enabled, days, 365), CLOCK, batch, maxBatches);
     }
 
     @Test
@@ -48,7 +50,8 @@ class IntegrationMessageRetentionSchedulerTest {
     void anUnresolvedCeilingShorterThanTheWindowIsRefused() {
         // A ceiling below the window would erase replayable dead letters
         // before ordinary traffic.
-        Integer purged = new IntegrationMessageRetentionScheduler(service, CLOCK, true, 180, 179, 500, 200)
+        Integer purged = new IntegrationMessageRetentionScheduler(
+                service, new IntegrationMessageRetentionPolicy(true, 180, 179), CLOCK, 500, 200)
             .purgeExpiredPayloads();
 
         assertThat(purged).isZero();
@@ -59,7 +62,8 @@ class IntegrationMessageRetentionSchedulerTest {
     void aCeilingEqualToTheWindowIsAccepted() {
         when(service.purgeBatch(any(), any(), any(), anyInt())).thenReturn(0);
 
-        new IntegrationMessageRetentionScheduler(service, CLOCK, true, 180, 180, 500, 200).purgeExpiredPayloads();
+        new IntegrationMessageRetentionScheduler(
+            service, new IntegrationMessageRetentionPolicy(true, 180, 180), CLOCK, 500, 200).purgeExpiredPayloads();
 
         verify(service).purgeBatch(NOW.minusDays(180), NOW.minusDays(180), NOW, 500);
     }

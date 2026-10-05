@@ -38,6 +38,7 @@ const fakePage = (
   totalElements: rows.length,
   totalPages: rows.length > 0 ? 1 : 0,
   deadLetterCount,
+  retentionActive: true,
   payloadRetentionDays: 180,
   payloadUnresolvedMaxDays: 365,
 });
@@ -192,5 +193,22 @@ describe('IntegrationMessagesComponent (MVP-c3)', () => {
     expect(service.replay).not.toHaveBeenCalled();
     expect(cmp.isPurged(purged)).toBeTrue();
     expect(cmp.isPurged(fakeEvent())).toBeFalse();
+  });
+  it('states the windows only while retention is actually running', () => {
+    service.search.and.returnValue(of(fakePage()));
+
+    const el: HTMLElement = setupFixture().nativeElement;
+
+    expect(el.querySelector('[data-test="retention-note"]')).not.toBeNull();
+    expect(el.querySelector('[data-test="retention-off"]')).toBeNull();
+  });
+
+  it('says retention is OFF instead of quoting windows nobody enforces', () => {
+    service.search.and.returnValue(of({ ...fakePage(), retentionActive: false }));
+
+    const el: HTMLElement = setupFixture().nativeElement;
+
+    expect(el.querySelector('[data-test="retention-off"]')).not.toBeNull();
+    expect(el.querySelector('[data-test="retention-note"]')).toBeNull();
   });
 });

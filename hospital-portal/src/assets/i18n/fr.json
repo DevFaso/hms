@@ -657,7 +657,8 @@
     "PAGER": "Page {{ current }} sur {{ total }}",
     "CONTENT_PURGED": "Contenu purgé (politique de conservation)",
     "CONTENT_PURGED_TITLE": "Contenu du message effacé le {{ date }} selon la politique de conservation ; l'enregistrement de l'événement est conservé.",
-    "RETENTION_NOTE": "Le contenu des messages est conservé {{ days }} jours. Un message en échec le garde jusqu'à {{ days }} jours après sa résolution, et au plus {{ maxDays }} jours s'il n'est jamais résolu. Les enregistrements d'événements sont conservés sans limite.",
+    "RETENTION_NOTE": "Le contenu des messages est conservé {{ days }} jours, et celui d'un message en échec au plus {{ maxDays }} jours (un message résolu le perd {{ days }} jours après sa résolution si c'est plus tôt). Les enregistrements d'événements sont conservés sans limite.",
+    "RETENTION_OFF": "La conservation limitée du contenu des messages est DÉSACTIVÉE — le contenu est conservé jusqu'à son activation.",
     "FILTER": {
       "INTEGRATION_ID": "Intégration",
       "INTEGRATION_ID_PLACEHOLDER": "ex. partner.nhis",

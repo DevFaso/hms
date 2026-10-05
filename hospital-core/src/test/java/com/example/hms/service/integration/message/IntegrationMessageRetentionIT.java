@@ -89,7 +89,8 @@ class IntegrationMessageRetentionIT {
 
     private IntegrationMessageRetentionScheduler sweep(int batchSize) {
         return new IntegrationMessageRetentionScheduler(
-            retentionService, Clock.systemDefaultZone(), true, DAYS, UNRESOLVED_MAX_DAYS, batchSize, 200);
+            retentionService, new IntegrationMessageRetentionPolicy(true, DAYS, UNRESOLVED_MAX_DAYS),
+            Clock.systemDefaultZone(), batchSize, 200);
     }
 
     private IntegrationMessageEvent row(IntegrationMessageStatus status, String correlationId,
@@ -188,9 +189,10 @@ class IntegrationMessageRetentionIT {
             row(IntegrationMessageStatus.FAILED, "dl-old", "MSH|a", now.minusDays(400));
         IntegrationMessageEvent itsReplay =
             row(IntegrationMessageStatus.REPLAYED, "dl-old", "MSH|a", now.minusDays(DAYS + 10L));
-        // Received long ago but resolved only last week: the clock starts at resolution.
+        // Received 300 days ago (inside the ceiling) but resolved only last
+        // week: the resolution clock starts at resolution.
         IntegrationMessageEvent recentlyResolved =
-            row(IntegrationMessageStatus.FAILED, "dl-new", "MSH|b", now.minusDays(400));
+            row(IntegrationMessageStatus.FAILED, "dl-new", "MSH|b", now.minusDays(300));
         row(IntegrationMessageStatus.REPLAYED, "dl-new", "MSH|b", now.minusDays(7));
 
         assertThat(sweep(500).purgeExpiredPayloads()).isEqualTo(2);
@@ -198,6 +200,30 @@ class IntegrationMessageRetentionIT {
         assertThat(raw(longResolved.getId()).get("payload_purged_at")).isNotNull();
         assertThat(raw(itsReplay.getId()).get("payload_purged_at")).isNotNull();
         assertThat(repository.findById(recentlyResolved.getId()).orElseThrow().getPayload()).isEqualTo("MSH|b");
+    }
+
+    @Test
+    void theCeilingIsAbsoluteEvenForARowSupersededByAStillRetryingOne() {
+        // A newer FAILED row on the same correlation id keeps absorbing
+        // retries, so every fold refreshes its lastAttemptedAt and the old
+        // row is never "resolved before the cutoff". Without an absolute
+        // ceiling its body would be kept as long as the feed keeps failing.
+        IntegrationMessageEvent superseded =
+            row(IntegrationMessageStatus.FAILED, "storm", "MSH|first", now.minusDays(370));
+        IntegrationMessageEvent stillRetrying =
+            row(IntegrationMessageStatus.FAILED, "storm", "MSH|latest", now.minusMinutes(5));
+        // The same shape inside the ceiling is kept.
+        IntegrationMessageEvent supersededRecent =
+            row(IntegrationMessageStatus.FAILED, "storm-2", "MSH|r", now.minusDays(300));
+        row(IntegrationMessageStatus.FAILED, "storm-2", "MSH|r2", now.minusMinutes(5));
+
+        assertThat(sweep(500).purgeExpiredPayloads()).isEqualTo(1);
+
+        assertThat(raw(superseded.getId())).containsEntry("payload", null);
+        assertThat(repository.findById(stillRetrying.getId()).orElseThrow().getPayload())
+            .isEqualTo("MSH|latest");
+        assertThat(repository.findById(supersededRecent.getId()).orElseThrow().getPayload())
+            .isEqualTo("MSH|r");
     }
 
     @Test

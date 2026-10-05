@@ -5,9 +5,10 @@
 -- indefinitely; the stored message body (the encrypted payload, which
 -- can hold a whole HL7 message, PID and all) is erased once it is older
 -- than a configurable window (hms.integration.retention.payload-days,
--- default 180). A resolved dead letter loses it that many days after
--- resolution; an unresolved one keeps it while it is replayable, up to
--- hms.integration.retention.unresolved-max-days (default 365).
+-- default 180). A failed message keeps it at most
+-- hms.integration.retention.unresolved-max-days (default 365), resolved
+-- or not; a resolved one loses it that many payload-days after
+-- resolution if that is sooner.
 -- The sweep is IntegrationMessageRetentionScheduler.
 --
 -- Strictly additive:

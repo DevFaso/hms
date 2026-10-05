@@ -9,9 +9,9 @@ import com.example.hms.payload.dto.superadmin.IntegrationMessagePageDTO;
 import com.example.hms.repository.integration.IntegrationMessageEventRepository;
 import com.example.hms.service.SuperAdminIntegrationMessageService;
 import com.example.hms.service.integration.message.IntegrationMessageRecorder;
+import com.example.hms.service.integration.message.IntegrationMessageRetentionPolicy;
 import com.example.hms.utility.MessageUtil;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -31,12 +31,12 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
     private final IntegrationMessageEventRepository repository;
     private final IntegrationMessageRecorder recorder;
 
-    /** Same properties the retention sweep reads; shown on the page so it can state the policy. */
-    @Value("${hms.integration.retention.payload-days:180}")
-    private int payloadRetentionDays;
-
-    @Value("${hms.integration.retention.unresolved-max-days:365}")
-    private int payloadUnresolvedMaxDays;
+    /**
+     * The policy object the sweep itself runs on, so the page states the
+     * policy in force - or that retention is off - and never windows a
+     * disabled or refused sweep is not enforcing.
+     */
+    private final IntegrationMessageRetentionPolicy retentionPolicy;
 
     @Override
     public IntegrationMessagePageDTO search(
@@ -69,8 +69,9 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
             .totalElements(page.getTotalElements())
             .totalPages(page.getTotalPages())
             .deadLetterCount(deadLetterCount)
-            .payloadRetentionDays(payloadRetentionDays)
-            .payloadUnresolvedMaxDays(payloadUnresolvedMaxDays)
+            .retentionActive(retentionPolicy.isActive())
+            .payloadRetentionDays(retentionPolicy.payloadDays())
+            .payloadUnresolvedMaxDays(retentionPolicy.unresolvedMaxDays())
             .build();
     }
 
