@@ -39,6 +39,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HexFormat;
@@ -46,6 +47,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
@@ -63,6 +65,7 @@ public class LabOrderServiceImpl implements LabOrderService {
 
     /** The key an unknown staff id gets; every ordering-staff refusal reuses it. */
     private static final String STAFF_NOT_FOUND = "staff.notfound";
+    private static final String ASSIGNMENT_NOT_FOUND = "assignment.notfound";
 
     /**
      * Resolvable message key, not a sentence, and the same one
@@ -327,8 +330,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         LabTestDefinition testDefinition = labTestDefinitionRepository.findById(request.getLabTestDefinitionId())
             .orElseThrow(() -> new ResourceNotFoundException("labtestdefinition.notfound"));
 
-        UserRoleHospitalAssignment assignment = assignmentRepository.findById(request.getAssignmentId())
-            .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
+        UserRoleHospitalAssignment assignment = resolveOrderingAssignment(base, request.getAssignmentId(), staff, hospital);
 
         if (isNew && labOrderRepository.existsByPatient_IdAndLabTestDefinition_IdAndOrderDatetime(
             patient.getId(), testDefinition.getId(), request.getOrderDatetime())) {
@@ -387,6 +389,96 @@ public class LabOrderServiceImpl implements LabOrderService {
             return null;
         }
         return current;
+    }
+
+    /**
+     * The role@hospital context the order is recorded under.
+     *
+     * <p>This used to be {@code assignmentRepository.findById(assignmentId)}
+     * and nothing more, so a caller could record an order under any
+     * assignment in the system - someone else's, another hospital's, a
+     * revoked one. The recorded assignment is now always one the ordering
+     * clinician holds, active, at the order's hospital:
+     * <ul>
+     *   <li>An edit that keeps the ordering clinician and leaves the
+     *       assignment as it is keeps it, whoever is editing, as long as it is
+     *       still at the order's hospital - the rule {@link #keptOrderingStaff}
+     *       applies to the clinician.</li>
+     *   <li>The named assignment is used when it is the ordering clinician's,
+     *       active, at the order's hospital.</li>
+     *   <li>The ordering clinician's own assignment that is inactive or at
+     *       another hospital is replaced by the one they hold here. The
+     *       portal sends the first active assignment of the signed-in user,
+     *       which for a clinician working at two hospitals is often the other
+     *       hospital's; that used to fail at flush
+     *       ({@code LabOrder.validateHospitalScope}).</li>
+     *   <li>On an edit that keeps another clinician's order, the editor's own
+     *       assignment is what a client naturally sends; it never becomes the
+     *       order's context - the order keeps the one it has.</li>
+     *   <li>Anything else - an unknown id, another person's assignment - is
+     *       refused with {@code assignment.notfound}, exactly what an unknown
+     *       id gets, so the answer says nothing about whether the id exists.</li>
+     * </ul>
+     */
+    private UserRoleHospitalAssignment resolveOrderingAssignment(
+            LabOrder base, UUID requestedAssignmentId, Staff staff, Hospital hospital) {
+        // Non-null only on an edit that keeps the ordering clinician.
+        UserRoleHospitalAssignment current = base != null && base.getOrderingStaff() != null
+            && staff.getId() != null && staff.getId().equals(base.getOrderingStaff().getId())
+            ? base.getAssignment() : null;
+        if (current != null && current.getId() != null && current.getId().equals(requestedAssignmentId)
+                && isAtHospital(current, hospital)) {
+            return current;
+        }
+        UUID orderingUserId = staff.getUser().getId();
+        UserRoleHospitalAssignment named = requestedAssignmentId == null ? null
+            : assignmentRepository.findById(requestedAssignmentId).orElse(null);
+        UUID namedUserId = named != null && named.getUser() != null ? named.getUser().getId() : null;
+        if (named == null || orderingUserId.equals(namedUserId)) {
+            if (named != null && isActiveAt(named, hospital)) {
+                return named;
+            }
+            return orderingClinicianAssignmentAt(staff, hospital).orElseThrow(() -> {
+                log.warn("Lab order refused: the ordering clinician holds no active assignment at hospital {}",
+                    hospital.getId());
+                return new ResourceNotFoundException(ASSIGNMENT_NOT_FOUND);
+            });
+        }
+        if (current != null && isAtHospital(current, hospital)
+                && namedUserId != null && namedUserId.equals(callerUserId())) {
+            return current;
+        }
+        log.warn("Lab order refused: the assignment named is not the ordering clinician's");
+        throw new ResourceNotFoundException(ASSIGNMENT_NOT_FOUND);
+    }
+
+    /**
+     * The ordering clinician's active assignment at the order's hospital: the
+     * one their staff row there is bound to, else any active one they hold
+     * there (ordered by id, so the choice is stable).
+     */
+    private Optional<UserRoleHospitalAssignment> orderingClinicianAssignmentAt(Staff staff, Hospital hospital) {
+        UUID userId = staff.getUser().getId();
+        UserRoleHospitalAssignment ofRow = staff.getAssignment();
+        if (ofRow != null && ofRow.getUser() != null && userId.equals(ofRow.getUser().getId())
+                && isActiveAt(ofRow, hospital)) {
+            return Optional.of(ofRow);
+        }
+        return assignmentRepository.findByUser_IdAndActiveTrue(userId).stream()
+            .filter(candidate -> isActiveAt(candidate, hospital))
+            .min(Comparator.comparing(UserRoleHospitalAssignment::getId));
+    }
+
+    private static boolean isAtHospital(UserRoleHospitalAssignment assignment, Hospital hospital) {
+        return assignment.getHospital() != null && hospital.getId().equals(assignment.getHospital().getId());
+    }
+
+    private static boolean isActiveAt(UserRoleHospitalAssignment assignment, Hospital hospital) {
+        return Boolean.TRUE.equals(assignment.getActive()) && isAtHospital(assignment, hospital);
+    }
+
+    private UUID callerUserId() {
+        return authUtils.resolveUserId(SecurityContextHolder.getContext().getAuthentication()).orElse(null);
     }
 
     /**
