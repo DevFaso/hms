@@ -4,6 +4,7 @@ import com.example.hms.enums.EducationComprehensionStatus;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.hibernate.Session;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,8 +13,9 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Savepoint;
 import java.sql.Timestamp;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.Instant;
+import java.util.Calendar;
+import java.util.TimeZone;
 import java.util.UUID;
 
 /**
@@ -54,6 +56,19 @@ public class EducationProgressWrites {
     private EntityManager entityManager;
 
     /**
+     * The zone Hibernate reads and writes this table's timestamps in
+     * ({@code hibernate.jdbc.time_zone}, UTC in application.properties). The
+     * row's timestamps must be stored the same way, or the entity reads them
+     * back shifted by the server's offset.
+     */
+    private final TimeZone jdbcTimeZone;
+
+    public EducationProgressWrites(
+            @Value("${spring.jpa.properties.hibernate.jdbc.time_zone:UTC}") String jdbcTimeZone) {
+        this.jdbcTimeZone = TimeZone.getTimeZone(jdbcTimeZone);
+    }
+
+    /**
      * Inserts the (patient, resource) row in the caller's transaction.
      *
      * @return true when this call created it; false when the row already
@@ -63,7 +78,10 @@ public class EducationProgressWrites {
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean insertIfAbsent(UUID patientId, UUID resourceId, UUID hospitalId,
                                   EducationComprehensionStatus initialStatus) {
-        Timestamp now = Timestamp.valueOf(LocalDateTime.now(ZoneId.systemDefault()));
+        // Bound exactly as Hibernate binds a LocalDateTime under
+        // hibernate.jdbc.time_zone: the instant, written in that zone.
+        Timestamp now = Timestamp.from(Instant.now());
+        Calendar jdbcZone = Calendar.getInstance(jdbcTimeZone);
         return entityManager.unwrap(Session.class).doReturningWork(connection -> {
             Savepoint savepoint = connection.setSavepoint();
             try (PreparedStatement insert = connection.prepareStatement(INSERT_SQL)) {
@@ -72,9 +90,9 @@ public class EducationProgressWrites {
                 insert.setObject(3, resourceId);
                 insert.setObject(4, hospitalId);
                 insert.setString(5, initialStatus.name());
-                insert.setTimestamp(6, now);
-                insert.setTimestamp(7, now);
-                insert.setTimestamp(8, now);
+                insert.setTimestamp(6, now, jdbcZone);
+                insert.setTimestamp(7, now, jdbcZone);
+                insert.setTimestamp(8, now, jdbcZone);
                 insert.executeUpdate();
             } catch (SQLException e) {
                 connection.rollback(savepoint);

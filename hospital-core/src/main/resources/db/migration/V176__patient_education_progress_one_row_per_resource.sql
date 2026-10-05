@@ -38,11 +38,16 @@
 --        rating                   the kept row's, else the first one in
 --                                 canonical order (a number cannot be joined)
 --        feedback, clarification_request, provider_notes   EVERY distinct
---                                 non-blank value of the group, trimmed, in
---                                 canonical order (the kept row's first),
---                                 joined by a newline and an em dash
---                                 (E'\n— '); a group with one distinct value
---                                 keeps it, trimmed
+--                                 value of the group, in canonical order (the
+--                                 kept row's first), joined by a newline and
+--                                 an em dash (E'\n— '). Each value is first
+--                                 stripped of ALL leading and trailing
+--                                 whitespace (spaces, tabs, CR, LF), so
+--                                 'great' and 'great' + newline are one entry
+--                                 and a whitespace-only text is dropped; a
+--                                 group with one distinct value keeps it,
+--                                 stripped. The length check below measures
+--                                 the stripped, joined text.
 --        provider_id, discussed_with_provider_at   from the row with the
 --                                 latest discussed_with_provider_at; when no
 --                                 row has a discussion date, from the first
@@ -149,9 +154,11 @@ BEGIN
     CREATE TEMP TABLE v176_merged ON COMMIT DROP AS
     WITH texts AS (
         -- Each distinct non-blank text of a group, at the position of the
-        -- first row (canonical order) that holds it.
+        -- first row (canonical order) that holds it. Leading and trailing
+        -- whitespace of every kind is stripped first (btrim only strips spaces).
         SELECT t.patient_id, t.resource_id, t.col, t.val, min(t.rn) AS first_rn
-          FROM (SELECT r.patient_id, r.resource_id, r.rn, v.col, btrim(v.val) AS val
+          FROM (SELECT r.patient_id, r.resource_id, r.rn, v.col,
+                       regexp_replace(v.val, '^\s+|\s+$', '', 'g') AS val
                   FROM v176_ranked r
                  CROSS JOIN LATERAL (VALUES ('feedback', r.feedback),
                                             ('clarification_request', r.clarification_request),

@@ -144,6 +144,8 @@ class EducationProgressDedupeMigrationIT {
             plantAndMigrate(stmt);
 
             try (ResultSet a = row(stmt, A1)) {
+                // A1's "clear" + CR LF and A2's "clear" are one entry; A3's
+                // whitespace-only feedback is dropped.
                 assertThat(a.getString("feedback")).isEqualTo("clear");
                 // Both clarification requests and both providers' notes, the
                 // kept row's first; A3's copy of A2's note is not repeated.
@@ -314,7 +316,7 @@ class EducationProgressDedupeMigrationIT {
         insert(stmt, A1, PATIENT_1, RESOURCE_1, "'2026-01-03 10:00'", "'2026-01-01 09:00'");
         stmt.executeUpdate("UPDATE clinical.patient_education_progress SET comprehension_status = 'IN_PROGRESS', "
             + "progress_percentage = 40, started_at = '2026-01-01 09:00', access_count = 2, "
-            + "time_spent_seconds = 100, clarification_request = 'is it safe', provider_id = '"
+            + "time_spent_seconds = 100, feedback = E'clear\\r\\n', clarification_request = 'is it safe', provider_id = '"
             + EARLIER_PROVIDER + "', provider_notes = 'first talk', discussed_with_provider_at = '2025-11-01 09:00' "
             + "WHERE id = '" + A1 + "'");
         insert(stmt, A2, PATIENT_1, RESOURCE_1, "'2026-01-02 10:00'", "'2025-12-01 09:00'");
@@ -325,7 +327,8 @@ class EducationProgressDedupeMigrationIT {
             + "discussed_with_provider_at = '2025-12-06 09:00' WHERE id = '" + A2 + "'");
         insert(stmt, A3, PATIENT_1, RESOURCE_1, "NULL", "'2026-02-01 09:00'");
         stmt.executeUpdate("UPDATE clinical.patient_education_progress SET needs_clarification = TRUE, "
-            + "clarification_request = 'what is a dose', provider_notes = '  went over it ' "
+            + "clarification_request = E'\\twhat is a dose\\n', provider_notes = '  went over it ', "
+            + "feedback = E'\\t \\r\\n' "
             + "WHERE id = '" + A3 + "'");
 
         insert(stmt, B1, PATIENT_1, RESOURCE_2, "'2026-03-01 09:00'", "'2026-02-15 09:00'");

@@ -22,6 +22,9 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.TimeZone;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -130,6 +133,33 @@ class EducationProgressWritesPostgresIT {
                 assertThat(row.getComprehensionStatus()).isEqualTo(EducationComprehensionStatus.NOT_STARTED);
                 assertThat(row.getProgressPercentage()).isEqualTo(30);
             });
+    }
+
+    @Test
+    void onANonUtcServerTheTimestampsReadBackAsTheMomentOfTheInsert() {
+        // Hibernate stores this table's timestamps in UTC
+        // (hibernate.jdbc.time_zone); a raw insert in the server's own zone
+        // would read back shifted by its offset (+05:30 here).
+        TimeZone original = TimeZone.getDefault();
+        TimeZone.setDefault(TimeZone.getTimeZone("Asia/Kolkata"));
+        try {
+            LocalDateTime before = LocalDateTime.now(ZoneId.systemDefault()).minusSeconds(5);
+            new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                skipForeignKeysInThisTransaction();
+                writes.insertIfAbsent(patientId, resourceId, hospitalId, EducationComprehensionStatus.NOT_STARTED);
+            });
+            LocalDateTime after = LocalDateTime.now(ZoneId.systemDefault()).plusSeconds(5);
+
+            PatientEducationProgress row = new TransactionTemplate(transactionManager).execute(status ->
+                repository.findByPatientIdAndResourceId(patientId, resourceId).getFirst());
+
+            assertThat(row).isNotNull();
+            assertThat(row.getStartedAt()).isBetween(before, after);
+            assertThat(row.getCreatedAt()).isBetween(before, after);
+            assertThat(row.getUpdatedAt()).isBetween(before, after);
+        } finally {
+            TimeZone.setDefault(original);
+        }
     }
 
     /**
