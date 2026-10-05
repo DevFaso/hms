@@ -18,8 +18,10 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -189,5 +191,58 @@ class SuperAdminIntegrationMessageServiceImplTest {
             .hasMessageContaining("could not be persisted")
             .satisfies(ex -> assertThat(((ResponseStatusException) ex).getStatusCode())
                 .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR));
+    }
+
+    @Test
+    void replayOfAPurgedRowIsRefusedWith409AndRecordsNothing() {
+        // Retention (V177) erased the content of a resolved dead letter.
+        // The row still says FAILED; replaying it would write a REPLAYED row
+        // with no body. A clear 409 instead.
+        ReflectionTestUtils.setField(service, "payloadRetentionDays", 180);
+        UUID originalId = UUID.randomUUID();
+        IntegrationMessageEvent purged = failedRow(originalId);
+        purged.setPayload(null);
+        purged.setPayloadPurgedAt(LocalDateTime.now().minusDays(1));
+        when(repository.findById(originalId)).thenReturn(Optional.of(purged));
+
+        assertThatThrownBy(() -> service.replay(originalId))
+            .isInstanceOf(ConflictException.class)
+            .hasMessageContaining("integration.message.contentPurged")
+            .hasMessageContaining("180");
+
+        verify(recorder, never()).recordReplay(any(), any(), any());
+    }
+
+    @Test
+    void thePurgeStampAndTheRetentionWindowReachThePage() {
+        ReflectionTestUtils.setField(service, "payloadRetentionDays", 90);
+        LocalDateTime purgedAt = LocalDateTime.of(2026, 9, 30, 3, 30);
+        IntegrationMessageEvent event = failedRow(UUID.randomUUID());
+        event.setPayload(null);
+        event.setPayloadPurgedAt(purgedAt);
+        when(repository.search(isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(event), PageRequest.of(0, 25), 1L));
+        when(repository.countUnresolvedDeadLetters()).thenReturn(0L);
+
+        IntegrationMessagePageDTO result = service.search(
+            null, null, null, null, null, PageRequest.of(0, 25));
+
+        assertThat(result.payloadRetentionDays()).isEqualTo(90);
+        assertThat(result.content().get(0).payloadPurgedAt()).isEqualTo(purgedAt);
+    }
+
+    @Test
+    void getByIdCarriesThePurgeStamp() {
+        UUID id = UUID.randomUUID();
+        LocalDateTime purgedAt = LocalDateTime.of(2026, 9, 30, 3, 30);
+        IntegrationMessageEvent event = failedRow(id);
+        event.setPayload(null);
+        event.setPayloadPurgedAt(purgedAt);
+        when(repository.findById(id)).thenReturn(Optional.of(event));
+
+        IntegrationMessageEventDTO dto = service.getById(id);
+
+        assertThat(dto.payload()).isNull();
+        assertThat(dto.payloadPurgedAt()).isEqualTo(purgedAt);
     }
 }

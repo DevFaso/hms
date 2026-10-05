@@ -5,11 +5,14 @@ import com.example.hms.model.integration.IntegrationMessageEvent;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -99,4 +102,66 @@ public interface IntegrationMessageEventRepository
     Optional<IntegrationMessageEvent>
         findFirstByCorrelationIdAndStatusAndReceivedAtAfterOrderByReceivedAtDesc(
             String correlationId, IntegrationMessageStatus status, LocalDateTime after);
+
+    /**
+     * Ids of rows whose message content is due for erasure, oldest first: a
+     * body still held, never purged, and past {@code cutoff} by the rule for
+     * its status.
+     *
+     * <ul>
+     *   <li>Anything but {@code FAILED}: received before the cutoff.</li>
+     *   <li>{@code FAILED}: only once <em>resolved</em>, and resolved before
+     *   the cutoff. Resolved means what {@link #countUnresolvedDeadLetters}
+     *   means - a later row shares its correlation id - so a dead letter the
+     *   badge still counts keeps its body and stays replayable however old it
+     *   is, and the clock starts at the first superseding attempt, not at
+     *   receipt. A {@code FAILED} row with no correlation id is never resolved
+     *   and is never purged.</li>
+     * </ul>
+     *
+     * <p>The partial index on rows holding a body (V177) serves the scan;
+     * the correlation index (V89) serves the {@code EXISTS}.
+     */
+    @Query("SELECT m.id FROM IntegrationMessageEvent m "
+        + "WHERE m.payload IS NOT NULL AND m.payloadPurgedAt IS NULL "
+        + "AND m.receivedAt < :cutoff "
+        + "AND (m.status <> com.example.hms.enums.integration.IntegrationMessageStatus.FAILED "
+        + "  OR EXISTS ("
+        + "    SELECT 1 FROM IntegrationMessageEvent later "
+        + "    WHERE later.correlationId IS NOT NULL "
+        + "    AND later.correlationId = m.correlationId "
+        + "    AND later.lastAttemptedAt > m.lastAttemptedAt "
+        + "    AND later.lastAttemptedAt < :cutoff"
+        + "  )"
+        + ") "
+        + "ORDER BY m.receivedAt ASC")
+    List<UUID> findPayloadPurgeCandidateIds(@Param("cutoff") LocalDateTime cutoff, Pageable pageable);
+
+    /**
+     * Erase the content of the given rows and stamp when. Re-checks the whole
+     * eligibility rule of {@link #findPayloadPurgeCandidateIds} rather than
+     * trusting the ids, so a row that changed between the read and this write
+     * is left alone, and a second instance or a rerun purging the same ids
+     * updates nothing: the statement is idempotent. Returns the rows actually
+     * purged.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE IntegrationMessageEvent m "
+        + "SET m.payload = NULL, m.payloadPurgedAt = :purgedAt "
+        + "WHERE m.id IN :ids "
+        + "AND m.payload IS NOT NULL AND m.payloadPurgedAt IS NULL "
+        + "AND m.receivedAt < :cutoff "
+        + "AND (m.status <> com.example.hms.enums.integration.IntegrationMessageStatus.FAILED "
+        + "  OR EXISTS ("
+        + "    SELECT 1 FROM IntegrationMessageEvent later "
+        + "    WHERE later.correlationId IS NOT NULL "
+        + "    AND later.correlationId = m.correlationId "
+        + "    AND later.lastAttemptedAt > m.lastAttemptedAt "
+        + "    AND later.lastAttemptedAt < :cutoff"
+        + "  )"
+        + ")")
+    int purgePayloads(
+        @Param("ids") Collection<UUID> ids,
+        @Param("cutoff") LocalDateTime cutoff,
+        @Param("purgedAt") LocalDateTime purgedAt);
 }

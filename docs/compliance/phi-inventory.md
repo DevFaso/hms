@@ -242,7 +242,7 @@ usages in the JPA model).** A grep of the entity layer
 | `Prescription` | 3 narrative columns (sig / instructions / notes)                                                                                    |
 | `Dispense`     | 1 narrative column                                                                                                                  |
 | `EmpiMergeEvent` | `notes` - an inbound HL7 `ADT^A40` writes both MRNs and the sender's provenance there, and a manual merge note is free text. Legacy plaintext rows are encrypted at startup by `PhiTextEncryptionBackfill`. |
-| `IntegrationMessageEvent` | `payload` - raw partner traffic; an unparseable HL7 message is kept whole (PID and all) as the only diagnostic. Legacy plaintext rows are encrypted at startup by `PhiTextEncryptionBackfill`. Retention is still undecided. |
+| `IntegrationMessageEvent` | `payload` - raw partner traffic; an unparseable HL7 message is kept whole (PID and all) as the only diagnostic. Legacy plaintext rows are encrypted at startup by `PhiTextEncryptionBackfill`. Retention (V177, decided 2026-10-04): rows kept indefinitely; `payload` erased after `hms.integration.retention.payload-days` (default 180), an unresolved dead letter only that long after it is resolved - see `docs/runbooks/hl7-adt-conflict-resolution.md` "Message log retention". |
 
 Plus the bespoke TOTP encryption on `user_mfa_enrollments.totp_secret`
 via `TotpSecretEncryptor` (separate converter, separate key derivation).

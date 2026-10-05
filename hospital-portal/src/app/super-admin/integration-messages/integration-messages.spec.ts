@@ -20,6 +20,7 @@ const fakeEvent = (overrides: Partial<IntegrationMessageEvent> = {}): Integratio
   messageType: overrides.messageType ?? 'CLAIM',
   correlationId: overrides.correlationId ?? 'trace-1',
   payload: overrides.payload ?? '{}',
+  payloadPurgedAt: overrides.payloadPurgedAt ?? null,
   status: overrides.status ?? 'FAILED',
   errorMessage: overrides.errorMessage ?? 'partner timeout',
   attemptCount: overrides.attemptCount ?? 1,
@@ -37,12 +38,13 @@ const fakePage = (
   totalElements: rows.length,
   totalPages: rows.length > 0 ? 1 : 0,
   deadLetterCount,
+  payloadRetentionDays: 180,
 });
 
 describe('IntegrationMessagesComponent (MVP-c3)', () => {
   let service: jasmine.SpyObj<IntegrationMessagesService>;
 
-  function setup(): IntegrationMessagesComponent {
+  function setupFixture() {
     TestBed.configureTestingModule({
       imports: [IntegrationMessagesComponent, TranslateModule.forRoot()],
       providers: [
@@ -54,7 +56,11 @@ describe('IntegrationMessagesComponent (MVP-c3)', () => {
     });
     const fixture = TestBed.createComponent(IntegrationMessagesComponent);
     fixture.detectChanges();
-    return fixture.componentInstance;
+    return fixture;
+  }
+
+  function setup(): IntegrationMessagesComponent {
+    return setupFixture().componentInstance;
   }
 
   beforeEach(() => {
@@ -149,5 +155,41 @@ describe('IntegrationMessagesComponent (MVP-c3)', () => {
     // Initial load only — both invalid jumps were no-ops.
     expect(service.search).toHaveBeenCalledTimes(1);
     expect(cmp.pageNumber()).toBe(0);
+  });
+  it('shows a purged row as "content purged" with replay disabled', () => {
+    const purged = fakeEvent({
+      id: 'msg-purged',
+      payload: null,
+      payloadPurgedAt: '2026-10-01T03:30:00',
+    });
+    const live = fakeEvent({ id: 'msg-live' });
+    service.search.and.returnValue(of(fakePage([purged, live])));
+
+    const fixture = setupFixture();
+    const el: HTMLElement = fixture.nativeElement;
+
+    expect(el.querySelector('[data-test-purged="msg-purged"]')).not.toBeNull();
+    expect(el.querySelector('[data-test-purged="msg-live"]')).toBeNull();
+    const purgedReplay = el.querySelector<HTMLButtonElement>('[data-test-replay="msg-purged"]');
+    const liveReplay = el.querySelector<HTMLButtonElement>('[data-test-replay="msg-live"]');
+    expect(purgedReplay?.disabled).toBeTrue();
+    expect(liveReplay?.disabled).toBeFalse();
+    expect(el.querySelector('[data-test="retention-note"]')).not.toBeNull();
+  });
+
+  it('replay() refuses a purged row without calling the server', () => {
+    const purged = fakeEvent({
+      id: 'msg-purged',
+      payload: null,
+      payloadPurgedAt: '2026-10-01T03:30:00',
+    });
+    service.search.and.returnValue(of(fakePage([purged])));
+
+    const cmp = setup();
+    cmp.replay('msg-purged');
+
+    expect(service.replay).not.toHaveBeenCalled();
+    expect(cmp.isPurged(purged)).toBeTrue();
+    expect(cmp.isPurged(fakeEvent())).toBeFalse();
   });
 });

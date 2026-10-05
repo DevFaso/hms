@@ -655,6 +655,9 @@
     "REPLAY": "Replay",
     "REPLAYING": "Replaying…",
     "PAGER": "Page {{ current }} of {{ total }}",
+    "CONTENT_PURGED": "Content purged after {{ days }} days",
+    "CONTENT_PURGED_TITLE": "Message content erased on {{ date }} under the retention policy; the event record is kept.",
+    "RETENTION_NOTE": "Message content is kept for {{ days }} days (an unresolved dead letter until {{ days }} days after it is resolved); event records are kept indefinitely.",
     "FILTER": {
       "INTEGRATION_ID": "Integration",
       "INTEGRATION_ID_PLACEHOLDER": "e.g. partner.nhis",

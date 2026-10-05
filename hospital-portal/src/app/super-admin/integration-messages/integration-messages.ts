@@ -62,6 +62,7 @@ export class IntegrationMessagesComponent implements OnInit {
   readonly totalElements = computed(() => this.page()?.totalElements ?? 0);
   readonly totalPages = computed(() => this.page()?.totalPages ?? 0);
   readonly deadLetterCount = computed(() => this.page()?.deadLetterCount ?? 0);
+  readonly retentionDays = computed(() => this.page()?.payloadRetentionDays ?? null);
   readonly hasPrev = computed(() => this.pageNumber() > 0);
   readonly hasNext = computed(() => this.pageNumber() < this.totalPages() - 1);
 
@@ -124,7 +125,16 @@ export class IntegrationMessagesComponent implements OnInit {
     this.search();
   }
 
+  /** Retention erased this row's content: it is shown as purged and cannot be replayed. */
+  isPurged(row: IntegrationMessageEvent): boolean {
+    return !!row.payloadPurgedAt;
+  }
+
   replay(messageId: string): void {
+    const row = this.rows().find((r) => r.id === messageId);
+    if (row && this.isPurged(row)) {
+      return;
+    }
     this.replayState.update((map) => {
       const next = new Map(map);
       next.set(messageId, { messageId, busy: true, errorKey: null });

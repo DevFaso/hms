@@ -187,7 +187,7 @@ public class IntegrationMessageRecorder {
      * shares its id. It does nothing about what is stored: {@link
      * #recordMessage} inserts on every call, so a vendor retrying an
      * unparseable message every thirty seconds writes thousands of full
-     * copies of it a day — PID and all — into a table with no retention,
+     * copies of it a day — PID and all — into a table that keeps each body for months,
      * while the badge reads 1. A bounded badge over unbounded PHI is worse
      * than the visible version, because it says the problem is handled.
      *

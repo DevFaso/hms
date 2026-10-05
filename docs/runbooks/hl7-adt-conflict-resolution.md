@@ -380,6 +380,52 @@ analyzer / sender is expected to handle the AE on its side.
 
 ---
 
+## Message log retention
+
+`clinical.integration_message_event` (the super-admin page at
+`/super-admin/integration-messages`) keeps **rows** and **content** on
+different clocks — user decision 2026-10-04, V177:
+
+| What | Kept for |
+| --- | --- |
+| The row: ids, integration (sender), organization, direction, message type, correlation id, status, error message (reason + MSH-10 control id), attempt count, timestamps | Indefinitely — it is audit evidence |
+| The content: `payload` (the encrypted raw message, PID and all) | `hms.integration.retention.payload-days` (default **180**) after `received_at` |
+| The content of an **unresolved** dead letter (a `FAILED` row the badge still counts) | Until it is resolved, however old — replay needs it |
+| The content of a **resolved** dead letter | `payload-days` after resolution — the first later row with the same correlation id (a replay, or a newer occurrence of the same problem) |
+
+A `FAILED` row with no correlation id (legacy rows only) is never
+"resolved" and keeps its content.
+
+**The sweep.** `IntegrationMessageRetentionScheduler`, nightly at 03:30,
+ShedLock-guarded (`IntegrationMessageRetentionScheduler.purgeExpiredPayloads`).
+It sets `payload = NULL` and stamps `payload_purged_at` in batches of
+`batch-size` rows per transaction, at most `max-batches` batches per run, so
+a backlog (the first run on an old table) drains over several nights. The
+UPDATE re-checks eligibility, so a rerun or a second instance purges
+nothing twice. It logs a count only.
+
+| Property | Env | Default |
+| --- | --- | --- |
+| `hms.integration.retention.enabled` | `HMS_INTEGRATION_RETENTION_ENABLED` | `true` |
+| `hms.integration.retention.cron` | `HMS_INTEGRATION_RETENTION_CRON` | `0 30 3 * * *` |
+| `hms.integration.retention.payload-days` | `HMS_INTEGRATION_RETENTION_PAYLOAD_DAYS` | `180` (below 1 the sweep refuses to run) |
+| `hms.integration.retention.batch-size` | `HMS_INTEGRATION_RETENTION_BATCH_SIZE` | `500` (clamped 1–5000) |
+| `hms.integration.retention.max-batches` | `HMS_INTEGRATION_RETENTION_MAX_BATCHES` | `200` |
+
+**What the operator sees.** A purged row stays in the search with
+"Content purged after N days" in its action cell (the purge date on hover),
+and its Replay button is disabled. `POST .../{id}/replay` on a purged row
+answers **409** with "content purged after the N-day retention period"
+and writes nothing. A row whose payload is empty *without* a purge stamp
+never had one (the inbound services record a reason, not a body).
+
+**Erasure is one-way.** There is no restore; lengthening `payload-days`
+only protects content not yet purged. To keep a specific message as
+evidence beyond the window, export it from the row-detail endpoint
+before it ages out.
+
+---
+
 ## Future direction (post v1.1)
 
 1. **Intake-provider config + auto-create.** Per-hospital config row

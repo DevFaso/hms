@@ -9,7 +9,9 @@ import com.example.hms.payload.dto.superadmin.IntegrationMessagePageDTO;
 import com.example.hms.repository.integration.IntegrationMessageEventRepository;
 import com.example.hms.service.SuperAdminIntegrationMessageService;
 import com.example.hms.service.integration.message.IntegrationMessageRecorder;
+import com.example.hms.utility.MessageUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -28,6 +30,10 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
 
     private final IntegrationMessageEventRepository repository;
     private final IntegrationMessageRecorder recorder;
+
+    /** Same property the retention sweep reads; shown on the page, quoted in a refused replay. */
+    @Value("${hms.integration.retention.payload-days:180}")
+    private int payloadRetentionDays;
 
     @Override
     public IntegrationMessagePageDTO search(
@@ -60,6 +66,7 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
             .totalElements(page.getTotalElements())
             .totalPages(page.getTotalPages())
             .deadLetterCount(deadLetterCount)
+            .payloadRetentionDays(payloadRetentionDays)
             .build();
     }
 
@@ -89,6 +96,15 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
             throw new ConflictException(
                 "Integration message " + originalMessageId + " is not in FAILED state "
                     + "(current: " + original.getStatus() + "); only FAILED messages can be replayed.");
+        }
+
+        // The retention sweep erased the content (V177). It only does that to
+        // a dead letter already resolved, but the row still says FAILED, so
+        // without this the replay would write a REPLAYED row with no body - a
+        // "retry" of nothing. A clear 409 instead of that or a 500.
+        if (original.getPayloadPurgedAt() != null) {
+            throw new ConflictException(MessageUtil.resolve(
+                "integration.message.contentPurged", payloadRetentionDays));
         }
 
         // Today the replay is symbolic — we record a REPLAYED row so
@@ -136,6 +152,7 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
             .direction(event.getDirection())
             .messageType(event.getMessageType())
             .correlationId(event.getCorrelationId())
+            .payloadPurgedAt(event.getPayloadPurgedAt())
             .status(event.getStatus())
             .errorMessage(event.getErrorMessage())
             .attemptCount(event.getAttemptCount())
