@@ -198,7 +198,6 @@ class SuperAdminIntegrationMessageServiceImplTest {
         // Retention (V177) erased the content of a resolved dead letter.
         // The row still says FAILED; replaying it would write a REPLAYED row
         // with no body. A clear 409 instead.
-        ReflectionTestUtils.setField(service, "payloadRetentionDays", 180);
         UUID originalId = UUID.randomUUID();
         IntegrationMessageEvent purged = failedRow(originalId);
         purged.setPayload(null);
@@ -207,8 +206,7 @@ class SuperAdminIntegrationMessageServiceImplTest {
 
         assertThatThrownBy(() -> service.replay(originalId))
             .isInstanceOf(ConflictException.class)
-            .hasMessageContaining("integration.message.contentPurged")
-            .hasMessageContaining("180");
+            .hasMessageContaining("integration.message.contentPurged");
 
         verify(recorder, never()).recordReplay(any(), any(), any());
     }
@@ -216,6 +214,7 @@ class SuperAdminIntegrationMessageServiceImplTest {
     @Test
     void thePurgeStampAndTheRetentionWindowReachThePage() {
         ReflectionTestUtils.setField(service, "payloadRetentionDays", 90);
+        ReflectionTestUtils.setField(service, "payloadUnresolvedMaxDays", 400);
         LocalDateTime purgedAt = LocalDateTime.of(2026, 9, 30, 3, 30);
         IntegrationMessageEvent event = failedRow(UUID.randomUUID());
         event.setPayload(null);
@@ -228,6 +227,7 @@ class SuperAdminIntegrationMessageServiceImplTest {
             null, null, null, null, null, PageRequest.of(0, 25));
 
         assertThat(result.payloadRetentionDays()).isEqualTo(90);
+        assertThat(result.payloadUnresolvedMaxDays()).isEqualTo(400);
         assertThat(result.content().get(0).payloadPurgedAt()).isEqualTo(purgedAt);
     }
 

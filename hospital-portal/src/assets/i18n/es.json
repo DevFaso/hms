@@ -655,9 +655,9 @@
     "REPLAY": "Reenviar",
     "REPLAYING": "Reenviando…",
     "PAGER": "Página {{ current }} de {{ total }}",
-    "CONTENT_PURGED": "Contenido eliminado tras {{ days }} días",
+    "CONTENT_PURGED": "Contenido eliminado (política de conservación)",
     "CONTENT_PURGED_TITLE": "Contenido del mensaje eliminado el {{ date }} según la política de conservación; el registro del evento se conserva.",
-    "RETENTION_NOTE": "El contenido de los mensajes se conserva {{ days }} días (un mensaje fallido sin resolver, hasta {{ days }} días después de su resolución); los registros de eventos se conservan indefinidamente.",
+    "RETENTION_NOTE": "El contenido de los mensajes se conserva {{ days }} días. Un mensaje fallido lo conserva hasta {{ days }} días después de su resolución, y como máximo {{ maxDays }} días si nunca se resuelve. Los registros de eventos se conservan indefinidamente.",
     "FILTER": {
       "INTEGRATION_ID": "Integración",
       "INTEGRATION_ID_PLACEHOLDER": "ej. partner.nhis",

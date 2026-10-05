@@ -389,12 +389,23 @@ different clocks — user decision 2026-10-04, V177:
 | What | Kept for |
 | --- | --- |
 | The row: ids, integration (sender), organization, direction, message type, correlation id, status, error message (reason + MSH-10 control id), attempt count, timestamps | Indefinitely — it is audit evidence |
-| The content: `payload` (the encrypted raw message, PID and all) | `hms.integration.retention.payload-days` (default **180**) after `received_at` |
-| The content of an **unresolved** dead letter (a `FAILED` row the badge still counts) | Until it is resolved, however old — replay needs it |
-| The content of a **resolved** dead letter | `payload-days` after resolution — the first later row with the same correlation id (a replay, or a newer occurrence of the same problem) |
+| 1. Content (`payload`, the encrypted raw message, PID and all) of any row that is not `FAILED` | `hms.integration.retention.payload-days` (default **180**) after `received_at` |
+| 2. Content of a **resolved** `FAILED` row (a later row shares its correlation id: a replay, or a newer occurrence of the same problem) | `payload-days` (**180**) after resolution — the first such later row |
+| 3. Content of an **unresolved** `FAILED` row (the dead-letter badge still counts it) | While it is replayable, up to `hms.integration.retention.unresolved-max-days` (default **365**) after `received_at`, then erased even though unresolved |
 
-A `FAILED` row with no correlation id (legacy rows only) is never
-"resolved" and keeps its content.
+Nothing is kept for ever. Rule 3 is what bounds the rows that can never be
+resolved: a one-off failure nobody replays, a legacy row with no correlation
+id, and a reject from a sender that was never allowlisted (or has a blank
+MSH-3/MSH-4), which the dispatcher records under a random correlation id so
+that no later row can ever supersede it. `received_at` on a dead letter is
+when the problem was *last* seen (a retry is folded into its row), so a
+problem that is still recurring keeps its current evidence.
+
+There is no separate, shorter rule for "non-replayable" failures: the replay
+endpoint accepts every `FAILED` row whose content has not been purged, so by
+its own rule every unresolved dead letter is replayable and falls under
+rule 3. `unresolved-max-days` must be at least `payload-days`; otherwise the
+sweep refuses to run.
 
 **The sweep.** `IntegrationMessageRetentionScheduler`, nightly at 03:30,
 ShedLock-guarded (`IntegrationMessageRetentionScheduler.purgeExpiredPayloads`).
@@ -409,13 +420,16 @@ nothing twice. It logs a count only.
 | `hms.integration.retention.enabled` | `HMS_INTEGRATION_RETENTION_ENABLED` | `true` |
 | `hms.integration.retention.cron` | `HMS_INTEGRATION_RETENTION_CRON` | `0 30 3 * * *` |
 | `hms.integration.retention.payload-days` | `HMS_INTEGRATION_RETENTION_PAYLOAD_DAYS` | `180` (below 1 the sweep refuses to run) |
+| `hms.integration.retention.unresolved-max-days` | `HMS_INTEGRATION_RETENTION_UNRESOLVED_MAX_DAYS` | `365` (below `payload-days` the sweep refuses to run) |
 | `hms.integration.retention.batch-size` | `HMS_INTEGRATION_RETENTION_BATCH_SIZE` | `500` (clamped 1–5000) |
 | `hms.integration.retention.max-batches` | `HMS_INTEGRATION_RETENTION_MAX_BATCHES` | `200` |
 
 **What the operator sees.** A purged row stays in the search with
-"Content purged after N days" in its action cell (the purge date on hover),
+"Content purged (retention policy)" in its action cell (the same label
+whichever rule applied; the purge date on hover),
 and its Replay button is disabled. `POST .../{id}/replay` on a purged row
-answers **409** with "content purged after the N-day retention period"
+answers **409** ("purged under the retention policy, so it can no longer be
+replayed")
 and writes nothing. A row whose payload is empty *without* a purge stamp
 never had one (the inbound services record a reason, not a body).
 

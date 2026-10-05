@@ -39,6 +39,8 @@ export interface IntegrationMessagePage {
   deadLetterCount: number;
   /** Configured content-retention window (`hms.integration.retention.payload-days`). */
   payloadRetentionDays: number;
+  /** Ceiling for unresolved dead letters (`hms.integration.retention.unresolved-max-days`). */
+  payloadUnresolvedMaxDays: number;
 }
 
 export interface IntegrationMessageSearchFilter {

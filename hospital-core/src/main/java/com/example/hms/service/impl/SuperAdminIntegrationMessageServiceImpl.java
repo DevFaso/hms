@@ -31,9 +31,12 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
     private final IntegrationMessageEventRepository repository;
     private final IntegrationMessageRecorder recorder;
 
-    /** Same property the retention sweep reads; shown on the page, quoted in a refused replay. */
+    /** Same properties the retention sweep reads; shown on the page so it can state the policy. */
     @Value("${hms.integration.retention.payload-days:180}")
     private int payloadRetentionDays;
+
+    @Value("${hms.integration.retention.unresolved-max-days:365}")
+    private int payloadUnresolvedMaxDays;
 
     @Override
     public IntegrationMessagePageDTO search(
@@ -67,6 +70,7 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
             .totalPages(page.getTotalPages())
             .deadLetterCount(deadLetterCount)
             .payloadRetentionDays(payloadRetentionDays)
+            .payloadUnresolvedMaxDays(payloadUnresolvedMaxDays)
             .build();
     }
 
@@ -98,13 +102,14 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
                     + "(current: " + original.getStatus() + "); only FAILED messages can be replayed.");
         }
 
-        // The retention sweep erased the content (V177). It only does that to
-        // a dead letter already resolved, but the row still says FAILED, so
+        // The retention sweep erased the content (V177) - after resolution,
+        // or past the unresolved ceiling - but the row still says FAILED, so
         // without this the replay would write a REPLAYED row with no body - a
-        // "retry" of nothing. A clear 409 instead of that or a 500.
+        // "retry" of nothing. A clear 409 instead of that or a 500. The
+        // message cites no number of days: which window applied depends on
+        // the row, and the purge stamp is on the DTO.
         if (original.getPayloadPurgedAt() != null) {
-            throw new ConflictException(MessageUtil.resolve(
-                "integration.message.contentPurged", payloadRetentionDays));
+            throw new ConflictException(MessageUtil.resolve("integration.message.contentPurged"));
         }
 
         // Today the replay is symbolic — we record a REPLAYED row so

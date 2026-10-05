@@ -63,6 +63,7 @@ export class IntegrationMessagesComponent implements OnInit {
   readonly totalPages = computed(() => this.page()?.totalPages ?? 0);
   readonly deadLetterCount = computed(() => this.page()?.deadLetterCount ?? 0);
   readonly retentionDays = computed(() => this.page()?.payloadRetentionDays ?? null);
+  readonly unresolvedMaxDays = computed(() => this.page()?.payloadUnresolvedMaxDays ?? null);
   readonly hasPrev = computed(() => this.pageNumber() > 0);
   readonly hasNext = computed(() => this.pageNumber() < this.totalPages() - 1);
 

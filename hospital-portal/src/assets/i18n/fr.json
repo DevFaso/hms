@@ -655,9 +655,9 @@
     "REPLAY": "Rejouer",
     "REPLAYING": "Rejeu…",
     "PAGER": "Page {{ current }} sur {{ total }}",
-    "CONTENT_PURGED": "Contenu purgé après {{ days }} jours",
+    "CONTENT_PURGED": "Contenu purgé (politique de conservation)",
     "CONTENT_PURGED_TITLE": "Contenu du message effacé le {{ date }} selon la politique de conservation ; l'enregistrement de l'événement est conservé.",
-    "RETENTION_NOTE": "Le contenu des messages est conservé {{ days }} jours (un message en échec non résolu, jusqu'à {{ days }} jours après sa résolution) ; les enregistrements d'événements sont conservés sans limite.",
+    "RETENTION_NOTE": "Le contenu des messages est conservé {{ days }} jours. Un message en échec le garde jusqu'à {{ days }} jours après sa résolution, et au plus {{ maxDays }} jours s'il n'est jamais résolu. Les enregistrements d'événements sont conservés sans limite.",
     "FILTER": {
       "INTEGRATION_ID": "Intégration",
       "INTEGRATION_ID_PLACEHOLDER": "ex. partner.nhis",

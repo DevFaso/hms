@@ -6,9 +6,10 @@ import java.util.List;
 
 /**
  * MVP-c3 — paged search result for the message-trace UI.
- * {@code payloadRetentionDays} is the configured content-retention window
- * ({@code hms.integration.retention.payload-days}), so the page can say how
- * long content is kept and why a purged row has none.
+ * {@code payloadRetentionDays} and {@code payloadUnresolvedMaxDays} are the
+ * configured content-retention window and the ceiling for unresolved dead
+ * letters ({@code hms.integration.retention.payload-days} /
+ * {@code unresolved-max-days}), so the page can state the policy.
  */
 @Builder
 public record IntegrationMessagePageDTO(
@@ -18,5 +19,6 @@ public record IntegrationMessagePageDTO(
     long totalElements,
     int totalPages,
     long deadLetterCount,
-    int payloadRetentionDays
+    int payloadRetentionDays,
+    int payloadUnresolvedMaxDays
 ) { }

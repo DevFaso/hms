@@ -16,7 +16,8 @@ import java.util.UUID;
  * <p>The rows are audit evidence and are never deleted. What goes is the
  * stored message body - {@code payload}, which can hold a whole HL7 message,
  * PID and all - once it is past the retention window. An unresolved dead
- * letter keeps its body whatever its age, because replay needs it; see
+ * letter keeps its body longer, because replay needs it, but only up to a
+ * hard ceiling; see
  * {@code IntegrationMessageEventRepository.findPayloadPurgeCandidateIds} for
  * the exact rule.
  *
@@ -39,11 +40,13 @@ public class IntegrationMessageRetentionService {
      *         the backlog is drained (or another instance took the rest)
      */
     @Transactional
-    public int purgeBatch(LocalDateTime cutoff, LocalDateTime purgedAt, int batchSize) {
-        List<UUID> ids = repository.findPayloadPurgeCandidateIds(cutoff, PageRequest.of(0, batchSize));
+    public int purgeBatch(LocalDateTime cutoff, LocalDateTime unresolvedCutoff,
+                          LocalDateTime purgedAt, int batchSize) {
+        List<UUID> ids = repository.findPayloadPurgeCandidateIds(
+            cutoff, unresolvedCutoff, PageRequest.of(0, batchSize));
         if (ids.isEmpty()) {
             return 0;
         }
-        return repository.purgePayloads(ids, cutoff, purgedAt);
+        return repository.purgePayloads(ids, cutoff, unresolvedCutoff, purgedAt);
     }
 }

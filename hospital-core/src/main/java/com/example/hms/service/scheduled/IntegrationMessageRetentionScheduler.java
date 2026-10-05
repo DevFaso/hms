@@ -19,9 +19,15 @@ import java.time.LocalDateTime;
  * <ul>
  *   <li>{@code enabled} (default {@code true}) - the whole sweep.</li>
  *   <li>{@code cron} (default 03:30 daily).</li>
- *   <li>{@code payload-days} (default 180) - age, or for a dead letter time
- *   since resolution, after which the content is erased. Below 1 the sweep
- *   refuses to run rather than erase everything.</li>
+ *   <li>{@code payload-days} (default 180) - age, or for a resolved dead
+ *   letter time since resolution, after which the content is erased. Below 1
+ *   the sweep refuses to run rather than erase everything.</li>
+ *   <li>{@code unresolved-max-days} (default 365) - the ceiling for a dead
+ *   letter nobody resolves: past it the content goes even though the row is
+ *   still replayable, so nothing is kept for ever. Below
+ *   {@code payload-days} the sweep refuses to run - a ceiling shorter than
+ *   the window would erase replayable dead letters before ordinary
+ *   traffic.</li>
  *   <li>{@code batch-size} (default 500) - rows per transaction.</li>
  *   <li>{@code max-batches} (default 200) - per run, so one run stays well
  *   inside its lock; a larger backlog finishes on the following nights.</li>
@@ -41,6 +47,7 @@ public class IntegrationMessageRetentionScheduler {
     private final Clock clock;
     private final boolean enabled;
     private final int payloadDays;
+    private final int unresolvedMaxDays;
     private final int batchSize;
     private final int maxBatches;
 
@@ -49,6 +56,7 @@ public class IntegrationMessageRetentionScheduler {
         Clock clock,
         @Value("${hms.integration.retention.enabled:true}") boolean enabled,
         @Value("${hms.integration.retention.payload-days:180}") int payloadDays,
+        @Value("${hms.integration.retention.unresolved-max-days:365}") int unresolvedMaxDays,
         @Value("${hms.integration.retention.batch-size:500}") int batchSize,
         @Value("${hms.integration.retention.max-batches:200}") int maxBatches
     ) {
@@ -56,6 +64,7 @@ public class IntegrationMessageRetentionScheduler {
         this.clock = clock;
         this.enabled = enabled;
         this.payloadDays = payloadDays;
+        this.unresolvedMaxDays = unresolvedMaxDays;
         this.batchSize = Math.clamp(batchSize, 1, MAX_BATCH_SIZE);
         this.maxBatches = Math.max(1, maxBatches);
     }
@@ -78,12 +87,18 @@ public class IntegrationMessageRetentionScheduler {
                 payloadDays);
             return 0;
         }
+        if (unresolvedMaxDays < payloadDays) {
+            log.error("[INTEGRATION-RETENTION] Refusing to run - unresolved-max-days ({}) must be at least "
+                + "payload-days ({})", unresolvedMaxDays, payloadDays);
+            return 0;
+        }
         LocalDateTime now = LocalDateTime.now(clock);
         LocalDateTime cutoff = now.minusDays(payloadDays);
+        LocalDateTime unresolvedCutoff = now.minusDays(unresolvedMaxDays);
         int total = 0;
         try {
             for (int batch = 0; batch < maxBatches; batch++) {
-                int purged = retentionService.purgeBatch(cutoff, now, batchSize);
+                int purged = retentionService.purgeBatch(cutoff, unresolvedCutoff, now, batchSize);
                 total += purged;
                 if (purged < batchSize) {
                     break;
@@ -96,8 +111,8 @@ public class IntegrationMessageRetentionScheduler {
                 total, ex.getClass().getSimpleName(), ex);
         }
         if (total > 0) {
-            log.info("[INTEGRATION-RETENTION] Purged message content from {} row(s) older than {} days",
-                total, payloadDays);
+            log.info("[INTEGRATION-RETENTION] Purged message content from {} row(s) "
+                + "(window {} days, unresolved ceiling {} days)", total, payloadDays, unresolvedMaxDays);
         }
         return total;
     }

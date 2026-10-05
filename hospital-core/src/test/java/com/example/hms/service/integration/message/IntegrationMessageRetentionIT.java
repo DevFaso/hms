@@ -46,6 +46,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class IntegrationMessageRetentionIT {
 
     private static final int DAYS = 180;
+    private static final int UNRESOLVED_MAX_DAYS = 365;
 
     @Container
     @SuppressWarnings("resource")
@@ -88,13 +89,18 @@ class IntegrationMessageRetentionIT {
 
     private IntegrationMessageRetentionScheduler sweep(int batchSize) {
         return new IntegrationMessageRetentionScheduler(
-            retentionService, Clock.systemDefaultZone(), true, DAYS, batchSize, 200);
+            retentionService, Clock.systemDefaultZone(), true, DAYS, UNRESOLVED_MAX_DAYS, batchSize, 200);
     }
 
     private IntegrationMessageEvent row(IntegrationMessageStatus status, String correlationId,
                                         String payload, LocalDateTime at) {
+        return row("MLLP:LAB|SITE", status, correlationId, payload, at);
+    }
+
+    private IntegrationMessageEvent row(String integrationId, IntegrationMessageStatus status,
+                                        String correlationId, String payload, LocalDateTime at) {
         return repository.saveAndFlush(IntegrationMessageEvent.builder()
-            .integrationId("MLLP:LAB|SITE")
+            .integrationId(integrationId)
             .direction(IntegrationMessageDirection.INBOUND)
             .messageType("ORU^R01")
             .correlationId(correlationId)
@@ -124,11 +130,11 @@ class IntegrationMessageRetentionIT {
 
         assertThat(purged).isEqualTo(1);
         Map<String, Object> gone = raw(oldReceived.getId());
-        assertThat(gone.get("payload")).isNull();
+        assertThat(gone).containsEntry("payload", null);
         assertThat(gone.get("payload_purged_at")).isNotNull();
         // The row is audit evidence: its metadata is untouched.
-        assertThat(gone.get("status")).isEqualTo("RECEIVED");
-        assertThat(gone.get("message_type")).isEqualTo("ORU^R01");
+        assertThat(gone).containsEntry("status", "RECEIVED");
+        assertThat(gone).containsEntry("message_type", "ORU^R01");
         IntegrationMessageEvent reloaded = repository.findById(oldReceived.getId()).orElseThrow();
         assertThat(reloaded.getReceivedAt()).isEqualToIgnoringNanos(old);
         assertThat(reloaded.getErrorMessage()).isNull();
@@ -139,20 +145,40 @@ class IntegrationMessageRetentionIT {
         assertThat(repository.findById(recentReceived.getId()).orElseThrow().getPayload())
             .isEqualTo("MSH|recent");
         // A row that never had a body is not "purged".
-        assertThat(raw(oldNoBody.getId()).get("payload_purged_at")).isNull();
+        assertThat(raw(oldNoBody.getId())).containsEntry("payload_purged_at", null);
     }
 
     @Test
-    void anUnresolvedDeadLetterKeepsItsContentHoweverOld() {
-        IntegrationMessageEvent unresolved =
-            row(IntegrationMessageStatus.FAILED, "dl-1", "MSH|dead", old.minusYears(2));
-        IntegrationMessageEvent noCorrelation = row(IntegrationMessageStatus.FAILED, null, "MSH|legacy", old);
+    void anUnresolvedDeadLetterKeepsItsContentPastTheWindowButNotPastTheCeiling() {
+        IntegrationMessageEvent at200 = row(IntegrationMessageStatus.FAILED, "dl-200", "MSH|200", now.minusDays(200));
+        IntegrationMessageEvent at370 = row(IntegrationMessageStatus.FAILED, "dl-370", "MSH|370", now.minusDays(370));
+        IntegrationMessageEvent noCorrelation =
+            row(IntegrationMessageStatus.FAILED, null, "MSH|legacy", now.minusDays(370));
 
-        assertThat(sweep(500).purgeExpiredPayloads()).isZero();
+        assertThat(sweep(500).purgeExpiredPayloads()).isEqualTo(2);
 
-        assertThat(repository.findById(unresolved.getId()).orElseThrow().getPayload()).isEqualTo("MSH|dead");
-        assertThat(repository.findById(noCorrelation.getId()).orElseThrow().getPayload())
-            .isEqualTo("MSH|legacy");
+        // Still replayable inside the ceiling...
+        assertThat(repository.findById(at200.getId()).orElseThrow().getPayload()).isEqualTo("MSH|200");
+        // ...but nothing is kept for ever, including a row that can never be resolved.
+        assertThat(raw(at370.getId())).containsEntry("payload", null);
+        assertThat(raw(at370.getId()).get("payload_purged_at")).isNotNull();
+        assertThat(raw(noCorrelation.getId())).containsEntry("payload", null);
+    }
+
+    @Test
+    void aRejectFromAnUnknownSenderCannotBeResolvedSoTheCeilingIsWhatErasesIt() {
+        // The dispatcher records a sender it could not resolve with a random
+        // correlation id, so no later row can ever supersede it. Before the
+        // ceiling, its raw message stayed for ever.
+        IntegrationMessageEvent kept = row("MLLP:?|?", IntegrationMessageStatus.FAILED,
+            UUID.randomUUID().toString(), "MSH|anon-1", now.minusDays(200));
+        IntegrationMessageEvent erased = row("MLLP:?|?", IntegrationMessageStatus.FAILED,
+            UUID.randomUUID().toString(), "MSH|anon-2", now.minusDays(370));
+
+        assertThat(sweep(500).purgeExpiredPayloads()).isEqualTo(1);
+
+        assertThat(repository.findById(kept.getId()).orElseThrow().getPayload()).isEqualTo("MSH|anon-1");
+        assertThat(raw(erased.getId())).containsEntry("payload", null);
     }
 
     @Test
@@ -182,7 +208,7 @@ class IntegrationMessageRetentionIT {
         assertThat(firstStamp).isNotNull();
 
         assertThat(sweep(500).purgeExpiredPayloads()).isZero();
-        assertThat(raw(oldSent.getId()).get("payload_purged_at")).isEqualTo(firstStamp);
+        assertThat(raw(oldSent.getId())).containsEntry("payload_purged_at", firstStamp);
     }
 
     @Test
@@ -205,7 +231,8 @@ class IntegrationMessageRetentionIT {
         sweep(500).purgeExpiredPayloads();
         long before = repository.count();
 
-        assertThatThrownBy(() -> messageService.replay(resolved.getId()))
+        UUID resolvedId = resolved.getId();
+        assertThatThrownBy(() -> messageService.replay(resolvedId))
             .isInstanceOf(ConflictException.class);
         assertThat(repository.count()).isEqualTo(before);
         assertThat(messageService.getById(resolved.getId()).payloadPurgedAt()).isNotNull();

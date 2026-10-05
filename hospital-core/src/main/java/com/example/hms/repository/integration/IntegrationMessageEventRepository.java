@@ -105,27 +105,47 @@ public interface IntegrationMessageEventRepository
 
     /**
      * Ids of rows whose message content is due for erasure, oldest first: a
-     * body still held, never purged, and past {@code cutoff} by the rule for
-     * its status.
+     * body still held, never purged, and past a cutoff by the rule for its
+     * status.
      *
      * <ul>
-     *   <li>Anything but {@code FAILED}: received before the cutoff.</li>
-     *   <li>{@code FAILED}: only once <em>resolved</em>, and resolved before
-     *   the cutoff. Resolved means what {@link #countUnresolvedDeadLetters}
-     *   means - a later row shares its correlation id - so a dead letter the
-     *   badge still counts keeps its body and stays replayable however old it
-     *   is, and the clock starts at the first superseding attempt, not at
-     *   receipt. A {@code FAILED} row with no correlation id is never resolved
-     *   and is never purged.</li>
+     *   <li>Anything but {@code FAILED}: received before {@code cutoff}.</li>
+     *   <li>A <em>resolved</em> {@code FAILED} row: resolved before
+     *   {@code cutoff}. Resolved means what {@link #countUnresolvedDeadLetters}
+     *   means - a later row shares its correlation id - so the clock starts
+     *   at the first superseding attempt, not at receipt.</li>
+     *   <li>An <em>unresolved</em> {@code FAILED} row - one the badge still
+     *   counts and the replay endpoint would still accept - keeps its body
+     *   while it is replayable, but not forever: once {@code received_at} is
+     *   before {@code unresolvedCutoff} it goes too. A dead letter nobody
+     *   resolves (a one-off failure, a reject from a sender that was never
+     *   allowlisted, which gets a random correlation id and so can never be
+     *   superseded, a legacy row with none) would otherwise hold its raw
+     *   message for ever. {@code received_at} rather than first sight,
+     *   because a recurring failure is folded into its row and refreshes it:
+     *   a problem still happening keeps its current evidence.</li>
      * </ul>
      *
-     * <p>The partial index on rows holding a body (V177) serves the scan;
-     * the correlation index (V89) serves the {@code EXISTS}.
+     * <p>The ceiling applies to unresolved rows only: a resolved row keeps
+     * the resolution rule above even when it was received before
+     * {@code unresolvedCutoff}, so a dead letter resolved last week keeps its
+     * body for the full window after that.
+     *
+     * <p>{@code unresolvedCutoff} is never later than {@code cutoff} (the
+     * scheduler refuses a ceiling shorter than the window). The partial index
+     * on rows holding a body (V177) serves the scan; the correlation index
+     * (V89) serves the {@code EXISTS}.
      */
     @Query("SELECT m.id FROM IntegrationMessageEvent m "
         + "WHERE m.payload IS NOT NULL AND m.payloadPurgedAt IS NULL "
         + "AND m.receivedAt < :cutoff "
         + "AND (m.status <> com.example.hms.enums.integration.IntegrationMessageStatus.FAILED "
+        + "  OR (m.receivedAt < :unresolvedCutoff AND NOT EXISTS ("
+        + "    SELECT 1 FROM IntegrationMessageEvent anyLater "
+        + "    WHERE anyLater.correlationId IS NOT NULL "
+        + "    AND anyLater.correlationId = m.correlationId "
+        + "    AND anyLater.lastAttemptedAt > m.lastAttemptedAt"
+        + "  )) "
         + "  OR EXISTS ("
         + "    SELECT 1 FROM IntegrationMessageEvent later "
         + "    WHERE later.correlationId IS NOT NULL "
@@ -135,7 +155,10 @@ public interface IntegrationMessageEventRepository
         + "  )"
         + ") "
         + "ORDER BY m.receivedAt ASC")
-    List<UUID> findPayloadPurgeCandidateIds(@Param("cutoff") LocalDateTime cutoff, Pageable pageable);
+    List<UUID> findPayloadPurgeCandidateIds(
+        @Param("cutoff") LocalDateTime cutoff,
+        @Param("unresolvedCutoff") LocalDateTime unresolvedCutoff,
+        Pageable pageable);
 
     /**
      * Erase the content of the given rows and stamp when. Re-checks the whole
@@ -152,6 +175,12 @@ public interface IntegrationMessageEventRepository
         + "AND m.payload IS NOT NULL AND m.payloadPurgedAt IS NULL "
         + "AND m.receivedAt < :cutoff "
         + "AND (m.status <> com.example.hms.enums.integration.IntegrationMessageStatus.FAILED "
+        + "  OR (m.receivedAt < :unresolvedCutoff AND NOT EXISTS ("
+        + "    SELECT 1 FROM IntegrationMessageEvent anyLater "
+        + "    WHERE anyLater.correlationId IS NOT NULL "
+        + "    AND anyLater.correlationId = m.correlationId "
+        + "    AND anyLater.lastAttemptedAt > m.lastAttemptedAt"
+        + "  )) "
         + "  OR EXISTS ("
         + "    SELECT 1 FROM IntegrationMessageEvent later "
         + "    WHERE later.correlationId IS NOT NULL "
@@ -163,5 +192,6 @@ public interface IntegrationMessageEventRepository
     int purgePayloads(
         @Param("ids") Collection<UUID> ids,
         @Param("cutoff") LocalDateTime cutoff,
+        @Param("unresolvedCutoff") LocalDateTime unresolvedCutoff,
         @Param("purgedAt") LocalDateTime purgedAt);
 }

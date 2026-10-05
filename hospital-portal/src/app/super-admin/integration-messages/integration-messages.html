@@ -5,7 +5,10 @@
       <p class="page-subtitle">{{ 'INTEGRATION_MESSAGES.SUBTITLE' | translate }}</p>
       @if (retentionDays(); as days) {
         <p class="retention-note" data-test="retention-note">
-          {{ 'INTEGRATION_MESSAGES.RETENTION_NOTE' | translate: { days: days } }}
+          {{
+            'INTEGRATION_MESSAGES.RETENTION_NOTE'
+              | translate: { days: days, maxDays: unresolvedMaxDays() }
+          }}
         </p>
       }
     </div>
@@ -157,7 +160,7 @@
                       | translate: { date: (row.payloadPurgedAt | date: 'medium') }
                   "
                 >
-                  {{ 'INTEGRATION_MESSAGES.CONTENT_PURGED' | translate: { days: retentionDays() } }}
+                  {{ 'INTEGRATION_MESSAGES.CONTENT_PURGED' | translate }}
                 </small>
               }
               @if (row.status === 'FAILED') {

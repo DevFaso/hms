@@ -106,7 +106,8 @@ public class IntegrationMessageEvent {
      *
      * <p>Retention: {@code IntegrationMessageRetentionService} sets this to
      * null once the content is past {@code hms.integration.retention.payload-days}
-     * and stamps {@link #payloadPurgedAt}; the row itself is kept.
+     * (an unresolved dead letter: past {@code unresolved-max-days}) and stamps
+     * {@link #payloadPurgedAt}; the row itself is kept.
      */
     @Column(name = "payload", columnDefinition = "TEXT")
     @Convert(converter = EncryptedStringConverter.class)

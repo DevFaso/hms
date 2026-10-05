@@ -31,37 +31,57 @@ class IntegrationMessageRetentionSchedulerTest {
     private IntegrationMessageRetentionService service;
 
     private IntegrationMessageRetentionScheduler scheduler(boolean enabled, int days, int batch, int maxBatches) {
-        return new IntegrationMessageRetentionScheduler(service, CLOCK, enabled, days, batch, maxBatches);
+        return new IntegrationMessageRetentionScheduler(service, CLOCK, enabled, days, 365, batch, maxBatches);
     }
 
     @Test
-    void theCutoffIsTheWindowBeforeNowAndTheStampIsNow() {
-        when(service.purgeBatch(any(), any(), anyInt())).thenReturn(3);
+    void theCutoffsAreTheWindowAndTheCeilingBeforeNowAndTheStampIsNow() {
+        when(service.purgeBatch(any(), any(), any(), anyInt())).thenReturn(3);
 
         Integer purged = scheduler(true, 180, 500, 200).purgeExpiredPayloads();
 
         assertThat(purged).isEqualTo(3);
-        verify(service).purgeBatch(NOW.minusDays(180), NOW, 500);
+        verify(service).purgeBatch(NOW.minusDays(180), NOW.minusDays(365), NOW, 500);
+    }
+
+    @Test
+    void anUnresolvedCeilingShorterThanTheWindowIsRefused() {
+        // A ceiling below the window would erase replayable dead letters
+        // before ordinary traffic.
+        Integer purged = new IntegrationMessageRetentionScheduler(service, CLOCK, true, 180, 179, 500, 200)
+            .purgeExpiredPayloads();
+
+        assertThat(purged).isZero();
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void aCeilingEqualToTheWindowIsAccepted() {
+        when(service.purgeBatch(any(), any(), any(), anyInt())).thenReturn(0);
+
+        new IntegrationMessageRetentionScheduler(service, CLOCK, true, 180, 180, 500, 200).purgeExpiredPayloads();
+
+        verify(service).purgeBatch(NOW.minusDays(180), NOW.minusDays(180), NOW, 500);
     }
 
     @Test
     void drainsFullBatchesUntilAShortOne() {
-        when(service.purgeBatch(any(), any(), eq(2))).thenReturn(2, 2, 1);
+        when(service.purgeBatch(any(), any(), any(), eq(2))).thenReturn(2, 2, 1);
 
         Integer purged = scheduler(true, 180, 2, 200).purgeExpiredPayloads();
 
         assertThat(purged).isEqualTo(5);
-        verify(service, times(3)).purgeBatch(any(), any(), eq(2));
+        verify(service, times(3)).purgeBatch(any(), any(), any(), eq(2));
     }
 
     @Test
     void stopsAtMaxBatchesSoOneRunStaysInsideItsLock() {
-        when(service.purgeBatch(any(), any(), eq(2))).thenReturn(2);
+        when(service.purgeBatch(any(), any(), any(), eq(2))).thenReturn(2);
 
         Integer purged = scheduler(true, 180, 2, 4).purgeExpiredPayloads();
 
         assertThat(purged).isEqualTo(8);
-        verify(service, times(4)).purgeBatch(any(), any(), eq(2));
+        verify(service, times(4)).purgeBatch(any(), any(), any(), eq(2));
     }
 
     @Test
@@ -79,7 +99,7 @@ class IntegrationMessageRetentionSchedulerTest {
 
     @Test
     void aFailingBatchIsSwallowedAndCommittedBatchesAreCounted() {
-        when(service.purgeBatch(any(), any(), eq(2)))
+        when(service.purgeBatch(any(), any(), any(), eq(2)))
             .thenReturn(2)
             .thenThrow(new IllegalStateException("db gone"));
 
@@ -90,12 +110,12 @@ class IntegrationMessageRetentionSchedulerTest {
 
     @Test
     void theBatchSizeIsClamped() {
-        when(service.purgeBatch(any(), any(), anyInt())).thenReturn(0);
+        when(service.purgeBatch(any(), any(), any(), anyInt())).thenReturn(0);
 
         scheduler(true, 180, 0, 200).purgeExpiredPayloads();
         scheduler(true, 180, 1_000_000, 200).purgeExpiredPayloads();
 
-        verify(service).purgeBatch(any(), any(), eq(1));
-        verify(service).purgeBatch(any(), any(), eq(IntegrationMessageRetentionScheduler.MAX_BATCH_SIZE));
+        verify(service).purgeBatch(any(), any(), any(), eq(1));
+        verify(service).purgeBatch(any(), any(), any(), eq(IntegrationMessageRetentionScheduler.MAX_BATCH_SIZE));
     }
 }

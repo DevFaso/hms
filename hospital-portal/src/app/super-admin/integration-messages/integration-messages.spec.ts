@@ -39,6 +39,7 @@ const fakePage = (
   totalPages: rows.length > 0 ? 1 : 0,
   deadLetterCount,
   payloadRetentionDays: 180,
+  payloadUnresolvedMaxDays: 365,
 });
 
 describe('IntegrationMessagesComponent (MVP-c3)', () => {
