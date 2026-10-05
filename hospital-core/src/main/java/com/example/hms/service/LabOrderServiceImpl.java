@@ -405,8 +405,17 @@ public class LabOrderServiceImpl implements LabOrderService {
      *       assignment as it is keeps it, whoever is editing, as long as it is
      *       still at the order's hospital - the rule {@link #keptOrderingStaff}
      *       applies to the clinician.</li>
-     *   <li>The named assignment is used when it is the ordering clinician's,
-     *       active, at the order's hospital, in a lab-ordering role.</li>
+     *   <li>On an edit that keeps the ordering clinician, naming another of
+     *       that clinician's own assignments (or none) does not move the order:
+     *       it keeps its current assignment while that is still a valid
+     *       ordering context (active, here, in a lab-ordering role), and only
+     *       otherwise is the assignment re-picked as below. The portal's edit
+     *       form sends the editor's first active assignment, not the order's,
+     *       so honouring it would rewrite, say, an order placed as SURGEON to
+     *       DOCTOR on any edit.</li>
+     *   <li>On a new order, the named assignment is used when it is the
+     *       ordering clinician's, active, at the order's hospital, in a
+     *       lab-ordering role.</li>
      *   <li>The ordering clinician's own assignment that is inactive, at
      *       another hospital or in another role is replaced by the one they
      *       hold here. The portal sends the first active assignment of the
@@ -440,6 +449,9 @@ public class LabOrderServiceImpl implements LabOrderService {
         UUID namedUserId = named != null && named.getUser() != null ? named.getUser().getId() : null;
         // A null id derives; an id that names nothing is refused below, like another person's.
         if (requestedAssignmentId == null || orderingUserId.equals(namedUserId)) {
+            if (current != null && isOrderingContextAt(current, hospital)) {
+                return current;
+            }
             if (named != null && isOrderingContextAt(named, hospital)) {
                 return named;
             }

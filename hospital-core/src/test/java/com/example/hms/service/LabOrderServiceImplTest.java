@@ -823,6 +823,38 @@ class LabOrderServiceImplTest {
         verify(labOrderRepository, never()).save(any());
     }
 
+    private LabOrder editOwnOrderNaming(UUID requestedAssignmentId) {
+        UUID labOrderId = UUID.randomUUID();
+        when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(existingLabOrder(labOrderId)));
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        labOrderService.updateLabOrder(labOrderId,
+            baseRequestBuilder().id(labOrderId).assignmentId(requestedAssignmentId).build(), Locale.ENGLISH);
+        ArgumentCaptor<LabOrder> captor = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository).save(captor.capture());
+        return captor.getValue();
+    }
+
+    @Test
+    void updateLabOrder_theCliniciansOtherOwnAssignmentDoesNotMoveTheirOrder() {
+        // The portal's edit form sends the editor's first active assignment,
+        // not the order's: an order placed under this assignment stays there.
+        mockCommonLookups();
+        UserRoleHospitalAssignment otherOwnHere = assignmentOf(staff.getUser(), hospital, true);
+        when(assignmentRepository.findById(otherOwnHere.getId())).thenReturn(Optional.of(otherOwnHere));
+
+        assertThat(editOwnOrderNaming(otherOwnHere.getId()).getAssignment()).isSameAs(assignment);
+    }
+
+    @Test
+    void updateLabOrder_anOrderWhoseAssignmentWasRevokedTakesTheCliniciansValidOne() {
+        mockCommonLookups();
+        assignment.setActive(false);
+        UserRoleHospitalAssignment otherOwnHere = assignmentOf(staff.getUser(), hospital, true);
+        when(assignmentRepository.findById(otherOwnHere.getId())).thenReturn(Optional.of(otherOwnHere));
+
+        assertThat(editOwnOrderNaming(otherOwnHere.getId()).getAssignment()).isSameAs(otherOwnHere);
+    }
+
     private void mockCommonLookups() {
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         // Lenient: an edit that keeps the ordering clinician never looks the row up.
