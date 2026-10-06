@@ -1,6 +1,8 @@
 package com.example.hms.service.impl;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.PharmacyType;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RoutingDecisionStatus;
@@ -16,6 +18,7 @@ import com.example.hms.model.User;
 import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
 import com.example.hms.model.prescription.PrescriptionTransmission;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.prescription.PrescriptionSmsDispatchRequestDTO;
 import com.example.hms.payload.dto.prescription.PrescriptionSmsDispatchResponseDTO;
 import com.example.hms.repository.PrescriptionRepository;
@@ -23,6 +26,7 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.pharmacy.PharmacyRepository;
 import com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository;
 import com.example.hms.repository.prescription.PrescriptionTransmissionRepository;
+import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.SmsService;
 import com.example.hms.service.pharmacy.PrescriberPharmacyNotifier;
 import com.example.hms.service.pharmacy.partner.PartnerNotificationChannel;
@@ -51,6 +55,7 @@ import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -73,6 +78,7 @@ class PrescriptionSmsDispatchServiceImplTest {
     @Mock private PartnerNotificationChannel partnerChannel;
     @Mock private ControllerAuthUtils authUtils;
     @Mock private PrescriberPharmacyNotifier prescriberNotifier;
+    @Mock private AuditEventLogService auditEventLogService;
     @Mock private Authentication auth;
 
     @InjectMocks private PrescriptionSmsDispatchServiceImpl service;
@@ -603,7 +609,7 @@ class PrescriptionSmsDispatchServiceImplTest {
 
         ArgumentCaptor<PrescriptionRoutingDecision> decisions =
                 ArgumentCaptor.forClass(PrescriptionRoutingDecision.class);
-        verify(routingDecisionRepository, org.mockito.Mockito.times(2)).save(decisions.capture());
+        verify(routingDecisionRepository, times(2)).save(decisions.capture());
         assertThat(decisions.getValue().getStatus())
                 .as("the pharmacy never got the offer, so its reference must not be answerable")
                 .isEqualTo(RoutingDecisionStatus.CANCELLED);
@@ -613,6 +619,48 @@ class PrescriptionSmsDispatchServiceImplTest {
         assertThat(rx.getPharmacyId()).as("the order is with no pharmacy").isNull();
         verify(prescriptionRepository).save(rx);
         verify(prescriberNotifier).notifyPrescriber(rx, PrescriptionStatus.TRANSMISSION_FAILED);
+    }
+
+    @Test
+    @DisplayName("the committed failure is audited with its actor (a 400 escapes the write-audit interceptor), ids only")
+    void dispatch_auditsTheRecordedFailure() {
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        stubHappyPathCollaborators();
+        doThrow(new IllegalStateException("twilio offline: +22670111222 unreachable"))
+                .when(smsService).send(anyString(), anyString());
+        PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
+
+        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
+                .isInstanceOf(PrescriptionDispatchFailedException.class);
+
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        AuditEventRequestDTO event = audit.getValue();
+        assertThat(event.getEventType()).isEqualTo(AuditEventType.PRESCRIPTION_SENT_TO_PARTNER);
+        assertThat(event.getStatus()).isEqualTo(AuditStatus.FAILURE);
+        assertThat(event.getUserId()).isEqualTo(userId);
+        assertThat(event.getResourceId()).isEqualTo(prescriptionId.toString());
+        assertThat(event.getEntityType()).isEqualTo("PRESCRIPTION");
+        assertThat(event.getEventDescription())
+                .contains(prescriptionId.toString(), pharmacyId.toString(), "TRANSMISSION_FAILED",
+                        "IllegalStateException")
+                .doesNotContain("+22670111222", "twilio", "Metformin", "Alice", "Doe", "Pharmacie Centrale");
+    }
+
+    @Test
+    @DisplayName("an audit-service failure never turns the recorded failure into something else")
+    void dispatch_auditFailureIsBestEffort() {
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        stubHappyPathCollaborators();
+        doThrow(new RuntimeException("gateway down")).when(smsService).send(anyString(), anyString());
+        doThrow(new RuntimeException("audit store down")).when(auditEventLogService).logEvent(any());
+        PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
+
+        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
+                .isInstanceOf(PrescriptionDispatchFailedException.class);
+        assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.TRANSMISSION_FAILED);
     }
 
     @Test
@@ -725,5 +773,6 @@ class PrescriptionSmsDispatchServiceImplTest {
         verify(transmissionRepository, never()).save(any());
         verify(routingDecisionRepository, never()).save(any());
         verify(prescriberNotifier, never()).notifyPrescriber(any(), any());
+        verify(auditEventLogService, never()).logEvent(any());
     }
 }

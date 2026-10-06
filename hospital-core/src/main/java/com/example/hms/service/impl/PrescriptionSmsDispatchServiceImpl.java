@@ -1,6 +1,8 @@
 package com.example.hms.service.impl;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.PharmacyType;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RoutingDecisionStatus;
@@ -13,6 +15,7 @@ import com.example.hms.model.User;
 import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
 import com.example.hms.model.prescription.PrescriptionTransmission;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.prescription.PrescriptionSmsDispatchRequestDTO;
 import com.example.hms.payload.dto.prescription.PrescriptionSmsDispatchResponseDTO;
 import com.example.hms.repository.PrescriptionRepository;
@@ -20,6 +23,7 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.pharmacy.PharmacyRepository;
 import com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository;
 import com.example.hms.repository.prescription.PrescriptionTransmissionRepository;
+import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.PrescriptionSmsDispatchService;
 import com.example.hms.service.SmsService;
 import com.example.hms.service.pharmacy.PrescriberPharmacyNotifier;
@@ -110,6 +114,7 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
     private final PartnerNotificationChannel partnerChannel;
     private final ControllerAuthUtils authUtils;
     private final PrescriberPharmacyNotifier prescriberNotifier;
+    private final AuditEventLogService auditEventLogService;
 
     /**
      * {@code noRollbackFor}: a provider failure throws
@@ -420,12 +425,47 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
                 prescriberNotifier.notifyPrescriber(rx, PrescriptionStatus.TRANSMISSION_FAILED);
             }
         }
+        auditFailure(rx.getId(), pharmacy.getId(), saved != null ? saved.getId() : null,
+                attempt.decidedBy() != null ? attempt.decidedBy().getId() : null,
+                rx.getStatus(), ex.getClass().getSimpleName());
         // Neither the number nor the provider's message: either can carry the
         // destination, and this line is all an operator gets.
         log.warn("Prescription SMS dispatch failed for prescription {} to pharmacy {} ({}); "
                         + "recorded as transmission {}, prescription now {}",
                 rx.getId(), pharmacy.getId(), ex.getClass().getSimpleName(),
                 saved != null ? saved.getId() : null, rx.getStatus());
+    }
+
+    /**
+     * The failure changed state that commits while the caller gets a 400, and
+     * the write-audit interceptor only records 2xx responses: without this the
+     * status change would have no actor on the audit trail. Emitted after the
+     * commit (so a record that did not stick is never audited) through the
+     * REQUIRES_NEW audit service, from ids captured here: the callback has no
+     * persistence context. The description carries ids, the resulting status
+     * and the exception type only, never the number or the provider's text.
+     * Best-effort, like every other audit write.
+     */
+    private void auditFailure(UUID prescriptionId, UUID pharmacyId, UUID transmissionId, UUID actorId,
+                              PrescriptionStatus resultingStatus, String exceptionType) {
+        String description = "SMS dispatch of prescription " + prescriptionId + " to pharmacy " + pharmacyId
+                + " failed (" + exceptionType + "); transmission " + transmissionId
+                + " recorded FAILED; prescription now " + resultingStatus;
+        TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                        .userId(actorId)
+                        .eventType(AuditEventType.PRESCRIPTION_SENT_TO_PARTNER)
+                        .eventDescription(description)
+                        .status(AuditStatus.FAILURE)
+                        .resourceId(prescriptionId != null ? prescriptionId.toString() : null)
+                        .entityType("PRESCRIPTION")
+                        .build());
+            } catch (RuntimeException auditEx) {
+                log.warn("Could not audit the failed SMS dispatch of prescription {}: {}",
+                        prescriptionId, auditEx.getClass().getSimpleName());
+            }
+        });
     }
 
     /** The prescriber saw the error on their own screen; a notification would only repeat it. */

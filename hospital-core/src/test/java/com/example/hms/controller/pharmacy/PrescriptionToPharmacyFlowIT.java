@@ -85,6 +85,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -519,6 +520,18 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
         assertThat(routingDecisionRepository.findByPrescriptionId(rxId))
                 .extracting(PrescriptionRoutingDecision::getStatus)
                 .containsExactly(RoutingDecisionStatus.CANCELLED);
+        // The 400 escapes the write-audit interceptor; the service audits the
+        // committed change itself, with its actor and without the number.
+        assertThat(auditEventLogRepository.findAll())
+                .filteredOn(row -> rxId.toString().equals(row.getResourceId())
+                        && row.getEventType() == AuditEventType.PRESCRIPTION_SENT_TO_PARTNER)
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.getStatus()).isEqualTo(com.example.hms.enums.AuditStatus.FAILURE);
+                    assertThat(row.getUser()).isNotNull();
+                    assertThat(row.getUser().getId()).isEqualTo(doctorA.getId());
+                    assertThat(row.getEventDescription()).doesNotContain(COMMUNITY_A_PHONE).doesNotContain("gateway");
+                });
 
         // Visible where the pharmacist works, flagged for attention.
         mockMvc.perform(apiGet(WORK_QUEUE).with(pharmacist(pharmacistA, hospitalA)))
@@ -528,7 +541,7 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
                         hasItem("TRANSMISSION_FAILED")));
 
         // The provider is back: sending again is the retry.
-        org.mockito.Mockito.reset(smsService);
+        reset(smsService);
         dispatchSms(rxId, communityA);
         assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
         assertThat(transmissionsOf(rxId))
