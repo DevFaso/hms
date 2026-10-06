@@ -42,6 +42,10 @@ public class PrescriberPharmacyNotificationWriter {
 
     /** {@code security.notifications.message} is VARCHAR(255); a longer body fails the INSERT. */
     static final int MAX_MESSAGE_LENGTH = 255;
+    /** The timeout has no status of its own (the row is PARTNER_REJECTED), so its key is named here. */
+    static final String PARTNER_TIMED_OUT_KEY = KEY_PREFIX + "PARTNER_TIMED_OUT";
+    /** A partner's dispense of an order the prescriber had withdrawn; the row stays withdrawn. */
+    static final String PARTNER_DISPENSED_WITHDRAWN_KEY = KEY_PREFIX + "PARTNER_DISPENSED_WITHDRAWN";
     private static final String PATIENT_FALLBACK_KEY = "prescription.pharmacy.patientFallback";
 
     private final PrescriptionRepository prescriptionRepository;
@@ -55,6 +59,34 @@ public class PrescriberPharmacyNotificationWriter {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean write(UUID prescriptionId, PrescriptionStatus event) {
+        return writeMessage(prescriptionId, KEY_PREFIX + event.name(), event);
+    }
+
+    /**
+     * The partner never answered and the offer was withdrawn after the
+     * timeout. The row is PARTNER_REJECTED like a refusal, and names the
+     * partner the same way, but the message says what happened.
+     *
+     * @return as {@link #write}
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean writePartnerTimedOut(UUID prescriptionId) {
+        return writeMessage(prescriptionId, PARTNER_TIMED_OUT_KEY, PrescriptionStatus.PARTNER_REJECTED);
+    }
+
+    /**
+     * The partner confirmed a dispense of an order the prescriber had already
+     * withdrawn. The prescription keeps its withdrawn status; the message
+     * names the partner and asks the prescriber to check with the patient.
+     *
+     * @return as {@link #write}
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean writePartnerDispensedAfterWithdrawal(UUID prescriptionId) {
+        return writeMessage(prescriptionId, PARTNER_DISPENSED_WITHDRAWN_KEY, PrescriptionStatus.PARTNER_DISPENSED);
+    }
+
+    private boolean writeMessage(UUID prescriptionId, String key, PrescriptionStatus event) {
         Prescription prescription = prescriptionRepository.findById(prescriptionId).orElse(null);
         if (prescription == null) {
             log.warn("Prescriber notification skipped: prescription {} not found", prescriptionId);
@@ -67,7 +99,7 @@ public class PrescriberPharmacyNotificationWriter {
             return false;
         }
         notificationService.createNotification(
-                capped(message(prescription, event)), username, NOTIFICATION_TYPE);
+                capped(message(prescription, key, event)), username, NOTIFICATION_TYPE);
         return true;
     }
 
@@ -86,11 +118,11 @@ public class PrescriberPharmacyNotificationWriter {
      * where the prescriber reads it; the notification row is plaintext and
      * 255 characters wide, so it must not carry the question (or the patient).
      */
-    private String message(Prescription prescription, PrescriptionStatus event) {
+    private String message(Prescription prescription, String key, PrescriptionStatus event) {
         String medication = prescription.getMedicationName() != null
                 ? prescription.getMedicationName() : "";
         if (event == PrescriptionStatus.PENDING_CLARIFICATION) {
-            return messageSource.getMessage(KEY_PREFIX + event.name(),
+            return messageSource.getMessage(key,
                     new Object[]{medication}, NotificationLocales.STAFF);
         }
         String patient = patientName(prescription.getPatient());
@@ -98,7 +130,7 @@ public class PrescriberPharmacyNotificationWriter {
             case PARTNER_ACCEPTED, PARTNER_REJECTED, PARTNER_DISPENSED -> partnerName(prescription);
             default -> "";
         };
-        return messageSource.getMessage(KEY_PREFIX + event.name(),
+        return messageSource.getMessage(key,
                 new Object[]{medication, patient, third}, NotificationLocales.STAFF);
     }
 

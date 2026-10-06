@@ -283,6 +283,19 @@ describe('PrescriptionsComponent — signing', () => {
     expect(component.prescriptionStatuses.map((s) => s.value)).not.toContain('SIGNED');
   });
 
+  it('offers only the withdrawn statuses when editing a withdrawn prescription', () => {
+    // Withdrawal is final on the server: a reopen to DRAFT would be refused.
+    for (const status of ['CANCELLED', 'DISCONTINUED']) {
+      component.openEdit(rx('w', status));
+      expect(component.statusOptions().map((s) => s.value)).toEqual(['CANCELLED', 'DISCONTINUED']);
+    }
+    component.openEdit(rx('d', 'DRAFT'));
+    expect(component.statusOptions().map((s) => s.value)).toContain('DRAFT');
+    component.openEdit(rx('c', 'CANCELLED'));
+    component.openCreate();
+    expect(component.statusOptions().length).toBe(component.prescriptionStatuses.length);
+  });
+
   it('offers signing only for a prescription still awaiting a signature', () => {
     expect(component.canSign(rx('a', 'DRAFT'))).toBeTrue();
     expect(component.canSign(rx('b', 'PENDING_SIGNATURE'))).toBeTrue();

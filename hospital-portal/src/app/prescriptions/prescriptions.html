@@ -837,7 +837,7 @@
           <div class="field">
             <label for="rx-status">{{ 'COMMON.STATUS' | translate }}</label>
             <select id="rx-status" [(ngModel)]="form.status">
-              @for (s of prescriptionStatuses; track s.value) {
+              @for (s of statusOptions(); track s.value) {
                 <option [value]="s.value">{{ s.labelKey | translate }}</option>
               }
             </select>

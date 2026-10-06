@@ -117,4 +117,11 @@ class PartnerSmsTemplatesTest {
         assertThat(templates.medicationFallback()).isEqualTo("médicament");
         assertThat(templates.pharmacyFallback(Locale.FRENCH)).isEqualTo("la pharmacie partenaire");
     }
+
+    @Test
+    void withdrawnTellsThePharmacyNotToDispenseWithoutClaimingATimeoutOrAnotherPharmacy() {
+        String msg = templates.withdrawn("ABC12");
+        assertThat(msg).contains("ABC12").contains("prescripteur").contains("Ne pas délivrer")
+                .doesNotContain("délai").doesNotContain("autre pharmacie");
+    }
 }

@@ -12,6 +12,9 @@ import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository;
 import com.example.hms.service.AuditEventLogService;
+import com.example.hms.service.pharmacy.PrescriberPharmacyNotificationWriter;
+import com.example.hms.service.pharmacy.PrescriberPharmacyNotifier;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,6 +22,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -26,9 +31,12 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -44,6 +52,7 @@ class PartnerExchangeServiceTest {
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private PartnerNotificationChannel channel;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private PrescriberPharmacyNotifier prescriberNotifier;
 
     private final PartnerSmsReplyParser parser = new PartnerSmsReplyParser();
 
@@ -59,7 +68,8 @@ class PartnerExchangeServiceTest {
     void setUp() {
         service = new PartnerExchangeService(
                 routingDecisionRepository, prescriptionRepository,
-                channel, parser, auditEventLogService, "226");
+                channel, parser, auditEventLogService, prescriberNotifier,
+                new WithdrawnOrderPartnerHandler(routingDecisionRepository, channel, auditEventLogService, prescriberNotifier), "226");
 
         decisionId = UUID.randomUUID();
         token = decisionId.toString().substring(0, 8).toUpperCase();
@@ -394,5 +404,305 @@ class PartnerExchangeServiceTest {
         assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.REJECTED);
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_REJECTED);
         verify(channel).sendAutoRejected(decision, partner);
+    }
+
+    // ---------- the prescriber is told the partner's answer ----------
+
+    @AfterEach
+    void clearSynchronization() {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    private void attachPartnerToPrescription() {
+        prescription.setPharmacyId(partner.getId());
+        prescription.setPharmacyName(partner.getName());
+        prescription.setPharmacyContact(PARTNER_PHONE);
+        prescription.setPharmacyAddress("Avenue Kwame Nkrumah");
+    }
+
+    private void assertPharmacyCleared() {
+        assertThat(prescription.getPharmacyId()).isNull();
+        assertThat(prescription.getPharmacyName()).isNull();
+        assertThat(prescription.getPharmacyContact()).isNull();
+        assertThat(prescription.getPharmacyAddress()).isNull();
+    }
+
+    private void stubStaleDecision() {
+        decision.setDecidedAt(LocalDateTime.now().minusHours(5));
+        when(routingDecisionRepository.findByRoutingTypeAndStatusAndDecidedAtBefore(
+                eq(RoutingType.PARTNER), eq(RoutingDecisionStatus.PENDING), any()))
+                .thenReturn(List.of(decision));
+    }
+
+    private PartnerExchangeService serviceWithRealNotifier(PrescriberPharmacyNotificationWriter writer) {
+        return new PartnerExchangeService(
+                routingDecisionRepository, prescriptionRepository, channel, parser, auditEventLogService,
+                new PrescriberPharmacyNotifier(writer),
+                new WithdrawnOrderPartnerHandler(routingDecisionRepository, channel, auditEventLogService,
+                        prescriberNotifier), "226");
+    }
+
+    @Test
+    @DisplayName("an SMS accept tells the prescriber the partner accepted, and keeps the partner as the pharmacy")
+    void smsAcceptNotifiesPrescriber() {
+        attachPartnerToPrescription();
+        stubPrefixLookup(decision);
+        stubSaves();
+
+        service.handleInboundReply(PARTNER_PHONE, "1 " + token);
+
+        verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.PARTNER_ACCEPTED);
+        assertThat(prescription.getPharmacyId()).isEqualTo(partner.getId());
+        assertThat(prescription.getPharmacyName()).isEqualTo(partner.getName());
+    }
+
+    @Test
+    @DisplayName("an SMS refusal tells the prescriber and detaches the partner, as the staff refusal does")
+    void smsRejectNotifiesPrescriberAndClearsPharmacy() {
+        attachPartnerToPrescription();
+        stubPrefixLookup(decision);
+        stubSaves();
+
+        service.handleInboundReply(PARTNER_PHONE, "2 " + token);
+
+        verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.PARTNER_REJECTED);
+        assertPharmacyCleared();
+        // who refused stays on record in the decision
+        assertThat(decision.getTargetPharmacy()).isSameAs(partner);
+    }
+
+    @Test
+    @DisplayName("an SMS dispense confirmation tells the prescriber the partner dispensed")
+    void smsDispenseNotifiesPrescriber() {
+        decision.setStatus(RoutingDecisionStatus.ACCEPTED);
+        stubPrefixLookup(decision);
+        stubSaves();
+
+        service.handleInboundReply(PARTNER_PHONE, "3 " + token);
+
+        verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.PARTNER_DISPENSED);
+    }
+
+    @Test
+    @DisplayName("an ignored reply tells the prescriber nothing")
+    void ignoredReplyNotifiesNobody() {
+        stubPrefixLookup(decision);
+
+        service.handleInboundReply(PARTNER_PHONE, "3 " + token);
+
+        verifyNoInteractions(prescriberNotifier);
+    }
+
+    @Test
+    @DisplayName("a timed-out offer tells the prescriber it timed out (not that it was refused) and detaches the partner")
+    void timeoutNotifiesPrescriberAndClearsPharmacy() {
+        attachPartnerToPrescription();
+        stubStaleDecision();
+        stubSaves();
+
+        service.sweepTimeouts();
+
+        verify(prescriberNotifier).notifyPrescriberOfPartnerTimeout(prescription);
+        verify(prescriberNotifier, never()).notifyPrescriber(any(), any());
+        assertPharmacyCleared();
+    }
+
+    @Test
+    @DisplayName("a reminder is not an outcome: the prescriber is not told")
+    void reminderNotifiesNobody() {
+        decision.setDecidedAt(LocalDateTime.now().minusHours(2).minusMinutes(30));
+        when(routingDecisionRepository.findByRoutingTypeAndStatusAndDecidedAtBefore(
+                eq(RoutingType.PARTNER), eq(RoutingDecisionStatus.PENDING), any()))
+                .thenReturn(List.of(decision));
+
+        service.sweepTimeouts();
+
+        verifyNoInteractions(prescriberNotifier);
+    }
+
+    @Test
+    @DisplayName("a notifier failure neither fails the webhook reply nor undoes the partner's answer")
+    void notifierFailureDoesNotFailTheReply() {
+        stubPrefixLookup(decision);
+        stubSaves();
+        doThrow(new IllegalStateException("notifier down"))
+                .when(prescriberNotifier).notifyPrescriber(any(), any());
+
+        Optional<PrescriptionRoutingDecision> updated =
+                service.handleInboundReply(PARTNER_PHONE, "1 " + token);
+
+        assertThat(updated).isPresent();
+        assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.ACCEPTED);
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_ACCEPTED);
+        verify(routingDecisionRepository).save(decision);
+    }
+
+    @Test
+    @DisplayName("a notifier failure neither fails the timeout sweep nor undoes the auto-reject")
+    void notifierFailureDoesNotFailTheSweep() {
+        stubStaleDecision();
+        stubSaves();
+        doThrow(new IllegalStateException("notifier down"))
+                .when(prescriberNotifier).notifyPrescriberOfPartnerTimeout(any());
+
+        PartnerExchangeService.TimeoutSweepResult[] result = new PartnerExchangeService.TimeoutSweepResult[1];
+        assertThatCode(() -> result[0] = service.sweepTimeouts()).doesNotThrowAnyException();
+
+        assertThat(result[0].autoRejected()).isEqualTo(1);
+        assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.REJECTED);
+        verify(channel).sendAutoRejected(decision, partner);
+    }
+
+    @Test
+    @DisplayName("with the real notifier, the prescriber's row is written only after the reply commits")
+    void notificationWaitsForTheCommit() {
+        PrescriberPharmacyNotificationWriter writer = mock(PrescriberPharmacyNotificationWriter.class);
+        PartnerExchangeService real = serviceWithRealNotifier(writer);
+        stubPrefixLookup(decision);
+        stubSaves();
+        TransactionSynchronizationManager.initSynchronization();
+
+        real.handleInboundReply(PARTNER_PHONE, "2 " + token);
+
+        verifyNoInteractions(writer);
+        for (TransactionSynchronization s : TransactionSynchronizationManager.getSynchronizations()) {
+            s.afterCommit();
+        }
+        verify(writer).write(prescription.getId(), PrescriptionStatus.PARTNER_REJECTED);
+    }
+
+    @Test
+    @DisplayName("with the real notifier, the timeout row is written only after the sweep commits")
+    void timeoutNotificationWaitsForTheCommit() {
+        PrescriberPharmacyNotificationWriter writer = mock(PrescriberPharmacyNotificationWriter.class);
+        PartnerExchangeService real = serviceWithRealNotifier(writer);
+        stubStaleDecision();
+        stubSaves();
+        TransactionSynchronizationManager.initSynchronization();
+
+        real.sweepTimeouts();
+
+        verifyNoInteractions(writer);
+        for (TransactionSynchronization s : TransactionSynchronizationManager.getSynchronizations()) {
+            s.afterCommit();
+        }
+        verify(writer).writePartnerTimedOut(prescription.getId());
+    }
+
+    @Test
+    @DisplayName("with the real notifier, a rolled-back reply tells the prescriber nothing")
+    void rolledBackReplyNotifiesNobody() {
+        PrescriberPharmacyNotificationWriter writer = mock(PrescriberPharmacyNotificationWriter.class);
+        PartnerExchangeService real = serviceWithRealNotifier(writer);
+        stubPrefixLookup(decision);
+        stubSaves();
+        TransactionSynchronizationManager.initSynchronization();
+
+        real.handleInboundReply(PARTNER_PHONE, "1 " + token);
+        for (TransactionSynchronization s : TransactionSynchronizationManager.getSynchronizations()) {
+            s.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK);
+        }
+
+        verifyNoInteractions(writer);
+    }
+
+    // ---------- an order the prescriber withdrew stays withdrawn ----------
+
+    @Test
+    @DisplayName("cancel then timeout: the order stays CANCELLED with its pharmacy, the offer closes, the prescriber hears nothing")
+    void withdrawnThenTimeout() {
+        prescription.setStatus(PrescriptionStatus.CANCELLED);
+        attachPartnerToPrescription();
+        stubStaleDecision();
+        when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        PartnerExchangeService.TimeoutSweepResult r = service.sweepTimeouts();
+
+        assertThat(r.autoRejected()).isEqualTo(1);
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.CANCELLED);
+        assertThat(prescription.getPharmacyId()).isEqualTo(partner.getId());
+        assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
+        verify(prescriptionRepository, never()).save(any());
+        verifyNoInteractions(prescriberNotifier);
+    }
+
+    @Test
+    @DisplayName("a late accept on a DISCONTINUED order changes nothing on it and tells neither patient nor prescriber")
+    void lateAcceptOnWithdrawnOrder() {
+        prescription.setStatus(PrescriptionStatus.DISCONTINUED);
+        stubPrefixLookup(decision);
+        when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        Optional<PrescriptionRoutingDecision> result = service.handleInboundReply(PARTNER_PHONE, "1 " + token);
+
+        assertThat(result).isPresent();
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISCONTINUED);
+        assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
+        verify(prescriptionRepository, never()).save(any());
+        verify(channel, never()).notifyPatientAccepted(any(), any());
+        verifyNoInteractions(prescriberNotifier);
+    }
+
+    @Test
+    @DisplayName("a late refusal on a CANCELLED order changes nothing on it — status and pharmacy stay")
+    void lateRejectOnWithdrawnOrder() {
+        prescription.setStatus(PrescriptionStatus.CANCELLED);
+        attachPartnerToPrescription();
+        stubPrefixLookup(decision);
+        when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.handleInboundReply(PARTNER_PHONE, "2 " + token);
+
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.CANCELLED);
+        assertThat(prescription.getPharmacyName()).isEqualTo(partner.getName());
+        assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
+        verify(prescriptionRepository, never()).save(any());
+        verifyNoInteractions(prescriberNotifier);
+    }
+
+    @Test
+    @DisplayName("a late dispense confirmation on a CANCELLED order is recorded, raised for staff and told to the prescriber")
+    void lateDispenseOnWithdrawnOrderIsSurfaced() {
+        prescription.setStatus(PrescriptionStatus.CANCELLED);
+        decision.setStatus(RoutingDecisionStatus.ACCEPTED);
+        stubPrefixLookup(decision);
+        when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        Optional<PrescriptionRoutingDecision> result = service.handleInboundReply(PARTNER_PHONE, "3 " + token);
+
+        assertThat(result).isPresent();
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.CANCELLED);
+        assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.COMPLETED);
+        verify(prescriptionRepository, never()).save(any());
+        verify(channel, never()).notifyPatientDispensed(any(), any());
+        verify(prescriberNotifier).notifyPrescriberOfDispenseAfterWithdrawal(prescription);
+        verify(prescriberNotifier, never()).notifyPrescriber(any(), any());
+        ArgumentCaptor<AuditEventRequestDTO> captor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(captor.capture());
+        AuditEventRequestDTO event = captor.getValue();
+        assertThat(event.getEventType()).isEqualTo(AuditEventType.SECURITY_ALERT_TRIGGERED);
+        assertThat(event.getStatus()).isEqualTo(AuditStatus.FAILURE);
+        assertThat(event.getResourceId()).isEqualTo(decisionId.toString());
+        assertThat(event.getEventDescription())
+                .contains(prescription.getId().toString())
+                .contains("CANCELLED");
+    }
+
+    @Test
+    @DisplayName("withdrawal is final: a late dispense on a DISCONTINUED order is still recorded and raised, never applied")
+    void lateDispenseOnDiscontinuedOrderIsSurfaced() {
+        prescription.setStatus(PrescriptionStatus.DISCONTINUED);
+        decision.setStatus(RoutingDecisionStatus.ACCEPTED);
+        stubPrefixLookup(decision);
+        when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.handleInboundReply(PARTNER_PHONE, "3 " + token);
+
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISCONTINUED);
+        assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.COMPLETED);
+        verify(channel, never()).notifyPatientDispensed(any(), any());
+        verify(prescriberNotifier).notifyPrescriberOfDispenseAfterWithdrawal(prescription);
     }
 }

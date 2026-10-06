@@ -39,6 +39,15 @@ public enum PrescriptionStatus {
     PRINTED_FOR_PATIENT;
 
     /**
+     * The prescriber took the order back. Nothing downstream — a partner's
+     * late SMS reply, the partner timeout sweep — may move a withdrawn order
+     * to another status or ask the prescriber to act on it.
+     */
+    public boolean isWithdrawn() {
+        return this == CANCELLED || this == DISCONTINUED;
+    }
+
+    /**
      * Whether this prescription is still a live authorization a refill can be
      * released against.
      *

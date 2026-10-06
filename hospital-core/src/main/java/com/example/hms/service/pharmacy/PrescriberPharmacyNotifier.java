@@ -54,9 +54,43 @@ public class PrescriberPharmacyNotifier {
             return;
         }
         UUID prescriptionId = prescription.getId();
+        afterCommit(prescriptionId, event.name(), () -> writer.write(prescriptionId, event));
+    }
+
+    /**
+     * Queue a notification that the partner pharmacy {@code prescription} was
+     * offered to never answered, and the offer was withdrawn after the
+     * timeout. Its own message rather than {@link PrescriptionStatus#PARTNER_REJECTED}'s:
+     * that one says the partner declined, and a pharmacy that never replied
+     * declined nothing. Same delivery rules as {@link #notifyPrescriber}.
+     */
+    public void notifyPrescriberOfPartnerTimeout(Prescription prescription) {
+        if (prescription == null || prescription.getId() == null) {
+            return;
+        }
+        UUID prescriptionId = prescription.getId();
+        afterCommit(prescriptionId, "PARTNER_TIMED_OUT", () -> writer.writePartnerTimedOut(prescriptionId));
+    }
+
+    /**
+     * Queue a notification that the partner pharmacy reports it dispensed
+     * {@code prescription} after the prescriber withdrew it: the patient may
+     * be holding a medication the prescriber stopped. Same delivery rules as
+     * {@link #notifyPrescriber}.
+     */
+    public void notifyPrescriberOfDispenseAfterWithdrawal(Prescription prescription) {
+        if (prescription == null || prescription.getId() == null) {
+            return;
+        }
+        UUID prescriptionId = prescription.getId();
+        afterCommit(prescriptionId, "PARTNER_DISPENSED_WITHDRAWN",
+                () -> writer.writePartnerDispensedAfterWithdrawal(prescriptionId));
+    }
+
+    private static void afterCommit(UUID prescriptionId, String event, Runnable write) {
         TransactionCallbacks.afterCommit(() -> {
             try {
-                writer.write(prescriptionId, event);
+                write.run();
             } catch (RuntimeException ex) {
                 // An after-commit failure would surface to the caller of
                 // commit() as if the business write had failed; it did not.
