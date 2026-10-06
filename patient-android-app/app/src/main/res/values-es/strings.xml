@@ -640,7 +640,6 @@
     <string name="rx_status_dispensed">Dispensada</string>
     <string name="rx_status_partially_filled">Dispensada en parte</string>
     <string name="rx_status_pending_stock">Sin existencias</string>
-    <string name="rx_status_requires_external_fill">Farmacia externa</string>
     <string name="rx_status_sent_to_partner">Enviada a una farmacia asociada</string>
     <string name="rx_status_partner_accepted">Aceptada por la farmacia</string>
     <string name="rx_status_partner_rejected">Rechazada por la farmacia</string>

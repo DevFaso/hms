@@ -6,6 +6,7 @@ import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RoutingDecisionStatus;
 import com.example.hms.enums.RoutingType;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.PrescriptionDispatchFailedException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.User;
@@ -21,6 +22,7 @@ import com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository
 import com.example.hms.repository.prescription.PrescriptionTransmissionRepository;
 import com.example.hms.service.PrescriptionSmsDispatchService;
 import com.example.hms.service.SmsService;
+import com.example.hms.service.pharmacy.PrescriberPharmacyNotifier;
 import com.example.hms.service.pharmacy.partner.PartnerNotificationChannel;
 import com.example.hms.utility.TransactionCallbacks;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +47,12 @@ import java.util.UUID;
  * offer template the stock-out routing uses — reference token included — so
  * the pharmacy's reply ("1 / 2 / 3 &lt;ref&gt;") lands in the partner webhook and
  * the reminder / auto-reject sweep applies unchanged.
+ *
+ * <p>A provider failure is recorded, not rolled back: the FAILED transmission
+ * row, the cancelled offer and, when no other pharmacy still holds the order,
+ * the prescription's TRANSMISSION_FAILED status all commit, and only then
+ * does the caller get the error. TRANSMISSION_FAILED is on the pharmacy work
+ * queue and dispatchable again, so the failure has a visible way out.
  */
 @Slf4j
 @Service
@@ -61,7 +69,8 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
      * States a prescription may be handed to an outside pharmacy from: signed
      * and unclaimed (SIGNED / TRANSMITTED), refused by the previous pharmacy or
      * waiting on stock (PARTNER_REJECTED / PENDING_STOCK), or already offered to
-     * one (SENT_TO_PARTNER).
+     * one (SENT_TO_PARTNER), or whose last SMS never arrived
+     * (TRANSMISSION_FAILED): sending again is the retry.
      *
      * <p>SENT_TO_PARTNER is here because a silent pharmacy is the ordinary case
      * a clinician has to escape: without it the only way out was the four-hour
@@ -73,8 +82,18 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
             PrescriptionStatus.TRANSMITTED,
             PrescriptionStatus.PARTNER_REJECTED,
             PrescriptionStatus.PENDING_STOCK,
-            PrescriptionStatus.SENT_TO_PARTNER
+            PrescriptionStatus.SENT_TO_PARTNER,
+            PrescriptionStatus.TRANSMISSION_FAILED
     );
+
+    /**
+     * What the caller is told when the provider refuses the SMS. A bundle key,
+     * never the provider's own text: that can quote the destination number.
+     */
+    static final String DISPATCH_FAILED_KEY = "prescription.dispatch.smsFailed";
+
+    /** The stored reason on a FAILED transmission row; the exception's type is appended, never its message. */
+    static final String FAILED_STATUS_REASON = "SMS provider refused the message";
 
     /** A decision the pharmacy could still answer (mirrors PartnerExchangeService.OPEN_STATUSES). */
     private static final Set<RoutingDecisionStatus> OPEN_DECISION_STATUSES = Set.of(
@@ -90,9 +109,16 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
     private final SmsService smsService;
     private final PartnerNotificationChannel partnerChannel;
     private final ControllerAuthUtils authUtils;
+    private final PrescriberPharmacyNotifier prescriberNotifier;
 
+    /**
+     * {@code noRollbackFor}: a provider failure throws
+     * {@link PrescriptionDispatchFailedException} only after recording itself,
+     * and that record must commit. Every other exception still rolls back,
+     * including the validation refusals thrown before anything is written.
+     */
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = PrescriptionDispatchFailedException.class)
     public PrescriptionSmsDispatchResponseDTO dispatch(Authentication auth,
                                                         UUID prescriptionId,
                                                         PrescriptionSmsDispatchRequestDTO request) {
@@ -113,7 +139,10 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
         requireDispatchable(rx);
         String phone = requirePharmacyPhone(pharmacy);
         User decidedBy = resolveCurrentUser(auth);
-        supersedeOpenDecisions(rx, pharmacy);
+        // Read before the new offer is saved (so it is not among them), but
+        // only cancelled once the SMS has gone: if it fails, these pharmacies
+        // still hold the order and nothing may take it from them.
+        List<PrescriptionRoutingDecision> openOffers = openPartnerDecisions(rx);
 
         // The decision is persisted first: its id is the reference token the
         // pharmacy quotes back, so the body cannot be built before it exists.
@@ -130,8 +159,10 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
                         .build());
 
         String body = buildSmsBody(decision, rx, request.getNote());
-        PrescriptionTransmission transmission = sendAndPersist(rx, pharmacy, phone, body);
+        PrescriptionTransmission transmission = sendAndPersist(rx, pharmacy, phone, body,
+                new DispatchAttempt(decision, openOffers, decidedBy));
 
+        supersedeOpenDecisions(rx, openOffers, pharmacy);
         applyDispatchToPrescription(rx, pharmacy, phone, transmission);
         log.info("Dispatched prescription {} via SMS to pharmacy {} ({}); routing decision {}",
                 prescriptionId, pharmacy.getId(), phone, decision.getId());
@@ -229,12 +260,8 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
      * a prescription and would otherwise keep waiting on a reply that can no
      * longer be applied.
      */
-    private void supersedeOpenDecisions(Prescription rx, Pharmacy newTarget) {
-        List<PrescriptionRoutingDecision> open = routingDecisionRepository.findByPrescriptionId(rx.getId())
-                .stream()
-                .filter(d -> d.getRoutingType() == RoutingType.PARTNER)
-                .filter(d -> OPEN_DECISION_STATUSES.contains(d.getStatus()))
-                .toList();
+    private void supersedeOpenDecisions(Prescription rx, List<PrescriptionRoutingDecision> open,
+                                        Pharmacy newTarget) {
         for (PrescriptionRoutingDecision d : open) {
             if (isSameTarget(d, newTarget)) {
                 // Re-sending to the same pharmacy replaces its offer; it has
@@ -251,6 +278,15 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
             log.info("Routing decision {} superseded by re-dispatch of prescription {}", d.getId(), rx.getId());
             notifySuperseded(d);
         }
+    }
+
+    /** The PARTNER offers a pharmacy could still answer; back orders are not offers. */
+    private List<PrescriptionRoutingDecision> openPartnerDecisions(Prescription rx) {
+        return routingDecisionRepository.findByPrescriptionId(rx.getId())
+                .stream()
+                .filter(d -> d.getRoutingType() == RoutingType.PARTNER)
+                .filter(d -> OPEN_DECISION_STATUSES.contains(d.getStatus()))
+                .toList();
     }
 
     private static boolean isSameTarget(PrescriptionRoutingDecision decision, Pharmacy newTarget) {
@@ -318,8 +354,15 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
         return reason.length() > 1024 ? reason.substring(0, 1024) : reason;
     }
 
+    /** The offer just made, the offers it would replace, and who made it. */
+    private record DispatchAttempt(PrescriptionRoutingDecision decision,
+                                   List<PrescriptionRoutingDecision> openOffers,
+                                   User decidedBy) {
+    }
+
     private PrescriptionTransmission sendAndPersist(Prescription rx, Pharmacy pharmacy,
-                                                    String phone, String body) {
+                                                    String phone, String body,
+                                                    DispatchAttempt attempt) {
         PrescriptionTransmission transmission = PrescriptionTransmission.builder()
                 .prescription(rx)
                 .channel(CHANNEL_SMS)
@@ -333,14 +376,63 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
         try {
             smsService.send(phone, body);
         } catch (Exception ex) {
-            transmission.setStatus(STATUS_FAILED);
-            transmission.setStatusReason(ex.getMessage());
-            transmissionRepository.save(transmission);
-            log.warn("Prescription SMS dispatch failed for {} → {}: {}",
-                    rx.getId(), phone, ex.getMessage(), ex);
-            throw new BusinessException("SMS provider rejected the message: " + ex.getMessage());
+            recordFailure(rx, pharmacy, transmission, attempt, ex);
+            throw new PrescriptionDispatchFailedException(DISPATCH_FAILED_KEY);
         }
         return transmissionRepository.save(transmission);
+    }
+
+    /**
+     * What a refused SMS leaves behind, all of it committed (see
+     * {@link #dispatch}'s {@code noRollbackFor}):
+     * <ul>
+     *   <li>a FAILED transmission row whose reason names the exception's type
+     *       only, because the provider's message can quote the number;</li>
+     *   <li>the new offer CANCELLED: the pharmacy never received it, so its
+     *       reference must not be answerable;</li>
+     *   <li>the prescription in TRANSMISSION_FAILED, on the work queue and
+     *       dispatchable again, with the prescriber told, unless another
+     *       pharmacy still holds an open offer. That offer was never
+     *       superseded, so the order is still with that pharmacy and stays
+     *       SENT_TO_PARTNER; moving it would make an order a pharmacy can
+     *       still accept fillable at the counter as well.</li>
+     * </ul>
+     * A withdrawn order never gets here: CANCELLED and DISCONTINUED are not
+     * dispatchable, and the row is locked for the whole call.
+     */
+    private void recordFailure(Prescription rx, Pharmacy pharmacy, PrescriptionTransmission transmission,
+                               DispatchAttempt attempt, Exception ex) {
+        transmission.setStatus(STATUS_FAILED);
+        transmission.setStatusReason(FAILED_STATUS_REASON + " (" + ex.getClass().getSimpleName() + ")");
+        PrescriptionTransmission saved = transmissionRepository.save(transmission);
+
+        PrescriptionRoutingDecision decision = attempt.decision();
+        decision.setStatus(RoutingDecisionStatus.CANCELLED);
+        decision.setReason(appendReason(decision.getReason(), "Not delivered: the SMS to the pharmacy failed"));
+        routingDecisionRepository.save(decision);
+
+        if (attempt.openOffers().isEmpty()) {
+            rx.setStatus(PrescriptionStatus.TRANSMISSION_FAILED);
+            rx.setDispatchChannel(CHANNEL_SMS);
+            rx.setDispatchStatus(STATUS_FAILED);
+            prescriptionRepository.save(rx);
+            if (!isPrescriber(attempt.decidedBy(), rx)) {
+                prescriberNotifier.notifyPrescriber(rx, PrescriptionStatus.TRANSMISSION_FAILED);
+            }
+        }
+        // Neither the number nor the provider's message: either can carry the
+        // destination, and this line is all an operator gets.
+        log.warn("Prescription SMS dispatch failed for prescription {} to pharmacy {} ({}); "
+                        + "recorded as transmission {}, prescription now {}",
+                rx.getId(), pharmacy.getId(), ex.getClass().getSimpleName(),
+                saved != null ? saved.getId() : null, rx.getStatus());
+    }
+
+    /** The prescriber saw the error on their own screen; a notification would only repeat it. */
+    private static boolean isPrescriber(User caller, Prescription rx) {
+        User prescriber = rx.getStaff() != null ? rx.getStaff().getUser() : null;
+        return caller != null && prescriber != null && caller.getId() != null
+                && caller.getId().equals(prescriber.getId());
     }
 
     private void applyDispatchToPrescription(Prescription rx, Pharmacy pharmacy, String phone,

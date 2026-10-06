@@ -4822,7 +4822,6 @@
         "REFILL_REQUESTED": "Renovación solicitada",
         "REJECTED": "Rechazado",
         "RELEASED": "Publicado",
-        "REQUIRES_EXTERNAL_FILL": "Requiere surtido externo",
         "RESCHEDULED": "Reprogramado",
         "RESULTED": "Con resultados",
         "RESULTS_AVAILABLE": "Resultados disponibles",
@@ -4936,7 +4935,6 @@
         "PENDING_SIGNATURE": "Pendiente de firma",
         "PENDING_STOCK": "En espera de stock",
         "PRINTED_FOR_PATIENT": "Impresa para el paciente",
-        "REQUIRES_EXTERNAL_FILL": "Requiere surtido externo",
         "SENT_TO_PARTNER": "Enviada al socio",
         "SIGNED": "Firmada",
         "TRANSMISSION_FAILED": "Error de transmisión",
@@ -5783,10 +5781,9 @@
     },
     "ATTENTION": {
       "PENDING_CLARIFICATION": "El farmacéutico espera la respuesta del prescriptor",
-      "TRANSMISSION_FAILED": "Fallo en la transmisión: la receta no llegó a ninguna farmacia y ningún circuito mueve este estado",
+      "TRANSMISSION_FAILED": "El envío del SMS a la farmacia falló: la receta no llegó a ninguna farmacia; vuelva a enviarla o rediríjala",
       "PARTNER_REJECTED": "La farmacia asociada la rechazó: debe derivarse a otra",
       "PENDING_STOCK": "Sin existencias: en pedido",
-      "REQUIRES_EXTERNAL_FILL": "A la espera de una farmacia externa: ningún circuito mueve este estado",
       "UNRECOGNISED_STATUS": "Estado no reconocido: consulte con la farmacia"
     },
     "PHARMACY": {
@@ -7442,6 +7439,7 @@
     "ATTENTION": {
       "PENDING_STOCK": "Sin existencias — en pedido pendiente",
       "PARTNER_REJECTED": "La farmacia asociada la rechazó — dispense aquí o derive a otra",
+      "TRANSMISSION_FAILED": "El envío por SMS falló: ninguna farmacia la tiene; dispénsela aquí, vuelva a enviarla o rediríjala",
       "PARTNER_ACCEPTED": "En una farmacia asociada — no se puede dispensar aquí mientras la tenga",
       "BACK_ORDER_OUTSTANDING": "Dispensada parcialmente — el pedido al proveedor sigue abierto",
       "CLARIFICATION_RESOLVED": "El prescriptor ha respondido — lea la respuesta primero",
