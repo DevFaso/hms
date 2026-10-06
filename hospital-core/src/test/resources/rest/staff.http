@@ -1,6 +1,6 @@
 POST http://localhost:8081/api/staff
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ0MzgwMTgsImV4cCI6MTc1NDUyNDQxOH0.TeA65dErd93u8DhHSl_O9P28l7H4O_BSbEH7_uxLvz-3qEFfGcVzGJSXXzL59CEwupT0ZWk_SzgVs3upGwPAEA
+Authorization: Bearer {{token}}
 
 {
   "userEmail": "lab.scientist@example.com",
@@ -18,7 +18,7 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiU
 ###
 POST http://localhost:8081/api/staff
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ1MzM4MDMsImV4cCI6MTc1NDYyMDIwM30.zxulzQBrtwBRFRX2sBLLz_2-JM4QllmvA4oMsXT61TARoIP7JZxbj5EOSLSFM_tXJQGxwx_aqrRrgoTlqsXl_w
+Authorization: Bearer {{token}}
 
 {
   "userEmail": "surgeon@example.com",
@@ -39,7 +39,7 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiU
 ###
 POST http://localhost:8081/api/staff
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ0MzgwMTgsImV4cCI6MTc1NDUyNDQxOH0.TeA65dErd93u8DhHSl_O9P28l7H4O_BSbEH7_uxLvz-3qEFfGcVzGJSXXzL59CEwupT0ZWk_SzgVs3upGwPAEA
+Authorization: Bearer {{token}}
 
 {
   "userEmail": "lab.scientist@example.com",
@@ -57,7 +57,7 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiU
 ###
 POST http://localhost:8081/api/staff
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ0MzgwMTgsImV4cCI6MTc1NDUyNDQxOH0.TeA65dErd93u8DhHSl_O9P28l7H4O_BSbEH7_uxLvz-3qEFfGcVzGJSXXzL59CEwupT0ZWk_SzgVs3upGwPAEA
+Authorization: Bearer {{token}}
 
 {
   "userEmail": "lab.technician@example.com",
@@ -75,7 +75,7 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiU
 ###
 POST http://localhost:8081/api/staff
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ0MzgwMTgsImV4cCI6MTc1NDUyNDQxOH0.TeA65dErd93u8DhHSl_O9P28l7H4O_BSbEH7_uxLvz-3qEFfGcVzGJSXXzL59CEwupT0ZWk_SzgVs3upGwPAEA
+Authorization: Bearer {{token}}
 
 {
   "userEmail": "lab.manager@example.com",
@@ -93,7 +93,7 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiU
 ###
 POST http://localhost:8081/api/staff
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ0MzgwMTgsImV4cCI6MTc1NDUyNDQxOH0.TeA65dErd93u8DhHSl_O9P28l7H4O_BSbEH7_uxLvz-3qEFfGcVzGJSXXzL59CEwupT0ZWk_SzgVs3upGwPAEA
+Authorization: Bearer {{token}}
 
 {
   "userEmail": "lab.assistant@example.com",
@@ -111,7 +111,7 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiU
 ###
 POST http://localhost:8081/api/staff
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ0MzgwMTgsImV4cCI6MTc1NDUyNDQxOH0.TeA65dErd93u8DhHSl_O9P28l7H4O_BSbEH7_uxLvz-3qEFfGcVzGJSXXzL59CEwupT0ZWk_SzgVs3upGwPAEA
+Authorization: Bearer {{token}}
 
 {
   "userEmail": "lab.director@example.com",

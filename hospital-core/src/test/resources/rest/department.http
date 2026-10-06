@@ -1,6 +1,6 @@
 ### Create Yalgado department as hadmin3
 POST http://localhost:8081/api/departments
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1Njg3MDUyLCJleHAiOjE3NTU3NzM0NTJ9.jig2TSgFIBmRnddMsoZXn17qo0_Z6cvW_quREyNj2n0
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept-Language: en
 
@@ -23,15 +23,15 @@ Accept-Language: en
 
 ### Option A: filter query
 GET http://localhost:8081/api/departments?hospitalName=Yalgado%20Hospital&name=General%20Medicine
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTQ2MTI1NDMsImV4cCI6MTc1NDY5ODk0M30.AmDaQrS2LzIhS7OAFgDHYqRjaBry_CYYLtPoE5ThKSNwl1-U1Fr5B7U1Yvd9fGlHQ8v-TsdWEe8wxlxEgBYQsw
+Authorization: Bearer {{token}}
 Accept-Language: en
 ###
 GET http://localhost:8081/api/departments/by-hospital/Sandof%20Hospital
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1Njg3MDUyLCJleHAiOjE3NTU3NzM0NTJ9.jig2TSgFIBmRnddMsoZXn17qo0_Z6cvW_quREyNj2n0
+Authorization: Bearer {{token}}
 
 ### link staff to department
 PUT http://localhost:8081/api/staff/bad141f5-8796-4196-9019-b242d7cbddea/department/c04a13d5-feb9-486e-9597-b8fbaa58e531
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1Njg3MDUyLCJleHAiOjE3NTU3NzM0NTJ9.jig2TSgFIBmRnddMsoZXn17qo0_Z6cvW_quREyNj2n0
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept-Language: en
 

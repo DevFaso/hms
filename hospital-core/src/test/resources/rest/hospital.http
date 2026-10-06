@@ -1,11 +1,11 @@
 ### Get all hospitals
 GET http://localhost:8081/api/hospitals
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTU0MDI4NzMsImV4cCI6MTc1NTQ4OTI3M30.ttPIzce3NJjOJ-IhUNV1sGrodopGp5glcR3SLmAjecw
+Authorization: Bearer {{token}}
 
 ### Create a new hospital
 POST http://localhost:8081/api/hospitals
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTU0MDI4NzMsImV4cCI6MTc1NTQ4OTI3M30.ttPIzce3NJjOJ-IhUNV1sGrodopGp5glcR3SLmAjecw
+Authorization: Bearer {{token}}
 Accept-Language: en
 
 {
@@ -26,7 +26,7 @@ Accept-Language: en
 ### Create a new hospital
 POST http://localhost:8081/api/hospitals
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTU0MDI4NzMsImV4cCI6MTc1NTQ4OTI3M30.ttPIzce3NJjOJ-IhUNV1sGrodopGp5glcR3SLmAjecw
+Authorization: Bearer {{token}}
 
 {
   "name": "Yalgado Ouedraogo Medical Center",
@@ -47,7 +47,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiO
 ### Create a new hospital
 POST http://localhost:8081/api/hospitals
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTU0MDI4NzMsImV4cCI6MTc1NTQ4OTI3M30.ttPIzce3NJjOJ-IhUNV1sGrodopGp5glcR3SLmAjecw
+Authorization: Bearer {{token}}
 
 {
   "name": "Bobo Dioulasso Regional Hospital",
@@ -66,7 +66,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiO
 ### Create a new hospital
 POST http://localhost:8081/api/hospitals
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTU0MDI4NzMsImV4cCI6MTc1NTQ4OTI3M30.ttPIzce3NJjOJ-IhUNV1sGrodopGp5glcR3SLmAjecw
+Authorization: Bearer {{token}}
 
 {
   "name": "Koudougou University Hospital",
@@ -85,7 +85,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiO
 ### Create a new hospital
 POST http://localhost:8081/api/hospitals
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTU0MDI4NzMsImV4cCI6MTc1NTQ4OTI3M30.ttPIzce3NJjOJ-IhUNV1sGrodopGp5glcR3SLmAjecw
+Authorization: Bearer {{token}}
 
 {
   "name": "Ziniaré Medical Center",
@@ -104,7 +104,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiO
 ### Create a new hospital
 POST http://localhost:8081/api/hospitals
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTU0MDI4NzMsImV4cCI6MTc1NTQ4OTI3M30.ttPIzce3NJjOJ-IhUNV1sGrodopGp5glcR3SLmAjecw
+Authorization: Bearer {{token}}
 
 {
   "name": "Gaoua General Hospital",
@@ -123,7 +123,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiO
 ### Create a new hospital
 POST http://localhost:8081/api/hospitals
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTU0MDI4NzMsImV4cCI6MTc1NTQ4OTI3M30.ttPIzce3NJjOJ-IhUNV1sGrodopGp5glcR3SLmAjecw
+Authorization: Bearer {{token}}
 
 {
   "name": "General Hospital",
@@ -141,7 +141,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiO
 ### Create a new hospital
 POST http://localhost:8081/api/hospitals
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTU0MDI4NzMsImV4cCI6MTc1NTQ4OTI3M30.ttPIzce3NJjOJ-IhUNV1sGrodopGp5glcR3SLmAjecw
+Authorization: Bearer {{token}}
 
 {
   "name": "Sunrise Medical Center",
@@ -159,7 +159,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiO
 ### Create a new hospital
 POST http://localhost:8081/api/hospitals
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTU0MDI4NzMsImV4cCI6MTc1NTQ4OTI3M30.ttPIzce3NJjOJ-IhUNV1sGrodopGp5glcR3SLmAjecw
+Authorization: Bearer {{token}}
 
 {
   "name": "Bay Area Health",
@@ -177,12 +177,12 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiO
 ### Get hospital by ID
 GET http://localhost:8081/api/hospitals/{{hospitalId}}
 Accept: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTIyODYwMTksImV4cCI6MTc1MjM3MjQxOX0.stDqFUFwusfxIfwJaxVt3Xv1hfHkcVM4mARWC9dg7obeUGp8ztxErgJmBH-TUHTJMbY5bUy2ssYNVlDwAYp8zA
+Authorization: Bearer {{token}}
 
 ### Update hospital
 PUT http://localhost:8081/api/hospitals/{{hospitalId}}
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTEzMzU0MjIsImV4cCI6MTc1MTQyMTgyMn0.7kq9agtFld8pB9S58JLxIAo4PMUv0xUDlWr8PYY5NKomhhr-fA5DWYMI0PnZjrizHD0zQTcB3fa5QlFy_YW3Og
+Authorization: Bearer {{token}}
 Accept-Language: en
 
 {
@@ -195,7 +195,7 @@ Accept-Language: en
 
 ### Delete hospital
 DELETE http://localhost:8081/api/hospitals/{{hospitalId}}
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTEzMzU0MjIsImV4cCI6MTc1MTQyMTgyMn0.7kq9agtFld8pB9S58JLxIAo4PMUv0xUDlWr8PYY5NKomhhr-fA5DWYMI0PnZjrizHD0zQTcB3fa5QlFy_YW3Og
+Authorization: Bearer {{token}}
 Accept-Language: en
 
 ###

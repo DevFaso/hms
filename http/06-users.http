@@ -2,7 +2,7 @@
 ### 06 - User Management
 ### ========================================
 @baseUrl = http://localhost:8081/api
-@accessToken = "eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpc0hvc3BpdGFsQWRtaW4iOmZhbHNlLCJpc1N1cGVyQWRtaW4iOnRydWUsImRlcGFydG1lbnRJZHMiOltdLCJpYXQiOjE3NzExMzYwMTUsImV4cCI6MTc3MTIyMjQxNX0.gW3R6rwnAU_dm6HKsw8ol6SimepZ3yDBxdzcIIthjUeisn7XYlKO_6m18Tt7qmI5"
+@accessToken = "{{accessToken}}"
 @userId = 39d89406-f028-433f-8d77-375f5c0b57eb
 @hospitalId = 9cdcecc4-c415-4ed4-ad8a-b50f2f80d728
 

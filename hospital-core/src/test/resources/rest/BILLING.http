@@ -1,5 +1,5 @@
 @baseUrl = http://localhost:8081/api
-@token = eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDg2MzgyNywiZXhwIjoxNzU0OTUwMjI3fQ.8nENkIWnZocWtw4wwQLQ5F2-iLzd37L18ptzaz8Qg5U
+@token = {{token}}
 @lang = en
 
 ### =========================
