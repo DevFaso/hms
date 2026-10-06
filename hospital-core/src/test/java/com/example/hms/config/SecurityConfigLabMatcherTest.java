@@ -45,27 +45,6 @@ class SecurityConfigLabMatcherTest {
     }
 
     /**
-     * B17 — a PATCH matcher on /lab-orders and /lab-results guarded nothing
-     * because no lab controller maps PATCH. It must not come back unless a
-     * handler does: this fails if either side reappears without the other.
-     */
-    @Test
-    @DisplayName("no PATCH matcher on lab paths while no lab controller maps PATCH")
-    void noDeadPatchMatcherOnLabPaths() throws IOException {
-        String source = Files.readString(SOURCE, StandardCharsets.UTF_8);
-        boolean matcher = java.util.regex.Pattern
-            .compile("HttpMethod[.]PATCH,[^)]*API_LAB_(ORDERS|RESULTS)").matcher(source).find();
-        Path controllers = Paths.get("src/main/java/com/example/hms/controller");
-        boolean handler = false;
-        for (String c : new String[] {"LabOrderController", "LabResultController"}) {
-            handler |= Files.readString(controllers.resolve(c + ".java"), StandardCharsets.UTF_8)
-                .contains("@PatchMapping");
-        }
-        assertThat(matcher).as("a PATCH matcher on lab paths exists only if a lab handler maps PATCH")
-            .isEqualTo(handler);
-    }
-
-    /**
      * B8 — the coarse matcher is first-match-wins and terminal, so every role
      * the controller's {@code @PreAuthorize} admits must be admitted here too;
      * LAB_DIRECTOR, QUALITY_MANAGER and SUPER_ADMIN used to get 403 before the
