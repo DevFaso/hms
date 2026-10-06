@@ -250,6 +250,13 @@
   color: #92400e;
 }
 
+/* Not graded: no configured range is in the result's unit. */
+.severity-unit-mismatch {
+  background: #fef3c7;
+  color: #92400e;
+  text-transform: none;
+}
+
 .severity-normal {
   background: #d1fae5;
   color: #065f46;

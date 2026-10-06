@@ -186,7 +186,7 @@ public class Hl7v2MessageBuilder {
         String setId    = f.length > 1  ? f[1].trim()          : "";
         String testCode = f.length > 3  ? firstComponent(f[3]) : "";
         String value    = f.length > 5  ? f[5]                 : "";
-        String unit     = f.length > 6  ? f[6]                 : "";
+        String unit     = f.length > 6  ? unitIdentifier(f[6]) : "";
         String refRange = f.length > 7  ? f[7]                 : "";
         String abnFlag  = f.length > 8  ? f[8]                 : "N";
         String status   = f.length > 11 ? f[11].trim()         : "";
@@ -425,6 +425,64 @@ public class Hl7v2MessageBuilder {
 
     private String pid(String patientId, String patientName) {
         return "PID|1||" + patientId + "|||" + patientName + SEG_TERM;
+    }
+
+    /**
+     * OBX-6 as a unit: its identifier (first component) with HL7 escapes
+     * decoded. Analysers send it coded, {@code mmol/L^millimole per liter^UCUM},
+     * and a unit that itself contains a caret travels escaped,
+     * {@code 10\S\9/L^...^UCUM}; split first, then decode, so the caret
+     * inside the unit survives and {@code 10^9/L} stays distinct from
+     * {@code 10^12/L}.
+     */
+    static String unitIdentifier(String field) {
+        if (field == null) {
+            return "";
+        }
+        int idx = field.indexOf('^');
+        return decodeEscapes(idx >= 0 ? field.substring(0, idx) : field);
+    }
+
+    /**
+     * Decodes the HL7 v2 delimiter escapes for the default encoding
+     * characters this parser assumes: F (field), S (component),
+     * R (repetition), T (subcomponent) and E (the escape character itself),
+     * each written between two escape characters. Any other sequence is kept
+     * as sent.
+     */
+    static String decodeEscapes(String text) {
+        if (text == null || text.indexOf(ESC) < 0) {
+            return text;
+        }
+        StringBuilder out = new StringBuilder(text.length());
+        int i = 0;
+        while (i < text.length()) {
+            char c = text.charAt(i);
+            String decoded = c == ESC && i + 2 < text.length() && text.charAt(i + 2) == ESC
+                ? delimiterFor(text.charAt(i + 1)) : null;
+            if (decoded != null) {
+                out.append(decoded);
+                i += 3;
+            } else {
+                out.append(c);
+                i++;
+            }
+        }
+        return out.toString();
+    }
+
+    /** The HL7 v2 default escape character. */
+    private static final char ESC = '\\';
+
+    private static String delimiterFor(char code) {
+        return switch (code) {
+            case 'F' -> "|";
+            case 'S' -> "^";
+            case 'R' -> "~";
+            case 'T' -> "&";
+            case 'E' -> String.valueOf(ESC);
+            default -> null;
+        };
     }
 
     private String firstComponent(String field) {

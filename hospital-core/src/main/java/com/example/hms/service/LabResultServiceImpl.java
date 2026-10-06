@@ -1238,10 +1238,12 @@ public class LabResultServiceImpl implements LabResultService {
      * abnormal flag (set by MLLP inbound) and the mapper's reference-range
      * severity (the only signal a manually entered result has). LOW, HIGH
      * and CRITICAL stay unreleased for a human; UNSPECIFIED (no reference
-     * range on the test) counts as "nothing abnormal found".
+     * range on the test) counts as "nothing abnormal found" — except when
+     * ranges exist and none is in the result's unit: that result was never
+     * graded, so a person reviews it on the release worklist.
      */
     private void performAutoVerification(LabResult result, String severity) {
-        if (!autoVerificationEnabled) {
+        if (!autoVerificationEnabled || labResultMapper.isUngradedForUnitMismatch(result)) {
             return;
         }
         boolean severityNormal = severity == null

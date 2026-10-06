@@ -126,6 +126,56 @@ class CriticalValueNotificationServiceTest {
         verify(labResultRepository, never()).save(any(LabResult.class));
     }
 
+    /** The real grading rule behind the alert, ranges configured in {@code rangeUnit}. */
+    private void gradeWithRealMapper(String rangeUnit) {
+        ReflectionTestUtils.setField(service, "labResultMapper", new LabResultMapper());
+        result.getLabOrder().getLabTestDefinition().setReferenceRanges(new java.util.ArrayList<>(List.of(
+            com.example.hms.model.LabTestReferenceRange.builder().minValue(3.5).maxValue(5.0).unit(rangeUnit).build())));
+    }
+
+    @Test
+    void aValueOutsideARangeInAnotherUnitRaisesNoAlert() {
+        // 7.1 mmol/L against 3.5-5.0 mg/dL used to grade HIGH and page the
+        // ordering doctor; limits in another unit grade nothing now.
+        gradeWithRealMapper("mg/dL");
+
+        service.notifyIfCritical(result);
+
+        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        assertThat(result.getCriticalNotifiedAt()).isNull();
+    }
+
+    @Test
+    void aValueOutsideARangeInItsOwnUnitStillAlerts() {
+        gradeWithRealMapper("mmol/L");
+
+        service.notifyIfCritical(result);
+
+        verify(notificationService).createNotification(anyString(), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT"));
+    }
+
+    @Test
+    void aBareRangeOnATestInAnotherUnitRaisesNoAlert() {
+        // The range states no unit, so it is in the test's unit (mg/dL).
+        gradeWithRealMapper(null);
+        result.getLabOrder().getLabTestDefinition().setUnit("mg/dL");
+
+        service.notifyIfCritical(result);
+
+        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void anAnalyserCriticalFlagStillAlertsWhenTheUnitsDiffer() {
+        // OBX-8 is the laboratory's own grading; only the range-derived one is withheld.
+        gradeWithRealMapper("mg/dL");
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+
+        service.notifyIfCritical(result);
+
+        verify(notificationService).createNotification(anyString(), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT"));
+    }
+
     @Test
     void doesNotRenotifyAlreadyNotifiedResults() {
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);

@@ -299,6 +299,11 @@ export interface PatientLabResult {
   /** NORMAL | ABNORMAL | ABNORMAL_LOW | ABNORMAL_HIGH | CRITICAL | PENDING. */
   status?: string;
   released: boolean;
+  /**
+   * No configured reference range is in this result's unit, so nothing
+   * graded it: a NORMAL status then only means no abnormal flag was recorded.
+   */
+  unitMismatch?: boolean;
   collectedAt?: string;
   resultedAt?: string;
   orderedBy?: string;
