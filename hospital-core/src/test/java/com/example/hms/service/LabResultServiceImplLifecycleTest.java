@@ -750,10 +750,9 @@ class LabResultServiceImplLifecycleTest {
         // fix/hl7-inbound-tenancy.
         bindHospitalContext(UUID.randomUUID());
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
-        // past the gate on the caller (an author at the sender, on their own
-        // assignment there), so this still fails on the acting-hospital check
+        // past the gate on the caller (their own live assignment), so this
+        // still fails on the acting-hospital check
         when(authService.getCurrentUserId()).thenReturn(actorId);
-        stubIngestAuthorAt(hospitalId);
         when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
 
         LabResultRequestDTO request = entryRequest();
@@ -1071,7 +1070,6 @@ class LabResultServiceImplLifecycleTest {
 
         bindHospitalContext(hospitalId);
         when(authService.getCurrentUserId()).thenReturn(actorId);
-        stubIngestAuthorAt(hospitalId);
         when(assignmentRepository.findById(colleagues.getId())).thenReturn(Optional.of(colleagues));
         org.mockito.Mockito.lenient().when(labOrderRepository.findById(order.getId()))
             .thenReturn(Optional.of(order));
@@ -1137,6 +1135,25 @@ class LabResultServiceImplLifecycleTest {
 
         verify(labResultRepository).save(any(LabResult.class));
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
+    }
+
+    @Test
+    @DisplayName("a scoped user at the ordering hospital still posts the performing laboratory's message")
+    void aScopedCallerAtTheOrderingHospitalStillPostsThePerformingLabsMessage() {
+        // B1: the order is handled by A (ordering) and B (performing). A user
+        // acting at A, on their own assignment at A, posting B's analyzer
+        // pair, reaches it through the acting-hospital rule as before; the
+        // sender-hospital standing is asked only of an unscoped caller.
+        UUID performingHospitalId = UUID.randomUUID();
+        Hospital performing = new Hospital();
+        performing.setId(performingHospitalId);
+        order.setPerformingHospital(performing);
+        stubEntryPath();
+        bindHospitalContext(hospitalId);
+
+        service.createIngestedLabResult(entryRequest(), performingHospitalId, Locale.ENGLISH);
+
+        verify(labResultRepository).save(any(LabResult.class));
     }
 
     /** A live assignment at {@code at} held by somebody other than the caller. */

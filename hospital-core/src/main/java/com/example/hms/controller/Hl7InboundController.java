@@ -77,11 +77,13 @@ public class Hl7InboundController {
      * <p>Those headers are the caller's own claim about which order this is,
      * which is why they are not trusted on their own: the message must also
      * identify a sender the receiving hospital has allowlisted, and the order
-     * must be one that hospital handles. The caller, too, must hold a lab or
-     * clinical role at that hospital and name their own live assignment there,
-     * checked before the order is read. An unknown sender, a caller with no
-     * standing at the sender's hospital and an order belonging to somebody
-     * else all get the same 404.
+     * must be one that hospital handles. X-Assignment-Id must be the caller's
+     * own live assignment. A caller with no hospital scope of their own must
+     * also hold a lab or clinical role at the sender's hospital and name an
+     * assignment there; that is checked before the order is read, so it
+     * cannot tell an existing order from a missing one. An unknown sender, a
+     * caller without that standing and an order belonging to somebody else
+     * all get the same 404.
      */
     @PostMapping(value = "/inbound",
                  consumes = {MediaType.TEXT_PLAIN_VALUE, "text/hl7-v2", MediaType.APPLICATION_OCTET_STREAM_VALUE})
@@ -96,10 +98,10 @@ public class Hl7InboundController {
                  description = "Unparseable HL7v2 message, or an MSH field wider than its column "
                              + "(the answer names the field and the limit)")
     @ApiResponse(responseCode = "404",
-                 description = "The sending pair is not allowlisted; the caller holds no lab or clinical "
-                             + "role at that sender's hospital, or X-Assignment-Id is not the caller's own "
-                             + "live assignment there; or the order is not one that hospital handles. "
-                             + "Deliberately the same answer for all of them.")
+                 description = "The sending pair is not allowlisted; X-Assignment-Id is not the caller's "
+                             + "own live assignment; a caller with no hospital scope holds no lab or "
+                             + "clinical role, or no assignment, at the sender's hospital; or the order is "
+                             + "not one that hospital handles. Deliberately the same answer for all of them.")
     public ResponseEntity<ApiResponseWrapper<LabResultResponseDTO>> inbound(
         @RequestBody String hl7Message,
         @RequestHeader("X-Lab-Order-Id")    UUID labOrderId,

@@ -154,7 +154,8 @@ public class LabResultServiceImpl implements LabResultService {
         // were called, and senderHospitalId is the hospital that entry points
         // at; the order must be one that hospital handles, on B1's
         // ordering-or-performing predicate. Null (the sender identified itself
-        // as nobody we know) was already refused above with this same 404, so
+        // as nobody we know) never gets here: the gate above refused it with
+        // this same 404 (and isHandledBy(null) is true, so it must), so
         // an unknown sender and an order at another hospital are one answer.
         //
         // This replaces a flag. Until now the ingest path decided whether to
@@ -165,7 +166,7 @@ public class LabResultServiceImpl implements LabResultService {
         // which left the endpoint unusable by the interface accounts it exists
         // for. An allowlist entry is a real identity, so the waiver no longer
         // needs one.
-        if (ingested && (senderHospitalId == null || !labOrder.isHandledBy(senderHospitalId))) {
+        if (ingested && !labOrder.isHandledBy(senderHospitalId)) {
             throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
         }
 
@@ -471,26 +472,39 @@ public class LabResultServiceImpl implements LabResultService {
     /**
      * The ingest path's gate on the caller, run before the order is read.
      *
-     * <p>The adapter resolved the message's sending pair to a hospital; the
-     * caller must be a lab or clinical author at THAT hospital on a live
-     * assignment, and the {@code X-Assignment-Id} they name must be their own,
-     * active, and at that hospital. A verified super-admin is exempt, as from
-     * every other author check here.
+     * <p>Two rules, by whether the caller has a hospital scope of their own
+     * (a verified super-admin is exempt from both, as from every other author
+     * check here):
+     * <ul>
+     *   <li><b>Unscoped</b> (no active assignment, or several and no
+     *       {@code X-Hospital-Id}): nothing of their own to compare the order
+     *       against, so the hospital the message names is the only anchor.
+     *       They must hold a live lab or clinical role at THAT hospital, and
+     *       {@code X-Assignment-Id} must be their own active assignment there.
+     *       A caller with no active assignment anywhere fails the role check,
+     *       so they are refused up front.</li>
+     *   <li><b>Scoped</b>: the acting-hospital comparisons after the lookup
+     *       stay the boundary, unchanged, so a lab user acting at the ordering
+     *       hospital can still post the performing laboratory's message for an
+     *       order both handle. Only {@code X-Assignment-Id} is added here: it
+     *       must be their own active assignment (at the acting hospital, which
+     *       the check after the lookup still enforces).</li>
+     * </ul>
      *
      * <p>Why before the lookup, and why every refusal is the missing-order
      * 404: the sending pair is plaintext in the body, so a caller can quote
-     * any hospital's allowlisted pair. When this was judged after the order
-     * was read, a caller with no assignment at that hospital got 400 ("no lab
-     * or clinical role") for an order id that hospital handles and 404 for
-     * any other id - which confirmed which order ids exist. Decided here, the
-     * answer cannot depend on the order at all.
+     * any hospital's allowlisted pair. When an unscoped caller was judged
+     * after the order was read, one with no assignment at that hospital got
+     * 400 ("no lab or clinical role") for an order id that hospital handles
+     * and 404 for any other id - which confirmed which order ids exist.
+     * Decided here, the answer cannot depend on the order at all. A scoped
+     * caller's later refusals are only reachable for orders their own
+     * hospital handles, so they reveal nothing.
      *
      * <p>The role check is the database lookup, not {@code
      * validateLabResultAuthor}: that one waves through a token carrying the
      * super-admin authority, which is not the verified signal, and a bypass
      * here would put the post-lookup checks back in front of such a caller.
-     * A caller with no active assignment anywhere (the unscoped principal)
-     * fails it, so they are refused up front.
      */
     private void requireIngestCallerAtSender(LabResultRequestDTO request, UUID senderHospitalId) {
         if (senderHospitalId == null) {
@@ -499,20 +513,23 @@ public class LabResultServiceImpl implements LabResultService {
         if (roleValidator.isSuperAdminFromJwtClaim()) {
             return;
         }
+        boolean unscoped = !hasResolvableHospitalScope();
         UUID currentUserId = authService.getCurrentUserId();
-        if (currentUserId == null || !holdsLabResultAuthorRole(currentUserId, senderHospitalId)) {
+        if (currentUserId == null
+                || (unscoped && !holdsLabResultAuthorRole(currentUserId, senderHospitalId))) {
             throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
         }
         UserRoleHospitalAssignment named = request.getAssignmentId() == null
             ? null
             : assignmentRepository.findById(request.getAssignmentId()).orElse(null);
-        boolean ownLiveAssignmentAtSender = named != null
+        boolean ownLiveAssignment = named != null
             && Boolean.TRUE.equals(named.getActive())
             && named.getUser() != null
-            && currentUserId.equals(named.getUser().getId())
+            && currentUserId.equals(named.getUser().getId());
+        boolean atSender = named != null
             && named.getHospital() != null
             && senderHospitalId.equals(named.getHospital().getId());
-        if (!ownLiveAssignmentAtSender) {
+        if (!ownLiveAssignment || (unscoped && !atSender)) {
             throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
         }
     }
