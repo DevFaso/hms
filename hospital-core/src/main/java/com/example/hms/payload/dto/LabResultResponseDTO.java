@@ -41,6 +41,14 @@ public class LabResultResponseDTO {
     private List<LabResultReferenceRangeDTO> referenceRanges;
     private List<LabResultTrendPointDTO> trendHistory;
     private String severityFlag;
+    /**
+     * True when the test has reference ranges but none is in this result's
+     * unit: the result is NOT graded (severityFlag UNSPECIFIED), raises no
+     * range-derived critical alert and is never auto-released. Staff surfaces
+     * show it as "not graded: units differ". An analyser's own abnormal flag
+     * (OBX-8) is separate and still honoured.
+     */
+    private boolean unitMismatch;
     private boolean acknowledged;
     private LocalDateTime acknowledgedAt;
     private String acknowledgedBy;

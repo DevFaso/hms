@@ -315,6 +315,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             .value(result.getResultValue())
             .unit(unit)
             .referenceRange(formatReferenceRange(labResultMapper.gradedReferenceRange(result)))
+            .unitMismatch(mapped != null && mapped.isUnitMismatch())
             .performedBy(resolveAssignmentUser(result.getAssignment()))
             .notes(result.getNotes())
             .build();

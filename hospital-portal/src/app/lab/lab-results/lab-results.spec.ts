@@ -86,6 +86,27 @@ describe('LabResultsComponent', () => {
     flushInit();
   });
 
+  it('marks a result no range in its unit could grade as "not graded: units differ"', () => {
+    fixture.detectChanges();
+    flushInit([mockResult({ severityFlag: 'UNSPECIFIED', unitMismatch: true })]);
+    fixture.detectChanges();
+
+    const marker = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="unit-mismatch-result-1"]',
+    );
+    expect(marker?.textContent).toContain('LAB_RESULTS.NOT_GRADED_UNITS_DIFFER');
+  });
+
+  it('shows the severity, not the marker, for a result graded in its own unit', () => {
+    fixture.detectChanges();
+    flushInit([mockResult({ severityFlag: 'HIGH', unitMismatch: false })]);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="unit-mismatch-result-1"]')).toBeNull();
+    expect(host.querySelector('.severity-high')?.textContent).toContain('HIGH');
+  });
+
   it('should load results on init', () => {
     fixture.detectChanges();
     flushInit();

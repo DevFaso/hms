@@ -898,9 +898,20 @@ export class PatientChartComponent implements OnInit, OnChanges {
     return !result.released;
   }
 
+  /**
+   * A released row no configured range could grade (every range is in another
+   * unit) and that carries no abnormal flag of its own. Its NORMAL status means
+   * only "nothing flagged", so it reads "not graded: units differ", never
+   * "Normal". A row the analyser flagged keeps that flag.
+   */
+  isUngradedResult(result: PatientLabResult): boolean {
+    return result.unitMismatch === true && (result.status ?? 'NORMAL') === 'NORMAL';
+  }
+
   /** Colour class for a RELEASED row only; a pending row gets none. */
   labStatusClass(result: PatientLabResult): string {
     if (this.isPendingResult(result)) return 'lab-badge lab-pending';
+    if (this.isUngradedResult(result)) return 'lab-badge lab-ungraded';
     switch (result.status) {
       case 'CRITICAL':
         return 'lab-badge lab-critical';
@@ -922,6 +933,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
    */
   labStatusKey(result: PatientLabResult): string {
     if (this.isPendingResult(result)) return 'CHART.LAB_STATUS_PENDING';
+    if (this.isUngradedResult(result)) return 'CHART.LAB_STATUS_NOT_GRADED_UNITS';
     switch (result.status) {
       case 'NORMAL':
       case 'ABNORMAL':

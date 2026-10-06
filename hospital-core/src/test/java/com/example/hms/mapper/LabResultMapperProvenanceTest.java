@@ -68,6 +68,58 @@ class LabResultMapperProvenanceTest {
     }
 
     @Test
+    void aResultWhoseRangesAreAllInAnotherUnitIsNotGraded() {
+        // 5.4 mmol/L against 70-110 mg/dL used to grade LOW off the first range.
+        LabResult row = result("5.4", "mmol/L", range(70, 110, "mg/dL"));
+
+        LabResultResponseDTO dto = mapper.toResponseDTO(row);
+
+        assertThat(dto.getSeverityFlag()).isEqualTo(LabResultMapper.FLAG_UNSPECIFIED);
+        assertThat(dto.isUnitMismatch()).isTrue();
+        assertThat(mapper.isUngradedForUnitMismatch(row)).isTrue();
+        assertThat(mapper.gradedReferenceRange(row)).isNull();
+        assertThat(mapper.toTrendPointDTO(row).getSeverityFlag()).isEqualTo(LabResultMapper.FLAG_UNSPECIFIED);
+        // Every range is still listed for staff to read; none graded the value.
+        assertThat(dto.getReferenceRanges()).hasSize(1);
+    }
+
+    @Test
+    void aResultInTheRangesUnitIsGradedAsBefore() {
+        LabResult row = result("7.1", "MMOL/L ", range(3.5, 5.0, "mmol/L"));
+
+        LabResultResponseDTO dto = mapper.toResponseDTO(row);
+
+        assertThat(dto.getSeverityFlag()).isEqualTo("HIGH");
+        assertThat(dto.isUnitMismatch()).isFalse();
+        assertThat(mapper.isUngradedForUnitMismatch(row)).isFalse();
+    }
+
+    @Test
+    void aRangeWithNoUnitOfItsOwnStillGrades() {
+        LabResult row = result("7.1", "mmol/L", range(3.5, 5.0, null));
+
+        assertThat(mapper.toResponseDTO(row).getSeverityFlag()).isEqualTo("HIGH");
+        assertThat(mapper.isUngradedForUnitMismatch(row)).isFalse();
+    }
+
+    @Test
+    void aResultStatingNoUnitIsStillGradedAgainstTheFirstRange() {
+        LabResult row = result("2.0", null, range(3.5, 5.0, "mmol/L"));
+
+        assertThat(mapper.toResponseDTO(row).getSeverityFlag()).isEqualTo("LOW");
+        assertThat(mapper.isUngradedForUnitMismatch(row)).isFalse();
+    }
+
+    @Test
+    void noConfiguredRangeIsNotAUnitMismatch() {
+        LabResult row = result("5.4", "mmol/L");
+
+        assertThat(mapper.toResponseDTO(row).isUnitMismatch()).isFalse();
+        assertThat(mapper.isUngradedForUnitMismatch(row)).isFalse();
+        assertThat(mapper.isUngradedForUnitMismatch(null)).isFalse();
+    }
+
+    @Test
     void noConfiguredRangeGradesNothing() {
         assertThat(mapper.gradedReferenceRange(result("5.4", "mmol/L"))).isNull();
         assertThat(mapper.gradedReferenceRange(null)).isNull();

@@ -498,6 +498,27 @@ class LabResultServiceImplLifecycleTest {
         assertThat(saved.getValue().isReleased()).isFalse();
     }
 
+    @Test
+    @DisplayName("Even switched on, a result no configured range could grade (units differ) is never auto-released")
+    void autoVerificationSkipsAResultUngradedForUnitMismatch() {
+        // UNSPECIFIED alone would read as "nothing abnormal found" and release;
+        // a result whose ranges are all in another unit was never graded.
+        ReflectionTestUtils.setField(service, "autoVerificationEnabled", true);
+        stubEntryPath();
+        when(labResultMapper.toResponseDTO(any(LabResult.class)))
+            .thenReturn(LabResultResponseDTO.builder()
+                .severityFlag(LabResultMapper.FLAG_UNSPECIFIED).unitMismatch(true).build());
+        when(labResultMapper.isUngradedForUnitMismatch(any(LabResult.class))).thenReturn(true);
+
+        service.createLabResult(entryRequest(), Locale.ENGLISH);
+
+        ArgumentCaptor<LabResult> saved = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(saved.capture());
+        assertThat(saved.getValue().isReleased()).isFalse();
+        assertThat(saved.getValue().getReleasedByDisplay()).isNull();
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
+    }
+
     // ── B10: release belongs to the laboratory ─────────────────────────────
 
     @Test

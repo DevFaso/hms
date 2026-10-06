@@ -54,6 +54,11 @@ export interface LabResultSummary {
   /** Ordered and awaiting release: show it as expected, never as a normal result. */
   isPending: boolean;
   isAbnormal: boolean;
+  /**
+   * Released, not flagged abnormal, and never compared with a reference range
+   * (none is configured in the result's unit): neither normal nor abnormal.
+   */
+  isUngraded?: boolean;
   unit: string;
   orderedBy: string;
   performedBy: string;
@@ -72,6 +77,8 @@ interface LabResultApiResponse {
   unit: string;
   referenceRange: string;
   status: string;
+  /** No configured reference range is in the result's unit, so nothing graded it. */
+  unitMismatch?: boolean;
   collectedAt: string;
   resultedAt: string;
   orderedBy: string;
@@ -325,6 +332,7 @@ function mapLabResult(l: LabResultApiResponse): LabResultSummary {
     released: !pending,
     isPending: pending,
     isAbnormal: !pending && ABNORMAL_LAB_STATUSES.has(l.status),
+    isUngraded: !pending && !ABNORMAL_LAB_STATUSES.has(l.status) && l.unitMismatch === true,
     unit: l.unit ?? '',
     orderedBy: l.orderedBy ?? '',
     performedBy: l.performedBy ?? '',

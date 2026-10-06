@@ -117,14 +117,25 @@ class PatientLabResultReferenceRangeTest {
     }
 
     @Test
-    void noRangeInTheResultsUnit_noRangeIsShown() {
-        // Grading still falls back to the first range (an open clinical
-        // decision); the display must not show limits in another unit.
+    void noRangeInTheResultsUnit_noRangeIsShownAndNothingGradedIt() {
+        // Clinical decision 2026-10-04: limits in another unit grade nothing.
+        // 5.4 against 70-110 used to reach the patient as ABNORMAL_LOW.
         PatientLabResultResponseDTO row = readOnly("5.4", "mmol/L", range(70, 110, "mg/dL"));
 
         assertThat(row.getReferenceRange())
             .as("5.4 mmol/L is never shown beside 70 - 110 mg/dL")
             .isNull();
         assertThat(row.getUnit()).isEqualTo("mmol/L");
+        assertThat(row.isUnitMismatch()).as("readers label it not graded").isTrue();
+        assertThat(row.getStatus())
+            .as("no range-derived grade; only a recorded flag could set one")
+            .isEqualTo("NORMAL");
+    }
+
+    @Test
+    void aRangeInTheResultsUnit_isNotAUnitMismatch() {
+        PatientLabResultResponseDTO row = readOnly("5.4", "mmol/L", range(3.9, 6.1, "mmol/L"));
+
+        assertThat(row.isUnitMismatch()).isFalse();
     }
 }

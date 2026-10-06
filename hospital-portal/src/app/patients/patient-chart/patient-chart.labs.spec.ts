@@ -266,6 +266,26 @@ describe('PatientChartComponent — labs section', () => {
     );
   });
 
+  it('labels a released row no range in its unit could grade "not graded: units differ", never Normal', () => {
+    const ungraded = released({ status: 'NORMAL', referenceRange: undefined, unitMismatch: true });
+    setup({ roles: ['ROLE_DOCTOR'], results: [ungraded] });
+    openLabs();
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('CHART.LAB_STATUS_NOT_GRADED_UNITS');
+    expect(text).not.toContain('CHART.LAB_STATUS_NORMAL');
+    expect(fixture.nativeElement.querySelector('.lab-ungraded')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.lab-normal')).toBeNull();
+  });
+
+  it('keeps an abnormal flag the analyser recorded on a row whose units differ', () => {
+    const flagged = released({ status: 'ABNORMAL_HIGH', unitMismatch: true });
+
+    setup({ roles: ['ROLE_DOCTOR'], results: [flagged] });
+    expect(component.labStatusKey(flagged)).toBe('CHART.LAB_STATUS_ABNORMAL_HIGH');
+    expect(component.labStatusClass(flagged)).toBe('lab-badge lab-abnormal');
+  });
+
   it('renders the order status through the labOrderStatus enum vocabulary', () => {
     setup({ roles: ['ROLE_DOCTOR'], orders: [order({ status: 'RESULTED' })] });
     openLabs();

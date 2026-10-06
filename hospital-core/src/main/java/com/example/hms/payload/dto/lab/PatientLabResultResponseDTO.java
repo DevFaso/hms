@@ -36,6 +36,13 @@ public class PatientLabResultResponseDTO {
      * preliminary one, and this flag is what lets a UI label it as such.
      */
     private boolean released;
+    /**
+     * True when no configured reference range is in this result's unit, so
+     * nothing graded it against the hospital's range. A NORMAL status on such
+     * a row means only that no abnormal flag was recorded; a reader must not
+     * present it as "within normal range".
+     */
+    private boolean unitMismatch;
     private LocalDateTime collectedAt;
     private LocalDateTime resultedAt;
     private String orderedBy;

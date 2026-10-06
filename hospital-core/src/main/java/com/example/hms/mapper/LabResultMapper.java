@@ -47,7 +47,8 @@ public class LabResultMapper {
 
         OrderContext context = extractOrderContext(result.getLabOrder());
         List<LabResultReferenceRangeDTO> referenceRanges = toReferenceRangeDtos(context.referenceRanges());
-        String severityFlag = determineSeverityFlag(result.getResultValue(), result.getResultUnit(), context.referenceRanges());
+        Grading grading = gradingOf(result.getResultUnit(), context.referenceRanges());
+        String severityFlag = determineSeverityFlag(result.getResultValue(), grading.range());
 
         return LabResultResponseDTO.builder()
             .id(result.getId() != null ? result.getId().toString() : null)
@@ -71,6 +72,7 @@ public class LabResultMapper {
             .notes(result.getNotes())
             .referenceRanges(referenceRanges)
             .severityFlag(severityFlag)
+            .unitMismatch(grading.unitMismatch())
             .acknowledged(result.isAcknowledged())
             .criticalNotifiedAt(result.getCriticalNotifiedAt())
             .criticalEscalatedAt(result.getCriticalEscalatedAt())
@@ -102,7 +104,8 @@ public class LabResultMapper {
         }
 
         OrderContext context = extractOrderContext(result.getLabOrder());
-        String severityFlag = determineSeverityFlag(result.getResultValue(), result.getResultUnit(), context.referenceRanges());
+        Grading grading = gradingOf(result.getResultUnit(), context.referenceRanges());
+        String severityFlag = determineSeverityFlag(result.getResultValue(), grading.range());
 
         return LabResultTrendPointDTO.builder()
             .labResultId(result.getId() != null ? result.getId().toString() : null)
@@ -122,30 +125,68 @@ public class LabResultMapper {
      * range can be in a unit the value was never expressed in, and a patient
      * reading 5.4 mmol/L beside 70-110 mg/dL draws the wrong conclusion.
      *
-     * <p>One selection, {@link #findMatchingRange}, serves both the grading
-     * and this, so the two cannot drift.
+     * <p>One selection, {@link #gradingOf}, serves the grading, the critical
+     * alerting that reads it, the release gate and this, so they cannot drift.
      *
-     * <p><b>A range in another unit is never returned.</b> When no configured
-     * range is in the result's unit, {@code findMatchingRange} still falls back
-     * to the first range for GRADING (and so for critical alerting) - changing
-     * that is an open clinical decision, deliberately not taken here. For
-     * DISPLAY that fallback is refused: a range whose unit is stated and differs
-     * from the result's is null here, so nothing is shown rather than limits
-     * the value was never expressed in. The severity flag can therefore
-     * disagree with a (now blank) range until a clinician decides. A range with
-     * no unit of its own is still returned (bare limits, no unit claimed), and
-     * so is any range for a result that states no unit.
+     * <p><b>A range in another unit is never used.</b> When no configured
+     * range is in the result's unit (and the fallback range states a unit of
+     * its own), the result is NOT graded: no range is returned here, the
+     * severity flag is {@link #FLAG_UNSPECIFIED}, and
+     * {@link #isUngradedForUnitMismatch} is true so the result is never
+     * auto-released and staff see "not graded: units differ". A range with no
+     * unit of its own is still used (bare limits, no unit claimed), and so is
+     * any range for a result that states no unit.
      */
     public LabResultReferenceRangeDTO gradedReferenceRange(LabResult result) {
         if (result == null) {
             return null;
         }
         OrderContext context = extractOrderContext(result.getLabOrder());
-        LabTestReferenceRange graded = findMatchingRange(result.getResultUnit(), context.referenceRanges());
-        if (graded == null || isInAnotherUnit(graded, result.getResultUnit())) {
-            return null;
+        LabTestReferenceRange graded = gradingOf(result.getResultUnit(), context.referenceRanges()).range();
+        return graded != null ? toReferenceRangeDto(graded) : null;
+    }
+
+    /**
+     * True when the test has reference ranges configured but none of them can
+     * grade this result because they are all stated in another unit. Such a
+     * result carries no range-derived severity, raises no range-derived
+     * critical alert, and is never released without a person reviewing it.
+     * An analyser's own OBX-8 flag on the row is a separate signal and is
+     * not affected.
+     *
+     * <p>Reads the order's test definition only if it is already loaded; a
+     * caller holding a lazy order initialises it first.
+     */
+    public boolean isUngradedForUnitMismatch(LabResult result) {
+        if (result == null) {
+            return false;
         }
-        return toReferenceRangeDto(graded);
+        OrderContext context = extractOrderContext(result.getLabOrder());
+        return gradingOf(result.getResultUnit(), context.referenceRanges()).unitMismatch();
+    }
+
+    /**
+     * The range a result is graded against, or why there is none.
+     * {@code unitMismatch} is true only when ranges exist and every candidate
+     * is stated in a unit other than the result's.
+     */
+    private record Grading(LabTestReferenceRange range, boolean unitMismatch) {}
+
+    private static final Grading NOT_GRADED = new Grading(null, false);
+    private static final Grading UNITS_DIFFER = new Grading(null, true);
+
+    /**
+     * The one unit-matching rule. A range in the result's unit wins; with none,
+     * the first configured range is used only when it states no unit of its
+     * own (or the result states none) — a range in another unit grades
+     * nothing.
+     */
+    private static Grading gradingOf(String resultUnit, List<LabTestReferenceRange> referenceRanges) {
+        LabTestReferenceRange candidate = findMatchingRange(resultUnit, referenceRanges);
+        if (candidate == null) {
+            return NOT_GRADED;
+        }
+        return isInAnotherUnit(candidate, resultUnit) ? UNITS_DIFFER : new Grading(candidate, false);
     }
 
     /** True when both units are stated and they differ. */
@@ -329,11 +370,17 @@ public class LabResultMapper {
             .build();
     }
 
-    private String determineSeverityFlag(String rawResultValue, String resultUnit, List<LabTestReferenceRange> referenceRanges) {
+    /**
+     * LOW / HIGH / NORMAL against {@code matchingRange}, the range
+     * {@link #gradingOf} chose; UNSPECIFIED when there is none (no range
+     * configured, or only ranges in another unit) or the value is not a
+     * number.
+     */
+    private static String determineSeverityFlag(String rawResultValue, LabTestReferenceRange matchingRange) {
         if (rawResultValue == null || rawResultValue.isBlank()) {
             return FLAG_UNSPECIFIED;
         }
-        if (referenceRanges == null || referenceRanges.isEmpty()) {
+        if (matchingRange == null) {
             return FLAG_UNSPECIFIED;
         }
 
@@ -341,11 +388,6 @@ public class LabResultMapper {
         try {
             value = Double.parseDouble(rawResultValue);
         } catch (NumberFormatException ex) {
-            return FLAG_UNSPECIFIED;
-        }
-
-        LabTestReferenceRange matchingRange = findMatchingRange(resultUnit, referenceRanges);
-        if (matchingRange == null) {
             return FLAG_UNSPECIFIED;
         }
 
@@ -360,7 +402,7 @@ public class LabResultMapper {
         return "NORMAL";
     }
 
-    private LabTestReferenceRange findMatchingRange(String resultUnit, List<LabTestReferenceRange> referenceRanges) {
+    private static LabTestReferenceRange findMatchingRange(String resultUnit, List<LabTestReferenceRange> referenceRanges) {
         if (referenceRanges == null || referenceRanges.isEmpty()) {
             return null;
         }

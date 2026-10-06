@@ -54,6 +54,9 @@ class MllpInboundLabServiceImplTest {
     @Mock private IntegrationMessageRecorder messageRecorder;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private com.example.hms.service.CriticalValueNotificationService criticalValueNotificationService;
+    // The real unit-matching rule, not a stub: the auto-release gate asks it.
+    @org.mockito.Spy private com.example.hms.mapper.LabResultMapper labResultMapper =
+        new com.example.hms.mapper.LabResultMapper();
 
     @InjectMocks private MllpInboundLabServiceImpl service;
 
@@ -404,6 +407,63 @@ class MllpInboundLabServiceImplTest {
         assertThat(release.getUserName()).isEqualTo("MLLP:APP/FAC");
         assertThat(release.getPatientId()).isNull();
         assertThat(release.getEventDescription()).contains("Autoverification").doesNotContain("5.4");
+    }
+
+    private void configureRangesIn(String unit) {
+        com.example.hms.model.LabTestDefinition definition = new com.example.hms.model.LabTestDefinition();
+        definition.setReferenceRanges(new java.util.ArrayList<>(List.of(
+            com.example.hms.model.LabTestReferenceRange.builder().minValue(70.0).maxValue(110.0).unit(unit).build())));
+        labOrder.setLabTestDefinition(definition);
+    }
+
+    @Test
+    @DisplayName("Auto-release on: an explicit N is NOT released when no configured range is in the observation's unit")
+    void explicitNormalInAnotherUnitWaitsForAPerson() {
+        ReflectionTestUtils.setField(service, "autoReleaseEnabled", true);
+        configureRangesIn("mg/dL");
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.processOruR01(List.of(observation("ACC-1", "5.4", "1", "GLU", "N")),
+            hospital, "APP", "FAC", null, "MSH|...\r");
+
+        ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(captor.capture());
+        assertThat(captor.getValue().isReleased()).isFalse();
+        // The analyser's own grading is stored as sent.
+        assertThat(captor.getValue().getAbnormalFlag()).isEqualTo(com.example.hms.enums.AbnormalFlag.NORMAL);
+    }
+
+    @Test
+    @DisplayName("Auto-release on: an explicit N in the range's own unit is released as before")
+    void explicitNormalInTheRangesUnitIsReleased() {
+        ReflectionTestUtils.setField(service, "autoReleaseEnabled", true);
+        configureRangesIn("mmol/L");
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.processOruR01(List.of(observation("ACC-1", "5.4", "1", "GLU", "N")),
+            hospital, "APP", "FAC", null, "MSH|...\r");
+
+        ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(captor.capture());
+        assertThat(captor.getValue().isReleased()).isTrue();
+    }
+
+    @Test
+    @DisplayName("An explicit OBX-8 critical flag is kept when the units differ: only range grading is withheld")
+    void analyserCriticalFlagIsKeptWhenUnitsDiffer() {
+        configureRangesIn("mg/dL");
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.processOruR01(List.of(observation("ACC-1", "1.1", "1", "K", "LL")),
+            hospital, "APP", "FAC", null, "MSH|...\r");
+
+        ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(captor.capture());
+        assertThat(captor.getValue().getAbnormalFlag()).isEqualTo(com.example.hms.enums.AbnormalFlag.CRITICAL);
+        verify(criticalValueNotificationService).notifyIfCritical(captor.getValue());
     }
 
     @Test

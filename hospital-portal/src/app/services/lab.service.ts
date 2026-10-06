@@ -49,6 +49,12 @@ export interface LabResultResponse {
   referenceRanges: LabResultReferenceRange[];
   trendHistory?: LabResultTrendPoint[];
   severityFlag: string | null;
+  /**
+   * Reference ranges exist for the test but none is in this result's unit,
+   * so it was NOT graded (severityFlag is UNSPECIFIED), raised no range alert
+   * and is never auto-released. Shown as "not graded: units differ".
+   */
+  unitMismatch?: boolean;
   acknowledged: boolean;
   acknowledgedAt: string | null;
   acknowledgedBy: string | null;
