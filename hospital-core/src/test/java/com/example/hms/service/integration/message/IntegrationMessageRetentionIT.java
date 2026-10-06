@@ -77,6 +77,8 @@ class IntegrationMessageRetentionIT {
     private SuperAdminIntegrationMessageService messageService;
     @Autowired
     private JdbcTemplate jdbc;
+    @Autowired
+    private IntegrationMessageRecorder recorder;
 
     private final LocalDateTime now = LocalDateTime.now();
     private final LocalDateTime old = now.minusDays(DAYS + 30L);
@@ -131,11 +133,12 @@ class IntegrationMessageRetentionIT {
 
         assertThat(purged).isEqualTo(1);
         Map<String, Object> gone = raw(oldReceived.getId());
-        assertThat(gone).containsEntry("payload", null);
-        assertThat(gone.get("payload_purged_at")).isNotNull();
-        // The row is audit evidence: its metadata is untouched.
-        assertThat(gone).containsEntry("status", "RECEIVED");
-        assertThat(gone).containsEntry("message_type", "ORU^R01");
+        // Content gone, stamp set; the row is audit evidence, so its metadata is untouched.
+        assertThat(gone)
+            .containsEntry("payload", null)
+            .doesNotContainEntry("payload_purged_at", null)
+            .containsEntry("status", "RECEIVED")
+            .containsEntry("message_type", "ORU^R01");
         IntegrationMessageEvent reloaded = repository.findById(oldReceived.getId()).orElseThrow();
         assertThat(reloaded.getReceivedAt()).isEqualToIgnoringNanos(old);
         assertThat(reloaded.getErrorMessage()).isNull();
@@ -262,5 +265,22 @@ class IntegrationMessageRetentionIT {
             .isInstanceOf(ConflictException.class);
         assertThat(repository.count()).isEqualTo(before);
         assertThat(messageService.getById(resolved.getId()).payloadPurgedAt()).isNotNull();
+    }
+
+    @Test
+    void aSweepBetweenTheCheckAndTheWriteIsSeenUnderTheLock() {
+        // The service's purge check has already passed (the row held content
+        // when it read it); the sweep then erases the content before the
+        // replay's write. The write re-reads the row under its lock, sees the
+        // purge and refuses - no REPLAYED row, no copy of erased content.
+        IntegrationMessageEvent resolved =
+            row(IntegrationMessageStatus.FAILED, "race-1", "MSH|y", now.minusDays(400));
+        UUID resolvedId = resolved.getId();
+        sweep(500).purgeExpiredPayloads();
+        long before = repository.count();
+
+        assertThatThrownBy(() -> recorder.recordReplay(resolvedId, IntegrationMessageStatus.REPLAYED, null))
+            .isInstanceOf(ConflictException.class);
+        assertThat(repository.count()).isEqualTo(before);
     }
 }

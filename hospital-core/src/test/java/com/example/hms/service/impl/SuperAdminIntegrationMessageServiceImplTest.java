@@ -208,8 +208,9 @@ class SuperAdminIntegrationMessageServiceImplTest {
         when(repository.findById(originalId)).thenReturn(Optional.of(purged));
 
         assertThatThrownBy(() -> service.replay(originalId))
-            .isInstanceOf(ConflictException.class)
-            .hasMessageContaining("integration.message.contentPurged");
+            // Type only: the message text depends on whether an earlier test
+            // in the JVM wired MessageUtil to the real bundle.
+            .isInstanceOf(ConflictException.class);
 
         verify(recorder, never()).recordReplay(any(), any(), any());
     }

@@ -2,6 +2,7 @@ package com.example.hms.service.integration.message;
 
 import com.example.hms.enums.integration.IntegrationMessageDirection;
 import com.example.hms.enums.integration.IntegrationMessageStatus;
+import com.example.hms.exception.ConflictException;
 import com.example.hms.model.integration.IntegrationMessageEvent;
 import com.example.hms.repository.integration.IntegrationMessageEventRepository;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -94,7 +96,7 @@ class IntegrationMessageRecorderTest {
             .errorMessage("partner timeout")
             .attemptCount(2)
             .build();
-        when(repository.findById(originalId)).thenReturn(Optional.of(original));
+        when(repository.findByIdForUpdate(originalId)).thenReturn(Optional.of(original));
         when(repository.save(any(IntegrationMessageEvent.class))).thenAnswer(inv -> inv.getArgument(0));
 
         IntegrationMessageEvent replay = recorder.recordReplay(
@@ -109,7 +111,7 @@ class IntegrationMessageRecorderTest {
     @Test
     void recordReplayReturnsNullWhenOriginalIsMissing() {
         UUID missingId = UUID.randomUUID();
-        when(repository.findById(missingId)).thenReturn(Optional.empty());
+        when(repository.findByIdForUpdate(missingId)).thenReturn(Optional.empty());
 
         IntegrationMessageEvent replay = recorder.recordReplay(
             missingId, IntegrationMessageStatus.REPLAYED, null);
@@ -327,7 +329,7 @@ class IntegrationMessageRecorderTest {
             .status(IntegrationMessageStatus.FAILED)
             .attemptCount(1)
             .build();
-        when(repository.findById(originalId)).thenReturn(Optional.of(original));
+        when(repository.findByIdForUpdate(originalId)).thenReturn(Optional.of(original));
         when(repository.save(any(IntegrationMessageEvent.class)))
             .thenThrow(new RuntimeException("DB down"));
 
@@ -335,5 +337,26 @@ class IntegrationMessageRecorderTest {
             originalId, IntegrationMessageStatus.REPLAYED, null);
 
         assertThat(result).isNull();
+    }
+
+    @Test
+    void recordReplayRefusesAPurgedRowUnderTheLockAndWritesNothing() {
+        // The service checked payloadPurgedAt earlier, but the nightly sweep
+        // purged the row before this write took the lock.
+        UUID originalId = UUID.randomUUID();
+        IntegrationMessageEvent purged = IntegrationMessageEvent.builder()
+            .integrationId("partner.nhis")
+            .direction(IntegrationMessageDirection.OUTBOUND)
+            .status(IntegrationMessageStatus.FAILED)
+            .attemptCount(1)
+            .payloadPurgedAt(LocalDateTime.now())
+            .build();
+        when(repository.findByIdForUpdate(originalId)).thenReturn(Optional.of(purged));
+
+        assertThatThrownBy(() -> recorder.recordReplay(originalId, IntegrationMessageStatus.REPLAYED, null))
+            // Type only: the message text depends on whether an earlier test
+            // in the JVM wired MessageUtil to the real bundle.
+            .isInstanceOf(ConflictException.class);
+        verify(repository, never()).save(any(IntegrationMessageEvent.class));
     }
 }

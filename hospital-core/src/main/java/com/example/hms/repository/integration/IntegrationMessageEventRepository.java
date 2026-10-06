@@ -4,7 +4,9 @@ import com.example.hms.enums.integration.IntegrationMessageStatus;
 import com.example.hms.model.integration.IntegrationMessageEvent;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -102,6 +104,22 @@ public interface IntegrationMessageEventRepository
     Optional<IntegrationMessageEvent>
         findFirstByCorrelationIdAndStatusAndReceivedAtAfterOrderByReceivedAtDesc(
             String correlationId, IntegrationMessageStatus status, LocalDateTime after);
+
+    /**
+     * The row, locked ({@code SELECT ... FOR UPDATE}) for the rest of the
+     * caller's transaction.
+     *
+     * <p>Used by {@code IntegrationMessageRecorder.recordReplay}: the replay
+     * copies the row's content into a new row, and the retention sweep's
+     * {@link #purgePayloads} UPDATE must not erase that content between the
+     * replay's purge check and its copy. Holding the row lock makes the
+     * check and the copy one step: a sweep that got there first is seen
+     * (the row reads as purged and the replay is refused), and a sweep that
+     * comes after waits for the replay to commit.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT m FROM IntegrationMessageEvent m WHERE m.id = :id")
+    Optional<IntegrationMessageEvent> findByIdForUpdate(@Param("id") UUID id);
 
     /**
      * Ids of rows whose message content is due for erasure, oldest first: a
