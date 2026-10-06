@@ -1,4 +1,5 @@
 import { CommonModule, DatePipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
   OnInit,
@@ -148,16 +149,27 @@ export class IntegrationMessagesComponent implements OnInit {
     this.service
       .replay(messageId)
       .pipe(
-        catchError(() => {
+        catchError((err: unknown) => {
+          // 409 on a FAILED row means retention erased its content after
+          // this page was loaded (the server re-checks under a row lock).
+          // Say so, and reload so the row shows as purged and its Replay
+          // button disables. Anything else keeps the generic error and the
+          // row where the operator can see it.
+          const purged = err instanceof HttpErrorResponse && err.status === 409;
           this.replayState.update((map) => {
             const next = new Map(map);
             next.set(messageId, {
               messageId,
               busy: false,
-              errorKey: 'INTEGRATION_MESSAGES.ERROR.REPLAY_FAILED',
+              errorKey: purged
+                ? 'INTEGRATION_MESSAGES.CONTENT_PURGED'
+                : 'INTEGRATION_MESSAGES.ERROR.REPLAY_FAILED',
             });
             return next;
           });
+          if (purged) {
+            this.search();
+          }
           return of(null);
         }),
       )

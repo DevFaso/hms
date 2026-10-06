@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient, withXhr } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -210,5 +210,28 @@ describe('IntegrationMessagesComponent (MVP-c3)', () => {
 
     expect(el.querySelector('[data-test="retention-off"]')).not.toBeNull();
     expect(el.querySelector('[data-test="retention-note"]')).toBeNull();
+  });
+  it('replay() answering 409 (content purged meanwhile) says so and reloads the list', () => {
+    service.search.and.returnValue(of(fakePage()));
+    service.replay.and.returnValue(throwError(() => new HttpErrorResponse({ status: 409 })));
+
+    const cmp = setup();
+    cmp.replay('msg-1');
+
+    expect(cmp.replayErrorKeyFor('msg-1')).toBe('INTEGRATION_MESSAGES.CONTENT_PURGED');
+    expect(cmp.replayBusyFor('msg-1')).toBeFalse();
+    // Reloaded so the row comes back purged and its Replay button disables.
+    expect(service.search).toHaveBeenCalledTimes(2);
+  });
+
+  it('replay() answering 500 keeps the generic error and does not reload', () => {
+    service.search.and.returnValue(of(fakePage()));
+    service.replay.and.returnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+
+    const cmp = setup();
+    cmp.replay('msg-1');
+
+    expect(cmp.replayErrorKeyFor('msg-1')).toBe('INTEGRATION_MESSAGES.ERROR.REPLAY_FAILED');
+    expect(service.search).toHaveBeenCalledTimes(1);
   });
 });
