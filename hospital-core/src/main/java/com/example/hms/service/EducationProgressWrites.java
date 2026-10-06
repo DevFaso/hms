@@ -12,10 +12,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Savepoint;
-import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.Calendar;
-import java.util.TimeZone;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.UUID;
 
 /**
@@ -61,11 +60,11 @@ public class EducationProgressWrites {
      * row's timestamps must be stored the same way, or the entity reads them
      * back shifted by the server's offset.
      */
-    private final TimeZone jdbcTimeZone;
+    private final ZoneId jdbcZone;
 
     public EducationProgressWrites(
             @Value("${spring.jpa.properties.hibernate.jdbc.time_zone:UTC}") String jdbcTimeZone) {
-        this.jdbcTimeZone = TimeZone.getTimeZone(jdbcTimeZone);
+        this.jdbcZone = ZoneId.of(jdbcTimeZone);
     }
 
     /**
@@ -78,10 +77,9 @@ public class EducationProgressWrites {
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean insertIfAbsent(UUID patientId, UUID resourceId, UUID hospitalId,
                                   EducationComprehensionStatus initialStatus) {
-        // Bound exactly as Hibernate binds a LocalDateTime under
-        // hibernate.jdbc.time_zone: the instant, written in that zone.
-        Timestamp now = Timestamp.from(Instant.now());
-        Calendar jdbcZone = Calendar.getInstance(jdbcTimeZone);
+        // The value Hibernate stores for a LocalDateTime under
+        // hibernate.jdbc.time_zone: the current instant's wall time in that zone.
+        LocalDateTime now = LocalDateTime.ofInstant(Instant.now(), jdbcZone);
         return entityManager.unwrap(Session.class).doReturningWork(connection -> {
             Savepoint savepoint = connection.setSavepoint();
             try (PreparedStatement insert = connection.prepareStatement(INSERT_SQL)) {
@@ -90,9 +88,9 @@ public class EducationProgressWrites {
                 insert.setObject(3, resourceId);
                 insert.setObject(4, hospitalId);
                 insert.setString(5, initialStatus.name());
-                insert.setTimestamp(6, now, jdbcZone);
-                insert.setTimestamp(7, now, jdbcZone);
-                insert.setTimestamp(8, now, jdbcZone);
+                insert.setObject(6, now);
+                insert.setObject(7, now);
+                insert.setObject(8, now);
                 insert.executeUpdate();
             } catch (SQLException e) {
                 connection.rollback(savepoint);
