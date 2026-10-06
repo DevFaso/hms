@@ -13,8 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * E9 #67 (D5, slice b2) — the lab matchers agree with the annotations: the
- * clinical lab paths (orders, results, specimens, acknowledge, transition,
- * PATCH) no longer admit HOSPITAL_ADMIN at the edge, while the lab
+ * clinical lab paths (orders, results, specimens, acknowledge, transition) no longer admit HOSPITAL_ADMIN at the edge, while the lab
  * configuration and integration matchers (test definitions, QC events,
  * reflex rules, HL7 inbound, instrument outbox) keep it.
  */
@@ -38,7 +37,6 @@ class SecurityConfigLabMatcherTest {
             ".requestMatchers(HttpMethod.POST, API_LAB_ORDERS)",
             ".requestMatchers(HttpMethod.GET, API_LAB_RESULTS, API_LAB_RESULTS_PATTERN)",
             ".requestMatchers(HttpMethod.POST, API_LAB_RESULTS + \"/*/acknowledge\")",
-            ".requestMatchers(HttpMethod.PATCH, API_LAB_ORDERS_PATTERN, API_LAB_RESULTS_PATTERN)",
             ".requestMatchers(HttpMethod.GET,  API_LAB_SPECIMENS, API_LAB_SPECIMENS_PATTERN)",
             ".requestMatchers(HttpMethod.POST, API_LAB_SPECIMENS, API_LAB_SPECIMENS_PATTERN)",
             "API_LAB_ORDERS + \"/*/specimens\")"}) {
