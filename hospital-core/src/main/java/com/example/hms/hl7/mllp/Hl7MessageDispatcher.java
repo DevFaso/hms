@@ -334,7 +334,7 @@ public class Hl7MessageDispatcher {
      * id only stops the retries being <em>counted</em>, while
      * {@code recordMessage} still inserts on every call. Keying alone would
      * have left a vendor writing thousands of full copies of a message — PID
-     * and all — into a table with no retention, while the badge read 1. A
+     * and all — into a table that keeps each body for months, while the badge read 1. A
      * bounded badge over unbounded PHI is worse than the visible version,
      * because it claims the problem is handled.
      *
