@@ -182,6 +182,42 @@ class LabResultMapperProvenanceTest {
     }
 
     @Test
+    void aCodedAnalyserUnitIsComparedOnItsFirstComponent() {
+        // OBX-6 is stored as sent: identifier^text^coding system.
+        LabResult row = result("7.1", "mmol/L^millimole per liter^UCUM", range(3.5, 5.0, "mmol/L"));
+
+        assertThat(mapper.toResponseDTO(row).getSeverityFlag()).isEqualTo("HIGH");
+        assertThat(mapper.isUngradedForUnitMismatch(row)).isFalse();
+    }
+
+    @Test
+    void aCodedUnitOnAMgPerDlTestWithABareRangeIsNotGraded() {
+        LabResult row = resultOnTest("5.4", "mmol/L^millimole per liter^UCUM", "mg/dL", range(70, 110, null));
+
+        assertThat(mapper.toResponseDTO(row).getSeverityFlag()).isEqualTo(LabResultMapper.FLAG_UNSPECIFIED);
+        assertThat(mapper.isUngradedForUnitMismatch(row)).isTrue();
+    }
+
+    @Test
+    void aCodedUnitWithNoIdentifierCountsAsNoUnit() {
+        // "^^UCUM": no first component, so the result states no unit and is
+        // graded against the first range rather than marked "units differ".
+        LabResult row = result("2.0", "^^UCUM", range(3.5, 5.0, "mmol/L"));
+
+        assertThat(mapper.toResponseDTO(row).getSeverityFlag()).isEqualTo("LOW");
+        assertThat(mapper.isUngradedForUnitMismatch(row)).isFalse();
+    }
+
+    @Test
+    void codedRangeAndTestUnitsAreComparedOnTheirFirstComponentToo() {
+        LabResult row = resultOnTest("7.1", "mmol/L", "mmol/L^millimole per liter^UCUM", range(3.5, 5.0, null),
+            range(70, 110, "mg/dL^milligram per deciliter^UCUM"));
+
+        assertThat(mapper.toResponseDTO(row).getSeverityFlag()).isEqualTo("HIGH");
+        assertThat(mapper.gradedReferenceRange(row).getMinValue()).isEqualTo(3.5);
+    }
+
+    @Test
     void aResultStatingNoUnitIsStillGradedAgainstTheFirstRange() {
         LabResult row = result("2.0", null, range(3.5, 5.0, "mmol/L"));
 

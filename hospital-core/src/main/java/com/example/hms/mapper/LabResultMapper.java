@@ -240,8 +240,20 @@ public class LabResultMapper {
         return own != null ? own : normalisedUnit(testUnit);
     }
 
+    /**
+     * The unit as compared: its first HL7 component, trimmed and lower-cased,
+     * or null when there is none. An analyser's OBX-6 is stored as sent and
+     * is usually coded ({@code mmol/L^millimole per liter^UCUM}); the first
+     * component is the unit identifier, so it alone is compared. A value
+     * starting with {@code ^} has an empty identifier and counts as no unit.
+     */
     private static String normalisedUnit(String unit) {
-        return unit == null || unit.isBlank() ? null : unit.trim().toLowerCase(Locale.ROOT);
+        if (unit == null) {
+            return null;
+        }
+        int separator = unit.indexOf('^');
+        String identifier = (separator >= 0 ? unit.substring(0, separator) : unit).trim();
+        return identifier.isEmpty() ? null : identifier.toLowerCase(Locale.ROOT);
     }
 
     public LabResult toEntity(LabResultRequestDTO dto, LabOrder labOrder, UserRoleHospitalAssignment assignment) {
