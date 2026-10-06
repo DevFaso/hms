@@ -2610,4 +2610,21 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V176 — one patient education progress row per (patient, resource).
+         Takes ACCESS EXCLUSIVE on the table; if any (patient, resource)
+         has more than one row it STOPS (count of groups only, nothing
+         changed: a person resolves the duplicates, then the deploy is
+         re-run); otherwise adds
+         uk_patient_education_progress_patient_resource. No environment has
+         duplicates today. One DO block: splitStatements="false". V174
+         stays unused.
+         ================================================================= -->
+    <changeSet id="V176-patient-education-progress-one-row-per-resource" author="hms-team" runOnChange="false">
+        <sqlFile path="V176__patient_education_progress_one_row_per_resource.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
