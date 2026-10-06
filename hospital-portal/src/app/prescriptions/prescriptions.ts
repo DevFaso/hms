@@ -66,6 +66,11 @@ export type PrescriptionStatusTab = Exclude<PrescriptionTab, 'all'>;
  * `labelKey` is the field name on purpose — check-i18n-referenced-keys.mjs
  * reads it, so a typo fails the gate instead of rendering the raw key.
  */
+/** CANCELLED and DISCONTINUED: the prescriber withdrew the order, which the server treats as final. */
+export function isWithdrawnStatus(status: string | null | undefined): boolean {
+  return status === 'CANCELLED' || status === 'DISCONTINUED';
+}
+
 export const ATTENTION_REASONS: readonly { status: string; labelKey: string }[] = [
   { status: 'PENDING_CLARIFICATION', labelKey: 'PRESCRIPTIONS.ATTENTION.PENDING_CLARIFICATION' },
   { status: 'TRANSMISSION_FAILED', labelKey: 'PRESCRIPTIONS.ATTENTION.TRANSMISSION_FAILED' },
@@ -310,6 +315,20 @@ export class PrescriptionsComponent implements OnInit {
     { value: 'DISCONTINUED', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.DISCONTINUED' },
   ];
 
+  /**
+   * Withdrawal is final on the server (a CANCELLED or DISCONTINUED order may
+   * only move to the other withdrawn state), so editing a withdrawn order
+   * offers only those two statuses instead of a reopen that would be refused.
+   */
+  editingWithdrawn = signal(false);
+
+  statusOptions(): { value: string; labelKey: string }[] {
+    if (!this.editingWithdrawn()) {
+      return this.prescriptionStatuses;
+    }
+    return this.prescriptionStatuses.filter((s) => isWithdrawnStatus(s.value));
+  }
+
   emptyForm(): PrescriptionRequest {
     return {
       patientId: '',
@@ -374,6 +393,7 @@ export class PrescriptionsComponent implements OnInit {
     this.form = this.emptyForm();
     this.editing.set(false);
     this.editingId.set(null);
+    this.editingWithdrawn.set(false);
     this.selectedPatient.set(null);
     this.patientQuery.set('');
     this.showModal.set(true);
@@ -399,6 +419,7 @@ export class PrescriptionsComponent implements OnInit {
     } as PatientResponse);
     this.editing.set(true);
     this.editingId.set(p.id);
+    this.editingWithdrawn.set(isWithdrawnStatus(p.status));
     this.showModal.set(true);
   }
 

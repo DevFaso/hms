@@ -1,5 +1,6 @@
 package com.example.hms.utility;
 
+import com.example.hms.config.SecurityConstants;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.HospitalScopeRefusedException;
 import com.example.hms.model.UserRoleHospitalAssignment;
@@ -22,6 +23,11 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class RoleValidator {
     private static final String HOSPITAL_ADMIN_ROLE = "HOSPITAL_ADMIN";
+    private static final String DOCTOR_ROLE = "DOCTOR";
+    private static final String PHYSICIAN_ROLE = "PHYSICIAN";
+    private static final String SURGEON_ROLE = "SURGEON";
+    private static final String NURSE_ROLE = "NURSE";
+    private static final String ROLE_PREFIX = SecurityConstants.ROLE_PREFIX;
 
     /**
      * What a caller with no resolvable hospital is told. Public so a guard
@@ -42,7 +48,7 @@ public class RoleValidator {
     private Set<String> expandCodes(String base) {
         String u = base == null ? "" : base.toUpperCase();
         // Support both ROLE_* and bare forms
-        return Set.of(u, u.startsWith("ROLE_") ? u.substring(5) : "ROLE_" + u);
+        return Set.of(u, u.startsWith(ROLE_PREFIX) ? u.substring(ROLE_PREFIX.length()) : ROLE_PREFIX + u);
     }
 
     public boolean hasAnyAuthority(String... bases) {
@@ -100,7 +106,7 @@ public class RoleValidator {
 
     /** Quick check for “can act as staff/admin” */
     public boolean isStaffOrAdminFromAuth() {
-        return hasAnyAuthority(HOSPITAL_ADMIN_ROLE,"DOCTOR","PHYSICIAN","NURSE","MIDWIFE","STAFF","RECEPTIONIST","SUPER_ADMIN");
+        return hasAnyAuthority(HOSPITAL_ADMIN_ROLE, DOCTOR_ROLE, PHYSICIAN_ROLE, NURSE_ROLE,"MIDWIFE","STAFF","RECEPTIONIST","SUPER_ADMIN");
     }
 
     /* =========================================
@@ -180,10 +186,10 @@ public class RoleValidator {
             userId, hospitalId, expandCodesForDb(baseCode));
     }
 
-    public boolean isDoctor(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "DOCTOR"); }
-    public boolean isPhysician(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "PHYSICIAN"); }
-    public boolean isSurgeon(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "SURGEON"); }
-    public boolean isNurse(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "NURSE"); }
+    public boolean isDoctor(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, DOCTOR_ROLE); }
+    public boolean isPhysician(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, PHYSICIAN_ROLE); }
+    public boolean isSurgeon(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, SURGEON_ROLE); }
+    public boolean isNurse(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, NURSE_ROLE); }
     public boolean isMidwife(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "MIDWIFE"); }
     public boolean isHospitalAdmin(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE); }
     public boolean isLabScientist(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "LAB_SCIENTIST"); }
@@ -238,10 +244,27 @@ public class RoleValidator {
      * and widening that is not this change's call.
      */
     public boolean canOrderLabTests(UUID userId, UUID hospitalId) {
-        return isDoctor(userId, hospitalId)
-            || isPhysician(userId, hospitalId)
-            || isSurgeon(userId, hospitalId)
-            || isNurse(userId, hospitalId);
+        return LAB_ORDERING_ROLE_CODES.stream().anyMatch(code -> hasAnyCode(userId, hospitalId, code));
+    }
+
+    /** The role codes {@link #canOrderLabTests} admits, in the order it checks them. */
+    private static final java.util.List<String> LAB_ORDERING_ROLE_CODES =
+        java.util.List.of(DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, NURSE_ROLE);
+
+    /**
+     * Whether this one assignment's role is one {@link #canOrderLabTests}
+     * admits - the same codes, matched the way the query matches them
+     * ({@code UPPER(role.code)}, bare or {@code ROLE_}-prefixed). Says nothing
+     * about whether the assignment is active or where it is.
+     */
+    public static boolean isLabOrderingRole(UserRoleHospitalAssignment assignment) {
+        String code = assignment == null || assignment.getRole() == null ? null : assignment.getRole().getCode();
+        if (code == null) {
+            return false;
+        }
+        String upper = code.toUpperCase(Locale.ROOT);
+        String bare = upper.startsWith(ROLE_PREFIX) ? upper.substring(ROLE_PREFIX.length()) : upper;
+        return LAB_ORDERING_ROLE_CODES.contains(bare);
     }
 
     public void requireLabScientistOrAdmin(UUID userId, UUID hospitalId, Locale locale, MessageSource messageSource) {

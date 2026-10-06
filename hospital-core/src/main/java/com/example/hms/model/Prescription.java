@@ -384,6 +384,19 @@ public class Prescription extends BaseEntity {
     @Version
     private Long version;
 
+    /**
+     * Detaches the order from the pharmacy it was sent to. Called when that
+     * pharmacy refuses it, lets it time out, or does not deliver: the work
+     * queue then groups the row under the in-house dispensary, and the
+     * refusing partner stays on record in the routing decision.
+     */
+    public void clearPharmacy() {
+        this.pharmacyId = null;
+        this.pharmacyName = null;
+        this.pharmacyContact = null;
+        this.pharmacyAddress = null;
+    }
+
     public void addTransmission(PrescriptionTransmission transmission) {
         if (transmission == null) {
             return;
