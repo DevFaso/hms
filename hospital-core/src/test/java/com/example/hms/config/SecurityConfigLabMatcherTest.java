@@ -13,8 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * E9 #67 (D5, slice b2) — the lab matchers agree with the annotations: the
- * clinical lab paths (orders, results, specimens, acknowledge, transition,
- * PATCH) no longer admit HOSPITAL_ADMIN at the edge, while the lab
+ * clinical lab paths (orders, results, specimens, acknowledge, transition) no longer admit HOSPITAL_ADMIN at the edge, while the lab
  * configuration and integration matchers (test definitions, QC events,
  * reflex rules, HL7 inbound, instrument outbox) keep it.
  */
@@ -38,12 +37,32 @@ class SecurityConfigLabMatcherTest {
             ".requestMatchers(HttpMethod.POST, API_LAB_ORDERS)",
             ".requestMatchers(HttpMethod.GET, API_LAB_RESULTS, API_LAB_RESULTS_PATTERN)",
             ".requestMatchers(HttpMethod.POST, API_LAB_RESULTS + \"/*/acknowledge\")",
-            ".requestMatchers(HttpMethod.PATCH, API_LAB_ORDERS_PATTERN, API_LAB_RESULTS_PATTERN)",
             ".requestMatchers(HttpMethod.GET,  API_LAB_SPECIMENS, API_LAB_SPECIMENS_PATTERN)",
             ".requestMatchers(HttpMethod.POST, API_LAB_SPECIMENS, API_LAB_SPECIMENS_PATTERN)",
             "API_LAB_ORDERS + \"/*/specimens\")"}) {
             assertThat(rolesOf(source, matcher)).as(matcher).doesNotContain("ROLE_HOSPITAL_ADMIN");
         }
+    }
+
+    /**
+     * B17 — a PATCH matcher on /lab-orders and /lab-results guarded nothing
+     * because no lab controller maps PATCH. It must not come back unless a
+     * handler does: this fails if either side reappears without the other.
+     */
+    @Test
+    @DisplayName("no PATCH matcher on lab paths while no lab controller maps PATCH")
+    void noDeadPatchMatcherOnLabPaths() throws IOException {
+        String source = Files.readString(SOURCE, StandardCharsets.UTF_8);
+        boolean matcher = java.util.regex.Pattern
+            .compile("HttpMethod[.]PATCH,[^)]*API_LAB_(ORDERS|RESULTS)").matcher(source).find();
+        Path controllers = Paths.get("src/main/java/com/example/hms/controller");
+        boolean handler = false;
+        for (String c : new String[] {"LabOrderController", "LabResultController"}) {
+            handler |= Files.readString(controllers.resolve(c + ".java"), StandardCharsets.UTF_8)
+                .contains("@PatchMapping");
+        }
+        assertThat(matcher).as("a PATCH matcher on lab paths exists only if a lab handler maps PATCH")
+            .isEqualTo(handler);
     }
 
     /**
