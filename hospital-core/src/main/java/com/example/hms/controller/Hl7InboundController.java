@@ -77,8 +77,11 @@ public class Hl7InboundController {
      * <p>Those headers are the caller's own claim about which order this is,
      * which is why they are not trusted on their own: the message must also
      * identify a sender the receiving hospital has allowlisted, and the order
-     * must be one that hospital handles. An unknown sender and an order
-     * belonging to somebody else get the same 404.
+     * must be one that hospital handles. The caller, too, must hold a lab or
+     * clinical role at that hospital and name their own live assignment there,
+     * checked before the order is read. An unknown sender, a caller with no
+     * standing at the sender's hospital and an order belonging to somebody
+     * else all get the same 404.
      */
     @PostMapping(value = "/inbound",
                  consumes = {MediaType.TEXT_PLAIN_VALUE, "text/hl7-v2", MediaType.APPLICATION_OCTET_STREAM_VALUE})
@@ -93,8 +96,10 @@ public class Hl7InboundController {
                  description = "Unparseable HL7v2 message, or an MSH field wider than its column "
                              + "(the answer names the field and the limit)")
     @ApiResponse(responseCode = "404",
-                 description = "The sending pair is not allowlisted, or the order is not one that "
-                             + "sender's hospital handles. Deliberately the same answer for both.")
+                 description = "The sending pair is not allowlisted; the caller holds no lab or clinical "
+                             + "role at that sender's hospital, or X-Assignment-Id is not the caller's own "
+                             + "live assignment there; or the order is not one that hospital handles. "
+                             + "Deliberately the same answer for all of them.")
     public ResponseEntity<ApiResponseWrapper<LabResultResponseDTO>> inbound(
         @RequestBody String hl7Message,
         @RequestHeader("X-Lab-Order-Id")    UUID labOrderId,

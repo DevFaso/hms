@@ -134,6 +134,15 @@ public class LabResultServiceImpl implements LabResultService {
     private LabResultResponseDTO createLabResult(LabResultRequestDTO request,
                                                  boolean ingested,
                                                  UUID senderHospitalId) {
+        // The ingest caller's own standing, settled BEFORE the order is read.
+        // Every refusal in it depends on who is calling and which hospital the
+        // message names, never on the order, and each one is the missing-order
+        // 404 - so an order id that exists and one that does not get the same
+        // answer however the caller stands.
+        if (ingested) {
+            requireIngestCallerAtSender(request, senderHospitalId);
+        }
+
         // Read first, lock later. The write lock on the order is needed only
         // for the status decision further down, and taking it here held it
         // across the permission checks and — before the side effects moved
@@ -144,10 +153,9 @@ public class LabResultServiceImpl implements LabResultService {
         // message header was resolved against the MLLP allowlist before we
         // were called, and senderHospitalId is the hospital that entry points
         // at; the order must be one that hospital handles, on B1's
-        // ordering-or-performing predicate. Null means the sender identified
-        // itself as nobody we know, and is refused here rather than earlier so
-        // that an unknown sender and an order at another hospital are the same
-        // 404 — neither learns which it was.
+        // ordering-or-performing predicate. Null (the sender identified itself
+        // as nobody we know) was already refused above with this same 404, so
+        // an unknown sender and an order at another hospital are one answer.
         //
         // This replaces a flag. Until now the ingest path decided whether to
         // waive the tenancy comparison from "does a hospital scope resolve for
@@ -457,6 +465,55 @@ public class LabResultServiceImpl implements LabResultService {
             // statement, decided on the value committed under the lock.
             moveStatus(orderId, committedStatus,
                 LabOrderLifecycle.statusAfterAllResultsReleased(committedStatus));
+        }
+    }
+
+    /**
+     * The ingest path's gate on the caller, run before the order is read.
+     *
+     * <p>The adapter resolved the message's sending pair to a hospital; the
+     * caller must be a lab or clinical author at THAT hospital on a live
+     * assignment, and the {@code X-Assignment-Id} they name must be their own,
+     * active, and at that hospital. A verified super-admin is exempt, as from
+     * every other author check here.
+     *
+     * <p>Why before the lookup, and why every refusal is the missing-order
+     * 404: the sending pair is plaintext in the body, so a caller can quote
+     * any hospital's allowlisted pair. When this was judged after the order
+     * was read, a caller with no assignment at that hospital got 400 ("no lab
+     * or clinical role") for an order id that hospital handles and 404 for
+     * any other id - which confirmed which order ids exist. Decided here, the
+     * answer cannot depend on the order at all.
+     *
+     * <p>The role check is the database lookup, not {@code
+     * validateLabResultAuthor}: that one waves through a token carrying the
+     * super-admin authority, which is not the verified signal, and a bypass
+     * here would put the post-lookup checks back in front of such a caller.
+     * A caller with no active assignment anywhere (the unscoped principal)
+     * fails it, so they are refused up front.
+     */
+    private void requireIngestCallerAtSender(LabResultRequestDTO request, UUID senderHospitalId) {
+        if (senderHospitalId == null) {
+            throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
+        }
+        if (roleValidator.isSuperAdminFromJwtClaim()) {
+            return;
+        }
+        UUID currentUserId = authService.getCurrentUserId();
+        if (currentUserId == null || !holdsLabResultAuthorRole(currentUserId, senderHospitalId)) {
+            throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
+        }
+        UserRoleHospitalAssignment named = request.getAssignmentId() == null
+            ? null
+            : assignmentRepository.findById(request.getAssignmentId()).orElse(null);
+        boolean ownLiveAssignmentAtSender = named != null
+            && Boolean.TRUE.equals(named.getActive())
+            && named.getUser() != null
+            && currentUserId.equals(named.getUser().getId())
+            && named.getHospital() != null
+            && senderHospitalId.equals(named.getHospital().getId());
+        if (!ownLiveAssignmentAtSender) {
+            throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
         }
     }
 
@@ -1289,7 +1346,14 @@ public class LabResultServiceImpl implements LabResultService {
         if (authService.hasRole(ROLE_SUPER_ADMIN)) {
             return;
         }
-        boolean allowed = roleValidator.hasRole(userId, hospitalId, "ROLE_LAB_SCIENTIST")
+        if (!holdsLabResultAuthorRole(userId, hospitalId)) {
+            throw new BusinessException("User does not have a lab or clinical role for this hospital.");
+        }
+    }
+
+    /** A live lab or clinical role at this hospital, asked of the database; no super-admin bypass. */
+    private boolean holdsLabResultAuthorRole(UUID userId, UUID hospitalId) {
+        return roleValidator.hasRole(userId, hospitalId, "ROLE_LAB_SCIENTIST")
             || roleValidator.isMidwife(userId, hospitalId)
             || roleValidator.isDoctor(userId, hospitalId)
             || roleValidator.isNurse(userId, hospitalId)
@@ -1297,9 +1361,6 @@ public class LabResultServiceImpl implements LabResultService {
             || roleValidator.isLabManager(userId, hospitalId)
             || roleValidator.hasRole(userId, hospitalId, ROLE_LAB_DIRECTOR)
             || roleValidator.hasRole(userId, hospitalId, "ROLE_QUALITY_MANAGER");
-        if (!allowed) {
-            throw new BusinessException("User does not have a lab or clinical role for this hospital.");
-        }
     }
 
     private void acknowledgeResult(LabResult result, UUID userId) {
