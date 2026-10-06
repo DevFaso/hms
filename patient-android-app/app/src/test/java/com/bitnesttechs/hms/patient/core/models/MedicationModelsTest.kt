@@ -91,7 +91,7 @@ class MedicationModelsTest {
         val backend = setOf(
             "DRAFT", "PENDING_SIGNATURE", "SIGNED", "TRANSMITTED", "TRANSMISSION_FAILED",
             "CANCELLED", "DISCONTINUED", "PENDING_CLARIFICATION", "DISPENSED",
-            "PARTIALLY_FILLED", "PENDING_STOCK", "REQUIRES_EXTERNAL_FILL", "SENT_TO_PARTNER",
+            "PARTIALLY_FILLED", "PENDING_STOCK", "SENT_TO_PARTNER",
             "PARTNER_ACCEPTED", "PARTNER_REJECTED", "PARTNER_DISPENSED", "PRINTED_FOR_PATIENT"
         )
         val named = PrescriptionStatus.entries

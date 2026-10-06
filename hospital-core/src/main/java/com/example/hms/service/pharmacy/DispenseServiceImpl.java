@@ -125,7 +125,10 @@ public class DispenseServiceImpl implements DispenseService {
      * back-ordered prescription is exactly the one that must be fillable the
      * day the stock lands, and a partner's refusal returns the order to the
      * hospital's own counter; both used to be terminal, vanishing from every
-     * screen with no way back to SIGNED. PENDING_CLARIFICATION is deliberately
+     * screen with no way back to SIGNED. TRANSMISSION_FAILED is here for the
+     * same reason as a refusal: the SMS dispatch reached no pharmacy, and it
+     * is only recorded when no other pharmacy holds an open offer, so the
+     * order is the hospital's again. PENDING_CLARIFICATION is deliberately
      * absent: the pharmacist asked a question, and nothing is dispensed until
      * the prescriber answers and the order returns to SIGNED.
      *
@@ -145,7 +148,8 @@ public class DispenseServiceImpl implements DispenseService {
             PrescriptionStatus.TRANSMITTED,
             PrescriptionStatus.PARTIALLY_FILLED,
             PrescriptionStatus.PENDING_STOCK,
-            PrescriptionStatus.PARTNER_REJECTED
+            PrescriptionStatus.PARTNER_REJECTED,
+            PrescriptionStatus.TRANSMISSION_FAILED
     );
 
     /**
@@ -166,7 +170,8 @@ public class DispenseServiceImpl implements DispenseService {
     static final Set<PrescriptionStatus> NEEDS_ATTENTION_STATUSES = Set.of(
             PrescriptionStatus.PENDING_STOCK,
             PrescriptionStatus.PARTNER_REJECTED,
-            PrescriptionStatus.PARTNER_ACCEPTED
+            PrescriptionStatus.PARTNER_ACCEPTED,
+            PrescriptionStatus.TRANSMISSION_FAILED
     );
 
     static final String ATTENTION_CLARIFICATION_RESOLVED = "CLARIFICATION_RESOLVED";
@@ -1013,9 +1018,11 @@ public class DispenseServiceImpl implements DispenseService {
 
     /**
      * Why a queue row needs a second look before dispensing, or null for a
-     * plain fill. The five values the portal switches on, in the order this
+     * plain fill. The six values the portal switches on, in the order this
      * method decides them: PENDING_STOCK (a back order — the stock may or may
      * not have arrived), PARTNER_REJECTED (re-route or fill in-house),
+     * TRANSMISSION_FAILED (the SMS dispatch reached no pharmacy: send again,
+     * re-route or fill in-house),
      * PARTNER_ACCEPTED (with a partner, not fillable here until somebody
      * records a no-show), BACK_ORDER_OUTSTANDING (a partial fill moved the
      * row off PENDING_STOCK but the supplier order is still open) and

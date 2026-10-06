@@ -290,9 +290,15 @@ public class PrescriptionController {
 
             The pharmacy must be active, at the prescription's hospital, have a phone number on \
             file and not be of type HOSPITAL_DISPENSARY. The prescription must be SIGNED, \
-            TRANSMITTED, PARTNER_REJECTED or PENDING_STOCK: a refusal or a back order can be sent \
-            to another pharmacy, and doing so supersedes the offer the previous pharmacy held \
-            (its reference stops working and it is told).""")
+            TRANSMITTED, PARTNER_REJECTED, PENDING_STOCK, SENT_TO_PARTNER or TRANSMISSION_FAILED: \
+            a refusal, a back order or a failed send can be sent to another pharmacy, and doing so \
+            supersedes the offer the previous pharmacy held (its reference stops working and it \
+            is told).
+
+            If the SMS provider refuses the message the call fails with 400, but the failure is \
+            recorded and kept: a FAILED transmission, the new offer cancelled and, unless another \
+            pharmacy still holds an open offer, the prescription in TRANSMISSION_FAILED (on the \
+            pharmacy work queue, and dispatchable again).""")
     public ResponseEntity<ApiResponseWrapper<PrescriptionSmsDispatchResponseDTO>> dispatchSms(
         Authentication auth,
         @PathVariable UUID id,

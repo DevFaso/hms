@@ -76,7 +76,6 @@ export const ATTENTION_REASONS: readonly { status: string; labelKey: string }[] 
   { status: 'TRANSMISSION_FAILED', labelKey: 'PRESCRIPTIONS.ATTENTION.TRANSMISSION_FAILED' },
   { status: 'PARTNER_REJECTED', labelKey: 'PRESCRIPTIONS.ATTENTION.PARTNER_REJECTED' },
   { status: 'PENDING_STOCK', labelKey: 'PRESCRIPTIONS.ATTENTION.PENDING_STOCK' },
-  { status: 'REQUIRES_EXTERNAL_FILL', labelKey: 'PRESCRIPTIONS.ATTENTION.REQUIRES_EXTERNAL_FILL' },
 ];
 
 /**
@@ -542,6 +541,7 @@ export class PrescriptionsComponent implements OnInit {
    * DISPATCHABLE_STATUSES exactly: a refusal, a back order, and a pharmacy that
    * has gone quiet on an offer must all leave the clinician free to send the
    * prescription somewhere else. Re-sending supersedes the previous offer.
+   * TRANSMISSION_FAILED is the retry: the last SMS never reached a pharmacy.
    */
   canDispatchSms(p: PrescriptionResponse): boolean {
     return (
@@ -549,7 +549,8 @@ export class PrescriptionsComponent implements OnInit {
       p.status === 'TRANSMITTED' ||
       p.status === 'PARTNER_REJECTED' ||
       p.status === 'PENDING_STOCK' ||
-      p.status === 'SENT_TO_PARTNER'
+      p.status === 'SENT_TO_PARTNER' ||
+      p.status === 'TRANSMISSION_FAILED'
     );
   }
 
@@ -1369,6 +1370,10 @@ export class PrescriptionsComponent implements OnInit {
           this.dispatching.set(false);
           const msg = err?.error?.message || 'Could not dispatch the prescription SMS';
           this.toast.error(msg);
+          // A refused SMS is recorded server-side (TRANSMISSION_FAILED, unless
+          // another pharmacy still holds the order): reload so the row shows
+          // it. The modal stays open for a retry or another pharmacy.
+          this.load();
         },
       });
   }

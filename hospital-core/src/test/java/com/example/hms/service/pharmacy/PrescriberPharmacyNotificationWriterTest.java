@@ -100,6 +100,19 @@ class PrescriberPharmacyNotificationWriterTest {
     }
 
     @Test
+    @DisplayName("a failed SMS dispatch tells the prescriber it reached no pharmacy, without naming one")
+    void transmissionFailed() {
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+        assertThat(writer.write(prescriptionId, PrescriptionStatus.TRANSMISSION_FAILED)).isTrue();
+
+        verify(notificationService).createNotification(
+                "Pharmacie : le SMS transmettant Amoxicilline 500 mg (Aminata Diallo) à une pharmacie "
+                        + "n'a pas pu être envoyé. Renvoyez-le ou orientez l'ordonnance autrement.",
+                "dr.awa", "PHARMACY_EVENT");
+    }
+
+    @Test
     @DisplayName("the body never exceeds the 255-character notification column")
     void bodyIsCappedToTheColumn() {
         prescription.setMedicationName("X".repeat(300));

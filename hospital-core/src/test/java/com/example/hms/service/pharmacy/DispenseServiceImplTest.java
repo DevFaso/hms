@@ -1221,6 +1221,33 @@ class DispenseServiceImplTest {
         }
 
         @Test
+        @DisplayName("an order whose SMS dispatch failed is on the queue, flagged, and fillable at the counter")
+        void transmissionFailedIsQueuedFlaggedAndDispensable() {
+            Pageable pageable = PageRequest.of(0, 20);
+            Prescription failed = new Prescription();
+            failed.setId(UUID.randomUUID());
+            failed.setStatus(PrescriptionStatus.TRANSMISSION_FAILED);
+
+            @SuppressWarnings("unchecked")
+            org.mockito.ArgumentCaptor<List<PrescriptionStatus>> asked =
+                    org.mockito.ArgumentCaptor.forClass(List.class);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByHospital_IdAndStatusIn(
+                    eq(hospitalId), asked.capture(), eq(pageable)))
+                    .thenReturn(new PageImpl<>(List.of(failed)));
+
+            List<com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO> rows =
+                    service.getWorkQueue(pageable).getContent();
+
+            assertThat(asked.getValue()).contains(PrescriptionStatus.TRANSMISSION_FAILED);
+            assertThat(DispenseServiceImpl.DISPENSABLE_STATUSES).contains(PrescriptionStatus.TRANSMISSION_FAILED);
+            assertThat(rows).singleElement().satisfies(row -> {
+                assertThat(row.isNeedsAttention()).isTrue();
+                assertThat(row.getAttentionReason()).isEqualTo("TRANSMISSION_FAILED");
+            });
+        }
+
+        @Test
         @DisplayName("a partial fill keeps the queue cue while the supplier order is still outstanding")
         void outstandingBackOrderKeepsNeedsAttention() {
             Pageable pageable = PageRequest.of(0, 20);

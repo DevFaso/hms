@@ -649,6 +649,18 @@ describe('DispensingComponent — clarification control on the work queue', () =
     expect(cue.textContent).toContain('PHARMACY.ATTENTION.PENDING_STOCK');
   });
 
+  it('flags an order whose SMS dispatch failed, in words', async () => {
+    await render(['ROLE_PHARMACIST'], {
+      status: 'TRANSMISSION_FAILED',
+      needsAttention: true,
+      attentionReason: 'TRANSMISSION_FAILED',
+    });
+
+    const cue = fixture.nativeElement.querySelector('[data-testid="rx-attention-rx-1"]');
+    expect(cue.textContent).toContain('PHARMACY.ATTENTION.TRANSMISSION_FAILED');
+    expect(cue.textContent).not.toContain('PHARMACY.ATTENTION.UNRECOGNISED');
+  });
+
   it('leaves a plain fill unflagged', async () => {
     await render(['ROLE_PHARMACIST']);
 

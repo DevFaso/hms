@@ -39,7 +39,8 @@ public class PrescriberPharmacyNotifier {
             PrescriptionStatus.PARTNER_ACCEPTED,
             PrescriptionStatus.PARTNER_REJECTED,
             PrescriptionStatus.PARTNER_DISPENSED,
-            PrescriptionStatus.PENDING_CLARIFICATION);
+            PrescriptionStatus.PENDING_CLARIFICATION,
+            PrescriptionStatus.TRANSMISSION_FAILED);
 
     private final PrescriberPharmacyNotificationWriter writer;
 

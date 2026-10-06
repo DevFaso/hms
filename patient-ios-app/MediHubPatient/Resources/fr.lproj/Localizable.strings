@@ -532,7 +532,6 @@
 "rx_status_dispensed" = "Délivrée";
 "rx_status_partially_filled" = "Partiellement délivrée";
 "rx_status_pending_stock" = "En rupture de stock";
-"rx_status_requires_external_fill" = "Pharmacie externe";
 "rx_status_sent_to_partner" = "Envoyée à une pharmacie partenaire";
 "rx_status_partner_accepted" = "Acceptée par la pharmacie";
 "rx_status_partner_rejected" = "Refusée par la pharmacie";

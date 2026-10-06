@@ -5,6 +5,11 @@ public enum PrescriptionStatus {
     PENDING_SIGNATURE,
     SIGNED,
     TRANSMITTED,
+    /**
+     * The SMS dispatch to a pharmacy was refused by the provider and no other
+     * pharmacy holds the order: it reached nobody. On the pharmacy work queue,
+     * dispensable in-house, routable, and dispatchable again (the retry).
+     */
     TRANSMISSION_FAILED,
     CANCELLED,
     DISCONTINUED,
@@ -16,17 +21,6 @@ public enum PrescriptionStatus {
     PARTIALLY_FILLED,
     /** Medication not in stock; awaiting restock before dispensing. */
     PENDING_STOCK,
-    /**
-     * Prescription requires fill at an external / partner pharmacy.
-     *
-     * <p>Dead state (G4): no code path writes it. A pharmacist who cannot fill
-     * in-house records the routing decision directly (route-to-partner,
-     * print-for-patient, back-order, SMS dispatch), each of which moves the
-     * prescription to its own status from SIGNED. Kept only so rows or
-     * clients that still carry the value keep deserialising; it is neither
-     * dispensable nor routable.
-     */
-    REQUIRES_EXTERNAL_FILL,
     /** Prescription forwarded to a partner pharmacy. */
     SENT_TO_PARTNER,
     /** Partner pharmacy acknowledged the prescription. */
