@@ -283,4 +283,24 @@ class IntegrationMessageRetentionIT {
             .isInstanceOf(ConflictException.class);
         assertThat(repository.count()).isEqualTo(before);
     }
+
+    @Test
+    void aPurgedDeadLetterLeavesTheBadgeAndAnUnpurgedOneStays() {
+        // Two unresolved dead letters from an unknown sender (random
+        // correlation ids, so neither can ever be superseded): one past the
+        // ceiling, one inside it.
+        IntegrationMessageEvent purgedOne = row("MLLP:?|?", IntegrationMessageStatus.FAILED,
+            UUID.randomUUID().toString(), "MSH|gone", now.minusDays(370));
+        row("MLLP:?|?", IntegrationMessageStatus.FAILED,
+            UUID.randomUUID().toString(), "MSH|kept", now.minusDays(10));
+        assertThat(repository.countUnresolvedDeadLetters()).isEqualTo(2);
+
+        sweep(500).purgeExpiredPayloads();
+
+        assertThat(raw(purgedOne.getId())).doesNotContainEntry("payload_purged_at", null);
+        // The purged one can never be replayed, so it no longer counts; the
+        // row itself is still there.
+        assertThat(repository.countUnresolvedDeadLetters()).isEqualTo(1);
+        assertThat(repository.findById(purgedOne.getId())).isPresent();
+    }
 }

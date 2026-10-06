@@ -67,9 +67,17 @@ public interface IntegrationMessageEventRepository
      * are still counted as unresolved — the recorder always generates
      * one for new messages, so the only way to land here is via
      * direct DB inserts.
+     *
+     * <p>A row whose content the retention sweep erased (V177,
+     * {@code payloadPurgedAt} set) is not counted: it cannot be replayed,
+     * so nothing an operator does could ever clear it, and a reject under a
+     * random correlation id (an unknown sender) would otherwise sit on the
+     * badge for ever. The row itself stays listed, shown as "content
+     * purged".
      */
     @Query("SELECT COUNT(m) FROM IntegrationMessageEvent m "
         + "WHERE m.status = com.example.hms.enums.integration.IntegrationMessageStatus.FAILED "
+        + "AND m.payloadPurgedAt IS NULL "
         + "AND NOT EXISTS ("
         + "  SELECT 1 FROM IntegrationMessageEvent later "
         + "  WHERE later.correlationId IS NOT NULL "
