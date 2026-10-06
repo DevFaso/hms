@@ -137,6 +137,50 @@ class LabResultMapperProvenanceTest {
         assertThat(mapper.gradedReferenceRange(row).getUnit()).isEqualTo("mmol/L");
     }
 
+    /** As {@link #result}, on a test definition stated in {@code testUnit}. */
+    private static LabResult resultOnTest(String value, String unit, String testUnit,
+                                          LabTestReferenceRange... ranges) {
+        LabResult row = result(value, unit, ranges);
+        row.getLabOrder().getLabTestDefinition().setUnit(testUnit);
+        return row;
+    }
+
+    @Test
+    void aUnitlessRangeIsInTheTestsUnit_soAnotherUnitIsNotGraded() {
+        // Glucose configured in mg/dL with one bare 70-110 range: 5.4 mmol/L
+        // used to read LOW (and an in-range value auto-released as normal).
+        LabResult row = resultOnTest("5.4", "mmol/L", "mg/dL", range(70, 110, null));
+
+        assertThat(mapper.toResponseDTO(row).getSeverityFlag()).isEqualTo(LabResultMapper.FLAG_UNSPECIFIED);
+        assertThat(mapper.isUngradedForUnitMismatch(row)).isTrue();
+        assertThat(mapper.gradedReferenceRange(row)).isNull();
+    }
+
+    @Test
+    void aUnitlessRangeGradesAResultInTheTestsUnit() {
+        LabResult row = resultOnTest("60", " MG/DL", "mg/dL ", range(70, 110, null));
+
+        assertThat(mapper.toResponseDTO(row).getSeverityFlag()).isEqualTo("LOW");
+        assertThat(mapper.isUngradedForUnitMismatch(row)).isFalse();
+        assertThat(mapper.gradedReferenceRange(row).getMinValue()).isEqualTo(70.0);
+    }
+
+    @Test
+    void aUnitlessRangeOnATestWithNoUnitGradesAnyUnit() {
+        LabResult row = resultOnTest("7.1", "mmol/L", " ", range(3.5, 5.0, null));
+
+        assertThat(mapper.toResponseDTO(row).getSeverityFlag()).isEqualTo("HIGH");
+        assertThat(mapper.isUngradedForUnitMismatch(row)).isFalse();
+    }
+
+    @Test
+    void aRangesOwnUnitBeatsTheTestsUnit() {
+        LabResult row = resultOnTest("7.1", "mmol/L", "mg/dL", range(70, 110, null), range(3.5, 5.0, "mmol/L"));
+
+        assertThat(mapper.toResponseDTO(row).getSeverityFlag()).isEqualTo("HIGH");
+        assertThat(mapper.gradedReferenceRange(row).getUnit()).isEqualTo("mmol/L");
+    }
+
     @Test
     void aResultStatingNoUnitIsStillGradedAgainstTheFirstRange() {
         LabResult row = result("2.0", null, range(3.5, 5.0, "mmol/L"));

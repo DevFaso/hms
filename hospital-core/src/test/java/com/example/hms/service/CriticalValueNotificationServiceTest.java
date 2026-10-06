@@ -155,6 +155,17 @@ class CriticalValueNotificationServiceTest {
     }
 
     @Test
+    void aBareRangeOnATestInAnotherUnitRaisesNoAlert() {
+        // The range states no unit, so it is in the test's unit (mg/dL).
+        gradeWithRealMapper(null);
+        result.getLabOrder().getLabTestDefinition().setUnit("mg/dL");
+
+        service.notifyIfCritical(result);
+
+        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+    }
+
+    @Test
     void anAnalyserCriticalFlagStillAlertsWhenTheUnitsDiffer() {
         // OBX-8 is the laboratory's own grading; only the range-derived one is withheld.
         gradeWithRealMapper("mg/dL");

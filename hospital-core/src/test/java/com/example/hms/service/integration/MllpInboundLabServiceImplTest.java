@@ -435,6 +435,23 @@ class MllpInboundLabServiceImplTest {
     }
 
     @Test
+    @DisplayName("Auto-release on: a bare range on a test in another unit does not release an explicit N")
+    void explicitNormalAgainstABareRangeInTheTestsOtherUnitWaits() {
+        ReflectionTestUtils.setField(service, "autoReleaseEnabled", true);
+        configureRangesIn(null);
+        labOrder.getLabTestDefinition().setUnit("mg/dL");
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.processOruR01(List.of(observation("ACC-1", "90", "1", "GLU", "N")),
+            hospital, "APP", "FAC", null, "MSH|..." + (char) 13);
+
+        ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(captor.capture());
+        assertThat(captor.getValue().isReleased()).isFalse();
+    }
+
+    @Test
     @DisplayName("Auto-release on: an explicit N in the range's own unit is released as before")
     void explicitNormalInTheRangesUnitIsReleased() {
         ReflectionTestUtils.setField(service, "autoReleaseEnabled", true);
