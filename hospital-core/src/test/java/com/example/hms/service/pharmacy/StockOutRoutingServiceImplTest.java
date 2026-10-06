@@ -294,21 +294,21 @@ class StockOutRoutingServiceImplTest {
     }
 
     @Test
-    @DisplayName("G4: REQUIRES_EXTERNAL_FILL has no writer and is not a routable state")
-    void routeToPartnerShouldRejectDeadRequiresExternalFillStatus() {
-        prescription.setStatus(PrescriptionStatus.REQUIRES_EXTERNAL_FILL);
-        RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()
-                .prescriptionId(prescriptionId)
-                .targetPharmacyId(partnerId)
-                .build();
+    @DisplayName("an order whose SMS dispatch failed reached no pharmacy and can be printed for the patient")
+    void transmissionFailedIsRoutable() {
+        prescription.setStatus(PrescriptionStatus.TRANSMISSION_FAILED);
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
         when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(routingMapper.toResponseDTO(any()))
+                .thenReturn(RoutingDecisionResponseDTO.builder().routingType("PRINT").build());
 
-        assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("REQUIRES_EXTERNAL_FILL");
-        verify(routingDecisionRepository, never()).save(any());
+        service.printForPatient(prescriptionId);
+
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PRINTED_FOR_PATIENT);
     }
 
     @Test

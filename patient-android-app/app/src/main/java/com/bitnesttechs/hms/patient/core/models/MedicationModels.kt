@@ -172,7 +172,6 @@ enum class PrescriptionStatus {
     DISPENSED,
     PARTIALLY_FILLED,
     PENDING_STOCK,
-    REQUIRES_EXTERNAL_FILL,
     SENT_TO_PARTNER,
     PARTNER_ACCEPTED,
     PARTNER_REJECTED,
@@ -196,7 +195,6 @@ enum class PrescriptionStatus {
             DISPENSED -> R.string.rx_status_dispensed
             PARTIALLY_FILLED -> R.string.rx_status_partially_filled
             PENDING_STOCK -> R.string.rx_status_pending_stock
-            REQUIRES_EXTERNAL_FILL -> R.string.rx_status_requires_external_fill
             SENT_TO_PARTNER -> R.string.rx_status_sent_to_partner
             PARTNER_ACCEPTED -> R.string.rx_status_partner_accepted
             PARTNER_REJECTED -> R.string.rx_status_partner_rejected
@@ -211,8 +209,8 @@ enum class PrescriptionStatus {
             PENDING_STOCK, PARTIALLY_FILLED, PENDING_CLARIFICATION, PENDING_SIGNATURE ->
                 StatusTone.ATTENTION
             PARTNER_REJECTED, TRANSMISSION_FAILED, CANCELLED, DISCONTINUED -> StatusTone.NEGATIVE
-            DRAFT, SIGNED, TRANSMITTED, SENT_TO_PARTNER, REQUIRES_EXTERNAL_FILL,
-            PRINTED_FOR_PATIENT, UNKNOWN -> StatusTone.NEUTRAL
+            DRAFT, SIGNED, TRANSMITTED, SENT_TO_PARTNER, PRINTED_FOR_PATIENT,
+            UNKNOWN -> StatusTone.NEUTRAL
         }
 
     /**
@@ -227,7 +225,7 @@ enum class PrescriptionStatus {
         get() = when (this) {
             DRAFT, PENDING_SIGNATURE, CANCELLED, DISCONTINUED -> false
             SIGNED, TRANSMITTED, TRANSMISSION_FAILED, PENDING_CLARIFICATION, DISPENSED,
-            PARTIALLY_FILLED, PENDING_STOCK, REQUIRES_EXTERNAL_FILL, SENT_TO_PARTNER,
+            PARTIALLY_FILLED, PENDING_STOCK, SENT_TO_PARTNER,
             PARTNER_ACCEPTED, PARTNER_REJECTED, PARTNER_DISPENSED, PRINTED_FOR_PATIENT,
             UNKNOWN -> true
         }

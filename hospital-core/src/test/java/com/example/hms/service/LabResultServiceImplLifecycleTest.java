@@ -129,6 +129,10 @@ class LabResultServiceImplLifecycleTest {
         assignment = new UserRoleHospitalAssignment();
         assignment.setId(UUID.randomUUID());
         assignment.setHospital(hospital);
+        // the caller's own: the ingest path refuses an assignment that is not
+        com.example.hms.model.User actor = new com.example.hms.model.User();
+        actor.setId(actorId);
+        assignment.setUser(actor);
     }
 
     private LabResultRequestDTO entryRequest() {
@@ -749,7 +753,7 @@ class LabResultServiceImplLifecycleTest {
         // It was skipped here once, on the premise that an interface account
         // holds no role anywhere; so does a technician offboarded this morning
         // whose token has not expired.
-        verify(roleValidator).hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST");
+        verify(roleValidator, atLeastOnce()).hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST");
     }
 
     @Test
@@ -767,6 +771,10 @@ class LabResultServiceImplLifecycleTest {
         // fix/hl7-inbound-tenancy.
         bindHospitalContext(UUID.randomUUID());
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        // past the gate on the caller (their own live assignment), so this
+        // still fails on the acting-hospital check
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
 
         LabResultRequestDTO request = entryRequest();
         assertThatThrownBy(() -> service.createIngestedLabResult(request, hospitalId, Locale.ENGLISH))
@@ -858,15 +866,15 @@ class LabResultServiceImplLifecycleTest {
         // nobody we know. It must be refused, and refused as a missing order —
         // a distinguishable "unknown sender" would let a caller walk order ids
         // with a pair it knows is unlisted and learn which ids exist.
-        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
         bindHospitalContext(null);
 
         LabResultRequestDTO request = entryRequest();
         assertThatThrownBy(() -> service.createIngestedLabResult(request, null, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
         verify(labResultRepository, never()).save(any(LabResult.class));
-        // and it never got as far as asking who the caller is
+        // and it never got as far as asking who the caller is, or the order
         verify(authService, never()).getCurrentUserId();
+        verify(labOrderRepository, never()).findById(any());
     }
 
     @Test
@@ -881,12 +889,19 @@ class LabResultServiceImplLifecycleTest {
         when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
         bindHospitalContext(null);
         UUID someOtherHospital = UUID.randomUUID();
+        // a caller in good standing at the sender's hospital, on their own
+        // assignment there - so the refusal is the order's, not the caller's
+        Hospital other = new Hospital();
+        other.setId(someOtherHospital);
+        assignment.setHospital(other);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        stubIngestAuthorAt(someOtherHospital);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
 
         LabResultRequestDTO request = entryRequest();
         assertThatThrownBy(() -> service.createIngestedLabResult(request, someOtherHospital, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
         verify(labResultRepository, never()).save(any(LabResult.class));
-        verify(authService, never()).getCurrentUserId();
     }
 
     @Test
@@ -944,17 +959,19 @@ class LabResultServiceImplLifecycleTest {
         // the allowlist cannot tell them apart either. What can is this check,
         // which asks the database for an ACTIVE assignment - and it is now run
         // on this path rather than skipped.
-        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
         bindHospitalContext(null);
-        when(roleValidator.getCurrentHospitalId()).thenReturn(null);
-        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(actorId);
         // every live-role lookup answers false: no active assignment anywhere
 
         LabResultRequestDTO request = entryRequest();
+        // refused as a missing order, before the order is read: a 400 here
+        // told an order id the sender's hospital handles from one it does not
         assertThatThrownBy(() -> service.createIngestedLabResult(request, hospitalId, Locale.ENGLISH))
-            .isInstanceOf(BusinessException.class);
+            .isInstanceOf(ResourceNotFoundException.class)
+            .extracting(t -> ((ResourceNotFoundException) t).getMessageKey())
+            .isEqualTo("laborder.notfound");
         verify(labResultRepository, never()).save(any(LabResult.class));
+        verify(labOrderRepository, never()).findById(any());
     }
 
     @Test
@@ -965,10 +982,7 @@ class LabResultServiceImplLifecycleTest {
         // recorded as the author of the result, in the chart and in the
         // response.
         assignment.setActive(false);
-        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
         bindHospitalContext(null);
-        when(roleValidator.getCurrentHospitalId()).thenReturn(null);
-        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(actorId);
         stubIngestAuthorAt(hospitalId);
         when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
@@ -991,11 +1005,9 @@ class LabResultServiceImplLifecycleTest {
         UserRoleHospitalAssignment foreign = new UserRoleHospitalAssignment();
         foreign.setId(UUID.randomUUID());
         foreign.setHospital(elsewhere);
+        foreign.setUser(assignment.getUser());
 
-        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
         bindHospitalContext(null);
-        when(roleValidator.getCurrentHospitalId()).thenReturn(null);
-        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(assignmentRepository.findById(foreign.getId())).thenReturn(Optional.of(foreign));
         // past the author check, so this test still fails on the assignment
@@ -1006,6 +1018,174 @@ class LabResultServiceImplLifecycleTest {
         assertThatThrownBy(() -> service.createIngestedLabResult(request, hospitalId, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
         verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    // ── The ingest gate on the caller: no existence oracle ───────────────
+
+    /** What the ingest call refused with; it must be the missing-order 404. */
+    private ResourceNotFoundException ingestRefusal(LabResultRequestDTO request, UUID senderHospitalId) {
+        Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(
+            () -> service.createIngestedLabResult(request, senderHospitalId, Locale.ENGLISH));
+        assertThat(thrown).isInstanceOf(ResourceNotFoundException.class);
+        return (ResourceNotFoundException) thrown;
+    }
+
+    @Test
+    @DisplayName("an unscoped caller quoting another hospital's sender cannot tell an existing order from a missing one")
+    void anUnscopedCallerCannotProbeOrderIds() {
+        // The residual oracle: a lab-role token with no active assignment,
+        // quoting the allowlisted MSH pair of a hospital it does not work at.
+        // The author check ran after the order was read and only for orders
+        // that hospital handles, so an existing id answered 400 ("no lab or
+        // clinical role") and any other id 404. Now both are the same 404,
+        // decided before the order is read.
+        bindHospitalContext(null);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        org.mockito.Mockito.lenient().when(labOrderRepository.findById(order.getId()))
+            .thenReturn(Optional.of(order));
+        UUID missingOrderId = UUID.randomUUID();
+        org.mockito.Mockito.lenient().when(labOrderRepository.findById(missingOrderId))
+            .thenReturn(Optional.empty());
+
+        LabResultRequestDTO existing = entryRequest();
+        LabResultRequestDTO missing = entryRequest();
+        missing.setLabOrderId(missingOrderId);
+        ResourceNotFoundException forExisting = ingestRefusal(existing, hospitalId);
+        ResourceNotFoundException forMissing = ingestRefusal(missing, hospitalId);
+
+        assertThat(forExisting.getMessageKey()).isEqualTo("laborder.notfound");
+        assertThat(forMissing.getMessageKey()).isEqualTo(forExisting.getMessageKey());
+        assertThat(forMissing.getMessage()).isEqualTo(forExisting.getMessage());
+        verify(labOrderRepository, never()).findById(any());
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("an X-Assignment-Id that is not the caller's own is the same missing-order 404")
+    void aColleaguesAssignmentIsRefusedAsAMissingOrder() {
+        // The assignment check on this path asked only that the assignment's
+        // hospital handle the order, so an author at the sender could put a
+        // colleague's name on the result. It must be the caller's own, and
+        // refusing it must reveal nothing the missing order would not.
+        UserRoleHospitalAssignment colleagues = colleaguesAssignmentAt(hospital);
+
+        bindHospitalContext(null);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        stubIngestAuthorAt(hospitalId);
+        when(assignmentRepository.findById(colleagues.getId())).thenReturn(Optional.of(colleagues));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findById(order.getId()))
+            .thenReturn(Optional.of(order));
+
+        LabResultRequestDTO request = entryRequest();
+        request.setAssignmentId(colleagues.getId());
+
+        assertThat(ingestRefusal(request, hospitalId).getMessageKey()).isEqualTo("laborder.notfound");
+        verify(labOrderRepository, never()).findById(any());
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("a scoped caller's X-Assignment-Id must be their own too")
+    void aScopedCallerCannotNameAColleaguesAssignment() {
+        UserRoleHospitalAssignment colleagues = colleaguesAssignmentAt(hospital);
+
+        bindHospitalContext(hospitalId);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(assignmentRepository.findById(colleagues.getId())).thenReturn(Optional.of(colleagues));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findById(order.getId()))
+            .thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        LabResultRequestDTO request = entryRequest();
+        request.setAssignmentId(colleagues.getId());
+
+        assertThat(ingestRefusal(request, hospitalId).getMessageKey()).isEqualTo("laborder.notfound");
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("the caller's own assignment at another hospital is the same missing-order 404")
+    void anOwnAssignmentAtAnotherHospitalIsRefusedAsAMissingOrder() {
+        // The assignment must be at the hospital the message names, not merely
+        // at one that handles the order (B1 gives an order two).
+        UUID performingHospitalId = UUID.randomUUID();
+        Hospital performing = new Hospital();
+        performing.setId(performingHospitalId);
+        order.setPerformingHospital(performing);
+
+        bindHospitalContext(null);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        stubIngestAuthorAt(performingHospitalId);
+        // the caller's own, live, but at the ordering hospital
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findById(order.getId()))
+            .thenReturn(Optional.of(order));
+
+        assertThat(ingestRefusal(entryRequest(), performingHospitalId).getMessageKey())
+            .isEqualTo("laborder.notfound");
+        verify(labOrderRepository, never()).findById(any());
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("the caller's own live assignment is not enough without a lab or clinical role there")
+    void anAssignmentWithoutAnAuthorRoleIsRefusedAsAMissingOrder() {
+        // A receptionist's assignment at the sender's hospital is live and
+        // their own, but it is not a role that may record a result; the
+        // refusal is the missing-order 404, before the order is read.
+        bindHospitalContext(null);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        org.mockito.Mockito.lenient().when(assignmentRepository.findById(assignment.getId()))
+            .thenReturn(Optional.of(assignment));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findById(order.getId()))
+            .thenReturn(Optional.of(order));
+        // every live-role lookup answers false
+
+        assertThat(ingestRefusal(entryRequest(), hospitalId).getMessageKey()).isEqualTo("laborder.notfound");
+        verify(labOrderRepository, never()).findById(any());
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("a scoped lab user at the sender's hospital, on their own assignment, still records the result")
+    void aScopedLabUserAtTheSenderStillIngests() {
+        stubEntryPath();
+        bindHospitalContext(hospitalId);
+
+        service.createIngestedLabResult(entryRequest(), hospitalId, Locale.ENGLISH);
+
+        verify(labResultRepository).save(any(LabResult.class));
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
+    }
+
+    @Test
+    @DisplayName("a scoped user at the ordering hospital still posts the performing laboratory's message")
+    void aScopedCallerAtTheOrderingHospitalStillPostsThePerformingLabsMessage() {
+        // B1: the order is handled by A (ordering) and B (performing). A user
+        // acting at A, on their own assignment at A, posting B's analyzer
+        // pair, reaches it through the acting-hospital rule as before; the
+        // sender-hospital standing is asked only of an unscoped caller.
+        UUID performingHospitalId = UUID.randomUUID();
+        Hospital performing = new Hospital();
+        performing.setId(performingHospitalId);
+        order.setPerformingHospital(performing);
+        stubEntryPath();
+        bindHospitalContext(hospitalId);
+
+        service.createIngestedLabResult(entryRequest(), performingHospitalId, Locale.ENGLISH);
+
+        verify(labResultRepository).save(any(LabResult.class));
+    }
+
+    /** A live assignment at {@code at} held by somebody other than the caller. */
+    private UserRoleHospitalAssignment colleaguesAssignmentAt(Hospital at) {
+        UserRoleHospitalAssignment colleagues = new UserRoleHospitalAssignment();
+        colleagues.setId(UUID.randomUUID());
+        colleagues.setHospital(at);
+        com.example.hms.model.User colleague = new com.example.hms.model.User();
+        colleague.setId(UUID.randomUUID());
+        colleagues.setUser(colleague);
+        return colleagues;
     }
 
     @Test

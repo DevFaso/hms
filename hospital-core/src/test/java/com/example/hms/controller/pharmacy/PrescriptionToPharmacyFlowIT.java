@@ -20,6 +20,7 @@ import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
+import com.example.hms.model.prescription.PrescriptionTransmission;
 import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
@@ -74,6 +75,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -83,6 +85,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -483,6 +486,67 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
                 .isEqualTo(RoutingDecisionStatus.PENDING);
         // ...and must not have been told to drop it (the notification is AFTER_COMMIT).
         verify(smsService, never()).send(eq(PARTNER_A_PHONE), contains("autre pharmacie"));
+        // The failed attempt itself is on file, committed with the error.
+        assertThat(transmissionsOf(rxId))
+                .extracting(PrescriptionTransmission::getStatus)
+                .containsExactly("FAILED");
+    }
+
+    @Test
+    @DisplayName("a refused SMS is recorded (FAILED row, TRANSMISSION_FAILED, on the work queue) and can be sent again")
+    void failedDispatchIsRecordedAndRetried() throws Exception {
+        UUID rxId = createAndSignPrescription();
+        doThrow(new IllegalStateException("gateway refused " + COMMUNITY_A_PHONE))
+                .when(smsService).send(eq(COMMUNITY_A_PHONE), anyString());
+
+        mockMvc.perform(apiPost(API + "/prescriptions/{id}/dispatch-sms", rxId)
+                        .with(doctor(doctorA, hospitalA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("pharmacyId", communityA.getId()))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", not(containsString(COMMUNITY_A_PHONE))))
+                .andExpect(jsonPath("$.message", not(containsString("gateway"))))
+                // The bundle sentence, not the raw key.
+                .andExpect(jsonPath("$.message", not(containsString("prescription.dispatch"))))
+                .andExpect(jsonPath("$.message", containsString("SMS")));
+
+        // Committed although the caller got an error.
+        assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.TRANSMISSION_FAILED);
+        List<PrescriptionTransmission> attempts = transmissionsOf(rxId);
+        assertThat(attempts).singleElement().satisfies(t -> {
+            assertThat(t.getStatus()).isEqualTo("FAILED");
+            assertThat(t.getStatusReason()).doesNotContain(COMMUNITY_A_PHONE).doesNotContain("gateway");
+        });
+        assertThat(routingDecisionRepository.findByPrescriptionId(rxId))
+                .extracting(PrescriptionRoutingDecision::getStatus)
+                .containsExactly(RoutingDecisionStatus.CANCELLED);
+        // The 400 escapes the write-audit interceptor; the service audits the
+        // committed change itself, with its actor and without the number.
+        assertThat(auditEventLogRepository.findAll())
+                .filteredOn(row -> rxId.toString().equals(row.getResourceId())
+                        && row.getEventType() == AuditEventType.PRESCRIPTION_SENT_TO_PARTNER)
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.getStatus()).isEqualTo(com.example.hms.enums.AuditStatus.FAILURE);
+                    assertThat(row.getUser()).isNotNull();
+                    assertThat(row.getUser().getId()).isEqualTo(doctorA.getId());
+                    assertThat(row.getEventDescription()).doesNotContain(COMMUNITY_A_PHONE).doesNotContain("gateway");
+                });
+
+        // Visible where the pharmacist works, flagged for attention.
+        mockMvc.perform(apiGet(WORK_QUEUE).with(pharmacist(pharmacistA, hospitalA)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(WORK_QUEUE_IDS, hasItem(rxId.toString())))
+                .andExpect(jsonPath("$.data.content[?(@.id == '" + rxId + "')].attentionReason",
+                        hasItem("TRANSMISSION_FAILED")));
+
+        // The provider is back: sending again is the retry.
+        reset(smsService);
+        dispatchSms(rxId, communityA);
+        assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
+        assertThat(transmissionsOf(rxId))
+                .extracting(PrescriptionTransmission::getStatus)
+                .containsExactlyInAnyOrder("FAILED", "SENT");
     }
 
     // ───────────────────────── leg 4: tenancy ─────────────────────────
@@ -684,6 +748,12 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
     private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder apiPost(
             String path, Object... vars) {
         return post(path, vars).contextPath(API);
+    }
+
+    private List<PrescriptionTransmission> transmissionsOf(UUID rxId) {
+        return transactionTemplate.execute(tx -> transmissionRepository.findAll().stream()
+                .filter(t -> t.getPrescription() != null && rxId.equals(t.getPrescription().getId()))
+                .toList());
     }
 
     private PrescriptionStatus statusOf(UUID rxId) {

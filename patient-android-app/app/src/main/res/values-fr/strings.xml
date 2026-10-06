@@ -640,7 +640,6 @@
     <string name="rx_status_dispensed">Délivrée</string>
     <string name="rx_status_partially_filled">Partiellement délivrée</string>
     <string name="rx_status_pending_stock">En rupture de stock</string>
-    <string name="rx_status_requires_external_fill">Pharmacie externe</string>
     <string name="rx_status_sent_to_partner">Envoyée à une pharmacie partenaire</string>
     <string name="rx_status_partner_accepted">Acceptée par la pharmacie</string>
     <string name="rx_status_partner_rejected">Refusée par la pharmacie</string>

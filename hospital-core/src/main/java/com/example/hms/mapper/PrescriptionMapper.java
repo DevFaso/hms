@@ -31,11 +31,11 @@ public class PrescriptionMapper {
      */
     static final java.util.Set<PrescriptionStatus> PHARMACY_OWNED_STATUSES = java.util.EnumSet.of(
         PrescriptionStatus.TRANSMITTED,
+        PrescriptionStatus.TRANSMISSION_FAILED,
         PrescriptionStatus.PENDING_CLARIFICATION,
         PrescriptionStatus.DISPENSED,
         PrescriptionStatus.PARTIALLY_FILLED,
         PrescriptionStatus.PENDING_STOCK,
-        PrescriptionStatus.REQUIRES_EXTERNAL_FILL,
         PrescriptionStatus.SENT_TO_PARTNER,
         PrescriptionStatus.PARTNER_ACCEPTED,
         PrescriptionStatus.PARTNER_REJECTED,

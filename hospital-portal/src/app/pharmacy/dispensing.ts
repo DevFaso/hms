@@ -43,6 +43,7 @@ import { PrescriptionClarificationComponent } from '../shared/prescription-clari
 export const QUEUE_ATTENTION_REASONS: readonly { reason: string; labelKey: string }[] = [
   { reason: 'PENDING_STOCK', labelKey: 'PHARMACY.ATTENTION.PENDING_STOCK' },
   { reason: 'PARTNER_REJECTED', labelKey: 'PHARMACY.ATTENTION.PARTNER_REJECTED' },
+  { reason: 'TRANSMISSION_FAILED', labelKey: 'PHARMACY.ATTENTION.TRANSMISSION_FAILED' },
   { reason: 'PARTNER_ACCEPTED', labelKey: 'PHARMACY.ATTENTION.PARTNER_ACCEPTED' },
   { reason: 'BACK_ORDER_OUTSTANDING', labelKey: 'PHARMACY.ATTENTION.BACK_ORDER_OUTSTANDING' },
   { reason: 'CLARIFICATION_RESOLVED', labelKey: 'PHARMACY.ATTENTION.CLARIFICATION_RESOLVED' },

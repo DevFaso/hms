@@ -75,7 +75,8 @@ public class PrescriptionClarificationService {
             PrescriptionStatus.TRANSMITTED,
             PrescriptionStatus.PARTIALLY_FILLED,
             PrescriptionStatus.PENDING_STOCK,
-            PrescriptionStatus.PARTNER_REJECTED
+            PrescriptionStatus.PARTNER_REJECTED,
+            PrescriptionStatus.TRANSMISSION_FAILED
     );
     private static final String AUDIT_ENTITY = "PRESCRIPTION";
 

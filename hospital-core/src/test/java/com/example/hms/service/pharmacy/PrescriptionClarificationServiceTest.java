@@ -133,6 +133,21 @@ class PrescriptionClarificationServiceTest {
         }
 
         @Test
+        @DisplayName("an order whose SMS dispatch failed is the hospital's again and can be questioned")
+        void clarifiesATransmissionFailedOrder() {
+            prescription.setStatus(PrescriptionStatus.TRANSMISSION_FAILED);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(pharmacistId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+            service.requestClarification(prescriptionId, "which strength?");
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PENDING_CLARIFICATION);
+            assertThat(prescription.getClarificationPreviousStatus())
+                    .isEqualTo(PrescriptionStatus.TRANSMISSION_FAILED);
+        }
+
+        @Test
         @DisplayName("refuses an order that is not awaiting a fill")
         void refusesNonDispensableStatus() {
             prescription.setStatus(PrescriptionStatus.DISPENSED);

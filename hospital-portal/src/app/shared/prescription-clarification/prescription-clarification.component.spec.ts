@@ -102,6 +102,11 @@ describe('PrescriptionClarificationComponent', () => {
     expect(el('rx-clarification-open-rx-1')).toBeNull();
   });
 
+  it('offers the control on an order whose SMS dispatch failed — it is back with the hospital', () => {
+    create(['ROLE_PHARMACIST'], { mode: 'PHARMACY', status: 'TRANSMISSION_FAILED' });
+    expect(el('rx-clarification-open-rx-1')).not.toBeNull();
+  });
+
   it('is absent on a status the backend refuses a question from', () => {
     // DISPENSED is not in CLARIFIABLE_STATUSES: the order has already been
     // handed over, so the button would only ever earn a 400.

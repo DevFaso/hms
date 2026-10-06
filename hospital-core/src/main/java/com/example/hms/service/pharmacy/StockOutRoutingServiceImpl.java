@@ -90,10 +90,9 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
      * a late confirmation from the original partner is refused rather than
      * flipping an order somebody else has since filled.
      *
-     * <p>REQUIRES_EXTERNAL_FILL is deliberately absent (gap G4): nothing in
-     * the backend writes it — a pharmacist who cannot fill in-house records
-     * the decision itself — so listing it only suggested a "flagged for
-     * external fill" step that does not exist.
+     * <p>TRANSMISSION_FAILED is routable: the SMS dispatch never reached a
+     * pharmacy, and the dispatch only records that state when no other
+     * pharmacy holds an open offer, so nobody else has the order.
      */
     static final Set<PrescriptionStatus> ROUTABLE_STATUSES = Set.of(
             PrescriptionStatus.SIGNED,
@@ -101,7 +100,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
             PrescriptionStatus.PARTIALLY_FILLED,
             PrescriptionStatus.PENDING_STOCK,
             PrescriptionStatus.PARTNER_REJECTED,
-            PrescriptionStatus.PARTNER_ACCEPTED
+            PrescriptionStatus.PARTNER_ACCEPTED,
+            PrescriptionStatus.TRANSMISSION_FAILED
     );
 
     /**

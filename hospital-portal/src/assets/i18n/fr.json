@@ -4796,7 +4796,6 @@
         "REFILL_REQUESTED": "Renouvellement demandé",
         "REJECTED": "Refusé",
         "RELEASED": "Diffusé",
-        "REQUIRES_EXTERNAL_FILL": "Nécessite délivrance externe",
         "RESCHEDULED": "Reprogrammé",
         "RESULTED": "Résultats rendus",
         "RESULTS_AVAILABLE": "Résultats disponibles",
@@ -4910,7 +4909,6 @@
         "PENDING_SIGNATURE": "En attente de signature",
         "PENDING_STOCK": "En attente de stock",
         "PRINTED_FOR_PATIENT": "Imprimée pour le patient",
-        "REQUIRES_EXTERNAL_FILL": "Nécessite délivrance externe",
         "SENT_TO_PARTNER": "Envoyée au partenaire",
         "SIGNED": "Signée",
         "TRANSMISSION_FAILED": "Échec de transmission",
@@ -5791,10 +5789,9 @@
     },
     "ATTENTION": {
       "PENDING_CLARIFICATION": "Le pharmacien attend la réponse du prescripteur",
-      "TRANSMISSION_FAILED": "Échec de la transmission — l'ordonnance n'est parvenue à aucune pharmacie, et aucun circuit ne fait avancer ce statut",
+      "TRANSMISSION_FAILED": "L'envoi du SMS à la pharmacie a échoué — l'ordonnance n'est parvenue à aucune pharmacie ; renvoyez-la ou orientez-la ailleurs",
       "PARTNER_REJECTED": "La pharmacie partenaire l'a refusée — elle doit être réorientée",
       "PENDING_STOCK": "Rupture de stock — en commande",
-      "REQUIRES_EXTERNAL_FILL": "En attente d'une pharmacie extérieure — aucun circuit ne fait avancer ce statut",
       "UNRECOGNISED_STATUS": "Statut non reconnu — vérifiez auprès de la pharmacie"
     },
     "PHARMACY": {
@@ -7451,6 +7448,7 @@
     "ATTENTION": {
       "PENDING_STOCK": "Rupture de stock — en commande",
       "PARTNER_REJECTED": "La pharmacie partenaire a refusé — délivrer ici ou réacheminer",
+      "TRANSMISSION_FAILED": "L'envoi par SMS a échoué — aucune pharmacie ne l'a ; délivrez ici, renvoyez-la ou orientez-la ailleurs",
       "PARTNER_ACCEPTED": "Chez une pharmacie partenaire — non délivrable ici tant qu'elle la détient",
       "BACK_ORDER_OUTSTANDING": "Partiellement délivrée — la commande fournisseur est toujours ouverte",
       "CLARIFICATION_RESOLVED": "Le prescripteur a répondu — lire la réponse d'abord",
