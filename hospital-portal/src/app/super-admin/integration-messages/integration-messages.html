@@ -3,6 +3,18 @@
     <div>
       <h1 class="page-title">{{ 'INTEGRATION_MESSAGES.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'INTEGRATION_MESSAGES.SUBTITLE' | translate }}</p>
+      @if (retentionOff()) {
+        <p class="retention-note" data-test="retention-off">
+          {{ 'INTEGRATION_MESSAGES.RETENTION_OFF' | translate }}
+        </p>
+      } @else if (retentionActive() && retentionDays(); as days) {
+        <p class="retention-note" data-test="retention-note">
+          {{
+            'INTEGRATION_MESSAGES.RETENTION_NOTE'
+              | translate: { days: days, maxDays: unresolvedMaxDays() }
+          }}
+        </p>
+      }
     </div>
     <div class="dlq-badge" data-test="dlq-badge">
       <span class="material-symbols-outlined" aria-hidden="true">error</span>
@@ -143,12 +155,24 @@
             <td>{{ row.attemptCount }}</td>
             <td class="cell-error">{{ row.errorMessage ?? '—' }}</td>
             <td class="cell-actions">
+              @if (isPurged(row)) {
+                <small
+                  class="purged-note"
+                  [attr.data-test-purged]="row.id"
+                  [title]="
+                    'INTEGRATION_MESSAGES.CONTENT_PURGED_TITLE'
+                      | translate: { date: (row.payloadPurgedAt | date: 'medium') }
+                  "
+                >
+                  {{ 'INTEGRATION_MESSAGES.CONTENT_PURGED' | translate }}
+                </small>
+              }
               @if (row.status === 'FAILED') {
                 <button
                   type="button"
                   class="replay-btn"
                   [attr.data-test-replay]="row.id"
-                  [disabled]="replayBusyFor(row.id)"
+                  [disabled]="replayBusyFor(row.id) || isPurged(row)"
                   (click)="replay(row.id)"
                 >
                   @if (replayBusyFor(row.id)) {

@@ -655,6 +655,10 @@
     "REPLAY": "Replay",
     "REPLAYING": "Replaying…",
     "PAGER": "Page {{ current }} of {{ total }}",
+    "CONTENT_PURGED": "Content purged (retention policy)",
+    "CONTENT_PURGED_TITLE": "Message content erased on {{ date }} under the retention policy; the event record is kept.",
+    "RETENTION_NOTE": "Message content is kept for {{ days }} days, and a failed message's for at most {{ maxDays }} days (a resolved one goes {{ days }} days after resolution if that is sooner). A replay is a new copy, kept {{ days }} days from the replay. Event records are kept indefinitely.",
+    "RETENTION_OFF": "Message content retention is OFF — content is kept until it is turned on.",
     "FILTER": {
       "INTEGRATION_ID": "Integration",
       "INTEGRATION_ID_PLACEHOLDER": "e.g. partner.nhis",
