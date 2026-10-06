@@ -182,39 +182,38 @@ class LabResultMapperProvenanceTest {
     }
 
     @Test
-    void aCodedAnalyserUnitIsComparedOnItsFirstComponent() {
-        // OBX-6 is stored as sent: identifier^text^coding system.
-        LabResult row = result("7.1", "mmol/L^millimole per liter^UCUM", range(3.5, 5.0, "mmol/L"));
-
-        assertThat(mapper.toResponseDTO(row).getSeverityFlag()).isEqualTo("HIGH");
-        assertThat(mapper.isUngradedForUnitMismatch(row)).isFalse();
-    }
-
-    @Test
-    void aCodedUnitOnAMgPerDlTestWithABareRangeIsNotGraded() {
-        LabResult row = resultOnTest("5.4", "mmol/L^millimole per liter^UCUM", "mg/dL", range(70, 110, null));
+    void exponentUnitsAreDistinct() {
+        // A caret inside a unit is part of it: 10^6/uL is not 10^3/uL.
+        LabResult row = result("250", "10^6/uL", range(150, 400, "10^3/uL"));
 
         assertThat(mapper.toResponseDTO(row).getSeverityFlag()).isEqualTo(LabResultMapper.FLAG_UNSPECIFIED);
         assertThat(mapper.isUngradedForUnitMismatch(row)).isTrue();
     }
 
     @Test
-    void aCodedUnitWithNoIdentifierCountsAsNoUnit() {
-        // "^^UCUM": no first component, so the result states no unit and is
-        // graded against the first range rather than marked "units differ".
-        LabResult row = result("2.0", "^^UCUM", range(3.5, 5.0, "mmol/L"));
+    void anExponentUnitGradesAgainstTheSameUnit() {
+        LabResult row = result("12.5", "10^9/L", range(4.0, 11.0, "10^9/L"), range(4.0, 11.0, "10^12/L"));
 
-        assertThat(mapper.toResponseDTO(row).getSeverityFlag()).isEqualTo("LOW");
-        assertThat(mapper.isUngradedForUnitMismatch(row)).isFalse();
+        assertThat(mapper.toResponseDTO(row).getSeverityFlag()).isEqualTo("HIGH");
+        assertThat(mapper.gradedReferenceRange(row).getUnit()).isEqualTo("10^9/L");
     }
 
     @Test
-    void codedRangeAndTestUnitsAreComparedOnTheirFirstComponentToo() {
-        LabResult row = resultOnTest("7.1", "mmol/L", "mmol/L^millimole per liter^UCUM", range(3.5, 5.0, null),
-            range(70, 110, "mg/dL^milligram per deciliter^UCUM"));
+    void aResultWithNoUnitIsInTheTestsUnit() {
+        // 95 on a mg/dL glucose test: graded against the bare 70-110 range
+        // (effective mg/dL), never against the mmol/L one listed first.
+        LabResult row = resultOnTest("95", null, "mg/dL", range(3.9, 6.1, "mmol/L"), range(70, 110, null));
 
-        assertThat(mapper.toResponseDTO(row).getSeverityFlag()).isEqualTo("HIGH");
-        assertThat(mapper.gradedReferenceRange(row).getMinValue()).isEqualTo(3.5);
+        assertThat(mapper.toResponseDTO(row).getSeverityFlag()).isEqualTo("NORMAL");
+        assertThat(mapper.gradedReferenceRange(row).getMinValue()).isEqualTo(70.0);
+    }
+
+    @Test
+    void aResultWithNoUnitOnATestWhoseRangesAreInAnotherUnitIsNotGraded() {
+        LabResult row = resultOnTest("95", " ", "mg/dL", range(3.9, 6.1, "mmol/L"));
+
+        assertThat(mapper.toResponseDTO(row).getSeverityFlag()).isEqualTo(LabResultMapper.FLAG_UNSPECIFIED);
+        assertThat(mapper.isUngradedForUnitMismatch(row)).isTrue();
     }
 
     @Test

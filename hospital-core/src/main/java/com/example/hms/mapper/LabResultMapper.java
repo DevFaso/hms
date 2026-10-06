@@ -182,13 +182,15 @@ public class LabResultMapper {
      * ranges were configured in. A range's EFFECTIVE unit is its own unit, or,
      * when it states none, the test definition's unit: an administrator who
      * leaves a range's unit empty means the test's unit, and a glucose range
-     * of 70-110 on a mg/dL test must not grade 5.4 mmol/L. Units compare
-     * trimmed and case-insensitively; nothing is converted.
+     * of 70-110 on a mg/dL test must not grade 5.4 mmol/L. A result that
+     * states no unit is likewise in the test's unit. Units compare trimmed and
+     * case-insensitively; nothing is converted.
      * <ol>
-     *   <li>the first range whose effective unit is the result's unit;</li>
+     *   <li>the first range whose effective unit is the result's effective unit;</li>
      *   <li>else the first range with no effective unit at all (neither the
      *       range nor the test states one: bare limits);</li>
-     *   <li>else, when the result itself states no unit, the first range;</li>
+     *   <li>else, when neither the result nor the test states a unit, the
+     *       first range;</li>
      *   <li>else nothing grades it: every range is in another unit.</li>
      * </ol>
      */
@@ -197,7 +199,11 @@ public class LabResultMapper {
         if (referenceRanges == null || referenceRanges.isEmpty()) {
             return NOT_GRADED;
         }
+        // A result that states no unit is in the test's unit, like a range.
         String result = normalisedUnit(resultUnit);
+        if (result == null) {
+            result = normalisedUnit(testUnit);
+        }
         LabTestReferenceRange chosen = result != null ? firstInUnit(referenceRanges, result, testUnit) : null;
         if (chosen == null) {
             chosen = firstWithoutUnit(referenceRanges, testUnit);
@@ -241,19 +247,12 @@ public class LabResultMapper {
     }
 
     /**
-     * The unit as compared: its first HL7 component, trimmed and lower-cased,
-     * or null when there is none. An analyser's OBX-6 is stored as sent and
-     * is usually coded ({@code mmol/L^millimole per liter^UCUM}); the first
-     * component is the unit identifier, so it alone is compared. A value
-     * starting with {@code ^} has an empty identifier and counts as no unit.
+     * The unit as compared: trimmed and lower-cased, null when blank. Nothing
+     * is split or converted here - {@code 10^9/L} is a unit, not a coded
+     * field; the HL7 parser stores only OBX-6's identifier.
      */
     private static String normalisedUnit(String unit) {
-        if (unit == null) {
-            return null;
-        }
-        int separator = unit.indexOf('^');
-        String identifier = (separator >= 0 ? unit.substring(0, separator) : unit).trim();
-        return identifier.isEmpty() ? null : identifier.toLowerCase(Locale.ROOT);
+        return unit == null || unit.isBlank() ? null : unit.trim().toLowerCase(Locale.ROOT);
     }
 
     public LabResult toEntity(LabResultRequestDTO dto, LabOrder labOrder, UserRoleHospitalAssignment assignment) {
