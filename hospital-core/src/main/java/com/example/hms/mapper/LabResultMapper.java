@@ -17,7 +17,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Predicate;
@@ -129,8 +128,8 @@ public class LabResultMapper {
      * alerting that reads it, the release gate and this, so they cannot drift.
      *
      * <p><b>A range in another unit is never used.</b> When no configured
-     * range is in the result's unit (and the fallback range states a unit of
-     * its own), the result is NOT graded: no range is returned here, the
+     * range is in the result's unit and none is unit-less, the result is NOT
+     * graded: no range is returned here, the
      * severity flag is {@link #FLAG_UNSPECIFIED}, and
      * {@link #isUngradedForUnitMismatch} is true so the result is never
      * auto-released and staff see "not graded: units differ". A range with no
@@ -176,26 +175,38 @@ public class LabResultMapper {
     private static final Grading UNITS_DIFFER = new Grading(null, true);
 
     /**
-     * The one unit-matching rule. A range in the result's unit wins; with none,
-     * the first configured range is used only when it states no unit of its
-     * own (or the result states none) — a range in another unit grades
-     * nothing.
+     * The one unit-matching rule, in this order, independent of the order the
+     * ranges were configured in:
+     * <ol>
+     *   <li>the first range stated in the result's unit;</li>
+     *   <li>else the first range with no unit of its own (bare limits);</li>
+     *   <li>else, when the result itself states no unit, the first range;</li>
+     *   <li>else nothing grades it: every range is in another unit.</li>
+     * </ol>
      */
     private static Grading gradingOf(String resultUnit, List<LabTestReferenceRange> referenceRanges) {
-        LabTestReferenceRange candidate = findMatchingRange(resultUnit, referenceRanges);
-        if (candidate == null) {
+        if (referenceRanges == null || referenceRanges.isEmpty()) {
             return NOT_GRADED;
         }
-        return isInAnotherUnit(candidate, resultUnit) ? UNITS_DIFFER : new Grading(candidate, false);
-    }
-
-    /** True when both units are stated and they differ. */
-    private static boolean isInAnotherUnit(LabTestReferenceRange range, String resultUnit) {
-        String rangeUnit = range.getUnit();
-        if (rangeUnit == null || rangeUnit.isBlank() || resultUnit == null || resultUnit.isBlank()) {
-            return false;
+        boolean resultHasUnit = resultUnit != null && !resultUnit.isBlank();
+        if (resultHasUnit) {
+            String unit = resultUnit.trim();
+            for (LabTestReferenceRange range : referenceRanges) {
+                if (range != null && range.getUnit() != null && range.getUnit().trim().equalsIgnoreCase(unit)) {
+                    return new Grading(range, false);
+                }
+            }
         }
-        return !rangeUnit.trim().equalsIgnoreCase(resultUnit.trim());
+        for (LabTestReferenceRange range : referenceRanges) {
+            if (range != null && (range.getUnit() == null || range.getUnit().isBlank())) {
+                return new Grading(range, false);
+            }
+        }
+        if (!resultHasUnit) {
+            LabTestReferenceRange first = referenceRanges.get(0);
+            return first != null ? new Grading(first, false) : NOT_GRADED;
+        }
+        return UNITS_DIFFER;
     }
 
     public LabResult toEntity(LabResultRequestDTO dto, LabOrder labOrder, UserRoleHospitalAssignment assignment) {
@@ -400,20 +411,5 @@ public class LabResultMapper {
             return "HIGH";
         }
         return "NORMAL";
-    }
-
-    private static LabTestReferenceRange findMatchingRange(String resultUnit, List<LabTestReferenceRange> referenceRanges) {
-        if (referenceRanges == null || referenceRanges.isEmpty()) {
-            return null;
-        }
-        if (resultUnit == null || resultUnit.isBlank()) {
-            return referenceRanges.get(0);
-        }
-        String normalizedUnit = resultUnit.trim().toLowerCase(Locale.ROOT);
-        return referenceRanges.stream()
-            .filter(range -> range != null && range.getUnit() != null
-                && range.getUnit().trim().equalsIgnoreCase(normalizedUnit))
-            .findFirst()
-            .orElse(referenceRanges.get(0));
     }
 }

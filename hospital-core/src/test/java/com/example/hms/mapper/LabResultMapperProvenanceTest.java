@@ -103,6 +103,41 @@ class LabResultMapperProvenanceTest {
     }
 
     @Test
+    void aUnitlessRangeAfterOneInAnotherUnitGrades() {
+        LabResult row = result("7.1", "mmol/L", range(70, 110, "mg/dL"), range(3.5, 5.0, null));
+
+        assertThat(mapper.toResponseDTO(row).getSeverityFlag()).isEqualTo("HIGH");
+        assertThat(mapper.isUngradedForUnitMismatch(row)).isFalse();
+        assertThat(mapper.gradedReferenceRange(row).getMinValue()).isEqualTo(3.5);
+    }
+
+    @Test
+    void aUnitlessRangeBeforeOneInAnotherUnitGradesTheSame() {
+        LabResult row = result("7.1", "mmol/L", range(3.5, 5.0, null), range(70, 110, "mg/dL"));
+
+        assertThat(mapper.toResponseDTO(row).getSeverityFlag()).isEqualTo("HIGH");
+        assertThat(mapper.isUngradedForUnitMismatch(row)).isFalse();
+        assertThat(mapper.gradedReferenceRange(row).getMinValue()).isEqualTo(3.5);
+    }
+
+    @Test
+    void rangesAllInOtherUnitsGradeNothing() {
+        LabResult row = result("7.1", "mmol/L", range(70, 110, "mg/dL"), range(0.7, 1.1, "g/L"));
+
+        assertThat(mapper.toResponseDTO(row).getSeverityFlag()).isEqualTo(LabResultMapper.FLAG_UNSPECIFIED);
+        assertThat(mapper.isUngradedForUnitMismatch(row)).isTrue();
+        assertThat(mapper.gradedReferenceRange(row)).isNull();
+    }
+
+    @Test
+    void aRangeInTheResultsUnitWinsOverAUnitlessOne() {
+        LabResult row = result("7.1", "mmol/L", range(0, 100, null), range(3.5, 5.0, "mmol/L"));
+
+        assertThat(mapper.toResponseDTO(row).getSeverityFlag()).isEqualTo("HIGH");
+        assertThat(mapper.gradedReferenceRange(row).getUnit()).isEqualTo("mmol/L");
+    }
+
+    @Test
     void aResultStatingNoUnitIsStillGradedAgainstTheFirstRange() {
         LabResult row = result("2.0", null, range(3.5, 5.0, "mmol/L"));
 
