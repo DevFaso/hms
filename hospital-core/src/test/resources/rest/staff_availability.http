@@ -1,6 +1,6 @@
 ### [1] Create availability for John Doe (f96720a8-8596-4d6a-a808-477748998daa)
 POST http://localhost:8081/api/availability
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1NzQzMDgxLCJleHAiOjE3NTU4Mjk0ODF9.SGOZWnxZVD-VhH3Z49Xd9Gw9ac8JLxnpzpMGOKATB1Y
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept-Language: en
 
@@ -19,11 +19,11 @@ Accept-Language: en
 
 ###
 GET http://localhost:8081/api/staff/by-user/23c38dc8-a4f4-4166-b026-32bede9ce994
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ2MjEzNzIsImV4cCI6MTc1NDcwNzc3Mn0.GlisdKkktahXynhDpQaGYnRgaT56bezzZIG6FyRlFnTnATSCI6mmoEDTqrkdZrLn8Tz_CMSQg8_Mb9QPkdpmxg
+Authorization: Bearer {{token}}
 
 ### [2] Create availability for Lab Scientist (c8990de4-2f41-45ab-b0f6-447f4050f015)
 POST http://localhost:8081/api/availability
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDYyMzYzNSwiZXhwIjoxNzU0NzEwMDM1fQ.9yTyhOoEOKzUSOl8SIT9iN-srXtt7yUAMKe92dfxQWb_kLBUHU-KpbLmJLmo6tJC5OlLv_6Hl4xx9pSVJhf0pA
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept-Language: en
 
@@ -42,7 +42,7 @@ Accept-Language: en
 ### [3] Create availability for Moderator (c6addf24-6a2a-4bbb-b126-22d39662ce16)
 POST http://localhost:8081/api/availability
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6IkFETUlOLFVTRVIiLCJpYXQiOjE3NDg3MDc3NDMsImV4cCI6MTc0ODc5NDE0M30.DpV3z0Fz3Vg13JajD2LJSJzwCKkiogu51h4A7oH1J1gtdIKYd0WDayt0SsH7H5CsLAPHVDGX1LZXDJKcU7Lh2g
+Authorization: Bearer {{token}}
 Accept-Language: en
 
 {
@@ -61,7 +61,7 @@ Accept-Language: en
 ### [4] Create availability for Surgeon (f68e3e2e-61d9-440f-9a55-305c062ad216)
 POST http://localhost:8081/api/availability
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDY1MDEyNSwiZXhwIjoxNzU0NzM2NTI1fQ.1pHj_4ml_3THPpkyAVxvlnIFzIn2cqxXGN-TLq7arfOYzhysFsKWyLWetZdWxT9wCrkBCuR6M4vqLJ8Ld-Tixw
+Authorization: Bearer {{token}}
 Accept-Language: en
 
 {
@@ -79,21 +79,21 @@ Accept-Language: en
 
 ### [5] Check availability for John Doe at 2025-06-16T10:00:00
 GET http://localhost:8081/api/availability/check?staffId=f96720a8-8596-4d6a-a808-477748998daa&datetime=2025-06-16T10:00:00
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6IkFETUlOLFVTRVIiLCJpYXQiOjE3NDg3MDc3NDMsImV4cCI6MTc0ODc5NDE0M30.DpV3z0Fz3Vg13JajD2LJSJzwCKkiogu51h4A7oH1J1gtdIKYd0WDayt0SsH7H5CsLAPHVDGX1LZXDJKcU7Lh2g
+Authorization: Bearer {{token}}
 Accept-Language: en
 
 ###
 
 ### [6] Check availability for Surgeon at 2025-06-18T14:00:00
 GET http://localhost:8081/api/availability/check?staffId=f68e3e2e-61d9-440f-9a55-305c062ad216&datetime=2025-06-18T14:00:00
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6IkFETUlOLFVTRVIiLCJpYXQiOjE3NDg3MDc3NDMsImV4cCI6MTc0ODc5NDE0M30.DpV3z0Fz3Vg13JajD2LJSJzwCKkiogu51h4A7oH1J1gtdIKYd0WDayt0SsH7H5CsLAPHVDGX1LZXDJKcU7Lh2g
+Authorization: Bearer {{token}}
 Accept-Language: en
 
 
 ###
 GET http://localhost:8081/api/staff/9794a549-bd9c-4285-9c5f-b4af4fb63c92
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDYyMzYzNSwiZXhwIjoxNzU0NzEwMDM1fQ.9yTyhOoEOKzUSOl8SIT9iN-srXtt7yUAMKe92dfxQWb_kLBUHU-KpbLmJLmo6tJC5OlLv_6Hl4xx9pSVJhf0pA
+Authorization: Bearer {{token}}
 
 ###
 GET http://localhost:8081/api/staff/9794a549-bd9c-4285-9c5f-b4af4fb63c92
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDYyMzYzNSwiZXhwIjoxNzU0NzEwMDM1fQ.9yTyhOoEOKzUSOl8SIT9iN-srXtt7yUAMKe92dfxQWb_kLBUHU-KpbLmJLmo6tJC5OlLv_6Hl4xx9pSVJhf0pA
+Authorization: Bearer {{token}}

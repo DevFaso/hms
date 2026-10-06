@@ -1,10 +1,10 @@
 ### Variables
 @host = http://localhost:8081/api
 @contentType = application/json
-@adminToken = eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1NzM2NjM4LCJleHAiOjE3NTU4MjMwMzh9.Y5dYymVwqCfLpQfY9xKnGVGIMi0ZhTWaTeh3bOM7Cs0
-@doctorToken = eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2RvY3RvciIsInJvbGVzIjpbIlJPTEVfRE9DVE9SIl0sImlhdCI6MTc1NTczOTI4NCwiZXhwIjoxNzU1ODI1Njg0fQ._YJOj6RYO-hEqN6RxzgtSSfHo9BQX4U07-JaoiAbuOE
-#@nurseToken = eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX251cnNlIiwicm9sZXMiOlsiUk9MRV9SRUNFUFRJT05JU1QiLCJST0xFX05VUlNFIl0sImlhdCI6MTc1NTczOTM1MSwiZXhwIjoxNzU1ODI1NzUxfQ.GidtPam3IQPMVUeiyJBrE1FPw6cz8VFDCw5t-keL8FE
-@patientToken = eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJtaW5vcl9wYXRpZW50MSIsInJvbGVzIjpbIlJPTEVfUEFUSUVOVCJdLCJpYXQiOjE3NTU3Mzk2NDQsImV4cCI6MTc1NTgyNjA0NH0.HPqoY6runESsj1ifGZUlyFIk80HWNgSA275KeBABoSk
+@adminToken = {{token}}
+@doctorToken = {{token}}
+#@nurseToken = {{token}}
+@patientToken = {{token}}
 
 ### Create a new treatment (Admin or Doctor)
 # @name createTreatment
@@ -136,7 +136,7 @@ Accept-Language: en-US
 ###
 POST {{host}}/treatments
 Content-Type: {{contentType}}
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMxNTE1MDYsImV4cCI6MTc1MzIzNzkwNn0.CJ9TLezokw3sMpRlpBSYoG8hnE0p2JI9A5J8MyWQMipYxKUmSf7YkxIynPSLxQGawxR0GYlOCY_2i4aMdm4GGA
+Authorization: Bearer {{token}}
 Accept-Language: en-US
 
 {

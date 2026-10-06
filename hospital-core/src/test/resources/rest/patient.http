@@ -1,6 +1,6 @@
 ### ENV / GLOBALS
 @base = http://localhost:8081/api
-@token = eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2RvY3RvciIsInJvbGVzIjpbIlJPTEVfRE9DVE9SIl0sImlhdCI6MTc1NjA1MzQ0MSwiZXhwIjoxNzU2MTM5ODQxfQ.thryCut9zvVE3-QATUrP2RWzewuHCiVIYUYX83hJB6c
+@token = {{token}}
 @patientUsername = doctor1
 @hospitalName = Clinic Sandoff
 
