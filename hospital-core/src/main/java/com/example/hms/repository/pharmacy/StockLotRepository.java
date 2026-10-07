@@ -49,6 +49,16 @@ public interface StockLotRepository extends JpaRepository<StockLot, UUID> {
     int decrementRemaining(@Param("id") UUID id, @Param("quantity") BigDecimal quantity,
                            @Param("now") LocalDateTime now);
 
+    /**
+     * Sets the remaining quantity outright: a count correction from the lot
+     * edit endpoint. Last write wins, as a stock count does; it never rides
+     * along with an unrelated edit of a stale copy.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = false)
+    @Query("UPDATE StockLot l SET l.remainingQuantity = :quantity, l.updatedAt = :now WHERE l.id = :id")
+    int setRemaining(@Param("id") UUID id, @Param("quantity") BigDecimal quantity,
+                     @Param("now") LocalDateTime now);
+
     /** Puts {@code quantity} back on the lot. */
     @Modifying(flushAutomatically = true, clearAutomatically = false)
     @Query("UPDATE StockLot l SET l.remainingQuantity = l.remainingQuantity + :quantity, l.updatedAt = :now "

@@ -847,9 +847,10 @@ public class DispenseServiceImpl implements DispenseService {
         }
         InventoryItem inventoryItem = stockLot.getInventoryItem();
         BigDecimal requested = dto.getQuantityDispensed();
-        // Atomic in the database (#825 security finding 1): two fills of
-        // different orders from the same lot can no longer overwrite each
-        // other's decrement. 0 rows = not enough left at this instant.
+        // Atomic in the database (#825 security finding 1, round 5): every
+        // stock writer (fills, returns, receipts, adjustments, transfers)
+        // moves quantities this way, lot first then item, so none can
+        // overwrite another. 0 rows = not enough left at this instant.
         LocalDateTime now = LocalDateTime.now(clock);
         if (stockLotRepository.decrementRemaining(stockLot.getId(), requested, now) == 0) {
             // No figure for what remains: the managed copy was read before the

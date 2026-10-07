@@ -366,6 +366,23 @@ class InventoryServiceImplTest {
             verify(inventoryItemMapper).updateEntity(inventoryItem, dto);
             verify(inventoryItemRepository).save(inventoryItem);
         }
+
+        @Test
+        @DisplayName("#825 round 5: a count correction is an atomic UPDATE; an edit without one leaves the quantity alone")
+        void quantityIsSetAtomically() {
+            InventoryItemRequestDTO dto = buildItemRequest();
+            dto.setQuantityOnHand(new BigDecimal("42.00"));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
+
+            service.updateInventoryItem(inventoryItemId, dto);
+            verify(inventoryItemRepository).setOnHand(eq(inventoryItemId), eq(new BigDecimal("42.00")), any());
+
+            dto.setQuantityOnHand(null);
+            service.updateInventoryItem(inventoryItemId, dto);
+            verify(inventoryItemRepository, org.mockito.Mockito.times(1)).setOnHand(any(), any(), any());
+        }
     }
 
     // ── deactivateInventoryItem ──────────────────────────────────────────
@@ -443,7 +460,11 @@ class InventoryServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(stockLotMapper.toEntity(dto, inventoryItem, user)).thenReturn(lot);
             when(stockLotRepository.save(lot)).thenReturn(lot);
-            when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
+            when(inventoryItemRepository.incrementOnHand(eq(inventoryItemId), any(), any()))
+                    .thenAnswer(inv -> {
+                        inventoryItem.setQuantityOnHand(inventoryItem.getQuantityOnHand().add(inv.getArgument(1)));
+                        return 1;
+                    });
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(stockTransactionRepository.save(any(StockTransaction.class)))
@@ -462,8 +483,10 @@ class InventoryServiceImplTest {
             // 2. Item quantity on hand is increased by lot's remaining quantity
             assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("150.00"));
 
-            // 3. Inventory item is saved with updated quantity
-            verify(inventoryItemRepository).save(inventoryItem);
+            // 3. ...atomically (#825 round 5), never by saving a stale copy
+            verify(inventoryItemRepository).incrementOnHand(eq(inventoryItemId),
+                    eq(new BigDecimal("50.00")), any());
+            verify(inventoryItemRepository, never()).save(inventoryItem);
 
             // 4. RECEIPT stock transaction is recorded
             ArgumentCaptor<StockTransaction> txCaptor = ArgumentCaptor.forClass(StockTransaction.class);
@@ -498,7 +521,6 @@ class InventoryServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(stockLotMapper.toEntity(dto, inventoryItem, user)).thenReturn(lot);
             when(stockLotRepository.save(lot)).thenReturn(lot);
-            when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
             when(stockTransactionRepository.save(any(StockTransaction.class)))
                     .thenAnswer(inv -> {
                         StockTransaction tx = inv.getArgument(0);
@@ -675,6 +697,25 @@ class InventoryServiceImplTest {
             assertThat(result.getLotNumber()).isEqualTo("LOT-001-UPDATED");
             verify(stockLotMapper).updateEntity(lot, dto);
             verify(stockLotRepository).save(lot);
+            verify(stockLotRepository, never()).setRemaining(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("#825 round 5: a remaining-quantity correction is an atomic UPDATE")
+        void remainingIsSetAtomically() {
+            StockLot lot = StockLot.builder().inventoryItem(inventoryItem).lotNumber("LOT-001").build();
+            lot.setId(stockLotId);
+            StockLotRequestDTO dto = StockLotRequestDTO.builder()
+                    .inventoryItemId(inventoryItemId)
+                    .remainingQuantity(new BigDecimal("7.00"))
+                    .build();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(lot));
+            stubHospitalScope();
+            when(stockLotRepository.save(lot)).thenReturn(lot);
+
+            service.updateStockLot(stockLotId, dto);
+
+            verify(stockLotRepository).setRemaining(eq(stockLotId), eq(new BigDecimal("7.00")), any());
         }
     }
 

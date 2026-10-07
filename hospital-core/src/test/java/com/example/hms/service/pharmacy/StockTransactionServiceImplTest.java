@@ -118,6 +118,38 @@ class StockTransactionServiceImplTest {
         user = new User();
         user.setId(userId);
         user.setUsername("pharmacist1");
+        stockMovesLikeTheDatabase();
+    }
+
+    /**
+     * The atomic quantity UPDATEs (#825 round 5) act on the fixture as the
+     * database would: a decrement applies only when enough is left.
+     */
+    private void stockMovesLikeTheDatabase() {
+        org.mockito.Mockito.lenient().when(stockLotRepository.decrementRemaining(any(), any(), any()))
+                .thenAnswer(inv -> {
+                    BigDecimal q = inv.getArgument(1);
+                    if (stockLot.getRemainingQuantity().compareTo(q) < 0) return 0;
+                    stockLot.setRemainingQuantity(stockLot.getRemainingQuantity().subtract(q));
+                    return 1;
+                });
+        org.mockito.Mockito.lenient().when(stockLotRepository.incrementRemaining(any(), any(), any()))
+                .thenAnswer(inv -> {
+                    stockLot.setRemainingQuantity(stockLot.getRemainingQuantity().add(inv.getArgument(1)));
+                    return 1;
+                });
+        org.mockito.Mockito.lenient().when(inventoryItemRepository.decrementOnHand(any(), any(), any()))
+                .thenAnswer(inv -> {
+                    BigDecimal q = inv.getArgument(1);
+                    if (inventoryItem.getQuantityOnHand().compareTo(q) < 0) return 0;
+                    inventoryItem.setQuantityOnHand(inventoryItem.getQuantityOnHand().subtract(q));
+                    return 1;
+                });
+        org.mockito.Mockito.lenient().when(inventoryItemRepository.incrementOnHand(any(), any(), any()))
+                .thenAnswer(inv -> {
+                    inventoryItem.setQuantityOnHand(inventoryItem.getQuantityOnHand().add(inv.getArgument(1)));
+                    return 1;
+                });
     }
 
     private void stubHospitalScope() {
@@ -163,7 +195,6 @@ class StockTransactionServiceImplTest {
         tx.setId(transactionId);
         when(stockTransactionMapper.toEntity(eq(dto), eq(inventoryItem), any(), eq(user))).thenReturn(tx);
         when(stockTransactionRepository.save(tx)).thenReturn(tx);
-        when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
         when(stockTransactionMapper.toResponseDTO(tx)).thenReturn(buildResponse());
     }
@@ -187,8 +218,8 @@ class StockTransactionServiceImplTest {
             assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("120.00"));
             // Lot remaining increased
             assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("70.00"));
-            verify(stockLotRepository).save(stockLot);
-            verify(inventoryItemRepository).save(inventoryItem);
+            verify(stockLotRepository, never()).save(any(StockLot.class));
+            verify(inventoryItemRepository, never()).save(any(InventoryItem.class));
             verify(auditEventLogService).logEvent(any(AuditEventRequestDTO.class));
         }
     }
@@ -210,13 +241,14 @@ class StockTransactionServiceImplTest {
 
             assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("90.00"));
             assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("40.00"));
-            verify(stockLotRepository).save(stockLot);
-            verify(inventoryItemRepository).save(inventoryItem);
+            verify(stockLotRepository, never()).save(any(StockLot.class));
+            verify(inventoryItemRepository, never()).save(any(InventoryItem.class));
         }
 
         @Test
         @DisplayName("throws BusinessException when insufficient item stock")
         void insufficientItemStock() {
+            stockLot.setRemainingQuantity(new BigDecimal("500.00")); // the item is what refuses
             BigDecimal qty = new BigDecimal("200.00");
             StockTransactionRequestDTO dto = buildRequest(StockTransactionType.DISPENSE, qty);
 
@@ -288,13 +320,14 @@ class StockTransactionServiceImplTest {
 
             assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("85.00"));
             assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("35.00"));
-            verify(stockLotRepository).save(stockLot);
-            verify(inventoryItemRepository).save(inventoryItem);
+            verify(stockLotRepository, never()).save(any(StockLot.class));
+            verify(inventoryItemRepository, never()).save(any(InventoryItem.class));
         }
 
         @Test
         @DisplayName("throws when insufficient stock for transfer")
         void insufficientStock() {
+            stockLot.setRemainingQuantity(new BigDecimal("500.00")); // the item is what refuses
             BigDecimal qty = new BigDecimal("150.00");
             StockTransactionRequestDTO dto = buildRequest(StockTransactionType.TRANSFER, qty);
 
@@ -337,7 +370,7 @@ class StockTransactionServiceImplTest {
 
             assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("105.00"));
             assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("55.00"));
-            verify(stockLotRepository).save(stockLot);
+            verify(stockLotRepository, never()).save(any(StockLot.class));
         }
 
         @Test
@@ -371,8 +404,8 @@ class StockTransactionServiceImplTest {
 
             assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("108.00"));
             assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("58.00"));
-            verify(stockLotRepository).save(stockLot);
-            verify(inventoryItemRepository).save(inventoryItem);
+            verify(stockLotRepository, never()).save(any(StockLot.class));
+            verify(inventoryItemRepository, never()).save(any(InventoryItem.class));
         }
     }
 
@@ -404,15 +437,13 @@ class StockTransactionServiceImplTest {
             when(stockTransactionMapper.toEntity(eq(dto), eq(inventoryItem), isNull(), eq(user)))
                     .thenReturn(tx);
             when(stockTransactionRepository.save(tx)).thenReturn(tx);
-            when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(stockTransactionMapper.toResponseDTO(tx)).thenReturn(buildResponse());
 
             service.recordTransaction(dto);
 
             assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("125.00"));
-            verify(inventoryItemRepository).save(inventoryItem);
-            verify(stockLotRepository, never()).save(any(StockLot.class));
+            verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
         }
     }
 
@@ -662,7 +693,6 @@ class StockTransactionServiceImplTest {
             when(stockTransactionMapper.toEntity(dto, inventoryItem, stockLot, user))
                     .thenReturn(tx);
             when(stockTransactionRepository.save(tx)).thenReturn(tx);
-            when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
             when(stockTransactionMapper.toResponseDTO(tx)).thenReturn(buildResponse());
 
             StockTransactionResponseDTO result = service.recordTransaction(dto);

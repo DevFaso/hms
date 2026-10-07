@@ -117,6 +117,7 @@ import static org.mockito.Mockito.when;
 @ActiveProfiles("test")
 @Import({DispenseServiceImpl.class, PreparedFillVoider.class, DispenseVerificationService.class,
         ControlledSubstanceGuard.class, StockOutRoutingServiceImpl.class, DispenseMapper.class,
+        StockTransactionServiceImpl.class, com.example.hms.mapper.pharmacy.StockTransactionMapper.class,
         PrescriptionRoutingMapper.class, EncryptionKeyHolder.class, PreparedFillConcurrencyPostgresIT.Config.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class PreparedFillConcurrencyPostgresIT {
@@ -155,10 +156,12 @@ class PreparedFillConcurrencyPostgresIT {
     @MockitoBean private PrescriberPharmacyNotifier prescriberNotifier;
     @MockitoBean private PartnerNotificationChannel partnerChannel;
     @MockitoBean private WithdrawnOrderPartnerHandler withdrawnOrders;
+    @MockitoBean private com.example.hms.service.AuditEventLogService auditEventLogService;
 
     @Autowired private DispenseService dispenseService;
     @Autowired private StockOutRoutingService routingService;
     @Autowired private PreparedFillVoider voider;
+    @Autowired private StockTransactionService stockTransactionService;
     @Autowired private DispenseRepository dispenseRepository;
     @Autowired private PrescriptionRepository prescriptionRepository;
     @Autowired private PlatformTransactionManager transactionManager;
@@ -348,6 +351,48 @@ class PreparedFillConcurrencyPostgresIT {
         assertThat(lotRemaining()).isEqualByComparingTo("50");
         assertThat(prescriptionStatus()).isEqualTo("SIGNED");
         verify(support, times(1)).notifyReadyCancelled(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("#825 round 5: a fill, then a stock adjustment of the same lot that waits on it: both land, exactly")
+    void fillThenAdjustment() throws Exception {
+        CompletableFuture<Object> second = race(
+            () -> dispenseService.createDispense(request()),
+            () -> stockTransactionService.recordTransaction(adjustLot("5")));
+
+        assertThat(second.get(30, TimeUnit.SECONDS)).isNotNull();
+        assertThat(lotRemaining()).isEqualByComparingTo("45");
+        assertThat(itemOnHand()).isEqualByComparingTo("95");
+    }
+
+    @Test
+    @DisplayName("#825 round 5: a stock adjustment, then a fill of the same lot that waits on it: both land, no deadlock")
+    void adjustmentThenFill() throws Exception {
+        CompletableFuture<Object> second = race(
+            () -> stockTransactionService.recordTransaction(adjustLot("-3")),
+            () -> dispenseService.createDispense(request()));
+
+        assertThat(second.get(30, TimeUnit.SECONDS)).isNotNull();
+        assertThat(lotRemaining()).isEqualByComparingTo("37");
+        assertThat(itemOnHand()).isEqualByComparingTo("87");
+    }
+
+    private com.example.hms.payload.dto.pharmacy.StockTransactionRequestDTO adjustLot(String quantity) {
+        return com.example.hms.payload.dto.pharmacy.StockTransactionRequestDTO.builder()
+            .inventoryItemId(lot.getInventoryItem().getId())
+            .stockLotId(lot.getId())
+            .transactionType(com.example.hms.enums.StockTransactionType.ADJUSTMENT)
+            .quantity(new BigDecimal(quantity))
+            .reason("Count correction")
+            .performedBy(pharmacist.getId())
+            .build();
+    }
+
+    private BigDecimal itemOnHand() {
+        return (BigDecimal) entityManager.createNativeQuery(
+                "SELECT quantity_on_hand FROM clinical.inventory_items WHERE id = :id")
+            .setParameter("id", lot.getInventoryItem().getId())
+            .getSingleResult();
     }
 
     // ── the state a hand-over leaves (B2) ────────────────────────────────

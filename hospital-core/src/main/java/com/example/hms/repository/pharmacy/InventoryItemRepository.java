@@ -50,6 +50,16 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
     int decrementOnHand(@Param("id") UUID id, @Param("quantity") BigDecimal quantity,
                         @Param("now") LocalDateTime now);
 
+    /**
+     * Sets the quantity on hand outright: a count correction from the item
+     * edit endpoint. Last write wins, as a stock count does; it never rides
+     * along with an unrelated edit of a stale copy.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = false)
+    @Query("UPDATE InventoryItem i SET i.quantityOnHand = :quantity, i.updatedAt = :now WHERE i.id = :id")
+    int setOnHand(@Param("id") UUID id, @Param("quantity") BigDecimal quantity,
+                  @Param("now") LocalDateTime now);
+
     /** Puts {@code quantity} back on hand. */
     @Modifying(flushAutomatically = true, clearAutomatically = false)
     @Query("UPDATE InventoryItem i SET i.quantityOnHand = i.quantityOnHand + :quantity, i.updatedAt = :now "

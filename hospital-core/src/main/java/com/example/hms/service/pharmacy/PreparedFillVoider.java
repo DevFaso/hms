@@ -104,8 +104,9 @@ public class PreparedFillVoider {
             return;
         }
         InventoryItem item = lot.getInventoryItem();
-        // Atomic in the database (#825 security finding 1): a return racing a
-        // fill of another order from the same lot cannot be lost.
+        // Atomic in the database (#825 security finding 1, round 5): every
+        // stock writer moves quantities this way, so a return racing a fill,
+        // a receipt or an adjustment of the same lot cannot be lost.
         LocalDateTime now = LocalDateTime.now(clock);
         stockLotRepository.incrementRemaining(lot.getId(), dispense.getQuantityDispensed(), now);
         inventoryItemRepository.incrementOnHand(item.getId(), dispense.getQuantityDispensed(), now);
