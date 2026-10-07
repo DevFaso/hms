@@ -93,57 +93,76 @@ class Hl7v2MessageBuilderEscapingTest {
     }
 
     @Test
-    void formattingEscapesPassThroughBothWays() {
-        // The decoder keeps these as received; re-escaping their backslash
-        // would make a receiver print it instead of breaking the line.
-        String stored = "line1\\.br\\line2 \\X0D\\ \\H\\bold a \\sp2\\, odd\\one";
+    void literalFormattingCodesAreTextBothWays() {
+        // Text is text: a stored "\H\" is three characters and goes out as such.
+        String stored = "\\H\\bold\\N\\ \\.sp2\\ \\Zlocal\\ C:\\temp";
 
         String encoded = Hl7v2MessageBuilder.encodeEscapes(stored);
 
         assertThat(encoded).isEqualTo(
-            "line1\\.br\\line2 \\X0D\\ \\H\\bold a \\E\\sp2\\E\\, odd\\E\\one");
+            "\\E\\H\\E\\bold\\E\\N\\E\\ \\E\\.sp2\\E\\ \\E\\Zlocal\\E\\ C:\\E\\temp");
         assertThat(Hl7v2MessageBuilder.decodeEscapes(encoded)).isEqualTo(stored);
     }
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {
-        ".br", ".sp", ".sp12", ".in", ".in+2", ".ti-3", ".sk4", ".ce", ".fi", ".nf", "H", "N", "X0D", "X0D0A", "Zlocal"
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = ';', value = {
+        "Gram\\.br\\S\\.br\\end; Gram{LF}S{LF}end",
+        "x\\.br\\F\\.br\\; x{LF}F{LF}",
+        "a\\X0D0A\\b; a{CR}{LF}b",
+        "a\\X0d\\b; a{CR}b",
+        "a\\X41\\b; a\\X41\\b",
+        "\\H\\T\\N\\; \\H\\T\\N\\",
+        "\\.sp2\\x; \\.sp2\\x",
+        "trailing\\; trailing\\"
     })
-    void everyFormattingEscapePassesThroughTheEncoder(String code) {
-        String text = "a\\" + code + "\\b";
+    void inboundEscapesDecodeToPlainText(String received, String expected) {
+        String plain = expected.replace("{LF}", "\n").replace("{CR}", "\r");
 
-        assertThat(Hl7v2MessageBuilder.encodeEscapes(text)).isEqualTo(text);
-    }
-
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {".bx", ".sp-1", ".spx", ".in+x", "X", "X0", "XZZ", "Q", ""})
-    void anythingElseHasItsBackslashesEscaped(String code) {
-        String text = "a\\" + code + "\\b";
-
-        assertThat(Hl7v2MessageBuilder.encodeEscapes(text)).isEqualTo("a\\E\\" + code + "\\E\\b");
-    }
-
-    /** A formatting escape's closing backslash never opens a delimiter escape. */
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {
-        "Gram\\.br\\S\\.br\\end",
-        "\\H\\T\\N\\",
-        "x\\.br\\F\\.br\\"
-    })
-    void formattingEscapesAreKeptWholeByTheDecoder(String text) {
-        assertThat(Hl7v2MessageBuilder.decodeEscapes(text)).isEqualTo(text);
-        assertThat(Hl7v2MessageBuilder.decodeEscapes(Hl7v2MessageBuilder.encodeEscapes(text))).isEqualTo(text);
+        assertThat(Hl7v2MessageBuilder.decodeEscapes(received)).isEqualTo(plain);
     }
 
     @Test
-    void aFormattedValueSurvivesTheRoundTrip() {
-        LabResult result = LabResult.builder()
-            .labOrder(order())
-            .resultValue("Note\\.br\\repeat \\X0D\\| done")
-            .build();
+    void aValueCannotInjectASegment() {
+        String forged = "a\rOBX|2|ST|X||evil";
+        LabResult result = LabResult.builder().labOrder(order()).resultValue(forged).build();
 
-        assertThat(builder.parseOruR01(builder.buildOruR01(result))).singleElement()
-            .satisfies(p -> assertThat(p.resultValue()).isEqualTo("Note\\.br\\repeat \\X0D\\| done"));
+        String oru = builder.buildOruR01(result);
+
+        assertThat(oru.split("\r")).filteredOn(segment -> segment.startsWith("OBX")).hasSize(1);
+        assertThat(builder.parseOruR01(oru)).singleElement()
+            .satisfies(p -> assertThat(p.resultValue()).isEqualTo(forged));
+    }
+
+    @Test
+    void aMultiLineNarrativeRoundTrips() {
+        String narrative = "Line 1\r\nLine 2\nLine 3\rend";
+        LabResult result = LabResult.builder().labOrder(order()).resultValue(narrative).build();
+
+        String oru = builder.buildOruR01(result);
+
+        assertThat(segment(oru, "OBX").split("\\|", -1)[5])
+            .isEqualTo("Line 1\\X0D\\\\.br\\Line 2\\.br\\Line 3\\X0D\\end");
+        assertThat(builder.parseOruR01(oru)).singleElement()
+            .satisfies(p -> assertThat(p.resultValue()).isEqualTo(narrative));
+    }
+
+    /** decode(encode(x)) == x, and nothing encoded can break a field or a segment. */
+    @Test
+    void encodingRoundTripsEveryString() {
+        String alphabet = "abXHNZ.0DAbr19+-\\|^&~\r\n ";
+        java.util.Random random = new java.util.Random(823);
+        for (int n = 0; n < 20_000; n++) {
+            StringBuilder text = new StringBuilder();
+            int length = random.nextInt(24);
+            for (int k = 0; k < length; k++) {
+                text.append(alphabet.charAt(random.nextInt(alphabet.length())));
+            }
+            String x = text.toString();
+            String encoded = Hl7v2MessageBuilder.encodeEscapes(x);
+
+            assertThat(Hl7v2MessageBuilder.decodeEscapes(encoded)).as("round trip of [%s]", x).isEqualTo(x);
+            assertThat(encoded).as("encoded [%s]", x).doesNotContain("|", "^", "&", "~", "\r", "\n");
+        }
     }
 
     private ParsedObservation inbound(String obx2, String obx5) {

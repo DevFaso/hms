@@ -471,11 +471,17 @@ public class Hl7v2MessageBuilder {
     }
 
     /**
-     * Decodes the HL7 v2 delimiter escapes for the default encoding
-     * characters this parser assumes: F (field), S (component),
-     * R (repetition), T (subcomponent) and E (the escape character itself),
-     * each written between two escape characters. Any other sequence is kept
-     * as sent.
+     * HL7 escapes to plain text. Stored values are plain text, so this is the
+     * inverse of {@link #encodeEscapes}, for the default encoding characters
+     * this parser assumes:
+     * <ul>
+     *   <li>\F\ \S\ \T\ \R\ \E\ become | ^ &amp; ~ and the escape character;</li>
+     *   <li>\.br\ becomes a line feed, and \Xhh..\ made only of 0D and 0A
+     *       becomes those carriage returns and line feeds;</li>
+     *   <li>any other escape sequence (\H\, \.sp\, \Z..\, other hex, ...) is
+     *       kept whole as literal text, and an unterminated escape character
+     *       is a literal backslash.</li>
+     * </ul>
      */
     static String decodeEscapes(String text) {
         if (text == null || text.indexOf(ESC) < 0) {
@@ -484,108 +490,73 @@ public class Hl7v2MessageBuilder {
         StringBuilder out = new StringBuilder(text.length());
         int i = 0;
         while (i < text.length()) {
-            char c = text.charAt(i);
-            // A formatting escape is one token, kept whole: its closing escape
-            // character must not open a delimiter escape (Gram\.br\S\.br\end).
-            int end = c == ESC ? formattingEscapeEnd(text, i) : -1;
-            String decoded = end < 0 && c == ESC && i + 2 < text.length() && text.charAt(i + 2) == ESC
-                ? delimiterFor(text.charAt(i + 1)) : null;
-            if (end >= 0) {
-                out.append(text, i, end + 1);
-                i = end + 1;
-            } else if (decoded != null) {
-                out.append(decoded);
-                i += 3;
-            } else {
-                out.append(c);
+            int close = text.charAt(i) == ESC ? text.indexOf(ESC, i + 1) : -1;
+            if (close < 0) {
+                out.append(text.charAt(i));
                 i++;
+            } else {
+                String sequence = text.substring(i + 1, close);
+                String decoded = decodedSequence(sequence);
+                out.append(decoded != null ? decoded : text.substring(i, close + 1));
+                i = close + 1;
+            }
+        }
+        return out.toString();
+    }
+
+    /** What one escape sequence stands for, or null when it is kept as literal text. */
+    private static String decodedSequence(String sequence) {
+        if (".br".equals(sequence)) {
+            return "\n";
+        }
+        if (sequence.length() == 1) {
+            return delimiterFor(sequence.charAt(0));
+        }
+        return sequence.startsWith("X") ? lineBreaksFromHex(sequence.substring(1)) : null;
+    }
+
+    /** Hex pairs that are all 0D or 0A as the characters they encode, else null. */
+    private static String lineBreaksFromHex(String hex) {
+        if (hex.isEmpty() || hex.length() % 2 != 0) {
+            return null;
+        }
+        StringBuilder out = new StringBuilder(hex.length() / 2);
+        for (int k = 0; k < hex.length(); k += 2) {
+            String pair = hex.substring(k, k + 2).toUpperCase(Locale.ROOT);
+            if ("0D".equals(pair)) {
+                out.append('\r');
+            } else if ("0A".equals(pair)) {
+                out.append('\n');
+            } else {
+                return null;
             }
         }
         return out.toString();
     }
 
     /**
-     * The inverse of {@link #decodeEscapes}: stored text written into a field,
-     * with every delimiter it contains escaped. A formatting or character-set
-     * escape the decoder kept as received ({@code \.br\}, {@code \H\},
-     * {@code \X0D\}, ...) is passed through unchanged, so a receiver still
-     * formats it; any other escape character is itself escaped. Null is an
-     * empty field.
+     * Plain text into a field. Every escape character is escaped (\E\) -
+     * nothing passes through - and so is every delimiter (\F\ \S\ \T\
+     * \R\). A line feed goes out as \.br\ and a carriage return as
+     * \X0D\, so no stored value can end a segment on the wire, and
+     * {@code decodeEscapes(encodeEscapes(x))} is {@code x} for every string.
+     * Null is an empty field.
      */
     static String encodeEscapes(String text) {
         if (text == null) {
             return "";
         }
         StringBuilder out = new StringBuilder(text.length());
-        int i = 0;
-        while (i < text.length()) {
+        for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
-            int end = c == ESC ? formattingEscapeEnd(text, i) : -1;
-            String code = end < 0 ? escapeCodeFor(c) : null;
-            if (end >= 0) {
-                out.append(text, i, end + 1);
-                i = end + 1;
+            String code = escapeCodeFor(c);
+            if (code != null) {
+                out.append(ESC).append(code).append(ESC);
             } else {
-                if (code != null) {
-                    out.append(ESC).append(code).append(ESC);
-                } else {
-                    out.append(c);
-                }
-                i++;
+                out.append(c);
             }
         }
         return out.toString();
-    }
-
-    /** Formatting escapes with nothing after the code: .br .ce .fi .nf, and H/N highlighting. */
-    private static final Set<String> FIXED_FORMATTING_ESCAPES = Set.of(".br", ".ce", ".fi", ".nf", "H", "N");
-
-    /** Formatting commands followed by an optional signed number: .in .ti .sk (and .sp, unsigned). */
-    private static final Set<String> NUMBERED_FORMATTING_ESCAPES = Set.of(".in", ".ti", ".sk");
-
-    /**
-     * Whether the text between two escape characters is an HL7 v2 formatting
-     * (FT) or character-set escape: .br .ce .fi .nf, .sp[n], .in/.ti/.sk[+-n],
-     * H and N (highlighting), Xhh... (hex data) or Z... (locally defined).
-     */
-    private static boolean isFormattingEscape(String body) {
-        if (FIXED_FORMATTING_ESCAPES.contains(body)) {
-            return true;
-        }
-        if (body.isEmpty()) {
-            return false;
-        }
-        String head = body.length() >= 3 ? body.substring(0, 3) : "";
-        if (".sp".equals(head)) {
-            return isDigits(body.substring(3));
-        }
-        if (NUMBERED_FORMATTING_ESCAPES.contains(head)) {
-            String rest = body.substring(3);
-            return isDigits(rest.startsWith("+") || rest.startsWith("-") ? rest.substring(1) : rest);
-        }
-        char code = body.charAt(0);
-        if (code == 'X') {
-            return isHexPairs(body.substring(1));
-        }
-        return code == 'Z' && body.chars().noneMatch(ch -> "|^&~".indexOf(ch) >= 0);
-    }
-
-    private static boolean isDigits(String text) {
-        return text.chars().allMatch(ch -> ch >= '0' && ch <= '9');
-    }
-
-    private static boolean isHexPairs(String text) {
-        return !text.isEmpty() && text.length() % 2 == 0
-            && text.chars().allMatch(ch -> Character.digit(ch, 16) >= 0);
-    }
-
-    /** The index of the escape character closing a formatting escape that starts at {@code start}, or -1. */
-    private static int formattingEscapeEnd(String text, int start) {
-        int close = text.indexOf(ESC, start + 1);
-        if (close < 0) {
-            return -1;
-        }
-        return isFormattingEscape(text.substring(start + 1, close)) ? close : -1;
     }
 
     private static String escapeCodeFor(char c) {
@@ -595,6 +566,8 @@ public class Hl7v2MessageBuilder {
             case '^' -> "S";
             case '&' -> "T";
             case '~' -> "R";
+            case '\n' -> ".br";
+            case '\r' -> "X0D";
             default -> null;
         };
     }
