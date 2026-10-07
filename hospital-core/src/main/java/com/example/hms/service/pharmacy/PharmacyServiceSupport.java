@@ -13,6 +13,7 @@ import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.SmsService;
 import com.example.hms.service.i18n.NotificationLocales;
 import com.example.hms.service.i18n.PatientLocaleResolver;
+import com.example.hms.utility.TransactionCallbacks;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -89,19 +90,60 @@ class PharmacyServiceSupport {
     /**
      * Send the dispensed receipt SMS to the patient (gap G15).
      *
-     * <p>This used to be worded "ready for pickup", but it only ever fires
-     * once the prescription is fully DISPENSED — that is, after the hand-over.
-     * There is no "ready" state in the dispense workflow ({@code
-     * DispenseStatus.PENDING} is never written), so the message now says what
-     * happened rather than what is about to. Failures are swallowed so they do
-     * not roll back the dispense transaction. No-op if SMS service is
-     * unavailable, the patient has no primary phone number, or the medication
-     * name is blank.
+     * <p>It fires once the prescription is fully DISPENSED, that is after the
+     * hand-over: from the one-step dispense, or from the hand-over of a
+     * prepared fill. "Ready for collection" has its own message
+     * ({@link #notifyReadyForCollection}). Sent after commit, like every
+     * message here: a dispense that rolls back sends nothing. No-op if the
+     * SMS service is unavailable, the patient has no primary phone number,
+     * or the medication name is blank.
      *
      * <p>Key {@code sms.pharmacy.dispensed}: {0} first name, {1} medication,
      * {2} pharmacy name.
      */
     void notifyDispensed(Patient patient, Pharmacy pharmacy, String medicationName) {
+        sendAfterCommit("dispensed", "sms.pharmacy.dispensed", patient, pharmacy, medicationName);
+    }
+
+    /**
+     * G15: the fill is prepared and waiting at {@code pharmacy}. Key
+     * {@code sms.pharmacy.readyForCollection}, same arguments as
+     * {@link #notifyDispensed}.
+     */
+    void notifyReadyForCollection(Patient patient, Pharmacy pharmacy, String medicationName) {
+        sendAfterCommit("ready for collection", "sms.pharmacy.readyForCollection",
+                patient, pharmacy, medicationName);
+    }
+
+    /**
+     * G15: a prepared fill is no longer waiting (the pharmacist cancelled it,
+     * or the prescriber withdrew or changed the order). Key
+     * {@code sms.pharmacy.readyCancelled}, same arguments.
+     */
+    void notifyReadyCancelled(Patient patient, Pharmacy pharmacy, String medicationName) {
+        sendAfterCommit("no longer ready", "sms.pharmacy.readyCancelled", patient, pharmacy, medicationName);
+    }
+
+    /**
+     * G15: the one reminder for a fill still waiting after the reminder
+     * window. Key {@code sms.pharmacy.readyReminder}, same arguments.
+     */
+    void notifyReadyReminder(Patient patient, Pharmacy pharmacy, String medicationName) {
+        sendAfterCommit("ready reminder", "sms.pharmacy.readyReminder", patient, pharmacy, medicationName);
+    }
+
+    /**
+     * Render now, send after commit (G15 rule 11).
+     *
+     * <p>The locale lookup and the render run here, inside the caller's
+     * transaction and inside the try, so a failure in either is swallowed
+     * and cannot roll the pharmacy action back. Only plain strings (the
+     * phone, the body, the patient id for the log) cross into the callback:
+     * by then the persistence context is closed. With no transaction on the
+     * thread the send runs at once ({@link TransactionCallbacks}).
+     */
+    private void sendAfterCommit(String what, String key, Patient patient, Pharmacy pharmacy,
+                                 String medicationName) {
         if (smsService == null || patient == null) {
             return;
         }
@@ -114,12 +156,21 @@ class PharmacyServiceSupport {
         }
         String firstName = patient.getFirstName() != null ? patient.getFirstName() : "";
         String pharmacyName = (pharmacy != null && pharmacy.getName() != null) ? pharmacy.getName() : "";
+        UUID patientId = patient.getId();
+        String body;
         try {
-            smsService.send(phone, render("sms.pharmacy.dispensed", patientLocale(patient),
-                    firstName, medicationName, pharmacyName));
+            body = render(key, patientLocale(patient), firstName, medicationName, pharmacyName);
         } catch (Exception e) {
-            logFailure("dispensed", patient, e);
+            logFailure(what, patientId, e);
+            return;
         }
+        TransactionCallbacks.afterCommit(() -> {
+            try {
+                smsService.send(phone, body);
+            } catch (Exception e) {
+                logFailure(what, patientId, e);
+            }
+        });
     }
 
     /**
@@ -196,6 +247,10 @@ class PharmacyServiceSupport {
      * patient their medication is ready may undo the fact that it is.
      */
     private void logFailure(String what, Patient patient, Exception e) {
-        log.warn("Failed to send {} SMS to patient {}: {}", what, patient.getId(), e.getMessage());
+        logFailure(what, patient.getId(), e);
+    }
+
+    private void logFailure(String what, UUID patientId, Exception e) {
+        log.warn("Failed to send {} SMS to patient {}: {}", what, patientId, e.getMessage());
     }
 }

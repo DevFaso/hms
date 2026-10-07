@@ -224,8 +224,112 @@
             }
             {{ 'PHARMACY.DISPENSE' | translate }}
           </button>
+          <!-- G15: prepare the fill and tell the patient it is ready. Shown
+               only when the server says the feature is on. -->
+          @if (readyForCollectionEnabled()) {
+            <button
+              type="button"
+              class="btn-secondary"
+              data-testid="mark-ready"
+              [disabled]="saving() || form.quantityDispensed <= 0"
+              (click)="submitReady()"
+            >
+              {{ 'PHARMACY.MARK_READY' | translate }}
+            </button>
+          }
         </div>
       </form>
+    </div>
+  }
+
+  <!-- G15: hand over a prepared fill, or cancel the preparation -->
+  @if (readyAction(); as action) {
+    <div class="form-card form-card-accent" data-testid="ready-action">
+      <div class="form-header">
+        <h3>
+          @if (action.kind === 'handOver') {
+            <span class="material-symbols-outlined" aria-hidden="true">how_to_reg</span>
+            {{ 'PHARMACY.HAND_OVER' | translate }}
+          } @else {
+            <span class="material-symbols-outlined" aria-hidden="true">cancel</span>
+            {{ 'PHARMACY.CANCEL_READY' | translate }}
+          }
+        </h3>
+        <button
+          type="button"
+          class="btn-text"
+          [attr.aria-label]="'COMMON.CANCEL' | translate"
+          (click)="closeReadyAction()"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="rx-summary">
+        <strong>{{ action.rx.medicationName }}</strong>
+        <span class="rx-meta">
+          {{ 'PHARMACY.PATIENT' | translate }}: {{ action.rx.patient?.firstName }}
+          {{ action.rx.patient?.lastName }}
+        </span>
+      </div>
+      @if (action.kind === 'handOver') {
+        <p>{{ 'PHARMACY.HAND_OVER_CONFIRM' | translate }}</p>
+        <div class="form-row">
+          <div class="field full-width">
+            <label for="handOverScan">{{ 'PHARMACY.PATIENT_SCAN' | translate }}</label>
+            <input
+              id="handOverScan"
+              type="text"
+              name="handOverScan"
+              autocomplete="off"
+              [(ngModel)]="handOverScan"
+            />
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" (click)="closeReadyAction()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="button"
+            class="btn-primary"
+            data-testid="confirm-hand-over"
+            [disabled]="readyActionSaving()"
+            (click)="confirmHandOver()"
+          >
+            {{ 'PHARMACY.HAND_OVER' | translate }}
+          </button>
+        </div>
+      } @else {
+        <p>{{ 'PHARMACY.CANCEL_READY_CONFIRM' | translate }}</p>
+        <div class="form-row">
+          <div class="field full-width">
+            <label for="cancelReadyReason">{{
+              'PHARMACY.CANCEL_READY_REASON_LABEL' | translate
+            }}</label>
+            <select id="cancelReadyReason" name="cancelReadyReason" [(ngModel)]="cancelReason">
+              @for (reason of readyCancelReasons; track reason) {
+                <option [value]="reason">
+                  {{ 'PHARMACY.CANCEL_READY_REASON.' + reason | translate }}
+                </option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" (click)="closeReadyAction()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="button"
+            class="btn-primary"
+            data-testid="confirm-cancel-ready"
+            [disabled]="readyActionSaving()"
+            (click)="confirmCancelReady()"
+          >
+            {{ 'PHARMACY.CANCEL_READY' | translate }}
+          </button>
+        </div>
+      }
     </div>
   }
 
@@ -279,8 +383,22 @@
                       <span class="material-symbols-outlined" aria-hidden="true"
                         >priority_high</span
                       >
-                      {{ reasonKey | translate }}
+                      {{ reasonKey | translate: attentionParams(rx) }}
                     </span>
+                  }
+                  <!-- G15: a fill prepared and waiting at the counter. -->
+                  @if (rx.readyForCollection; as ready) {
+                    <span
+                      class="badge badge-success"
+                      [attr.data-testid]="'rx-ready-' + rx.id"
+                      [title]="
+                        'PHARMACY.PREPARED_BY' | translate: { name: ready.preparedByName ?? '' }
+                      "
+                      >{{ 'PHARMACY.READY_FOR_COLLECTION' | translate }}</span
+                    >
+                    <span class="refill-note">{{
+                      'PHARMACY.READY_SINCE' | translate: { date: (ready.readyAt | date: 'short') }
+                    }}</span>
                   }
                   <!-- Gap G5 — and separately, whether the prescriber has
                        answered. Separate because resolving a clarification
@@ -331,31 +449,62 @@
                 </td>
                 <td>{{ rx.staff?.user?.firstName }} {{ rx.staff?.user?.lastName }}</td>
                 <td>
-                  <button class="btn-action" (click)="selectPrescription(rx)">
-                    <span class="material-symbols-outlined">medication</span>
-                    {{ 'PHARMACY.DISPENSE' | translate }}
-                  </button>
-                  <button
-                    class="btn-action"
-                    type="button"
-                    (click)="routeFromQueue(rx)"
-                    [title]="'PHARMACY.ROUTE_HINT' | translate"
-                  >
-                    <span class="material-symbols-outlined">alt_route</span>
-                    {{ 'PHARMACY.ROUTE' | translate }}
-                  </button>
+                  @if (rx.readyForCollection) {
+                    <!-- G15: a prepared fill is handed over or its preparation
+                         cancelled; it is never dispensed again or routed. -->
+                    <button
+                      class="btn-action"
+                      type="button"
+                      [attr.data-testid]="'rx-hand-over-' + rx.id"
+                      (click)="openHandOver(rx)"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">how_to_reg</span>
+                      {{ 'PHARMACY.HAND_OVER' | translate }}
+                    </button>
+                    <button
+                      class="btn-action danger"
+                      type="button"
+                      [attr.data-testid]="'rx-cancel-ready-' + rx.id"
+                      (click)="openCancelReady(rx)"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">cancel</span>
+                      {{ 'PHARMACY.CANCEL_READY' | translate }}
+                    </button>
+                  } @else {
+                    <button
+                      class="btn-action"
+                      [attr.data-testid]="'rx-dispense-' + rx.id"
+                      (click)="selectPrescription(rx)"
+                    >
+                      <span class="material-symbols-outlined">medication</span>
+                      {{ 'PHARMACY.DISPENSE' | translate }}
+                    </button>
+                    <button
+                      class="btn-action"
+                      type="button"
+                      (click)="routeFromQueue(rx)"
+                      [title]="'PHARMACY.ROUTE_HINT' | translate"
+                    >
+                      <span class="material-symbols-outlined">alt_route</span>
+                      {{ 'PHARMACY.ROUTE' | translate }}
+                    </button>
+                  }
                   <!-- Gap G5 — send the order back to its prescriber with a
                        question, and read the answer when the row returns
-                       flagged CLARIFICATION_RESOLVED. -->
-                  <app-prescription-clarification
-                    mode="PHARMACY"
-                    [prescriptionId]="rx.id"
-                    [status]="rx.status"
-                    [medicationLabel]="rx.medicationName"
-                    [attentionReason]="rx.attentionReason ?? null"
-                    [clarificationResolvedAt]="rx.clarificationResolvedAt ?? null"
-                    (changed)="loadWorkQueue()"
-                  />
+                       flagged CLARIFICATION_RESOLVED. Not on a prepared row
+                       (G15): the server refuses a question while a fill is
+                       waiting, so the control would only lead to a 409. -->
+                  @if (!rx.readyForCollection) {
+                    <app-prescription-clarification
+                      mode="PHARMACY"
+                      [prescriptionId]="rx.id"
+                      [status]="rx.status"
+                      [medicationLabel]="rx.medicationName"
+                      [attentionReason]="rx.attentionReason ?? null"
+                      [clarificationResolvedAt]="rx.clarificationResolvedAt ?? null"
+                      (changed)="loadWorkQueue()"
+                    />
+                  }
                 </td>
               </tr>
             }
@@ -439,9 +588,11 @@
                   }
                 </td>
                 <td>{{ d.dispensedByName }}</td>
-                <td>{{ d.dispensedAt | date: 'short' }}</td>
+                <td>{{ d.dispensedAt ? (d.dispensedAt | date: 'short') : '—' }}</td>
                 <td>
-                  @if (d.status !== 'CANCELLED') {
+                  <!-- G15: a PENDING row is a prepared fill; it is cancelled
+                       from the work queue (stock back, patient told). -->
+                  @if (d.status !== 'CANCELLED' && d.status !== 'PENDING') {
                     <button class="btn-action danger" (click)="cancelDispense(d.id)">
                       <span class="material-symbols-outlined">cancel</span>
                     </button>

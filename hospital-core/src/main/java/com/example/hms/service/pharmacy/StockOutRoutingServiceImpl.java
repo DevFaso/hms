@@ -1,12 +1,13 @@
 package com.example.hms.service.pharmacy;
 
 import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.DispenseStatus;
 import com.example.hms.enums.PharmacyType;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RoutingDecisionStatus;
-import com.example.hms.enums.DispenseStatus;
 import com.example.hms.enums.RoutingType;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.pharmacy.PrescriptionRoutingMapper;
 import com.example.hms.model.Patient;
@@ -27,6 +28,7 @@ import com.example.hms.repository.pharmacy.DispenseRepository;
 import com.example.hms.repository.pharmacy.InventoryItemRepository;
 import com.example.hms.repository.pharmacy.PharmacyRepository;
 import com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository;
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -559,8 +561,11 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
      * no hospital is refused as before — as a 404 rather than a 500.
      */
     private Prescription findPrescription(UUID prescriptionId, UUID hospitalId) {
-        Prescription prescription = prescriptionRepository.findById(prescriptionId)
-                .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
+        return requirePrescriptionInScope(prescriptionRepository.findById(prescriptionId)
+                .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound")), hospitalId);
+    }
+
+    private Prescription requirePrescriptionInScope(Prescription prescription, UUID hospitalId) {
         if (hospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
             throw new ResourceNotFoundException("prescription.notfound");
         }
@@ -588,7 +593,19 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         if (hospitalId == null) {
             throw new ResourceNotFoundException("prescription.notfound");
         }
-        return findPrescription(prescriptionId, hospitalId);
+        // Locked (G15 rule 1): routing writes the prescription, a prepared
+        // fill does not, so without the row lock both could commit.
+        // The hospital is in the locking query (#825 security finding 3).
+        Prescription prescription = requirePrescriptionInScope(prescriptionRepository
+                .findByIdAndHospitalIdForUpdate(prescriptionId, hospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound")), hospitalId);
+        // G15 AC-10: a prepared fill holds stock for this order at the
+        // counter; sending the order elsewhere first would leave a bag nobody
+        // may collect. Hand it over or cancel the preparation first.
+        if (dispenseRepository.existsByPrescription_IdAndStatus(prescription.getId(), DispenseStatus.PENDING)) {
+            throw new ConflictException(MessageUtil.resolve("dispense.ready.openPreparation"));
+        }
+        return prescription;
     }
 
     /**
@@ -652,7 +669,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
      */
     private BigDecimal remainingQuantity(Prescription prescription) {
         BigDecimal dispensedToDate = dispenseRepository
-                .sumQuantityDispensedForPrescription(prescription.getId(), DispenseStatus.CANCELLED);
+                .sumQuantityDispensedForPrescription(prescription.getId(), DispenseRepository.NOT_A_FILL);
         return FillAccounting.remaining(prescription, dispensedToDate);
     }
 

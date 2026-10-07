@@ -109,6 +109,15 @@ struct MedicationsView: View {
                                     Text(String(format: "since_with_value".localized, String(start.prefix(10))))
                                         .font(.caption2).foregroundColor(.secondary)
                                 }
+                                // G15: a fill is waiting at the pharmacy counter.
+                                if let readyAt = med.readyForCollectionAt {
+                                    Text(String(format: "medication_ready_for_collection".localized,
+                                                med.readyForCollectionPharmacyName ?? "")
+                                         + " · "
+                                         + String(format: "medication_ready_since".localized,
+                                                  String(readyAt.prefix(16)).replacingOccurrences(of: "T", with: " ")))
+                                        .font(.caption).fontWeight(.semibold).foregroundColor(.accentColor)
+                                }
                             }
                             Image(systemName: "chevron.right")
                                 .foregroundColor(.secondary).font(.caption)
@@ -158,6 +167,15 @@ struct MedicationsView: View {
                                 if let pharmacy = rx.pharmacyName, !pharmacy.isEmpty {
                                     Text(String(format: "rx_pharmacy_with_value".localized, pharmacy))
                                         .font(.caption).foregroundColor(.secondary)
+                                }
+                                // G15: a fill is waiting at the pharmacy counter.
+                                if let readyAt = rx.readyForCollectionAt {
+                                    Text(String(format: "medication_ready_for_collection".localized,
+                                                rx.readyForCollectionPharmacyName ?? "")
+                                         + " · "
+                                         + String(format: "medication_ready_since".localized,
+                                                  String(readyAt.prefix(16)).replacingOccurrences(of: "T", with: " ")))
+                                        .font(.caption).fontWeight(.semibold).foregroundColor(.accentColor)
                                 }
                             }
                             Spacer(minLength: 4)

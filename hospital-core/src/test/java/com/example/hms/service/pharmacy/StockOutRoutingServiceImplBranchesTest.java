@@ -233,7 +233,7 @@ class StockOutRoutingServiceImplBranchesTest {
                 .routingType("BACKORDER").build();
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
         when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
         when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -250,7 +250,7 @@ class StockOutRoutingServiceImplBranchesTest {
     @DisplayName("resolveCurrentUser throws BusinessException when no user in context")
     void resolveCurrentUserNullThrows() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
         when(roleValidator.getCurrentUserId()).thenReturn(null);
 
         assertThatThrownBy(() -> service.printForPatient(prescriptionId))
@@ -262,7 +262,7 @@ class StockOutRoutingServiceImplBranchesTest {
     @DisplayName("resolveCurrentUser throws ResourceNotFoundException when user missing from repo")
     void resolveCurrentUserMissingThrows() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
@@ -290,7 +290,7 @@ class StockOutRoutingServiceImplBranchesTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
         when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
         when(pharmacyRepository.findById(partnerId)).thenReturn(Optional.of(partnerPharmacy));
         when(routingMapper.toEntity(eq(request), any())).thenReturn(decision);
         when(routingDecisionRepository.save(decision)).thenReturn(decision);
@@ -366,7 +366,7 @@ class StockOutRoutingServiceImplBranchesTest {
         prescription.setHospital(other);
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
         assertThatThrownBy(() -> service.backOrder(prescriptionId, LocalDate.now().plusDays(3)))
                 .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);

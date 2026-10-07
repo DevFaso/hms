@@ -21,6 +21,7 @@ import com.example.hms.repository.pharmacy.StockLotRepository;
 import com.example.hms.repository.pharmacy.StockTransactionRepository;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.utility.RoleValidator;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -30,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.UUID;
 
 @Service
@@ -45,6 +47,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     private final StockTransactionMapper stockTransactionMapper;
     private final RoleValidator roleValidator;
     private final AuditEventLogService auditEventLogService;
+    /** Re-reads the lot and item after the atomic quantity UPDATEs (#825 round 5). */
+    private final EntityManager entityManager;
 
     @Override
     @Transactional
@@ -154,55 +158,47 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         enforceHospitalScope(pharmacy);
     }
 
+    /**
+     * Moves the quantities in the database, never by writing back a value
+     * read earlier (#825 round 5): an adjustment racing a fill or a return of
+     * the same lot used to overwrite it (lot 10, adjustment +5 reads 10, the
+     * fill commits 9, the adjustment saved 15 instead of 14). Same queries
+     * and same order as the dispense path: the lot first, then the item, so
+     * the two paths cannot deadlock against each other.
+     */
     private void applyQuantityChange(InventoryItem item, StockLot lot,
                                      StockTransactionType type, BigDecimal quantity) {
+        LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
         switch (type) {
-            case RECEIPT -> {
-                item.setQuantityOnHand(item.getQuantityOnHand().add(quantity));
-                if (lot != null) {
-                    lot.setRemainingQuantity(lot.getRemainingQuantity().add(quantity));
-                    stockLotRepository.save(lot);
-                }
-            }
-            case DISPENSE, TRANSFER -> {
-                validateSufficientStock(item, quantity);
-                item.setQuantityOnHand(item.getQuantityOnHand().subtract(quantity));
-                if (lot != null) {
-                    validateSufficientLotStock(lot, quantity);
-                    lot.setRemainingQuantity(lot.getRemainingQuantity().subtract(quantity));
-                    stockLotRepository.save(lot);
-                }
-            }
-            case ADJUSTMENT -> {
-                // Quantity can be positive (increase) or negative (decrease)
-                item.setQuantityOnHand(item.getQuantityOnHand().add(quantity));
-                if (lot != null) {
-                    lot.setRemainingQuantity(lot.getRemainingQuantity().add(quantity));
-                    stockLotRepository.save(lot);
-                }
-            }
-            case RETURN -> {
-                item.setQuantityOnHand(item.getQuantityOnHand().add(quantity));
-                if (lot != null) {
-                    lot.setRemainingQuantity(lot.getRemainingQuantity().add(quantity));
-                    stockLotRepository.save(lot);
-                }
-            }
+            case DISPENSE, TRANSFER -> takeOff(item, lot, quantity, now);
+            // RECEIPT and RETURN add; ADJUSTMENT adds a signed quantity (a
+            // negative one decreases), unguarded as it always was.
+            case RECEIPT, RETURN, ADJUSTMENT -> putOn(item, lot, quantity, now);
         }
-        inventoryItemRepository.save(item);
+        refreshIfManaged(lot);
+        refreshIfManaged(item);
     }
 
-    private void validateSufficientStock(InventoryItem item, BigDecimal quantity) {
-        if (item.getQuantityOnHand().compareTo(quantity) < 0) {
-            throw new BusinessException("Insufficient stock: " + item.getQuantityOnHand()
-                    + " on hand, requested " + quantity);
+    private void takeOff(InventoryItem item, StockLot lot, BigDecimal quantity, LocalDateTime now) {
+        if (lot != null && stockLotRepository.decrementRemaining(lot.getId(), quantity, now) == 0) {
+            throw new BusinessException("Insufficient lot stock: lot " + lot.getLotNumber()
+                    + " does not hold the requested " + quantity);
+        }
+        if (inventoryItemRepository.decrementOnHand(item.getId(), quantity, now) == 0) {
+            throw new BusinessException("Insufficient stock: the item does not hold the requested " + quantity);
         }
     }
 
-    private void validateSufficientLotStock(StockLot lot, BigDecimal quantity) {
-        if (lot.getRemainingQuantity().compareTo(quantity) < 0) {
-            throw new BusinessException("Insufficient lot stock: " + lot.getRemainingQuantity()
-                    + " remaining in lot " + lot.getLotNumber() + ", requested " + quantity);
+    private void putOn(InventoryItem item, StockLot lot, BigDecimal quantity, LocalDateTime now) {
+        if (lot != null) {
+            stockLotRepository.incrementRemaining(lot.getId(), quantity, now);
+        }
+        inventoryItemRepository.incrementOnHand(item.getId(), quantity, now);
+    }
+
+    private void refreshIfManaged(Object entity) {
+        if (entity != null && entityManager != null && entityManager.contains(entity)) {
+            entityManager.refresh(entity);
         }
     }
 

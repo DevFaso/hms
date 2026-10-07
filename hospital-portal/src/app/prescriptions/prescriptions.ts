@@ -1044,7 +1044,7 @@ export class PrescriptionsComponent implements OnInit {
     const decision = this.routingHistory()[0];
     const remaining = decision?.remainingQuantity;
     if (remaining == null || remaining <= 0) return null;
-    const fill = this.dispenseHistory().find((d) => d.status !== 'CANCELLED');
+    const fill = this.dispenseHistory().find(isCountableFill);
     if (
       fill &&
       eventTime(fill.dispensedAt, fill.createdAt) >
@@ -1129,10 +1129,13 @@ export class PrescriptionsComponent implements OnInit {
     return this.routingSnapshotRemainder();
   });
 
-  /** The fills that count against the order: everything not cancelled. */
-  private readonly countableFills = computed(() =>
-    this.dispenseHistory().filter((d) => d.status !== 'CANCELLED'),
-  );
+  /**
+   * The fills that count against the order: everything neither cancelled nor
+   * PENDING. A PENDING row is a fill prepared and waiting for collection
+   * (G15): nothing has been handed over yet, and the backend leaves it out
+   * of the dispensed total too.
+   */
+  private readonly countableFills = computed(() => this.dispenseHistory().filter(isCountableFill));
 
   /**
    * Whether the fills can be SUBTRACTED from the ordered quantity at all.
@@ -1417,4 +1420,12 @@ function eventTime(primary?: string | null, fallback?: string | null): number {
   if (!raw) return 0;
   const parsed = Date.parse(raw);
   return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+/**
+ * A fill that counts against the order: neither cancelled nor PENDING (a fill
+ * prepared and waiting for collection, G15 — nothing has been handed over).
+ */
+function isCountableFill(d: DispenseResponse): boolean {
+  return d.status !== 'CANCELLED' && d.status !== 'PENDING';
 }

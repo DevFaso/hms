@@ -4429,7 +4429,9 @@
       "REFILL_HISTORY": "Historial de renovaciones",
       "REQUESTED": "Solicitado",
       "COMPLETED": "Completado",
-      "NOT_REFILLABLE": "Esta receta ya no puede renovarse — solicite una nueva a su equipo de atención."
+      "NOT_REFILLABLE": "Esta receta ya no puede renovarse — solicite una nueva a su equipo de atención.",
+      "READY_AT": "Lista para recoger en {{pharmacy}}",
+      "READY_SINCE": "Desde el {{date}}"
     },
     "LAB_RESULTS": {
       "TITLE": "Resultados de pruebas",
@@ -5073,7 +5075,7 @@
         "CANCELLED": "Cancelado",
         "COMPLETED": "Dispensado",
         "PARTIAL": "Parcial",
-        "PENDING": "Pendiente"
+        "PENDING": "Lista para recoger"
       },
       "IMAGING_ORDER_STATUS": {
         "CANCELLED": "Cancelado",
@@ -5318,7 +5320,10 @@
         "USER_UPDATE": "Usuario actualizado",
         "WEBHOOK_ENDPOINT_DISABLED": "Webhook desactivado",
         "WEBHOOK_ENDPOINT_REGISTERED": "Webhook registrado",
-        "WEBHOOK_ENDPOINT_UPDATED": "Webhook actualizado"
+        "WEBHOOK_ENDPOINT_UPDATED": "Webhook actualizado",
+        "DISPENSE_READY": "Dispensación preparada para recoger",
+        "DISPENSE_HANDED_OVER": "Dispensación preparada entregada",
+        "DISPENSE_READY_CANCELLED": "Dispensación preparada cancelada"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -7453,7 +7458,8 @@
       "BACK_ORDER_OUTSTANDING": "Dispensada parcialmente — el pedido al proveedor sigue abierto",
       "CLARIFICATION_RESOLVED": "El prescriptor ha respondido — lea la respuesta primero",
       "PRESCRIBER_ANSWERED": "El prescriptor ha respondido",
-      "UNRECOGNISED": "Requiere una segunda revisión — compruebe la orden antes de dispensar"
+      "UNRECOGNISED": "Requiere una segunda revisión — compruebe la orden antes de dispensar",
+      "READY_UNCOLLECTED": "Lista desde hace {{days}} días y no recogida"
     },
     "ACCEPT": "Aceptar",
     "ADDRESS": "Dirección",
@@ -7734,7 +7740,28 @@
     "VERIFICATION": "Verificación",
     "VERIFIED": "Verificado",
     "WORK_QUEUE": "Cola de trabajo",
-    "WORK_QUEUE_LOAD_FAILED": "Error al cargar la cola de trabajo"
+    "WORK_QUEUE_LOAD_FAILED": "Error al cargar la cola de trabajo",
+    "MARK_READY": "Marcar lista para recoger",
+    "READY_FOR_COLLECTION": "Lista para recoger",
+    "READY_SINCE": "Lista desde el {{date}}",
+    "HAND_OVER": "Entregar al paciente",
+    "HAND_OVER_CONFIRM": "¿Entregar esta dispensación preparada al paciente?",
+    "CANCEL_READY": "Cancelar la preparación",
+    "CANCEL_READY_CONFIRM": "¿Cancelar esta preparación? Las existencias se reintegran y se informa al paciente de que ya no está lista.",
+    "CANCEL_READY_REASON_LABEL": "Motivo",
+    "CANCEL_READY_REASON": {
+      "STOCK_UNAVAILABLE": "Existencias faltantes o dañadas",
+      "PATIENT_DECLINED": "Rechazada por el paciente",
+      "NOT_COLLECTED": "No recogida",
+      "OTHER": "Otro"
+    },
+    "READY_SUCCESS": "Marcada como lista para recoger.",
+    "READY_FAILED": "No se pudo marcar la receta como lista.",
+    "HAND_OVER_SUCCESS": "Entregada al paciente.",
+    "HAND_OVER_FAILED": "No se pudo registrar la entrega.",
+    "CANCEL_READY_SUCCESS": "Preparación cancelada.",
+    "CANCEL_READY_FAILED": "No se pudo cancelar la preparación.",
+    "PREPARED_BY": "Preparada por {{name}}"
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",

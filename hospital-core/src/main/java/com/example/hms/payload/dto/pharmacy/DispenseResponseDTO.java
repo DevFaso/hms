@@ -62,6 +62,20 @@ public class DispenseResponseDTO {
 
     private String verificationOverrideReason;
 
+    /* ── Ready for collection (G15) ─────────────────────────────────────── */
+
+    /** Who prepared the fill; null for a one-step fill. Kept after hand-over. */
+    private UUID preparedBy;
+
+    /** Their name, as a person reads it; null when none is on file. */
+    private String preparedByName;
+
+    /** When the fill was marked ready (its creation time); null for a one-step fill. */
+    private LocalDateTime readyAt;
+
+    /** Why a preparation was cancelled or voided ({@code ReadyCancelReason}); null otherwise. */
+    private String cancelReason;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -280,7 +280,8 @@ export interface DispenseResponse {
   substitutionReason?: string;
   status: string;
   notes?: string;
-  dispensedAt: string;
+  /** When the fill was handed over; absent while it is PENDING (prepared, G15). */
+  dispensedAt?: string | null;
   /**
    * NOT_VERIFIED is the paper-fallback path and a legitimate outcome, not a
    * failure — do not render it as an error.
@@ -289,8 +290,44 @@ export interface DispenseResponse {
   scanVerifiedAt?: string;
   verificationOverrides?: DispenseCheck[];
   verificationOverrideReason?: string;
+  /** G15: who prepared the fill (absent for a one-step fill); kept after hand-over. */
+  preparedBy?: string;
+  preparedByName?: string;
+  /** G15: when it was marked ready for collection. */
+  readyAt?: string;
+  /** G15: why a preparation was cancelled or voided. */
+  cancelReason?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * G15: the reasons a pharmacist may give when cancelling a preparation. The
+ * backend's two PRESCRIPTION_* values are its own (a withdrawn or changed
+ * order) and are refused from here.
+ */
+export const READY_CANCEL_REASONS = [
+  'STOCK_UNAVAILABLE',
+  'PATIENT_DECLINED',
+  'NOT_COLLECTED',
+  'OTHER',
+] as const;
+export type ReadyCancelReason = (typeof READY_CANCEL_REASONS)[number];
+
+/** G15: GET /pharmacy/dispense/settings. */
+export interface DispenseSettings {
+  readyForCollectionEnabled: boolean;
+}
+
+/** G15: the fill prepared for a work-queue row and waiting for collection. */
+export interface WorkQueueReadyForCollection {
+  dispenseId: string;
+  readyAt?: string;
+  preparedByName?: string;
+  quantity?: number;
+  unit?: string;
+  /** When the one reminder SMS went out; absent before. */
+  reminderSentAt?: string;
 }
 
 /** Work-queue prescription — minimal projection returned by GET /pharmacy/dispense/work-queue. */
@@ -319,6 +356,12 @@ export interface WorkQueuePrescription {
   /** Absent on a first fill with no refill allowance and no request history. */
   refill?: WorkQueueRefillContext;
   /**
+   * G15: the fill prepared for this order and waiting at the counter; absent
+   * when there is none. While it is set the row is handed over or its
+   * preparation cancelled, never dispensed or routed.
+   */
+  readyForCollection?: WorkQueueReadyForCollection;
+  /**
    * True when the row is not a plain fill and the pharmacist should look
    * before dispensing; {@link attentionReason} says which. Absent (rather
    * than false) on payloads produced before the backend added the flag.
@@ -326,7 +369,8 @@ export interface WorkQueuePrescription {
   needsAttention?: boolean;
   /**
    * PENDING_STOCK, PARTNER_REJECTED, PARTNER_ACCEPTED,
-   * BACK_ORDER_OUTSTANDING or CLARIFICATION_RESOLVED; absent when nothing
+   * BACK_ORDER_OUTSTANDING, CLARIFICATION_RESOLVED or (G15)
+   * READY_UNCOLLECTED; absent when nothing
    * needs attention. Only CLARIFICATION_RESOLVED is acted on here (gap G5) —
    * the rest belong to the back-order and partner-routing cues.
    */
@@ -803,6 +847,40 @@ export class PharmacyService {
 
   cancelDispense(id: string): Observable<ApiResponse<DispenseResponse>> {
     return this.http.post<ApiResponse<DispenseResponse>>(`/pharmacy/dispense/${id}/cancel`, {});
+  }
+
+  // ── Ready for collection (G15) ──
+
+  /** Whether "Mark ready for collection" is switched on server-side. */
+  getDispenseSettings(): Observable<ApiResponse<DispenseSettings>> {
+    return this.http.get<ApiResponse<DispenseSettings>>('/pharmacy/dispense/settings');
+  }
+
+  /** Prepare a fill (stock set aside) and text the patient that it is ready. */
+  markReady(req: DispenseRequest): Observable<ApiResponse<DispenseResponse>> {
+    return this.http.post<ApiResponse<DispenseResponse>>('/pharmacy/dispense/ready', req);
+  }
+
+  /** Hand a prepared fill over; the wristband scan is optional and checked when sent. */
+  handOver(
+    dispenseId: string,
+    body: { patientScanValue?: string; notes?: string } = {},
+  ): Observable<ApiResponse<DispenseResponse>> {
+    return this.http.post<ApiResponse<DispenseResponse>>(
+      `/pharmacy/dispense/${dispenseId}/hand-over`,
+      body,
+    );
+  }
+
+  /** Cancel a preparation: the stock goes back and the patient is told. */
+  cancelReady(
+    dispenseId: string,
+    reason: ReadyCancelReason,
+  ): Observable<ApiResponse<DispenseResponse>> {
+    return this.http.post<ApiResponse<DispenseResponse>>(
+      `/pharmacy/dispense/${dispenseId}/cancel-ready`,
+      { reason },
+    );
   }
 
   // ── Stock-Out Routing ──

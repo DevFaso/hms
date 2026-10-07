@@ -172,6 +172,16 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
+                                    med.readyForCollectionAt?.let { readyAt ->
+                                        // G15: a fill is waiting at the pharmacy counter.
+                                        Text(
+                                            stringResource(R.string.medication_ready_for_collection,
+                                                med.readyForCollectionPharmacyName.orEmpty()) + " · " +
+                                                stringResource(R.string.medication_ready_since, readyAt.take(16).replace('T', ' ')),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.SemiBold)
+                                    }
                                 }
                                 Icon(Icons.Default.ChevronRight, contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
@@ -250,6 +260,16 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                     Text(stringResource(R.string.rx_pharmacy_with_value, it),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                rx.readyForCollectionAt?.let { readyAt ->
+                                    // G15: a fill is waiting at the pharmacy counter.
+                                    Text(
+                                        stringResource(R.string.medication_ready_for_collection,
+                                            rx.readyForCollectionPharmacyName.orEmpty()) + " · " +
+                                            stringResource(R.string.medication_ready_since, readyAt.take(16).replace('T', ' ')),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.SemiBold)
                                 }
                                 Spacer(Modifier.height(6.dp))
                                 // An open request is worth saying whatever the

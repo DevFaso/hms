@@ -22,6 +22,8 @@ import {
   WorkQueuePrescription,
   RefillDecisionStatus,
   StockLotResponse,
+  READY_CANCEL_REASONS,
+  ReadyCancelReason,
 } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
@@ -47,7 +49,20 @@ export const QUEUE_ATTENTION_REASONS: readonly { reason: string; labelKey: strin
   { reason: 'PARTNER_ACCEPTED', labelKey: 'PHARMACY.ATTENTION.PARTNER_ACCEPTED' },
   { reason: 'BACK_ORDER_OUTSTANDING', labelKey: 'PHARMACY.ATTENTION.BACK_ORDER_OUTSTANDING' },
   { reason: 'CLARIFICATION_RESOLVED', labelKey: 'PHARMACY.ATTENTION.CLARIFICATION_RESOLVED' },
+  // G15: a prepared fill nobody has come for. Lowest precedence; carries
+  // the number of days it has waited.
+  { reason: 'READY_UNCOLLECTED', labelKey: 'PHARMACY.ATTENTION.READY_UNCOLLECTED' },
 ];
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Newest first; a missing or unparseable time sorts last. */
+function eventTime(primary?: string | null, fallback?: string | null): number {
+  const raw = primary ?? fallback;
+  if (!raw) return 0;
+  const parsed = Date.parse(raw);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
 
 /** The reason whose label already says the prescriber answered. */
 const CLARIFICATION_RESOLVED_LABEL_KEY = 'PHARMACY.ATTENTION.CLARIFICATION_RESOLVED';
@@ -120,8 +135,22 @@ export class DispensingComponent implements OnInit, OnDestroy {
   recentDispenses = signal<DispenseResponse[]>([]);
   dispensesLoading = signal(false);
 
+  // G15 — ready for collection. The server says whether "Mark ready" is on
+  // (GET /pharmacy/dispense/settings); off until it has answered, so a
+  // pharmacist never sees a button the server would refuse with a 404.
+  readonly readyForCollectionEnabled = signal(false);
+  readonly readyCancelReasons = READY_CANCEL_REASONS;
+  /** The prepared row being handed over or whose preparation is being cancelled. */
+  readonly readyAction = signal<{ kind: 'handOver' | 'cancel'; rx: WorkQueuePrescription } | null>(
+    null,
+  );
+  readyActionSaving = signal(false);
+  handOverScan = '';
+  cancelReason: ReadyCancelReason = 'NOT_COLLECTED';
+
   ngOnInit(): void {
     this.loadPharmacies();
+    this.loadDispenseSettings();
 
     // Roadmap row 4 / T-68 — wire up the offline queue. Subscribe to the
     // pending count so the banner reacts in real time, and trigger a replay
@@ -185,6 +214,13 @@ export class DispensingComponent implements OnInit, OnDestroy {
     }
   }
 
+  private loadDispenseSettings(): void {
+    this.svc.getDispenseSettings().subscribe({
+      next: (res) => this.readyForCollectionEnabled.set(!!res?.data?.readyForCollectionEnabled),
+      error: () => this.readyForCollectionEnabled.set(false),
+    });
+  }
+
   private loadPharmacies(): void {
     this.svc.listPharmacies(0, 100).subscribe({
       next: (page) => {
@@ -223,7 +259,13 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.dispensesLoading.set(true);
     this.svc.listDispensesByPharmacy(this.selectedPharmacyId, 0, 10).subscribe({
       next: (res) => {
-        this.recentDispenses.set(res?.data?.content ?? []);
+        // G15: a prepared fill has no dispensedAt yet; it sorts by when it
+        // was prepared (coalesce(dispensedAt, createdAt)), newest first.
+        this.recentDispenses.set(
+          [...(res?.data?.content ?? [])].sort(
+            (a, b) => eventTime(b.dispensedAt, b.createdAt) - eventTime(a.dispensedAt, a.createdAt),
+          ),
+        );
         this.dispensesLoading.set(false);
       },
       error: () => {
@@ -350,6 +392,92 @@ export class DispensingComponent implements OnInit, OnDestroy {
         this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.DISPENSE_FAILED'));
       },
     });
+  }
+
+  /**
+   * G15 AC-1: prepare the fill and text the patient that it is ready. Same
+   * form as a dispense; the wristband is checked at hand-over, not here.
+   */
+  submitReady(): void {
+    this.saving.set(true);
+    this.svc.markReady({ ...this.form, patientScanValue: '' }).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('PHARMACY.READY_SUCCESS'));
+        this.saving.set(false);
+        this.showForm.set(false);
+        this.selectedPrescription = null;
+        this.loadWorkQueue();
+        this.loadRecentDispenses();
+      },
+      error: (err) => {
+        this.saving.set(false);
+        this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.READY_FAILED'));
+      },
+    });
+  }
+
+  openHandOver(rx: WorkQueuePrescription): void {
+    this.closeForm();
+    this.handOverScan = '';
+    this.readyAction.set({ kind: 'handOver', rx });
+  }
+
+  openCancelReady(rx: WorkQueuePrescription): void {
+    this.closeForm();
+    this.cancelReason = 'NOT_COLLECTED';
+    this.readyAction.set({ kind: 'cancel', rx });
+  }
+
+  closeReadyAction(): void {
+    this.readyAction.set(null);
+  }
+
+  /** G15 AC-4: the patient is at the counter; the optional scan is checked server-side. */
+  confirmHandOver(): void {
+    const dispenseId = this.readyAction()?.rx.readyForCollection?.dispenseId;
+    if (!dispenseId) return;
+    const scan = this.handOverScan.trim();
+    this.readyActionSaving.set(true);
+    this.svc.handOver(dispenseId, scan ? { patientScanValue: scan } : {}).subscribe({
+      next: () => this.afterReadyAction('PHARMACY.HAND_OVER_SUCCESS'),
+      error: (err) => this.readyActionFailed(err, 'PHARMACY.HAND_OVER_FAILED'),
+    });
+  }
+
+  /** G15 AC-7: the stock goes back and the patient is told it is no longer ready. */
+  confirmCancelReady(): void {
+    const dispenseId = this.readyAction()?.rx.readyForCollection?.dispenseId;
+    if (!dispenseId) return;
+    this.readyActionSaving.set(true);
+    this.svc.cancelReady(dispenseId, this.cancelReason).subscribe({
+      next: () => this.afterReadyAction('PHARMACY.CANCEL_READY_SUCCESS'),
+      error: (err) => this.readyActionFailed(err, 'PHARMACY.CANCEL_READY_FAILED'),
+    });
+  }
+
+  private afterReadyAction(successKey: string): void {
+    this.readyActionSaving.set(false);
+    this.readyAction.set(null);
+    this.toast.success(this.translate.instant(successKey));
+    this.loadWorkQueue();
+    this.loadRecentDispenses();
+  }
+
+  private readyActionFailed(err: { error?: { message?: string } }, fallbackKey: string): void {
+    this.readyActionSaving.set(false);
+    this.toast.error(err?.error?.message ?? this.translate.instant(fallbackKey));
+  }
+
+  /** Whole days a prepared fill has waited, for the queue's cue. */
+  daysWaiting(rx: WorkQueuePrescription): number {
+    const readyAt = rx.readyForCollection?.readyAt;
+    if (!readyAt) return 0;
+    return Math.max(0, Math.floor((Date.now() - eventTime(readyAt, null)) / DAY_MS));
+  }
+
+  /** Interpolation for an attention label: only READY_UNCOLLECTED has one. */
+  attentionParams(rx: WorkQueuePrescription): Record<string, number> {
+    return rx.attentionReason === 'READY_UNCOLLECTED' ? { days: this.daysWaiting(rx) } : {};
   }
 
   cancelDispense(id: string): void {

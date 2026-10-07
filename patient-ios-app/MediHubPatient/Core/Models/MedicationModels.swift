@@ -31,6 +31,11 @@ struct MedicationDTO: Codable, Identifiable, Hashable {
     /// The wire name of that request's status, so the app can tell "awaiting
     /// review" from "your provider put it on hold" without a second call.
     let refillRequestStatus: String?
+    /// G15: when a fill was marked ready for collection, and at which
+    /// pharmacy. Both nil when nothing is waiting; optional, so an older
+    /// payload decodes unchanged.
+    let readyForCollectionAt: String?
+    let readyForCollectionPharmacyName: String?
 
     /// Display name: prefer `name`, fall back to `medicationName`
     var displayName: String {
@@ -122,6 +127,11 @@ struct PrescriptionDTO: Codable, Identifiable, Hashable {
     /// order is still at — or was filled by — the hospital's own dispensary.
     let pharmacyName: String?
     let instructions: String?
+    /// G15: when a fill was marked ready for collection, and at which
+    /// pharmacy. Both nil when nothing is waiting; optional, so an older
+    /// payload decodes unchanged.
+    let readyForCollectionAt: String?
+    let readyForCollectionPharmacyName: String?
 
     var displayName: String {
         if let display = medicationDisplayName, !display.isEmpty { return display }

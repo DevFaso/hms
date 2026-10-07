@@ -65,9 +65,6 @@ public class StockLotMapper {
         if (dto.getExpiryDate() != null) {
             entity.setExpiryDate(dto.getExpiryDate());
         }
-        if (dto.getRemainingQuantity() != null) {
-            entity.setRemainingQuantity(dto.getRemainingQuantity());
-        }
         if (dto.getSupplier() != null) {
             entity.setSupplier(dto.getSupplier());
         }

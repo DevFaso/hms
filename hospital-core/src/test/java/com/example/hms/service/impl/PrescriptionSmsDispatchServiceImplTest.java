@@ -79,6 +79,7 @@ class PrescriptionSmsDispatchServiceImplTest {
     @Mock private ControllerAuthUtils authUtils;
     @Mock private PrescriberPharmacyNotifier prescriberNotifier;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
     @Mock private Authentication auth;
 
     @InjectMocks private PrescriptionSmsDispatchServiceImpl service;
@@ -150,6 +151,24 @@ class PrescriptionSmsDispatchServiceImplTest {
                 });
         when(partnerChannel.prescriptionOfferBody(any(), eq(rx), anyString()))
                 .thenAnswer(inv -> TEMPLATES.prescriptionOffer(REF_TOKEN, inv.getArgument(2), "AD"));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = PrescriptionStatus.class,
+            names = {"SIGNED", "TRANSMISSION_FAILED"})
+    @DisplayName("G15 AC-10: no dispatch (first send or retry) while a fill is prepared: 409, nothing sent")
+    void dispatch_refusedWhileAFillIsPrepared(PrescriptionStatus status) {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        rx.setStatus(status);
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
+        when(dispenseRepository.existsByPrescription_IdAndStatus(prescriptionId,
+                com.example.hms.enums.DispenseStatus.PENDING)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId,
+                PrescriptionSmsDispatchRequestDTO.builder().pharmacyId(pharmacyId).build()))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        org.mockito.Mockito.verifyNoInteractions(smsService, routingDecisionRepository, transmissionRepository);
+        assertThat(rx.getStatus()).isEqualTo(status);
     }
 
     @Test

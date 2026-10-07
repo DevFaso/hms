@@ -39,7 +39,14 @@ data class MedicationDto(
      * The wire name of that request's status, so the app can tell "awaiting
      * review" from "your care team put it on hold" without a second call.
      */
-    @Json(name = "refillRequestStatus") val refillRequestStatus: String? = null
+    @Json(name = "refillRequestStatus") val refillRequestStatus: String? = null,
+    /**
+     * G15: when a fill of this prescription was marked ready for collection,
+     * and at which pharmacy. Both null when nothing is waiting. Builds older
+     * than the field simply ignore it.
+     */
+    @Json(name = "readyForCollectionAt") val readyForCollectionAt: String? = null,
+    @Json(name = "readyForCollectionPharmacyName") val readyForCollectionPharmacyName: String? = null
 ) {
     /** Backward compat alias */
     val name: String get() = medicationName
@@ -145,7 +152,14 @@ data class PrescriptionDto(
      * order is still at — or was filled by — the hospital's own dispensary.
      */
     @Json(name = "pharmacyName") val pharmacyName: String? = null,
-    @Json(name = "instructions") val instructions: String? = null
+    @Json(name = "instructions") val instructions: String? = null,
+    /**
+     * G15: when a fill of this prescription was marked ready for collection,
+     * and at which pharmacy. Both null when nothing is waiting. Builds older
+     * than the field simply ignore it.
+     */
+    @Json(name = "readyForCollectionAt") val readyForCollectionAt: String? = null,
+    @Json(name = "readyForCollectionPharmacyName") val readyForCollectionPharmacyName: String? = null
 ) {
     val displayName: String
         get() = medicationDisplayName?.takeIf { it.isNotBlank() } ?: medicationName

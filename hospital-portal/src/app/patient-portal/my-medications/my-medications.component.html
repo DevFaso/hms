@@ -37,6 +37,21 @@
               <div class="pli-body">
                 <span class="pli-title">{{ med.medicationName }}</span>
                 <span class="pli-sub">{{ med.dosage }} · {{ med.frequency }}</span>
+                @if (med.readyForCollectionAt) {
+                  <!-- G15: a fill is waiting at the pharmacy counter. -->
+                  <span class="ready-chip" [attr.data-testid]="'med-ready-' + med.id">
+                    <span class="material-symbols-outlined" aria-hidden="true">storefront</span>
+                    {{
+                      'PORTAL.MEDICATIONS.READY_AT'
+                        | translate: { pharmacy: med.readyForCollectionPharmacyName ?? '' }
+                    }}
+                    ·
+                    {{
+                      'PORTAL.MEDICATIONS.READY_SINCE'
+                        | translate: { date: (med.readyForCollectionAt | date: 'short') }
+                    }}
+                  </span>
+                }
                 <span class="pli-meta"
                   >{{ 'PORTAL.MEDICATIONS.PRESCRIBED_BY' | translate }}
                   {{ med.prescribedBy || ('PORTAL.MEDICATIONS.PROVIDER' | translate) }} ·
@@ -164,6 +179,20 @@
               <div class="pli-body">
                 <span class="pli-title">{{ rx.medicationName }}</span>
                 <span class="pli-sub">{{ rx.dosage }} · {{ rx.frequency }}</span>
+                @if (rx.readyForCollectionAt) {
+                  <span class="ready-chip" [attr.data-testid]="'rx-ready-' + rx.id">
+                    <span class="material-symbols-outlined" aria-hidden="true">storefront</span>
+                    {{
+                      'PORTAL.MEDICATIONS.READY_AT'
+                        | translate: { pharmacy: rx.readyForCollectionPharmacyName ?? '' }
+                    }}
+                    ·
+                    {{
+                      'PORTAL.MEDICATIONS.READY_SINCE'
+                        | translate: { date: (rx.readyForCollectionAt | date: 'short') }
+                    }}
+                  </span>
+                }
                 <span class="pli-meta">
                   {{ 'PORTAL.MEDICATIONS.PRESCRIBED_BY' | translate }}
                   {{ rx.prescribedBy || ('PORTAL.MEDICATIONS.PROVIDER' | translate) }}

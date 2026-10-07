@@ -332,7 +332,7 @@ export class EnumLabelService implements OnDestroy {
       OTHER: 'Other',
     },
     dispenseStatus: {
-      PENDING: 'Pending',
+      PENDING: 'Ready for collection',
       COMPLETED: 'Completed',
       PARTIAL: 'Partial',
       CANCELLED: 'Cancelled',

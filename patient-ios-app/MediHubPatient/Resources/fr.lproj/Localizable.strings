@@ -910,3 +910,6 @@
 "disclosures_role_security" = "Agent(e) de sécurité";
 "disclosures_role_store_manager" = "Gestionnaire de stock";
 "disclosures_role_support" = "Assistance technique";
+/* G15: a fill waiting at the pharmacy counter */
+"medication_ready_for_collection" = "Prête à retirer à %@";
+"medication_ready_since" = "Depuis le %@";

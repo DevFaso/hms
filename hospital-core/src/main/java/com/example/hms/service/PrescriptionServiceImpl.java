@@ -87,6 +87,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final java.time.Clock clock;
     private final CrossHospitalReachRecorder reachRecorder;
     private final com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler withdrawnOrders;
+    /** G15: withdrawal and edit void an open preparation (rule 8). */
+    private final com.example.hms.service.pharmacy.PreparedFillVoider preparedFills;
+    /** G15 AC-12: readiness on the patient-portal prescriptions read. */
+    private final com.example.hms.service.pharmacy.ReadyForCollectionLookup readyForCollection;
 
     @Override
     @Transactional
@@ -680,6 +684,27 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
+     * G15 rule 8 (user decision 1): a withdrawn or changed order can never be
+     * collected, so ANY successful edit of a non-withdrawn order voids its
+     * open preparation: PRESCRIPTION_WITHDRAWN on the way into withdrawal,
+     * PRESCRIPTION_CHANGED otherwise. The stock goes back and the patient is
+     * told after commit. Runs under the row lock {@code updatePrescription}
+     * took, inside this already-authorised transaction (a global-view
+     * super-admin included), so the voider makes no scope call of its own.
+     * An order that was already withdrawn cannot hold one: its withdrawal
+     * voided it.
+     */
+    private void voidPreparedFillOnEdit(Prescription prescription, PrescriptionStatus statusBefore) {
+        if (statusBefore != null && statusBefore.isWithdrawn()) {
+            return;
+        }
+        PrescriptionStatus now = prescription.getStatus();
+        preparedFills.voidPreparedFill(prescription, now != null && now.isWithdrawn()
+            ? com.example.hms.enums.ReadyCancelReason.PRESCRIPTION_WITHDRAWN
+            : com.example.hms.enums.ReadyCancelReason.PRESCRIPTION_CHANGED);
+    }
+
+    /**
      * A declared safeguard cannot be quietly un-declared.
      *
      * <p>Making the controlled-substance flags writable (P2 #15's actual gap —
@@ -805,14 +830,22 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Override
     @Transactional
     public PrescriptionResponseDTO updatePrescription(UUID id, PrescriptionRequestDTO request, Locale locale) {
-        Prescription existing = prescriptionRepository.findById(id)
+        // Locked (G15 rule 1): a withdrawal or an edit voids an open
+        // preparation, and a preparation never writes this row, so @Version
+        // cannot see the race; the row lock serialises the two.
+        // The hospital is in the locking query when one is pinned (#825
+        // security finding 3); a super-admin in global view has none.
+        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+        Prescription existing = (actingHospitalId != null
+                ? prescriptionRepository.findByIdAndHospitalIdForUpdate(id, actingHospitalId)
+                : prescriptionRepository.findByIdForUpdate(id))
             .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
         // ── Hospital scope enforcement ── the row's own hospital, as on
         // sign/co-sign/delete, and BEFORE the status checks below, which
         // answer 400 and would otherwise tell a real id from a missing one.
         // Authority used to be judged only at the REQUEST's encounter
         // hospital, so another hospital's prescription could be rewritten.
-        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+        // Kept after the scoped lock as defence in depth.
         if (actingHospitalId != null
                 && (existing.getHospital() == null || !actingHospitalId.equals(existing.getHospital().getId()))) {
             throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
@@ -864,6 +897,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // assert a check of a drug the pharmacist never saw.
         pharmacistVerificationService.invalidateOnChange(existing);
         controlledSubstanceGuard.requireSafeguardsFor(existing, existing.getStatus());
+        voidPreparedFillOnEdit(existing, statusBefore);
 
         Prescription saved = prescriptionRepository.save(existing);
         PrescriptionResponseDTO response = prescriptionMapper.toResponseDTO(saved);
@@ -913,8 +947,21 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Override
     @Transactional
     public java.util.List<PrescriptionResponseDTO> getPrescriptionsForPortalPatient(UUID patientId, Locale locale) {
-        return prescriptionRepository.findByPatient_Id(patientId, Pageable.unpaged()).stream()
-            .map(prescriptionMapper::toResponseDTO)
+        java.util.List<Prescription> rows = prescriptionRepository.findByPatient_Id(patientId, Pageable.unpaged())
+            .getContent();
+        // G15 AC-12: a fill waiting at the counter, one query for the list.
+        java.util.Map<UUID, com.example.hms.service.pharmacy.ReadyForCollectionLookup.Readiness> ready =
+            readyForCollection.openPreparations(rows);
+        return rows.stream()
+            .map(p -> {
+                PrescriptionResponseDTO dto = prescriptionMapper.toResponseDTO(p);
+                var waiting = ready.get(p.getId());
+                if (dto != null && waiting != null) {
+                    dto.setReadyForCollectionAt(waiting.readyAt());
+                    dto.setReadyForCollectionPharmacyName(waiting.pharmacyName());
+                }
+                return dto;
+            })
             .toList();
     }
 

@@ -110,6 +110,10 @@ class PrescriptionServiceImplTest {
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock
     private com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler withdrawnOrders;
+    @Mock
+    private com.example.hms.service.pharmacy.PreparedFillVoider preparedFills;
+    @Mock
+    private com.example.hms.service.pharmacy.ReadyForCollectionLookup readyForCollection;
     /**
      * Not optional: getPrescriptionById dereferences this whenever the thread's
      * SecurityContext holds a patient-only principal. No test here sets one
@@ -432,7 +436,7 @@ class PrescriptionServiceImplTest {
         UUID currentUser = UUID.randomUUID();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(prescriptionId).build();
 
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(existing));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
@@ -1249,7 +1253,7 @@ class PrescriptionServiceImplTest {
     @Test
     void updatePrescriptionWhenNotFoundThrows() {
         UUID prescriptionId = UUID.randomUUID();
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.empty());
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.empty());
 
         var request = buildRequest();
         assertThatThrownBy(() -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH))
@@ -1322,14 +1326,14 @@ class PrescriptionServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
         PrescriptionRequestDTO request = buildRequest();
 
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.empty());
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.empty());
         ResourceNotFoundException missing = catchThrowableOfType(ResourceNotFoundException.class,
             () -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH));
 
         Prescription foreign = new Prescription();
         foreign.setId(prescriptionId);
         foreign.setHospital(encounter.getHospital());
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(foreign));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(foreign));
         ResourceNotFoundException refused = catchThrowableOfType(ResourceNotFoundException.class,
             () -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH));
 
@@ -1351,7 +1355,7 @@ class PrescriptionServiceImplTest {
         PrescriptionRequestDTO request = buildRequest();
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(actingHospitalId);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(own));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(own));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
@@ -1367,6 +1371,22 @@ class PrescriptionServiceImplTest {
     }
 
     @Test
+    void theLockQueryCarriesTheActingHospital_soAnotherTenantsRowIsNeverLocked() {
+        // #825 security finding 3
+        UUID prescriptionId = UUID.randomUUID();
+        UUID actingHospitalId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(actingHospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(prescriptionId, actingHospitalId))
+            .thenReturn(Optional.empty());
+        PrescriptionRequestDTO request = buildRequest();
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(prescriptionRepository, never()).findByIdForUpdate(any());
+        verify(prescriptionRepository, never()).findById(any());
+    }
+
+    @Test
     void updateAtTheActingHospitalStillWorks() {
         UUID prescriptionId = UUID.randomUUID();
         Prescription own = new Prescription();
@@ -1375,7 +1395,7 @@ class PrescriptionServiceImplTest {
         PrescriptionRequestDTO request = buildRequest();
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(own));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(own));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
@@ -1403,7 +1423,7 @@ class PrescriptionServiceImplTest {
 
         PrescriptionRequestDTO request = buildRequest();
 
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(existing));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
@@ -1444,7 +1464,7 @@ class PrescriptionServiceImplTest {
         existing.setPharmacistVerificationNote("Dose checked");
         PrescriptionRequestDTO request = buildRequest();
 
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(existing));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
@@ -1473,7 +1493,7 @@ class PrescriptionServiceImplTest {
         PrescriptionRequestDTO request = buildRequest();
         encounter.setHospital(null);
 
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(existing));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
@@ -1492,7 +1512,7 @@ class PrescriptionServiceImplTest {
 
         PrescriptionRequestDTO request = buildRequest();
 
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(existing));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
@@ -2215,7 +2235,7 @@ class PrescriptionServiceImplTest {
             .build();
         noHospEnc.setId(encounterId);
 
-        when(prescriptionRepository.findById(prescId)).thenReturn(Optional.of(existing));
+        when(prescriptionRepository.findByIdForUpdate(prescId)).thenReturn(Optional.of(existing));
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(noHospEnc));
@@ -2238,7 +2258,7 @@ class PrescriptionServiceImplTest {
         // Set encounter assignment so resolvePrescriberAssignmentOrThrow returns immediately
         encounter.setAssignment(assignment);
 
-        when(prescriptionRepository.findById(prescId)).thenReturn(Optional.of(existing));
+        when(prescriptionRepository.findByIdForUpdate(prescId)).thenReturn(Optional.of(existing));
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
@@ -3041,7 +3061,7 @@ class PrescriptionServiceImplTest {
             .controlledSubstance(false)
             .build();
 
-        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(existing));
+        when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(existing));
 
         // The echoed status passes the status rule; the safeguard rule, which
         // runs next, is what refuses this request — proving the status check
@@ -3069,7 +3089,7 @@ class PrescriptionServiceImplTest {
             .status(com.example.hms.enums.PrescriptionStatus.DISPENSED)
             .build();
 
-        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(existing));
+        when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> prescriptionService.updatePrescription(rxId, request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
@@ -3098,7 +3118,7 @@ class PrescriptionServiceImplTest {
             .controlledSubstance(false)
             .build();
 
-        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(existing));
+        when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(existing));
         when(roleValidator.getCurrentUserId()).thenReturn(doctorUserId);
 
         // The status rule lets the withdrawal through; the safeguard rule,
@@ -3128,7 +3148,7 @@ class PrescriptionServiceImplTest {
             .status(com.example.hms.enums.PrescriptionStatus.DRAFT)
             .build();
 
-        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(existing));
+        when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> prescriptionService.updatePrescription(rxId, request, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.exception.ConflictException.class)
@@ -3151,7 +3171,7 @@ class PrescriptionServiceImplTest {
             .status(com.example.hms.enums.PrescriptionStatus.DISPENSED)
             .build();
 
-        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(existing));
+        when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> prescriptionService.updatePrescription(rxId, request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
@@ -3176,7 +3196,7 @@ class PrescriptionServiceImplTest {
             .controlledSubstance(false)
             .build();
 
-        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(existing));
+        when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> prescriptionService.updatePrescription(rxId, request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
@@ -3324,7 +3344,7 @@ class PrescriptionServiceImplTest {
         Prescription existing = new Prescription();
         existing.setId(prescriptionId);
         existing.setStatus(from);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(existing));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
@@ -3348,6 +3368,84 @@ class PrescriptionServiceImplTest {
         PrescriptionRequestDTO request = buildRequest();
         request.setStatus(status);
         return request;
+    }
+
+    @Test
+    void portalPrescriptionsCarryReadinessOnTheRowWithAFillWaiting() {
+        // G15 AC-12
+        Prescription waiting = new Prescription();
+        waiting.setId(UUID.randomUUID());
+        Prescription other = new Prescription();
+        other.setId(UUID.randomUUID());
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(waiting, other)));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class)))
+            .thenAnswer(inv -> PrescriptionResponseDTO.builder().id(((Prescription) inv.getArgument(0)).getId()).build());
+        java.time.LocalDateTime readyAt = java.time.LocalDateTime.of(2026, 10, 6, 15, 30);
+        when(readyForCollection.openPreparations(List.of(waiting, other))).thenReturn(java.util.Map.of(
+            waiting.getId(), new com.example.hms.service.pharmacy.ReadyForCollectionLookup.Readiness(
+                readyAt, "Pharmacie Centrale")));
+
+        List<PrescriptionResponseDTO> result = prescriptionService.getPrescriptionsForPortalPatient(patientId, Locale.FRENCH);
+
+        assertThat(result.get(0).getReadyForCollectionAt()).isEqualTo(readyAt);
+        assertThat(result.get(0).getReadyForCollectionPharmacyName()).isEqualTo("Pharmacie Centrale");
+        assertThat(result.get(1).getReadyForCollectionAt()).isNull();
+    }
+
+    // ═══════════════ G15: withdrawal and edit void a prepared fill (AC-8, AC-9) ═══════════════
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.PrescriptionStatus.class,
+        names = {"CANCELLED", "DISCONTINUED"})
+    void withdrawalVoidsTheOpenPreparation(com.example.hms.enums.PrescriptionStatus withdrawnTo) {
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = stubUpdateTo(prescriptionId,
+            com.example.hms.enums.PrescriptionStatus.SIGNED, withdrawnTo);
+
+        prescriptionService.updatePrescription(prescriptionId, requestWithStatus(withdrawnTo), Locale.ENGLISH);
+
+        verify(preparedFills).voidPreparedFill(existing,
+            com.example.hms.enums.ReadyCancelReason.PRESCRIPTION_WITHDRAWN);
+    }
+
+    @Test
+    void anyEditOfALiveOrderVoidsTheOpenPreparation() {
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = stubUpdateTo(prescriptionId,
+            com.example.hms.enums.PrescriptionStatus.PARTIALLY_FILLED,
+            com.example.hms.enums.PrescriptionStatus.PARTIALLY_FILLED);
+
+        prescriptionService.updatePrescription(prescriptionId, buildRequest(), Locale.ENGLISH);
+
+        verify(preparedFills).voidPreparedFill(existing,
+            com.example.hms.enums.ReadyCancelReason.PRESCRIPTION_CHANGED);
+    }
+
+    @Test
+    void anEditOfAnAlreadyWithdrawnOrderHasNothingToVoid() {
+        UUID prescriptionId = UUID.randomUUID();
+        stubUpdateTo(prescriptionId, com.example.hms.enums.PrescriptionStatus.CANCELLED,
+            com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+
+        prescriptionService.updatePrescription(prescriptionId,
+            requestWithStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED), Locale.ENGLISH);
+
+        verifyNoInteractions(preparedFills);
+    }
+
+    @Test
+    void aRefusedEditVoidsNothing() {
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        PrescriptionRequestDTO request = requestWithStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class);
+        verifyNoInteractions(preparedFills);
     }
 
     @Test
@@ -3414,7 +3512,7 @@ class PrescriptionServiceImplTest {
         Prescription existing = new Prescription();
         existing.setId(prescriptionId);
         existing.setStatus(withdrawn);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(existing));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
         PrescriptionRequestDTO request = requestWithStatus(requested);
 
         assertThatThrownBy(() -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH))
