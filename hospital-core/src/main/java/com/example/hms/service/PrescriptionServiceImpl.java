@@ -89,6 +89,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler withdrawnOrders;
     /** G15: withdrawal and edit void an open preparation (rule 8). */
     private final com.example.hms.service.pharmacy.PreparedFillVoider preparedFills;
+    /** G15 AC-12: readiness on the patient-portal prescriptions read. */
+    private final com.example.hms.service.pharmacy.ReadyForCollectionLookup readyForCollection;
 
     @Override
     @Transactional
@@ -940,8 +942,21 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Override
     @Transactional
     public java.util.List<PrescriptionResponseDTO> getPrescriptionsForPortalPatient(UUID patientId, Locale locale) {
-        return prescriptionRepository.findByPatient_Id(patientId, Pageable.unpaged()).stream()
-            .map(prescriptionMapper::toResponseDTO)
+        java.util.List<Prescription> rows = prescriptionRepository.findByPatient_Id(patientId, Pageable.unpaged())
+            .getContent();
+        // G15 AC-12: a fill waiting at the counter, one query for the list.
+        java.util.Map<UUID, com.example.hms.service.pharmacy.ReadyForCollectionLookup.Readiness> ready =
+            readyForCollection.openPreparations(rows);
+        return rows.stream()
+            .map(p -> {
+                PrescriptionResponseDTO dto = prescriptionMapper.toResponseDTO(p);
+                var waiting = ready.get(p.getId());
+                if (dto != null && waiting != null) {
+                    dto.setReadyForCollectionAt(waiting.readyAt());
+                    dto.setReadyForCollectionPharmacyName(waiting.pharmacyName());
+                }
+                return dto;
+            })
             .toList();
     }
 

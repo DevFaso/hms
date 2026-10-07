@@ -112,6 +112,8 @@ class PrescriptionServiceImplTest {
     private com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler withdrawnOrders;
     @Mock
     private com.example.hms.service.pharmacy.PreparedFillVoider preparedFills;
+    @Mock
+    private com.example.hms.service.pharmacy.ReadyForCollectionLookup readyForCollection;
     /**
      * Not optional: getPrescriptionById dereferences this whenever the thread's
      * SecurityContext holds a patient-only principal. No test here sets one
@@ -3350,6 +3352,29 @@ class PrescriptionServiceImplTest {
         PrescriptionRequestDTO request = buildRequest();
         request.setStatus(status);
         return request;
+    }
+
+    @Test
+    void portalPrescriptionsCarryReadinessOnTheRowWithAFillWaiting() {
+        // G15 AC-12
+        Prescription waiting = new Prescription();
+        waiting.setId(UUID.randomUUID());
+        Prescription other = new Prescription();
+        other.setId(UUID.randomUUID());
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(waiting, other)));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class)))
+            .thenAnswer(inv -> PrescriptionResponseDTO.builder().id(((Prescription) inv.getArgument(0)).getId()).build());
+        java.time.LocalDateTime readyAt = java.time.LocalDateTime.of(2026, 10, 6, 15, 30);
+        when(readyForCollection.openPreparations(List.of(waiting, other))).thenReturn(java.util.Map.of(
+            waiting.getId(), new com.example.hms.service.pharmacy.ReadyForCollectionLookup.Readiness(
+                readyAt, "Pharmacie Centrale")));
+
+        List<PrescriptionResponseDTO> result = prescriptionService.getPrescriptionsForPortalPatient(patientId, Locale.FRENCH);
+
+        assertThat(result.get(0).getReadyForCollectionAt()).isEqualTo(readyAt);
+        assertThat(result.get(0).getReadyForCollectionPharmacyName()).isEqualTo("Pharmacie Centrale");
+        assertThat(result.get(1).getReadyForCollectionAt()).isNull();
     }
 
     // ═══════════════ G15: withdrawal and edit void a prepared fill (AC-8, AC-9) ═══════════════

@@ -1200,7 +1200,7 @@ After any merge, check the changelog and the i18n files by hand.
   - `READY_UNCOLLECTED`, at the lowest precedence.
   - `coalesce(dispensedAt, createdAt)` in `lastPharmacyActionsFor` (`:792`).
   - The `uncollected-after` property; tests.
-- [ ] **T12 — Patient and staff medication reads.** AC-12.
+- [x] **T12 — Patient and staff medication reads.** AC-12.
   - `PatientMedicationResponseDTO`, `PrescriptionResponseDTO`,
     `PatientMedicationServiceImpl` (portal and staff),
     `getPrescriptionsForPortalPatient`; tests.

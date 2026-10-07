@@ -52,6 +52,8 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
     private final RefillRequestRepository refillRequestRepository;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    /** G15 AC-12: a fill waiting at the counter, on each row. */
+    private final com.example.hms.service.pharmacy.ReadyForCollectionLookup readyForCollection;
 
     @Override
     @Transactional(readOnly = true)
@@ -128,9 +130,11 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             .toList();
 
         Map<UUID, RefillRequest> latestRefills = latestRefillsFor(visible);
+        Map<UUID, com.example.hms.service.pharmacy.ReadyForCollectionLookup.Readiness> ready =
+            readyForCollection.openPreparations(visible);
 
         return visible.stream()
-            .map(p -> toResponse(p, latestRefills.get(p.getId())))
+            .map(p -> withReadiness(toResponse(p, latestRefills.get(p.getId())), ready.get(p.getId())))
             .toList();
     }
 
@@ -183,6 +187,15 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             .hospitalId(CrossHospitalReachRecorder.hospitalIdOf(prescription.getHospital()))
             .hospitalName(prescription.getHospital() != null ? prescription.getHospital().getName() : null)
             .build();
+    }
+
+    private static PatientMedicationResponseDTO withReadiness(
+            PatientMedicationResponseDTO dto, com.example.hms.service.pharmacy.ReadyForCollectionLookup.Readiness ready) {
+        if (ready != null) {
+            dto.setReadyForCollectionAt(ready.readyAt());
+            dto.setReadyForCollectionPharmacyName(ready.pharmacyName());
+        }
+        return dto;
     }
 
     /**

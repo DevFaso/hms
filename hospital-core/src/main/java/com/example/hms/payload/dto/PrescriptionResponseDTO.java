@@ -115,6 +115,14 @@ public class PrescriptionResponseDTO {
     private String pharmacyName;
     private String pharmacyContact;
 
+    /**
+     * G15: a fill of this prescription waiting for collection at a hospital
+     * dispensary: when it was marked ready, and where. Null when nothing is
+     * waiting. Set only on the patient-portal read.
+     */
+    private LocalDateTime readyForCollectionAt;
+    private String readyForCollectionPharmacyName;
+
     /** Community-pharmacy dispatch (PrescriptionSmsDispatchService): SMS / SENT / when. */
     private String dispatchChannel;
     private String dispatchStatus;
