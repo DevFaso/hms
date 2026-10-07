@@ -1218,7 +1218,7 @@ After any merge, check the changelog and the i18n files by hand.
 - [x] **T15 — Patient portal.** AC-12, AC-16.
   - `services/patient-portal.service.ts`; `patient-portal/my-medications/*`;
     the `PORTAL.MEDICATIONS.*` keys.
-- [ ] **T16 — Android.** AC-12.
+- [x] **T16 — Android.** AC-12.
   - `MedicationModels.kt`, `MedicationsScreen.kt`, `strings.xml` ×3,
     `MedicationModelsTest.kt`.
 - [ ] **T17 — iOS.** AC-12.

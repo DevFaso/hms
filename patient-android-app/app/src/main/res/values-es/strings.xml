@@ -1012,4 +1012,7 @@
     <string name="push_channel_messages_description">Mensajes nuevos de su equipo de atención</string>
     <string name="push_new_message_title">Mensaje nuevo</string>
     <string name="push_new_message_body">Tiene un mensaje nuevo de su equipo de atención.</string>
+    <!-- G15: a fill waiting at the pharmacy counter -->
+    <string name="medication_ready_for_collection">Lista para recoger en %1$s</string>
+    <string name="medication_ready_since">Desde el %1$s</string>
 </resources>

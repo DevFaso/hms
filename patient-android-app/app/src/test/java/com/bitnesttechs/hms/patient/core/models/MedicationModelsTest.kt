@@ -184,4 +184,44 @@ class MedicationModelsTest {
         assertEquals(RefillStatus.entries.size, refillLabels.toSet().size)
         assertTrue(refillLabels.none { it == 0 })
     }
+
+    // ── G15: ready for collection ─────────────────────────────────────────
+
+    @Test
+    fun prescriptionDecodesReadiness() {
+        val rx = decode(
+            """
+            {"success": true, "message": "ok", "data": [{
+              "id": "rx-1", "medicationName": "Amoxicillin", "status": "SIGNED",
+              "readyForCollectionAt": "2026-10-06T15:30:00",
+              "readyForCollectionPharmacyName": "Pharmacie Centrale"
+            }]}
+            """.trimIndent()
+        )
+
+        assertEquals("2026-10-06T15:30:00", rx.readyForCollectionAt)
+        assertEquals("Pharmacie Centrale", rx.readyForCollectionPharmacyName)
+    }
+
+    @Test
+    fun medicationDecodesReadinessAndToleratesItsAbsence() {
+        val listType = Types.newParameterizedType(List::class.java, MedicationDto::class.java)
+        val responseType = Types.newParameterizedType(ApiResponse::class.java, listType)
+        val adapter = moshi.adapter<ApiResponse<List<MedicationDto>>>(responseType)
+        val meds = adapter.fromJson(
+            """
+            {"success": true, "message": "ok", "data": [
+              {"id": "m-1", "medicationName": "Amoxicillin", "status": "ACTIVE",
+               "readyForCollectionAt": "2026-10-06T15:30:00",
+               "readyForCollectionPharmacyName": "Pharmacie Centrale"},
+              {"id": "m-2", "medicationName": "Metformin", "status": "ACTIVE"}
+            ]}
+            """.trimIndent()
+        )?.data.orEmpty()
+
+        assertEquals("Pharmacie Centrale", meds[0].readyForCollectionPharmacyName)
+        assertEquals("2026-10-06T15:30:00", meds[0].readyForCollectionAt)
+        assertEquals(null, meds[1].readyForCollectionAt)
+        assertEquals(null, meds[1].readyForCollectionPharmacyName)
+    }
 }
