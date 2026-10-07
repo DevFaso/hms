@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 /**
  * Minimal HL7v2 message builder / parser for instrument integration scaffolding.
@@ -198,7 +197,11 @@ public class Hl7v2MessageBuilder {
      */
     private static final Set<String> TEXT_VALUE_TYPES = Set.of("ST", "TX", "FT", "NM", "SN");
 
-    /** OBX-5 as stored: decoded for a text value type, as received otherwise. */
+    /**
+     * OBX-5 as stored: decoded for a text value type, as received otherwise.
+     * Rows written from now on hold decoded text; no stored value carried an
+     * escape before this, in any environment, as of 2026-10-06.
+     */
     private static String observationValue(String obx2, String obx5) {
         String type = obx2 == null ? "" : obx2.trim().toUpperCase(Locale.ROOT);
         return TEXT_VALUE_TYPES.contains(type) ? decodeEscapes(obx5) : obx5;
@@ -482,9 +485,15 @@ public class Hl7v2MessageBuilder {
         int i = 0;
         while (i < text.length()) {
             char c = text.charAt(i);
-            String decoded = c == ESC && i + 2 < text.length() && text.charAt(i + 2) == ESC
+            // A formatting escape is one token, kept whole: its closing escape
+            // character must not open a delimiter escape (Gram\.br\S\.br\end).
+            int end = c == ESC ? formattingEscapeEnd(text, i) : -1;
+            String decoded = end < 0 && c == ESC && i + 2 < text.length() && text.charAt(i + 2) == ESC
                 ? delimiterFor(text.charAt(i + 1)) : null;
-            if (decoded != null) {
+            if (end >= 0) {
+                out.append(text, i, end + 1);
+                i = end + 1;
+            } else if (decoded != null) {
                 out.append(decoded);
                 i += 3;
             } else {
@@ -528,13 +537,47 @@ public class Hl7v2MessageBuilder {
         return out.toString();
     }
 
+    /** Formatting escapes with nothing after the code: .br .ce .fi .nf, and H/N highlighting. */
+    private static final Set<String> FIXED_FORMATTING_ESCAPES = Set.of(".br", ".ce", ".fi", ".nf", "H", "N");
+
+    /** Formatting commands followed by an optional signed number: .in .ti .sk (and .sp, unsigned). */
+    private static final Set<String> NUMBERED_FORMATTING_ESCAPES = Set.of(".in", ".ti", ".sk");
+
     /**
-     * The HL7 v2 formatting (FT) and character-set escapes: .br .sp .in .ti
-     * .sk .ce .fi .nf, H and N (highlighting), Xhh... (hex data) and Z...
-     * (locally defined).
+     * Whether the text between two escape characters is an HL7 v2 formatting
+     * (FT) or character-set escape: .br .ce .fi .nf, .sp[n], .in/.ti/.sk[+-n],
+     * H and N (highlighting), Xhh... (hex data) or Z... (locally defined).
      */
-    private static final Pattern FORMATTING_ESCAPE = Pattern.compile(
-        "\\.(?:br|sp\\d*|in[+-]?\\d*|ti[+-]?\\d*|sk[+-]?\\d*|ce|fi|nf)|H|N|X(?:[0-9A-Fa-f]{2})+|Z[^|^&~\\\\]*");
+    private static boolean isFormattingEscape(String body) {
+        if (FIXED_FORMATTING_ESCAPES.contains(body)) {
+            return true;
+        }
+        if (body.isEmpty()) {
+            return false;
+        }
+        String head = body.length() >= 3 ? body.substring(0, 3) : "";
+        if (".sp".equals(head)) {
+            return isDigits(body.substring(3));
+        }
+        if (NUMBERED_FORMATTING_ESCAPES.contains(head)) {
+            String rest = body.substring(3);
+            return isDigits(rest.startsWith("+") || rest.startsWith("-") ? rest.substring(1) : rest);
+        }
+        char code = body.charAt(0);
+        if (code == 'X') {
+            return isHexPairs(body.substring(1));
+        }
+        return code == 'Z' && body.chars().noneMatch(ch -> "|^&~".indexOf(ch) >= 0);
+    }
+
+    private static boolean isDigits(String text) {
+        return text.chars().allMatch(ch -> ch >= '0' && ch <= '9');
+    }
+
+    private static boolean isHexPairs(String text) {
+        return !text.isEmpty() && text.length() % 2 == 0
+            && text.chars().allMatch(ch -> Character.digit(ch, 16) >= 0);
+    }
 
     /** The index of the escape character closing a formatting escape that starts at {@code start}, or -1. */
     private static int formattingEscapeEnd(String text, int start) {
@@ -542,7 +585,7 @@ public class Hl7v2MessageBuilder {
         if (close < 0) {
             return -1;
         }
-        return FORMATTING_ESCAPE.matcher(text.substring(start + 1, close)).matches() ? close : -1;
+        return isFormattingEscape(text.substring(start + 1, close)) ? close : -1;
     }
 
     private static String escapeCodeFor(char c) {

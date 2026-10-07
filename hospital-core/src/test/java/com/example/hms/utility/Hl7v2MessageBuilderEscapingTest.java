@@ -105,6 +105,36 @@ class Hl7v2MessageBuilderEscapingTest {
         assertThat(Hl7v2MessageBuilder.decodeEscapes(encoded)).isEqualTo(stored);
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        ".br", ".sp", ".sp12", ".in", ".in+2", ".ti-3", ".sk4", ".ce", ".fi", ".nf", "H", "N", "X0D", "X0D0A", "Zlocal"
+    })
+    void everyFormattingEscapePassesThroughTheEncoder(String code) {
+        String text = "a\\" + code + "\\b";
+
+        assertThat(Hl7v2MessageBuilder.encodeEscapes(text)).isEqualTo(text);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {".bx", ".sp-1", ".spx", ".in+x", "X", "X0", "XZZ", "Q", ""})
+    void anythingElseHasItsBackslashesEscaped(String code) {
+        String text = "a\\" + code + "\\b";
+
+        assertThat(Hl7v2MessageBuilder.encodeEscapes(text)).isEqualTo("a\\E\\" + code + "\\E\\b");
+    }
+
+    /** A formatting escape's closing backslash never opens a delimiter escape. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        "Gram\\.br\\S\\.br\\end",
+        "\\H\\T\\N\\",
+        "x\\.br\\F\\.br\\"
+    })
+    void formattingEscapesAreKeptWholeByTheDecoder(String text) {
+        assertThat(Hl7v2MessageBuilder.decodeEscapes(text)).isEqualTo(text);
+        assertThat(Hl7v2MessageBuilder.decodeEscapes(Hl7v2MessageBuilder.encodeEscapes(text))).isEqualTo(text);
+    }
+
     @Test
     void aFormattedValueSurvivesTheRoundTrip() {
         LabResult result = LabResult.builder()
