@@ -911,3 +911,6 @@
 "disclosures_role_security" = "Security";
 "disclosures_role_store_manager" = "Store Manager";
 "disclosures_role_support" = "Support";
+/* G15: a fill waiting at the pharmacy counter */
+"medication_ready_for_collection" = "Ready for collection at %@";
+"medication_ready_since" = "Since %@";

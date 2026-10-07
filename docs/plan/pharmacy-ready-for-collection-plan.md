@@ -1221,7 +1221,7 @@ After any merge, check the changelog and the i18n files by hand.
 - [x] **T16 — Android.** AC-12.
   - `MedicationModels.kt`, `MedicationsScreen.kt`, `strings.xml` ×3,
     `MedicationModelsTest.kt`.
-- [ ] **T17 — iOS.** AC-12.
+- [x] **T17 — iOS.** AC-12.
   - `MedicationModels.swift`, `MedicationsView.swift`, `Localizable.strings`
     ×3, `MedicationModelsTests.swift`.
 - [ ] **T18 — Bookkeeping.**
