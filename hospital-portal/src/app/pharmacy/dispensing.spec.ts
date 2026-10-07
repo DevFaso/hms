@@ -135,6 +135,10 @@ describe('DispensingComponent', () => {
       'listLotsByPharmacy',
       'createDispense',
       'cancelDispense',
+      'getDispenseSettings',
+      'markReady',
+      'handOver',
+      'cancelReady',
     ]);
     authSvc = jasmine.createSpyObj('AuthService', [], {
       currentProfile: () => ({ id: 'user-1' }),
@@ -146,6 +150,9 @@ describe('DispensingComponent', () => {
     pharmacySvc.listDispensesByPharmacy.and.returnValue(of(mockDispenses as any));
     pharmacySvc.listInventoryByPharmacy.and.returnValue(of(mockInventory as any));
     pharmacySvc.listLotsByPharmacy.and.returnValue(of(mockLots as any));
+    pharmacySvc.getDispenseSettings.and.returnValue(
+      of({ data: { readyForCollectionEnabled: true } } as any),
+    );
 
     // Roadmap row 4 / T-68 — substitute the offline queue with a stub so the
     // existing dispensing tests don't open the real IndexedDB. The pending$
@@ -351,6 +358,199 @@ describe('DispensingComponent', () => {
     component.prevPage();
     expect(component.queuePage).toBe(0); // Should not go below 0
   });
+  // ── G15 — ready for collection ───────────────────────────────────────
+
+  const preparedRow = {
+    id: 'rx-ready',
+    medicationName: 'Amoxicillin',
+    quantity: 30,
+    status: 'SIGNED',
+    patient: { id: 'pat-1', firstName: 'John', lastName: 'Doe' },
+    readyForCollection: {
+      dispenseId: 'd-ready',
+      readyAt: '2026-10-06T09:00:00',
+      preparedByName: 'Awa Ouedraogo',
+      quantity: 30,
+      unit: 'tablets',
+    },
+  };
+
+  function showQueue(rows: unknown[]): void {
+    component.workQueue.set(rows as any);
+    fixture.detectChanges();
+  }
+
+  function byTestId(id: string): HTMLElement | null {
+    return fixture.nativeElement.querySelector(`[data-testid="${id}"]`);
+  }
+
+  it('reads the ready-for-collection switch from the server', () => {
+    expect(pharmacySvc.getDispenseSettings).toHaveBeenCalled();
+    expect(component.readyForCollectionEnabled()).toBeTrue();
+  });
+
+  it('shows Mark ready next to Dispense only when the server switch is on', () => {
+    component.selectPrescription(mockWorkQueue.data.content[0]);
+    fixture.detectChanges();
+    expect(byTestId('mark-ready')).not.toBeNull();
+
+    component.readyForCollectionEnabled.set(false);
+    fixture.detectChanges();
+    expect(byTestId('mark-ready')).toBeNull();
+  });
+
+  it('keeps Mark ready hidden when the settings cannot be read', () => {
+    pharmacySvc.getDispenseSettings.and.returnValue(throwError(() => new Error('down')));
+    const again = TestBed.createComponent(DispensingComponent);
+    again.detectChanges();
+    expect(again.componentInstance.readyForCollectionEnabled()).toBeFalse();
+  });
+
+  it('marks ready through its own endpoint, never sending a wristband scan', () => {
+    pharmacySvc.markReady.and.returnValue(of({ data: { id: 'd-new', status: 'PENDING' } } as any));
+    component.form = {
+      prescriptionId: 'rx-1',
+      patientId: 'pat-1',
+      pharmacyId: 'ph-1',
+      dispensedBy: 'user-1',
+      medicationName: 'Amoxicillin',
+      quantityRequested: 30,
+      quantityDispensed: 30,
+      patientScanValue: 'someone',
+    };
+
+    component.submitReady();
+
+    expect(pharmacySvc.markReady).toHaveBeenCalledWith(
+      jasmine.objectContaining({ prescriptionId: 'rx-1', patientScanValue: '' }),
+    );
+    expect(pharmacySvc.createDispense).not.toHaveBeenCalled();
+    expect(toastSvc.success).toHaveBeenCalledWith('PHARMACY.READY_SUCCESS');
+  });
+
+  it('a prepared row offers Hand over and Cancel preparation instead of Dispense and Route', () => {
+    showQueue([preparedRow, mockWorkQueue.data.content[0]]);
+
+    expect(byTestId('rx-hand-over-rx-ready')).not.toBeNull();
+    expect(byTestId('rx-cancel-ready-rx-ready')).not.toBeNull();
+    expect(byTestId('rx-dispense-rx-ready')).toBeNull();
+    expect(byTestId('rx-ready-rx-ready')).not.toBeNull();
+    // the plain row keeps Dispense and has no hand-over
+    expect(byTestId('rx-dispense-rx-1')).not.toBeNull();
+    expect(byTestId('rx-hand-over-rx-1')).toBeNull();
+  });
+
+  it('hands over with the optional wristband scan', () => {
+    pharmacySvc.handOver.and.returnValue(
+      of({ data: { id: 'd-ready', status: 'COMPLETED' } } as any),
+    );
+    component.openHandOver(preparedRow as any);
+    component.handOverScan = ' pat-1 ';
+
+    component.confirmHandOver();
+
+    expect(pharmacySvc.handOver).toHaveBeenCalledWith('d-ready', { patientScanValue: 'pat-1' });
+    expect(toastSvc.success).toHaveBeenCalledWith('PHARMACY.HAND_OVER_SUCCESS');
+    expect(component.readyAction()).toBeNull();
+  });
+
+  it('hands over without a scan when none was taken', () => {
+    pharmacySvc.handOver.and.returnValue(of({ data: {} } as any));
+    component.openHandOver(preparedRow as any);
+
+    component.confirmHandOver();
+
+    expect(pharmacySvc.handOver).toHaveBeenCalledWith('d-ready', {});
+  });
+
+  it('shows the server refusal when a hand-over fails', () => {
+    pharmacySvc.handOver.and.returnValue(
+      throwError(() => ({ error: { message: 'This prescription can no longer be handed over.' } })),
+    );
+    component.openHandOver(preparedRow as any);
+
+    component.confirmHandOver();
+
+    expect(toastSvc.error).toHaveBeenCalledWith('This prescription can no longer be handed over.');
+    expect(component.readyAction()).not.toBeNull();
+  });
+
+  it('cancels a preparation with the chosen reason', () => {
+    pharmacySvc.cancelReady.and.returnValue(of({ data: {} } as any));
+    component.openCancelReady(preparedRow as any);
+    component.cancelReason = 'STOCK_UNAVAILABLE';
+
+    component.confirmCancelReady();
+
+    expect(pharmacySvc.cancelReady).toHaveBeenCalledWith('d-ready', 'STOCK_UNAVAILABLE');
+    expect(toastSvc.success).toHaveBeenCalledWith('PHARMACY.CANCEL_READY_SUCCESS');
+  });
+
+  it('offers only the pharmacist reasons, never the system ones', () => {
+    expect([...component.readyCancelReasons]).toEqual([
+      'STOCK_UNAVAILABLE',
+      'PATIENT_DECLINED',
+      'NOT_COLLECTED',
+      'OTHER',
+    ]);
+  });
+
+  it('labels READY_UNCOLLECTED with the days the fill has waited', () => {
+    const readyAt = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000 - 60_000).toISOString();
+    const row = {
+      ...preparedRow,
+      needsAttention: true,
+      attentionReason: 'READY_UNCOLLECTED',
+      readyForCollection: { ...preparedRow.readyForCollection, readyAt },
+    } as any;
+
+    expect(component.attentionKey(row)).toBe('PHARMACY.ATTENTION.READY_UNCOLLECTED');
+    expect(component.attentionParams(row)).toEqual({ days: 8 });
+    expect(component.attentionParams(mockWorkQueue.data.content[0] as any)).toEqual({});
+  });
+
+  it('a PENDING row in recent dispenses has no plain Cancel and sorts by when it was prepared', () => {
+    component.recentDispenses.set([
+      {
+        id: 'd-old',
+        medicationName: 'A',
+        quantityDispensed: 1,
+        status: 'COMPLETED',
+        dispensedAt: '2026-10-01T10:00:00',
+        createdAt: '2026-10-01T10:00:00',
+      },
+      {
+        id: 'd-pending',
+        medicationName: 'B',
+        quantityDispensed: 1,
+        status: 'PENDING',
+        createdAt: '2026-10-06T10:00:00',
+      },
+    ] as any);
+    fixture.detectChanges();
+
+    const rows = fixture.debugElement.queryAll(By.css('.section-card:last-of-type tbody tr'));
+    const pendingRow = rows.find((r) => r.nativeElement.textContent.includes('B'));
+    expect(pendingRow?.query(By.css('.btn-action.danger'))).toBeNull();
+
+    pharmacySvc.listDispensesByPharmacy.and.returnValue(
+      of({
+        data: {
+          content: [
+            {
+              id: 'd-old',
+              status: 'COMPLETED',
+              dispensedAt: '2026-10-01T10:00:00',
+              createdAt: '2026-10-01T10:00:00',
+            },
+            { id: 'd-pending', status: 'PENDING', createdAt: '2026-10-06T10:00:00' },
+          ],
+        },
+      } as any),
+    );
+    component.onPharmacyChange();
+    expect(component.recentDispenses().map((d) => d.id)).toEqual(['d-pending', 'd-old']);
+  });
 });
 
 /**
@@ -397,7 +597,11 @@ describe('DispensingComponent — refill context on the work queue', () => {
       'listLotsByPharmacy',
       'createDispense',
       'cancelDispense',
+      'getDispenseSettings',
     ]);
+    pharmacySvc.getDispenseSettings.and.returnValue(
+      of({ data: { readyForCollectionEnabled: false } }) as never,
+    );
     // The component only loads the work queue once a pharmacy is selected,
     // so an empty pharmacy list would leave the queue permanently unrendered.
     pharmacySvc.listPharmacies.and.returnValue(
@@ -555,7 +759,11 @@ describe('DispensingComponent — clarification control on the work queue', () =
       'listLotsByPharmacy',
       'createDispense',
       'cancelDispense',
+      'getDispenseSettings',
     ]);
+    pharmacySvc.getDispenseSettings.and.returnValue(
+      of({ data: { readyForCollectionEnabled: false } }) as never,
+    );
     pharmacySvc.listPharmacies.and.returnValue(
       of({
         content: [{ id: 'ph-1', name: 'Main Pharmacy' }],

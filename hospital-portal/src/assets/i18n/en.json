@@ -4429,7 +4429,9 @@
       "REFILL_HISTORY": "Refill History",
       "REQUESTED": "Requested",
       "COMPLETED": "Completed",
-      "NOT_REFILLABLE": "This prescription can no longer be refilled — ask your care team for a new one."
+      "NOT_REFILLABLE": "This prescription can no longer be refilled — ask your care team for a new one.",
+      "READY_AT": "Ready for collection at {{pharmacy}}",
+      "READY_SINCE": "Since {{date}}"
     },
     "LAB_RESULTS": {
       "TITLE": "Test Results",
@@ -5073,7 +5075,7 @@
         "CANCELLED": "Cancelled",
         "COMPLETED": "Completed",
         "PARTIAL": "Partial",
-        "PENDING": "Pending"
+        "PENDING": "Ready for collection"
       },
       "IMAGING_ORDER_STATUS": {
         "CANCELLED": "Cancelled",
@@ -7456,7 +7458,8 @@
       "BACK_ORDER_OUTSTANDING": "Partly filled — the supplier order is still open",
       "CLARIFICATION_RESOLVED": "The prescriber has answered — read the answer first",
       "PRESCRIBER_ANSWERED": "The prescriber has answered",
-      "UNRECOGNISED": "Needs a second look — check the order before filling"
+      "UNRECOGNISED": "Needs a second look — check the order before filling",
+      "READY_UNCOLLECTED": "Ready for {{days}} days and not collected"
     },
     "ACCEPT": "Accept",
     "ADDRESS": "Address",
@@ -7737,7 +7740,28 @@
     "VERIFICATION": "Verification",
     "VERIFIED": "Verified",
     "WORK_QUEUE": "Work Queue",
-    "WORK_QUEUE_LOAD_FAILED": "Failed to load work queue"
+    "WORK_QUEUE_LOAD_FAILED": "Failed to load work queue",
+    "MARK_READY": "Mark ready for collection",
+    "READY_FOR_COLLECTION": "Ready for collection",
+    "READY_SINCE": "Ready since {{date}}",
+    "HAND_OVER": "Hand over",
+    "HAND_OVER_CONFIRM": "Hand this prepared fill over to the patient?",
+    "CANCEL_READY": "Cancel preparation",
+    "CANCEL_READY_CONFIRM": "Cancel this preparation? The stock is returned and the patient is told it is no longer ready.",
+    "CANCEL_READY_REASON_LABEL": "Reason",
+    "CANCEL_READY_REASON": {
+      "STOCK_UNAVAILABLE": "Stock missing or damaged",
+      "PATIENT_DECLINED": "Patient declined",
+      "NOT_COLLECTED": "Not collected",
+      "OTHER": "Other"
+    },
+    "READY_SUCCESS": "Marked ready for collection.",
+    "READY_FAILED": "Could not mark the prescription ready.",
+    "HAND_OVER_SUCCESS": "Handed over to the patient.",
+    "HAND_OVER_FAILED": "Could not record the hand-over.",
+    "CANCEL_READY_SUCCESS": "Preparation cancelled.",
+    "CANCEL_READY_FAILED": "Could not cancel the preparation.",
+    "PREPARED_BY": "Prepared by {{name}}"
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",

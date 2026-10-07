@@ -1207,7 +1207,7 @@ After any merge, check the changelog and the i18n files by hand.
 - [x] **T13 — Reminder sweep.** AC-13.
   - `ReadyForCollectionReminderScheduler` (void, `@SchedulerLock`, claim
     REQUIRES_NEW, then send); properties; `SchedulerLockCoverageTest`; test.
-- [ ] **T14 — Portal pharmacy UI.** AC-11, AC-16, AC-17.
+- [x] **T14 — Portal pharmacy UI.** AC-11, AC-16, AC-17.
   - `services/pharmacy.service.ts`; `pharmacy/dispensing.{ts,html,scss,spec.ts}`.
   - `core/enum-label.service.ts:335`.
   - `assets/i18n/{en,fr,es}.json`: the `PHARMACY.*` keys and
@@ -1215,7 +1215,7 @@ After any merge, check the changelog and the i18n files by hand.
     already landed in T6, T7 and T8.
   - The settings call.
   - Pass `i18n:enums` and `i18n:translated`.
-- [ ] **T15 — Patient portal.** AC-12, AC-16.
+- [x] **T15 — Patient portal.** AC-12, AC-16.
   - `services/patient-portal.service.ts`; `patient-portal/my-medications/*`;
     the `PORTAL.MEDICATIONS.*` keys.
 - [ ] **T16 — Android.** AC-12.

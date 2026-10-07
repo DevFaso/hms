@@ -4429,7 +4429,9 @@
       "REFILL_HISTORY": "Historique des renouvellements",
       "REQUESTED": "Demandé",
       "COMPLETED": "Terminé",
-      "NOT_REFILLABLE": "Cette ordonnance ne peut plus être renouvelée — demandez-en une nouvelle à votre équipe soignante."
+      "NOT_REFILLABLE": "Cette ordonnance ne peut plus être renouvelée — demandez-en une nouvelle à votre équipe soignante.",
+      "READY_AT": "Prête à retirer à {{pharmacy}}",
+      "READY_SINCE": "Depuis le {{date}}"
     },
     "LAB_RESULTS": {
       "TITLE": "Résultats d’analyses",
@@ -5039,7 +5041,7 @@
         "CANCELLED": "Annulé",
         "COMPLETED": "Délivré",
         "PARTIAL": "Partiel",
-        "PENDING": "En attente"
+        "PENDING": "Prête à retirer"
       },
       "IMAGING_ORDER_STATUS": {
         "CANCELLED": "Annulé",
@@ -7456,7 +7458,8 @@
       "BACK_ORDER_OUTSTANDING": "Partiellement délivrée — la commande fournisseur est toujours ouverte",
       "CLARIFICATION_RESOLVED": "Le prescripteur a répondu — lire la réponse d'abord",
       "PRESCRIBER_ANSWERED": "Le prescripteur a répondu",
-      "UNRECOGNISED": "À revoir — vérifier l'ordonnance avant de délivrer"
+      "UNRECOGNISED": "À revoir — vérifier l'ordonnance avant de délivrer",
+      "READY_UNCOLLECTED": "Prête depuis {{days}} jours et non retirée"
     },
     "ACCEPT": "Accepter",
     "ADDRESS": "Adresse",
@@ -7737,7 +7740,28 @@
     "VERIFICATION": "Vérification",
     "VERIFIED": "Vérifié",
     "WORK_QUEUE": "File d'attente",
-    "WORK_QUEUE_LOAD_FAILED": "Échec du chargement de la file d'attente"
+    "WORK_QUEUE_LOAD_FAILED": "Échec du chargement de la file d'attente",
+    "MARK_READY": "Marquer prête à retirer",
+    "READY_FOR_COLLECTION": "Prête à retirer",
+    "READY_SINCE": "Prête depuis le {{date}}",
+    "HAND_OVER": "Remettre au patient",
+    "HAND_OVER_CONFIRM": "Remettre cette délivrance préparée au patient ?",
+    "CANCEL_READY": "Annuler la préparation",
+    "CANCEL_READY_CONFIRM": "Annuler cette préparation ? Le stock est réintégré et le patient est informé qu'elle n'est plus prête.",
+    "CANCEL_READY_REASON_LABEL": "Motif",
+    "CANCEL_READY_REASON": {
+      "STOCK_UNAVAILABLE": "Stock manquant ou endommagé",
+      "PATIENT_DECLINED": "Refusée par le patient",
+      "NOT_COLLECTED": "Non retirée",
+      "OTHER": "Autre"
+    },
+    "READY_SUCCESS": "Marquée prête à retirer.",
+    "READY_FAILED": "Impossible de marquer l'ordonnance comme prête.",
+    "HAND_OVER_SUCCESS": "Remise au patient.",
+    "HAND_OVER_FAILED": "Impossible d'enregistrer la remise.",
+    "CANCEL_READY_SUCCESS": "Préparation annulée.",
+    "CANCEL_READY_FAILED": "Impossible d'annuler la préparation.",
+    "PREPARED_BY": "Préparée par {{name}}"
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",
