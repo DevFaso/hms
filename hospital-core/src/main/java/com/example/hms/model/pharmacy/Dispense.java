@@ -9,6 +9,7 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.User;
 import com.example.hms.model.Prescription;
 import com.example.hms.security.EncryptedStringConverter;
+import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
@@ -30,6 +31,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.hibernate.annotations.Type;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -222,6 +224,12 @@ public class Dispense extends BaseEntity {
      * JSON array of {@link com.example.hms.enums.DispenseCheck} names that
      * failed and were overridden. Null unless the status is OVERRIDDEN.
      */
+    // The column is JSONB (V138): without the JSON binding, Hibernate binds a
+    // VARCHAR and PostgreSQL refuses every INSERT of a dispense, null or not
+    // ("column is of type jsonb but expression is of type character varying").
+    // H2 never noticed; PreparedFillConcurrencyPostgresIT did. Same binding as
+    // MedicationAdministrationRecord.fiveRightsOverrides.
+    @Type(JsonBinaryType.class)
     @Column(name = "verification_overrides", columnDefinition = "JSONB")
     private String verificationOverrides;
 

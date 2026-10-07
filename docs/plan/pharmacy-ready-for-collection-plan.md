@@ -1178,7 +1178,7 @@ After any merge, check the changelog and the i18n files by hand.
   - Wire the voider in `PrescriptionServiceImpl` (`:855-860`, any edit and any
     withdrawal).
   - `PrescriptionServiceImplTest`.
-- [ ] **T9 — Postgres concurrency IT.** AC-3, AC-5, AC-8, AC-10, AC-4/B2.
+- [x] **T9 — Postgres concurrency IT.** AC-3, AC-5, AC-8, AC-10, AC-4/B2.
   - New `PreparedFillConcurrencyPostgresIT`, modelled on
     `EducationProgressWritesPostgresIT`.
   - Covers:
