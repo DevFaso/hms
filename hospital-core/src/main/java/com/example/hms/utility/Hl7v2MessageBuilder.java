@@ -200,11 +200,11 @@ public class Hl7v2MessageBuilder {
 
     /**
      * OBX-2 value types whose OBX-5 is one piece of text, so its escapes are
-     * decoded as a whole. A coded value (CE, CWE, CNE, ...) has components of
+     * decoded as a whole. A coded or structured value (CE, CWE, CNE, SN, ...) has components of
      * its own, and decoding the whole field would turn an escaped caret inside
      * a component into a component separator; it is stored as received.
      */
-    private static final Set<String> TEXT_VALUE_TYPES = Set.of("ST", "TX", "FT", "NM", "SN");
+    private static final Set<String> TEXT_VALUE_TYPES = Set.of("ST", "TX", "FT", "NM");
 
     /**
      * OBX-5 as stored: decoded for a text value type, as received otherwise.
@@ -592,14 +592,6 @@ public class Hl7v2MessageBuilder {
     }
 
     /**
-     * A field's first component as plain text: split on the component
-     * separator first, then decode, so an escaped caret inside the component
-     * ({@code WBC\S\1}) is data and not a split. Every identifier the
-     * outbound builders escape (PID-3, OBR-2/OBR-3 order and accession
-     * numbers, OBX-3 test code) is read back through this. Lab ORU paths
-     * only: the ADT parser keeps {@link #rawFirstComponent}.
-     */
-    /**
      * The ADT parser's split, exactly as before HL7 escapes were decoded on the
      * lab paths: the first component as received, nothing decoded. ADT MRNs,
      * names and merge ids are all read raw, and a visit number decoded here
@@ -610,6 +602,14 @@ public class Hl7v2MessageBuilder {
         return idx >= 0 ? field.substring(0, idx) : field;
     }
 
+    /**
+     * A field's first component as plain text: split on the component
+     * separator first, then decode, so an escaped caret inside the component
+     * ({@code WBC\S\1}) is data and not a split. Every identifier the
+     * outbound builders escape (PID-3, OBR-2/OBR-3 order and accession
+     * numbers, OBX-3 test code) is read back through this. Lab ORU paths
+     * only: the ADT parser keeps {@link #rawFirstComponent}.
+     */
     private static String firstComponent(String field) {
         if (field == null) {
             return "";

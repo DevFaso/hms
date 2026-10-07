@@ -204,6 +204,12 @@ class Hl7v2MessageBuilderEscapingTest {
     }
 
     @Test
+    void aStructuredNumericValueIsStoredAsReceived() {
+        // SN has components of its own (comparator^number), like a coded type.
+        assertThat(inbound("SN", "<^10\\S\\3").resultValue()).isEqualTo("<^10\\S\\3");
+    }
+
+    @Test
     void aTextValueIsDecoded() {
         assertThat(inbound("ST", "a\\S\\b").resultValue()).isEqualTo("a^b");
         assertThat(inbound("tx", "a\\F\\b").resultValue()).isEqualTo("a|b");
