@@ -22,6 +22,19 @@ public interface DispenseService {
      */
     DispenseResponseDTO createDispenseTransactionally(DispenseRequestDTO dto);
 
+    /**
+     * G15: prepare a fill (stock set aside, status PENDING) and tell the
+     * patient it is ready for collection. 404 when
+     * {@code pharmacy.ready-for-collection.enabled} is off.
+     */
+    DispenseResponseDTO markReadyForCollection(DispenseRequestDTO dto);
+
+    /** Transactional body of {@link #markReadyForCollection}; same contract as {@link #createDispenseTransactionally}. */
+    DispenseResponseDTO markReadyForCollectionTransactionally(DispenseRequestDTO dto);
+
+    /** {@code pharmacy.ready-for-collection.enabled}, for {@code GET /pharmacy/dispense/settings}. */
+    boolean isReadyForCollectionEnabled();
+
     DispenseResponseDTO getDispense(UUID id);
 
     Page<DispenseResponseDTO> listByPrescription(UUID prescriptionId, Pageable pageable);

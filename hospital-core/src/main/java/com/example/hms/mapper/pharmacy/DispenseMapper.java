@@ -59,6 +59,10 @@ public class DispenseMapper {
             .scanVerifiedAt(entity.getScanVerifiedAt())
             .verificationOverrides(parseOverrides(entity.getVerificationOverrides()))
             .verificationOverrideReason(entity.getVerificationOverrideReason())
+            .preparedBy(entity.getPreparedByUser() != null ? entity.getPreparedByUser().getId() : null)
+            .preparedByName(displayNameOf(entity.getPreparedByUser()))
+            .readyAt(entity.getPreparedByUser() != null ? entity.getCreatedAt() : null)
+            .cancelReason(entity.getCancelReason() != null ? entity.getCancelReason().name() : null)
             .createdAt(entity.getCreatedAt())
             .updatedAt(entity.getUpdatedAt())
             .build();

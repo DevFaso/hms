@@ -5284,7 +5284,8 @@
         "USER_UPDATE": "Utilisateur modifié",
         "WEBHOOK_ENDPOINT_DISABLED": "Webhook désactivé",
         "WEBHOOK_ENDPOINT_REGISTERED": "Webhook enregistré",
-        "WEBHOOK_ENDPOINT_UPDATED": "Webhook modifié"
+        "WEBHOOK_ENDPOINT_UPDATED": "Webhook modifié",
+        "DISPENSE_READY": "Délivrance préparée pour retrait"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",

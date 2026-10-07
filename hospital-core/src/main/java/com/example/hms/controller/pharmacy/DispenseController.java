@@ -3,6 +3,7 @@ package com.example.hms.controller.pharmacy;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.pharmacy.DispenseRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseResponseDTO;
+import com.example.hms.payload.dto.pharmacy.DispenseSettingsDTO;
 import com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO;
 import com.example.hms.service.pharmacy.DispenseService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -53,6 +54,30 @@ public class DispenseController {
             @Valid @RequestBody DispenseRequestDTO dto) {
         DispenseResponseDTO created = dispenseService.createDispense(dto);
         return ResponseEntity.status(201).body(ApiResponseWrapper.success(created));
+    }
+
+    @GetMapping("/settings")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Dispensing settings",
+            description = "Server-side switches the dispensing screen needs: whether a fill can be marked ready for collection")
+    @ApiResponse(responseCode = "200", description = "Settings returned")
+    public ResponseEntity<ApiResponseWrapper<DispenseSettingsDTO>> getSettings() {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                new DispenseSettingsDTO(dispenseService.isReadyForCollectionEnabled())));
+    }
+
+    @PostMapping("/ready")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Mark ready for collection",
+            description = "Prepare a fill (stock set aside, status PENDING) and text the patient that it is ready")
+    @ApiResponse(responseCode = "201", description = "Fill prepared")
+    @ApiResponse(responseCode = "400", description = "Not dispensable, CDS, verification, or a status in the body")
+    @ApiResponse(responseCode = "404", description = "Prescription or pharmacy outside scope, or the feature is off")
+    @ApiResponse(responseCode = "409", description = "A preparation is already open, or a concurrent change")
+    public ResponseEntity<ApiResponseWrapper<DispenseResponseDTO>> markReady(
+            @Valid @RequestBody DispenseRequestDTO dto) {
+        DispenseResponseDTO prepared = dispenseService.markReadyForCollection(dto);
+        return ResponseEntity.status(201).body(ApiResponseWrapper.success(prepared));
     }
 
     @GetMapping("/{id}")

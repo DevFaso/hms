@@ -5318,7 +5318,8 @@
         "USER_UPDATE": "User Updated",
         "WEBHOOK_ENDPOINT_DISABLED": "Webhook Disabled",
         "WEBHOOK_ENDPOINT_REGISTERED": "Webhook Registered",
-        "WEBHOOK_ENDPOINT_UPDATED": "Webhook Updated"
+        "WEBHOOK_ENDPOINT_UPDATED": "Webhook Updated",
+        "DISPENSE_READY": "Fill prepared for collection"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",

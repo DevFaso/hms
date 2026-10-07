@@ -99,6 +99,8 @@ public enum AuditEventType {
     DISPENSE_CREATED,
     DISPENSE_CANCELLED,
     DISPENSE_SUBSTITUTED,
+    /** G15: a fill was prepared and the patient told it is ready for collection. */
+    DISPENSE_READY,
     MEDICATION_DEACTIVATED,
     PHARMACY_DEACTIVATED,
     MTM_REVIEW_STARTED,

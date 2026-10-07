@@ -1147,7 +1147,7 @@ After any merge, check the changelog and the i18n files by hand.
   - `PharmacyServiceSupport`: the three new methods; move `notifyDispensed` to
     after-commit.
   - The four `messages*.properties` files; `PharmacyServiceSupportTest`.
-- [ ] **T6 — Mark ready and the flag.** AC-1, AC-2, AC-3, AC-17.
+- [x] **T6 — Mark ready and the flag.** AC-1, AC-2, AC-3, AC-17.
   - `markReadyForCollection`, with the shared front half extracted.
   - `POST /ready`; `DISPENSE_READY`, **plus `PORTAL.ENUM.AUDIT_EVENT_TYPE.DISPENSE_READY` in `assets/i18n/{en,fr,es}.json` in the same commit** (A5; `i18n:enums` reads the Java enum).
   - `GET /settings` and `DispenseSettingsDTO` (A4).
