@@ -12,6 +12,16 @@ revision:
 - applies every advisory;
 - records the user's decisions of 2026-10-07 as decided (section 10, "Decided").
 
+<!-- Revision 3 edits applied -->
+**Revision 3 (2026-10-07).** Plan review pass 2 returned REVISE. This
+revision:
+
+- applies N1: the routing and clarification writes now take the prescription
+  lock;
+- applies advisories A1–A9;
+- applies the coordinator decision A4, which puts the flag on
+  `GET /pharmacy/dispense/settings`.
+
 ---
 
 ## 1. Summary
@@ -338,12 +348,15 @@ In every case nothing changes.
   - stock-out routing (partner, print, back order);
   - SMS dispatch, including the TRANSMISSION_FAILED retry;
   - a clarification request.
+- Each of these writes first loads the prescription with `findByIdForUpdate`
+  and only then checks for an open preparation (rule 1, N1). A ready racing a
+  route-to-partner therefore cannot commit alongside it.
 
 ### US-5 — The pharmacist sees what is waiting
 
 **AC-11 — Work queue.**
 
-- The work-queue response carries `readyForCollectionEnabled` (B6).
+- The flag reaches the portal through `GET /pharmacy/dispense/settings` (A4).
 - Each row with an open preparation carries `readyForCollection`, made of
   `dispenseId`, `readyAt`, `preparedByName`, `quantity`, `unit` and
   `reminderSentAt`.
@@ -396,11 +409,13 @@ In every case nothing changes.
 **AC-14 — Tenancy and roles.**
 
 - On hand-over and on cancel-ready, these three must answer 404
-  `dispense.notfound` with **byte-identical** response bodies:
+  `dispense.notfound` with identical response bodies:
   - a dispense in another hospital;
   - a random id;
   - a null-scope caller.
-- The test asserts body equality.
+- The test asserts that `status`, `error` and `message` are equal (A2). It
+  excludes `timestamp`, which differs on every call, and `path`, which contains
+  the id; `errorBody` writes both.
 - Role gates are asserted by reflection: the `@PreAuthorize` value on each new
   controller method equals the one on `dispense()`. No slice test is needed
   (see the webmvctest-slice-scanning lesson).
@@ -423,8 +438,8 @@ In every case nothing changes.
 
 - With `pharmacy.ready-for-collection.enabled=false`:
   - `POST /ready` → **404**;
-  - the work queue reports `readyForCollectionEnabled:false`, and the portal
-    hides **Mark ready**;
+  - `GET /pharmacy/dispense/settings` returns `{"readyForCollectionEnabled":false}`,
+    and the portal hides **Mark ready**;
   - hand-over and cancel-ready still work.
 - The reminder sweep has its own flag.
 
@@ -463,6 +478,7 @@ PESSIMISTIC_WRITE). Under that lock it re-checks the prescription status and
 | One-step `POST /pharmacy/dispense` | Same method, so both paths take it; the open-preparation check runs under it |
 | `hand-over` and `cancel-ready` | Load the dispense id → prescription id without a lock; take the prescription lock; then run the conditional UPDATE on the dispense |
 | `PrescriptionServiceImpl.updatePrescription` | Changes `findById` (`:808`) to `findByIdForUpdate`, so withdrawal and edit hold the prescription before voiding |
+| Writes that route the order away, or ask a question about it, while it might be prepared (N1): `StockOutRoutingServiceImpl.routeToPartner` (`:203`), `printForPatient` (`:274`), `backOrder` (`:312`), and `PrescriptionClarificationService` request-clarification | Load through `PrescriptionRepository.findByIdForUpdate` **before** the `existsOpenPreparation` guard. Routing: `findPrescriptionForWrite` (`:587`) uses the locked read instead of `findPrescription`'s `findById` (`:562`). Clarification: the write path's `findInScope` (`:158`) gets a locked variant (reads keep `findById`). SMS dispatch already locks (`PrescriptionSmsDispatchServiceImpl.java:136`) and only gains the guard |
 
 **Lock order is always prescription, then dispense.** This removes the
 deadlock between hand-over (which would otherwise lock dispense, then
@@ -473,7 +489,10 @@ prescription) and withdrawal (prescription, then dispense).
 - ready vs. withdrawal. Ready never writes the prescription, so `@Version`
   never fires there;
 - ready vs. one-step dispense. The partial index does not cover COMPLETED rows;
-- ready vs. ready.
+- ready vs. ready;
+- ready vs. routing to a partner, print, back order or a clarification request
+  (N1). Each of those writes the prescription, but ready does not, so without
+  the lock both could commit.
 
 **Lock and optimistic-lock failures map to 409.** Add two
 `GlobalExceptionHandler` entries:
@@ -484,6 +503,15 @@ prescription) and withdrawal (prescription, then dispense).
 
 Both return 409 with the generic key `concurrent.modification` (EN, FR, ES
 below). Today both fall to the `RuntimeException` handler at `:350`.
+
+**How every 409 is thrown (A3).** Every 409 in this feature is
+`new ConflictException(MessageUtil.resolve(key))`.
+
+- `GlobalExceptionHandler.handleConflictException` (`:46-57`) splits a message
+  on its first `:` into a `field` and the message. A colon in the translated
+  text would therefore cut the sentence in two.
+- So no 409 message text, in any locale, contains a colon. See the reworded
+  `dispense.ready.openPreparation`.
 
 ### 2. PENDING is not a fill
 
@@ -522,7 +550,10 @@ Both failures are refusals and never overridable.
   - otherwise NOT_VERIFIED.
 - `patientScanValue` takes the hand-over scan, if supplied.
 - `scanVerifiedAt` is the latest scan time.
-- `verificationOverrides` is unchanged.
+- `verificationOverrides` and `verification_override_reason` are unchanged.
+  V138's `ck_dispense_override_reason` (`V138__dispense_verification.sql:111-115`)
+  requires a non-blank reason whenever the status is OVERRIDDEN, and the
+  preserved values satisfy it.
 
 NOT_VERIFIED is the honest default when no scan exists at either step, exactly
 as on the one-step path (`Dispense.java:184-193`).
@@ -535,7 +566,13 @@ evaluated on the locked prescription.
 ### 7. Conditional transitions (B2)
 
 **Hand-over and cancel-ready are each one `@Modifying(flushAutomatically = true,
-clearAutomatically = true)` JPQL UPDATE … `WHERE id=:id AND status=PENDING`.**
+clearAutomatically = false)` JPQL UPDATE … `WHERE id=:id AND status=PENDING`.**
+
+The persistence context is **not** cleared (A1). Clearing it mid-transaction
+would detach `existing` and everything else that `updatePrescription` still
+uses after `:859`. Instead, only that one row is resynced: if the `Dispense` is
+managed, call `entityManager.refresh(dispense)` right after the update;
+otherwise detach it and re-read it.
 It sets every column the transition changes:
 
 - **hand-over**: `status`, `dispensedAt`, `dispensedBy`, `verificationStatus`,
@@ -545,8 +582,9 @@ It sets every column the transition changes:
 `updatedAt` must be set explicitly. Bulk JPQL skips the `@PreUpdate` in
 `BaseEntity` (`model/BaseEntity.java:39-40`).
 
-**No code mutates the managed `Dispense` after the update.** The entity has
-no `@DynamicUpdate`, so a later flush would write the stale PENDING back.
+**No code mutates the managed `Dispense` between the update and the refresh.**
+The entity has no `@DynamicUpdate`, so an unrefreshed managed copy would flush
+its stale PENDING back.
 
 If the update count is 0:
 
@@ -554,7 +592,14 @@ If the update count is 0:
 - replay rules as in AC-5;
 - otherwise 409.
 
-The response DTO is built from a **fresh re-read** after the update.
+The response DTO is built from the **refreshed or re-read** row.
+
+**How hand-over and cancel-ready find the prescription to lock (A8).** They
+use a scalar query, `select d.prescription.id from Dispense d where d.id = :id`,
+and do not rely on the LAZY `prescription` mapping.
+
+- An empty result is the identical 404.
+- The scope check comes next, then the lock.
 
 Ready keeps `idempotencyKey` through the existing pre-check and race wrapper.
 
@@ -573,8 +618,10 @@ Ready keeps `idempotencyKey` through the existing pre-check and race wrapper.
 - It does **not** call `requireHospitalScopeForWrite` or `enforceHospitalScope`.
   The prescriber's transaction is already authorised and may be a global-view
   super-admin.
-- It uses the same conditional UPDATE as cancel-ready, plus the stock RETURN,
-  the audit, and the after-commit SMS.
+- It is the **only** implementation of the conditional cancel, the stock
+  RETURN, the audit and the after-commit SMS (A7).
+- `cancelReady` does three things: it checks scope (identical 404), takes the
+  prescription lock, then delegates to the voider with the pharmacist's reason.
 - It runs in the same transaction, so a failure rolls the withdrawal back.
 
 ### 9. A patient who never comes (user decision 2)
@@ -625,7 +672,7 @@ accounting does not change. AC-15 stops new ones.
   covers:
   - `lastPharmacyActionsFor` (`:792`);
   - the recent-dispenses list;
-  - the portal's `eventTime(fill.dispensedAt, fill.createdAt)` (`prescriptions.ts:1048`),
+  - the portal's `eventTime(fill.dispensedAt, fill.createdAt)` (`prescriptions.ts:1050`),
     which already does this.
 
 ### 15. Payments and claims (user decision 4)
@@ -673,7 +720,8 @@ has no DO blocks. It does the following:
      - `chk_disp_qty_positive` (`V43:198`);
      - two on `verification_status` from V138:
        - the value set `NOT_VERIFIED`/`VERIFIED`/`OVERRIDDEN` (`V138__dispense_verification.sql:107`);
-       - an OVERRIDDEN-requires-overrides rule (`:113`).
+       - `ck_dispense_override_reason` (`:111-115`): OVERRIDDEN requires a non-blank
+         `verification_override_reason`.
    - The hand-over merge (rule 5) only writes values those constraints allow.
    - Nothing in `db/migration` constrains `prescriptions.status`.
    - *Coordinator to verify prod* with `\d clinical.dispenses`. Hand-run `R__`
@@ -712,18 +760,18 @@ returns it with RETURN, as `cancelDispense` does (`:686-704`).
 | `enums/DispenseStatus.java` | Javadoc: PENDING means "prepared, awaiting collection" |
 | New `enums/ReadyCancelReason.java` | API values STOCK_UNAVAILABLE, PATIENT_DECLINED, NOT_COLLECTED, OTHER; system values PRESCRIPTION_WITHDRAWN, PRESCRIPTION_CHANGED, refused from the API |
 | `model/pharmacy/Dispense.java` | `dispensedAt` nullable (drop `@NotNull`, keep `@Builder.Default` for the one-step path); add `preparedByUser` (LAZY), `readyReminderSentAt`, `cancelReason`; **no new `@Index`** |
-| `repository/pharmacy/DispenseRepository.java` | Sum query with an excluded collection; `existsByPrescription_IdAndStatus`; `findFirstByPrescription_IdAndStatus`; batched `findByPrescription_IdInAndStatus`; conditional `@Modifying(flushAutomatically = true, clearAutomatically = true)` methods `completePreparedFill`, `cancelPreparedFill`, `claimReadyReminder`; the sweep finder |
-| `service/pharmacy/DispenseService(Impl).java` | `markReadyForCollection` (wrapper and transactional body, sharing an extracted front half with create; takes the lock); `handOver`; `cancelReady`; the open-preparation guard and lock in create; the work-queue decoration and `readyForCollectionEnabled` |
+| `repository/pharmacy/DispenseRepository.java` | Sum query with an excluded collection; `existsByPrescription_IdAndStatus`; `findFirstByPrescription_IdAndStatus`; batched `findByPrescription_IdInAndStatus`; conditional `@Modifying(flushAutomatically = true, clearAutomatically = false)` methods, each followed by a refresh of that one row `completePreparedFill`, `cancelPreparedFill`, `claimReadyReminder`; the sweep finder |
+| `service/pharmacy/DispenseService(Impl).java` | `markReadyForCollection` (wrapper and transactional body, sharing an extracted front half with create; takes the lock); `handOver`; `cancelReady`; the open-preparation guard and lock in create; the work-queue decoration |
 | New `service/pharmacy/PreparedFillVoider.java` | `voidPreparedFill(prescription, reason)`. No scope calls. Shares the conditional cancel, the stock return and the SMS with `cancelReady` |
 | `service/pharmacy/PharmacyServiceSupport.java` | `notifyReadyForCollection`, `notifyReadyCancelled`, `notifyReadyReminder`; after-commit sending (rule 11) |
 | New `service/pharmacy/ReadyForCollectionReminderScheduler.java` | A `void` method with `@SchedulerLock` (lesson #563) and `@Scheduled(cron="${pharmacy.ready-for-collection.reminder.cron:0 0 10 * * *}")`; claims in REQUIRES_NEW, then sends; covered by `SchedulerLockCoverageTest` |
-| `StockOutRoutingServiceImpl` (near `:660`), `PrescriptionSmsDispatchServiceImpl`, `PrescriptionClarificationService` | The `existsOpenPreparation` 409 guard |
+| `StockOutRoutingServiceImpl` (`findPrescriptionForWrite` `:587`, guard near `:660`), `PrescriptionSmsDispatchServiceImpl` (already locks, `:136`), `PrescriptionClarificationService` (locked write-path `findInScope`, `:158`) | Locked load, then the `existsOpenPreparation` 409 guard (N1) |
 | `service/PrescriptionServiceImpl.java` | `findByIdForUpdate` at `:808`; the voider call at `:855-860` |
 | `exception/GlobalExceptionHandler.java` | 409 handlers for pessimistic and optimistic lock failures (rule 1) |
 | `PatientMedicationServiceImpl` (`:156`), `PrescriptionService.getPrescriptionsForPortalPatient` (from `PatientPortalServiceImpl.java:366`) | Batched readiness lookup |
 | `payload/dto/medication/PatientMedicationResponseDTO.java`, `payload/dto/PrescriptionResponseDTO.java` (next to `pharmacyName` `:115`) | The two readiness fields |
 | `payload/dto/pharmacy/WorkQueuePrescriptionDTO.java` | `readyForCollection` |
-| Work-queue page wrapper | `readyForCollectionEnabled` (see the flag section) |
+| `DispenseController` `GET /settings` and a new `payload/dto/pharmacy/DispenseSettingsDTO` | `{readyForCollectionEnabled}`; the same `@PreAuthorize` as the work queue (`:36`); the `Page` response does not change (A4) |
 | `enums/AuditEventType.java` | Add `DISPENSE_READY`, `DISPENSE_READY_CANCELLED`, `DISPENSE_HANDED_OVER`. `DisclosureCategoryTest` must still pass |
 | `controller/pharmacy/DispenseController.java` | Three new POSTs with the same `@PreAuthorize` as `dispense()`. No `@WriteAudited(skip)`, so the conventional DATA_* audit row is also written |
 
@@ -769,9 +817,15 @@ meaning per endpoint.
   - 400 when `status` is PENDING or CANCELLED;
   - 409 when a preparation is open.
 
+**`GET /settings` (new, A4)**
+
+- Same roles as the work queue.
+- 200 → `{ "readyForCollectionEnabled": boolean }`.
+- No body, and no other status codes beyond the standard 401 and 403.
+
 **`GET /work-queue` (existing)**
 
-- The page response gains `readyForCollectionEnabled` (boolean).
+- The `Page` response itself is unchanged.
 - Each row gains `readyForCollection`, a nullable object.
 - `attentionReason` can now be `"READY_UNCOLLECTED"`.
 
@@ -797,8 +851,10 @@ the queue already handles.
   - `FeatureFlagService` has no `isEnabled`;
   - `applySubscriptionPlanGate` would force the flag OFF for subscribed tenants;
   - `/feature-flags` is `permitAll` and not tenant-scoped.
-- It reaches the portal as `readyForCollectionEnabled` on the authenticated
-  work-queue response, which the dispensing page already loads.
+- It reaches the portal through a small authenticated endpoint,
+  `GET /pharmacy/dispense/settings`, with the same roles as the work queue
+  (A4, coordinator decision). The endpoint returns `{readyForCollectionEnabled}`.
+- The work-queue `Page` response is not changed.
 - It gates `POST /ready` and the **Mark ready** button only.
 - Reminders have their own flag, `pharmacy.ready-for-collection.reminder.enabled`,
   `${PHARMACY_READY_REMINDER_ENABLED:true}`.
@@ -810,7 +866,7 @@ the queue already handles.
 
 - **`services/pharmacy.service.ts`**
   - `WorkQueuePrescription` (`:297`) gains `readyForCollection?`.
-  - The work-queue page type gains `readyForCollectionEnabled`.
+  - A new `getDispenseSettings()` call. The dispensing page loads it once and keeps it in a signal.
   - `DispenseResponse` gains `preparedByName?` and `readyAt?`.
   - New calls `markReady`, `handOver` and `cancelReady`, next to `:751` and `:805`.
 - **`pharmacy/dispensing.{ts,html}`**
@@ -865,7 +921,7 @@ SMS text is logistics only, with no clinical content. The SMS arguments are:
 | `sms.pharmacy.readyReminder` | `Hello {0}, your prescription ({1}) is still waiting for you at {2}. Thank you.` | `Bonjour {0}, votre ordonnance ({1}) vous attend toujours à {2}. Merci.` | `Hola {0}, su receta ({1}) todavía le espera en {2}. Gracias.` |
 | `sms.pharmacy.readyCancelled` | `Hello {0}, your prescription ({1}) is no longer ready for collection at {2}. Please contact the pharmacy before you come.` | `Bonjour {0}, votre ordonnance ({1}) n''est plus prête à être retirée à {2}. Veuillez contacter la pharmacie avant de vous déplacer.` | `Hola {0}, su receta ({1}) ya no está lista para recoger en {2}. Póngase en contacto con la farmacia antes de acudir.` |
 | `dispense.ready.alreadyOpen` | `This prescription already has a fill prepared for collection.` | `Cette ordonnance a déjà une délivrance préparée en attente de retrait.` | `Esta receta ya tiene una dispensación preparada para recoger.` |
-| `dispense.ready.openPreparation` | `A fill is prepared for this prescription: hand it over or cancel the preparation first.` | `Une délivrance est préparée pour cette ordonnance : remettez-la au patient ou annulez la préparation d''abord.` | `Hay una dispensación preparada para esta receta: entréguela o cancele la preparación primero.` |
+| `dispense.ready.openPreparation` | `A fill is prepared for this prescription. Hand it over or cancel the preparation first.` | `Une délivrance est préparée pour cette ordonnance. Remettez-la au patient ou annulez la préparation d''abord.` | `Hay una dispensación preparada para esta receta. Entréguela o cancele la preparación primero.` |
 | `dispense.ready.notPending` | `This fill is no longer waiting for collection.` | `Cette délivrance n''est plus en attente de retrait.` | `Esta dispensación ya no está pendiente de recogida.` |
 | `dispense.ready.prescriptionNotDispensable` | `This prescription can no longer be handed over.` | `Cette ordonnance ne peut plus être remise au patient.` | `Esta receta ya no se puede entregar.` |
 | `dispense.status.notAssertable` | `The dispense status cannot be set directly; use the ready-for-collection actions.` | `Le statut de la délivrance ne peut pas être défini directement ; utilisez les actions de retrait.` | `El estado de la dispensación no se puede definir directamente; use las acciones de recogida.` |
@@ -922,14 +978,14 @@ The aria-labels of the new buttons use the same keys.
 | A prepared fill is handed over after withdrawal or edit, including in the ready-vs-withdrawal race | Rule 1 lock; void under that lock (AC-8, AC-9); the hand-over re-checks under the lock |
 | Double collection, or the same stock spent by both a prepared fill and a one-step fill | Rule 1 lock and re-check; the partial unique index; conditional transitions; the idempotency key |
 | A deadlock surfaces as a 500 | Fixed lock order (prescription, then dispense); 409 handlers |
-| A stale flush rewrites the status after a bulk update | B2: one UPDATE, `clearAutomatically`, no later mutation, fresh re-read |
+| A stale flush rewrites the status after a bulk update | B2 and A1: one UPDATE, then `entityManager.refresh` (or detach and re-read) of that row only, with no mutation in between |
 | The wrong person collects, or expired stock is handed over | EXPIRY and PATIENT checked at hand-over, never overridable |
 | PHI in the SMS | The same content class as the existing `sms.pharmacy.dispensed`; sent to the patient's own primary phone only |
 | PHI in logs or audit | Ids and codes only |
 | An SMS is sent for a transaction that rolled back | After-commit sending |
 | A patient sees another patient's readiness | Readiness is computed only inside the existing own-record and chart-gated reads |
 | An external pharmacy is marked "ready" | `requireDispensary` |
-| Unauthenticated or tenant-blind flag reads | The flag is read only from the authenticated, tenant-scoped work queue (B6) |
+| Unauthenticated or tenant-blind flag reads | The flag is read only from `GET /pharmacy/dispense/settings`, which is authenticated and role-gated like the work queue (A4) |
 
 ## 8. Test plan
 
@@ -948,21 +1004,21 @@ H2 cannot exercise partial indexes or `SELECT … FOR UPDATE` contention.
 | AC-2 | Parameterised over non-dispensable statuses, plus the controlled, expired and CDS cases: 400, no save, no SMS | Remove the status check on the ready path |
 | AC-3 | Unit: second ready → 409; one-step with an open preparation → 409. **Postgres IT**: (a) two concurrent readies → 1 row and 1 × 409; (b) ready vs one-step → exactly one committed, stock decremented once; (c) a **direct JDBC insert** of a second PENDING row → unique violation | (a)/(b): remove the `findByIdForUpdate` from create/ready (the race reappears, verified by a CountDownLatch-ordered test); (c): drop the index from V178 |
 | AC-4 | Unit and IT: COMPLETED; `dispensedAt`, `dispensedBy` and `updatedAt` set in the DB; `preparedBy` kept; prescription DISPENSED; notifier called; refill closed; receipt after commit | Skip the recompute; omit `updatedAt` from the UPDATE (the IT asserts it changed) |
-| AC-4/B2 | IT: after hand-over the persisted status is COMPLETED (re-read in a new transaction), proving no stale flush | Remove `clearAutomatically` and set a field on the managed entity afterwards |
+| AC-4/B2 | IT: after hand-over the persisted status is COMPLETED (re-read in a new transaction), proving no stale flush | Remove the `refresh` and set a field on the managed entity afterwards. A companion unit test proves `existing` in `updatePrescription` is still managed after a void |
 | AC-5 | Unit: a COMPLETED replay with `preparedBy` → 200 with zero side-effect interactions; COMPLETED with `preparedBy` null → 409. IT: two concurrent hand-overs → one audit row | **Accept a COMPLETED source in the conditional UPDATE and re-run the side effects** (the test sees a second audit/SMS) |
 | AC-6 | Unit: the prescription under lock is not dispensable → 409; expired lot → 400; patient mismatch → 400; controlled guard re-run → 400; the verification merge follows rule 5 | Remove the locked re-check; drop OVERRIDDEN from the merge |
 | AC-7 | Unit and IT: CANCELLED, `cancelReason`, RETURN transaction, cancelled SMS; non-PENDING → 409; `/cancel` refuses PENDING | Skip the stock return |
 | AC-8 | `PrescriptionServiceImplTest` and **Postgres IT** "ready vs withdrawal": whichever commits first, the end state never has a PENDING fill on a withdrawn prescription; the void runs for a global-view super-admin | Remove `findByIdForUpdate` from `updatePrescription`; add a scope call to the voider (the global-view test goes red) |
 | AC-9 | `PrescriptionServiceImplTest`: any edit voids with PRESCRIPTION_CHANGED | Void only on withdrawal |
-| AC-10 | Routing, dispatch and clarification tests: 409 while prepared | Remove each guard |
-| AC-11 | Work-queue unit tests: batched (repository call count); READY_UNCOLLECTED at P7D and not at P6D, below status reasons; `readyForCollectionEnabled` reflects the property. `dispensing.spec.ts`: button swap; flag hides Mark ready; PENDING label | Drop the decoration; invert the age comparison |
+| AC-10 | Routing, dispatch and clarification tests: 409 while prepared; routing and clarification writes load through `findByIdForUpdate` (N1). **Postgres IT** "ready vs route-to-partner": exactly one of the two commits | Remove each guard; restore `findById` in `findPrescriptionForWrite` (the IT race reappears) |
+| AC-11 | Work-queue unit tests: batched (repository call count); READY_UNCOLLECTED at P7D and not at P6D, below status reasons; `GET /settings` reflects the property. `dispensing.spec.ts`: button swap; flag hides Mark ready; PENDING label | Drop the decoration; invert the age comparison |
 | AC-11b | `prescriptions.spec.ts` (or the component spec): a PENDING fill counts in neither the dispensed-to-date sum nor the snapshot | Restore `!== 'CANCELLED'` alone |
 | AC-12 | `PatientMedicationServiceImplTest` (portal and staff reads) and a portal-prescriptions test; `my-medications.component.spec.ts`; Android `MedicationModelsTest.kt`; iOS new `MediHubPatientTests/MedicationModelsTests.swift` (confirm `project.yml`) | Return readiness regardless of prescription status |
 | AC-13 | `ReadyForCollectionReminderSchedulerTest` plus `SchedulerLockCoverageTest` | Remove the claim condition |
-| AC-14 | Unit: foreign-hospital, random-id and null-scope → identical serialised error bodies on both endpoints. Reflection: each new controller method's `@PreAuthorize` value equals `dispense()`'s | Call `enforceHospitalScope` (the body becomes `pharmacy.notfound`) |
+| AC-14 | Unit: foreign-hospital, random-id and null-scope → equal `status`, `error` and `message` on both endpoints, excluding `timestamp` and `path`. Reflection: each new controller method's `@PreAuthorize` value equals `dispense()`'s | Call `enforceHospitalScope` (the body becomes `pharmacy.notfound`) |
 | AC-15 | Unit: PENDING or CANCELLED in the body → 400 | Remove the check |
 | AC-16 | `npm run i18n:parity`, `i18n:referenced`, `i18n:enums`, `i18n:translated`; backend bundle parity; app string parity | Delete one FR key |
-| AC-17 | Unit: flag off → ready 404, hand-over 200; the work queue reports false | Gate hand-over on the flag |
+| AC-17 | Unit: flag off → ready 404, hand-over 200; `GET /settings` reports false | Gate hand-over on the flag |
 | AC-18 | `MigrationRegistrationTest`, `LiquibaseSchemaIT`, `EntitySchemaValidationIT`; an H2 test with two fills of one prescription still passes (no full index from JPA) | Add `@Index(unique=true)` on `prescription_id` |
 | Rule 1 | `GlobalExceptionHandler` unit: `PessimisticLockingFailureException` and `ObjectOptimisticLockingFailureException` → 409 `concurrent.modification` | Remove the handlers |
 
@@ -1059,15 +1115,24 @@ After any merge, check the changelog and the i18n files by hand.
   - `DispenseRepository` sum with an excluded collection; update the callers
     `:870` and `StockOutRoutingServiceImpl:655`.
   - New finders and the conditional `@Modifying(flushAutomatically = true,
-    clearAutomatically = true)` transitions.
+    clearAutomatically = false)` transitions, each followed by a single-row `refresh` (A1).
   - `prescriptions/prescriptions.ts` (`:1047`, `:1134`) and its spec.
-- [ ] **T3 — One lock rule and the 409 mapping.** AC-3, AC-8 (B1).
+- [ ] **T3 — One lock rule and the 409 mapping.** AC-3, AC-8, AC-10 (B1, N1).
   - `loadAndValidatePrescription` uses `findByIdForUpdate` for create and
     ready.
   - `PrescriptionServiceImpl.updatePrescription` (`:808`) uses `findByIdForUpdate`.
+  - Routing and clarification writes use it too (N1):
+    `StockOutRoutingServiceImpl.findPrescriptionForWrite` (`:587`), and a
+    locked variant of `PrescriptionClarificationService.findInScope` (`:158`)
+    for the request-clarification write.
   - `GlobalExceptionHandler`: pessimistic and optimistic lock failures → 409
     `concurrent.modification`, with the message in 4 bundles.
   - Handler unit test.
+  - **Update the stubs this breaks, in the same commit (A6).**
+    `DispenseServiceImplTest`, `PrescriptionServiceImplTest`,
+    `StockOutRoutingServiceImplTest` and `PrescriptionClarificationServiceTest`
+    stub `prescriptionRepository.findById`. They must stub `findByIdForUpdate`
+    on the write paths; otherwise the push turns CI red.
 - [ ] **T4 — Client status hole and the one-step guard.** AC-15, AC-3.
   - `createDispenseTransactionally`; `DispenseMapper.java:124`.
   - Messages `dispense.status.notAssertable` and `dispense.ready.openPreparation`.
@@ -1077,7 +1142,8 @@ After any merge, check the changelog and the i18n files by hand.
   - The four `messages*.properties` files; `PharmacyServiceSupportTest`.
 - [ ] **T6 — Mark ready and the flag.** AC-1, AC-2, AC-3, AC-17.
   - `markReadyForCollection`, with the shared front half extracted.
-  - `POST /ready`; `DISPENSE_READY`.
+  - `POST /ready`; `DISPENSE_READY`, **plus `PORTAL.ENUM.AUDIT_EVENT_TYPE.DISPENSE_READY` in `assets/i18n/{en,fr,es}.json` in the same commit** (A5; `i18n:enums` reads the Java enum).
+  - `GET /settings` and `DispenseSettingsDTO` (A4).
   - The `pharmacy.ready-for-collection.enabled` `@Value` and the
     `application.properties` placeholder.
   - `DispenseResponseDTO` and mapper fields.
@@ -1091,28 +1157,38 @@ After any merge, check the changelog and the i18n files by hand.
     - the replay rule;
     - the recompute and close-outs;
     - the receipt SMS;
-    - `DISPENSE_HANDED_OVER`.
+    - `DISPENSE_HANDED_OVER`, **plus its `PORTAL.ENUM.AUDIT_EVENT_TYPE.DISPENSE_HANDED_OVER` key ×3 in the same commit** (A5).
   - Identical 404 bodies; `HandOverRequestDTO`; the controller.
   - Unit tests and the reflection role test.
 - [ ] **T8 — Cancel preparation and the voider.** AC-7, AC-8, AC-9, AC-14.
-  - `cancelReady`; the new `PreparedFillVoider` (no scope calls);
-    `DISPENSE_READY_CANCELLED`.
+  - `cancelReady`: the scope check (identical 404), the lock, then delegate.
+  - The new `PreparedFillVoider`, the only implementation of the conditional
+    cancel, the stock return and the SMS (A7). It makes no scope calls.
+  - `DISPENSE_READY_CANCELLED`, **plus its
+    `PORTAL.ENUM.AUDIT_EVENT_TYPE.DISPENSE_READY_CANCELLED` key ×3 in the same
+    commit** (A5).
   - `CancelReadyRequestDTO`; the controller.
   - Wire the voider in `PrescriptionServiceImpl` (`:855-860`, any edit and any
     withdrawal).
   - `PrescriptionServiceImplTest`.
-- [ ] **T9 — Postgres concurrency IT.** AC-3, AC-5, AC-8, AC-4/B2.
+- [ ] **T9 — Postgres concurrency IT.** AC-3, AC-5, AC-8, AC-10, AC-4/B2.
   - New `PreparedFillConcurrencyPostgresIT`, modelled on
     `EducationProgressWritesPostgresIT`.
-  - Covers: ready vs ready, ready vs one-step, ready vs withdrawal, hand-over
-    vs hand-over, the direct-insert index check, and the persisted state after
-    hand-over.
+  - Covers:
+    - ready vs ready;
+    - ready vs one-step;
+    - ready vs withdrawal;
+    - **ready vs route-to-partner (N1)**;
+    - hand-over vs hand-over;
+    - the direct-insert index check;
+    - the persisted state after hand-over.
 - [ ] **T10 — Guards while prepared.** AC-10.
-  - `StockOutRoutingServiceImpl`, `PrescriptionSmsDispatchServiceImpl`,
-    `PrescriptionClarificationService`, and their tests.
+  - The `existsOpenPreparation` 409 guard, placed **after** the locked load from
+    T3, in `StockOutRoutingServiceImpl`, `PrescriptionSmsDispatchServiceImpl`
+    and `PrescriptionClarificationService`, with their tests.
 - [ ] **T11 — Work queue.** AC-11.
-  - `WorkQueuePrescriptionDTO.readyForCollection`; `readyForCollectionEnabled`
-    on the page response.
+  - `WorkQueuePrescriptionDTO.readyForCollection`. The `Page` response is
+    unchanged.
   - Batched decoration.
   - `READY_UNCOLLECTED`, at the lowest precedence.
   - `coalesce(dispensedAt, createdAt)` in `lastPharmacyActionsFor` (`:792`).
@@ -1127,9 +1203,10 @@ After any merge, check the changelog and the i18n files by hand.
 - [ ] **T14 — Portal pharmacy UI.** AC-11, AC-16, AC-17.
   - `services/pharmacy.service.ts`; `pharmacy/dispensing.{ts,html,scss,spec.ts}`.
   - `core/enum-label.service.ts:335`.
-  - `assets/i18n/{en,fr,es}.json`: the `PHARMACY.*` keys,
-    `PORTAL.ENUM.DISPENSE_STATUS.PENDING`, and the three
-    `PORTAL.ENUM.AUDIT_EVENT_TYPE.*`.
+  - `assets/i18n/{en,fr,es}.json`: the `PHARMACY.*` keys and
+    `PORTAL.ENUM.DISPENSE_STATUS.PENDING`. The `AUDIT_EVENT_TYPE` keys
+    already landed in T6, T7 and T8.
+  - The settings call.
   - Pass `i18n:enums` and `i18n:translated`.
 - [ ] **T15 — Patient portal.** AC-12, AC-16.
   - `services/patient-portal.service.ts`; `patient-portal/my-medications/*`;
