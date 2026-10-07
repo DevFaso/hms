@@ -2962,10 +2962,17 @@
                   class="lab-icon-wrap"
                   [class.lab-abnormal]="lab.isAbnormal"
                   [class.lab-pending]="lab.isPending"
+                  [class.lab-ungraded]="lab.isUngraded"
                 >
                   <span class="material-symbols-outlined" style="font-size: 18px">
                     {{
-                      lab.isPending ? 'hourglass_top' : lab.isAbnormal ? 'warning' : 'check_circle'
+                      lab.isPending
+                        ? 'hourglass_top'
+                        : lab.isAbnormal
+                          ? 'warning'
+                          : lab.isUngraded
+                            ? 'info'
+                            : 'check_circle'
                     }}
                   </span>
                 </div>

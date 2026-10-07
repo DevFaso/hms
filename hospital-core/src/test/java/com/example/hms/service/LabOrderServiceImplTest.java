@@ -553,6 +553,308 @@ class LabOrderServiceImplTest {
         verify(labOrderRepository, never()).save(any());
     }
 
+    // -- The recorded assignment is the ordering clinician's, active, at the order's hospital --
+
+    private UserRoleHospitalAssignment assignmentOf(User holder, Hospital at, boolean active) {
+        UserRoleHospitalAssignment row = new UserRoleHospitalAssignment();
+        row.setId(UUID.randomUUID());
+        row.setUser(holder);
+        row.setHospital(at);
+        row.setRole(assignment.getRole());
+        row.setActive(active);
+        return row;
+    }
+
+    private User someoneElse() {
+        User other = new User();
+        other.setId(UUID.randomUUID());
+        return other;
+    }
+
+    private LabOrder createWithAssignment(UUID requestedAssignmentId) {
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        labOrderService.createLabOrder(baseRequestBuilder().assignmentId(requestedAssignmentId).build(), Locale.ENGLISH);
+        ArgumentCaptor<LabOrder> captor = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository).save(captor.capture());
+        return captor.getValue();
+    }
+
+    private void assertCreateRefusedAsUnknownAssignment(UUID requestedAssignmentId) {
+        LabOrderRequestDTO request = baseRequestBuilder().assignmentId(requestedAssignmentId).build();
+        assertThatThrownBy(() -> labOrderService.createLabOrder(request, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
+            .isEqualTo("assignment.notfound");
+        verify(labOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void createLabOrder_recordsTheNamedAssignmentWhenItIsTheClinicians() {
+        mockCommonLookups();
+
+        assertThat(createWithAssignment(assignmentId).getAssignment()).isSameAs(assignment);
+        verify(assignmentRepository, never()).findByUser_IdAndActiveTrue(any());
+    }
+
+    @Test
+    void createLabOrder_refusesAnotherPersonsAssignment() {
+        mockCommonLookups();
+        UserRoleHospitalAssignment theirs = assignmentOf(someoneElse(), hospital, true);
+        when(assignmentRepository.findById(theirs.getId())).thenReturn(Optional.of(theirs));
+
+        assertCreateRefusedAsUnknownAssignment(theirs.getId());
+    }
+
+    @Test
+    void createLabOrder_refusesAnotherPersonsAssignmentAtAnotherHospital() {
+        mockCommonLookups();
+        UserRoleHospitalAssignment theirs = assignmentOf(someoneElse(), otherHospital(), true);
+        when(assignmentRepository.findById(theirs.getId())).thenReturn(Optional.of(theirs));
+
+        assertCreateRefusedAsUnknownAssignment(theirs.getId());
+    }
+
+    @Test
+    void createLabOrder_refusesAnotherPersonsInactiveAssignment() {
+        mockCommonLookups();
+        UserRoleHospitalAssignment theirs = assignmentOf(someoneElse(), hospital, false);
+        when(assignmentRepository.findById(theirs.getId())).thenReturn(Optional.of(theirs));
+
+        assertCreateRefusedAsUnknownAssignment(theirs.getId());
+    }
+
+    @Test
+    void createLabOrder_refusesAnUnknownAssignmentEvenWhenOneCouldBeDerived() {
+        // Same answer as another person's id: deriving here would tell a
+        // caller which ids exist (refused) and which do not (accepted).
+        mockCommonLookups();
+        UUID unknown = UUID.randomUUID();
+        when(assignmentRepository.findById(unknown)).thenReturn(Optional.empty());
+
+        assertCreateRefusedAsUnknownAssignment(unknown);
+    }
+
+    @Test
+    void createLabOrder_derivesTheAssignmentWhenNoneIsNamed() {
+        // Internal callers may pass no id; the DTO's @NotNull keeps HTTP callers out of this path.
+        mockCommonLookups();
+
+        assertThat(createWithAssignment(null).getAssignment()).isSameAs(assignment);
+        verify(assignmentRepository, never()).findById(any());
+    }
+
+    private UserRoleHospitalAssignment adminAssignmentHere(UUID id) {
+        Role admin = new Role();
+        admin.setCode("ROLE_HOSPITAL_ADMIN");
+        UserRoleHospitalAssignment row = assignmentOf(staff.getUser(), hospital, true);
+        row.setId(id);
+        row.setRole(admin);
+        return row;
+    }
+
+    @Test
+    void createLabOrder_replacesTheCliniciansOwnNonClinicalAssignmentHereWithTheLabOrderingOne() {
+        mockCommonLookups();
+        UserRoleHospitalAssignment adminHere = adminAssignmentHere(UUID.randomUUID());
+        when(assignmentRepository.findById(adminHere.getId())).thenReturn(Optional.of(adminHere));
+
+        assertThat(createWithAssignment(adminHere.getId()).getAssignment()).isSameAs(assignment);
+    }
+
+    @Test
+    void createLabOrder_theFallbackSkipsANonClinicalAssignmentEvenWhenItsIdSortsFirst() {
+        mockCommonLookups();
+        assignment.setActive(false);
+        UserRoleHospitalAssignment adminHere = adminAssignmentHere(new UUID(0L, 1L));
+        UserRoleHospitalAssignment doctorHere = assignmentOf(staff.getUser(), hospital, true);
+        doctorHere.setId(new UUID(0L, 2L));
+        when(assignmentRepository.findByUser_IdAndActiveTrue(orderingUserId)).thenReturn(List.of(adminHere, doctorHere));
+
+        assertThat(createWithAssignment(assignmentId).getAssignment()).isSameAs(doctorHere);
+    }
+
+    @Test
+    void createLabOrder_refusesWhenTheCliniciansOnlyActiveAssignmentHereIsNonClinical() {
+        mockCommonLookups();
+        assignment.setActive(false);
+        UserRoleHospitalAssignment adminHere = adminAssignmentHere(UUID.randomUUID());
+        when(assignmentRepository.findByUser_IdAndActiveTrue(orderingUserId)).thenReturn(List.of(adminHere));
+
+        assertCreateRefusedAsUnknownAssignment(assignmentId);
+    }
+
+    @Test
+    void createLabOrder_replacesTheCliniciansOwnAssignmentAtAnotherHospitalWithTheOneHeldHere() {
+        // The portal sends the signed-in user's first active assignment; for a
+        // clinician working at two hospitals that is often the other one.
+        mockCommonLookups();
+        UserRoleHospitalAssignment ownElsewhere = assignmentOf(staff.getUser(), otherHospital(), true);
+        when(assignmentRepository.findById(ownElsewhere.getId())).thenReturn(Optional.of(ownElsewhere));
+
+        assertThat(createWithAssignment(ownElsewhere.getId()).getAssignment()).isSameAs(assignment);
+    }
+
+    @Test
+    void createLabOrder_replacesTheCliniciansOwnInactiveAssignmentWithTheActiveOneHere() {
+        mockCommonLookups();
+        UserRoleHospitalAssignment revoked = assignmentOf(staff.getUser(), hospital, false);
+        when(assignmentRepository.findById(revoked.getId())).thenReturn(Optional.of(revoked));
+
+        assertThat(createWithAssignment(revoked.getId()).getAssignment()).isSameAs(assignment);
+    }
+
+    @Test
+    void createLabOrder_fallsBackToAnyActiveAssignmentHereWhenTheStaffRowsIsInactive() {
+        mockCommonLookups();
+        assignment.setActive(false);
+        UserRoleHospitalAssignment ownElsewhere = assignmentOf(staff.getUser(), otherHospital(), true);
+        UserRoleHospitalAssignment activeHere = assignmentOf(staff.getUser(), hospital, true);
+        when(assignmentRepository.findById(ownElsewhere.getId())).thenReturn(Optional.of(ownElsewhere));
+        when(assignmentRepository.findByUser_IdAndActiveTrue(orderingUserId))
+            .thenReturn(List.of(ownElsewhere, activeHere));
+
+        assertThat(createWithAssignment(ownElsewhere.getId()).getAssignment()).isSameAs(activeHere);
+    }
+
+    @Test
+    void createLabOrder_refusesTheCliniciansOwnAssignmentElsewhereWhenTheyHoldNoneHere() {
+        mockCommonLookups();
+        assignment.setActive(false);
+        UserRoleHospitalAssignment ownElsewhere = assignmentOf(staff.getUser(), otherHospital(), true);
+        when(assignmentRepository.findById(ownElsewhere.getId())).thenReturn(Optional.of(ownElsewhere));
+        when(assignmentRepository.findByUser_IdAndActiveTrue(orderingUserId)).thenReturn(List.of(ownElsewhere));
+
+        assertCreateRefusedAsUnknownAssignment(ownElsewhere.getId());
+    }
+
+    @Test
+    void createLabOrder_refusesTheCliniciansOwnInactiveAssignmentWhenTheyHoldNoneActiveHere() {
+        mockCommonLookups();
+        assignment.setActive(false);
+        when(assignmentRepository.findByUser_IdAndActiveTrue(orderingUserId)).thenReturn(List.of());
+
+        assertCreateRefusedAsUnknownAssignment(assignmentId);
+    }
+
+    @Test
+    void updateLabOrder_anotherClinicianKeepsTheOrdersAssignmentWhenLeftUnchanged() {
+        mockCommonLookups();
+        lenient().when(authUtils.resolveUserId(any())).thenReturn(Optional.of(UUID.randomUUID()));
+        UUID labOrderId = UUID.randomUUID();
+        LabOrder existing = existingLabOrder(labOrderId);
+        when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(existing));
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        labOrderService.updateLabOrder(labOrderId, baseRequestBuilder().id(labOrderId).build(), Locale.ENGLISH);
+
+        ArgumentCaptor<LabOrder> captor = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository).save(captor.capture());
+        assertThat(captor.getValue().getAssignment()).isSameAs(assignment);
+        verify(assignmentRepository, never()).findById(any());
+    }
+
+    @Test
+    void updateLabOrder_theEditorsOwnAssignmentNeverBecomesTheOrdersContext() {
+        // A nurse corrects a doctor's order, keeps the doctor, and her client
+        // sends her own assignment: the order keeps the doctor's.
+        mockCommonLookups();
+        User nurse = someoneElse();
+        UserRoleHospitalAssignment nursesAssignment = assignmentOf(nurse, hospital, true);
+        when(authUtils.resolveUserId(any())).thenReturn(Optional.of(nurse.getId()));
+        when(assignmentRepository.findById(nursesAssignment.getId())).thenReturn(Optional.of(nursesAssignment));
+        UUID labOrderId = UUID.randomUUID();
+        LabOrder existing = existingLabOrder(labOrderId);
+        when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(existing));
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        labOrderService.updateLabOrder(labOrderId,
+            baseRequestBuilder().id(labOrderId).assignmentId(nursesAssignment.getId()).build(), Locale.ENGLISH);
+
+        ArgumentCaptor<LabOrder> captor = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository).save(captor.capture());
+        assertThat(captor.getValue().getAssignment()).isSameAs(assignment);
+    }
+
+    @Test
+    void updateLabOrder_refusesAThirdPersonsAssignmentOnAKeptOrder() {
+        mockCommonLookups();
+        when(authUtils.resolveUserId(any())).thenReturn(Optional.of(UUID.randomUUID()));
+        UserRoleHospitalAssignment theirs = assignmentOf(someoneElse(), hospital, true);
+        when(assignmentRepository.findById(theirs.getId())).thenReturn(Optional.of(theirs));
+        UUID labOrderId = UUID.randomUUID();
+        LabOrder existing = existingLabOrder(labOrderId);
+        when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(existing));
+
+        LabOrderRequestDTO request = baseRequestBuilder().id(labOrderId).assignmentId(theirs.getId()).build();
+        assertThatThrownBy(() -> labOrderService.updateLabOrder(labOrderId, request, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
+            .isEqualTo("assignment.notfound");
+        verify(labOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void updateLabOrder_takingOverAnOrderDoesNotTakeOverTheFormerCliniciansAssignment() {
+        // A second doctor re-attributes the order to herself but echoes the
+        // first doctor's assignment: it is someone else's, so it is refused.
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        User secondDoctor = someoneElse();
+        Staff secondDoctorsRow = new Staff();
+        secondDoctorsRow.setId(UUID.randomUUID());
+        secondDoctorsRow.setUser(secondDoctor);
+        secondDoctorsRow.setHospital(hospital);
+        secondDoctorsRow.setAssignment(assignmentOf(secondDoctor, hospital, true));
+        when(staffRepository.findById(secondDoctorsRow.getId())).thenReturn(Optional.of(secondDoctorsRow));
+        when(authUtils.resolveUserId(any())).thenReturn(Optional.of(secondDoctor.getId()));
+        when(roleValidator.canOrderLabTests(secondDoctor.getId(), hospitalId)).thenReturn(true);
+        when(labTestDefinitionRepository.findById(labTestDefinitionId)).thenReturn(Optional.of(labTestDefinition));
+        when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
+        UUID labOrderId = UUID.randomUUID();
+        when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(existingLabOrder(labOrderId)));
+
+        LabOrderRequestDTO request = baseRequestBuilder().id(labOrderId)
+            .orderingStaffId(secondDoctorsRow.getId()).assignmentId(assignmentId).build();
+        assertThatThrownBy(() -> labOrderService.updateLabOrder(labOrderId, request, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
+            .isEqualTo("assignment.notfound");
+        verify(labOrderRepository, never()).save(any());
+    }
+
+    private LabOrder editOwnOrderNaming(UUID requestedAssignmentId) {
+        UUID labOrderId = UUID.randomUUID();
+        when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(existingLabOrder(labOrderId)));
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        labOrderService.updateLabOrder(labOrderId,
+            baseRequestBuilder().id(labOrderId).assignmentId(requestedAssignmentId).build(), Locale.ENGLISH);
+        ArgumentCaptor<LabOrder> captor = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository).save(captor.capture());
+        return captor.getValue();
+    }
+
+    @Test
+    void updateLabOrder_theCliniciansOtherOwnAssignmentDoesNotMoveTheirOrder() {
+        // The portal's edit form sends the editor's first active assignment,
+        // not the order's: an order placed under this assignment stays there.
+        mockCommonLookups();
+        UserRoleHospitalAssignment otherOwnHere = assignmentOf(staff.getUser(), hospital, true);
+        when(assignmentRepository.findById(otherOwnHere.getId())).thenReturn(Optional.of(otherOwnHere));
+
+        assertThat(editOwnOrderNaming(otherOwnHere.getId()).getAssignment()).isSameAs(assignment);
+    }
+
+    @Test
+    void updateLabOrder_anOrderWhoseAssignmentWasRevokedTakesTheCliniciansValidOne() {
+        mockCommonLookups();
+        assignment.setActive(false);
+        UserRoleHospitalAssignment otherOwnHere = assignmentOf(staff.getUser(), hospital, true);
+        when(assignmentRepository.findById(otherOwnHere.getId())).thenReturn(Optional.of(otherOwnHere));
+
+        assertThat(editOwnOrderNaming(otherOwnHere.getId()).getAssignment()).isSameAs(otherOwnHere);
+    }
+
     private void mockCommonLookups() {
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         // Lenient: an edit that keeps the ordering clinician never looks the row up.
@@ -563,7 +865,8 @@ class LabOrderServiceImplTest {
         when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
         when(roleValidator.canOrderLabTests(orderingUserId, hospitalId)).thenReturn(true);
         when(labTestDefinitionRepository.findById(labTestDefinitionId)).thenReturn(Optional.of(labTestDefinition));
-        when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
+        // Lenient: an edit that keeps the ordering clinician and the assignment never looks it up.
+        lenient().when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
         lenient().when(labOrderRepository.existsByPatient_IdAndLabTestDefinition_IdAndOrderDatetime(eq(patientId), eq(labTestDefinitionId), any(LocalDateTime.class)))
             .thenReturn(false);
     }

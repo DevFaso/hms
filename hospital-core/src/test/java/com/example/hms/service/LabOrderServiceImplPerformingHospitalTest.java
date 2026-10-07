@@ -732,7 +732,8 @@ class LabOrderServiceImplPerformingHospitalTest {
             .thenReturn(true);
         when(roleValidator.canOrderLabTests(staff.getUser().getId(), ordering.getId())).thenReturn(true);
         when(labTestDefinitionRepository.findById(definition.getId())).thenReturn(Optional.of(definition));
-        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        // Lenient: an edit that keeps the ordering clinician and the assignment never looks it up.
+        lenient().when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
         lenient().when(labOrderRepository.existsByPatient_IdAndLabTestDefinition_IdAndOrderDatetime(
             eq(patient.getId()), eq(definition.getId()), any(LocalDateTime.class))).thenReturn(false);
     }

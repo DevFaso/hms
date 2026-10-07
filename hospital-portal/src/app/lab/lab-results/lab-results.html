@@ -134,7 +134,14 @@
                 }
               </td>
               <td>
-                @if (r.severityFlag) {
+                @if (r.unitMismatch) {
+                  <span
+                    class="severity-badge severity-unit-mismatch"
+                    [attr.title]="'LAB_RESULTS.NOT_GRADED_UNITS_DIFFER_HINT' | translate"
+                    [attr.data-testid]="'unit-mismatch-' + r.id"
+                    >{{ 'LAB_RESULTS.NOT_GRADED_UNITS_DIFFER' | translate }}</span
+                  >
+                } @else if (r.severityFlag) {
                   <span [class]="getSeverityClass(r.severityFlag)">{{ r.severityFlag }}</span>
                 } @else {
                   <span>—</span>
@@ -288,7 +295,14 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'LAB_RESULTS.SEVERITY' | translate }}</span>
-              <span class="field-value">{{ r.severityFlag || '—' }}</span>
+              @if (r.unitMismatch) {
+                <span class="field-value" data-testid="detail-unit-mismatch"
+                  >{{ 'LAB_RESULTS.NOT_GRADED_UNITS_DIFFER' | translate }} —
+                  {{ 'LAB_RESULTS.NOT_GRADED_UNITS_DIFFER_HINT' | translate }}</span
+                >
+              } @else {
+                <span class="field-value">{{ r.severityFlag || '—' }}</span>
+              }
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'LAB_RESULTS.RESULT_DATE' | translate }}</span>

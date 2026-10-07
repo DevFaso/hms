@@ -33,6 +33,7 @@ import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.VisitEducationDocumentationRepository;
+import com.example.hms.service.EducationProgressWrites;
 import com.example.hms.service.PatientEducationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -62,6 +63,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     private final StaffRepository staffRepository;
     private final HospitalRepository hospitalRepository;
     private final EncounterRepository encounterRepository;
+    private final EducationProgressWrites progressWrites;
 
     private final EducationResourceMapper resourceMapper;
     private final PatientEducationProgressMapper progressMapper;
@@ -219,23 +221,10 @@ public class PatientEducationServiceImpl implements PatientEducationService {
         Hospital hospital = hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
-        PatientEducationProgress progress = EducationProgressRows
-            .canonical(progressRepository.findByPatientIdAndResourceId(patientId, requestDTO.getResourceId()))
-            .orElseGet(() -> {
-                PatientEducationProgress newProgress = new PatientEducationProgress();
-                newProgress.setPatientId(patientId);
-                newProgress.setResourceId(resource.getId());
-                newProgress.setHospitalId(hospital.getId());
-                newProgress.setStartedAt(LocalDateTime.now());
-                newProgress.setAccessCount(0);
-                newProgress.setTimeSpentSeconds(0L);
-                newProgress.setComprehensionStatus(
-                    requestDTO.getComprehensionStatus() != null
-                        ? requestDTO.getComprehensionStatus()
-                        : EducationComprehensionStatus.NOT_STARTED
-                );
-                return newProgress;
-            });
+        PatientEducationProgress progress = progressRowFor(patientId, resource.getId(), hospital.getId(),
+            requestDTO.getComprehensionStatus() != null
+                ? requestDTO.getComprehensionStatus()
+                : EducationComprehensionStatus.NOT_STARTED);
 
         progress.setPatientId(patientId);
         progress.setResourceId(resource.getId());
@@ -261,6 +250,27 @@ public class PatientEducationServiceImpl implements PatientEducationService {
 
         log.info("Tracked progress with id: {}", savedProgress.getId());
         return progressMapper.toResponseDTO(savedProgress);
+    }
+
+    /**
+     * The (patient, resource) progress row, created when there is none, in
+     * this request's transaction (it exists only if the request commits).
+     * Since V176 there is at most one
+     * ({@code uk_patient_education_progress_patient_resource}): when two first
+     * requests race, the loser's insert is a no-op (EducationProgressWrites)
+     * and this request updates the winner's row instead of answering 500.
+     */
+    private PatientEducationProgress progressRowFor(UUID patientId, UUID resourceId, UUID hospitalId,
+                                                    EducationComprehensionStatus initialStatus) {
+        List<PatientEducationProgress> rows = progressRepository.findByPatientIdAndResourceId(patientId, resourceId);
+        if (rows.isEmpty()) {
+            if (!progressWrites.insertIfAbsent(patientId, resourceId, hospitalId, initialStatus)) {
+                log.debug("education progress row for resource {} was created by a concurrent request", resourceId);
+            }
+            rows = progressRepository.findByPatientIdAndResourceId(patientId, resourceId);
+        }
+        return EducationProgressRows.canonical(rows)
+            .orElseThrow(() -> new IllegalStateException("education progress row missing after insert"));
     }
 
     @Override

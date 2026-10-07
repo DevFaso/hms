@@ -287,8 +287,13 @@ export class LabReleaseWorklistComponent implements OnInit {
     }
   }
 
-  /** LOW / HIGH / NORMAL / UNSPECIFIED, as LabResultMapper.determineSeverityFlag emits them. */
+  /**
+   * LOW / HIGH / NORMAL / UNSPECIFIED, as LabResultMapper.determineSeverityFlag
+   * emits them, or UNIT_MISMATCH when no configured range is in the result's
+   * unit: that row was never graded, which "not flagged" would hide.
+   */
   severityKey(r: LabResultResponse): string {
+    if (r.unitMismatch) return 'UNIT_MISMATCH';
     const flag = (r.severityFlag ?? '').toUpperCase();
     return flag === 'LOW' || flag === 'HIGH' || flag === 'NORMAL' ? flag : 'UNSPECIFIED';
   }

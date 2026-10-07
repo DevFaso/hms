@@ -99,6 +99,48 @@ describe('PatientPortalService lab results', () => {
     expect(lab.referenceRange).toBe('12 - 15.5 g/dL');
   });
 
+  it('maps a released row nothing graded (units differ) as ungraded, not normal', () => {
+    const [lab] = labResults([
+      {
+        id: 'l1',
+        testName: 'Glucose',
+        value: '5.4',
+        unit: 'mmol/L',
+        status: 'NORMAL',
+        unitMismatch: true,
+        released: true,
+      },
+    ]);
+
+    expect(lab.isUngraded).toBeTrue();
+    expect(lab.isAbnormal).toBeFalse();
+  });
+
+  it('keeps an abnormal status abnormal, and a matching-unit normal graded, whatever unitMismatch says', () => {
+    const mapped = labResults([
+      {
+        id: 'a',
+        testName: 'K',
+        value: '7.8',
+        status: 'CRITICAL',
+        unitMismatch: true,
+        released: true,
+      },
+      {
+        id: 'b',
+        testName: 'K',
+        value: '4.1',
+        status: 'NORMAL',
+        unitMismatch: false,
+        released: true,
+      },
+      { id: 'c', testName: 'K', status: 'PENDING', unitMismatch: true, released: false },
+    ]);
+
+    expect(mapped.map((l) => l.isUngraded)).toEqual([false, false, false]);
+    expect(mapped.map((l) => l.isAbnormal)).toEqual([true, false, false]);
+  });
+
   it('does not call a value inside its range abnormal, nor one outside it normal', () => {
     // The old value-vs-range parsing decided both of these the other way:
     // it flagged the in-range row the analyser called high as normal, and

@@ -826,10 +826,6 @@ public class SecurityConfig {
                         ROLE_QUALITY_MANAGER, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
                         ROLE_SUPER_ADMIN)
 
-                .requestMatchers(HttpMethod.PATCH, API_LAB_ORDERS_PATTERN, API_LAB_RESULTS_PATTERN)
-                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
-                        ROLE_SUPER_ADMIN)
-
                 // ---- Specimen endpoints (POST /lab-orders/{id}/specimens has its own matcher above) ----
                 .requestMatchers(HttpMethod.GET,  API_LAB_SPECIMENS, API_LAB_SPECIMENS_PATTERN)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,

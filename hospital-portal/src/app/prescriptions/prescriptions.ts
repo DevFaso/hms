@@ -66,12 +66,16 @@ export type PrescriptionStatusTab = Exclude<PrescriptionTab, 'all'>;
  * `labelKey` is the field name on purpose — check-i18n-referenced-keys.mjs
  * reads it, so a typo fails the gate instead of rendering the raw key.
  */
+/** CANCELLED and DISCONTINUED: the prescriber withdrew the order, which the server treats as final. */
+export function isWithdrawnStatus(status: string | null | undefined): boolean {
+  return status === 'CANCELLED' || status === 'DISCONTINUED';
+}
+
 export const ATTENTION_REASONS: readonly { status: string; labelKey: string }[] = [
   { status: 'PENDING_CLARIFICATION', labelKey: 'PRESCRIPTIONS.ATTENTION.PENDING_CLARIFICATION' },
   { status: 'TRANSMISSION_FAILED', labelKey: 'PRESCRIPTIONS.ATTENTION.TRANSMISSION_FAILED' },
   { status: 'PARTNER_REJECTED', labelKey: 'PRESCRIPTIONS.ATTENTION.PARTNER_REJECTED' },
   { status: 'PENDING_STOCK', labelKey: 'PRESCRIPTIONS.ATTENTION.PENDING_STOCK' },
-  { status: 'REQUIRES_EXTERNAL_FILL', labelKey: 'PRESCRIPTIONS.ATTENTION.REQUIRES_EXTERNAL_FILL' },
 ];
 
 /**
@@ -310,6 +314,20 @@ export class PrescriptionsComponent implements OnInit {
     { value: 'DISCONTINUED', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.DISCONTINUED' },
   ];
 
+  /**
+   * Withdrawal is final on the server (a CANCELLED or DISCONTINUED order may
+   * only move to the other withdrawn state), so editing a withdrawn order
+   * offers only those two statuses instead of a reopen that would be refused.
+   */
+  editingWithdrawn = signal(false);
+
+  statusOptions(): { value: string; labelKey: string }[] {
+    if (!this.editingWithdrawn()) {
+      return this.prescriptionStatuses;
+    }
+    return this.prescriptionStatuses.filter((s) => isWithdrawnStatus(s.value));
+  }
+
   emptyForm(): PrescriptionRequest {
     return {
       patientId: '',
@@ -374,6 +392,7 @@ export class PrescriptionsComponent implements OnInit {
     this.form = this.emptyForm();
     this.editing.set(false);
     this.editingId.set(null);
+    this.editingWithdrawn.set(false);
     this.selectedPatient.set(null);
     this.patientQuery.set('');
     this.showModal.set(true);
@@ -399,6 +418,7 @@ export class PrescriptionsComponent implements OnInit {
     } as PatientResponse);
     this.editing.set(true);
     this.editingId.set(p.id);
+    this.editingWithdrawn.set(isWithdrawnStatus(p.status));
     this.showModal.set(true);
   }
 
@@ -521,6 +541,7 @@ export class PrescriptionsComponent implements OnInit {
    * DISPATCHABLE_STATUSES exactly: a refusal, a back order, and a pharmacy that
    * has gone quiet on an offer must all leave the clinician free to send the
    * prescription somewhere else. Re-sending supersedes the previous offer.
+   * TRANSMISSION_FAILED is the retry: the last SMS never reached a pharmacy.
    */
   canDispatchSms(p: PrescriptionResponse): boolean {
     return (
@@ -528,7 +549,8 @@ export class PrescriptionsComponent implements OnInit {
       p.status === 'TRANSMITTED' ||
       p.status === 'PARTNER_REJECTED' ||
       p.status === 'PENDING_STOCK' ||
-      p.status === 'SENT_TO_PARTNER'
+      p.status === 'SENT_TO_PARTNER' ||
+      p.status === 'TRANSMISSION_FAILED'
     );
   }
 
@@ -1348,6 +1370,10 @@ export class PrescriptionsComponent implements OnInit {
           this.dispatching.set(false);
           const msg = err?.error?.message || 'Could not dispatch the prescription SMS';
           this.toast.error(msg);
+          // A refused SMS is recorded server-side (TRANSMISSION_FAILED, unless
+          // another pharmacy still holds the order): reload so the row shows
+          // it. The modal stays open for a retry or another pharmacy.
+          this.load();
         },
       });
   }

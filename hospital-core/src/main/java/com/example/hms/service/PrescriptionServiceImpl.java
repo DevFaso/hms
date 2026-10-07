@@ -86,6 +86,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      */
     private final java.time.Clock clock;
     private final CrossHospitalReachRecorder reachRecorder;
+    private final com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler withdrawnOrders;
 
     @Override
     @Transactional
@@ -609,6 +610,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (requested == null) {
             return;
         }
+        if (existing.getStatus() != null && existing.getStatus().isWithdrawn()) {
+            rejectReopeningWithdrawn(requested);
+            return;
+        }
         if (existing.getStatus() != PrescriptionStatus.PENDING_CLARIFICATION) {
             rejectClientAssertedWorkflowStatus(request);
             return;
@@ -627,6 +632,20 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
+     * Withdrawal is final. A CANCELLED or DISCONTINUED order can move to the
+     * other withdrawn state and nowhere else: reopened (DRAFT is a status a
+     * client may assert), its partner offers would act live again — an
+     * ACCEPTED offer stays open after withdrawal so a late dispense is
+     * surfaced, and the partner holding it has been told not to dispense.
+     * A prescriber who wants the medication again writes a new prescription.
+     */
+    private static void rejectReopeningWithdrawn(PrescriptionStatus requested) {
+        if (!requested.isWithdrawn()) {
+            throw new BusinessException("prescription.withdrawn.final");
+        }
+    }
+
+    /**
      * Withdrawing an order answers the pharmacist's question in the only way
      * that matters, so the clarification is stamped resolved by whoever
      * withdrew it. The reason and the previous status stay on the row as the
@@ -641,6 +660,23 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         existing.setClarificationResolvedByUserId(roleValidator.getCurrentUserId());
         logger.info("Prescription {} withdrawn while awaiting clarification; the question is closed",
             existing.getId());
+    }
+
+    /**
+     * A withdrawn order takes its partner-pharmacy offers with it: unanswered
+     * ones are closed so the timeout sweep and a late reply cannot stamp a
+     * partner status back over it, and every partner holding one is told not
+     * to dispense (WithdrawnOrderPartnerHandler). Same transaction as the
+     * status change; the partner SMS goes out after it commits.
+     */
+    private void closePartnerOffersOnWithdrawal(Prescription prescription, PrescriptionStatus statusBefore) {
+        PrescriptionStatus now = prescription.getStatus();
+        // Only on the way INTO withdrawal: CANCELLED -> DISCONTINUED (or back)
+        // is still the same withdrawn order, and its partners were already told.
+        if (now == null || !now.isWithdrawn() || (statusBefore != null && statusBefore.isWithdrawn())) {
+            return;
+        }
+        withdrawnOrders.withdrawPartnerOffers(prescription);
     }
 
     /**
@@ -817,8 +853,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose
         List<CdsCard> advisories = runCdsRuleEngine(patient, hospitalId, request);
 
+        PrescriptionStatus statusBefore = existing.getStatus();
         prescriptionMapper.updateEntity(existing, request, patient, staff, encounter);
         existing.setAssignment(prescriberAssignment);
+        closePartnerOffersOnWithdrawal(existing, statusBefore);
         // Tier 2 item 33: an edit invalidates any pharmacist verification.
         // updateEntity rewrites medicationName, dosage and frequency, and
         // there is no status guard above — so a SIGNED prescription's drug

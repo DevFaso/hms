@@ -149,7 +149,6 @@ export class EnumLabelService implements OnDestroy {
       DISPENSED: 'Dispensed',
       PARTIALLY_FILLED: 'Partially Filled',
       PENDING_STOCK: 'Pending Stock',
-      REQUIRES_EXTERNAL_FILL: 'Requires External Fill',
       SENT_TO_PARTNER: 'Sent to Partner',
       PARTNER_ACCEPTED: 'Partner Accepted',
       PARTNER_REJECTED: 'Partner Rejected',

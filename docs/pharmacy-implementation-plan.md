@@ -95,7 +95,7 @@ Doctor prescribes medication in HMS
  IN STOCK    NOT IN STOCK
     │            │
     ▼            ▼
- Normal      Prescription marked REQUIRES_EXTERNAL_FILL
+ Normal      Pharmacist records a routing decision
  Tier 1      Pharmacist informs patient of options:
  dispense        │
                  ├─► [A] Partner pharmacy (Tier 2)
@@ -131,7 +131,6 @@ Doctor prescribes medication in HMS
 
 | Status | Meaning |
 | --- | --- |
-| `REQUIRES_EXTERNAL_FILL` | Hospital dispensary cannot fill; awaiting patient routing decision |
 | `SENT_TO_PARTNER` | Transmitted to a Tier 2 partner pharmacy; awaiting response |
 | `PARTNER_ACCEPTED` | Partner pharmacy confirmed they will fill it |
 | `PARTNER_REJECTED` | Partner pharmacy declined (patient should choose another option) |
@@ -256,9 +255,9 @@ DevFaso/hms is **not** starting from zero. The codebase already contains:
 
 ### Epic 3b: Stock-Out Routing (Tier 1 → Tier 2/3 handoff)
 
-> **US-3b.1** As a **hospital pharmacist**, when a prescribed medication is not in stock at the hospital dispensary, I want the system to automatically flag the prescription as `REQUIRES_EXTERNAL_FILL` and present me with routing options so I can help the patient get their medication.
+> **US-3b.1** As a **hospital pharmacist**, when a prescribed medication is not in stock at the hospital dispensary, I want the system to present me with routing options so I can help the patient get their medication.
 > - AC: Stock check happens automatically when a dispense is initiated
-> - AC: If stock = 0 or insufficient quantity, status changes to `REQUIRES_EXTERNAL_FILL`
+> - AC: If stock = 0 or insufficient quantity, the stock check says so (no intermediate status: the routing decision itself moves the prescription)
 > - AC: Pharmacist sees three options: send to partner pharmacy, print for patient, or back-order
 
 > **US-3b.2** As a **hospital pharmacist**, I want to see which partner pharmacies (Tier 2) have this medication on their formulary, ranked by patient preference and proximity, so I can suggest options to the patient.
@@ -274,7 +273,7 @@ DevFaso/hms is **not** starting from zero. The codebase already contains:
 > **US-3b.4** As a **hospital pharmacist**, I want to split-fill a multi-medication prescription — dispense what we have in stock and route the remaining items externally.
 > - AC: Prescription status set to `PARTIALLY_FILLED`
 > - AC: Dispensed items recorded normally (Tier 1 flow)
-> - AC: Remaining items get individual `REQUIRES_EXTERNAL_FILL` status
+> - AC: Remaining items are routed (partner, print or back order) from `PARTIALLY_FILLED`
 > - AC: Patient sees unified view of what was filled and what's pending
 
 > **US-3b.5** As a **hospital pharmacist**, I want to back-order a medication and place the prescription in `PENDING_STOCK` status, so the patient is notified automatically when it arrives.
@@ -490,8 +489,8 @@ MVP scope (Tier 3 print-for-patient routing, partner formulary matching, routing
 
 | # | Task | Layer | Stories | Status |
 |---|---|---|---|---|
-| T-37a | ✅ ~~Add new prescription statuses (`REQUIRES_EXTERNAL_FILL`, `SENT_TO_PARTNER`, `PARTNER_ACCEPTED`, `PARTNER_REJECTED`, `PARTNER_DISPENSED`, `PENDING_STOCK`, `PARTIALLY_FILLED`, `PRINTED_FOR_PATIENT`)~~ | Backend | US-3b.1 | Done (PrescriptionStatus enum) |
-| T-37b | ✅ ~~Stock-out detection service: auto-check stock on dispense initiation, flag `REQUIRES_EXTERNAL_FILL`~~ | Backend | US-3b.1 | Done |
+| T-37a | ✅ ~~Add new prescription statuses (`SENT_TO_PARTNER`, `PARTNER_ACCEPTED`, `PARTNER_REJECTED`, `PARTNER_DISPENSED`, `PENDING_STOCK`, `PARTIALLY_FILLED`, `PRINTED_FOR_PATIENT`)~~ | Backend | US-3b.1 | Done (PrescriptionStatus enum) |
+| T-37b | ✅ ~~Stock-out detection service: auto-check stock on dispense initiation~~ (the external-fill status it was to set was never written, and was removed from the enum in 2026-10) | Backend | US-3b.1 | Done |
 | T-37c | ✅ ~~Partner formulary matching: query partner pharmacies by medication, rank by patient pref + proximity~~ | Backend | US-3b.2 | Done |
 | T-37d | ✅ ~~Routing decision service: record patient's choice (partner/print/back-order), update Rx status~~ | Backend | US-3b.3 | Done |
 | T-37e | Split-fill logic: partial dispense at Tier 1 + external routing for remainder | Backend | US-3b.4 | 🕒 Deferred (v3) |

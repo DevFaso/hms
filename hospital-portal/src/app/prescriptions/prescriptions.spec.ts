@@ -185,6 +185,35 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
     expect(component.dispatching()).toBeFalse();
   });
 
+  it('reloads the list after a refused SMS so the row shows the recorded failure', () => {
+    prescriptionService.dispatchSms.and.returnValue(
+      throwError(() => ({ error: { message: 'The SMS to the pharmacy could not be sent.' } })),
+    );
+    component.dispatchTarget.set({ id: 'rx-1', status: 'SIGNED' } as PrescriptionResponse);
+    component.dispatchPharmacyId = 'ph-1';
+    const listCallsBefore = prescriptionService.list.calls.count();
+
+    component.submitDispatch();
+
+    expect(prescriptionService.list.calls.count())
+      .withContext('the backend committed TRANSMISSION_FAILED; a stale row would still read SIGNED')
+      .toBe(listCallsBefore + 2);
+    expect(component.dispatching()).toBeFalse();
+    expect(component.dispatchTarget())
+      .withContext('the modal stays open for a retry or another pharmacy')
+      .not.toBeNull();
+  });
+
+  it('offers the SMS dispatch again on an order whose last SMS failed', () => {
+    expect(
+      component.canDispatchSms({ status: 'TRANSMISSION_FAILED' } as PrescriptionResponse),
+    ).toBeTrue();
+    expect(component.canDispatchSms({ status: 'CANCELLED' } as PrescriptionResponse)).toBeFalse();
+    expect(
+      component.canDispatchSms({ status: 'DISCONTINUED' } as PrescriptionResponse),
+    ).toBeFalse();
+  });
+
   it('does not fire a second dispatch while one is in flight', () => {
     component.dispatchTarget.set({ id: 'rx-1', status: 'SIGNED' } as PrescriptionResponse);
     component.dispatchPharmacyId = 'ph-1';
@@ -281,6 +310,19 @@ describe('PrescriptionsComponent — signing', () => {
   it('does not offer SIGNED in the editable status list', () => {
     // The whole point of the ceremony: this status is reachable only by signing.
     expect(component.prescriptionStatuses.map((s) => s.value)).not.toContain('SIGNED');
+  });
+
+  it('offers only the withdrawn statuses when editing a withdrawn prescription', () => {
+    // Withdrawal is final on the server: a reopen to DRAFT would be refused.
+    for (const status of ['CANCELLED', 'DISCONTINUED']) {
+      component.openEdit(rx('w', status));
+      expect(component.statusOptions().map((s) => s.value)).toEqual(['CANCELLED', 'DISCONTINUED']);
+    }
+    component.openEdit(rx('d', 'DRAFT'));
+    expect(component.statusOptions().map((s) => s.value)).toContain('DRAFT');
+    component.openEdit(rx('c', 'CANCELLED'));
+    component.openCreate();
+    expect(component.statusOptions().length).toBe(component.prescriptionStatuses.length);
   });
 
   it('offers signing only for a prescription still awaiting a signature', () => {

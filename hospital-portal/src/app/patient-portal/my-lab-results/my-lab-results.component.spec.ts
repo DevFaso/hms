@@ -121,6 +121,18 @@ describe('MyLabResultsComponent', () => {
     );
   });
 
+  it('draws a released result nothing graded (units differ) without the all-clear', async () => {
+    const el = await render([lab({ referenceRange: '', isUngraded: true })]);
+
+    expect(el.querySelector('.pli-icon .material-symbols-outlined')?.textContent?.trim()).toBe(
+      'info',
+    );
+    expect(el.querySelector('.abnormal-badge')).toBeFalsy();
+    expect(component.interpretation(component.results()[0])).toBe(
+      'PORTAL.LAB_RESULTS.NOT_GRADED_RESULT',
+    );
+  });
+
   it('shows the pending text in the detail panel instead of a blank result', async () => {
     const el = await render([pending()]);
     component.toggleExpand('l1');

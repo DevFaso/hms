@@ -345,6 +345,26 @@ describe('LabReleaseWorklistComponent', () => {
     expect(component.canReleaseResult(component.rows()[0])).toBeTrue();
   });
 
+  it('labels a row no range in its unit could grade "not graded: units differ", not "not flagged"', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    fixture.detectChanges();
+    flushWorklist([result({ severityFlag: 'UNSPECIFIED', unitMismatch: true })]);
+    fixture.detectChanges();
+
+    expect(component.severityKey(component.rows()[0])).toBe('UNIT_MISMATCH');
+    const row = host().querySelector('[data-testid="release-row-result-1"]');
+    expect(row?.textContent).toContain('LAB_RELEASE.FLAG_UNIT_MISMATCH');
+    expect(row?.querySelector('.flag-unit_mismatch')).not.toBeNull();
+  });
+
+  it('keeps the graded flag for a row in its range unit', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    fixture.detectChanges();
+    flushWorklist([result({ severityFlag: 'HIGH', unitMismatch: false })]);
+
+    expect(component.severityKey(component.rows()[0])).toBe('HIGH');
+  });
+
   it('flags a critical result on the queue', () => {
     setup(['ROLE_LAB_DIRECTOR']);
     fixture.detectChanges();

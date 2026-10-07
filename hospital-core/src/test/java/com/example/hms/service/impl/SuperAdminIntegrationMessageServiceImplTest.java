@@ -9,6 +9,7 @@ import com.example.hms.payload.dto.superadmin.IntegrationMessageEventDTO;
 import com.example.hms.payload.dto.superadmin.IntegrationMessagePageDTO;
 import com.example.hms.repository.integration.IntegrationMessageEventRepository;
 import com.example.hms.service.integration.message.IntegrationMessageRecorder;
+import com.example.hms.service.integration.message.IntegrationMessageRetentionPolicy;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -20,6 +21,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -41,6 +43,9 @@ class SuperAdminIntegrationMessageServiceImplTest {
 
     @Mock
     private IntegrationMessageRecorder recorder;
+
+    @Mock
+    private IntegrationMessageRetentionPolicy retentionPolicy;
 
     @InjectMocks
     private SuperAdminIntegrationMessageServiceImpl service;
@@ -189,5 +194,76 @@ class SuperAdminIntegrationMessageServiceImplTest {
             .hasMessageContaining("could not be persisted")
             .satisfies(ex -> assertThat(((ResponseStatusException) ex).getStatusCode())
                 .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR));
+    }
+
+    @Test
+    void replayOfAPurgedRowIsRefusedWith409AndRecordsNothing() {
+        // Retention (V177) erased the content of a resolved dead letter.
+        // The row still says FAILED; replaying it would write a REPLAYED row
+        // with no body. A clear 409 instead.
+        UUID originalId = UUID.randomUUID();
+        IntegrationMessageEvent purged = failedRow(originalId);
+        purged.setPayload(null);
+        purged.setPayloadPurgedAt(LocalDateTime.now().minusDays(1));
+        when(repository.findById(originalId)).thenReturn(Optional.of(purged));
+
+        assertThatThrownBy(() -> service.replay(originalId))
+            // Type only: the message text depends on whether an earlier test
+            // in the JVM wired MessageUtil to the real bundle.
+            .isInstanceOf(ConflictException.class);
+
+        verify(recorder, never()).recordReplay(any(), any(), any());
+    }
+
+    @Test
+    void thePurgeStampAndTheRetentionWindowReachThePage() {
+        when(retentionPolicy.isActive()).thenReturn(true);
+        when(retentionPolicy.payloadDays()).thenReturn(90);
+        when(retentionPolicy.unresolvedMaxDays()).thenReturn(400);
+        LocalDateTime purgedAt = LocalDateTime.of(2026, 9, 30, 3, 30);
+        IntegrationMessageEvent event = failedRow(UUID.randomUUID());
+        event.setPayload(null);
+        event.setPayloadPurgedAt(purgedAt);
+        when(repository.search(isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(event), PageRequest.of(0, 25), 1L));
+        when(repository.countUnresolvedDeadLetters()).thenReturn(0L);
+
+        IntegrationMessagePageDTO result = service.search(
+            null, null, null, null, null, PageRequest.of(0, 25));
+
+        assertThat(result.payloadRetentionDays()).isEqualTo(90);
+        assertThat(result.payloadUnresolvedMaxDays()).isEqualTo(400);
+        assertThat(result.retentionActive()).isTrue();
+        assertThat(result.content().get(0).payloadPurgedAt()).isEqualTo(purgedAt);
+    }
+
+    @Test
+    void getByIdCarriesThePurgeStamp() {
+        UUID id = UUID.randomUUID();
+        LocalDateTime purgedAt = LocalDateTime.of(2026, 9, 30, 3, 30);
+        IntegrationMessageEvent event = failedRow(id);
+        event.setPayload(null);
+        event.setPayloadPurgedAt(purgedAt);
+        when(repository.findById(id)).thenReturn(Optional.of(event));
+
+        IntegrationMessageEventDTO dto = service.getById(id);
+
+        assertThat(dto.payload()).isNull();
+        assertThat(dto.payloadPurgedAt()).isEqualTo(purgedAt);
+    }
+
+    @Test
+    void thePageSaysRetentionIsOffWhenThePolicyIsNotInForce() {
+        // Disabled, or a configuration the sweep refuses: the page must not
+        // quote windows nobody is enforcing.
+        when(retentionPolicy.isActive()).thenReturn(false);
+        when(repository.search(isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 25), 0L));
+        when(repository.countUnresolvedDeadLetters()).thenReturn(0L);
+
+        IntegrationMessagePageDTO result = service.search(
+            null, null, null, null, null, PageRequest.of(0, 25));
+
+        assertThat(result.retentionActive()).isFalse();
     }
 }

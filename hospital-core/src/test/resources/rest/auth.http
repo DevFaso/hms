@@ -719,7 +719,7 @@ Content-Type: application/json
 }
 
 ### Refresh Token
-POST http://localhost:8081/api/auth/refresh-token?refreshToken=eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJhZG1pbnVzZXIiLCJyb2xlcyI6IlJPTEVfQURNSU4iLCJpYXQiOjE3NDczMDk3MzMsImV4cCI6MTc0NzM5NjEzM30.HtKdCKv8envadPwB7ztvnogqmuKn-SSu4oulsqKK_GFtMVFEiOOJI9RxasP6WKR367JQomakLjQpmYOxXpm_iw
+POST http://localhost:8081/api/auth/refresh-token?refreshToken={{token}}
 
 
 ### Search Users by Name
@@ -815,7 +815,7 @@ Content-Type: application/json
 ###
 ### Register RECEPTIONIST for Clinic Sandoff
 POST http://localhost:8081/api/users/admin-register
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTQ2MjA1MzYsImV4cCI6MTc1NDcwNjkzNn0.Gd_8d7QdPLap7mV_lZZ5NOr5VdryjCdnf1QbXT6bSXepCqPiHQfKFKyUXKaDTB9VL5ugX3MoLcwvpQrU7bCbDw
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept-Language: en
 

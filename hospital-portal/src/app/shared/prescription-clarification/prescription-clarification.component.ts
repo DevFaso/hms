@@ -146,6 +146,7 @@ export class PrescriptionClarificationComponent {
     'PARTIALLY_FILLED',
     'PENDING_STOCK',
     'PARTNER_REJECTED',
+    'TRANSMISSION_FAILED',
   ];
 
   /** The work-queue attention flag that means "the prescriber has answered". */

@@ -472,4 +472,27 @@ class SmsPartnerNotificationChannelTest {
 
         verify(smsService).send(anyString(), anyString());
     }
+
+    @Test
+    @DisplayName("sendWithdrawn tells the partner not to dispense, by reference only")
+    void sendWithdrawnSuccess() {
+        when(smsServiceProvider.getIfAvailable()).thenReturn(smsService);
+
+        channel.sendWithdrawn(decision, partner);
+
+        ArgumentCaptor<String> msg = ArgumentCaptor.forClass(String.class);
+        verify(smsService).send(eq("+22670000000"), msg.capture());
+        assertThat(msg.getValue())
+                .contains(decisionId.toString().substring(0, 8).toUpperCase())
+                .contains("Ne pas délivrer");
+    }
+
+    @Test
+    @DisplayName("sendWithdrawn is a no-op without a partner phone")
+    void sendWithdrawnBlankPhone() {
+        partner.setPhoneNumber(" ");
+        channel.sendWithdrawn(decision, partner);
+        channel.sendWithdrawn(decision, null);
+        verifyNoInteractions(smsServiceProvider, smsService);
+    }
 }

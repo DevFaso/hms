@@ -108,6 +108,8 @@ class PrescriptionServiceImplTest {
     private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    @Mock
+    private com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler withdrawnOrders;
     /**
      * Not optional: getPrescriptionById dereferences this whenever the thread's
      * SecurityContext holds a patient-only principal. No test here sets one
@@ -3313,5 +3315,140 @@ class PrescriptionServiceImplTest {
         assertThat(result).extracting(PrescriptionResponseDTO::getId).containsExactly(localRx.getId(), foreignRx.getId());
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    // ═══════════════ withdrawal takes the partner offers with it ═══════════════
+
+    private Prescription stubUpdateTo(UUID prescriptionId, com.example.hms.enums.PrescriptionStatus from,
+                                      com.example.hms.enums.PrescriptionStatus to) {
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setStatus(from);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(existing));
+        when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(roleValidator.canCreatePrescription(any(), eq(hospitalId))).thenReturn(true);
+        when(urhaRepository.findByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(
+            any(), eq(hospitalId), eq("DOCTOR")))
+            .thenReturn(Optional.of(assignment));
+        // the mapper is a mock: copy the requested status as the real one does
+        org.mockito.Mockito.doAnswer(inv -> {
+            ((Prescription) inv.getArgument(0)).setStatus(to);
+            return null;
+        }).when(prescriptionMapper).updateEntity(any(), any(), any(), any(), any());
+        when(prescriptionRepository.save(any())).thenReturn(existing);
+        when(prescriptionMapper.toResponseDTO(any())).thenReturn(
+            PrescriptionResponseDTO.builder().id(prescriptionId).build());
+        return existing;
+    }
+
+    private PrescriptionRequestDTO requestWithStatus(com.example.hms.enums.PrescriptionStatus status) {
+        PrescriptionRequestDTO request = buildRequest();
+        request.setStatus(status);
+        return request;
+    }
+
+    @Test
+    void cancellingWithdrawsThePartnerOffers() {
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = stubUpdateTo(prescriptionId,
+            com.example.hms.enums.PrescriptionStatus.SENT_TO_PARTNER,
+            com.example.hms.enums.PrescriptionStatus.CANCELLED);
+
+        prescriptionService.updatePrescription(prescriptionId,
+            requestWithStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED), Locale.ENGLISH);
+
+        verify(withdrawnOrders).withdrawPartnerOffers(existing);
+    }
+
+    @Test
+    void discontinuingWithdrawsThePartnerOffersToo() {
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = stubUpdateTo(prescriptionId,
+            com.example.hms.enums.PrescriptionStatus.PARTNER_ACCEPTED,
+            com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+
+        prescriptionService.updatePrescription(prescriptionId,
+            requestWithStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED), Locale.ENGLISH);
+
+        verify(withdrawnOrders).withdrawPartnerOffers(existing);
+    }
+
+    @Test
+    void anEditThatDoesNotWithdrawLeavesPartnerOffersAlone() {
+        UUID prescriptionId = UUID.randomUUID();
+        stubUpdateTo(prescriptionId, com.example.hms.enums.PrescriptionStatus.SENT_TO_PARTNER,
+            com.example.hms.enums.PrescriptionStatus.SENT_TO_PARTNER);
+
+        prescriptionService.updatePrescription(prescriptionId, buildRequest(), Locale.ENGLISH);
+
+        verifyNoInteractions(withdrawnOrders);
+    }
+
+    @Test
+    void movingBetweenWithdrawnStatesDoesNotTellThePartnersAgain() {
+        UUID cancelledId = UUID.randomUUID();
+        stubUpdateTo(cancelledId, com.example.hms.enums.PrescriptionStatus.CANCELLED,
+            com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        prescriptionService.updatePrescription(cancelledId,
+            requestWithStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED), Locale.ENGLISH);
+
+        UUID discontinuedId = UUID.randomUUID();
+        stubUpdateTo(discontinuedId, com.example.hms.enums.PrescriptionStatus.DISCONTINUED,
+            com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        prescriptionService.updatePrescription(discontinuedId,
+            requestWithStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED), Locale.ENGLISH);
+
+        verifyNoInteractions(withdrawnOrders);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "CANCELLED,DRAFT", "CANCELLED,PENDING_SIGNATURE", "CANCELLED,SIGNED",
+        "DISCONTINUED,DRAFT", "DISCONTINUED,PENDING_SIGNATURE", "DISCONTINUED,SIGNED"})
+    void aWithdrawnPrescriptionCannotBeReopened(com.example.hms.enums.PrescriptionStatus withdrawn,
+                                                com.example.hms.enums.PrescriptionStatus requested) {
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setStatus(withdrawn);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(existing));
+        PrescriptionRequestDTO request = requestWithStatus(requested);
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("prescription.withdrawn.final");
+        assertThat(existing.getStatus()).isEqualTo(withdrawn);
+        verify(prescriptionRepository, never()).save(any());
+        verifyNoInteractions(withdrawnOrders, prescriptionMapper);
+    }
+
+    @Test
+    void aWithdrawnPrescriptionMayMoveToTheOtherWithdrawnState() {
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = stubUpdateTo(prescriptionId,
+            com.example.hms.enums.PrescriptionStatus.CANCELLED,
+            com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+
+        prescriptionService.updatePrescription(prescriptionId,
+            requestWithStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED), Locale.ENGLISH);
+
+        assertThat(existing.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        verify(prescriptionRepository).save(existing);
+    }
+
+    @Test
+    void reSavingAnAlreadyCancelledOrderDoesNotTellThePartnersAgain() {
+        UUID prescriptionId = UUID.randomUUID();
+        stubUpdateTo(prescriptionId, com.example.hms.enums.PrescriptionStatus.CANCELLED,
+            com.example.hms.enums.PrescriptionStatus.CANCELLED);
+
+        prescriptionService.updatePrescription(prescriptionId,
+            requestWithStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED), Locale.ENGLISH);
+
+        verifyNoInteractions(withdrawnOrders);
     }
 }

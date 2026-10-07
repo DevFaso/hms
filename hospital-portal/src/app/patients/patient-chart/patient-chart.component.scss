@@ -660,6 +660,11 @@ tr.foreign-row td:first-child,
     background: #eef2f7;
     color: #33415c;
   }
+  /* Released but never graded (every range is in another unit): never green. */
+  &.lab-ungraded {
+    background: #fef3c7;
+    color: #92400e;
+  }
 }
 
 /* The row is also marked structurally, so the "not released yet" signal

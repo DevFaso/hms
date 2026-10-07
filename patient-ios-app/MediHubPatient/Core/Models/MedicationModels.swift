@@ -149,7 +149,6 @@ enum PrescriptionStatus: String, CaseIterable {
     case dispensed = "DISPENSED"
     case partiallyFilled = "PARTIALLY_FILLED"
     case pendingStock = "PENDING_STOCK"
-    case requiresExternalFill = "REQUIRES_EXTERNAL_FILL"
     case sentToPartner = "SENT_TO_PARTNER"
     case partnerAccepted = "PARTNER_ACCEPTED"
     case partnerRejected = "PARTNER_REJECTED"
@@ -177,7 +176,6 @@ enum PrescriptionStatus: String, CaseIterable {
         case .dispensed: "rx_status_dispensed"
         case .partiallyFilled: "rx_status_partially_filled"
         case .pendingStock: "rx_status_pending_stock"
-        case .requiresExternalFill: "rx_status_requires_external_fill"
         case .sentToPartner: "rx_status_sent_to_partner"
         case .partnerAccepted: "rx_status_partner_accepted"
         case .partnerRejected: "rx_status_partner_rejected"
@@ -194,8 +192,8 @@ enum PrescriptionStatus: String, CaseIterable {
         case .dispensed, .partnerDispensed, .partnerAccepted: .positive
         case .pendingStock, .partiallyFilled, .pendingClarification, .pendingSignature: .attention
         case .partnerRejected, .transmissionFailed, .cancelled, .discontinued: .negative
-        case .draft, .signed, .transmitted, .sentToPartner, .requiresExternalFill,
-             .printedForPatient, .unknown: .neutral
+        case .draft, .signed, .transmitted, .sentToPartner, .printedForPatient,
+             .unknown: .neutral
         }
     }
 
@@ -209,7 +207,7 @@ enum PrescriptionStatus: String, CaseIterable {
         switch self {
         case .draft, .pendingSignature, .cancelled, .discontinued: false
         case .signed, .transmitted, .transmissionFailed, .pendingClarification, .dispensed,
-             .partiallyFilled, .pendingStock, .requiresExternalFill, .sentToPartner,
+             .partiallyFilled, .pendingStock, .sentToPartner,
              .partnerAccepted, .partnerRejected, .partnerDispensed, .printedForPatient,
              .unknown: true
         }

@@ -60,6 +60,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     private final PharmacyServiceSupport support;
     private final com.example.hms.service.pharmacy.partner.PartnerNotificationChannel partnerChannel;
     private final PrescriberPharmacyNotifier prescriberNotifier;
+    private final com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler withdrawnOrders;
 
     private static final String AUDIT_ENTITY = "PRESCRIPTION_ROUTING";
 
@@ -89,10 +90,9 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
      * a late confirmation from the original partner is refused rather than
      * flipping an order somebody else has since filled.
      *
-     * <p>REQUIRES_EXTERNAL_FILL is deliberately absent (gap G4): nothing in
-     * the backend writes it — a pharmacist who cannot fill in-house records
-     * the decision itself — so listing it only suggested a "flagged for
-     * external fill" step that does not exist.
+     * <p>TRANSMISSION_FAILED is routable: the SMS dispatch never reached a
+     * pharmacy, and the dispatch only records that state when no other
+     * pharmacy holds an open offer, so nobody else has the order.
      */
     static final Set<PrescriptionStatus> ROUTABLE_STATUSES = Set.of(
             PrescriptionStatus.SIGNED,
@@ -100,7 +100,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
             PrescriptionStatus.PARTIALLY_FILLED,
             PrescriptionStatus.PENDING_STOCK,
             PrescriptionStatus.PARTNER_REJECTED,
-            PrescriptionStatus.PARTNER_ACCEPTED
+            PrescriptionStatus.PARTNER_ACCEPTED,
+            PrescriptionStatus.TRANSMISSION_FAILED
     );
 
     /**
@@ -368,6 +369,11 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         }
 
         Prescription prescription = decision.getPrescription();
+        if (com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler.isWithdrawn(prescription)) {
+            // An offer left open from before the withdrawal: close it, move nothing.
+            return routingMapper.toResponseDTO(withdrawnOrders.closeOffer(decision, prescription,
+                    "Pharmacist-recorded partner " + (accepted ? "acceptance" : "refusal")));
+        }
 
         if (accepted) {
             decision.setStatus(RoutingDecisionStatus.ACCEPTED);
@@ -378,7 +384,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
             // The refusing partner is no longer this order's pharmacy: the
             // work queue groups the row under the in-house dispensary and
             // shows the refusal from the decision (lastRefusedBy).
-            clearPharmacy(prescription);
+            prescription.clearPharmacy();
         }
 
         prescriptionRepository.save(prescription);
@@ -418,6 +424,12 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         }
 
         Prescription prescription = decision.getPrescription();
+        if (com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler.isWithdrawn(prescription)) {
+            // Exactly as the SMS confirmation: recorded and raised, the order
+            // stays withdrawn, the patient is not told "dispensed".
+            return routingMapper.toResponseDTO(withdrawnOrders.recordDispenseOfWithdrawn(
+                    decision, prescription, "Pharmacist-recorded partner dispense"));
+        }
         // A confirmation must not overwrite an open question: PENDING_CLARIFICATION
         // has no writer but this one, and silently stamping PARTNER_DISPENSED over
         // it would leave the pharmacist's question unanswerable for good.
@@ -482,9 +494,15 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         // nothing a client types can be mistaken for the fact.
         decision.setPartnerNoShow(true);
         decision.setNoShowReason(words);
+        if (com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler.isWithdrawn(prescription)) {
+            // Never back into the in-house queue: SIGNED is dispensable, and
+            // the prescriber withdrew this order. The no-show stays recorded.
+            return routingMapper.toResponseDTO(
+                    withdrawnOrders.closeOffer(decision, prescription, "Partner no-show"));
+        }
         prescription.setStatus(PrescriptionStatus.SIGNED);
         // The partner that did not deliver is no longer this order's pharmacy.
-        clearPharmacy(prescription);
+        prescription.clearPharmacy();
         prescriptionRepository.save(prescription);
         PrescriptionRoutingDecision saved = routingDecisionRepository.save(decision);
 
@@ -636,13 +654,6 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         BigDecimal dispensedToDate = dispenseRepository
                 .sumQuantityDispensedForPrescription(prescription.getId(), DispenseStatus.CANCELLED);
         return FillAccounting.remaining(prescription, dispensedToDate);
-    }
-
-    private static void clearPharmacy(Prescription prescription) {
-        prescription.setPharmacyId(null);
-        prescription.setPharmacyName(null);
-        prescription.setPharmacyContact(null);
-        prescription.setPharmacyAddress(null);
     }
 
     private void validateRoutableStatus(Prescription prescription) {

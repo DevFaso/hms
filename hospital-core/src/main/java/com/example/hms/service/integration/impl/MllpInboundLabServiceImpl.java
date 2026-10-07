@@ -56,6 +56,8 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
     private final AuditEventLogService auditEventLogService;
     // Last so existing positional constructor calls in tests only append.
     private final com.example.hms.service.CriticalValueNotificationService criticalValueNotificationService;
+    /** The one unit-matching rule, so a result in no configured unit is never auto-released. */
+    private final com.example.hms.mapper.LabResultMapper labResultMapper;
 
     /**
      * B14 — the switch PR #716 introduces for manual entry
@@ -315,9 +317,24 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
      * released: neither is "the analyzer said normal". Everything else
      * lands unreleased and waits on the worklist; the patient sees
      * "pending", never the value.
+     *
+     * <p>An explicit {@code N} is still not enough when the test has
+     * reference ranges and none is in this observation's unit
+     * ({@link com.example.hms.mapper.LabResultMapper#isUngradedForUnitMismatch}):
+     * the hospital's own ranges could not grade it, so a person reviews it on
+     * the worklist. The analyser's flag itself is stored as sent.
      */
     private void autoReleaseIfExplicitlyNormal(LabResult result, String hl7Flag, boolean finalOrCorrected) {
         if (!autoReleaseEnabled || result.isReleased() || !finalOrCorrected || !isExplicitlyNormal(hl7Flag)) {
+            return;
+        }
+        // The order comes off the specimen and its test definition is lazy;
+        // the mapper reads ranges only from a loaded definition.
+        LabOrder order = result.getLabOrder();
+        if (order != null && order.getLabTestDefinition() != null) {
+            org.hibernate.Hibernate.initialize(order.getLabTestDefinition());
+        }
+        if (labResultMapper.isUngradedForUnitMismatch(result)) {
             return;
         }
         result.setReleased(true);

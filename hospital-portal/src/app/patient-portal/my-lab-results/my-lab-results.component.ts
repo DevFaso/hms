@@ -39,21 +39,26 @@ export class MyLabResultsComponent implements OnInit {
    */
   labIcon(lab: LabResultSummary): string {
     if (lab.isPending) return 'hourglass_top';
+    if (lab.isUngraded) return 'info';
     return lab.isAbnormal ? 'warning' : 'check_circle';
   }
 
   labIconBackground(lab: LabResultSummary): string {
     if (lab.isPending) return '#fef3c7';
+    if (lab.isUngraded) return '#eef2f7';
     return lab.isAbnormal ? '#fee2e2' : '#d1fae5';
   }
 
   labIconColor(lab: LabResultSummary): string {
     if (lab.isPending) return '#b45309';
+    if (lab.isUngraded) return '#33415c';
     return lab.isAbnormal ? '#dc2626' : '#059669';
   }
 
   interpretation(lab: LabResultSummary): string {
     if (lab.isPending) return 'PORTAL.LAB_RESULTS.PENDING_INTERPRETATION';
+    // Not compared with a range in its unit: "within normal limits" would be a claim nobody made.
+    if (lab.isUngraded) return 'PORTAL.LAB_RESULTS.NOT_GRADED_RESULT';
     return lab.isAbnormal
       ? 'PORTAL.LAB_RESULTS.ABNORMAL_RESULT'
       : 'PORTAL.LAB_RESULTS.NORMAL_RESULT';

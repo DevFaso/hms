@@ -42,6 +42,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -65,6 +66,7 @@ class StockOutRoutingServiceImplTest {
     @Mock private PharmacyServiceSupport support;
     @Mock private com.example.hms.service.pharmacy.partner.PartnerNotificationChannel partnerChannel;
     @Mock private PrescriberPharmacyNotifier prescriberNotifier;
+    @Mock private com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler withdrawnOrders;
 
     @InjectMocks
     private StockOutRoutingServiceImpl service;
@@ -292,21 +294,21 @@ class StockOutRoutingServiceImplTest {
     }
 
     @Test
-    @DisplayName("G4: REQUIRES_EXTERNAL_FILL has no writer and is not a routable state")
-    void routeToPartnerShouldRejectDeadRequiresExternalFillStatus() {
-        prescription.setStatus(PrescriptionStatus.REQUIRES_EXTERNAL_FILL);
-        RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()
-                .prescriptionId(prescriptionId)
-                .targetPharmacyId(partnerId)
-                .build();
+    @DisplayName("an order whose SMS dispatch failed reached no pharmacy and can be printed for the patient")
+    void transmissionFailedIsRoutable() {
+        prescription.setStatus(PrescriptionStatus.TRANSMISSION_FAILED);
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
         when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(routingMapper.toResponseDTO(any()))
+                .thenReturn(RoutingDecisionResponseDTO.builder().routingType("PRINT").build());
 
-        assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("REQUIRES_EXTERNAL_FILL");
-        verify(routingDecisionRepository, never()).save(any());
+        service.printForPatient(prescriptionId);
+
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PRINTED_FOR_PATIENT);
     }
 
     @Test
@@ -1122,5 +1124,80 @@ class StockOutRoutingServiceImplTest {
         org.springframework.data.domain.Page<RoutingDecisionResponseDTO> page =
                 service.listByPatient(patientQueryId, pageable);
         assertThat(page.getContent()).hasSize(1);
+    }
+
+    @Nested
+    @DisplayName("a withdrawn order stays withdrawn on the pharmacist's partner endpoints")
+    class WithdrawnOrder {
+
+        private PrescriptionRoutingDecision partnerDecision(RoutingDecisionStatus status) {
+            PrescriptionRoutingDecision decision = PrescriptionRoutingDecision.builder()
+                    .prescription(prescription)
+                    .targetPharmacy(partnerPharmacy)
+                    .decidedForPatient(patient)
+                    .routingType(RoutingType.PARTNER)
+                    .status(status)
+                    .build();
+            decision.setId(UUID.randomUUID());
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(routingDecisionRepository.findById(decision.getId())).thenReturn(Optional.of(decision));
+            return decision;
+        }
+
+        private void withdraw(PrescriptionStatus status) {
+            prescription.setStatus(status);
+            prescription.setPharmacyId(partnerId);
+            prescription.setPharmacyName("Partner Pharmacy");
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.EnumSource(value = PrescriptionStatus.class, names = {"CANCELLED", "DISCONTINUED"})
+        @DisplayName("confirmPartnerDispense records and raises it, keeps the status, texts no patient")
+        void confirmDispense(PrescriptionStatus withdrawn) {
+            withdraw(withdrawn);
+            PrescriptionRoutingDecision decision = partnerDecision(RoutingDecisionStatus.ACCEPTED);
+
+            service.confirmPartnerDispense(decision.getId());
+
+            verify(withdrawnOrders).recordDispenseOfWithdrawn(eq(decision), eq(prescription), anyString());
+            assertThat(prescription.getStatus()).isEqualTo(withdrawn);
+            verify(prescriptionRepository, never()).save(any());
+            verify(partnerChannel, never()).notifyPatientDispensed(any(), any());
+            verifyNoInteractions(prescriberNotifier);
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.EnumSource(value = PrescriptionStatus.class, names = {"CANCELLED", "DISCONTINUED"})
+        @DisplayName("partnerNoShow closes the offer and never requeues the order")
+        void noShow(PrescriptionStatus withdrawn) {
+            withdraw(withdrawn);
+            PrescriptionRoutingDecision decision = partnerDecision(RoutingDecisionStatus.ACCEPTED);
+
+            service.partnerNoShow(decision.getId(), "never came");
+
+            verify(withdrawnOrders).closeOffer(eq(decision), eq(prescription), anyString());
+            assertThat(decision.isPartnerNoShow()).isTrue();
+            assertThat(decision.getNoShowReason()).isEqualTo("never came");
+            assertThat(prescription.getStatus()).isEqualTo(withdrawn);
+            assertThat(prescription.getPharmacyId()).isEqualTo(partnerId);
+            verify(prescriptionRepository, never()).save(any());
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.EnumSource(value = PrescriptionStatus.class, names = {"CANCELLED", "DISCONTINUED"})
+        @DisplayName("partnerRespond closes a still-open offer and moves nothing")
+        void respond(PrescriptionStatus withdrawn) {
+            withdraw(withdrawn);
+            PrescriptionRoutingDecision decision = partnerDecision(RoutingDecisionStatus.PENDING);
+
+            service.partnerRespond(decision.getId(), true);
+
+            verify(withdrawnOrders).closeOffer(eq(decision), eq(prescription), anyString());
+            assertThat(prescription.getStatus()).isEqualTo(withdrawn);
+            assertThat(prescription.getPharmacyId()).isEqualTo(partnerId);
+            verify(prescriptionRepository, never()).save(any());
+            verify(partnerChannel, never()).notifyPatientAccepted(any(), any());
+            verifyNoInteractions(prescriberNotifier);
+        }
     }
 }

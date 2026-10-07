@@ -46,13 +46,13 @@ Content-Type: application/json
 ### Get all appointments
 GET http://localhost:8081/api/appointments
 Accept: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ1c2VyMSIsInJvbGVzIjpbIlJPTEVfUkVDRVBUSU9OSVNUIl0sImlhdCI6MTc1MzMyMDg2NywiZXhwIjoxNzUzNDA3MjY3fQ.-O3BzjZaIf3O9iQrebivH7zqXlWbD8SQRgqhJyTvvx_C1Q55vqRvhG8fH3SaHjVVBGpLprhvBVsY4hyoyCE4ig
+Authorization: Bearer {{token}}
 
 ### Create a new appointment
 ### CREATE Appointment (Hospital Admin, Staff, Doctor, Nurse, Receptionist)
 POST http://localhost:8081/api/appointments
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2RvY3RvciIsInJvbGVzIjpbIlJPTEVfRE9DVE9SIl0sImlhdCI6MTc1NTc3NDY3NiwiZXhwIjoxNzU1ODYxMDc2fQ.jPi2B7ybh5Xalnt7uY37tkvfPnU9P0NPVUI8BLp_r80
+Authorization: Bearer {{token}}
 Accept-Language: en
 
 {
@@ -70,14 +70,14 @@ Accept-Language: en
 ### Get appointment by ID
 GET http://localhost:8081/api/appointments/19df2330-dc72-445c-bae8-3d7be8623f05
 Accept: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJhbmdlbGFicm93biIsInJvbGVzIjpbIlJPTEVfUEFUSUVOVCIsIlJPTEVfU1VSR0VPTiJdLCJpYXQiOjE3NTMyNzMwNzAsImV4cCI6MTc1MzM1OTQ3MH0.80Xe2bFe-0e9SOtMz0K8l7xmI6Z01HbwdV_Y5UB9B-h1cVyUivujyPJWGVijo8R12bRX19R8iB7H9663-0FwOA
+Authorization: Bearer {{token}}
 Accept-Language: en
 
 
 ### Update appointment
 PUT http://localhost:8081/api/appointments/19df2330-dc72-445c-bae8-3d7be8623f05
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ1c2VyMSIsInJvbGVzIjpbIlJPTEVfUkVDRVBUSU9OSVNUIl0sImlhdCI6MTc1MzIzMTM4OSwiZXhwIjoxNzUzMzE3Nzg5fQ.eync82xThnb645mFrhohmNEvQCw_R_7nWZU-wDcTw7phgJzjr78SANCI7LxN0QEW493vTpWkjBp8jyXyqqWQeQ
+Authorization: Bearer {{token}}
 Accept-Language: en
 
 {
@@ -101,61 +101,61 @@ Authorization: Bearer {{TOKEN}}
 
 ### GET Appointment by ID (scoped)
 GET http://localhost:8081/api/appointments/39613a7d-7978-4c4a-a7be-4a06a8456c9a
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1ODMxOTg4LCJleHAiOjE3NTU5MTgzODh9.AN7XXuxtLfLRMkuEqyw8s7DfG0frUWOoHIKxEb0-S-k
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept-Language: en
 
 ### GET All Appointments (scoped)
 GET http://localhost:8081/api/appointments
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1ODMxOTg4LCJleHAiOjE3NTU5MTgzODh9.AN7XXuxtLfLRMkuEqyw8s7DfG0frUWOoHIKxEb0-S-k
+Authorization: Bearer {{token}}
 
 ### DELETE Appointment
 DELETE http://localhost:8081/api/appointments/7736f7ea-7366-4d98-99ea-74930c6e9cea
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1ODMxOTg4LCJleHAiOjE3NTU5MTgzODh9.AN7XXuxtLfLRMkuEqyw8s7DfG0frUWOoHIKxEb0-S-k
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept-Language: en
 
 ### GET Appointments by Patient ID (scoped)
 GET http://localhost:8081/api/appointments/patients/9bae259d-10ec-439a-8ff4-568a3ebcb1a2
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1ODMxOTg4LCJleHAiOjE3NTU5MTgzODh9.AN7XXuxtLfLRMkuEqyw8s7DfG0frUWOoHIKxEb0-S-k
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept-Language: en
 
 ### GET Appointments by Staff ID (scoped)
 GET http://localhost:8081/appointments/staff/{{STAFF_ID}}
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1ODMxOTg4LCJleHAiOjE3NTU5MTgzODh9.AN7XXuxtLfLRMkuEqyw8s7DfG0frUWOoHIKxEb0-S-k
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept-Language: en
 
 ### GET Appointments by Nurse ID (admin/nurse)
 GET http://localhost:8081/api/appointments/nurse/bad141f5-8796-4196-9019-b242d7cbddea
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1ODMxOTg4LCJleHAiOjE3NTU5MTgzODh9.AN7XXuxtLfLRMkuEqyw8s7DfG0frUWOoHIKxEb0-S-k
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept-Language: en
 
 ### GET Appointments by Doctor ID (admin/doctor legacy)
 GET http://localhost:8081/api/appointments/doctor/fef4b1cd-ed76-45c2-ac64-9e7f78429a88
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1ODMxOTg4LCJleHAiOjE3NTU5MTgzODh9.AN7XXuxtLfLRMkuEqyw8s7DfG0frUWOoHIKxEb0-S-k
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept-Language: en
 
 ### GET All Appointments for a Doctor (admin/legacy)
 GET http://localhost:8081/api/appointments/doctor/fef4b1cd-ed76-45c2-ac64-9e7f78429a88
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1ODMxOTg4LCJleHAiOjE3NTU5MTgzODh9.AN7XXuxtLfLRMkuEqyw8s7DfG0frUWOoHIKxEb0-S-k
+Authorization: Bearer {{token}}
 
 ### Get appointments by patient ID
 GET http://localhost:8081/api/appointments/patient/43b55243-5527-4992-bddb-a0cb9b7fe937
 Accept: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6WyJST0xFX0FETUlOIl0sImlhdCI6MTc1MDM0MTMwNywiZXhwIjoxNzUwNDI3NzA3fQ.SzeO1QbeAqyHwGtEtktiYIagoeXCzPm35p9kiKeXgF2CXKLVFLfS70ObjipGbtCUFSrluEJ9RbEfoPv9GXhnDw
+Authorization: Bearer {{token}}
 
 ### Get appointments by doctor ID
 GET http://localhost:8081//api/appointments/doctor/bad141f5-8796-4196-9019-b242d7cbddea
 Accept: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2RvY3RvciIsInJvbGVzIjpbIlJPTEVfRE9DVE9SIl0sImlhdCI6MTc1NTgyNjcxMywiZXhwIjoxNzU1OTEzMTEzfQ.x-Ez4gsMlLzDuMsjTpLK5uCfcVH1G4SCqG36972wcuM
+Authorization: Bearer {{token}}
 
 ### Delete appointment
 DELETE http://localhost:8081/api/appointments/{{appointmentId}}
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6WyJST0xFX0FETUlOIl0sImlhdCI6MTc1MDM0MTMwNywiZXhwIjoxNzUwNDI3NzA3fQ.SzeO1QbeAqyHwGtEtktiYIagoeXCzPm35p9kiKeXgF2CXKLVFLfS70ObjipGbtCUFSrluEJ9RbEfoPv9GXhnDw
+Authorization: Bearer {{token}}
 Accept-Language: en
 
 
