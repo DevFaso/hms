@@ -381,7 +381,7 @@ class InventoryServiceImplTest {
 
             dto.setQuantityOnHand(null);
             service.updateInventoryItem(inventoryItemId, dto);
-            verify(inventoryItemRepository, org.mockito.Mockito.times(1)).setOnHand(any(), any(), any());
+            verify(inventoryItemRepository, times(1)).setOnHand(any(), any(), any());
         }
     }
 

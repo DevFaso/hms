@@ -31,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.UUID;
 
 @Service
@@ -167,7 +168,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
      */
     private void applyQuantityChange(InventoryItem item, StockLot lot,
                                      StockTransactionType type, BigDecimal quantity) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
         switch (type) {
             case DISPENSE, TRANSFER -> takeOff(item, lot, quantity, now);
             // RECEIPT and RETURN add; ADJUSTMENT adds a signed quantity (a

@@ -39,6 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.context.MessageSource;
@@ -125,7 +126,7 @@ public class InventoryServiceImpl implements InventoryService {
         InventoryItem saved = inventoryItemRepository.save(item);
         if (dto.getQuantityOnHand() != null) {
             // A count correction, applied atomically (#825 round 5).
-            inventoryItemRepository.setOnHand(saved.getId(), dto.getQuantityOnHand(), LocalDateTime.now());
+            inventoryItemRepository.setOnHand(saved.getId(), dto.getQuantityOnHand(), LocalDateTime.now(ZoneId.systemDefault()));
             refreshIfManaged(saved);
         }
         return inventoryItemMapper.toResponseDTO(saved);
@@ -158,7 +159,7 @@ public class InventoryServiceImpl implements InventoryService {
 
         // Update quantity on hand: atomically, so a fill or a return of the
         // same item at the same moment is not overwritten (#825 round 5).
-        inventoryItemRepository.incrementOnHand(item.getId(), savedLot.getRemainingQuantity(), LocalDateTime.now());
+        inventoryItemRepository.incrementOnHand(item.getId(), savedLot.getRemainingQuantity(), LocalDateTime.now(ZoneId.systemDefault()));
         refreshIfManaged(item);
 
         // Record stock transaction
@@ -219,7 +220,7 @@ public class InventoryServiceImpl implements InventoryService {
         StockLot saved = stockLotRepository.save(lot);
         if (dto.getRemainingQuantity() != null) {
             // A count correction, applied atomically (#825 round 5).
-            stockLotRepository.setRemaining(saved.getId(), dto.getRemainingQuantity(), LocalDateTime.now());
+            stockLotRepository.setRemaining(saved.getId(), dto.getRemainingQuantity(), LocalDateTime.now(ZoneId.systemDefault()));
             refreshIfManaged(saved);
         }
         return stockLotMapper.toResponseDTO(saved);
