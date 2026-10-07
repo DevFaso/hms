@@ -101,6 +101,10 @@ public enum AuditEventType {
     DISPENSE_SUBSTITUTED,
     /** G15: a fill was prepared and the patient told it is ready for collection. */
     DISPENSE_READY,
+    /** G15: a prepared fill was handed over to the patient. */
+    DISPENSE_HANDED_OVER,
+    /** G15: a prepared fill was cancelled, or voided by the prescriber's withdrawal or edit. */
+    DISPENSE_READY_CANCELLED,
     MEDICATION_DEACTIVATED,
     PHARMACY_DEACTIVATED,
     MTM_REVIEW_STARTED,

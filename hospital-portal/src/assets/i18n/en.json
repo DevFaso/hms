@@ -5319,7 +5319,9 @@
         "WEBHOOK_ENDPOINT_DISABLED": "Webhook Disabled",
         "WEBHOOK_ENDPOINT_REGISTERED": "Webhook Registered",
         "WEBHOOK_ENDPOINT_UPDATED": "Webhook Updated",
-        "DISPENSE_READY": "Fill prepared for collection"
+        "DISPENSE_READY": "Fill prepared for collection",
+        "DISPENSE_HANDED_OVER": "Prepared fill handed over",
+        "DISPENSE_READY_CANCELLED": "Prepared fill cancelled"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",

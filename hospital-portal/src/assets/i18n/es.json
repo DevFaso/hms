@@ -5319,7 +5319,9 @@
         "WEBHOOK_ENDPOINT_DISABLED": "Webhook desactivado",
         "WEBHOOK_ENDPOINT_REGISTERED": "Webhook registrado",
         "WEBHOOK_ENDPOINT_UPDATED": "Webhook actualizado",
-        "DISPENSE_READY": "Dispensación preparada para recoger"
+        "DISPENSE_READY": "Dispensación preparada para recoger",
+        "DISPENSE_HANDED_OVER": "Dispensación preparada entregada",
+        "DISPENSE_READY_CANCELLED": "Dispensación preparada cancelada"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",

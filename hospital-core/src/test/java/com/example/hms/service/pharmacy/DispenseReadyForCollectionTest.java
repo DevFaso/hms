@@ -10,6 +10,12 @@ import com.example.hms.payload.dto.pharmacy.CdsAlertResult;
 import com.example.hms.payload.dto.pharmacy.DispenseResponseDTO;
 import org.mockito.ArgumentCaptor;
 import com.example.hms.enums.DispenseStatus;
+import com.example.hms.enums.DispenseVerificationStatus;
+import com.example.hms.enums.ReadyCancelReason;
+import com.example.hms.enums.RefillStatus;
+import com.example.hms.payload.dto.pharmacy.CancelReadyRequestDTO;
+import com.example.hms.payload.dto.pharmacy.HandOverRequestDTO;
+import java.time.LocalDateTime;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ConflictException;
@@ -91,6 +97,8 @@ class DispenseReadyForCollectionTest {
     @Mock private CdsCheckService cdsCheckService;
     @Mock private PrescriberPharmacyNotifier prescriberNotifier;
     @Mock private PrescriptionRoutingDecisionRepository routingDecisionRepository;
+    @Mock private PreparedFillVoider preparedFillVoider;
+    @Mock private jakarta.persistence.EntityManager entityManager;
 
     @org.mockito.Spy
     private ControlledSubstanceGuard controlledSubstanceGuard = new ControlledSubstanceGuard();
@@ -436,6 +444,387 @@ class DispenseReadyForCollectionTest {
             verify(stockLotRepository, never()).save(any());
             verify(stockTransactionRepository, never()).save(any());
             verify(support, never()).notifyReadyForCollection(any(), any(), any());
+        }
+    }
+
+    /** A fill prepared earlier by {@link #user}, waiting at {@link #pharmacy}. */
+    Dispense preparedFill() {
+        Dispense d = Dispense.builder()
+                .prescription(prescription)
+                .patient(patient)
+                .pharmacy(pharmacy)
+                .stockLot(stockLot)
+                .dispensedByUser(user)
+                .preparedByUser(user)
+                .medicationName("Amoxicillin")
+                .quantityRequested(BigDecimal.TEN)
+                .quantityDispensed(BigDecimal.TEN)
+                .status(DispenseStatus.PENDING)
+                .dispensedAt(null)
+                .build();
+        d.setId(dispenseId);
+        return d;
+    }
+
+    /** Scope and lock succeed for {@code d}; the resync re-reads it (not managed in a unit test). */
+    void stubLocked(Dispense d) {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findPrescriptionIdById(dispenseId)).thenReturn(Optional.of(prescriptionId));
+        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(d));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
+        org.mockito.Mockito.lenient().when(dispenseMapper.toResponseDTO(any(Dispense.class)))
+                .thenAnswer(inv -> DispenseResponseDTO.builder()
+                        .id(((Dispense) inv.getArgument(0)).getId())
+                        .status(((Dispense) inv.getArgument(0)).getStatus().name()).build());
+    }
+
+    /** The conditional UPDATE succeeds, and the resync sees what it wrote. */
+    void stubHandOverWrites(Dispense d) {
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(dispenseRepository.completePreparedFill(eq(dispenseId), any(), eq(user), any(), any(), any()))
+                .thenAnswer(inv -> {
+                    d.setStatus(DispenseStatus.COMPLETED);
+                    d.setDispensedAt(inv.getArgument(1));
+                    d.setVerificationStatus(inv.getArgument(3));
+                    d.setPatientScanValue(inv.getArgument(4));
+                    d.setScanVerifiedAt(inv.getArgument(5));
+                    return 1;
+                });
+        org.mockito.Mockito.lenient()
+                .when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
+                .thenReturn(BigDecimal.TEN);
+    }
+
+    final UUID dispenseId = UUID.randomUUID();
+
+    @Nested
+    @DisplayName("hand-over (AC-4, AC-5, AC-6)")
+    class HandOver {
+
+        @Test
+        @DisplayName("AC-4: COMPLETED, handed over now by the caller, the order DISPENSED and announced, receipt and audit")
+        void handsOver() {
+            Dispense d = preparedFill();
+            stubLocked(d);
+            stubHandOverWrites(d);
+
+            DispenseResponseDTO result = service.handOver(dispenseId, null);
+
+            assertThat(result.getStatus()).isEqualTo("COMPLETED");
+            verify(dispenseRepository).completePreparedFill(dispenseId, LocalDateTime.now(FIXED_CLOCK), user,
+                    DispenseVerificationStatus.NOT_VERIFIED, null, null);
+            assertThat(d.getPreparedByUser()).isSameAs(user);
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+            verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.DISPENSED);
+            verify(refillRequestRepository).findFirstByPrescription_IdAndStatusOrderByUpdatedAtDesc(
+                    prescriptionId, RefillStatus.APPROVED);
+            verify(support).notifyDispensed(patient, pharmacy, "Amoxicillin");
+            verify(support).logAudit(eq(AuditEventType.DISPENSE_HANDED_OVER), anyString(),
+                    eq(dispenseId.toString()), eq("DISPENSE"));
+            // no stock moves at hand-over: it moved at ready
+            verifyNoInteractions(stockLotRepository, stockTransactionRepository);
+        }
+
+        @Test
+        @DisplayName("AC-4: a partial fill hands over as PARTIALLY_FILLED and sends no receipt yet")
+        void partialHandOver() {
+            prescription.setQuantity(BigDecimal.valueOf(30));
+            Dispense d = preparedFill();
+            stubLocked(d);
+            stubHandOverWrites(d);
+
+            service.handOver(dispenseId, null);
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTIALLY_FILLED);
+            verify(support, never()).notifyDispensed(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("AC-5: a repeated hand-over of a prepared fill answers 200 and does nothing")
+        void replayDoesNothing() {
+            Dispense d = preparedFill();
+            d.setStatus(DispenseStatus.COMPLETED);
+            stubLocked(d);
+
+            DispenseResponseDTO result = service.handOver(dispenseId, null);
+
+            assertThat(result.getStatus()).isEqualTo("COMPLETED");
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+            verify(support, never()).logAudit(any(), any(), any(), any());
+            verify(support, never()).notifyDispensed(any(), any(), any());
+            verifyNoInteractions(prescriberNotifier);
+        }
+
+        @Test
+        @DisplayName("AC-5: a racing hand-over that lost the conditional UPDATE answers the winner's body, once")
+        void lostRaceIsAReplay() {
+            Dispense d = preparedFill();
+            stubLocked(d);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseRepository.completePreparedFill(any(), any(), any(), any(), any(), any()))
+                    .thenAnswer(inv -> {
+                        d.setStatus(DispenseStatus.COMPLETED); // the other one won
+                        return 0;
+                    });
+
+            DispenseResponseDTO result = service.handOver(dispenseId, null);
+
+            assertThat(result.getStatus()).isEqualTo("COMPLETED");
+            verify(support, never()).logAudit(any(), any(), any(), any());
+            verifyNoInteractions(prescriberNotifier);
+        }
+
+        @Test
+        @DisplayName("AC-5: a one-step COMPLETED fill was never prepared: 409")
+        void oneStepFillIsNotPending() {
+            Dispense d = preparedFill();
+            d.setStatus(DispenseStatus.COMPLETED);
+            d.setPreparedByUser(null);
+            stubLocked(d);
+
+            assertThatThrownBy(() -> service.handOver(dispenseId, null))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessage("This fill is no longer waiting for collection.");
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+        }
+
+        @ParameterizedTest
+        @EnumSource(value = PrescriptionStatus.class, names = {"CANCELLED", "DISCONTINUED",
+                "PENDING_CLARIFICATION", "PARTNER_ACCEPTED", "DISPENSED"})
+        @DisplayName("AC-6: the order re-read under the lock is no longer dispensable: 409, nothing changes")
+        void orderNoLongerDispensable(PrescriptionStatus status) {
+            prescription.setStatus(status);
+            stubLocked(preparedFill());
+
+            assertThatThrownBy(() -> service.handOver(dispenseId, null))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessage("This prescription can no longer be handed over.");
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("AC-6: the lot expired while the bag waited: 400, never overridable")
+        void expiredAtHandOver() {
+            stockLot.setExpiryDate(TODAY.minusDays(1));
+            stubLocked(preparedFill());
+
+            assertThatThrownBy(() -> service.handOver(dispenseId, null))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("expired on");
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("AC-6: a wristband that is somebody else's: 400")
+        void wrongPatient() {
+            stubLocked(preparedFill());
+            HandOverRequestDTO body = HandOverRequestDTO.builder()
+                    .patientScanValue(UUID.randomUUID().toString()).build();
+
+            assertThatThrownBy(() -> service.handOver(dispenseId, body))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("different patient");
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("AC-6: the controlled-substance guard is re-run: 400")
+        void controlledAtHandOver() {
+            prescription.setControlledSubstance(true);
+            stubLocked(preparedFill());
+
+            assertThatThrownBy(() -> service.handOver(dispenseId, null))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("CONTROLLED_SUBSTANCE");
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("rule 5: the right wristband makes the fill VERIFIED and is stored with its time")
+        void rightWristbandVerifies() {
+            Dispense d = preparedFill();
+            stubLocked(d);
+            stubHandOverWrites(d);
+            HandOverRequestDTO body = HandOverRequestDTO.builder()
+                    .patientScanValue(" " + patientId + " ").notes("Collected by the patient").build();
+
+            service.handOver(dispenseId, body);
+
+            verify(dispenseRepository).completePreparedFill(dispenseId, LocalDateTime.now(FIXED_CLOCK), user,
+                    DispenseVerificationStatus.VERIFIED, patientId.toString(), LocalDateTime.now(FIXED_CLOCK));
+            assertThat(d.getNotes()).isEqualTo("Collected by the patient");
+        }
+
+        @Test
+        @DisplayName("rule 5: OVERRIDDEN at ready stays OVERRIDDEN; a product scan at ready alone is VERIFIED")
+        void mergeRule() {
+            Dispense overridden = preparedFill();
+            overridden.setVerificationStatus(DispenseVerificationStatus.OVERRIDDEN);
+            stubLocked(overridden);
+            stubHandOverWrites(overridden);
+
+            service.handOver(dispenseId, null);
+
+            verify(dispenseRepository).completePreparedFill(eq(dispenseId), any(), eq(user),
+                    eq(DispenseVerificationStatus.OVERRIDDEN), any(), any());
+
+            Dispense scanned = preparedFill();
+            scanned.setProductScanValue("LOT-LABEL");
+            scanned.setScanVerifiedAt(LocalDateTime.of(2026, 10, 6, 8, 0));
+            prescription.setStatus(PrescriptionStatus.SIGNED);
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(scanned));
+            stubHandOverWrites(scanned);
+
+            service.handOver(dispenseId, null);
+
+            verify(dispenseRepository).completePreparedFill(dispenseId, LocalDateTime.now(FIXED_CLOCK), user,
+                    DispenseVerificationStatus.VERIFIED, null, LocalDateTime.of(2026, 10, 6, 8, 0));
+        }
+
+        @Test
+        @DisplayName("AC-17: hand-over still works with the flag off")
+        void flagOffStillHandsOver() {
+            org.springframework.test.util.ReflectionTestUtils.setField(service, "readyForCollectionEnabled", false);
+            Dispense d = preparedFill();
+            stubLocked(d);
+            stubHandOverWrites(d);
+
+            assertThat(service.handOver(dispenseId, null).getStatus()).isEqualTo("COMPLETED");
+        }
+    }
+
+    @Nested
+    @DisplayName("cancel preparation (AC-7)")
+    class CancelReady {
+
+        @ParameterizedTest
+        @EnumSource(value = ReadyCancelReason.class, names = {"PRESCRIPTION_WITHDRAWN", "PRESCRIPTION_CHANGED"})
+        @DisplayName("a system reason, or none, is a 400 before anything is read")
+        void systemReasonIsRefused(ReadyCancelReason reason) {
+            assertThatThrownBy(() -> service.cancelReady(dispenseId, new CancelReadyRequestDTO(reason)))
+                    .isInstanceOf(BusinessException.class);
+            assertThatThrownBy(() -> service.cancelReady(dispenseId, new CancelReadyRequestDTO(null)))
+                    .isInstanceOf(BusinessException.class);
+            verifyNoInteractions(dispenseRepository, preparedFillVoider);
+        }
+
+        @Test
+        @DisplayName("scope, the lock, then the voider with the pharmacist's reason")
+        void delegatesToTheVoider() {
+            Dispense d = preparedFill();
+            stubLocked(d);
+            when(preparedFillVoider.cancel(d, ReadyCancelReason.STOCK_UNAVAILABLE)).thenAnswer(inv -> {
+                d.setStatus(DispenseStatus.CANCELLED);
+                return d;
+            });
+
+            DispenseResponseDTO result = service.cancelReady(dispenseId,
+                    new CancelReadyRequestDTO(ReadyCancelReason.STOCK_UNAVAILABLE));
+
+            assertThat(result.getStatus()).isEqualTo("CANCELLED");
+            org.mockito.InOrder order = org.mockito.Mockito.inOrder(prescriptionRepository, preparedFillVoider);
+            order.verify(prescriptionRepository).findByIdForUpdate(prescriptionId);
+            order.verify(preparedFillVoider).cancel(d, ReadyCancelReason.STOCK_UNAVAILABLE);
+        }
+
+        @Test
+        @DisplayName("a row that is not PENDING: 409, the voider is not called")
+        void notPending() {
+            Dispense d = preparedFill();
+            d.setStatus(DispenseStatus.COMPLETED);
+            stubLocked(d);
+
+            assertThatThrownBy(() -> service.cancelReady(dispenseId,
+                    new CancelReadyRequestDTO(ReadyCancelReason.OTHER)))
+                    .isInstanceOf(ConflictException.class);
+            verifyNoInteractions(preparedFillVoider);
+        }
+
+        @Test
+        @DisplayName("the old /cancel still refuses a PENDING row")
+        void oldCancelRefusesPending() {
+            Dispense d = preparedFill();
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(d));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+            assertThatThrownBy(() -> service.cancelDispense(dispenseId))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("Only completed or partial");
+        }
+    }
+
+    @Nested
+    @DisplayName("tenancy (AC-14)")
+    class Tenancy {
+
+        private final com.example.hms.exception.GlobalExceptionHandler handler =
+                new com.example.hms.exception.GlobalExceptionHandler();
+
+        @SuppressWarnings("unchecked")
+        private java.util.Map<String, Object> bodyOf(Runnable call) {
+            org.springframework.web.context.request.WebRequest request =
+                    org.mockito.Mockito.mock(org.springframework.web.context.request.WebRequest.class);
+            when(request.getDescription(false)).thenReturn("uri=/api/pharmacy/dispense/x");
+            try {
+                call.run();
+            } catch (com.example.hms.exception.ResourceNotFoundException ex) {
+                java.util.Map<String, Object> body = new java.util.HashMap<>(
+                        (java.util.Map<String, Object>) handler.handleResourceNotFoundException(ex, request).getBody());
+                body.remove("timestamp");
+                body.remove("path");
+                return body;
+            }
+            throw new AssertionError("expected a 404");
+        }
+
+        private java.util.List<java.util.Map<String, Object>> threeRefusals(Runnable call) {
+            // a random id
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(dispenseRepository.findPrescriptionIdById(dispenseId)).thenReturn(Optional.empty());
+            java.util.Map<String, Object> randomId = bodyOf(call);
+
+            // a dispense at another hospital's pharmacy
+            Hospital other = new Hospital();
+            other.setId(UUID.randomUUID());
+            Pharmacy foreign = Pharmacy.builder().hospital(other).name("Elsewhere").build();
+            Dispense d = preparedFill();
+            d.setPharmacy(foreign);
+            when(dispenseRepository.findPrescriptionIdById(dispenseId)).thenReturn(Optional.of(prescriptionId));
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(d));
+            java.util.Map<String, Object> foreignHospital = bodyOf(call);
+
+            // a caller with no hospital scope
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            java.util.Map<String, Object> nullScope = bodyOf(call);
+
+            return java.util.List.of(randomId, foreignHospital, nullScope);
+        }
+
+        @Test
+        @DisplayName("hand-over: a random id, another hospital's fill and a null scope answer the same 404 body")
+        void handOverAnswersTheSame() {
+            var bodies = threeRefusals(() -> service.handOver(dispenseId, null));
+
+            assertThat(bodies.get(0)).containsEntry("status", 404)
+                    .containsEntry("message", "Dispense record not found");
+            assertThat(bodies.get(1)).isEqualTo(bodies.get(0));
+            assertThat(bodies.get(2)).isEqualTo(bodies.get(0));
+            verify(prescriptionRepository, never()).findByIdForUpdate(any());
+        }
+
+        @Test
+        @DisplayName("cancel-ready: the same three answer the same 404 body")
+        void cancelReadyAnswersTheSame() {
+            var bodies = threeRefusals(() -> service.cancelReady(dispenseId,
+                    new CancelReadyRequestDTO(ReadyCancelReason.OTHER)));
+
+            assertThat(bodies.get(0)).containsEntry("status", 404)
+                    .containsEntry("message", "Dispense record not found");
+            assertThat(bodies.get(1)).isEqualTo(bodies.get(0));
+            assertThat(bodies.get(2)).isEqualTo(bodies.get(0));
+            verifyNoInteractions(preparedFillVoider);
         }
     }
 }

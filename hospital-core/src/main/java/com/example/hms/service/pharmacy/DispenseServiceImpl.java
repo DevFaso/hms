@@ -5,6 +5,7 @@ import com.example.hms.enums.DispenseCheck;
 import com.example.hms.enums.DispenseStatus;
 import com.example.hms.enums.PharmacyType;
 import com.example.hms.enums.DispenseVerificationStatus;
+import com.example.hms.enums.ReadyCancelReason;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RefillStatus;
 import com.example.hms.enums.RoutingDecisionStatus;
@@ -25,7 +26,9 @@ import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
 import com.example.hms.model.pharmacy.StockLot;
 import com.example.hms.model.pharmacy.StockTransaction;
+import com.example.hms.payload.dto.pharmacy.CancelReadyRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseRequestDTO;
+import com.example.hms.payload.dto.pharmacy.HandOverRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseResponseDTO;
 import com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO;
 import com.example.hms.repository.PatientRepository;
@@ -41,6 +44,7 @@ import com.example.hms.repository.pharmacy.StockLotRepository;
 import com.example.hms.repository.pharmacy.StockTransactionRepository;
 import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.RoleValidator;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -93,6 +97,10 @@ public class DispenseServiceImpl implements DispenseService {
     private final ControlledSubstanceGuard controlledSubstanceGuard;
     private final PrescriberPharmacyNotifier prescriberNotifier;
     private final PrescriptionRoutingDecisionRepository routingDecisionRepository;
+    /** G15: the one owner of cancelling a prepared fill (rule 8). */
+    private final PreparedFillVoider preparedFillVoider;
+    /** G15 B2/A1: resyncs the one row a conditional bulk UPDATE changed. */
+    private final EntityManager entityManager;
 
     /**
      * Roadmap row 4 / T-68 — self-proxy used by {@link #createDispense} so the
@@ -406,6 +414,182 @@ public class DispenseServiceImpl implements DispenseService {
 
         support.notifyReadyForCollection(fill.patient(), fill.pharmacy(), dto.getMedicationName());
         return dispenseMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * G15 AC-4 to AC-6: the patient collects a prepared fill.
+     *
+     * <p>Order of work, all of it under the prescription row lock (rule 1):
+     * scope (an identical 404 for every failure), the lock, then the replay
+     * rule, the locked re-check of the order, EXPIRY and PATIENT (never
+     * overridable; DRUG was settled at ready), one conditional UPDATE and a
+     * resync of that one row, and finally what a one-step fill does after its
+     * insert: the status recompute and the prescriber's notice, the back-order
+     * and refill close-outs, and the receipt SMS after commit.
+     */
+    @Override
+    @Transactional
+    public DispenseResponseDTO handOver(UUID dispenseId, HandOverRequestDTO request) {
+        LockedPreparedFill locked = lockPreparedFill(dispenseId);
+        Dispense dispense = locked.dispense();
+        Prescription prescription = locked.prescription();
+
+        // AC-5: a repeated hand-over of a fill that was prepared answers as
+        // the first one did, and nothing happens a second time.
+        if (isHandOverReplay(dispense)) {
+            return dispenseMapper.toResponseDTO(dispense);
+        }
+        if (dispense.getStatus() != DispenseStatus.PENDING) {
+            throw new ConflictException(MessageUtil.resolve("dispense.ready.notPending"));
+        }
+
+        // AC-6: the order, re-read under the lock, must still be dispensable.
+        if (!DISPENSABLE_STATUSES.contains(prescription.getStatus())) {
+            throw new ConflictException(MessageUtil.resolve("dispense.ready.prescriptionNotDispensable"));
+        }
+        controlledSubstanceGuard.requireDispensable(prescription);
+
+        String patientScan = trimToNull(request != null ? request.getPatientScanValue() : null);
+        requireHandOverChecksPass(dispenseVerificationService.verify(
+                prescription, dispense.getStockLot(), patientScan, null));
+
+        LocalDateTime now = LocalDateTime.now(clock);
+        User handedOverBy = resolveCurrentUser();
+        int changed = dispenseRepository.completePreparedFill(dispense.getId(), now, handedOverBy,
+                mergedVerificationStatus(dispense, patientScan),
+                patientScan != null ? patientScan : dispense.getPatientScanValue(),
+                patientScan != null ? now : dispense.getScanVerifiedAt());
+        // B2: nothing touches the managed copy between the UPDATE and this
+        // resync, or a flush would write its stale PENDING back.
+        dispense = resync(dispense);
+        if (changed == 0) {
+            if (isHandOverReplay(dispense)) {
+                return dispenseMapper.toResponseDTO(dispense);
+            }
+            throw new ConflictException(MessageUtil.resolve("dispense.ready.notPending"));
+        }
+        appendNotes(dispense, request);
+
+        updatePrescriptionStatusFromHistory(prescription, true);
+        if (prescription.getStatus() == PrescriptionStatus.DISPENSED) {
+            closeOutBackOrder(prescription);
+            support.notifyDispensed(dispense.getPatient(), dispense.getPharmacy(), dispense.getMedicationName());
+        }
+
+        logAudit(AuditEventType.DISPENSE_HANDED_OVER,
+                "Prepared fill handed over, prescription " + prescription.getId(),
+                dispense.getId().toString());
+        return dispenseMapper.toResponseDTO(dispense);
+    }
+
+    /**
+     * G15 AC-7: the pharmacist cancels a preparation. Scope (identical 404),
+     * the prescription lock, then {@link PreparedFillVoider}, the one owner of
+     * the conditional cancel, the stock return, the audit and the SMS.
+     */
+    @Override
+    @Transactional
+    public DispenseResponseDTO cancelReady(UUID dispenseId, CancelReadyRequestDTO request) {
+        ReadyCancelReason reason = request != null ? request.getReason() : null;
+        if (reason == null || !reason.isPharmacistChoice()) {
+            throw new BusinessException("dispense.ready.cancelReason.invalid");
+        }
+        LockedPreparedFill locked = lockPreparedFill(dispenseId);
+        if (locked.dispense().getStatus() != DispenseStatus.PENDING) {
+            throw new ConflictException(MessageUtil.resolve("dispense.ready.notPending"));
+        }
+        return dispenseMapper.toResponseDTO(preparedFillVoider.cancel(locked.dispense(), reason));
+    }
+
+    /**
+     * Scope, then the lock (A8, rule 1). Every failure to find or scope the
+     * row is the SAME 404 {@code dispense.notfound}: an unknown id, a
+     * dispense at another hospital's pharmacy, a pharmacy with no hospital,
+     * and a caller with no hospital scope. Deliberately not
+     * {@link #enforceHospitalScope}, whose {@code pharmacy.notfound} would
+     * tell a foreign id from a missing one.
+     */
+    private LockedPreparedFill lockPreparedFill(UUID dispenseId) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null) {
+            throw dispenseNotFound();
+        }
+        UUID prescriptionId = dispenseRepository.findPrescriptionIdById(dispenseId)
+                .orElseThrow(this::dispenseNotFound);
+        Dispense dispense = dispenseRepository.findById(dispenseId)
+                .orElseThrow(this::dispenseNotFound);
+        Pharmacy pharmacy = dispense.getPharmacy();
+        if (pharmacy == null || pharmacy.getHospital() == null
+                || !hospitalId.equals(pharmacy.getHospital().getId())) {
+            throw dispenseNotFound();
+        }
+        Prescription prescription = prescriptionRepository.findByIdForUpdate(prescriptionId)
+                .orElseThrow(this::dispenseNotFound);
+        // The row as it is now that nobody else can move it.
+        return new LockedPreparedFill(resync(dispense), prescription);
+    }
+
+    private record LockedPreparedFill(Dispense dispense, Prescription prescription) {}
+
+    private ResourceNotFoundException dispenseNotFound() {
+        return new ResourceNotFoundException("dispense.notfound");
+    }
+
+    /** COMPLETED and prepared: this fill was already handed over. */
+    private static boolean isHandOverReplay(Dispense dispense) {
+        return dispense.getStatus() == DispenseStatus.COMPLETED && dispense.getPreparedByUser() != null;
+    }
+
+    /**
+     * Rule 5: only EXPIRY and PATIENT are evaluated at hand-over, and either
+     * failure refuses it. Neither is overridable: there is no case for
+     * handing out expired stock, or for handing it to somebody else.
+     */
+    private static void requireHandOverChecksPass(DispenseVerificationResult verification) {
+        String reasons = verification.getFailureReasons().entrySet().stream()
+                .filter(e -> e.getKey() == DispenseCheck.EXPIRY || e.getKey() == DispenseCheck.PATIENT)
+                .map(Map.Entry::getValue)
+                .collect(Collectors.joining("; "));
+        if (!reasons.isEmpty()) {
+            throw new BusinessException("Hand-over refused — " + reasons);
+        }
+    }
+
+    /**
+     * Rule 5: OVERRIDDEN stays OVERRIDDEN (its override reason is kept, which
+     * V138's ck_dispense_override_reason requires); otherwise VERIFIED when a
+     * scan was supplied at either step, else the honest NOT_VERIFIED.
+     */
+    private static DispenseVerificationStatus mergedVerificationStatus(Dispense dispense, String patientScan) {
+        if (dispense.getVerificationStatus() == DispenseVerificationStatus.OVERRIDDEN) {
+            return DispenseVerificationStatus.OVERRIDDEN;
+        }
+        boolean scanned = patientScan != null
+                || dispense.getProductScanValue() != null
+                || dispense.getPatientScanValue() != null;
+        return scanned ? DispenseVerificationStatus.VERIFIED : DispenseVerificationStatus.NOT_VERIFIED;
+    }
+
+    /** After the resync, so an ordinary dirty-checked update (through the encrypting converter). */
+    private static void appendNotes(Dispense dispense, HandOverRequestDTO request) {
+        String notes = request != null ? trimToNull(request.getNotes()) : null;
+        if (notes == null) {
+            return;
+        }
+        String existing = trimToNull(dispense.getNotes());
+        dispense.setNotes(existing == null ? notes : existing + "\n" + notes);
+    }
+
+    /**
+     * The row as a bulk update left it: a refresh of the managed copy, or a
+     * fresh read. Only this row; the persistence context is not cleared.
+     */
+    private Dispense resync(Dispense dispense) {
+        if (entityManager != null && entityManager.contains(dispense)) {
+            entityManager.refresh(dispense);
+            return dispense;
+        }
+        return dispenseRepository.findById(dispense.getId()).orElse(dispense);
     }
 
     private void requireReadyForCollectionEnabled() {

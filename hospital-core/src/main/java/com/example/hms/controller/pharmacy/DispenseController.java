@@ -1,9 +1,11 @@
 package com.example.hms.controller.pharmacy;
 
 import com.example.hms.payload.dto.ApiResponseWrapper;
+import com.example.hms.payload.dto.pharmacy.CancelReadyRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseResponseDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseSettingsDTO;
+import com.example.hms.payload.dto.pharmacy.HandOverRequestDTO;
 import com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO;
 import com.example.hms.service.pharmacy.DispenseService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -78,6 +80,32 @@ public class DispenseController {
             @Valid @RequestBody DispenseRequestDTO dto) {
         DispenseResponseDTO prepared = dispenseService.markReadyForCollection(dto);
         return ResponseEntity.status(201).body(ApiResponseWrapper.success(prepared));
+    }
+
+    @PostMapping("/{id}/hand-over")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Hand over a prepared fill",
+            description = "Complete a fill prepared for collection: the patient has it")
+    @ApiResponse(responseCode = "200", description = "Handed over (a repeat answers the same)")
+    @ApiResponse(responseCode = "400", description = "Expired lot, wrong patient, or controlled substance")
+    @ApiResponse(responseCode = "404", description = "Dispense record not found")
+    @ApiResponse(responseCode = "409", description = "Not waiting for collection, order no longer dispensable, or a concurrent change")
+    public ResponseEntity<ApiResponseWrapper<DispenseResponseDTO>> handOver(
+            @PathVariable UUID id, @Valid @RequestBody(required = false) HandOverRequestDTO request) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(dispenseService.handOver(id, request)));
+    }
+
+    @PostMapping("/{id}/cancel-ready")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Cancel a preparation",
+            description = "Cancel a fill prepared for collection; the stock is returned and the patient told")
+    @ApiResponse(responseCode = "200", description = "Preparation cancelled")
+    @ApiResponse(responseCode = "400", description = "Reason missing or not a pharmacist's choice")
+    @ApiResponse(responseCode = "404", description = "Dispense record not found")
+    @ApiResponse(responseCode = "409", description = "Not waiting for collection, or a concurrent change")
+    public ResponseEntity<ApiResponseWrapper<DispenseResponseDTO>> cancelReady(
+            @PathVariable UUID id, @Valid @RequestBody CancelReadyRequestDTO request) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(dispenseService.cancelReady(id, request)));
     }
 
     @GetMapping("/{id}")

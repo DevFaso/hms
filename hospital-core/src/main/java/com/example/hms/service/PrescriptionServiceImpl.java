@@ -87,6 +87,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final java.time.Clock clock;
     private final CrossHospitalReachRecorder reachRecorder;
     private final com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler withdrawnOrders;
+    /** G15: withdrawal and edit void an open preparation (rule 8). */
+    private final com.example.hms.service.pharmacy.PreparedFillVoider preparedFills;
 
     @Override
     @Transactional
@@ -680,6 +682,27 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
+     * G15 rule 8 (user decision 1): a withdrawn or changed order can never be
+     * collected, so ANY successful edit of a non-withdrawn order voids its
+     * open preparation: PRESCRIPTION_WITHDRAWN on the way into withdrawal,
+     * PRESCRIPTION_CHANGED otherwise. The stock goes back and the patient is
+     * told after commit. Runs under the row lock {@code updatePrescription}
+     * took, inside this already-authorised transaction (a global-view
+     * super-admin included), so the voider makes no scope call of its own.
+     * An order that was already withdrawn cannot hold one: its withdrawal
+     * voided it.
+     */
+    private void voidPreparedFillOnEdit(Prescription prescription, PrescriptionStatus statusBefore) {
+        if (statusBefore != null && statusBefore.isWithdrawn()) {
+            return;
+        }
+        PrescriptionStatus now = prescription.getStatus();
+        preparedFills.voidPreparedFill(prescription, now != null && now.isWithdrawn()
+            ? com.example.hms.enums.ReadyCancelReason.PRESCRIPTION_WITHDRAWN
+            : com.example.hms.enums.ReadyCancelReason.PRESCRIPTION_CHANGED);
+    }
+
+    /**
      * A declared safeguard cannot be quietly un-declared.
      *
      * <p>Making the controlled-substance flags writable (P2 #15's actual gap —
@@ -867,6 +890,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // assert a check of a drug the pharmacist never saw.
         pharmacistVerificationService.invalidateOnChange(existing);
         controlledSubstanceGuard.requireSafeguardsFor(existing, existing.getStatus());
+        voidPreparedFillOnEdit(existing, statusBefore);
 
         Prescription saved = prescriptionRepository.save(existing);
         PrescriptionResponseDTO response = prescriptionMapper.toResponseDTO(saved);

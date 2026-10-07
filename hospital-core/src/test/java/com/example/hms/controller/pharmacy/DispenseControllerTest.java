@@ -37,6 +37,16 @@ class DispenseControllerTest {
     }
 
     @Test
+    @DisplayName("hand-over and cancel-ready have the gate of POST /pharmacy/dispense")
+    void handOverAndCancelReadyHaveTheDispenseGate() throws Exception {
+        String dispenseGate = gateOf("dispense", DispenseRequestDTO.class);
+        assertThat(gateOf("handOver", java.util.UUID.class,
+                com.example.hms.payload.dto.pharmacy.HandOverRequestDTO.class)).isEqualTo(dispenseGate);
+        assertThat(gateOf("cancelReady", java.util.UUID.class,
+                com.example.hms.payload.dto.pharmacy.CancelReadyRequestDTO.class)).isEqualTo(dispenseGate);
+    }
+
+    @Test
     @DisplayName("GET /settings has the gate of the work queue")
     void settingsHaveTheWorkQueueGate() throws Exception {
         assertThat(gateOf("getSettings")).isEqualTo(gateOf("getWorkQueue", Pageable.class));

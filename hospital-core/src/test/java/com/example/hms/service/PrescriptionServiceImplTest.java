@@ -110,6 +110,8 @@ class PrescriptionServiceImplTest {
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock
     private com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler withdrawnOrders;
+    @Mock
+    private com.example.hms.service.pharmacy.PreparedFillVoider preparedFills;
     /**
      * Not optional: getPrescriptionById dereferences this whenever the thread's
      * SecurityContext holds a patient-only principal. No test here sets one
@@ -3348,6 +3350,61 @@ class PrescriptionServiceImplTest {
         PrescriptionRequestDTO request = buildRequest();
         request.setStatus(status);
         return request;
+    }
+
+    // ═══════════════ G15: withdrawal and edit void a prepared fill (AC-8, AC-9) ═══════════════
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.PrescriptionStatus.class,
+        names = {"CANCELLED", "DISCONTINUED"})
+    void withdrawalVoidsTheOpenPreparation(com.example.hms.enums.PrescriptionStatus withdrawnTo) {
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = stubUpdateTo(prescriptionId,
+            com.example.hms.enums.PrescriptionStatus.SIGNED, withdrawnTo);
+
+        prescriptionService.updatePrescription(prescriptionId, requestWithStatus(withdrawnTo), Locale.ENGLISH);
+
+        verify(preparedFills).voidPreparedFill(existing,
+            com.example.hms.enums.ReadyCancelReason.PRESCRIPTION_WITHDRAWN);
+    }
+
+    @Test
+    void anyEditOfALiveOrderVoidsTheOpenPreparation() {
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = stubUpdateTo(prescriptionId,
+            com.example.hms.enums.PrescriptionStatus.PARTIALLY_FILLED,
+            com.example.hms.enums.PrescriptionStatus.PARTIALLY_FILLED);
+
+        prescriptionService.updatePrescription(prescriptionId, buildRequest(), Locale.ENGLISH);
+
+        verify(preparedFills).voidPreparedFill(existing,
+            com.example.hms.enums.ReadyCancelReason.PRESCRIPTION_CHANGED);
+    }
+
+    @Test
+    void anEditOfAnAlreadyWithdrawnOrderHasNothingToVoid() {
+        UUID prescriptionId = UUID.randomUUID();
+        stubUpdateTo(prescriptionId, com.example.hms.enums.PrescriptionStatus.CANCELLED,
+            com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+
+        prescriptionService.updatePrescription(prescriptionId,
+            requestWithStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED), Locale.ENGLISH);
+
+        verifyNoInteractions(preparedFills);
+    }
+
+    @Test
+    void aRefusedEditVoidsNothing() {
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        PrescriptionRequestDTO request = requestWithStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class);
+        verifyNoInteractions(preparedFills);
     }
 
     @Test

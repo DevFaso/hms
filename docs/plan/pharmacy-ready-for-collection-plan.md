@@ -1155,7 +1155,7 @@ After any merge, check the changelog and the i18n files by hand.
     `application.properties` placeholder.
   - `DispenseResponseDTO` and mapper fields.
   - Tests.
-- [ ] **T7 — Hand-over.** AC-4, AC-5, AC-6, AC-14.
+- [x] **T7 — Hand-over.** AC-4, AC-5, AC-6, AC-14.
   - `handOver`:
     - the lock;
     - the locked re-check;
@@ -1167,7 +1167,7 @@ After any merge, check the changelog and the i18n files by hand.
     - `DISPENSE_HANDED_OVER`, **plus its `PORTAL.ENUM.AUDIT_EVENT_TYPE.DISPENSE_HANDED_OVER` key ×3 in the same commit** (A5).
   - Identical 404 bodies; `HandOverRequestDTO`; the controller.
   - Unit tests and the reflection role test.
-- [ ] **T8 — Cancel preparation and the voider.** AC-7, AC-8, AC-9, AC-14.
+- [x] **T8 — Cancel preparation and the voider.** AC-7, AC-8, AC-9, AC-14.
   - `cancelReady`: the scope check (identical 404), the lock, then delegate.
   - The new `PreparedFillVoider`, the only implementation of the conditional
     cancel, the stock return and the SMS (A7). It makes no scope calls.

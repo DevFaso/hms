@@ -1,7 +1,9 @@
 package com.example.hms.service.pharmacy;
 
+import com.example.hms.payload.dto.pharmacy.CancelReadyRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseResponseDTO;
+import com.example.hms.payload.dto.pharmacy.HandOverRequestDTO;
 import com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -34,6 +36,12 @@ public interface DispenseService {
 
     /** {@code pharmacy.ready-for-collection.enabled}, for {@code GET /pharmacy/dispense/settings}. */
     boolean isReadyForCollectionEnabled();
+
+    /** G15: hand a prepared (PENDING) fill over to the patient. */
+    DispenseResponseDTO handOver(UUID dispenseId, HandOverRequestDTO request);
+
+    /** G15: cancel a prepared (PENDING) fill; the stock is returned and the patient told. */
+    DispenseResponseDTO cancelReady(UUID dispenseId, CancelReadyRequestDTO request);
 
     DispenseResponseDTO getDispense(UUID id);
 
