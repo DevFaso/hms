@@ -1204,7 +1204,7 @@ After any merge, check the changelog and the i18n files by hand.
   - `PatientMedicationResponseDTO`, `PrescriptionResponseDTO`,
     `PatientMedicationServiceImpl` (portal and staff),
     `getPrescriptionsForPortalPatient`; tests.
-- [ ] **T13 — Reminder sweep.** AC-13.
+- [x] **T13 — Reminder sweep.** AC-13.
   - `ReadyForCollectionReminderScheduler` (void, `@SchedulerLock`, claim
     REQUIRES_NEW, then send); properties; `SchedulerLockCoverageTest`; test.
 - [ ] **T14 — Portal pharmacy UI.** AC-11, AC-16, AC-17.
