@@ -169,6 +169,37 @@ class StockOutRoutingServiceImplTest {
         assertThat(result.getPartnerPharmacies().get(0).isHasOnFormulary()).isTrue();
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"partner", "print", "backOrder"})
+    @DisplayName("G15 AC-10: while a fill is prepared, routing elsewhere is a 409 and changes nothing")
+    void openPreparationBlocksRouting(String route) {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+        try {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(dispenseRepository.existsByPrescription_IdAndStatus(prescriptionId,
+                    com.example.hms.enums.DispenseStatus.PENDING)).thenReturn(true);
+            com.example.hms.enums.PrescriptionStatus before = prescription.getStatus();
+
+            org.assertj.core.api.ThrowableAssert.ThrowingCallable call = switch (route) {
+                case "partner" -> () -> service.routeToPartner(prescriptionId, RoutingDecisionRequestDTO.builder()
+                        .prescriptionId(prescriptionId).targetPharmacyId(partnerId).build());
+                case "print" -> () -> service.printForPatient(prescriptionId);
+                default -> () -> service.backOrder(prescriptionId, null);
+            };
+            assertThatThrownBy(call)
+                    .isInstanceOf(com.example.hms.exception.ConflictException.class)
+                    .hasMessage("A fill is prepared for this prescription. Hand it over or cancel the preparation first.");
+            assertThat(prescription.getStatus()).isEqualTo(before);
+            verify(prescriptionRepository, never()).save(any());
+            verify(routingDecisionRepository, never()).save(any());
+            verify(prescriptionRepository, never()).findById(any());
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
     @Test
     @DisplayName("routeToPartner should update prescription and persist a routing decision")
     void routeToPartnerShouldUpdatePrescriptionAndPersistDecision() {

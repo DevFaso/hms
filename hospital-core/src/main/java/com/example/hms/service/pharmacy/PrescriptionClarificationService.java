@@ -86,6 +86,8 @@ public class PrescriptionClarificationService {
     private final PharmacyServiceSupport support;
     private final PrescriberPharmacyNotifier prescriberNotifier;
     private final Clock clock;
+    /** G15: an open preparation blocks a clarification request (AC-10). */
+    private final com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
 
     /**
      * @param reason the pharmacist's question; required, at most 1000 chars,
@@ -97,6 +99,12 @@ public class PrescriptionClarificationService {
         // cannot commit alongside a question that takes the order off the
         // counter.
         Prescription prescription = findInScopeForUpdate(prescriptionId);
+        // G15 AC-10: no question while a fill is prepared at the counter.
+        if (dispenseRepository.existsByPrescription_IdAndStatus(prescriptionId,
+                com.example.hms.enums.DispenseStatus.PENDING)) {
+            throw new com.example.hms.exception.ConflictException(
+                    com.example.hms.utility.MessageUtil.resolve("dispense.ready.openPreparation"));
+        }
         if (reason == null || reason.isBlank()) {
             throw new BusinessException("A clarification request needs a reason.");
         }

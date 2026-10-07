@@ -51,6 +51,7 @@ class PrescriptionClarificationServiceTest {
     @Mock private RoleValidator roleValidator;
     @Mock private PharmacyServiceSupport support;
     @Mock private PrescriberPharmacyNotifier prescriberNotifier;
+    @Mock private com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
 
     private PrescriptionClarificationService service;
 
@@ -65,7 +66,7 @@ class PrescriptionClarificationServiceTest {
     @BeforeEach
     void setUp() {
         service = new PrescriptionClarificationService(prescriptionRepository, staffRepository,
-                roleValidator, support, prescriberNotifier, CLOCK);
+                roleValidator, support, prescriberNotifier, CLOCK, dispenseRepository);
         hospital = new Hospital();
         hospital.setId(hospitalId);
         prescription = new Prescription();
@@ -112,6 +113,22 @@ class PrescriptionClarificationServiceTest {
             assertThat(description.getValue()).doesNotContain("rénal");
 
             verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.PENDING_CLARIFICATION);
+        }
+
+        @Test
+        @DisplayName("G15 AC-10: no question while a fill is prepared: 409 under the lock, nothing changes")
+        void openPreparationBlocksTheQuestion() {
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(dispenseRepository.existsByPrescription_IdAndStatus(prescriptionId,
+                    com.example.hms.enums.DispenseStatus.PENDING)).thenReturn(true);
+
+            assertThatThrownBy(() -> service.requestClarification(prescriptionId, "Dose?"))
+                    .isInstanceOf(com.example.hms.exception.ConflictException.class);
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+            verify(prescriptionRepository, org.mockito.Mockito.never()).save(any());
+            org.mockito.Mockito.verifyNoInteractions(prescriberNotifier);
         }
 
         @Test

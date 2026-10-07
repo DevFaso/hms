@@ -1,11 +1,13 @@
 package com.example.hms.service.pharmacy;
 
 import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.DispenseStatus;
 import com.example.hms.enums.PharmacyType;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RoutingDecisionStatus;
 import com.example.hms.enums.RoutingType;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.pharmacy.PrescriptionRoutingMapper;
 import com.example.hms.model.Patient;
@@ -26,6 +28,7 @@ import com.example.hms.repository.pharmacy.DispenseRepository;
 import com.example.hms.repository.pharmacy.InventoryItemRepository;
 import com.example.hms.repository.pharmacy.PharmacyRepository;
 import com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository;
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -592,8 +595,15 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         }
         // Locked (G15 rule 1): routing writes the prescription, a prepared
         // fill does not, so without the row lock both could commit.
-        return requirePrescriptionInScope(prescriptionRepository.findByIdForUpdate(prescriptionId)
+        Prescription prescription = requirePrescriptionInScope(prescriptionRepository.findByIdForUpdate(prescriptionId)
                 .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound")), hospitalId);
+        // G15 AC-10: a prepared fill holds stock for this order at the
+        // counter; sending the order elsewhere first would leave a bag nobody
+        // may collect. Hand it over or cancel the preparation first.
+        if (dispenseRepository.existsByPrescription_IdAndStatus(prescription.getId(), DispenseStatus.PENDING)) {
+            throw new ConflictException(MessageUtil.resolve("dispense.ready.openPreparation"));
+        }
+        return prescription;
     }
 
     /**

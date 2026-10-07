@@ -1189,7 +1189,7 @@ After any merge, check the changelog and the i18n files by hand.
     - hand-over vs hand-over;
     - the direct-insert index check;
     - the persisted state after hand-over.
-- [ ] **T10 — Guards while prepared.** AC-10.
+- [x] **T10 — Guards while prepared.** AC-10.
   - The `existsOpenPreparation` 409 guard, placed **after** the locked load from
     T3, in `StockOutRoutingServiceImpl`, `PrescriptionSmsDispatchServiceImpl`
     and `PrescriptionClarificationService`, with their tests.
