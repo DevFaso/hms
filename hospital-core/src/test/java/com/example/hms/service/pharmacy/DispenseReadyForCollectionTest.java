@@ -729,20 +729,42 @@ class DispenseReadyForCollectionTest {
         }
 
         @Test
-        @DisplayName("#825 round 2: a note one character too long is refused up front, naming what fits, before any lock")
-        void noteTooLongIsRefusedBeforeTheLock() {
+        @DisplayName("#825 round 2: a note one character too long is refused before any write, naming what fits")
+        void noteTooLongIsRefusedBeforeAnyWrite() {
             Dispense d = preparedFill();
             d.setNotes("p".repeat(600));
-            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(dispenseRepository.findPrescriptionIdById(dispenseId)).thenReturn(Optional.of(prescriptionId));
-            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(d));
+            stubLocked(d);
 
             assertThatThrownBy(() -> service.handOver(dispenseId,
                     HandOverRequestDTO.builder().notes("h".repeat(400)).build()))
                     .isInstanceOf(BusinessException.class)
                     .hasMessage("The hand-over note is too long for this fill's notes; at most 399 characters fit.");
-            verify(prescriptionRepository, never()).findByIdAndHospitalIdForUpdate(any(), any());
             verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+            verifyNoInteractions(prescriberNotifier);
+        }
+
+        @Test
+        @DisplayName("#825 round 3: a retried hand-over carrying its note answers the same 200; the stored note does not refuse it")
+        void retryWithItsNoteIsAReplay() {
+            Dispense d = preparedFill();
+            stubLocked(d);
+            stubHandOverWrites(d);
+            HandOverRequestDTO body = HandOverRequestDTO.builder().notes("h".repeat(600)).build();
+
+            DispenseResponseDTO first = service.handOver(dispenseId, body);
+            DispenseResponseDTO retry = service.handOver(dispenseId, body);
+
+            assertThat(first.getStatus()).isEqualTo("COMPLETED");
+            assertThat(retry.getStatus()).isEqualTo("COMPLETED");
+            assertThat(retry.getId()).isEqualTo(first.getId());
+            assertThat(d.getNotes()).hasSize(600);
+            // the side effects ran once, for the first call only
+            verify(dispenseRepository, org.mockito.Mockito.times(1))
+                    .completePreparedFill(any(), any(), any(), any(), any(), any());
+            verify(support, org.mockito.Mockito.times(1)).logAudit(eq(AuditEventType.DISPENSE_HANDED_OVER),
+                    anyString(), anyString(), eq("DISPENSE"));
+            verify(support, org.mockito.Mockito.times(1)).notifyDispensed(any(), any(), any());
+            verify(prescriberNotifier, org.mockito.Mockito.times(1)).notifyPrescriber(any(), any());
         }
 
         @Test

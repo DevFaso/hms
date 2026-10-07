@@ -458,10 +458,7 @@ public class DispenseServiceImpl implements DispenseService {
     @Override
     @Transactional
     public DispenseResponseDTO handOver(UUID dispenseId, HandOverRequestDTO request) {
-        // A hand-over is never refused at flush over its note: the note is
-        // checked against what fits, after the scope check and before any
-        // lock or write (#825 code-review round 2).
-        LockedPreparedFill locked = lockPreparedFill(dispenseId, scoped -> requireNotesFit(scoped, request));
+        LockedPreparedFill locked = lockPreparedFill(dispenseId);
         Dispense dispense = locked.dispense();
         Prescription prescription = locked.prescription();
 
@@ -473,6 +470,12 @@ public class DispenseServiceImpl implements DispenseService {
         if (dispense.getStatus() != DispenseStatus.PENDING) {
             throw new ConflictException(MessageUtil.resolve("dispense.ready.notPending"));
         }
+        // A hand-over is never refused at flush over its note: the note is
+        // checked against what fits while the fill is still PENDING, before
+        // any write (#825 round 2). After the replay check (round 3): a
+        // retried hand-over's note is already in the stored notes, and the
+        // retry must answer as the first call did.
+        requireNotesFit(dispense, request);
 
         // AC-6: the order, re-read under the lock, must still be dispensable.
         if (!DISPENSABLE_STATUSES.contains(prescription.getStatus())) {
@@ -525,7 +528,7 @@ public class DispenseServiceImpl implements DispenseService {
         if (reason == null || !reason.isPharmacistChoice()) {
             throw new BusinessException("dispense.ready.cancelReason.invalid");
         }
-        LockedPreparedFill locked = lockPreparedFill(dispenseId, scoped -> { });
+        LockedPreparedFill locked = lockPreparedFill(dispenseId);
         if (locked.dispense().getStatus() != DispenseStatus.PENDING) {
             throw new ConflictException(MessageUtil.resolve("dispense.ready.notPending"));
         }
@@ -540,12 +543,7 @@ public class DispenseServiceImpl implements DispenseService {
      * {@link #enforceHospitalScope}, whose {@code pharmacy.notfound} would
      * tell a foreign id from a missing one.
      */
-    /**
-     * @param beforeLock a check on the in-scope (not yet locked) row, run
-     *                   after the scope check so it can never answer for
-     *                   another hospital's fill
-     */
-    private LockedPreparedFill lockPreparedFill(UUID dispenseId, java.util.function.Consumer<Dispense> beforeLock) {
+    private LockedPreparedFill lockPreparedFill(UUID dispenseId) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
             throw dispenseNotFound();
@@ -559,7 +557,6 @@ public class DispenseServiceImpl implements DispenseService {
                 || !hospitalId.equals(pharmacy.getHospital().getId())) {
             throw dispenseNotFound();
         }
-        beforeLock.accept(dispense);
         Prescription prescription = prescriptionRepository.findByIdAndHospitalIdForUpdate(prescriptionId, hospitalId)
                 .orElseThrow(this::dispenseNotFound);
         // The row as it is now that nobody else can move it.
