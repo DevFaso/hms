@@ -11,6 +11,7 @@ import com.example.hms.enums.RoutingDecisionStatus;
 import com.example.hms.enums.RoutingType;
 import com.example.hms.enums.StockTransactionType;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.pharmacy.DispenseMapper;
 import com.example.hms.model.Patient;
@@ -38,6 +39,7 @@ import com.example.hms.repository.pharmacy.PharmacyRepository;
 import com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository;
 import com.example.hms.repository.pharmacy.StockLotRepository;
 import com.example.hms.repository.pharmacy.StockTransactionRepository;
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -274,12 +276,21 @@ public class DispenseServiceImpl implements DispenseService {
     @Override
     @Transactional
     public DispenseResponseDTO createDispenseTransactionally(DispenseRequestDTO dto) {
+        // AC-15: PENDING (prepared, waiting for collection) and CANCELLED
+        // are reached only through their own actions. A client that posted
+        // PENDING here used to write a row every sum counted as a fill.
+        requireAssertableStatus(dto);
+
         UUID hospitalId = roleValidator.requireActiveHospitalId();
 
         // Validate quantities at the boundary (positive, dispensed <= requested)
         validateQuantities(dto.getQuantityRequested(), dto.getQuantityDispensed());
 
         Prescription prescription = loadAndValidatePrescription(dto, hospitalId);
+        // AC-3: a prepared fill holds stock for this order; a one-step fill
+        // beside it would hand the medication over twice. Checked under the
+        // prescription lock taken just above.
+        requireNoOpenPreparation(prescription);
 
         Patient patient = patientRepository.findById(dto.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", dto.getPatientId()));
@@ -393,6 +404,19 @@ public class DispenseServiceImpl implements DispenseService {
 
         controlledSubstanceGuard.requireDispensable(prescription);
         return prescription;
+    }
+
+    private static void requireAssertableStatus(DispenseRequestDTO dto) {
+        DispenseStatus status = dto.getStatus();
+        if (status == DispenseStatus.PENDING || status == DispenseStatus.CANCELLED) {
+            throw new BusinessException("dispense.status.notAssertable");
+        }
+    }
+
+    private void requireNoOpenPreparation(Prescription prescription) {
+        if (dispenseRepository.existsByPrescription_IdAndStatus(prescription.getId(), DispenseStatus.PENDING)) {
+            throw new ConflictException(MessageUtil.resolve("dispense.ready.openPreparation"));
+        }
     }
 
     private ActorPair resolveActors(DispenseRequestDTO dto) {

@@ -121,6 +121,9 @@ public class DispenseMapper {
             .unit(dto.getUnit())
             .substitution(Boolean.TRUE.equals(dto.getSubstitution()))
             .substitutionReason(dto.getSubstitutionReason())
+            // COMPLETED or PARTIAL only: DispenseServiceImpl refuses PENDING and
+            // CANCELLED before mapping (AC-15), and the ready path sets PENDING
+            // itself after mapping.
             .status(dto.getStatus() != null ? dto.getStatus() : DispenseStatus.COMPLETED)
             .notes(dto.getNotes())
             // Roadmap row 4 / T-68: blank → null so the partial UNIQUE

@@ -1140,7 +1140,7 @@ After any merge, check the changelog and the i18n files by hand.
     `StockOutRoutingServiceImplTest` and `PrescriptionClarificationServiceTest`
     stub `prescriptionRepository.findById`. They must stub `findByIdForUpdate`
     on the write paths; otherwise the push turns CI red.
-- [ ] **T4 — Client status hole and the one-step guard.** AC-15, AC-3.
+- [x] **T4 — Client status hole and the one-step guard.** AC-15, AC-3.
   - `createDispenseTransactionally`; `DispenseMapper.java:124`.
   - Messages `dispense.status.notAssertable` and `dispense.ready.openPreparation`.
 - [ ] **T5 — Patient SMS and after-commit sending.** AC-1, AC-7, AC-13, AC-16.
