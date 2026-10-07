@@ -35,6 +35,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -213,6 +214,97 @@ class PharmacyServiceSupportTest {
                 new org.springframework.context.support.StaticMessageSource(), patientLocaleResolver);
 
         assertThatCode(() -> broken.notifyDispensed(patient(), pharmacy("X"), "Med"))
+                .doesNotThrowAnyException();
+        verify(smsService, never()).send(any(), any());
+    }
+
+    // ---------- ready for collection (G15) ----------
+
+    @Test
+    @DisplayName("G15: ready for collection, in French by default")
+    void readyForCollectionInFrench() {
+        support.notifyReadyForCollection(patient(), pharmacy("Pharmacie Centrale"), "Amoxicilline");
+
+        verify(smsService).send("+22670000000",
+                "Bonjour Awa, votre ordonnance (Amoxicilline) est prête à être retirée à Pharmacie Centrale. Merci.");
+    }
+
+    @Test
+    @DisplayName("G15: ready for collection follows the patient's language (EN, ES)")
+    void readyForCollectionInEnglishAndSpanish() {
+        Patient en = patient();
+        Patient es = patient();
+        es.setPhoneNumberPrimary("+22670000001");
+        when(patientLocaleResolver.resolve(eq(en), any())).thenReturn(Locale.ENGLISH);
+        when(patientLocaleResolver.resolve(eq(es), any())).thenReturn(Locale.forLanguageTag("es"));
+
+        support.notifyReadyForCollection(en, pharmacy("Central"), "Amoxicillin");
+        support.notifyReadyForCollection(es, pharmacy("Central"), "Amoxicilina");
+
+        verify(smsService).send("+22670000000",
+                "Hello Awa, your prescription (Amoxicillin) is ready for collection at Central. Thank you.");
+        verify(smsService).send("+22670000001",
+                "Hola Awa, su receta (Amoxicilina) está lista para recoger en Central. Gracias.");
+    }
+
+    @Test
+    @DisplayName("G15: no longer ready and the reminder render their own keys")
+    void cancelledAndReminderTexts() {
+        support.notifyReadyCancelled(patient(), pharmacy("Pharmacie Centrale"), "Amoxicilline");
+        support.notifyReadyReminder(patient(), pharmacy("Pharmacie Centrale"), "Amoxicilline");
+
+        verify(smsService).send("+22670000000",
+                "Bonjour Awa, votre ordonnance (Amoxicilline) n'est plus prête à être retirée à Pharmacie Centrale. "
+                        + "Veuillez contacter la pharmacie avant de vous déplacer.");
+        verify(smsService).send("+22670000000",
+                "Bonjour Awa, votre ordonnance (Amoxicilline) vous attend toujours à Pharmacie Centrale. Merci.");
+    }
+
+    @Test
+    @DisplayName("G15 rule 12: no first name still sends, with an empty name")
+    void readyWithoutFirstNameStillSends() {
+        Patient p = patient();
+        p.setFirstName(null);
+
+        support.notifyReadyForCollection(p, pharmacy("X"), "Med");
+
+        verify(smsService).send("+22670000000",
+                "Bonjour , votre ordonnance (Med) est prête à être retirée à X. Merci.");
+    }
+
+    @Test
+    @DisplayName("G15 rule 11: inside a transaction nothing is sent until it commits, and a rollback sends nothing")
+    void sendsOnlyAfterCommit() {
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            support.notifyReadyForCollection(patient(), pharmacy("X"), "Med");
+            support.notifyDispensed(patient(), pharmacy("X"), "Med");
+            verifyNoInteractions(smsService);
+
+            var syncs = org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations();
+            assertThat(syncs).hasSize(2);
+            syncs.forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+            verify(smsService, times(2)).send(anyString(), anyString());
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    @DisplayName("G15 rule 11: a provider failure after commit is swallowed")
+    void afterCommitFailureIsSwallowed() {
+        doThrow(new RuntimeException("provider down")).when(smsService).send(anyString(), anyString());
+
+        assertThatCode(() -> support.notifyReadyCancelled(patient(), pharmacy("X"), "Med"))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("G15: a render failure is swallowed and nothing is sent")
+    void readyRenderFailureIsSwallowed() {
+        when(patientLocaleResolver.resolve(any(), any())).thenThrow(new IllegalStateException("db"));
+
+        assertThatCode(() -> support.notifyReadyReminder(patient(), pharmacy("X"), "Med"))
                 .doesNotThrowAnyException();
         verify(smsService, never()).send(any(), any());
     }

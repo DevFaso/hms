@@ -46,6 +46,7 @@ class PatientMedicationServiceImplTest {
     @Mock private RefillRequestRepository refillRequestRepository;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    @Mock private com.example.hms.service.pharmacy.ReadyForCollectionLookup readyForCollection;
 
     @InjectMocks
     private PatientMedicationServiceImpl service;
@@ -340,6 +341,47 @@ class PatientMedicationServiceImplTest {
 
         verify(prescriptionRepository, never()).findByPatient_Id(any(), any());
         org.mockito.Mockito.verifyNoInteractions(reachRecorder);
+    }
+
+    @Test
+    void portalRead_carriesReadinessOnTheRowWithAFillWaiting_andNoneElsewhere() {
+        // G15 AC-12
+        Prescription waiting = new Prescription(); waiting.setId(UUID.randomUUID());
+        waiting.setCreatedAt(LocalDateTime.now()); waiting.setMedicationName("Amlodipine");
+        Prescription other = new Prescription(); other.setId(UUID.randomUUID());
+        other.setCreatedAt(LocalDateTime.now().minusDays(1)); other.setMedicationName("Metformin");
+        LocalDateTime readyAt = LocalDateTime.of(2026, 10, 6, 15, 30);
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(waiting, other)));
+        when(readyForCollection.openPreparations(List.of(waiting, other))).thenReturn(java.util.Map.of(
+            waiting.getId(), new com.example.hms.service.pharmacy.ReadyForCollectionLookup.Readiness(
+                readyAt, "Pharmacie Centrale")));
+
+        List<PatientMedicationResponseDTO> result = service.getMedicationsForPatientPortal(patientId, null, 10);
+
+        assertThat(result.get(0).getReadyForCollectionAt()).isEqualTo(readyAt);
+        assertThat(result.get(0).getReadyForCollectionPharmacyName()).isEqualTo("Pharmacie Centrale");
+        assertThat(result.get(1).getReadyForCollectionAt()).isNull();
+        assertThat(result.get(1).getReadyForCollectionPharmacyName()).isNull();
+    }
+
+    @Test
+    void staffRead_carriesReadinessToo() {
+        // G15 AC-12: the staff medication list shows the same fact.
+        Prescription waiting = new Prescription(); waiting.setId(UUID.randomUUID());
+        waiting.setCreatedAt(LocalDateTime.now()); waiting.setMedicationName("Amlodipine");
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId)))
+            .thenReturn(List.of(waiting));
+        when(readyForCollection.openPreparations(List.of(waiting))).thenReturn(java.util.Map.of(
+            waiting.getId(), new com.example.hms.service.pharmacy.ReadyForCollectionLookup.Readiness(
+                LocalDateTime.of(2026, 10, 6, 15, 30), "Pharmacie Centrale")));
+
+        List<PatientMedicationResponseDTO> result = service.getMedicationsForPatient(patientId, hospitalId, 10);
+
+        assertThat(result.get(0).getReadyForCollectionPharmacyName()).isEqualTo("Pharmacie Centrale");
     }
 
     @Test

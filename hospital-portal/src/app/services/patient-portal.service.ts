@@ -115,6 +115,10 @@ export interface MedicationSummary {
   refillProviderNotes?: string;
   /** True while REQUESTED or PAUSED: a decision is still outstanding. */
   refillRequestOpen?: boolean;
+  /** G15: when a fill was marked ready for collection; absent when nothing is waiting. */
+  readyForCollectionAt?: string;
+  /** G15: the pharmacy where it is waiting. */
+  readyForCollectionPharmacyName?: string;
 }
 
 export type RefillRequestStatus =
@@ -466,6 +470,10 @@ export interface PortalPrescription {
   prescribedBy: string;
   prescribedDate: string;
   status: string;
+  /** G15: when a fill was marked ready for collection; absent when nothing is waiting. */
+  readyForCollectionAt?: string;
+  /** G15: the pharmacy where it is waiting. */
+  readyForCollectionPharmacyName?: string;
 }
 
 /** Raw shape returned by backend PrescriptionResponseDTO. */
@@ -480,6 +488,8 @@ interface PrescriptionApiResponse {
   staffFullName: string;
   status: string;
   createdAt: string;
+  readyForCollectionAt?: string;
+  readyForCollectionPharmacyName?: string;
 }
 
 export interface AfterVisitSummary {
@@ -986,6 +996,8 @@ export class PatientPortalService {
           prescribedBy: p.staffFullName ?? '',
           prescribedDate: p.createdAt ?? '',
           status: p.status ?? '',
+          readyForCollectionAt: p.readyForCollectionAt ?? undefined,
+          readyForCollectionPharmacyName: p.readyForCollectionPharmacyName ?? undefined,
         })),
       ),
       catchError(() => of([])),

@@ -28,6 +28,7 @@ import com.example.hms.repository.pharmacy.StockTransactionRepository;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.NotificationService;
 import com.example.hms.utility.RoleValidator;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -37,6 +38,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.context.MessageSource;
@@ -61,6 +64,8 @@ public class InventoryServiceImpl implements InventoryService {
     private final AuditEventLogService auditEventLogService;
     private final NotificationService notificationService;
     private final MessageSource messageSource;
+    /** Re-reads an entity after an atomic quantity UPDATE (#825 round 5). */
+    private final EntityManager entityManager;
 
     // ── Inventory items ──────────────────────────────────────────────────
 
@@ -119,6 +124,11 @@ public class InventoryServiceImpl implements InventoryService {
         enforceHospitalScope(item.getPharmacy());
         inventoryItemMapper.updateEntity(item, dto);
         InventoryItem saved = inventoryItemRepository.save(item);
+        if (dto.getQuantityOnHand() != null) {
+            // A count correction, applied atomically (#825 round 5).
+            inventoryItemRepository.setOnHand(saved.getId(), dto.getQuantityOnHand(), LocalDateTime.now(ZoneId.systemDefault()));
+            refreshIfManaged(saved);
+        }
         return inventoryItemMapper.toResponseDTO(saved);
     }
 
@@ -147,9 +157,10 @@ public class InventoryServiceImpl implements InventoryService {
         StockLot lot = stockLotMapper.toEntity(dto, item, receivedByUser);
         StockLot savedLot = stockLotRepository.save(lot);
 
-        // Update quantity on hand
-        item.setQuantityOnHand(item.getQuantityOnHand().add(savedLot.getRemainingQuantity()));
-        inventoryItemRepository.save(item);
+        // Update quantity on hand: atomically, so a fill or a return of the
+        // same item at the same moment is not overwritten (#825 round 5).
+        inventoryItemRepository.incrementOnHand(item.getId(), savedLot.getRemainingQuantity(), LocalDateTime.now(ZoneId.systemDefault()));
+        refreshIfManaged(item);
 
         // Record stock transaction
         recordStockTransaction(item, savedLot, StockTransactionType.RECEIPT,
@@ -207,6 +218,11 @@ public class InventoryServiceImpl implements InventoryService {
         enforceHospitalScope(lot.getInventoryItem().getPharmacy());
         stockLotMapper.updateEntity(lot, dto);
         StockLot saved = stockLotRepository.save(lot);
+        if (dto.getRemainingQuantity() != null) {
+            // A count correction, applied atomically (#825 round 5).
+            stockLotRepository.setRemaining(saved.getId(), dto.getRemainingQuantity(), LocalDateTime.now(ZoneId.systemDefault()));
+            refreshIfManaged(saved);
+        }
         return stockLotMapper.toResponseDTO(saved);
     }
 
@@ -338,6 +354,12 @@ public class InventoryServiceImpl implements InventoryService {
                     .build());
         } catch (Exception e) {
             log.warn("Failed to log audit event {}: {}", eventType, e.getMessage());
+        }
+    }
+
+    private void refreshIfManaged(Object entity) {
+        if (entityManager != null && entityManager.contains(entity)) {
+            entityManager.refresh(entity);
         }
     }
 }

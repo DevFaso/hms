@@ -185,6 +185,8 @@ describe('EnumLabelPipe', () => {
     expect(pipe.transform('AWAITING_DISCHARGE', 'admissionStatus')).toBe('Awaiting Discharge');
     expect(pipe.transform('OUT_OF_SERVICE', 'bedStatus')).toBe('Out of Service');
     expect(pipe.transform('PARTIAL', 'dispenseStatus')).toBe('Partial');
+    // G15: PENDING is a fill prepared and waiting for collection.
+    expect(pipe.transform('PENDING', 'dispenseStatus')).toBe('Ready for collection');
     expect(pipe.transform('PENDING_AUTHORIZATION', 'imagingOrderStatus')).toBe(
       'Pending Authorization',
     );

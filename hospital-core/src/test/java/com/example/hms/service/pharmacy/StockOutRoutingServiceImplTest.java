@@ -169,6 +169,37 @@ class StockOutRoutingServiceImplTest {
         assertThat(result.getPartnerPharmacies().get(0).isHasOnFormulary()).isTrue();
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"partner", "print", "backOrder"})
+    @DisplayName("G15 AC-10: while a fill is prepared, routing elsewhere is a 409 and changes nothing")
+    void openPreparationBlocksRouting(String route) {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+        try {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(dispenseRepository.existsByPrescription_IdAndStatus(prescriptionId,
+                    com.example.hms.enums.DispenseStatus.PENDING)).thenReturn(true);
+            com.example.hms.enums.PrescriptionStatus before = prescription.getStatus();
+
+            org.assertj.core.api.ThrowableAssert.ThrowingCallable call = switch (route) {
+                case "partner" -> () -> service.routeToPartner(prescriptionId, RoutingDecisionRequestDTO.builder()
+                        .prescriptionId(prescriptionId).targetPharmacyId(partnerId).build());
+                case "print" -> () -> service.printForPatient(prescriptionId);
+                default -> () -> service.backOrder(prescriptionId, null);
+            };
+            assertThatThrownBy(call)
+                    .isInstanceOf(com.example.hms.exception.ConflictException.class)
+                    .hasMessage("A fill is prepared for this prescription. Hand it over or cancel the preparation first.");
+            assertThat(prescription.getStatus()).isEqualTo(before);
+            verify(prescriptionRepository, never()).save(any());
+            verify(routingDecisionRepository, never()).save(any());
+            verify(prescriptionRepository, never()).findById(any());
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
     @Test
     @DisplayName("routeToPartner should update prescription and persist a routing decision")
     void routeToPartnerShouldUpdatePrescriptionAndPersistDecision() {
@@ -197,7 +228,7 @@ class StockOutRoutingServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
         when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
         when(pharmacyRepository.findById(partnerId)).thenReturn(Optional.of(partnerPharmacy));
         when(routingMapper.toEntity(eq(request), any())).thenReturn(decision);
         when(routingDecisionRepository.save(decision)).thenReturn(decision);
@@ -286,7 +317,7 @@ class StockOutRoutingServiceImplTest {
                 .build();
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
         assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
                 .isInstanceOf(BusinessException.class)
@@ -301,7 +332,7 @@ class StockOutRoutingServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
         when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
         when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(routingMapper.toResponseDTO(any()))
                 .thenReturn(RoutingDecisionResponseDTO.builder().routingType("PRINT").build());
@@ -327,7 +358,7 @@ class StockOutRoutingServiceImplTest {
                 .build();
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
         when(pharmacyRepository.findById(noPhoneId)).thenReturn(Optional.of(noPhone));
 
         assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
@@ -351,7 +382,7 @@ class StockOutRoutingServiceImplTest {
                 .build();
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
         when(pharmacyRepository.findById(partnerId)).thenReturn(Optional.of(partnerPharmacy));
 
         assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
@@ -387,7 +418,7 @@ class StockOutRoutingServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
         when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
         when(pharmacyRepository.findById(communityId)).thenReturn(Optional.of(community));
         when(routingMapper.toEntity(eq(request), any())).thenReturn(decision);
         when(routingDecisionRepository.save(decision)).thenReturn(decision);
@@ -410,7 +441,7 @@ class StockOutRoutingServiceImplTest {
                 .build();
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
         assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
                 .isInstanceOf(BusinessException.class)
@@ -426,7 +457,7 @@ class StockOutRoutingServiceImplTest {
                 .build();
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
         when(pharmacyRepository.findById(dispensaryId)).thenReturn(Optional.of(dispensary));
 
         assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
@@ -450,7 +481,7 @@ class StockOutRoutingServiceImplTest {
                 .build();
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
         when(pharmacyRepository.findById(partnerId)).thenReturn(Optional.of(crossHospitalPartner));
 
         assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
@@ -464,7 +495,7 @@ class StockOutRoutingServiceImplTest {
                 .routingType("PRINT").build();
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
         when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
         when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -487,7 +518,7 @@ class StockOutRoutingServiceImplTest {
                 .routingType("BACKORDER").build();
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
         when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
         when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -534,7 +565,7 @@ class StockOutRoutingServiceImplTest {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
             when(pharmacyRepository.findById(partnerId)).thenReturn(Optional.of(partnerPharmacy));
             when(routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescriptionId))
                     .thenReturn(List.of(backOrder));
@@ -558,7 +589,7 @@ class StockOutRoutingServiceImplTest {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
             when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(routingMapper.toResponseDTO(any()))
                     .thenReturn(RoutingDecisionResponseDTO.builder().routingType("PRINT").build());
@@ -577,7 +608,7 @@ class StockOutRoutingServiceImplTest {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
             when(routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescriptionId))
                     .thenReturn(List.of(backOrder));
             when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -597,7 +628,7 @@ class StockOutRoutingServiceImplTest {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
             when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(routingMapper.toResponseDTO(any()))
                     .thenReturn(RoutingDecisionResponseDTO.builder().routingType("BACKORDER").build());
@@ -623,7 +654,7 @@ class StockOutRoutingServiceImplTest {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
             when(routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescriptionId))
                     .thenReturn(List.of(accepted));
             when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -647,9 +678,9 @@ class StockOutRoutingServiceImplTest {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
             when(dispenseRepository.sumQuantityDispensedForPrescription(
-                    prescriptionId, com.example.hms.enums.DispenseStatus.CANCELLED))
+                    prescriptionId, com.example.hms.repository.pharmacy.DispenseRepository.NOT_A_FILL))
                     .thenReturn(java.math.BigDecimal.valueOf(4));
             when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(routingMapper.toResponseDTO(any()))
@@ -671,7 +702,7 @@ class StockOutRoutingServiceImplTest {
                     .prescriptionId(prescriptionId).targetPharmacyId(partnerId).build();
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
             assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
                     .isInstanceOf(BusinessException.class)
@@ -684,7 +715,7 @@ class StockOutRoutingServiceImplTest {
             prescription.setStatus(PrescriptionStatus.PENDING_CLARIFICATION);
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
             assertThatThrownBy(() -> service.backOrder(prescriptionId, null))
                     .isInstanceOf(BusinessException.class)

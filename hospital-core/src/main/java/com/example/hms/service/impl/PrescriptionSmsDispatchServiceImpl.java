@@ -115,6 +115,8 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
     private final ControllerAuthUtils authUtils;
     private final PrescriberPharmacyNotifier prescriberNotifier;
     private final AuditEventLogService auditEventLogService;
+    /** G15: an open preparation blocks a dispatch (AC-10). */
+    private final com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
 
     /**
      * {@code noRollbackFor}: a provider failure throws
@@ -136,6 +138,13 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
         Prescription rx = prescriptionRepository.findByIdForUpdate(prescriptionId)
                 .orElseThrow(() -> new ResourceNotFoundException("prescription.notFound", prescriptionId));
         requireCallerHospital(auth, rx);
+        // G15 AC-10: not while a fill is prepared at the counter (checked
+        // under the lock above, so a preparation cannot slip in beside it).
+        if (dispenseRepository.existsByPrescription_IdAndStatus(rx.getId(),
+                com.example.hms.enums.DispenseStatus.PENDING)) {
+            throw new com.example.hms.exception.ConflictException(
+                    com.example.hms.utility.MessageUtil.resolve("dispense.ready.openPreparation"));
+        }
         Pharmacy pharmacy = pharmacyRepository.findById(request.getPharmacyId())
                 .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notFound", request.getPharmacyId()));
 

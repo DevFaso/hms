@@ -1206,6 +1206,33 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     expect(component.outstandingQuantity()).toBe(20);
   });
 
+  it('ignores a PENDING (prepared, not collected) fill when computing the remainder', async () => {
+    // G15: a PENDING row is a fill prepared and waiting for collection.
+    // Nothing has been handed over, and the backend leaves it out of the
+    // dispensed total too.
+    const rx = makeRx({ status: 'PARTIALLY_FILLED', quantity: 30, quantityUnit: 'comprimés' });
+    await setup({
+      list: [rx],
+      dispenses: of(
+        page([
+          makeDispense({ id: 'd-1', quantityDispensed: 10, unit: 'comprimés' }),
+          makeDispense({
+            id: 'd-2',
+            quantityDispensed: 20,
+            unit: 'comprimés',
+            status: 'PENDING',
+            dispensedAt: null,
+          }),
+        ]),
+      ),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(component.outstandingQuantity()).toBe(20);
+  });
+
   it('falls back to the routing snapshot when the fills could not be loaded', async () => {
     // "Expected minus nothing" would claim the whole order is outstanding on
     // a prescription that may be nearly complete.
@@ -1634,6 +1661,33 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
             id: 'd-cancelled',
             status: 'CANCELLED',
             dispensedAt: '2026-09-06T08:00:00',
+          }),
+        ]),
+      ),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(component.outstandingQuantity()).toBe(30);
+  });
+
+  it('does not let a PENDING (prepared) fill hide a remainder that is still owed', async () => {
+    // G15: a prepared fill is not a fill until it is handed over, so it
+    // cannot make the routing decision's remainder stale either.
+    const rx = makeRx({ status: 'PENDING_STOCK' });
+    await setup({
+      list: [rx],
+      routings: of(
+        page([makeRouting({ remainingQuantity: 30, decidedAt: '2026-09-04T08:00:00' })]),
+      ),
+      dispenses: of(
+        page([
+          makeDispense({
+            id: 'd-prepared',
+            status: 'PENDING',
+            dispensedAt: null,
+            createdAt: '2026-09-06T08:00:00',
           }),
         ]),
       ),

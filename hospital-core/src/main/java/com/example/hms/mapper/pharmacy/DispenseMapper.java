@@ -59,6 +59,10 @@ public class DispenseMapper {
             .scanVerifiedAt(entity.getScanVerifiedAt())
             .verificationOverrides(parseOverrides(entity.getVerificationOverrides()))
             .verificationOverrideReason(entity.getVerificationOverrideReason())
+            .preparedBy(entity.getPreparedByUser() != null ? entity.getPreparedByUser().getId() : null)
+            .preparedByName(displayNameOf(entity.getPreparedByUser()))
+            .readyAt(entity.getPreparedByUser() != null ? entity.getCreatedAt() : null)
+            .cancelReason(entity.getCancelReason() != null ? entity.getCancelReason().name() : null)
             .createdAt(entity.getCreatedAt())
             .updatedAt(entity.getUpdatedAt())
             .build();
@@ -71,7 +75,7 @@ public class DispenseMapper {
      * name is not worth failing a dispense response over, so a detached proxy
      * answers null there rather than throwing.
      */
-    private static String displayNameOf(User user) {
+    public static String displayNameOf(User user) {
         if (user == null) {
             return null;
         }
@@ -121,6 +125,9 @@ public class DispenseMapper {
             .unit(dto.getUnit())
             .substitution(Boolean.TRUE.equals(dto.getSubstitution()))
             .substitutionReason(dto.getSubstitutionReason())
+            // COMPLETED or PARTIAL only: DispenseServiceImpl refuses PENDING and
+            // CANCELLED before mapping (AC-15), and the ready path sets PENDING
+            // itself after mapping.
             .status(dto.getStatus() != null ? dto.getStatus() : DispenseStatus.COMPLETED)
             .notes(dto.getNotes())
             // Roadmap row 4 / T-68: blank → null so the partial UNIQUE

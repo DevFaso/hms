@@ -5,12 +5,14 @@ import com.example.hms.enums.DispenseCheck;
 import com.example.hms.enums.DispenseStatus;
 import com.example.hms.enums.PharmacyType;
 import com.example.hms.enums.DispenseVerificationStatus;
+import com.example.hms.enums.ReadyCancelReason;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RefillStatus;
 import com.example.hms.enums.RoutingDecisionStatus;
 import com.example.hms.enums.RoutingType;
 import com.example.hms.enums.StockTransactionType;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.pharmacy.DispenseMapper;
 import com.example.hms.model.Patient;
@@ -24,7 +26,9 @@ import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
 import com.example.hms.model.pharmacy.StockLot;
 import com.example.hms.model.pharmacy.StockTransaction;
+import com.example.hms.payload.dto.pharmacy.CancelReadyRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseRequestDTO;
+import com.example.hms.payload.dto.pharmacy.HandOverRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseResponseDTO;
 import com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO;
 import com.example.hms.repository.PatientRepository;
@@ -38,10 +42,13 @@ import com.example.hms.repository.pharmacy.PharmacyRepository;
 import com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository;
 import com.example.hms.repository.pharmacy.StockLotRepository;
 import com.example.hms.repository.pharmacy.StockTransactionRepository;
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.RoleValidator;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -58,6 +65,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -89,6 +97,10 @@ public class DispenseServiceImpl implements DispenseService {
     private final ControlledSubstanceGuard controlledSubstanceGuard;
     private final PrescriberPharmacyNotifier prescriberNotifier;
     private final PrescriptionRoutingDecisionRepository routingDecisionRepository;
+    /** G15: the one owner of cancelling a prepared fill (rule 8). */
+    private final PreparedFillVoider preparedFillVoider;
+    /** G15 B2/A1: resyncs the one row a conditional bulk UPDATE changed. */
+    private final EntityManager entityManager;
 
     /**
      * Roadmap row 4 / T-68 — self-proxy used by {@link #createDispense} so the
@@ -115,7 +127,22 @@ public class DispenseServiceImpl implements DispenseService {
     @SuppressWarnings("java:S6813")
     private DispenseServiceImpl self;
 
+    /**
+     * G15: {@code pharmacy.ready-for-collection.enabled}. Gates only
+     * {@code POST /ready}; open preparations stay finishable when it is off.
+     * Initialised here so a pure-unit test (no Spring) sees the production
+     * default.
+     */
+    @Value("${pharmacy.ready-for-collection.enabled:true}")
+    private boolean readyForCollectionEnabled = true;
+
+    /** G15: after this long a prepared fill is flagged READY_UNCOLLECTED on the queue. */
+    @Value("${pharmacy.ready-for-collection.uncollected-after:P7D}")
+    private java.time.Duration uncollectedAfter = java.time.Duration.ofDays(7);
+
     private static final String AUDIT_ENTITY = "DISPENSE";
+    private static final String DISPENSE_NOT_FOUND = "dispense.notfound";
+    private static final String READY_NOT_PENDING = "dispense.ready.notPending";
 
     /**
      * What the pharmacist may hand medication over against, and therefore
@@ -184,6 +211,14 @@ public class DispenseServiceImpl implements DispenseService {
     static final String ATTENTION_BACK_ORDER_OUTSTANDING = "BACK_ORDER_OUTSTANDING";
 
     /**
+     * G15: a prepared fill has waited longer than
+     * {@code pharmacy.ready-for-collection.uncollected-after}. Nothing is
+     * cancelled automatically (user decision 2); the cue asks a person to
+     * call the patient or cancel the preparation.
+     */
+    static final String ATTENTION_READY_UNCOLLECTED = "READY_UNCOLLECTED";
+
+    /**
      * The fill states a cancellation may recompute from. Every other status
      * belongs to a routing or clarification workflow that owns the exit.
      */
@@ -194,75 +229,113 @@ public class DispenseServiceImpl implements DispenseService {
     );
 
     /**
-     * Roadmap row 4 / T-68 — orchestrator that enforces idempotent replay
-     * semantics around the transactional create body in
-     * {@link #createDispenseTransactionally(DispenseRequestDTO)}.
-     *
-     * <p>Three paths:
-     * <ol>
-     *   <li><b>Pre-check fast path</b> — if the supplied idempotency key is
-     *       already on file, return the existing DTO without touching the
-     *       create transaction at all (no stock decrement, no audit, no SMS).</li>
-     *   <li><b>Normal create</b> — delegate through the AOP proxy to the
-     *       transactional inner method.</li>
-     *   <li><b>Race recovery</b> — if two concurrent POSTs both pass the
-     *       pre-check (each sees an empty lookup) and the second hits the
-     *       V94 partial UNIQUE index ({@code uq_disp_idempotency_key}),
-     *       Spring translates the constraint violation to
-     *       {@link DataIntegrityViolationException}; the @Transactional
-     *       proxy rolls back our stock decrement and bubbles the exception
-     *       here. We re-look up by key — guaranteed to find the winning
-     *       row at this point — and return that DTO. Copilot review on
-     *       PR #287 caught the original race window.</li>
-     * </ol>
-     *
-     * <p>Intentionally NOT @Transactional: the recovery {@code findByIdempotencyKey}
-     * must execute in its own (auto-commit) read so it sees the winning
-     * insert that committed in another transaction. Putting @Transactional
-     * on this wrapper would put the lookup in the same rolled-back tx and
-     * defeat the purpose.
+     * Roadmap row 4 / T-68 — the one-step fill, with idempotent replay and
+     * race recovery around {@link #createDispenseTransactionally}; see
+     * {@code withIdempotency} for the three paths.
      */
     @Override
     public DispenseResponseDTO createDispense(DispenseRequestDTO dto) {
-        // Pre-check fast path — short-circuit a replayed POST from the
-        // offline pharmacy queue BEFORE any side-effects fire. A blank/null
-        // key falls through to the normal create path.
+        DispenseService delegate = self != null ? self : this;
+        return withIdempotency(dto, delegate::createDispenseTransactionally, null);
+    }
+
+    /**
+     * G15: prepare a fill and tell the patient it is ready for collection.
+     * Same idempotent replay and race recovery as {@link #createDispense};
+     * a lost race on the one-open-preparation index
+     * ({@code uq_disp_one_pending_per_rx}) answers 409, not 400.
+     */
+    @Override
+    public DispenseResponseDTO markReadyForCollection(DispenseRequestDTO dto) {
+        requireReadyForCollectionEnabled();
+        DispenseService delegate = self != null ? self : this;
+        return withIdempotency(dto, delegate::markReadyForCollectionTransactionally, dto.getPrescriptionId());
+    }
+
+    @Override
+    public boolean isReadyForCollectionEnabled() {
+        return readyForCollectionEnabled;
+    }
+
+    /**
+     * Roadmap row 4 / T-68 — the three paths shared by the one-step fill and
+     * the ready path.
+     *
+     * <ol>
+     *   <li><b>Pre-check fast path</b>: if the supplied idempotency key is
+     *       already on file, return the existing DTO without touching the
+     *       create transaction at all (no stock decrement, no audit, no SMS).</li>
+     *   <li><b>Normal create</b>: delegate through the AOP proxy to the
+     *       transactional body.</li>
+     *   <li><b>Race recovery</b>: if two concurrent POSTs both pass the
+     *       pre-check and the second hits the V94 partial UNIQUE index
+     *       ({@code uq_disp_idempotency_key}), the proxy rolls our stock
+     *       decrement back and the {@link DataIntegrityViolationException}
+     *       lands here; the winning row is now committed and is returned.
+     *       Copilot review on PR #287 caught the original race window.</li>
+     * </ol>
+     *
+     * <p>Intentionally NOT @Transactional: the recovery lookups must run in
+     * their own (auto-commit) reads so they see the winner's commit.
+     *
+     * @param preparingFor the prescription id on the ready path, whose lost
+     *                     race on {@code uq_disp_one_pending_per_rx} is a 409;
+     *                     null on the one-step path
+     */
+    private DispenseResponseDTO withIdempotency(DispenseRequestDTO dto,
+                                                Function<DispenseRequestDTO, DispenseResponseDTO> body,
+                                                UUID preparingFor) {
+        // Pre-check fast path: a replayed POST from the offline pharmacy
+        // queue returns BEFORE any side-effects fire. A blank/null key falls
+        // through to the normal path.
         String idempotencyKey = normalize(dto.getIdempotencyKey());
         if (idempotencyKey != null) {
             var replay = dispenseRepository.findByIdempotencyKey(idempotencyKey);
             if (replay.isPresent()) {
+                requireReplayInCallersHospital(replay.get());
                 log.info("[DISPENSE] idempotency replay hit — returning existing dispense id={} for key={}",
                         replay.get().getId(), idempotencyKey);
                 return dispenseMapper.toResponseDTO(replay.get());
             }
         }
 
-        // self may be null in pure-unit tests (no Spring container). Direct
-        // call in that case — correctness equivalent because tests never
-        // exercise the AOP transaction or the unique-index race.
-        DispenseService delegate = self != null ? self : this;
+        // The body is the proxy's method when Spring wired self, this
+        // instance's own in a pure-unit test (no container), which is correct
+        // because those tests never exercise the AOP transaction.
         try {
-            return delegate.createDispenseTransactionally(dto);
+            return body.apply(dto);
         } catch (DataIntegrityViolationException ex) {
-            if (idempotencyKey == null) {
-                // Some other unique-constraint hit (not idempotency); not
-                // ours to recover from.
-                throw ex;
+            if (idempotencyKey != null) {
+                var winner = dispenseRepository.findByIdempotencyKey(idempotencyKey);
+                if (winner.isPresent()) {
+                    requireReplayInCallersHospital(winner.get());
+                    log.info("[DISPENSE] idempotency race resolved — returning winner dispense id={} for key={}",
+                            winner.get().getId(), idempotencyKey);
+                    return dispenseMapper.toResponseDTO(winner.get());
+                }
             }
-            // Race recovery — the @Transactional proxy already rolled back
-            // our stock decrement; the winning insert from the racing tx is
-            // now committed and visible.
-            var winner = dispenseRepository.findByIdempotencyKey(idempotencyKey);
-            if (winner.isPresent()) {
-                log.info("[DISPENSE] idempotency race resolved — returning winner dispense id={} for key={}",
-                        winner.get().getId(), idempotencyKey);
-                return dispenseMapper.toResponseDTO(winner.get());
+            // The rule-1 lock serialises two preparations, so this is the
+            // index catching what the lock did not: same answer as the
+            // locked re-check.
+            if (preparingFor != null
+                    && dispenseRepository.existsByPrescription_IdAndStatus(preparingFor, DispenseStatus.PENDING)) {
+                throw new ConflictException(MessageUtil.resolve("dispense.ready.alreadyOpen"));
             }
-            // Constraint violation but no winning row — should not happen
-            // (the V94 index is the only constraint that could fire on this
-            // path) but be defensive: surface the original exception so the
-            // caller sees the real failure rather than a silent success.
             throw ex;
+        }
+    }
+
+    /**
+     * An idempotency key is a client value: a replay answers only with a
+     * dispense of the caller's own hospital, else exactly as a missing one
+     * (#825 security finding 4). Read as a scalar: the replay path runs
+     * outside any transaction, where the LAZY pharmacy cannot load.
+     */
+    private void requireReplayInCallersHospital(Dispense replay) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        UUID replayHospitalId = dispenseRepository.findHospitalIdById(replay.getId()).orElse(null);
+        if (hospitalId == null || !hospitalId.equals(replayHospitalId)) {
+            throw new ResourceNotFoundException(DISPENSE_NOT_FOUND);
         }
     }
 
@@ -274,12 +347,338 @@ public class DispenseServiceImpl implements DispenseService {
     @Override
     @Transactional
     public DispenseResponseDTO createDispenseTransactionally(DispenseRequestDTO dto) {
+        // AC-15: PENDING (prepared, waiting for collection) and CANCELLED
+        // are reached only through their own actions. A client that posted
+        // PENDING here used to write a row every sum counted as a fill.
+        requireAssertableStatus(dto);
+
+        // AC-3: a prepared fill holds stock for this order; a one-step fill
+        // beside it would hand the medication over twice.
+        FillContext fill = validateFill(dto, "dispense.ready.openPreparation");
+        Prescription prescription = fill.prescription();
+        Patient patient = fill.patient();
+        Pharmacy pharmacy = fill.pharmacy();
+
+        consumeStockLot(dto, fill.stockLot(), prescription, fill.actors().dispensedBy());
+
+        // Build and save the dispense record
+        Dispense dispense = dispenseMapper.toEntity(dto, fill.mapperContext());
+        dispense.setDispensedAt(LocalDateTime.now(clock));
+        recordVerification(dispense, dto, fill.verification());
+        Dispense saved = dispenseRepository.save(dispense);
+
+        // Update prescription status based on cumulative dispensed quantity (supports partial fills)
+        updatePrescriptionStatusFromHistory(prescription, true);
+        // A partial fill against a back order leaves the remainder unavailable,
+        // so the BACKORDER decision stays PENDING until the order is fully
+        // filled — whether that happens in one dispense or over several
+        // (PENDING_STOCK → PARTIALLY_FILLED → DISPENSED).
+        if (prescription.getStatus() == PrescriptionStatus.DISPENSED) {
+            closeOutBackOrder(prescription);
+        }
+
+        // T-38 / G15: the dispensed receipt SMS — only when the Rx is now
+        // fully DISPENSED, and only once the fill has committed.
+        if (prescription.getStatus() == PrescriptionStatus.DISPENSED) {
+            support.notifyDispensed(patient, pharmacy, dto.getMedicationName());
+        }
+
+        logAudit(AuditEventType.DISPENSE_CREATED,
+                "Dispensed " + dto.getQuantityDispensed() + " " + (dto.getUnit() != null ? dto.getUnit() : "units")
+                        + " of " + dto.getMedicationName() + " to patient " + patient.getId(),
+                saved.getId().toString());
+
+        // P-04: emit a distinct audit event when the dispense is a substitution so that
+        // formulary substitutions are queryable independently of regular dispenses.
+        if (Boolean.TRUE.equals(dto.getSubstitution())) {
+            String reason = dto.getSubstitutionReason() != null ? dto.getSubstitutionReason() : "(no reason provided)";
+            logAudit(AuditEventType.DISPENSE_SUBSTITUTED,
+                    "Substituted dispense for " + dto.getMedicationName() + " — reason: " + reason,
+                    saved.getId().toString());
+        }
+
+        return dispenseMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * G15 AC-1: the transactional body of {@link #markReadyForCollection}.
+     * Every check of the one-step fill runs (status, lock, tenant, CDS,
+     * controlled substance, product and expiry verification), the stock comes
+     * off the shelf, and a PENDING row is written. The prescription status
+     * does not move and the prescriber is not told: that happens at
+     * hand-over. The patient is texted after commit.
+     */
+    @Override
+    @Transactional
+    public DispenseResponseDTO markReadyForCollectionTransactionally(DispenseRequestDTO dto) {
+        requireReadyForCollectionEnabled();
+        if (dto.getStatus() != null) {
+            throw new BusinessException("dispense.status.notAssertable");
+        }
+        // Nobody stands at the counter yet: the wristband is checked at hand-over.
+        dto.setPatientScanValue(null);
+
+        FillContext fill = validateFill(dto, "dispense.ready.alreadyOpen");
+        User preparer = fill.actors().dispensedBy();
+
+        consumeStockLot(dto, fill.stockLot(), fill.prescription(), preparer);
+
+        Dispense dispense = dispenseMapper.toEntity(dto, fill.mapperContext());
+        dispense.setStatus(DispenseStatus.PENDING);
+        dispense.setDispensedAt(null);
+        // dispensed_by is NOT NULL: the preparer, until hand-over overwrites it.
+        dispense.setPreparedByUser(preparer);
+        recordVerification(dispense, dto, fill.verification());
+        Dispense saved = dispenseRepository.save(dispense);
+
+        UUID prescriptionId = fill.prescription().getId();
+        logAudit(AuditEventType.DISPENSE_READY,
+                "Prepared " + dto.getQuantityDispensed() + " " + (dto.getUnit() != null ? dto.getUnit() : "units")
+                        + " for collection, prescription " + prescriptionId,
+                saved.getId().toString());
+        if (Boolean.TRUE.equals(dto.getSubstitution())) {
+            logAudit(AuditEventType.DISPENSE_SUBSTITUTED,
+                    "Substitution recorded on a prepared fill, prescription " + prescriptionId,
+                    saved.getId().toString());
+        }
+
+        support.notifyReadyForCollection(fill.patient(), fill.pharmacy(), dto.getMedicationName());
+        return dispenseMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * G15 AC-4 to AC-6: the patient collects a prepared fill.
+     *
+     * <p>Order of work, all of it under the prescription row lock (rule 1):
+     * scope (an identical 404 for every failure), the lock, then the replay
+     * rule, the locked re-check of the order, EXPIRY and PATIENT (never
+     * overridable; DRUG was settled at ready), one conditional UPDATE and a
+     * resync of that one row, and finally what a one-step fill does after its
+     * insert: the status recompute and the prescriber's notice, the back-order
+     * and refill close-outs, and the receipt SMS after commit.
+     */
+    @Override
+    @Transactional
+    public DispenseResponseDTO handOver(UUID dispenseId, HandOverRequestDTO request) {
+        LockedPreparedFill locked = lockPreparedFill(dispenseId);
+        Dispense dispense = locked.dispense();
+        Prescription prescription = locked.prescription();
+
+        // AC-5: a repeated hand-over of a fill that was prepared answers as
+        // the first one did, and nothing happens a second time.
+        if (isHandOverReplay(dispense)) {
+            return dispenseMapper.toResponseDTO(dispense);
+        }
+        if (dispense.getStatus() != DispenseStatus.PENDING) {
+            throw new ConflictException(MessageUtil.resolve(READY_NOT_PENDING));
+        }
+        // A hand-over is never refused at flush over its note: the note is
+        // checked against what fits while the fill is still PENDING, before
+        // any write (#825 round 2). After the replay check (round 3): a
+        // retried hand-over's note is already in the stored notes, and the
+        // retry must answer as the first call did.
+        requireNotesFit(dispense, request);
+
+        // AC-6: the order, re-read under the lock, must still be dispensable.
+        if (!DISPENSABLE_STATUSES.contains(prescription.getStatus())) {
+            throw new ConflictException(MessageUtil.resolve("dispense.ready.prescriptionNotDispensable"));
+        }
+        controlledSubstanceGuard.requireDispensable(prescription);
+
+        String patientScan = trimToNull(request != null ? request.getPatientScanValue() : null);
+        requireHandOverChecksPass(dispenseVerificationService.verify(
+                prescription, dispense.getStockLot(), patientScan, null));
+
+        LocalDateTime now = LocalDateTime.now(clock);
+        User handedOverBy = resolveCurrentUser();
+        int changed = dispenseRepository.completePreparedFill(dispense.getId(), now, handedOverBy,
+                mergedVerificationStatus(dispense, patientScan),
+                patientScan != null ? patientScan : dispense.getPatientScanValue(),
+                patientScan != null ? now : dispense.getScanVerifiedAt());
+        // B2: nothing touches the managed copy between the UPDATE and this
+        // resync, or a flush would write its stale PENDING back.
+        dispense = resync(dispense);
+        if (changed == 0) {
+            if (isHandOverReplay(dispense)) {
+                return dispenseMapper.toResponseDTO(dispense);
+            }
+            throw new ConflictException(MessageUtil.resolve(READY_NOT_PENDING));
+        }
+        appendNotes(dispense, request);
+
+        updatePrescriptionStatusFromHistory(prescription, true);
+        if (prescription.getStatus() == PrescriptionStatus.DISPENSED) {
+            closeOutBackOrder(prescription);
+            support.notifyDispensed(dispense.getPatient(), dispense.getPharmacy(), dispense.getMedicationName());
+        }
+
+        logAudit(AuditEventType.DISPENSE_HANDED_OVER,
+                "Prepared fill handed over, prescription " + prescription.getId(),
+                dispense.getId().toString());
+        return dispenseMapper.toResponseDTO(dispense);
+    }
+
+    /**
+     * G15 AC-7: the pharmacist cancels a preparation. Scope (identical 404),
+     * the prescription lock, then {@link PreparedFillVoider}, the one owner of
+     * the conditional cancel, the stock return, the audit and the SMS.
+     */
+    @Override
+    @Transactional
+    public DispenseResponseDTO cancelReady(UUID dispenseId, CancelReadyRequestDTO request) {
+        ReadyCancelReason reason = request != null ? request.getReason() : null;
+        if (reason == null || !reason.isPharmacistChoice()) {
+            throw new BusinessException("dispense.ready.cancelReason.invalid");
+        }
+        LockedPreparedFill locked = lockPreparedFill(dispenseId);
+        if (locked.dispense().getStatus() != DispenseStatus.PENDING) {
+            throw new ConflictException(MessageUtil.resolve(READY_NOT_PENDING));
+        }
+        return dispenseMapper.toResponseDTO(preparedFillVoider.cancel(locked.dispense(), reason));
+    }
+
+    /**
+     * Scope, then the lock (A8, rule 1). Every failure to find or scope the
+     * row is the SAME 404 {@code dispense.notfound}: an unknown id, a
+     * dispense at another hospital's pharmacy, a pharmacy with no hospital,
+     * and a caller with no hospital scope. Deliberately not
+     * {@link #enforceHospitalScope}, whose {@code pharmacy.notfound} would
+     * tell a foreign id from a missing one.
+     */
+    private LockedPreparedFill lockPreparedFill(UUID dispenseId) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null) {
+            throw dispenseNotFound();
+        }
+        UUID prescriptionId = dispenseRepository.findPrescriptionIdById(dispenseId)
+                .orElseThrow(this::dispenseNotFound);
+        Dispense dispense = dispenseRepository.findById(dispenseId)
+                .orElseThrow(this::dispenseNotFound);
+        Pharmacy pharmacy = dispense.getPharmacy();
+        if (pharmacy == null || pharmacy.getHospital() == null
+                || !hospitalId.equals(pharmacy.getHospital().getId())) {
+            throw dispenseNotFound();
+        }
+        Prescription prescription = prescriptionRepository.findByIdAndHospitalIdForUpdate(prescriptionId, hospitalId)
+                .orElseThrow(this::dispenseNotFound);
+        // The row as it is now that nobody else can move it.
+        return new LockedPreparedFill(resync(dispense), prescription);
+    }
+
+    private record LockedPreparedFill(Dispense dispense, Prescription prescription) {}
+
+    private ResourceNotFoundException dispenseNotFound() {
+        return new ResourceNotFoundException(DISPENSE_NOT_FOUND);
+    }
+
+    /** COMPLETED and prepared: this fill was already handed over. */
+    private static boolean isHandOverReplay(Dispense dispense) {
+        return dispense.getStatus() == DispenseStatus.COMPLETED && dispense.getPreparedByUser() != null;
+    }
+
+    /**
+     * Rule 5: only EXPIRY and PATIENT are evaluated at hand-over, and either
+     * failure refuses it. Neither is overridable: there is no case for
+     * handing out expired stock, or for handing it to somebody else.
+     */
+    private static void requireHandOverChecksPass(DispenseVerificationResult verification) {
+        String reasons = verification.getFailureReasons().entrySet().stream()
+                .filter(e -> e.getKey() == DispenseCheck.EXPIRY || e.getKey() == DispenseCheck.PATIENT)
+                .map(Map.Entry::getValue)
+                .collect(Collectors.joining("; "));
+        if (!reasons.isEmpty()) {
+            throw new BusinessException("Hand-over refused — " + reasons);
+        }
+    }
+
+    /**
+     * Rule 5: OVERRIDDEN stays OVERRIDDEN (its override reason is kept, which
+     * V138's ck_dispense_override_reason requires); otherwise VERIFIED when a
+     * scan was supplied at either step, else the honest NOT_VERIFIED.
+     */
+    private static DispenseVerificationStatus mergedVerificationStatus(Dispense dispense, String patientScan) {
+        if (dispense.getVerificationStatus() == DispenseVerificationStatus.OVERRIDDEN) {
+            return DispenseVerificationStatus.OVERRIDDEN;
+        }
+        boolean scanned = patientScan != null
+                || dispense.getProductScanValue() != null
+                || dispense.getPatientScanValue() != null;
+        return scanned ? DispenseVerificationStatus.VERIFIED : DispenseVerificationStatus.NOT_VERIFIED;
+    }
+
+    /** {@code Dispense.notes} holds at most this many characters (its @Size). */
+    static final int NOTES_MAX = 1000;
+
+    /**
+     * The hand-over note is appended to the preparation's note, and the two
+     * together must fit {@link #NOTES_MAX}: refused up front with what still
+     * fits, never at flush after the patient is already at the counter.
+     */
+    private static void requireNotesFit(Dispense dispense, HandOverRequestDTO request) {
+        String notes = request != null ? trimToNull(request.getNotes()) : null;
+        if (notes == null) {
+            return;
+        }
+        String existing = trimToNull(dispense.getNotes());
+        int remaining = existing == null ? NOTES_MAX : NOTES_MAX - existing.length() - 1;
+        if (notes.length() > remaining) {
+            throw new BusinessException("dispense.handOver.notesTooLong", String.valueOf(Math.max(remaining, 0)));
+        }
+    }
+
+    /** After the resync, so an ordinary dirty-checked update (through the encrypting converter). */
+    private static void appendNotes(Dispense dispense, HandOverRequestDTO request) {
+        String notes = request != null ? trimToNull(request.getNotes()) : null;
+        if (notes == null) {
+            return;
+        }
+        String existing = trimToNull(dispense.getNotes());
+        dispense.setNotes(existing == null ? notes : existing + "\n" + notes);
+    }
+
+    /** Re-reads one entity after a bulk UPDATE changed its row; nothing else is touched. */
+    private void refreshIfManaged(Object entity) {
+        if (entityManager != null && entityManager.contains(entity)) {
+            entityManager.refresh(entity);
+        }
+    }
+
+    /**
+     * The row as a bulk update left it: a refresh of the managed copy, or a
+     * fresh read. Only this row; the persistence context is not cleared.
+     */
+    private Dispense resync(Dispense dispense) {
+        if (entityManager != null && entityManager.contains(dispense)) {
+            entityManager.refresh(dispense);
+            return dispense;
+        }
+        return dispenseRepository.findById(dispense.getId()).orElse(dispense);
+    }
+
+    private void requireReadyForCollectionEnabled() {
+        if (!readyForCollectionEnabled) {
+            throw new ResourceNotFoundException("dispense.ready.disabled");
+        }
+    }
+
+    /**
+     * Everything the one-step fill and the ready path check before any stock
+     * moves: quantities, the locked prescription (rule 1) and its open
+     * preparation, patient, pharmacy scope and type, CDS, actors, catalogue
+     * item, the lot, and the counter-side verification.
+     *
+     * @param openPreparationKey the 409 message when the prescription already
+     *                           has an open preparation
+     */
+    private FillContext validateFill(DispenseRequestDTO dto, String openPreparationKey) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
 
         // Validate quantities at the boundary (positive, dispensed <= requested)
         validateQuantities(dto.getQuantityRequested(), dto.getQuantityDispensed());
 
         Prescription prescription = loadAndValidatePrescription(dto, hospitalId);
+        // Checked under the prescription lock taken just above.
+        requireNoOpenPreparation(prescription, openPreparationKey);
 
         Patient patient = patientRepository.findById(dto.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", dto.getPatientId()));
@@ -317,47 +716,17 @@ public class DispenseServiceImpl implements DispenseService {
                         dto.getPatientScanValue(), dto.getProductScanValue());
         applyVerificationOutcome(dto, verification);
 
-        consumeStockLot(dto, stockLot, prescription, actors.dispensedBy());
+        return new FillContext(prescription, patient, pharmacy, actors, catalogItem, stockLot, verification);
+    }
 
-        // Build and save the dispense record
-        DispenseMapper.DispenseContext ctx = new DispenseMapper.DispenseContext(
-                prescription, patient, pharmacy, stockLot,
-                actors.dispensedBy(), actors.verifiedBy(), catalogItem);
-        Dispense dispense = dispenseMapper.toEntity(dto, ctx);
-        dispense.setDispensedAt(LocalDateTime.now(clock));
-        recordVerification(dispense, dto, verification);
-        Dispense saved = dispenseRepository.save(dispense);
-
-        // Update prescription status based on cumulative dispensed quantity (supports partial fills)
-        updatePrescriptionStatusFromHistory(prescription, true);
-        // A partial fill against a back order leaves the remainder unavailable,
-        // so the BACKORDER decision stays PENDING until the order is fully
-        // filled — whether that happens in one dispense or over several
-        // (PENDING_STOCK → PARTIALLY_FILLED → DISPENSED).
-        if (prescription.getStatus() == PrescriptionStatus.DISPENSED) {
-            closeOutBackOrder(prescription);
+    /** What {@link #validateFill} established, for the half that writes. */
+    private record FillContext(Prescription prescription, Patient patient, Pharmacy pharmacy,
+                               ActorPair actors, MedicationCatalogItem catalogItem, StockLot stockLot,
+                               DispenseVerificationResult verification) {
+        DispenseMapper.DispenseContext mapperContext() {
+            return new DispenseMapper.DispenseContext(prescription, patient, pharmacy, stockLot,
+                    actors.dispensedBy(), actors.verifiedBy(), catalogItem);
         }
-
-        // T-38 / G15: the dispensed receipt SMS — only when the Rx is now fully DISPENSED
-        if (prescription.getStatus() == PrescriptionStatus.DISPENSED) {
-            support.notifyDispensed(patient, pharmacy, dto.getMedicationName());
-        }
-
-        logAudit(AuditEventType.DISPENSE_CREATED,
-                "Dispensed " + dto.getQuantityDispensed() + " " + (dto.getUnit() != null ? dto.getUnit() : "units")
-                        + " of " + dto.getMedicationName() + " to patient " + patient.getId(),
-                saved.getId().toString());
-
-        // P-04: emit a distinct audit event when the dispense is a substitution so that
-        // formulary substitutions are queryable independently of regular dispenses.
-        if (Boolean.TRUE.equals(dto.getSubstitution())) {
-            String reason = dto.getSubstitutionReason() != null ? dto.getSubstitutionReason() : "(no reason provided)";
-            logAudit(AuditEventType.DISPENSE_SUBSTITUTED,
-                    "Substituted dispense for " + dto.getMedicationName() + " — reason: " + reason,
-                    saved.getId().toString());
-        }
-
-        return dispenseMapper.toResponseDTO(saved);
     }
 
     private Prescription loadAndValidatePrescription(DispenseRequestDTO dto, UUID hospitalId) {
@@ -368,7 +737,14 @@ public class DispenseServiceImpl implements DispenseService {
         if (hospitalId == null) {
             throw new ResourceNotFoundException("prescription.notfound");
         }
-        Prescription prescription = prescriptionRepository.findById(dto.getPrescriptionId())
+        // G15 rule 1: the row lock serialises a fill against a preparation,
+        // a withdrawal or a routing write of the same order, so the checks
+        // below (and the open-preparation check) are made on a state nobody
+        // else can change before this transaction commits.
+        // The hospital is in the locking query (#825 security finding 3):
+        // another tenant's prescription is never locked, only refused.
+        Prescription prescription = prescriptionRepository
+                .findByIdAndHospitalIdForUpdate(dto.getPrescriptionId(), hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
 
         // Tenant isolation: prescription must belong to the active hospital
@@ -389,6 +765,19 @@ public class DispenseServiceImpl implements DispenseService {
 
         controlledSubstanceGuard.requireDispensable(prescription);
         return prescription;
+    }
+
+    private static void requireAssertableStatus(DispenseRequestDTO dto) {
+        DispenseStatus status = dto.getStatus();
+        if (status == DispenseStatus.PENDING || status == DispenseStatus.CANCELLED) {
+            throw new BusinessException("dispense.status.notAssertable");
+        }
+    }
+
+    private void requireNoOpenPreparation(Prescription prescription, String messageKey) {
+        if (dispenseRepository.existsByPrescription_IdAndStatus(prescription.getId(), DispenseStatus.PENDING)) {
+            throw new ConflictException(MessageUtil.resolve(messageKey));
+        }
     }
 
     private ActorPair resolveActors(DispenseRequestDTO dto) {
@@ -458,19 +847,22 @@ public class DispenseServiceImpl implements DispenseService {
         }
         InventoryItem inventoryItem = stockLot.getInventoryItem();
         BigDecimal requested = dto.getQuantityDispensed();
-        if (stockLot.getRemainingQuantity().compareTo(requested) < 0) {
-            throw new BusinessException("Insufficient lot stock: "
-                    + stockLot.getRemainingQuantity() + " remaining, requested " + requested);
+        // Atomic in the database (#825 security finding 1, round 5): every
+        // stock writer (fills, returns, receipts, adjustments, transfers)
+        // moves quantities this way, lot first then item, so none can
+        // overwrite another. 0 rows = not enough left at this instant.
+        LocalDateTime now = LocalDateTime.now(clock);
+        if (stockLotRepository.decrementRemaining(stockLot.getId(), requested, now) == 0) {
+            // No figure for what remains: the managed copy was read before the
+            // atomic UPDATE and can be stale under concurrency.
+            throw new BusinessException("Insufficient lot stock: the lot does not hold the requested "
+                    + requested);
         }
-
-        stockLot.setRemainingQuantity(stockLot.getRemainingQuantity().subtract(requested));
-        stockLotRepository.save(stockLot);
-
-        if (inventoryItem.getQuantityOnHand().compareTo(requested) < 0) {
+        if (inventoryItemRepository.decrementOnHand(inventoryItem.getId(), requested, now) == 0) {
             throw new BusinessException("Insufficient inventory stock");
         }
-        inventoryItem.setQuantityOnHand(inventoryItem.getQuantityOnHand().subtract(requested));
-        inventoryItemRepository.save(inventoryItem);
+        refreshIfManaged(stockLot);
+        refreshIfManaged(inventoryItem);
 
         StockTransaction tx = StockTransaction.builder()
                 .inventoryItem(inventoryItem)
@@ -604,7 +996,7 @@ public class DispenseServiceImpl implements DispenseService {
     @Transactional(readOnly = true)
     public DispenseResponseDTO getDispense(UUID id) {
         Dispense dispense = dispenseRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(DISPENSE_NOT_FOUND));
         enforceHospitalScope(dispense.getPharmacy());
         return dispenseMapper.toResponseDTO(dispense);
     }
@@ -665,7 +1057,7 @@ public class DispenseServiceImpl implements DispenseService {
     @Transactional
     public DispenseResponseDTO cancelDispense(UUID id) {
         Dispense dispense = dispenseRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(DISPENSE_NOT_FOUND));
         // Cancelling reverses a stock lot and rewrites the prescription's
         // status: it is a write on one hospital's records, and it takes the
         // same answer as every other write here. enforceHospitalScope alone
@@ -673,6 +1065,13 @@ public class DispenseServiceImpl implements DispenseService {
         // another tenant's fill — more reachable now that the reads succeed.
         requireHospitalScopeForWrite();
         enforceHospitalScope(dispense.getPharmacy());
+        // Rule 1 (#825 security finding 2): the prescription lock first, as
+        // every other path that moves a fill takes it, so this cannot
+        // deadlock against a preparation of the same order; then the row
+        // as it is under that lock.
+        prescriptionRepository.findByIdForUpdate(dispense.getPrescription().getId())
+                .orElseThrow(() -> new ResourceNotFoundException(DISPENSE_NOT_FOUND));
+        dispense = resync(dispense);
 
         if (dispense.getStatus() == DispenseStatus.CANCELLED) {
             throw new BusinessException("Dispense is already cancelled");
@@ -686,12 +1085,12 @@ public class DispenseServiceImpl implements DispenseService {
         // Reverse stock if a lot was used
         if (dispense.getStockLot() != null) {
             StockLot lot = dispense.getStockLot();
-            lot.setRemainingQuantity(lot.getRemainingQuantity().add(dispense.getQuantityDispensed()));
-            stockLotRepository.save(lot);
-
             InventoryItem item = lot.getInventoryItem();
-            item.setQuantityOnHand(item.getQuantityOnHand().add(dispense.getQuantityDispensed()));
-            inventoryItemRepository.save(item);
+            LocalDateTime now = LocalDateTime.now(clock);
+            stockLotRepository.incrementRemaining(lot.getId(), dispense.getQuantityDispensed(), now);
+            inventoryItemRepository.incrementOnHand(item.getId(), dispense.getQuantityDispensed(), now);
+            refreshIfManaged(lot);
+            refreshIfManaged(item);
 
             User performer = resolveCurrentUser();
             StockTransaction reverseTx = StockTransaction.builder()
@@ -741,9 +1140,51 @@ public class DispenseServiceImpl implements DispenseService {
         Map<UUID, PrescriptionRoutingDecision> latestDecisions = latestDecisionsFor(rows);
         Set<UUID> outstandingBackOrders = outstandingBackOrdersFor(rows);
         Map<UUID, LocalDateTime> lastActions = lastPharmacyActionsFor(rows, latestDecisions);
-        return page.map(p -> toWorkQueueDTO(p, latestRefills.get(p.getId()),
-                latestDecisions.get(p.getId()), lastActions.get(p.getId()),
-                outstandingBackOrders.contains(p.getId())));
+        Map<UUID, Dispense> preparedFills = openPreparationsFor(rows);
+        LocalDateTime uncollectedBefore = LocalDateTime.now(clock).minus(uncollectedAfter);
+        return page.map(p -> {
+            Dispense prepared = preparedFills.get(p.getId());
+            WorkQueuePrescriptionDTO dto = toWorkQueueDTO(p, latestRefills.get(p.getId()),
+                    latestDecisions.get(p.getId()), lastActions.get(p.getId()),
+                    outstandingBackOrders.contains(p.getId()));
+            if (prepared != null) {
+                dto.setReadyForCollection(toReadyForCollection(prepared));
+                // G15 AC-11: the lowest-precedence reason. A status or an
+                // answered question says more about the order than its age.
+                if (dto.getAttentionReason() == null && prepared.getCreatedAt() != null
+                        && prepared.getCreatedAt().isBefore(uncollectedBefore)) {
+                    dto.setAttentionReason(ATTENTION_READY_UNCOLLECTED);
+                    dto.setNeedsAttention(true);
+                }
+            }
+            return dto;
+        });
+    }
+
+    /** G15: the open preparation of each order on the page, one query. */
+    private Map<UUID, Dispense> openPreparationsFor(List<Prescription> prescriptions) {
+        if (prescriptions.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> ids = prescriptions.stream().map(Prescription::getId).toList();
+        Map<UUID, Dispense> open = new HashMap<>();
+        for (Dispense d : dispenseRepository.findByPrescription_IdInAndStatus(ids, DispenseStatus.PENDING)) {
+            if (d.getPrescription() != null) {
+                open.putIfAbsent(d.getPrescription().getId(), d);
+            }
+        }
+        return open;
+    }
+
+    private static WorkQueuePrescriptionDTO.ReadyForCollection toReadyForCollection(Dispense prepared) {
+        return WorkQueuePrescriptionDTO.ReadyForCollection.builder()
+                .dispenseId(prepared.getId())
+                .readyAt(prepared.getCreatedAt())
+                .preparedByName(DispenseMapper.displayNameOf(prepared.getPreparedByUser()))
+                .quantity(prepared.getQuantityDispensed())
+                .unit(prepared.getUnit())
+                .reminderSentAt(prepared.getReadyReminderSentAt())
+                .build();
     }
 
     /** Newest routing decision per prescription on the page, one query. */
@@ -798,17 +1239,30 @@ public class DispenseServiceImpl implements DispenseService {
         Map<UUID, LocalDateTime> last = new HashMap<>();
         for (Dispense d : dispenseRepository.findByPrescription_IdInAndStatusNotOrderByDispensedAtDesc(
                 ids, DispenseStatus.CANCELLED)) {
-            if (d.getPrescription() != null && d.getDispensedAt() != null) {
-                last.putIfAbsent(d.getPrescription().getId(), d.getDispensedAt());
-            }
+            recordDispenseAction(last, d);
         }
-        latestDecisions.forEach((id, decision) -> {
-            LocalDateTime decidedAt = decision.getDecidedAt();
-            if (decidedAt != null) {
-                last.merge(id, decidedAt, (a, b) -> a.isAfter(b) ? a : b);
-            }
-        });
+        latestDecisions.forEach((id, decision) -> keepNewer(last, id, decision.getDecidedAt()));
         return last;
+    }
+
+    /**
+     * G15: a prepared fill has no dispensedAt yet; preparing it is the
+     * pharmacy acting, at its creation time (coalesce(dispensedAt,
+     * createdAt)). The newest wins whatever order the rows came in, since
+     * NULLs sort first in a DESC.
+     */
+    private static void recordDispenseAction(Map<UUID, LocalDateTime> last, Dispense d) {
+        if (d.getPrescription() == null) {
+            return;
+        }
+        LocalDateTime actedAt = d.getDispensedAt() != null ? d.getDispensedAt() : d.getCreatedAt();
+        keepNewer(last, d.getPrescription().getId(), actedAt);
+    }
+
+    private static void keepNewer(Map<UUID, LocalDateTime> last, UUID prescriptionId, LocalDateTime at) {
+        if (at != null) {
+            last.merge(prescriptionId, at, (a, b) -> a.isAfter(b) ? a : b);
+        }
     }
 
     /**
@@ -867,7 +1321,7 @@ public class DispenseServiceImpl implements DispenseService {
     private void updatePrescriptionStatusFromHistory(Prescription prescription, boolean announce) {
         BigDecimal expected = expectedLifetimeQuantity(prescription);
         BigDecimal dispensedToDate = dispenseRepository
-                .sumQuantityDispensedForPrescription(prescription.getId(), DispenseStatus.CANCELLED);
+                .sumQuantityDispensedForPrescription(prescription.getId(), DispenseRepository.NOT_A_FILL);
         if (dispensedToDate == null) {
             dispensedToDate = BigDecimal.ZERO;
         }
@@ -1030,7 +1484,9 @@ public class DispenseServiceImpl implements DispenseService {
      * answer first). The last one
      * holds only until the pharmacy acts on the answer — a dispense or a
      * routing decision after the resolution clears it; without that the row
-     * would be flagged for the rest of its life.
+     * would be flagged for the rest of its life. A seventh, READY_UNCOLLECTED
+     * (G15), is added by {@link #getWorkQueue} below all of these, because it
+     * needs the page's open preparations.
      */
     private static String attentionReason(Prescription p, LocalDateTime unactedAnswer,
                                           boolean backOrderOutstanding) {
@@ -1128,7 +1584,7 @@ public class DispenseServiceImpl implements DispenseService {
      */
     private void requireHospitalScopeForWrite() {
         if (roleValidator.requireActiveHospitalId() == null) {
-            throw new ResourceNotFoundException("dispense.notfound");
+            throw new ResourceNotFoundException(DISPENSE_NOT_FOUND);
         }
     }
 

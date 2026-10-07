@@ -249,7 +249,9 @@ public class LabResultMapper {
     /**
      * The unit as compared: trimmed and lower-cased, null when blank. Nothing
      * is split or converted here - {@code 10^9/L} is a unit, not a coded
-     * field; the HL7 parser stores only OBX-6's identifier.
+     * field: the HL7 parser stores only OBX-6's identifier, decoded, and a
+     * text OBX-5 decoded too. (No row stored a coded unit or an escaped value
+     * before that, in any environment, as of 2026-10-06.)
      */
     private static String normalisedUnit(String unit) {
         return unit == null || unit.isBlank() ? null : unit.trim().toLowerCase(Locale.ROOT);

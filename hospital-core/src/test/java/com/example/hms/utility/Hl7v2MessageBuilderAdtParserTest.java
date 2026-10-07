@@ -264,6 +264,19 @@ class Hl7v2MessageBuilderAdtParserTest {
         }
 
         @Test
+        @DisplayName("ADT identifiers are read raw: HL7 escapes are not decoded on the ADT path")
+        void adtIdentifiersStayRaw() {
+            // The lab paths decode escapes; ADT keeps its pre-existing split so a
+            // stored visit number still matches the same visit on an update.
+            ParsedAdtMessage parsed = builder.parseAdtMessage(
+                adtWith("MRN\\S\\1", "WARD-A", "V\\S\\1^EXT"), "A01");
+
+            assertThat(parsed).isNotNull();
+            assertThat(parsed.visitNumber()).isEqualTo("V\\S\\1");
+            assertThat(parsed.mrn()).isEqualTo("MRN\\S\\1");
+        }
+
+        @Test
         @DisplayName("One character over on PID-3 is refused, not truncated")
         void anOverWidthMrnIsRefused() {
             assertThat(builder.parseAdtMessage(

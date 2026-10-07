@@ -227,3 +227,85 @@ describe('MyMedicationsComponent — refill visibility', () => {
     expect(component.refillChipClass('DISPENSED')).toBe('refill-chip');
   });
 });
+
+/** G15 AC-12: a fill waiting at the counter is shown on the row. */
+describe('MyMedicationsComponent — ready for collection', () => {
+  let fixture: ComponentFixture<MyMedicationsComponent>;
+
+  const base: MedicationSummary = {
+    id: 'm-1',
+    medicationName: 'Amoxicillin',
+    dosage: '500mg',
+    frequency: 'BID',
+    prescribedBy: 'Dr. A',
+    startDate: '2026-10-01',
+    status: 'ACTIVE',
+    route: 'PO',
+    endDate: '',
+    indication: '',
+    instructions: '',
+  };
+
+  async function render(meds: MedicationSummary[], rxs: unknown[] = []): Promise<HTMLElement> {
+    await TestBed.configureTestingModule({
+      imports: [MyMedicationsComponent, TranslateModule.forRoot()],
+      providers: [
+        {
+          provide: PatientPortalService,
+          useValue: {
+            getMyMedications: () => of(meds),
+            getMyPrescriptions: () => of(rxs),
+            getMyRefills: () => of([]),
+            requestRefill: () => of({}),
+          },
+        },
+        {
+          provide: ToastService,
+          useValue: { success: jasmine.createSpy('success'), error: jasmine.createSpy('error') },
+        },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(MyMedicationsComponent);
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  it('shows the chip on a medication with a fill waiting, and none elsewhere', async () => {
+    const el = await render([
+      {
+        ...base,
+        readyForCollectionAt: '2026-10-06T15:30:00',
+        readyForCollectionPharmacyName: 'Pharmacie Centrale',
+      },
+      { ...base, id: 'm-2' },
+    ]);
+
+    const chip = el.querySelector('[data-testid="med-ready-m-1"]');
+    expect(chip).not.toBeNull();
+    expect(chip!.textContent).toContain('PORTAL.MEDICATIONS.READY_AT');
+    expect(el.querySelector('[data-testid="med-ready-m-2"]')).toBeNull();
+  });
+
+  it('shows the chip on a prescription with a fill waiting', async () => {
+    const el = await render(
+      [],
+      [
+        {
+          id: 'rx-9',
+          medicationName: 'Amoxicillin',
+          dosage: '500mg',
+          frequency: 'BID',
+          duration: '',
+          notes: '',
+          prescribedBy: '',
+          prescribedDate: '2026-10-01',
+          status: 'SIGNED',
+          readyForCollectionAt: '2026-10-06T15:30:00',
+          readyForCollectionPharmacyName: 'Pharmacie Centrale',
+        },
+      ],
+    );
+
+    expect(el.querySelector('[data-testid="rx-ready-rx-9"]')).not.toBeNull();
+  });
+});

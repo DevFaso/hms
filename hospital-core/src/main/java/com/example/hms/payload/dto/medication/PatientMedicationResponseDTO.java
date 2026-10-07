@@ -70,4 +70,12 @@ public class PatientMedicationResponseDTO {
     /** E9 provenance — the hospital that prescribed; equals the acting hospital for a local row. */
     private UUID hospitalId;
     private String hospitalName;
+
+    /**
+     * G15: when a fill of this prescription was marked ready for collection,
+     * and at which pharmacy. Both null when nothing is waiting (none
+     * prepared, handed over, cancelled, or the prescription withdrawn).
+     */
+    private java.time.LocalDateTime readyForCollectionAt;
+    private String readyForCollectionPharmacyName;
 }
