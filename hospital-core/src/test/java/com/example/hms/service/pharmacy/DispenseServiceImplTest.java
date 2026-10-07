@@ -224,7 +224,7 @@ class DispenseServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
-            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.TEN);
             when(prescriptionRepository.save(any(Prescription.class))).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
@@ -255,7 +255,7 @@ class DispenseServiceImplTest {
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
-            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.TEN);
             when(prescriptionRepository.save(any())).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
@@ -306,7 +306,7 @@ class DispenseServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
-            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.TEN);
             when(prescriptionRepository.save(any())).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(DispenseResponseDTO.builder().id(dispenseId).build());
@@ -343,7 +343,7 @@ class DispenseServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
-            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.TEN);
             when(prescriptionRepository.save(any())).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(DispenseResponseDTO.builder().id(dispenseId).build());
@@ -372,7 +372,7 @@ class DispenseServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
-            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.valueOf(4));
             when(prescriptionRepository.save(any())).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(DispenseResponseDTO.builder().id(dispenseId).build());
@@ -400,7 +400,7 @@ class DispenseServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
-            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.valueOf(4));
             when(prescriptionRepository.save(any())).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(DispenseResponseDTO.builder().id(dispenseId).build());
@@ -507,7 +507,7 @@ class DispenseServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
-            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.valueOf(5));
             when(prescriptionRepository.save(any())).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
@@ -538,7 +538,7 @@ class DispenseServiceImplTest {
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
             // 10 from the original fill + 3 of the refill's 10.
-            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.valueOf(13));
             when(prescriptionRepository.save(any())).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(
@@ -571,7 +571,7 @@ class DispenseServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
-            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.valueOf(20));
             when(prescriptionRepository.save(any())).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(
@@ -600,7 +600,7 @@ class DispenseServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
-            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.valueOf(10));
             when(prescriptionRepository.save(any())).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(
@@ -628,7 +628,7 @@ class DispenseServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
-            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.TEN);
             when(prescriptionRepository.save(any())).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
@@ -659,7 +659,7 @@ class DispenseServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
-            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.TEN);
             when(prescriptionRepository.save(any())).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
@@ -690,7 +690,7 @@ class DispenseServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
-            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.TEN);
             when(prescriptionRepository.save(any())).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
@@ -739,7 +739,7 @@ class DispenseServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
-            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.TEN);
             when(prescriptionRepository.save(any())).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
@@ -770,7 +770,7 @@ class DispenseServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
-            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.valueOf(5));
             when(prescriptionRepository.save(any())).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
@@ -1485,7 +1485,7 @@ class DispenseServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
-            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.TEN);
             when(prescriptionRepository.save(any(Prescription.class))).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
@@ -1514,7 +1514,7 @@ class DispenseServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
-            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.TEN);
             when(prescriptionRepository.save(any(Prescription.class))).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
@@ -1635,7 +1635,7 @@ class DispenseServiceImplTest {
                     .id(dispenseId).status("COMPLETED").build();
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
-            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.TEN);
             when(prescriptionRepository.save(any())).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);

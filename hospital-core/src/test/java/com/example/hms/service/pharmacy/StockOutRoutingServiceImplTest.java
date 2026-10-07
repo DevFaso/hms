@@ -649,7 +649,7 @@ class StockOutRoutingServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
             when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
             when(dispenseRepository.sumQuantityDispensedForPrescription(
-                    prescriptionId, com.example.hms.enums.DispenseStatus.CANCELLED))
+                    prescriptionId, com.example.hms.repository.pharmacy.DispenseRepository.NOT_A_FILL))
                     .thenReturn(java.math.BigDecimal.valueOf(4));
             when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(routingMapper.toResponseDTO(any()))

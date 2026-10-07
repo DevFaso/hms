@@ -867,7 +867,7 @@ public class DispenseServiceImpl implements DispenseService {
     private void updatePrescriptionStatusFromHistory(Prescription prescription, boolean announce) {
         BigDecimal expected = expectedLifetimeQuantity(prescription);
         BigDecimal dispensedToDate = dispenseRepository
-                .sumQuantityDispensedForPrescription(prescription.getId(), DispenseStatus.CANCELLED);
+                .sumQuantityDispensedForPrescription(prescription.getId(), DispenseRepository.NOT_A_FILL);
         if (dispensedToDate == null) {
             dispensedToDate = BigDecimal.ZERO;
         }

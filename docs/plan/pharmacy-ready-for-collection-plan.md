@@ -1118,7 +1118,7 @@ After any merge, check the changelog and the i18n files by hand.
     - **no `@Index`**.
   - `enums/DispenseStatus.java` (Javadoc) and `enums/ReadyCancelReason.java`.
   - `MigrationRegistrationTest`, `LiquibaseSchemaIT`, `EntitySchemaValidationIT`.
-- [ ] **T2 — PENDING is not a fill, backend and portal.** AC-4, AC-11b.
+- [x] **T2 — PENDING is not a fill, backend and portal.** AC-4, AC-11b.
   - `DispenseRepository` sum with an excluded collection; update the callers
     `:870` and `StockOutRoutingServiceImpl:655`.
   - New finders and the conditional `@Modifying(flushAutomatically = true,

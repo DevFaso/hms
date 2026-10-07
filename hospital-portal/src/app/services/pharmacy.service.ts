@@ -280,7 +280,8 @@ export interface DispenseResponse {
   substitutionReason?: string;
   status: string;
   notes?: string;
-  dispensedAt: string;
+  /** When the fill was handed over; null while it is PENDING (prepared, G15). */
+  dispensedAt: string | null;
   /**
    * NOT_VERIFIED is the paper-fallback path and a legitimate outcome, not a
    * failure — do not render it as an error.

@@ -4,7 +4,6 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.PharmacyType;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RoutingDecisionStatus;
-import com.example.hms.enums.DispenseStatus;
 import com.example.hms.enums.RoutingType;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -652,7 +651,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
      */
     private BigDecimal remainingQuantity(Prescription prescription) {
         BigDecimal dispensedToDate = dispenseRepository
-                .sumQuantityDispensedForPrescription(prescription.getId(), DispenseStatus.CANCELLED);
+                .sumQuantityDispensedForPrescription(prescription.getId(), DispenseRepository.NOT_A_FILL);
         return FillAccounting.remaining(prescription, dispensedToDate);
     }
 
