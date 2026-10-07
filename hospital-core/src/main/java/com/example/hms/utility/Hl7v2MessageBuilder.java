@@ -11,7 +11,10 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Minimal HL7v2 message builder / parser for instrument integration scaffolding.
@@ -187,12 +190,26 @@ public class Hl7v2MessageBuilder {
         }
     }
 
+    /**
+     * OBX-2 value types whose OBX-5 is one piece of text, so its escapes are
+     * decoded as a whole. A coded value (CE, CWE, CNE, ...) has components of
+     * its own, and decoding the whole field would turn an escaped caret inside
+     * a component into a component separator; it is stored as received.
+     */
+    private static final Set<String> TEXT_VALUE_TYPES = Set.of("ST", "TX", "FT", "NM", "SN");
+
+    /** OBX-5 as stored: decoded for a text value type, as received otherwise. */
+    private static String observationValue(String obx2, String obx5) {
+        String type = obx2 == null ? "" : obx2.trim().toUpperCase(Locale.ROOT);
+        return TEXT_VALUE_TYPES.contains(type) ? decodeEscapes(obx5) : obx5;
+    }
+
     private ParsedObservation parseObxSegment(String seg, String patientId,
                                               String placer, String filler) {
         String[] f = seg.split("\\|", -1);
         String setId    = f.length > 1  ? f[1].trim()          : "";
         String testCode = f.length > 3  ? firstComponent(f[3]) : "";
-        String value    = f.length > 5  ? decodeEscapes(f[5])  : "";
+        String value    = f.length > 5  ? observationValue(f[2], f[5]) : "";
         String unit     = f.length > 6  ? unitIdentifier(f[6]) : "";
         String refRange = f.length > 7  ? f[7]                 : "";
         String abnFlag  = f.length > 8  ? f[8]                 : "N";
@@ -479,25 +496,53 @@ public class Hl7v2MessageBuilder {
     }
 
     /**
-     * The exact inverse of {@link #decodeEscapes}: stored text written into a
-     * field, with every delimiter it contains escaped (the escape character
-     * itself first, so nothing is escaped twice). Null is an empty field.
+     * The inverse of {@link #decodeEscapes}: stored text written into a field,
+     * with every delimiter it contains escaped. A formatting or character-set
+     * escape the decoder kept as received ({@code \.br\}, {@code \H\},
+     * {@code \X0D\}, ...) is passed through unchanged, so a receiver still
+     * formats it; any other escape character is itself escaped. Null is an
+     * empty field.
      */
     static String encodeEscapes(String text) {
         if (text == null) {
             return "";
         }
         StringBuilder out = new StringBuilder(text.length());
-        for (int i = 0; i < text.length(); i++) {
+        int i = 0;
+        while (i < text.length()) {
             char c = text.charAt(i);
-            String code = escapeCodeFor(c);
-            if (code != null) {
-                out.append(ESC).append(code).append(ESC);
+            int end = c == ESC ? formattingEscapeEnd(text, i) : -1;
+            String code = end < 0 ? escapeCodeFor(c) : null;
+            if (end >= 0) {
+                out.append(text, i, end + 1);
+                i = end + 1;
             } else {
-                out.append(c);
+                if (code != null) {
+                    out.append(ESC).append(code).append(ESC);
+                } else {
+                    out.append(c);
+                }
+                i++;
             }
         }
         return out.toString();
+    }
+
+    /**
+     * The HL7 v2 formatting (FT) and character-set escapes: .br .sp .in .ti
+     * .sk .ce .fi .nf, H and N (highlighting), Xhh... (hex data) and Z...
+     * (locally defined).
+     */
+    private static final Pattern FORMATTING_ESCAPE = Pattern.compile(
+        "\\.(?:br|sp\\d*|in[+-]?\\d*|ti[+-]?\\d*|sk[+-]?\\d*|ce|fi|nf)|H|N|X(?:[0-9A-Fa-f]{2})+|Z[^|^&~\\\\]*");
+
+    /** The index of the escape character closing a formatting escape that starts at {@code start}, or -1. */
+    private static int formattingEscapeEnd(String text, int start) {
+        int close = text.indexOf(ESC, start + 1);
+        if (close < 0) {
+            return -1;
+        }
+        return FORMATTING_ESCAPE.matcher(text.substring(start + 1, close)).matches() ? close : -1;
     }
 
     private static String escapeCodeFor(char c) {

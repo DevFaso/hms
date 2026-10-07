@@ -93,6 +93,52 @@ class Hl7v2MessageBuilderEscapingTest {
     }
 
     @Test
+    void formattingEscapesPassThroughBothWays() {
+        // The decoder keeps these as received; re-escaping their backslash
+        // would make a receiver print it instead of breaking the line.
+        String stored = "line1\\.br\\line2 \\X0D\\ \\H\\bold a \\sp2\\, odd\\one";
+
+        String encoded = Hl7v2MessageBuilder.encodeEscapes(stored);
+
+        assertThat(encoded).isEqualTo(
+            "line1\\.br\\line2 \\X0D\\ \\H\\bold a \\E\\sp2\\E\\, odd\\E\\one");
+        assertThat(Hl7v2MessageBuilder.decodeEscapes(encoded)).isEqualTo(stored);
+    }
+
+    @Test
+    void aFormattedValueSurvivesTheRoundTrip() {
+        LabResult result = LabResult.builder()
+            .labOrder(order())
+            .resultValue("Note\\.br\\repeat \\X0D\\| done")
+            .build();
+
+        assertThat(builder.parseOruR01(builder.buildOruR01(result))).singleElement()
+            .satisfies(p -> assertThat(p.resultValue()).isEqualTo("Note\\.br\\repeat \\X0D\\| done"));
+    }
+
+    private ParsedObservation inbound(String obx2, String obx5) {
+        String oru = "MSH|^~\\&|LIS|LAB1|HMS|HOSP1|20261006093000||ORU^R01|M-1|P|2.5.1\r"
+            + "OBR|1|ACC-1||MAL^Malaria|||20261006093000\r"
+            + "OBX|1|" + obx2 + "|MAL^Malaria||" + obx5 + "|||A|||F|||20261006093000\r";
+        return builder.parseOruR01(oru).get(0);
+    }
+
+    @Test
+    void aCodedValueIsStoredAsReceived() {
+        // Decoding the whole CWE would turn the escaped caret inside the
+        // text component into a fourth component.
+        assertThat(inbound("CWE", "POS^Positive \\S\\ see note^L").resultValue())
+            .isEqualTo("POS^Positive \\S\\ see note^L");
+        assertThat(inbound("CE", "POS^Positive\\F\\^L").resultValue()).isEqualTo("POS^Positive\\F\\^L");
+    }
+
+    @Test
+    void aTextValueIsDecoded() {
+        assertThat(inbound("ST", "a\\S\\b").resultValue()).isEqualTo("a^b");
+        assertThat(inbound("tx", "a\\F\\b").resultValue()).isEqualTo("a|b");
+    }
+
+    @Test
     void encodingIsTheInverseOfDecoding() {
         String encoded = Hl7v2MessageBuilder.encodeEscapes(AWKWARD);
 
