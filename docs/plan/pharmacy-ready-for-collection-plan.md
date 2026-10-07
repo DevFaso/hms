@@ -1124,7 +1124,7 @@ After any merge, check the changelog and the i18n files by hand.
   - New finders and the conditional `@Modifying(flushAutomatically = true,
     clearAutomatically = false)` transitions, each followed by a single-row `refresh` (A1).
   - `prescriptions/prescriptions.ts` (`:1047`, `:1134`) and its spec.
-- [ ] **T3 — One lock rule and the 409 mapping.** AC-3, AC-8, AC-10 (B1, N1).
+- [x] **T3 — One lock rule and the 409 mapping.** AC-3, AC-8, AC-10 (B1, N1).
   - `loadAndValidatePrescription` uses `findByIdForUpdate` for create and
     ready.
   - `PrescriptionServiceImpl.updatePrescription` (`:808`) uses `findByIdForUpdate`.

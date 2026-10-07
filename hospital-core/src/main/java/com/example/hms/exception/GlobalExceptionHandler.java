@@ -6,6 +6,8 @@ import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
@@ -63,6 +65,23 @@ public class GlobalExceptionHandler {
         if (field != null) body.put("field", field);
         body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
         return new ResponseEntity<>(body, HttpStatus.CONFLICT);
+    }
+
+    /**
+     * Two writers met on the same row (G15 rule 1): a row lock could not be
+     * taken or Postgres broke a deadlock ({@link PessimisticLockingFailureException},
+     * {@code CannotAcquireLockException} included), or a {@code @Version}
+     * check failed on flush ({@link OptimisticLockingFailureException},
+     * {@code ObjectOptimisticLockingFailureException} included). Nothing was
+     * written; reloading and retrying is the right answer, so 409 rather than
+     * the 500 the RuntimeException catch-all gave. The detail stays in the
+     * log: it can name tables and ids.
+     */
+    @ExceptionHandler({PessimisticLockingFailureException.class, OptimisticLockingFailureException.class})
+    public ResponseEntity<Object> handleConcurrentModification(RuntimeException ex, WebRequest request) {
+        log.warn("Concurrent modification at path {}: {}", request.getDescription(false), ex.getClass().getSimpleName());
+        return buildErrorResponse(HttpStatus.CONFLICT,
+                com.example.hms.utility.MessageUtil.resolve("concurrent.modification"), request);
     }
 
     @ExceptionHandler(PatientAlreadyRegisteredException.class)

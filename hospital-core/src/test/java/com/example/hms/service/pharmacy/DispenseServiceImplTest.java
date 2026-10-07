@@ -217,7 +217,7 @@ class DispenseServiceImplTest {
             DispenseResponseDTO responseDTO = DispenseResponseDTO.builder()
                     .id(dispenseId).medicationName("Amoxicillin").status("COMPLETED").build();
 
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -247,7 +247,7 @@ class DispenseServiceImplTest {
             DispenseResponseDTO responseDTO = DispenseResponseDTO.builder()
                     .id(dispenseId).status("COMPLETED").build();
 
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -277,7 +277,7 @@ class DispenseServiceImplTest {
             DispenseRequestDTO dto = buildRequest();
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
 
             assertThatThrownBy(() -> service.createDispense(dto))
                     .isInstanceOf(BusinessException.class)
@@ -299,7 +299,7 @@ class DispenseServiceImplTest {
             DispenseRequestDTO dto = buildRequest();
             Dispense entity = buildDispense(DispenseStatus.COMPLETED);
 
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -336,7 +336,7 @@ class DispenseServiceImplTest {
             dto.setQuantityDispensed(BigDecimal.valueOf(6));
             Dispense entity = buildDispense(DispenseStatus.COMPLETED);
 
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -365,7 +365,7 @@ class DispenseServiceImplTest {
             dto.setQuantityDispensed(BigDecimal.valueOf(4));
             Dispense entity = buildDispense(DispenseStatus.PARTIAL);
 
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -393,7 +393,7 @@ class DispenseServiceImplTest {
             Dispense entity = buildDispense(DispenseStatus.PARTIAL);
             dto.setQuantityDispensed(BigDecimal.valueOf(4));
 
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -421,7 +421,7 @@ class DispenseServiceImplTest {
             DispenseRequestDTO dto = buildRequest();
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
 
             assertThatThrownBy(() -> service.createDispense(dto))
                     .isInstanceOf(BusinessException.class)
@@ -436,7 +436,7 @@ class DispenseServiceImplTest {
             DispenseRequestDTO dto = buildRequest();
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
 
             assertThatThrownBy(() -> service.createDispense(dto))
                     .isInstanceOf(BusinessException.class)
@@ -450,7 +450,7 @@ class DispenseServiceImplTest {
             DispenseRequestDTO dto = buildRequest();
             dto.setStockLotId(stockLotId);
 
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -470,7 +470,7 @@ class DispenseServiceImplTest {
             // Scoped caller: the lookup is the thing under test here, so the
             // hospital must be present or the null-scope guard answers first.
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.empty());
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.createDispense(dto))
                     .isInstanceOf(ResourceNotFoundException.class);
@@ -500,7 +500,7 @@ class DispenseServiceImplTest {
             DispenseResponseDTO responseDTO = DispenseResponseDTO.builder()
                     .id(dispenseId).status("PARTIAL").build();
 
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -530,7 +530,7 @@ class DispenseServiceImplTest {
             dto.setQuantityDispensed(BigDecimal.valueOf(3));
             Dispense entity = buildDispense(DispenseStatus.PARTIAL);
 
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -564,7 +564,7 @@ class DispenseServiceImplTest {
             DispenseRequestDTO dto = buildRequest();
             Dispense entity = buildDispense(DispenseStatus.COMPLETED);
 
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -593,7 +593,7 @@ class DispenseServiceImplTest {
             DispenseRequestDTO dto = buildRequest();
             Dispense entity = buildDispense(DispenseStatus.COMPLETED);
 
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -621,7 +621,7 @@ class DispenseServiceImplTest {
             DispenseResponseDTO responseDTO = DispenseResponseDTO.builder()
                     .id(dispenseId).medicationName("Amoxicillin").status("COMPLETED").build();
 
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -652,7 +652,7 @@ class DispenseServiceImplTest {
             DispenseResponseDTO responseDTO = DispenseResponseDTO.builder()
                     .id(dispenseId).medicationName("Amoxicillin").status("COMPLETED").build();
 
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -683,7 +683,7 @@ class DispenseServiceImplTest {
             DispenseResponseDTO responseDTO = DispenseResponseDTO.builder()
                     .id(dispenseId).medicationName("Amoxicillin").status("COMPLETED").build();
 
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -707,7 +707,7 @@ class DispenseServiceImplTest {
             DispenseRequestDTO dto = buildRequest();
             // No cdsOverrideReason set — must block
 
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -732,7 +732,7 @@ class DispenseServiceImplTest {
             DispenseResponseDTO responseDTO = DispenseResponseDTO.builder()
                     .id(dispenseId).medicationName("Amoxicillin").status("COMPLETED").build();
 
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -763,7 +763,7 @@ class DispenseServiceImplTest {
             DispenseResponseDTO responseDTO = DispenseResponseDTO.builder()
                     .id(dispenseId).status("PARTIAL").build();
 
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -1058,7 +1058,7 @@ class DispenseServiceImplTest {
             prescription.setHospital(other);
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
 
             DispenseRequestDTO dto = buildRequest();
             assertThatThrownBy(() -> service.createDispense(dto))
@@ -1072,7 +1072,7 @@ class DispenseServiceImplTest {
             dto.setPatientId(UUID.randomUUID());
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
 
             assertThatThrownBy(() -> service.createDispense(dto))
                     .isInstanceOf(BusinessException.class)
@@ -1086,7 +1086,7 @@ class DispenseServiceImplTest {
             dto.setVerifiedBy(UUID.randomUUID());
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
@@ -1107,7 +1107,7 @@ class DispenseServiceImplTest {
             dto.setStockLotId(stockLotId);
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
@@ -1478,7 +1478,7 @@ class DispenseServiceImplTest {
 
             // The replay lookup must NOT be consulted for a blank key — that's
             // wasted IO. Verified via never() below.
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -1507,7 +1507,7 @@ class DispenseServiceImplTest {
                     .id(dispenseId).status("COMPLETED").build();
 
             when(dispenseRepository.findByIdempotencyKey(KEY)).thenReturn(Optional.empty());
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -1552,7 +1552,7 @@ class DispenseServiceImplTest {
             // the save() that explodes. Spring would normally roll back the
             // tx here; in this unit test there is no real tx to roll back —
             // we only need to verify the catch-and-recover path.
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -1592,7 +1592,7 @@ class DispenseServiceImplTest {
             when(dispenseRepository.findByIdempotencyKey(KEY))
                     .thenReturn(Optional.empty())
                     .thenReturn(Optional.empty());
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -1621,7 +1621,7 @@ class DispenseServiceImplTest {
         /** Everything a create needs up to the point verification runs. */
         private void stubUpToVerification() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -1810,7 +1810,7 @@ class DispenseServiceImplTest {
             DispenseRequestDTO dto = buildRequest();
             Dispense entity = buildDispense(DispenseStatus.COMPLETED);
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -1836,7 +1836,7 @@ class DispenseServiceImplTest {
             DispenseRequestDTO dto = buildRequest();
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
 
@@ -1857,7 +1857,7 @@ class DispenseServiceImplTest {
             DispenseRequestDTO dto = buildRequest();
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
 

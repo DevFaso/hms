@@ -573,4 +573,61 @@ class GlobalExceptionHandlerTest {
             }
         }
     }
+
+    @Nested
+    @DisplayName("handleConcurrentModification (G15 rule 1)")
+    class HandleConcurrentModification {
+
+        @SuppressWarnings("unchecked")
+        private Map<String, Object> bodyOf(ResponseEntity<Object> response) {
+            return (Map<String, Object>) response.getBody();
+        }
+
+        private void inFrench(Runnable body) {
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            try {
+                body.run();
+            } finally {
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
+        }
+
+        @Test
+        @DisplayName("a lock that could not be taken (or a broken deadlock) is a 409, not a 500")
+        void pessimisticLockIsConflict() {
+            inFrench(() -> {
+                ResponseEntity<Object> response = handler.handleConcurrentModification(
+                    new org.springframework.dao.CannotAcquireLockException("deadlock detected"), request);
+
+                assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+                assertThat(bodyOf(response)).containsEntry("message",
+                    "Cet enregistrement a été modifié par quelqu'un d'autre au même moment. Rechargez et réessayez.");
+            });
+        }
+
+        @Test
+        @DisplayName("a failed @Version check is a 409 with the same message")
+        void optimisticLockIsConflict() {
+            inFrench(() -> {
+                ResponseEntity<Object> response = handler.handleConcurrentModification(
+                    new org.springframework.orm.ObjectOptimisticLockingFailureException("Prescription", "id"), request);
+
+                assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+                assertThat(bodyOf(response).get("message").toString()).startsWith("Cet enregistrement");
+            });
+        }
+
+        @Test
+        @DisplayName("both families are mapped on the handler, so neither falls to the RuntimeException catch-all")
+        void handlerDeclaresBothFamilies() throws Exception {
+            org.springframework.web.bind.annotation.ExceptionHandler mapping = GlobalExceptionHandler.class
+                .getMethod("handleConcurrentModification", RuntimeException.class, WebRequest.class)
+                .getAnnotation(org.springframework.web.bind.annotation.ExceptionHandler.class);
+
+            assertThat(mapping.value()).containsExactlyInAnyOrder(
+                org.springframework.dao.PessimisticLockingFailureException.class,
+                org.springframework.dao.OptimisticLockingFailureException.class);
+        }
+    }
 }

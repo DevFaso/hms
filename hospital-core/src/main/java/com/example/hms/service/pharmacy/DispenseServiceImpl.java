@@ -368,7 +368,11 @@ public class DispenseServiceImpl implements DispenseService {
         if (hospitalId == null) {
             throw new ResourceNotFoundException("prescription.notfound");
         }
-        Prescription prescription = prescriptionRepository.findById(dto.getPrescriptionId())
+        // G15 rule 1: the row lock serialises a fill against a preparation,
+        // a withdrawal or a routing write of the same order, so the checks
+        // below (and the open-preparation check) are made on a state nobody
+        // else can change before this transaction commits.
+        Prescription prescription = prescriptionRepository.findByIdForUpdate(dto.getPrescriptionId())
                 .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
 
         // Tenant isolation: prescription must belong to the active hospital

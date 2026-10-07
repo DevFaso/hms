@@ -805,7 +805,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Override
     @Transactional
     public PrescriptionResponseDTO updatePrescription(UUID id, PrescriptionRequestDTO request, Locale locale) {
-        Prescription existing = prescriptionRepository.findById(id)
+        // Locked (G15 rule 1): a withdrawal or an edit voids an open
+        // preparation, and a preparation never writes this row, so @Version
+        // cannot see the race; the row lock serialises the two.
+        Prescription existing = prescriptionRepository.findByIdForUpdate(id)
             .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
         // ── Hospital scope enforcement ── the row's own hospital, as on
         // sign/co-sign/delete, and BEFORE the status checks below, which

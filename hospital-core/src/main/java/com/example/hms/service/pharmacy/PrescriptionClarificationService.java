@@ -93,7 +93,10 @@ public class PrescriptionClarificationService {
      */
     @Transactional
     public void requestClarification(UUID prescriptionId, String reason) {
-        Prescription prescription = findInScope(prescriptionId);
+        // Locked (G15 rule 1): a fill being prepared under the same lock
+        // cannot commit alongside a question that takes the order off the
+        // counter.
+        Prescription prescription = findInScopeForUpdate(prescriptionId);
         if (reason == null || reason.isBlank()) {
             throw new BusinessException("A clarification request needs a reason.");
         }
@@ -155,8 +158,21 @@ public class PrescriptionClarificationService {
 
     /** Same 404-not-403 idiom as the rest of the prescription surface. */
     private Prescription findInScope(UUID prescriptionId) {
-        Prescription prescription = prescriptionRepository.findById(prescriptionId)
-                .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
+        return requireInScope(prescriptionRepository.findById(prescriptionId)
+                .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND)));
+    }
+
+    /**
+     * {@link #findInScope} with the prescription row locked, for the write
+     * that takes the order away from the counter (G15 rule 1: every write
+     * that might meet a prepared fill takes the prescription lock first).
+     */
+    private Prescription findInScopeForUpdate(UUID prescriptionId) {
+        return requireInScope(prescriptionRepository.findByIdForUpdate(prescriptionId)
+                .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND)));
+    }
+
+    private Prescription requireInScope(Prescription prescription) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null
                 && (prescription.getHospital() == null

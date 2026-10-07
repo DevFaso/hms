@@ -558,8 +558,11 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
      * no hospital is refused as before — as a 404 rather than a 500.
      */
     private Prescription findPrescription(UUID prescriptionId, UUID hospitalId) {
-        Prescription prescription = prescriptionRepository.findById(prescriptionId)
-                .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
+        return requirePrescriptionInScope(prescriptionRepository.findById(prescriptionId)
+                .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound")), hospitalId);
+    }
+
+    private Prescription requirePrescriptionInScope(Prescription prescription, UUID hospitalId) {
         if (hospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
             throw new ResourceNotFoundException("prescription.notfound");
         }
@@ -587,7 +590,10 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         if (hospitalId == null) {
             throw new ResourceNotFoundException("prescription.notfound");
         }
-        return findPrescription(prescriptionId, hospitalId);
+        // Locked (G15 rule 1): routing writes the prescription, a prepared
+        // fill does not, so without the row lock both could commit.
+        return requirePrescriptionInScope(prescriptionRepository.findByIdForUpdate(prescriptionId)
+                .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound")), hospitalId);
     }
 
     /**
