@@ -4615,12 +4615,16 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   (`Prescription.version`, `@Version` at `Prescription.java:384`, refuses the
   second write). Needed only for multi-pharmacist queues. Open.
 
-- **The patient SMS in `PartnerExchangeService.applyReply` is unguarded
-  (2026-10-07, left by #812).** `channel.notifyPatientAccepted`
-  (`PartnerExchangeService.java:316`) and `notifyPatientDispensed` (:335) run
-  inside `handleInboundReply`'s transaction with no try/catch, so a channel
-  failure rolls back the partner's answer and fails the webhook. The
-  prescriber notification #812 added is guarded and runs after commit. Open.
+- **The patient SMS in `PartnerExchangeService.applyReply` is sent before
+  commit (2026-10-07, left by #812).** `channel.notifyPatientAccepted`
+  (`PartnerExchangeService.java:316`) and `notifyPatientDispensed` (:335) send
+  inside `handleInboundReply`'s transaction. A send failure cannot fail the
+  webhook: the only channel, `SmsPartnerNotificationChannel`, sends through
+  `trySend` (`SmsPartnerNotificationChannel.java:132`), which catches and logs
+  every failure (:140). The gap is the order: if the transaction then rolls
+  back (an optimistic-lock failure, for example), the patient has already
+  been told the partner accepted or dispensed. Fix: send after commit, as
+  `PrescriberPharmacyNotifier` already does for the prescriber. Open.
 
 - **Partner-channel residuals of #812 (2026-10-07).** (a) A partner SMS that
   fails to send is only logged (`WithdrawnOrderPartnerHandler.java:151`, as
@@ -4648,7 +4652,7 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 - **A coded OBX-5 goes out as escaped `ST` text (2026-10-07, left by #823).**
   The inbound parser stores a coded value (`CE`, `CWE`, `CNE`, …) as received
   and stores no OBX-2 value type, so the outbound ORU
-  (`Hl7v2MessageBuilder.java:118`; `valueType` at :128 picks only `ST` or
+  (`Hl7v2MessageBuilder.java:118`; `valueType` at :127 picks only `ST` or
   `FT`) sends it as text with its component separators escaped. Fixing it
   needs a column for the value type (a migration, V178 if it is next). Open.
 
