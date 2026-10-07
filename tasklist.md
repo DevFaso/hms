@@ -4708,7 +4708,14 @@ they stay visible instead of living in a javadoc.
 - Play Store privacy-policy URL. (2026-10-04, #791: `/privacy-policy` already
   exists; the user supplies or reviews the policy text and sets the URL in
   the Play Console. The iOS privacy-policy HTML still names the old dev host.)
-- **Before the next develop -> main sync, #789's data steps** (its PR body,
+- **~~Before the next develop -> main sync, #789's data steps~~ Done
+  2026-10-04**, read-only on prod by the coordinator before the 147332e39
+  sync: (1) the Keycloak `app_user_id` backfill was not needed, because the
+  Keycloak path is OFF on prod (no `OIDC_ISSUER_URI` on hms-backend-core), so
+  no Keycloak user could lose their scope; (2) one legacy `user_roles`-only
+  super-admin was found (s_donald), and the user accepted the loss of
+  SUPER_ADMIN; (3) the organisation-only impact query found 0 pairs and 0
+  staff. What it was (its PR body,
   design section 4.0): (1) the Keycloak `app_user_id` backfill wherever the
   Keycloak path is live (`npm run backfill:app-user-id -- --check`, then the
   run; target missing = unknown = mismatched = 0), or every Keycloak user gets
@@ -4717,8 +4724,6 @@ they stay visible instead of living in a javadoc.
   create the assignment or confirm the loss; (3) the organisation-scope impact
   query, the (staff, patient) pairs readable today only through the
   organisation OR that #789 dropped. Not recorded whether they were run on dev.
-  (2026-10-07: both syncs since, 147332e39 and ce3265e8f, went ahead; whether
-  these steps were run first is not recorded here.)
 - After the sync, watch the deploy log for V167-V175's NOTICE and WARNING lines
   (orphans, sender collisions, kept `*_v2` tables, case-variant username
   groups, dangling assignments) — #790's unchecked test-plan item — and
