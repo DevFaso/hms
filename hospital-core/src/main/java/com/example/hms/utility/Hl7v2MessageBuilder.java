@@ -47,14 +47,16 @@ public class Hl7v2MessageBuilder {
         String msgId = "HMS-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase();
 
         String patientName = order.getPatient() != null
-            ? order.getPatient().getLastName() + "^" + order.getPatient().getFirstName()
+            ? encodeEscapes(order.getPatient().getLastName()) + "^" + encodeEscapes(order.getPatient().getFirstName())
             : "UNKNOWN^UNKNOWN";
-        String patientId = order.getPatient() != null ? order.getPatient().getId().toString() : "";
-        String testCode = order.getLabTestDefinition() != null ? order.getLabTestDefinition().getTestCode() : "";
-        String testName = order.getLabTestDefinition() != null ? order.getLabTestDefinition().getName() : "";
-        String priority = order.getPriority() != null ? order.getPriority() : "ROUTINE";
+        String patientId = order.getPatient() != null ? encodeEscapes(order.getPatient().getId().toString()) : "";
+        String testCode = order.getLabTestDefinition() != null
+            ? encodeEscapes(order.getLabTestDefinition().getTestCode()) : "";
+        String testName = order.getLabTestDefinition() != null
+            ? encodeEscapes(order.getLabTestDefinition().getName()) : "";
+        String priority = encodeEscapes(order.getPriority() != null ? order.getPriority() : "ROUTINE");
         String collectedAt = specimen.getCollectedAt() != null ? specimen.getCollectedAt().format(HL7_DT) : now;
-        String accession = specimen.getAccessionNumber();
+        String accession = encodeEscapes(specimen.getAccessionNumber());
 
         return msh("OML^O21^OML_O21", msgId, now) +
             pid(patientId, patientName) +
@@ -92,22 +94,27 @@ public class Hl7v2MessageBuilder {
         String now = LocalDateTime.now().format(HL7_DT);
         String msgId = "HMS-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase();
 
+        // Every stored text is escaped on its own (a CE field's parts one by
+        // one, never the joined field), so a delimiter inside it - the caret
+        // in 10^9/L, a pipe in a value - is data to the receiver, not a split.
         String patientName = order.getPatient() != null
-            ? order.getPatient().getLastName() + "^" + order.getPatient().getFirstName()
+            ? encodeEscapes(order.getPatient().getLastName()) + "^" + encodeEscapes(order.getPatient().getFirstName())
             : "UNKNOWN^UNKNOWN";
-        String patientId = order.getPatient() != null ? order.getPatient().getId().toString() : "";
-        String testCode = order.getLabTestDefinition() != null ? order.getLabTestDefinition().getTestCode() : "";
-        String testName = order.getLabTestDefinition() != null ? order.getLabTestDefinition().getName() : "";
+        String patientId = order.getPatient() != null ? encodeEscapes(order.getPatient().getId().toString()) : "";
+        String testCode = order.getLabTestDefinition() != null
+            ? encodeEscapes(order.getLabTestDefinition().getTestCode()) : "";
+        String testName = order.getLabTestDefinition() != null
+            ? encodeEscapes(order.getLabTestDefinition().getName()) : "";
         String resultDate = result.getResultDate() != null ? result.getResultDate().format(HL7_DT) : now;
         String abnormalFlag = toHl7AbnormalFlag(result.getAbnormalFlag());
         String resultStatus = result.isReleased() ? OBX_STATUS_FINAL : OBX_STATUS_PRELIMINARY;
-        String orderId = order.getId() != null ? order.getId().toString() : "";
+        String orderId = order.getId() != null ? encodeEscapes(order.getId().toString()) : "";
 
         return msh("ORU^R01^ORU_R01", msgId, now) +
             pid(patientId, patientName) +
             "OBR|1|" + orderId + "||" + testCode + "^" + testName + "|||" + resultDate + SEG_TERM +
-            "OBX|1|ST|" + testCode + "^" + testName + "||" + blankIfNull(result.getResultValue()) + "|" +
-            blankIfNull(result.getResultUnit()) + "||" + abnormalFlag + "|||" + resultStatus
+            "OBX|1|ST|" + testCode + "^" + testName + "||" + encodeEscapes(result.getResultValue()) + "|" +
+            encodeEscapes(result.getResultUnit()) + "||" + abnormalFlag + "|||" + resultStatus
             + "|||" + resultDate + SEG_TERM;
     }
 
@@ -185,7 +192,7 @@ public class Hl7v2MessageBuilder {
         String[] f = seg.split("\\|", -1);
         String setId    = f.length > 1  ? f[1].trim()          : "";
         String testCode = f.length > 3  ? firstComponent(f[3]) : "";
-        String value    = f.length > 5  ? f[5]                 : "";
+        String value    = f.length > 5  ? decodeEscapes(f[5])  : "";
         String unit     = f.length > 6  ? unitIdentifier(f[6]) : "";
         String refRange = f.length > 7  ? f[7]                 : "";
         String abnFlag  = f.length > 8  ? f[8]                 : "N";
@@ -471,6 +478,39 @@ public class Hl7v2MessageBuilder {
         return out.toString();
     }
 
+    /**
+     * The exact inverse of {@link #decodeEscapes}: stored text written into a
+     * field, with every delimiter it contains escaped (the escape character
+     * itself first, so nothing is escaped twice). Null is an empty field.
+     */
+    static String encodeEscapes(String text) {
+        if (text == null) {
+            return "";
+        }
+        StringBuilder out = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            String code = escapeCodeFor(c);
+            if (code != null) {
+                out.append(ESC).append(code).append(ESC);
+            } else {
+                out.append(c);
+            }
+        }
+        return out.toString();
+    }
+
+    private static String escapeCodeFor(char c) {
+        return switch (c) {
+            case ESC -> "E";
+            case '|' -> "F";
+            case '^' -> "S";
+            case '&' -> "T";
+            case '~' -> "R";
+            default -> null;
+        };
+    }
+
     /** The HL7 v2 default escape character. */
     private static final char ESC = '\\';
 
@@ -508,16 +548,6 @@ public class Hl7v2MessageBuilder {
         } catch (Exception e) {
             return LocalDateTime.now();
         }
-    }
-
-    /**
-     * An absent field is empty, never the four characters {@code null}.
-     * {@code resultUnit} is nullable on the entity and a concatenation would
-     * put the word into OBX-6 for any unitless result; the release ORU means
-     * every result is built twice, so it went out twice.
-     */
-    private static String blankIfNull(String value) {
-        return value == null ? "" : value;
     }
 
     /**
