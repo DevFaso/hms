@@ -2352,7 +2352,8 @@ FHIR on prod (lab and reception roles are now refused); a hospital switcher
 for users who are not super-admins; #46 kiosk check-in. The two clinical
 questions below need a clinician, not an engineer. (2026-10-04: #790 took the
 first `patient_diagnoses` option, V171; the others are still open, and the
-batches added more, each recorded on its bullet.)
+batches added more, each recorded on its bullet. 2026-10-07: the user's
+2026-10-04 decisions D1-D5 are recorded below the batches.)
 
 **Outside the plan, merged meanwhile.** #795 (2026-10-03) made develop compile
 and pass again after #788 and #789, each green alone, merged into a
@@ -2367,11 +2368,67 @@ disable or delete another tenant's integration). Dependabot #796, #798, #800, #8
 #802 and #803 (2026-10-03); the Angular group bump left two deprecated
 packages (new bullet).
 
-**Next (2026-10-04).** No batch is in flight. What remains here is decisions
-for the user, data steps, and the residuals each PR recorded (the bullets
-dated 2026-10-04 at the end of the items). develop is not synced to main
-(main is still 1d5e26b45, 2026-09-26): before that sync, run #789's three data
-steps (see "Operational, open right now"). Next free migration: **V176**.
+**Pharmacy and lab residuals — done (#811-#823, merged 2026-10-06 and
+2026-10-07).** Not a planned batch: the residuals #790 and the user's
+2026-10-04 decisions left on the pharmacy/lab initiative, each off develop.
+#811 records a lab order only under an assignment the ordering clinician
+holds, active, at the order's hospital, in a lab-ordering role (derived when
+the portal sends the wrong one of the clinician's own, refused with
+`assignment.notfound` when it names someone else's). #812 tells the
+prescriber a partner's SMS accept, refusal and dispense and the 4-hour
+timeout; an SMS refusal or a timeout clears the pharmacy, as the staff
+refusal does; and a withdrawn prescription (CANCELLED or DISCONTINUED) is
+final: its PENDING partner offers close, every partner holding an offer is
+told by SMS, no late reply, sweep or staff partner endpoint moves it, and
+`PUT /prescriptions/{id}` refuses any status but the other withdrawn one
+(`prescription.withdrawn.final`), so it cannot be reopened. #813 the
+education unique key (V176). #814 message-content retention on
+`integration_message_event` (V177). #816 the dead PATCH matcher on lab paths
+(audit B17), with a test pairing that matcher with the lab controllers. #817
+the HTTP HL7 ingest's order-existence oracle. #818 a refused prescription SMS
+is committed and retryable (`TRANSMISSION_FAILED`), and
+`REQUIRES_EXTERNAL_FILL` is gone from the backend, the portal and both apps.
+#819 a result in no configured unit is not graded, alerted on or
+auto-released, and the HL7 parser stores OBX-6's identifier, decoded. #823
+HL7 escaping both ways, which #819's decoded units needed on the way out: text
+is text (stored values are plain text, the wire carries the escapes,
+`decode(encode(x)) == x`, and no stored value can put a CR, an LF or an
+unescaped delimiter on the wire). #820 closed Dependabot alerts #268 and #269
+(`qs` 6.16.0, through the `overrides` pin) and took `proxy-addr` 2.0.8 and
+`source-map-js` 1.2.2 (`npm audit --omit=dev` reports 0). #821 removed the
+170 committed JWTs (all expired) from 28 `.http` files and the Swagger text,
+for secret-scanning alert #53. Dependabot security bumps #809 and #810 merged
+straight to main on 2026-10-05 (new bullet: security updates ignore
+`target-branch`); #815, the first back-merge, was closed and superseded by
+#822, which merged main into develop. Each source bullet below says what its
+PR left; what had no bullet is new at the end of the items.
+
+**User decisions of 2026-10-04.** Recorded here and on their bullets.
+- **D1:** a lab result whose unit matches no configured range is not graded,
+  is never auto-released, and is labelled ("Not graded: units differ"). A
+  range's effective unit is its own unit, else the test definition's; a
+  result with no unit is in the test's unit (#819, refined in its review).
+- **D2:** `TRANSMISSION_FAILED` is used (a refused prescription SMS);
+  `REQUIRES_EXTERNAL_FILL` is removed (#818).
+- **D3:** message content is kept 180 days, a failed message's for at most
+  365; a replay starts its own 180 days; a purged dead letter leaves the
+  dead-letter badge (#814).
+- **D4:** V176 stops the deploy on duplicate education progress rows; there
+  is no automatic merge (#813, confirmed 2026-10-05; prod had 0 rows).
+- **D5:** pharmacy as a platform tenant is DEFERRED, deliberately. SMS stays
+  the channel between organisations.
+
+Two rules the same PRs settled: a withdrawn prescription is final and cannot
+be reopened (#812); in HL7, text is text (#823).
+
+**Next (2026-10-07).** No batch is in flight. main was synced twice since the
+last recording: 147332e39 (2026-10-04, develop at #808: batches 2 to 6,
+V166-V175) and ce3265e8f (2026-10-07, #809-#822: V176 and V177). Prod is at
+ce3265e8f (V177). #823 is on develop only, awaiting the next sync. Next free
+migration: **V178**. G15 (a "ready for collection" state) is in progress on
+`feat/pharmacy-ready-for-collection`. What remains here is decisions for the
+user, data steps, and the residuals each PR recorded (the bullets dated
+2026-10-04 and 2026-10-07 at the end of the items).
 
 ### The items
 
@@ -2386,8 +2443,13 @@ steps (see "Operational, open right now"). Next free migration: **V176**.
   fix is one identity for both paths (the HMS user id resolved from `/me` once
   per session, or the `sub` mapped server side), applied to both apps at once.
 
-- **Duplicate education progress rows make the client and the server pick
-  different rows (#708).** *Partly addressed by #790 (2026-10-03):* the list,
+- **~~Duplicate education progress rows make the client and the server pick
+  different rows (#708).~~ Closed by #813** (2026-10-06, V176): the unique key
+  on (patient, resource) exists, and, by the user's decision (D4), V176 stops
+  the deploy on duplicates instead of merging them (prod and dev had 0 rows).
+  Two racing first writes leave one row: the loser rolls back to a savepoint
+  and updates the winner's row. Before that: *Partly addressed by #790
+  (2026-10-03):* the list,
   the portal write and the staff progress write now pick the same row per
   (patient, resource) (`EducationProgressRows`: most recently accessed, then
   newest, then id), so a rating can no longer land on an invisible row. Still
@@ -3520,7 +3582,8 @@ steps (see "Operational, open right now"). Next free migration: **V176**.
   patient apps (the lab wire-contract mismatch, and pharmacy status labels
   rendering raw enum names); and the open design question of whether a pharmacy
   should be a platform tenant with its own work queue, since today the only
-  channel that crosses organisations is SMS.
+  channel that crosses organisations is SMS. **Decided 2026-10-04 (D5):
+  DEFERRED, deliberately; SMS stays the inter-organisation channel.**
 
 - **The HTTP HL7 ingest door had no tenant boundary of its own.** Closed by
   this PR, recorded because it was never written down: `POST
@@ -3534,7 +3597,12 @@ steps (see "Operational, open right now"). Next free migration: **V176**.
   own sending pair must resolve to an active entry and the order must belong to
   that entry's hospital, so the property is gone rather than flipped. The
   operational consequence is that an analyzer posting over HTTP now needs an
-  allowlist row, exactly as one posting over MLLP always has.
+  allowlist row, exactly as one posting over MLLP always has. #817
+  (2026-10-06) then closed the order-existence oracle left on that door: a
+  caller with no scope of its own is judged at the sender's hospital before
+  the order is read, every refusal is the same 404 `laborder.notfound`, and
+  `X-Assignment-Id` must be the caller's own active assignment (a contract
+  change for integrators; prod had no allowlist entries).
 
 - **The pharmacy and laboratory flows: what wave 2 left underneath it.** The
   portal and both apps now carry the two flows end to end (#724-#729) and the
@@ -3559,9 +3627,14 @@ steps (see "Operational, open right now"). Next free migration: **V176**.
   (`ClientSafeAccessDeniedException`); the no-show reason is a column (V167),
   not English prose. G15 is half done: refill approval no longer tells the
   patient the medication is ready to collect; a real "ready for collection"
-  state is a product decision. Still open: `REQUIRES_EXTERNAL_FILL` and
-  `TRANSMISSION_FAILED` (nothing writes them), `LabOrderRequestDTO.assignmentId`
-  is not validated against the ordering staff or hospital, and the portal's
+  state is a product decision (in progress since 2026-10-07 on
+  `feat/pharmacy-ready-for-collection`). Still open: ~~`REQUIRES_EXTERNAL_FILL`
+  and `TRANSMISSION_FAILED` (nothing writes them)~~ (closed by #818,
+  2026-10-06, D2), ~~`LabOrderRequestDTO.assignmentId` is not validated against
+  the ordering staff or hospital~~ (closed by #811, 2026-10-06: the order is
+  recorded only under an active lab-ordering assignment the ordering clinician
+  holds at the order's hospital; the portal edit form it left is a bullet at
+  the end), and the portal's
   other ROLE_DOCTOR gates, which the expansion now opens to physicians and
   surgeons, were not audited one by one. Sub-items that name a branch were
   owned by that wave's streams and are not re-checked here.
@@ -3692,9 +3765,18 @@ steps (see "Operational, open right now"). Next free migration: **V176**.
   *Still open from the original audit.*
   - G15 — there is no "ready for collection" state, so the message telling a
     patient their prescription is ready still goes out after they have
-    collected it. Unowned.
-  - `REQUIRES_EXTERNAL_FILL` and `TRANSMISSION_FAILED` are states nothing
-    writes. #727 surfaces them under Needs attention so a legacy row carrying
+    collected it. In progress (2026-10-07) on
+    `feat/pharmacy-ready-for-collection`.
+  - ~~`REQUIRES_EXTERNAL_FILL` and `TRANSMISSION_FAILED` are states nothing
+    writes.~~ **Closed by #818** (2026-10-06, D2): a refused SMS commits a
+    FAILED transmission, cancels the new offer and moves the order to
+    `TRANSMISSION_FAILED` (unless another pharmacy still holds an open offer),
+    audited, with the prescriber told; that state is routable, dispensable
+    in-house, clarifiable and re-sendable. The provider's text, which can
+    quote the number, is no longer stored or returned.
+    `REQUIRES_EXTERNAL_FILL` is removed from the backend, the portal and both
+    apps (0 rows on prod and dev, no CHECK constraint, no migration). What it
+    was: #727 surfaces them under Needs attention so a legacy row carrying
     one is not stuck, but whether they should exist at all is undecided.
     Unowned.
   - `StockOutRoutingServiceImpl.appendNoShowReason` composes the English
@@ -3738,7 +3820,14 @@ steps (see "Operational, open right now"). Next free migration: **V176**.
   result was graded against, and can be labelled with a unit it was never
   expressed in.~~ Closed by #790** (2026-10-03): the patient read formats the
   range the grading used, labelled only with its own unit; when no range is in
-  the result's unit, none is displayed. Still open, a clinical decision:
+  the result's unit, none is displayed. The grading half was closed by #819
+  (2026-10-06, decision D1): a result whose unit matches no range (a range's
+  effective unit is its own, else the test's) is not graded (`UNSPECIFIED`
+  plus `unitMismatch`), raises no range-derived alert, is never auto-released,
+  even with an explicit OBX-8 `N`, and reads "Not graded: units differ" on
+  staff and patient screens; the analyser's own OBX-8 flag is still honoured.
+  The parser now stores OBX-6's identifier, decoded, and #823 escapes it on
+  the way out. As it stood before #819, a clinical decision:
   `findMatchingRange` still falls back to the first range in another explicit
   unit, so the severity flag (and critical alerting) can be computed against
   limits in the wrong unit and disagree with the now-blank displayed range.
@@ -3852,7 +3941,10 @@ steps (see "Operational, open right now"). Next free migration: **V176**.
     offered the verify button.) Unowned.
   - **Closed by #790** (2026-10-03): the payload is an
     `EncryptedStringConverter` column, and `PhiTextEncryptionBackfill`
-    encrypts legacy rows after readiness. Retention is still undecided. Was:
+    encrypts legacy rows after readiness. Retention was decided on
+    2026-10-04 (D3) and shipped by #814 (2026-10-06, V177): the rows stay,
+    the content is erased after 180 days (a failed message's after at most
+    365), and a purged row cannot be replayed (409). Was:
     `integration_message_event.payload` is plain TEXT with no
     `EncryptedStringConverter`, and the dispatcher's parse-failure rows put raw
     HL7 in it. The body is the only diagnostic for an unparseable message, so
@@ -4467,8 +4559,9 @@ steps (see "Operational, open right now"). Next free migration: **V176**.
   `*_v2` table that holds rows; V172 skips the case-insensitive username index
   while case-variant groups exist, so the stranded-lockout leak is closed by
   the id-keyed throttle alone on such a database. Reconciling, dropping or
-  merging any of them is a decision; the deploy log names them. Also undecided:
-  `integration_message_event` retention.
+  merging any of them is a decision; the deploy log names them.
+  `integration_message_event` retention, undecided then, was decided (D3) and
+  shipped by #814 (V177).
 
 - **Redundant PHYSICIAN / SURGEON compensations after #780 (2026-10-04).** The
   Keycloak path expands roles now, so `SecurityConfig.FHIR_READER_AUTHORITIES`
@@ -4515,6 +4608,58 @@ steps (see "Operational, open right now"). Next free migration: **V176**.
   itself, the lifecycle gate, the deprecated adapters, the verified-signal
   reads, the own-pin reads) carry permanent reasons and are not debt.
   Moving each tagged call and deleting its allowance is the whole job.
+
+- **G13: a pharmacist cannot claim a work-queue prescription (2026-10-07).**
+  Nothing assigns a queued prescription to one pharmacist, so two can start
+  preparing the same order; only the dispense itself is protected
+  (`Prescription.version`, `@Version` at `Prescription.java:384`, refuses the
+  second write). Needed only for multi-pharmacist queues. Open.
+
+- **The patient SMS in `PartnerExchangeService.applyReply` is unguarded
+  (2026-10-07, left by #812).** `channel.notifyPatientAccepted`
+  (`PartnerExchangeService.java:316`) and `notifyPatientDispensed` (:335) run
+  inside `handleInboundReply`'s transaction with no try/catch, so a channel
+  failure rolls back the partner's answer and fails the webhook. The
+  prescriber notification #812 added is guarded and runs after commit. Open.
+
+- **Partner-channel residuals of #812 (2026-10-07).** (a) A partner SMS that
+  fails to send is only logged (`WithdrawnOrderPartnerHandler.java:151`, as
+  everywhere in the partner channel), never audited. (b)
+  `withdrawPartnerOffers` skips every decision that is not PARTNER
+  (`WithdrawnOrderPartnerHandler.java:71`), so a BACKORDER decision on a
+  withdrawn order stays PENDING, and (c) nobody is told that back-order was
+  cancelled. Open.
+
+- **The portal's lab-order edit form re-attributes the order to the editor
+  (2026-10-07, left by #811).** `openEdit` in
+  `hospital-portal/src/app/lab/lab.ts:336` sends the editor's own
+  `orderingStaffId`, and :338 the editor's first active assignment
+  (`activeAssignmentId`, set at :158). Since #811 the server keeps the order's
+  assignment when its clinician is kept and refuses another person's, but an
+  edit by a colleague still makes the colleague the ordering clinician. The
+  form should send the order's own values. Open.
+
+- **Outbound HL7 puts the patient name in PID-6 (2026-10-07, found by
+  #823).** `Hl7v2MessageBuilder.pid` (`Hl7v2MessageBuilder.java:463`) writes
+  `PID|1||id|||name`, which is PID-6 (mother's maiden name), not PID-5
+  (patient name), so a receiver reading PID-5 gets no name. Pre-existing.
+  Open.
+
+- **A coded OBX-5 goes out as escaped `ST` text (2026-10-07, left by #823).**
+  The inbound parser stores a coded value (`CE`, `CWE`, `CNE`, …) as received
+  and stores no OBX-2 value type, so the outbound ORU
+  (`Hl7v2MessageBuilder.java:118`; `valueType` at :128 picks only `ST` or
+  `FT`) sends it as text with its component separators escaped. Fixing it
+  needs a column for the value type (a migration, V178 if it is next). Open.
+
+- **Dependabot security updates ignore `target-branch` (2026-10-07).**
+  `.github/dependabot.yml` sets `target-branch: develop` for every ecosystem
+  (its header explains why main must not take bumps directly), but security
+  updates always target the default branch: #809 and #810 merged straight to
+  main (prod) on 2026-10-05 and had to be merged back by #822 (#815 closed).
+  Either turn off Dependabot security updates for main in the repository
+  settings, or back-merge each one. A repository-settings decision for the
+  user. Open.
 
 ## Open clinical questions — kept open on purpose, not forgotten
 
@@ -4572,12 +4717,21 @@ they stay visible instead of living in a javadoc.
   create the assignment or confirm the loss; (3) the organisation-scope impact
   query, the (staff, patient) pairs readable today only through the
   organisation OR that #789 dropped. Not recorded whether they were run on dev.
+  (2026-10-07: both syncs since, 147332e39 and ce3265e8f, went ahead; whether
+  these steps were run first is not recorded here.)
 - After the sync, watch the deploy log for V167-V175's NOTICE and WARNING lines
   (orphans, sender collisions, kept `*_v2` tables, case-variant username
   groups, dangling assignments) — #790's unchecked test-plan item — and
   expect the first boot to encrypt every `empi.merge_events.notes` and
   `integration_message_event.payload` row in the background. Queued mail needs
   `APP_ENCRYPTION_KEY`.
+- **Close secret-scanning alert #53 as revoked** (user action, 2026-10-07).
+  #821 removed that token and the other 169; every one had expired (the
+  newest on 2026-02-16) and the signing keys were never exposed, so nothing
+  needs rotating. The tokens stay in git history.
+- Since ce3265e8f (2026-10-07) the nightly 03:30 retention sweep (#814) runs on
+  prod; its first runs erase real content for good (up to 100k rows a night).
+  Turn it off with `HMS_INTEGRATION_RETENTION_ENABLED=false`.
 - Set the repository variable `PLAY_APP_PUBLISHED` to `true` after the first
   Play publish (#791); until then `stage_and_submit` is refused.
 
