@@ -491,16 +491,20 @@
                   }
                   <!-- Gap G5 — send the order back to its prescriber with a
                        question, and read the answer when the row returns
-                       flagged CLARIFICATION_RESOLVED. -->
-                  <app-prescription-clarification
-                    mode="PHARMACY"
-                    [prescriptionId]="rx.id"
-                    [status]="rx.status"
-                    [medicationLabel]="rx.medicationName"
-                    [attentionReason]="rx.attentionReason ?? null"
-                    [clarificationResolvedAt]="rx.clarificationResolvedAt ?? null"
-                    (changed)="loadWorkQueue()"
-                  />
+                       flagged CLARIFICATION_RESOLVED. Not on a prepared row
+                       (G15): the server refuses a question while a fill is
+                       waiting, so the control would only lead to a 409. -->
+                  @if (!rx.readyForCollection) {
+                    <app-prescription-clarification
+                      mode="PHARMACY"
+                      [prescriptionId]="rx.id"
+                      [status]="rx.status"
+                      [medicationLabel]="rx.medicationName"
+                      [attentionReason]="rx.attentionReason ?? null"
+                      [clarificationResolvedAt]="rx.clarificationResolvedAt ?? null"
+                      (changed)="loadWorkQueue()"
+                    />
+                  }
                 </td>
               </tr>
             }

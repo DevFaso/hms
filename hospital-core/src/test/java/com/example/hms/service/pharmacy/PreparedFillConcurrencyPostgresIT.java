@@ -27,6 +27,7 @@ import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.model.pharmacy.InventoryItem;
 import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.StockLot;
+import com.example.hms.payload.dto.pharmacy.CancelReadyRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseRequestDTO;
 import com.example.hms.payload.dto.pharmacy.RoutingDecisionRequestDTO;
 import com.example.hms.repository.PrescriptionRepository;
@@ -314,6 +315,40 @@ class PreparedFillConcurrencyPostgresIT {
                 "SELECT quantity_on_hand FROM clinical.inventory_items WHERE id = :id")
             .setParameter("id", lot.getInventoryItem().getId())
             .getSingleResult()).intValue()).isEqualTo(80);
+    }
+
+    @Test
+    @DisplayName("AC-7: a hand-over, then a cancel-ready that waits on it: the cancel is refused, the fill stays handed over")
+    void handOverThenCancelReady() throws Exception {
+        UUID dispenseId = prepare();
+
+        CompletableFuture<Object> second = race(
+            () -> dispenseService.handOver(dispenseId, null),
+            () -> dispenseService.cancelReady(dispenseId, new CancelReadyRequestDTO(ReadyCancelReason.OTHER)));
+
+        assertThat(causeOf(second)).isInstanceOf(ConflictException.class)
+            .hasMessage("This fill is no longer waiting for collection.");
+        assertThat(statusesOfDispenses()).containsExactly("COMPLETED");
+        assertThat(lotRemaining()).isEqualByComparingTo("40");
+        verify(support, times(0)).notifyReadyCancelled(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("AC-7: a cancel-ready, then a hand-over that waits on it: the hand-over is refused, the stock is back")
+    void cancelReadyThenHandOver() throws Exception {
+        UUID dispenseId = prepare();
+
+        CompletableFuture<Object> second = race(
+            () -> dispenseService.cancelReady(dispenseId, new CancelReadyRequestDTO(ReadyCancelReason.NOT_COLLECTED)),
+            () -> dispenseService.handOver(dispenseId, null));
+
+        assertThat(causeOf(second)).isInstanceOf(ConflictException.class)
+            .hasMessage("This fill is no longer waiting for collection.");
+        assertThat(statusesOfDispenses()).containsExactly("CANCELLED");
+        assertThat(cancelReasons()).containsExactly(ReadyCancelReason.NOT_COLLECTED.name());
+        assertThat(lotRemaining()).isEqualByComparingTo("50");
+        assertThat(prescriptionStatus()).isEqualTo("SIGNED");
+        verify(support, times(1)).notifyReadyCancelled(any(), any(), any());
     }
 
     // ── the state a hand-over leaves (B2) ────────────────────────────────

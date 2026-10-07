@@ -438,6 +438,13 @@ describe('DispensingComponent', () => {
     // the plain row keeps Dispense and has no hand-over
     expect(byTestId('rx-dispense-rx-1')).not.toBeNull();
     expect(byTestId('rx-hand-over-rx-1')).toBeNull();
+    // and no "ask the prescriber" control on the prepared row: the server
+    // refuses a question while a fill is waiting (AC-10)
+    const rows = fixture.debugElement.queryAll(By.css('tbody tr'));
+    const prepared = rows.find((r) => r.query(By.css('[data-testid="rx-ready-rx-ready"]')));
+    const plain = rows.find((r) => r.query(By.css('[data-testid="rx-dispense-rx-1"]')));
+    expect(prepared?.query(By.css('app-prescription-clarification'))).toBeNull();
+    expect(plain?.query(By.css('app-prescription-clarification'))).not.toBeNull();
   });
 
   it('hands over with the optional wristband scan', () => {
@@ -532,6 +539,10 @@ describe('DispensingComponent', () => {
     const rows = fixture.debugElement.queryAll(By.css('.section-card:last-of-type tbody tr'));
     const pendingRow = rows.find((r) => r.nativeElement.textContent.includes('B'));
     expect(pendingRow?.query(By.css('.btn-action.danger'))).toBeNull();
+    // AC-11: a PENDING row reads "Ready for collection", not "Pending"
+    expect(pendingRow?.query(By.css('.badge')).nativeElement.textContent.trim()).toBe(
+      'Ready for collection',
+    );
 
     pharmacySvc.listDispensesByPharmacy.and.returnValue(
       of({
