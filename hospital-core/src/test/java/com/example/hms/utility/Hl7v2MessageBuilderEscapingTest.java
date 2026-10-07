@@ -55,10 +55,12 @@ class Hl7v2MessageBuilderEscapingTest {
             .build();
         result.setReleased(true);
 
+        LabOrder order = result.getLabOrder();
         String oru = builder.buildOruR01(result);
 
         String[] obx = segment(oru, "OBX").split("\\|", -1);
         assertThat(obx).hasSizeGreaterThan(14);
+        assertThat(obx[2]).as("a one-line value is ST").isEqualTo("ST");
         assertThat(obx[6]).as("raw OBX-6").isEqualTo("10\\S\\9/L");
         assertThat(obx[3]).as("each CE part escaped on its own")
             .isEqualTo("WBC\\S\\1^White cells \\T\\ count");
@@ -67,6 +69,25 @@ class Hl7v2MessageBuilderEscapingTest {
             assertThat(p.resultUnit()).isEqualTo("10^9/L");
             assertThat(p.resultValue()).isEqualTo(AWKWARD);
             assertThat(p.resultStatus()).isEqualTo("F");
+            // Every field the builder escapes is decoded on the way back in.
+            assertThat(p.testCode()).isEqualTo("WBC^1");
+            assertThat(p.placerOrderNumber()).isEqualTo(order.getId().toString());
+            assertThat(p.patientId()).isEqualTo(order.getPatient().getId().toString());
+        });
+    }
+
+    @Test
+    void escapedIdentifiersAreDecodedPerComponent() {
+        String oru = "MSH|^~\\&|LIS|LAB1|HMS|HOSP1|20261006093000||ORU^R01|M-1|P|2.5.1\r"
+            + "PID|1||MRN\\S\\9^^^HOSP\r"
+            + "OBR|1|ACC\\F\\1^LIS|FIL\\T\\2^LIS|GLU^Glucose|||20261006093000\r"
+            + "OBX|1|NM|GLU\\S\\X^Glucose\\S\\fasting||5.4|mmol/L|||N|||F|||20261006093000\r";
+
+        assertThat(builder.parseOruR01(oru)).singleElement().satisfies(p -> {
+            assertThat(p.patientId()).isEqualTo("MRN^9");
+            assertThat(p.placerOrderNumber()).as("the accession the lookup uses").isEqualTo("ACC|1");
+            assertThat(p.fillerOrderNumber()).isEqualTo("FIL&2");
+            assertThat(p.testCode()).isEqualTo("GLU^X");
         });
     }
 
@@ -140,6 +161,7 @@ class Hl7v2MessageBuilderEscapingTest {
 
         String oru = builder.buildOruR01(result);
 
+        assertThat(segment(oru, "OBX").split("\\|", -1)[2]).as("line breaks need FT").isEqualTo("FT");
         assertThat(segment(oru, "OBX").split("\\|", -1)[5])
             .isEqualTo("Line 1\\X0D\\\\.br\\Line 2\\.br\\Line 3\\X0D\\end");
         assertThat(builder.parseOruR01(oru)).singleElement()

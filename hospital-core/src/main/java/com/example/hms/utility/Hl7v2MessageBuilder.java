@@ -115,9 +115,18 @@ public class Hl7v2MessageBuilder {
         return msh("ORU^R01^ORU_R01", msgId, now) +
             pid(patientId, patientName) +
             "OBR|1|" + orderId + "||" + testCode + "^" + testName + "|||" + resultDate + SEG_TERM +
-            "OBX|1|ST|" + testCode + "^" + testName + "||" + encodeEscapes(result.getResultValue()) + "|" +
+            "OBX|1|" + valueType(result.getResultValue()) + "|" + testCode + "^" + testName + "||"
+            + encodeEscapes(result.getResultValue()) + "|" +
             encodeEscapes(result.getResultUnit()) + "||" + abnormalFlag + "|||" + resultStatus
             + "|||" + resultDate + SEG_TERM;
+    }
+
+    /**
+     * OBX-2 for a stored value: FT (formatted text, where the line-break
+     * escape is defined) when the value spans lines, ST otherwise.
+     */
+    private static String valueType(String value) {
+        return value != null && (value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0) ? "FT" : "ST";
     }
 
     // ── Inbound ORU^R01 parser ────────────────────────────────────────────────
@@ -463,11 +472,7 @@ public class Hl7v2MessageBuilder {
      * {@code 10^12/L}.
      */
     static String unitIdentifier(String field) {
-        if (field == null) {
-            return "";
-        }
-        int idx = field.indexOf('^');
-        return decodeEscapes(idx >= 0 ? field.substring(0, idx) : field);
+        return firstComponent(field);
     }
 
     /**
@@ -586,9 +591,19 @@ public class Hl7v2MessageBuilder {
         };
     }
 
-    private String firstComponent(String field) {
+    /**
+     * A field's first component as plain text: split on the component
+     * separator first, then decode, so an escaped caret inside the component
+     * ({@code WBC\S\1}) is data and not a split. Every identifier the
+     * outbound builders escape (PID-3, OBR-2/OBR-3 order and accession
+     * numbers, OBX-3 test code) is read back through this.
+     */
+    private static String firstComponent(String field) {
+        if (field == null) {
+            return "";
+        }
         int idx = field.indexOf('^');
-        return idx >= 0 ? field.substring(0, idx) : field;
+        return decodeEscapes(idx >= 0 ? field.substring(0, idx) : field);
     }
 
     private String extractPid(String[] segments) {
