@@ -716,6 +716,48 @@ class DispenseReadyForCollectionTest {
         }
 
         @Test
+        @DisplayName("#825 round 2: a hand-over note that fits exactly is appended")
+        void noteThatFitsIsAppended() {
+            Dispense d = preparedFill();
+            d.setNotes("p".repeat(600));
+            stubLocked(d);
+            stubHandOverWrites(d);
+
+            service.handOver(dispenseId, HandOverRequestDTO.builder().notes("h".repeat(399)).build());
+
+            assertThat(d.getNotes()).hasSize(1000);
+        }
+
+        @Test
+        @DisplayName("#825 round 2: a note one character too long is refused up front, naming what fits, before any lock")
+        void noteTooLongIsRefusedBeforeTheLock() {
+            Dispense d = preparedFill();
+            d.setNotes("p".repeat(600));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(dispenseRepository.findPrescriptionIdById(dispenseId)).thenReturn(Optional.of(prescriptionId));
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(d));
+
+            assertThatThrownBy(() -> service.handOver(dispenseId,
+                    HandOverRequestDTO.builder().notes("h".repeat(400)).build()))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage("The hand-over note is too long for this fill's notes; at most 399 characters fit.");
+            verify(prescriptionRepository, never()).findByIdAndHospitalIdForUpdate(any(), any());
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("#825 round 2: with no preparation note the whole 1000 is available")
+        void noPreparationNoteLeavesTheWholeField() {
+            Dispense d = preparedFill();
+            stubLocked(d);
+            stubHandOverWrites(d);
+
+            service.handOver(dispenseId, HandOverRequestDTO.builder().notes("h".repeat(1000)).build());
+
+            assertThat(d.getNotes()).hasSize(1000);
+        }
+
+        @Test
         @DisplayName("AC-17: hand-over still works with the flag off")
         void flagOffStillHandsOver() {
             org.springframework.test.util.ReflectionTestUtils.setField(service, "readyForCollectionEnabled", false);

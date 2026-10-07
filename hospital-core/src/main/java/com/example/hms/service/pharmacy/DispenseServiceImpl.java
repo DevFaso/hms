@@ -458,7 +458,10 @@ public class DispenseServiceImpl implements DispenseService {
     @Override
     @Transactional
     public DispenseResponseDTO handOver(UUID dispenseId, HandOverRequestDTO request) {
-        LockedPreparedFill locked = lockPreparedFill(dispenseId);
+        // A hand-over is never refused at flush over its note: the note is
+        // checked against what fits, after the scope check and before any
+        // lock or write (#825 code-review round 2).
+        LockedPreparedFill locked = lockPreparedFill(dispenseId, scoped -> requireNotesFit(scoped, request));
         Dispense dispense = locked.dispense();
         Prescription prescription = locked.prescription();
 
@@ -522,7 +525,7 @@ public class DispenseServiceImpl implements DispenseService {
         if (reason == null || !reason.isPharmacistChoice()) {
             throw new BusinessException("dispense.ready.cancelReason.invalid");
         }
-        LockedPreparedFill locked = lockPreparedFill(dispenseId);
+        LockedPreparedFill locked = lockPreparedFill(dispenseId, scoped -> { });
         if (locked.dispense().getStatus() != DispenseStatus.PENDING) {
             throw new ConflictException(MessageUtil.resolve("dispense.ready.notPending"));
         }
@@ -537,7 +540,12 @@ public class DispenseServiceImpl implements DispenseService {
      * {@link #enforceHospitalScope}, whose {@code pharmacy.notfound} would
      * tell a foreign id from a missing one.
      */
-    private LockedPreparedFill lockPreparedFill(UUID dispenseId) {
+    /**
+     * @param beforeLock a check on the in-scope (not yet locked) row, run
+     *                   after the scope check so it can never answer for
+     *                   another hospital's fill
+     */
+    private LockedPreparedFill lockPreparedFill(UUID dispenseId, java.util.function.Consumer<Dispense> beforeLock) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
             throw dispenseNotFound();
@@ -551,6 +559,7 @@ public class DispenseServiceImpl implements DispenseService {
                 || !hospitalId.equals(pharmacy.getHospital().getId())) {
             throw dispenseNotFound();
         }
+        beforeLock.accept(dispense);
         Prescription prescription = prescriptionRepository.findByIdAndHospitalIdForUpdate(prescriptionId, hospitalId)
                 .orElseThrow(this::dispenseNotFound);
         // The row as it is now that nobody else can move it.
@@ -596,6 +605,26 @@ public class DispenseServiceImpl implements DispenseService {
                 || dispense.getProductScanValue() != null
                 || dispense.getPatientScanValue() != null;
         return scanned ? DispenseVerificationStatus.VERIFIED : DispenseVerificationStatus.NOT_VERIFIED;
+    }
+
+    /** {@code Dispense.notes} holds at most this many characters (its @Size). */
+    static final int NOTES_MAX = 1000;
+
+    /**
+     * The hand-over note is appended to the preparation's note, and the two
+     * together must fit {@link #NOTES_MAX}: refused up front with what still
+     * fits, never at flush after the patient is already at the counter.
+     */
+    private static void requireNotesFit(Dispense dispense, HandOverRequestDTO request) {
+        String notes = request != null ? trimToNull(request.getNotes()) : null;
+        if (notes == null) {
+            return;
+        }
+        String existing = trimToNull(dispense.getNotes());
+        int remaining = existing == null ? NOTES_MAX : NOTES_MAX - existing.length() - 1;
+        if (notes.length() > remaining) {
+            throw new BusinessException("dispense.handOver.notesTooLong", String.valueOf(Math.max(remaining, 0)));
+        }
     }
 
     /** After the resync, so an ordinary dirty-checked update (through the encrypting converter). */
