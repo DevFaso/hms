@@ -1193,7 +1193,7 @@ After any merge, check the changelog and the i18n files by hand.
   - The `existsOpenPreparation` 409 guard, placed **after** the locked load from
     T3, in `StockOutRoutingServiceImpl`, `PrescriptionSmsDispatchServiceImpl`
     and `PrescriptionClarificationService`, with their tests.
-- [ ] **T11 — Work queue.** AC-11.
+- [x] **T11 — Work queue.** AC-11.
   - `WorkQueuePrescriptionDTO.readyForCollection`. The `Page` response is
     unchanged.
   - Batched decoration.

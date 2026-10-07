@@ -75,7 +75,7 @@ public class DispenseMapper {
      * name is not worth failing a dispense response over, so a detached proxy
      * answers null there rather than throwing.
      */
-    private static String displayNameOf(User user) {
+    public static String displayNameOf(User user) {
         if (user == null) {
             return null;
         }

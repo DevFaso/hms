@@ -136,6 +136,10 @@ public class DispenseServiceImpl implements DispenseService {
     @Value("${pharmacy.ready-for-collection.enabled:true}")
     private boolean readyForCollectionEnabled = true;
 
+    /** G15: after this long a prepared fill is flagged READY_UNCOLLECTED on the queue. */
+    @Value("${pharmacy.ready-for-collection.uncollected-after:P7D}")
+    private java.time.Duration uncollectedAfter = java.time.Duration.ofDays(7);
+
     private static final String AUDIT_ENTITY = "DISPENSE";
 
     /**
@@ -203,6 +207,14 @@ public class DispenseServiceImpl implements DispenseService {
      * outstanding back order loses its only cue.
      */
     static final String ATTENTION_BACK_ORDER_OUTSTANDING = "BACK_ORDER_OUTSTANDING";
+
+    /**
+     * G15: a prepared fill has waited longer than
+     * {@code pharmacy.ready-for-collection.uncollected-after}. Nothing is
+     * cancelled automatically (user decision 2); the cue asks a person to
+     * call the patient or cancel the preparation.
+     */
+    static final String ATTENTION_READY_UNCOLLECTED = "READY_UNCOLLECTED";
 
     /**
      * The fill states a cancellation may recompute from. Every other status
@@ -1064,9 +1076,51 @@ public class DispenseServiceImpl implements DispenseService {
         Map<UUID, PrescriptionRoutingDecision> latestDecisions = latestDecisionsFor(rows);
         Set<UUID> outstandingBackOrders = outstandingBackOrdersFor(rows);
         Map<UUID, LocalDateTime> lastActions = lastPharmacyActionsFor(rows, latestDecisions);
-        return page.map(p -> toWorkQueueDTO(p, latestRefills.get(p.getId()),
-                latestDecisions.get(p.getId()), lastActions.get(p.getId()),
-                outstandingBackOrders.contains(p.getId())));
+        Map<UUID, Dispense> preparedFills = openPreparationsFor(rows);
+        LocalDateTime uncollectedBefore = LocalDateTime.now(clock).minus(uncollectedAfter);
+        return page.map(p -> {
+            Dispense prepared = preparedFills.get(p.getId());
+            WorkQueuePrescriptionDTO dto = toWorkQueueDTO(p, latestRefills.get(p.getId()),
+                    latestDecisions.get(p.getId()), lastActions.get(p.getId()),
+                    outstandingBackOrders.contains(p.getId()));
+            if (prepared != null) {
+                dto.setReadyForCollection(toReadyForCollection(prepared));
+                // G15 AC-11: the lowest-precedence reason. A status or an
+                // answered question says more about the order than its age.
+                if (dto.getAttentionReason() == null && prepared.getCreatedAt() != null
+                        && prepared.getCreatedAt().isBefore(uncollectedBefore)) {
+                    dto.setAttentionReason(ATTENTION_READY_UNCOLLECTED);
+                    dto.setNeedsAttention(true);
+                }
+            }
+            return dto;
+        });
+    }
+
+    /** G15: the open preparation of each order on the page, one query. */
+    private Map<UUID, Dispense> openPreparationsFor(List<Prescription> prescriptions) {
+        if (prescriptions.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> ids = prescriptions.stream().map(Prescription::getId).toList();
+        Map<UUID, Dispense> open = new HashMap<>();
+        for (Dispense d : dispenseRepository.findByPrescription_IdInAndStatus(ids, DispenseStatus.PENDING)) {
+            if (d.getPrescription() != null) {
+                open.putIfAbsent(d.getPrescription().getId(), d);
+            }
+        }
+        return open;
+    }
+
+    private static WorkQueuePrescriptionDTO.ReadyForCollection toReadyForCollection(Dispense prepared) {
+        return WorkQueuePrescriptionDTO.ReadyForCollection.builder()
+                .dispenseId(prepared.getId())
+                .readyAt(prepared.getCreatedAt())
+                .preparedByName(DispenseMapper.displayNameOf(prepared.getPreparedByUser()))
+                .quantity(prepared.getQuantityDispensed())
+                .unit(prepared.getUnit())
+                .reminderSentAt(prepared.getReadyReminderSentAt())
+                .build();
     }
 
     /** Newest routing decision per prescription on the page, one query. */
@@ -1121,8 +1175,13 @@ public class DispenseServiceImpl implements DispenseService {
         Map<UUID, LocalDateTime> last = new HashMap<>();
         for (Dispense d : dispenseRepository.findByPrescription_IdInAndStatusNotOrderByDispensedAtDesc(
                 ids, DispenseStatus.CANCELLED)) {
-            if (d.getPrescription() != null && d.getDispensedAt() != null) {
-                last.putIfAbsent(d.getPrescription().getId(), d.getDispensedAt());
+            // G15: a prepared fill has no dispensedAt yet; preparing it is
+            // the pharmacy acting, at its creation time
+            // (coalesce(dispensedAt, createdAt)). The newest wins whatever
+            // order the rows came in, since NULLs sort first in a DESC.
+            LocalDateTime actedAt = d.getDispensedAt() != null ? d.getDispensedAt() : d.getCreatedAt();
+            if (d.getPrescription() != null && actedAt != null) {
+                last.merge(d.getPrescription().getId(), actedAt, (a, b) -> a.isAfter(b) ? a : b);
             }
         }
         latestDecisions.forEach((id, decision) -> {
@@ -1353,7 +1412,9 @@ public class DispenseServiceImpl implements DispenseService {
      * answer first). The last one
      * holds only until the pharmacy acts on the answer — a dispense or a
      * routing decision after the resolution clears it; without that the row
-     * would be flagged for the rest of its life.
+     * would be flagged for the rest of its life. A seventh, READY_UNCOLLECTED
+     * (G15), is added by {@link #getWorkQueue} below all of these, because it
+     * needs the page's open preparations.
      */
     private static String attentionReason(Prescription p, LocalDateTime unactedAnswer,
                                           boolean backOrderOutstanding) {

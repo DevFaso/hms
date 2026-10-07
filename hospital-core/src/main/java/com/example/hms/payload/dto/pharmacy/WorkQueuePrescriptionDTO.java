@@ -84,6 +84,13 @@ public class WorkQueuePrescriptionDTO {
     private Refill refill;
 
     /**
+     * G15: the fill prepared for this order and waiting for collection, or
+     * null when there is none. While it is set the pharmacist hands over or
+     * cancels; the order cannot be dispensed or routed elsewhere.
+     */
+    private ReadyForCollection readyForCollection;
+
+    /**
      * What the pharmacist needs in order to decide whether to hand medication
      * over: how many fills this authorization still has, and what the
      * prescriber last decided about the patient's request.
@@ -112,6 +119,23 @@ public class WorkQueuePrescriptionDTO {
         private LocalDateTime lastDecidedAt;
         /** True when this fill is sitting in the queue because a refill was approved. */
         private boolean awaitingRefillPickup;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public static class ReadyForCollection {
+        private UUID dispenseId;
+        /** When it was marked ready. */
+        private LocalDateTime readyAt;
+        private String preparedByName;
+        private BigDecimal quantity;
+        private String unit;
+        /** When the one reminder SMS was sent; null before. */
+        private LocalDateTime reminderSentAt;
     }
 
     @Getter

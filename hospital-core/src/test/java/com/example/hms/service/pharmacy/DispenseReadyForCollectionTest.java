@@ -827,4 +827,111 @@ class DispenseReadyForCollectionTest {
             verifyNoInteractions(preparedFillVoider);
         }
     }
+
+    @Nested
+    @DisplayName("work queue (AC-11)")
+    class WorkQueue {
+
+        private final LocalDateTime now = LocalDateTime.now(FIXED_CLOCK);
+
+        private Dispense preparedAt(Prescription rx, LocalDateTime readyAt) {
+            User preparer = new User();
+            preparer.setId(UUID.randomUUID());
+            preparer.setFirstName("Awa");
+            preparer.setLastName("Ouedraogo");
+            Dispense d = Dispense.builder()
+                    .prescription(rx)
+                    .preparedByUser(preparer)
+                    .dispensedByUser(preparer)
+                    .medicationName("Amoxicillin")
+                    .quantityRequested(BigDecimal.TEN)
+                    .quantityDispensed(BigDecimal.TEN)
+                    .unit("tablets")
+                    .status(DispenseStatus.PENDING)
+                    .dispensedAt(null)
+                    .build();
+            d.setId(UUID.randomUUID());
+            d.setCreatedAt(readyAt);
+            return d;
+        }
+
+        private java.util.List<com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO> queue(
+                java.util.List<Prescription> rows, java.util.List<Dispense> open) {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByHospital_IdAndStatusIn(any(), any(), any()))
+                    .thenReturn(new org.springframework.data.domain.PageImpl<>(rows));
+            when(dispenseRepository.findByPrescription_IdInAndStatus(any(), eq(DispenseStatus.PENDING)))
+                    .thenReturn(open);
+            return service.getWorkQueue(org.springframework.data.domain.PageRequest.of(0, 20)).getContent();
+        }
+
+        private Prescription another() {
+            Prescription rx = new Prescription();
+            rx.setId(UUID.randomUUID());
+            rx.setStatus(PrescriptionStatus.SIGNED);
+            rx.setMedicationName("Paracetamol");
+            return rx;
+        }
+
+        @Test
+        @DisplayName("a prepared order carries its preparation; the others carry none; one query for the page")
+        void decoratesThePreparedRows() {
+            Prescription plain = another();
+            Dispense prepared = preparedAt(prescription, now.minusHours(2));
+
+            var rows = queue(java.util.List.of(prescription, plain), java.util.List.of(prepared));
+
+            var ready = rows.get(0).getReadyForCollection();
+            assertThat(ready).isNotNull();
+            assertThat(ready.getDispenseId()).isEqualTo(prepared.getId());
+            assertThat(ready.getReadyAt()).isEqualTo(now.minusHours(2));
+            assertThat(ready.getPreparedByName()).isEqualTo("Awa Ouedraogo");
+            assertThat(ready.getQuantity()).isEqualByComparingTo("10");
+            assertThat(ready.getUnit()).isEqualTo("tablets");
+            assertThat(ready.getReminderSentAt()).isNull();
+            assertThat(rows.get(0).getAttentionReason()).isNull();
+            assertThat(rows.get(1).getReadyForCollection()).isNull();
+            verify(dispenseRepository, org.mockito.Mockito.times(1))
+                    .findByPrescription_IdInAndStatus(any(), eq(DispenseStatus.PENDING));
+        }
+
+        @Test
+        @DisplayName("READY_UNCOLLECTED once it has waited longer than 7 days, not before")
+        void uncollectedAfterSevenDays() {
+            Prescription fresh = another();
+            var rows = queue(java.util.List.of(prescription, fresh), java.util.List.of(
+                    preparedAt(prescription, now.minusDays(7).minusMinutes(1)),
+                    preparedAt(fresh, now.minusDays(6))));
+
+            assertThat(rows.get(0).getAttentionReason()).isEqualTo("READY_UNCOLLECTED");
+            assertThat(rows.get(0).isNeedsAttention()).isTrue();
+            assertThat(rows.get(1).getAttentionReason()).isNull();
+            assertThat(rows.get(1).isNeedsAttention()).isFalse();
+        }
+
+        @Test
+        @DisplayName("READY_UNCOLLECTED is the lowest precedence: a status reason wins")
+        void statusReasonWins() {
+            prescription.setStatus(PrescriptionStatus.PENDING_STOCK);
+
+            var rows = queue(java.util.List.of(prescription), java.util.List.of(
+                    preparedAt(prescription, now.minusDays(30))));
+
+            assertThat(rows.get(0).getAttentionReason()).isEqualTo("PENDING_STOCK");
+        }
+
+        @Test
+        @DisplayName("preparing is acting on an answered question: the CLARIFICATION_RESOLVED cue clears (coalesce)")
+        void preparingActsOnTheAnswer() {
+            prescription.setClarificationResolvedAt(now.minusHours(5));
+            Dispense prepared = preparedAt(prescription, now.minusHours(1));
+            when(dispenseRepository.findByPrescription_IdInAndStatusNotOrderByDispensedAtDesc(any(), eq(DispenseStatus.CANCELLED)))
+                    .thenReturn(java.util.List.of(prepared));
+
+            var rows = queue(java.util.List.of(prescription), java.util.List.of(prepared));
+
+            assertThat(rows.get(0).getAttentionReason()).isNull();
+            assertThat(rows.get(0).getClarificationResolvedAt()).isNull();
+        }
+    }
 }
