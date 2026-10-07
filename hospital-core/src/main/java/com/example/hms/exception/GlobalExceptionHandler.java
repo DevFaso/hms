@@ -79,7 +79,10 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler({PessimisticLockingFailureException.class, OptimisticLockingFailureException.class})
     public ResponseEntity<Object> handleConcurrentModification(RuntimeException ex, WebRequest request) {
-        log.warn("Concurrent modification at path {}: {}", request.getDescription(false), ex.getClass().getSimpleName());
+        if (log.isWarnEnabled()) {
+            log.warn("Concurrent modification at path {}: {}", request.getDescription(false),
+                    ex.getClass().getSimpleName());
+        }
         return buildErrorResponse(HttpStatus.CONFLICT,
                 com.example.hms.utility.MessageUtil.resolve("concurrent.modification"), request);
     }

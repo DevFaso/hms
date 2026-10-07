@@ -1,7 +1,6 @@
 package com.example.hms.service.pharmacy;
 
 import com.example.hms.enums.AuditEventType;
-import com.example.hms.enums.DispenseStatus;
 import com.example.hms.enums.EmploymentType;
 import com.example.hms.enums.EncounterType;
 import com.example.hms.enums.JobTitle;
@@ -366,10 +365,11 @@ class PreparedFillConcurrencyPostgresIT {
         dispenseService.handOver(dispenseId, null);
 
         Map<String, Object> after = dispenseRow(dispenseId);
-        assertThat(after.get("status")).isEqualTo("COMPLETED");
+        assertThat(after)
+            .containsEntry("status", "COMPLETED")
+            .containsEntry("dispensed_by", secondPharmacist.getId())
+            .containsEntry("prepared_by", pharmacist.getId());
         assertThat(after.get("dispensed_at")).isNotNull();
-        assertThat(after.get("dispensed_by")).isEqualTo(secondPharmacist.getId());
-        assertThat(after.get("prepared_by")).isEqualTo(pharmacist.getId());
         assertThat((LocalDateTime) after.get("updated_at")).isAfter((LocalDateTime) before.get("updated_at"));
         assertThat(prescriptionStatus()).isEqualTo("DISPENSED");
         assertThat(dispenseRepository.sumQuantityDispensedForPrescription(prescription.getId(),

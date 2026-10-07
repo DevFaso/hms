@@ -35,6 +35,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -283,7 +284,7 @@ class PharmacyServiceSupportTest {
             var syncs = org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations();
             assertThat(syncs).hasSize(2);
             syncs.forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
-            verify(smsService, org.mockito.Mockito.times(2)).send(anyString(), anyString());
+            verify(smsService, times(2)).send(anyString(), anyString());
         } finally {
             org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
         }

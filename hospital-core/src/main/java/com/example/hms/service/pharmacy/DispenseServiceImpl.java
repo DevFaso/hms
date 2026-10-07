@@ -141,6 +141,8 @@ public class DispenseServiceImpl implements DispenseService {
     private java.time.Duration uncollectedAfter = java.time.Duration.ofDays(7);
 
     private static final String AUDIT_ENTITY = "DISPENSE";
+    private static final String DISPENSE_NOT_FOUND = "dispense.notfound";
+    private static final String READY_NOT_PENDING = "dispense.ready.notPending";
 
     /**
      * What the pharmacist may hand medication over against, and therefore
@@ -333,7 +335,7 @@ public class DispenseServiceImpl implements DispenseService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         UUID replayHospitalId = dispenseRepository.findHospitalIdById(replay.getId()).orElse(null);
         if (hospitalId == null || !hospitalId.equals(replayHospitalId)) {
-            throw new ResourceNotFoundException("dispense.notfound");
+            throw new ResourceNotFoundException(DISPENSE_NOT_FOUND);
         }
     }
 
@@ -468,7 +470,7 @@ public class DispenseServiceImpl implements DispenseService {
             return dispenseMapper.toResponseDTO(dispense);
         }
         if (dispense.getStatus() != DispenseStatus.PENDING) {
-            throw new ConflictException(MessageUtil.resolve("dispense.ready.notPending"));
+            throw new ConflictException(MessageUtil.resolve(READY_NOT_PENDING));
         }
         // A hand-over is never refused at flush over its note: the note is
         // checked against what fits while the fill is still PENDING, before
@@ -500,7 +502,7 @@ public class DispenseServiceImpl implements DispenseService {
             if (isHandOverReplay(dispense)) {
                 return dispenseMapper.toResponseDTO(dispense);
             }
-            throw new ConflictException(MessageUtil.resolve("dispense.ready.notPending"));
+            throw new ConflictException(MessageUtil.resolve(READY_NOT_PENDING));
         }
         appendNotes(dispense, request);
 
@@ -530,7 +532,7 @@ public class DispenseServiceImpl implements DispenseService {
         }
         LockedPreparedFill locked = lockPreparedFill(dispenseId);
         if (locked.dispense().getStatus() != DispenseStatus.PENDING) {
-            throw new ConflictException(MessageUtil.resolve("dispense.ready.notPending"));
+            throw new ConflictException(MessageUtil.resolve(READY_NOT_PENDING));
         }
         return dispenseMapper.toResponseDTO(preparedFillVoider.cancel(locked.dispense(), reason));
     }
@@ -566,7 +568,7 @@ public class DispenseServiceImpl implements DispenseService {
     private record LockedPreparedFill(Dispense dispense, Prescription prescription) {}
 
     private ResourceNotFoundException dispenseNotFound() {
-        return new ResourceNotFoundException("dispense.notfound");
+        return new ResourceNotFoundException(DISPENSE_NOT_FOUND);
     }
 
     /** COMPLETED and prepared: this fill was already handed over. */
@@ -850,8 +852,10 @@ public class DispenseServiceImpl implements DispenseService {
         // other's decrement. 0 rows = not enough left at this instant.
         LocalDateTime now = LocalDateTime.now(clock);
         if (stockLotRepository.decrementRemaining(stockLot.getId(), requested, now) == 0) {
-            throw new BusinessException("Insufficient lot stock: "
-                    + stockLot.getRemainingQuantity() + " remaining, requested " + requested);
+            // No figure for what remains: the managed copy was read before the
+            // atomic UPDATE and can be stale under concurrency.
+            throw new BusinessException("Insufficient lot stock: the lot does not hold the requested "
+                    + requested);
         }
         if (inventoryItemRepository.decrementOnHand(inventoryItem.getId(), requested, now) == 0) {
             throw new BusinessException("Insufficient inventory stock");
@@ -991,7 +995,7 @@ public class DispenseServiceImpl implements DispenseService {
     @Transactional(readOnly = true)
     public DispenseResponseDTO getDispense(UUID id) {
         Dispense dispense = dispenseRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(DISPENSE_NOT_FOUND));
         enforceHospitalScope(dispense.getPharmacy());
         return dispenseMapper.toResponseDTO(dispense);
     }
@@ -1052,7 +1056,7 @@ public class DispenseServiceImpl implements DispenseService {
     @Transactional
     public DispenseResponseDTO cancelDispense(UUID id) {
         Dispense dispense = dispenseRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(DISPENSE_NOT_FOUND));
         // Cancelling reverses a stock lot and rewrites the prescription's
         // status: it is a write on one hospital's records, and it takes the
         // same answer as every other write here. enforceHospitalScope alone
@@ -1065,7 +1069,7 @@ public class DispenseServiceImpl implements DispenseService {
         // deadlock against a preparation of the same order; then the row
         // as it is under that lock.
         prescriptionRepository.findByIdForUpdate(dispense.getPrescription().getId())
-                .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(DISPENSE_NOT_FOUND));
         dispense = resync(dispense);
 
         if (dispense.getStatus() == DispenseStatus.CANCELLED) {
@@ -1234,22 +1238,30 @@ public class DispenseServiceImpl implements DispenseService {
         Map<UUID, LocalDateTime> last = new HashMap<>();
         for (Dispense d : dispenseRepository.findByPrescription_IdInAndStatusNotOrderByDispensedAtDesc(
                 ids, DispenseStatus.CANCELLED)) {
-            // G15: a prepared fill has no dispensedAt yet; preparing it is
-            // the pharmacy acting, at its creation time
-            // (coalesce(dispensedAt, createdAt)). The newest wins whatever
-            // order the rows came in, since NULLs sort first in a DESC.
-            LocalDateTime actedAt = d.getDispensedAt() != null ? d.getDispensedAt() : d.getCreatedAt();
-            if (d.getPrescription() != null && actedAt != null) {
-                last.merge(d.getPrescription().getId(), actedAt, (a, b) -> a.isAfter(b) ? a : b);
-            }
+            recordDispenseAction(last, d);
         }
-        latestDecisions.forEach((id, decision) -> {
-            LocalDateTime decidedAt = decision.getDecidedAt();
-            if (decidedAt != null) {
-                last.merge(id, decidedAt, (a, b) -> a.isAfter(b) ? a : b);
-            }
-        });
+        latestDecisions.forEach((id, decision) -> keepNewer(last, id, decision.getDecidedAt()));
         return last;
+    }
+
+    /**
+     * G15: a prepared fill has no dispensedAt yet; preparing it is the
+     * pharmacy acting, at its creation time (coalesce(dispensedAt,
+     * createdAt)). The newest wins whatever order the rows came in, since
+     * NULLs sort first in a DESC.
+     */
+    private static void recordDispenseAction(Map<UUID, LocalDateTime> last, Dispense d) {
+        if (d.getPrescription() == null) {
+            return;
+        }
+        LocalDateTime actedAt = d.getDispensedAt() != null ? d.getDispensedAt() : d.getCreatedAt();
+        keepNewer(last, d.getPrescription().getId(), actedAt);
+    }
+
+    private static void keepNewer(Map<UUID, LocalDateTime> last, UUID prescriptionId, LocalDateTime at) {
+        if (at != null) {
+            last.merge(prescriptionId, at, (a, b) -> a.isAfter(b) ? a : b);
+        }
     }
 
     /**
@@ -1571,7 +1583,7 @@ public class DispenseServiceImpl implements DispenseService {
      */
     private void requireHospitalScopeForWrite() {
         if (roleValidator.requireActiveHospitalId() == null) {
-            throw new ResourceNotFoundException("dispense.notfound");
+            throw new ResourceNotFoundException(DISPENSE_NOT_FOUND);
         }
     }
 

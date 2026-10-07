@@ -68,7 +68,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -271,7 +273,7 @@ class DispenseReadyForCollectionTest {
         }
         when(dispenseMapper.toEntity(any(), any())).thenAnswer(inv -> {
             DispenseMapper.DispenseContext ctx = inv.getArgument(1);
-            Dispense d = Dispense.builder()
+            return Dispense.builder()
                     .prescription(ctx.prescription())
                     .patient(ctx.patient())
                     .pharmacy(ctx.pharmacy())
@@ -281,7 +283,6 @@ class DispenseReadyForCollectionTest {
                     .quantityRequested(BigDecimal.TEN)
                     .quantityDispensed(BigDecimal.TEN)
                     .build();
-            return d;
         });
         // lenient: a test that makes the save fail never reaches the mapping
         org.mockito.Mockito.lenient().when(dispenseRepository.save(any(Dispense.class))).thenAnswer(inv -> {
@@ -353,7 +354,8 @@ class DispenseReadyForCollectionTest {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
-            assertThatThrownBy(() -> service.markReadyForCollection(request()))
+            DispenseRequestDTO req = request();
+            assertThatThrownBy(() -> service.markReadyForCollection(req))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("not in a dispensable state");
             assertNothingPrepared();
@@ -366,7 +368,8 @@ class DispenseReadyForCollectionTest {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
-            assertThatThrownBy(() -> service.markReadyForCollection(request()))
+            DispenseRequestDTO req = request();
+            assertThatThrownBy(() -> service.markReadyForCollection(req))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("CONTROLLED_SUBSTANCE");
             assertNothingPrepared();
@@ -403,7 +406,8 @@ class DispenseReadyForCollectionTest {
             when(cdsCheckService.checkAtDispense(prescription, patientId)).thenReturn(
                     new CdsAlertResult(CdsAlertSeverity.CRITICAL, java.util.List.of("interaction"), true));
 
-            assertThatThrownBy(() -> service.markReadyForCollection(request()))
+            DispenseRequestDTO req = request();
+            assertThatThrownBy(() -> service.markReadyForCollection(req))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("CDS_CRITICAL");
             assertNothingPrepared();
@@ -417,7 +421,8 @@ class DispenseReadyForCollectionTest {
             when(dispenseRepository.existsByPrescription_IdAndStatus(prescriptionId, DispenseStatus.PENDING))
                     .thenReturn(true);
 
-            assertThatThrownBy(() -> service.markReadyForCollection(request()))
+            DispenseRequestDTO req = request();
+            assertThatThrownBy(() -> service.markReadyForCollection(req))
                     .isInstanceOf(ConflictException.class)
                     .hasMessage("This prescription already has a fill prepared for collection.");
             assertNothingPrepared();
@@ -432,7 +437,8 @@ class DispenseReadyForCollectionTest {
             when(dispenseRepository.existsByPrescription_IdAndStatus(prescriptionId, DispenseStatus.PENDING))
                     .thenReturn(false, true);
 
-            assertThatThrownBy(() -> service.markReadyForCollection(request()))
+            DispenseRequestDTO req = request();
+            assertThatThrownBy(() -> service.markReadyForCollection(req))
                     .isInstanceOf(ConflictException.class)
                     .hasMessage("This prescription already has a fill prepared for collection.");
         }
@@ -454,10 +460,11 @@ class DispenseReadyForCollectionTest {
         void flagOffIsNotFound() {
             org.springframework.test.util.ReflectionTestUtils.setField(service, "readyForCollectionEnabled", false);
 
-            assertThatThrownBy(() -> service.markReadyForCollection(request()))
+            DispenseRequestDTO req = request();
+            assertThatThrownBy(() -> service.markReadyForCollection(req))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessage("Ready for collection is not enabled.");
-            assertThatThrownBy(() -> service.markReadyForCollectionTransactionally(request()))
+            assertThatThrownBy(() -> service.markReadyForCollectionTransactionally(req))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessage("Ready for collection is not enabled.");
             verifyNoInteractions(prescriptionRepository);
@@ -735,8 +742,8 @@ class DispenseReadyForCollectionTest {
             d.setNotes("p".repeat(600));
             stubLocked(d);
 
-            assertThatThrownBy(() -> service.handOver(dispenseId,
-                    HandOverRequestDTO.builder().notes("h".repeat(400)).build()))
+            HandOverRequestDTO tooLong = HandOverRequestDTO.builder().notes("h".repeat(400)).build();
+            assertThatThrownBy(() -> service.handOver(dispenseId, tooLong))
                     .isInstanceOf(BusinessException.class)
                     .hasMessage("The hand-over note is too long for this fill's notes; at most 399 characters fit.");
             verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
@@ -759,12 +766,12 @@ class DispenseReadyForCollectionTest {
             assertThat(retry.getId()).isEqualTo(first.getId());
             assertThat(d.getNotes()).hasSize(600);
             // the side effects ran once, for the first call only
-            verify(dispenseRepository, org.mockito.Mockito.times(1))
+            verify(dispenseRepository, times(1))
                     .completePreparedFill(any(), any(), any(), any(), any(), any());
-            verify(support, org.mockito.Mockito.times(1)).logAudit(eq(AuditEventType.DISPENSE_HANDED_OVER),
+            verify(support, times(1)).logAudit(eq(AuditEventType.DISPENSE_HANDED_OVER),
                     anyString(), anyString(), eq("DISPENSE"));
-            verify(support, org.mockito.Mockito.times(1)).notifyDispensed(any(), any(), any());
-            verify(prescriberNotifier, org.mockito.Mockito.times(1)).notifyPrescriber(any(), any());
+            verify(support, times(1)).notifyDispensed(any(), any(), any());
+            verify(prescriberNotifier, times(1)).notifyPrescriber(any(), any());
         }
 
         @Test
@@ -799,9 +806,11 @@ class DispenseReadyForCollectionTest {
         @EnumSource(value = ReadyCancelReason.class, names = {"PRESCRIPTION_WITHDRAWN", "PRESCRIPTION_CHANGED"})
         @DisplayName("a system reason, or none, is a 400 before anything is read")
         void systemReasonIsRefused(ReadyCancelReason reason) {
-            assertThatThrownBy(() -> service.cancelReady(dispenseId, new CancelReadyRequestDTO(reason)))
+            CancelReadyRequestDTO systemReason = new CancelReadyRequestDTO(reason);
+            CancelReadyRequestDTO noReason = new CancelReadyRequestDTO(null);
+            assertThatThrownBy(() -> service.cancelReady(dispenseId, systemReason))
                     .isInstanceOf(BusinessException.class);
-            assertThatThrownBy(() -> service.cancelReady(dispenseId, new CancelReadyRequestDTO(null)))
+            assertThatThrownBy(() -> service.cancelReady(dispenseId, noReason))
                     .isInstanceOf(BusinessException.class);
             verifyNoInteractions(dispenseRepository, preparedFillVoider);
         }
@@ -832,8 +841,8 @@ class DispenseReadyForCollectionTest {
             d.setStatus(DispenseStatus.COMPLETED);
             stubLocked(d);
 
-            assertThatThrownBy(() -> service.cancelReady(dispenseId,
-                    new CancelReadyRequestDTO(ReadyCancelReason.OTHER)))
+            CancelReadyRequestDTO other = new CancelReadyRequestDTO(ReadyCancelReason.OTHER);
+            assertThatThrownBy(() -> service.cancelReady(dispenseId, other))
                     .isInstanceOf(ConflictException.class);
             verifyNoInteractions(preparedFillVoider);
         }
@@ -862,7 +871,7 @@ class DispenseReadyForCollectionTest {
         @SuppressWarnings("unchecked")
         private java.util.Map<String, Object> bodyOf(Runnable call) {
             org.springframework.web.context.request.WebRequest request =
-                    org.mockito.Mockito.mock(org.springframework.web.context.request.WebRequest.class);
+                    mock(org.springframework.web.context.request.WebRequest.class);
             when(request.getDescription(false)).thenReturn("uri=/api/pharmacy/dispense/x");
             try {
                 call.run();
@@ -988,7 +997,7 @@ class DispenseReadyForCollectionTest {
             assertThat(ready.getReminderSentAt()).isNull();
             assertThat(rows.get(0).getAttentionReason()).isNull();
             assertThat(rows.get(1).getReadyForCollection()).isNull();
-            verify(dispenseRepository, org.mockito.Mockito.times(1))
+            verify(dispenseRepository, times(1))
                     .findByPrescription_IdInAndStatus(any(), eq(DispenseStatus.PENDING));
         }
 
