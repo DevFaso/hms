@@ -833,14 +833,19 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // Locked (G15 rule 1): a withdrawal or an edit voids an open
         // preparation, and a preparation never writes this row, so @Version
         // cannot see the race; the row lock serialises the two.
-        Prescription existing = prescriptionRepository.findByIdForUpdate(id)
+        // The hospital is in the locking query when one is pinned (#825
+        // security finding 3); a super-admin in global view has none.
+        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+        Prescription existing = (actingHospitalId != null
+                ? prescriptionRepository.findByIdAndHospitalIdForUpdate(id, actingHospitalId)
+                : prescriptionRepository.findByIdForUpdate(id))
             .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
         // ── Hospital scope enforcement ── the row's own hospital, as on
         // sign/co-sign/delete, and BEFORE the status checks below, which
         // answer 400 and would otherwise tell a real id from a missing one.
         // Authority used to be judged only at the REQUEST's encounter
         // hospital, so another hospital's prescription could be rewritten.
-        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+        // Kept after the scoped lock as defence in depth.
         if (actingHospitalId != null
                 && (existing.getHospital() == null || !actingHospitalId.equals(existing.getHospital().getId()))) {
             throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);

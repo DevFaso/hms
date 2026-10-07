@@ -95,7 +95,7 @@ class PrescriptionClarificationServiceTest {
         void happyPath() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(roleValidator.getCurrentUserId()).thenReturn(pharmacistId);
-            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
             service.requestClarification(prescriptionId, "  Dose au-dessus du plafond rénal ");
 
@@ -120,7 +120,7 @@ class PrescriptionClarificationServiceTest {
         void openPreparationBlocksTheQuestion() {
             com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
             when(dispenseRepository.existsByPrescription_IdAndStatus(prescriptionId,
                     com.example.hms.enums.DispenseStatus.PENDING)).thenReturn(true);
 
@@ -140,7 +140,7 @@ class PrescriptionClarificationServiceTest {
             prescription.setClarificationResolvedByUserId(doctorUserId);
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(roleValidator.getCurrentUserId()).thenReturn(pharmacistId);
-            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
             service.requestClarification(prescriptionId, "new question");
 
@@ -155,7 +155,7 @@ class PrescriptionClarificationServiceTest {
             prescription.setStatus(PrescriptionStatus.TRANSMISSION_FAILED);
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(roleValidator.getCurrentUserId()).thenReturn(pharmacistId);
-            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
             service.requestClarification(prescriptionId, "which strength?");
 
@@ -169,7 +169,7 @@ class PrescriptionClarificationServiceTest {
         void refusesNonDispensableStatus() {
             prescription.setStatus(PrescriptionStatus.DISPENSED);
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
             assertThatThrownBy(() -> service.requestClarification(prescriptionId, "why"))
                     .isInstanceOf(BusinessException.class)
@@ -190,7 +190,7 @@ class PrescriptionClarificationServiceTest {
 
             prescription.setStatus(PrescriptionStatus.PARTNER_ACCEPTED);
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
             assertThatThrownBy(() -> service.requestClarification(prescriptionId, "why"))
                     .isInstanceOf(BusinessException.class)
@@ -202,7 +202,7 @@ class PrescriptionClarificationServiceTest {
         @DisplayName("refuses a blank reason")
         void refusesBlankReason() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
             assertThatThrownBy(() -> service.requestClarification(prescriptionId, "   "))
                     .isInstanceOf(BusinessException.class)
@@ -213,7 +213,7 @@ class PrescriptionClarificationServiceTest {
         @DisplayName("a prescription at another hospital is 404, not 403")
         void crossTenantIs404() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
-            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
             assertThatThrownBy(() -> service.requestClarification(prescriptionId, "why"))
                     .isInstanceOf(ResourceNotFoundException.class);

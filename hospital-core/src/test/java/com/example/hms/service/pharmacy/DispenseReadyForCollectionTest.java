@@ -172,6 +172,38 @@ class DispenseReadyForCollectionTest {
                 .barcodeValue(LotBarcode.mint())
                 .build();
         stockLot.setId(stockLotId);
+        stockMovesLikeTheDatabase();
+    }
+
+    /**
+     * The atomic stock UPDATEs (#825 security finding 1) act on the fixture
+     * as the database would: a decrement applies only when enough is left.
+     */
+    private void stockMovesLikeTheDatabase() {
+        org.mockito.Mockito.lenient().when(stockLotRepository.decrementRemaining(any(), any(), any()))
+                .thenAnswer(inv -> {
+                    java.math.BigDecimal q = inv.getArgument(1);
+                    if (stockLot.getRemainingQuantity().compareTo(q) < 0) return 0;
+                    stockLot.setRemainingQuantity(stockLot.getRemainingQuantity().subtract(q));
+                    return 1;
+                });
+        org.mockito.Mockito.lenient().when(stockLotRepository.incrementRemaining(any(), any(), any()))
+                .thenAnswer(inv -> {
+                    stockLot.setRemainingQuantity(stockLot.getRemainingQuantity().add(inv.getArgument(1)));
+                    return 1;
+                });
+        org.mockito.Mockito.lenient().when(inventoryItemRepository.decrementOnHand(any(), any(), any()))
+                .thenAnswer(inv -> {
+                    java.math.BigDecimal q = inv.getArgument(1);
+                    if (inventoryItem.getQuantityOnHand().compareTo(q) < 0) return 0;
+                    inventoryItem.setQuantityOnHand(inventoryItem.getQuantityOnHand().subtract(q));
+                    return 1;
+                });
+        org.mockito.Mockito.lenient().when(inventoryItemRepository.incrementOnHand(any(), any(), any()))
+                .thenAnswer(inv -> {
+                    inventoryItem.setQuantityOnHand(inventoryItem.getQuantityOnHand().add(inv.getArgument(1)));
+                    return 1;
+                });
     }
 
     @org.junit.jupiter.api.AfterEach
@@ -212,7 +244,7 @@ class DispenseReadyForCollectionTest {
         @DisplayName("an open preparation refuses the one-step fill with 409, before any stock moves")
         void openPreparationRefusesOneStep() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
             when(dispenseRepository.existsByPrescription_IdAndStatus(prescriptionId, DispenseStatus.PENDING))
                     .thenReturn(true);
             DispenseRequestDTO dto = request();
@@ -230,7 +262,7 @@ class DispenseReadyForCollectionTest {
     void stubReadyPath(boolean withLot) {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
-        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -319,7 +351,7 @@ class DispenseReadyForCollectionTest {
         void notDispensableIsRefused(PrescriptionStatus status) {
             prescription.setStatus(status);
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
             assertThatThrownBy(() -> service.markReadyForCollection(request()))
                     .isInstanceOf(BusinessException.class)
@@ -332,7 +364,7 @@ class DispenseReadyForCollectionTest {
         void controlledSubstanceIsRefused() {
             prescription.setControlledSubstance(true);
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
             assertThatThrownBy(() -> service.markReadyForCollection(request()))
                     .isInstanceOf(BusinessException.class)
@@ -346,7 +378,7 @@ class DispenseReadyForCollectionTest {
             stockLot.setExpiryDate(TODAY.minusDays(1));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
-            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -365,7 +397,7 @@ class DispenseReadyForCollectionTest {
         @DisplayName("AC-2: a CRITICAL CDS alert without an override reason is refused")
         void criticalCdsIsRefused() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(cdsCheckService.checkAtDispense(prescription, patientId)).thenReturn(
@@ -381,7 +413,7 @@ class DispenseReadyForCollectionTest {
         @DisplayName("AC-3: a second preparation of the same order is a 409, checked under the lock")
         void secondPreparationIsAConflict() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
             when(dispenseRepository.existsByPrescription_IdAndStatus(prescriptionId, DispenseStatus.PENDING))
                     .thenReturn(true);
 
@@ -471,7 +503,7 @@ class DispenseReadyForCollectionTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(dispenseRepository.findPrescriptionIdById(dispenseId)).thenReturn(Optional.of(prescriptionId));
         when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(d));
-        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
         org.mockito.Mockito.lenient().when(dispenseMapper.toResponseDTO(any(Dispense.class)))
                 .thenAnswer(inv -> DispenseResponseDTO.builder()
                         .id(((Dispense) inv.getArgument(0)).getId())
@@ -725,7 +757,7 @@ class DispenseReadyForCollectionTest {
 
             assertThat(result.getStatus()).isEqualTo("CANCELLED");
             org.mockito.InOrder order = org.mockito.Mockito.inOrder(prescriptionRepository, preparedFillVoider);
-            order.verify(prescriptionRepository).findByIdForUpdate(prescriptionId);
+            order.verify(prescriptionRepository).findByIdAndHospitalIdForUpdate(eq(prescriptionId), any());
             order.verify(preparedFillVoider).cancel(d, ReadyCancelReason.STOCK_UNAVAILABLE);
         }
 
@@ -748,6 +780,7 @@ class DispenseReadyForCollectionTest {
             Dispense d = preparedFill();
             when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(d));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
 
             assertThatThrownBy(() -> service.cancelDispense(dispenseId))
                     .isInstanceOf(BusinessException.class)

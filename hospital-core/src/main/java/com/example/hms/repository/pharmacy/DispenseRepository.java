@@ -87,6 +87,10 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
     @Query("SELECT d.prescription.id FROM Dispense d WHERE d.id = :id")
     Optional<UUID> findPrescriptionIdById(@Param("id") UUID id);
 
+    /** The hospital of a dispense's pharmacy, as a scalar (usable outside a transaction). */
+    @Query("SELECT d.pharmacy.hospital.id FROM Dispense d WHERE d.id = :id")
+    Optional<UUID> findHospitalIdById(@Param("id") UUID id);
+
     /**
      * Hand-over: PENDING to COMPLETED in one conditional UPDATE. Returns the
      * number of rows changed: 0 when the row is no longer PENDING. Bulk JPQL

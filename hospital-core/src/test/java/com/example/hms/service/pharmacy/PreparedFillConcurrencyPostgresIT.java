@@ -176,6 +176,9 @@ class PreparedFillConcurrencyPostgresIT {
     private Pharmacy dispensary;
     private Pharmacy partner;
     private StockLot lot;
+    private Staff doctorStaff;
+    private Encounter encounter;
+    private UserRoleHospitalAssignment doctorAssignment;
 
     @BeforeEach
     void setUp() {
@@ -284,6 +287,33 @@ class PreparedFillConcurrencyPostgresIT {
         verify(support, times(1)).logAudit(eq(AuditEventType.DISPENSE_HANDED_OVER), anyString(), anyString(), anyString());
         verify(prescriberNotifier, times(1)).notifyPrescriber(any(), eq(PrescriptionStatus.DISPENSED));
         verify(support, times(1)).notifyDispensed(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("#825 finding 1: two orders filled from one lot at once: the second waits on the lot row, neither decrement is lost")
+    void twoOrdersFromOneLotLoseNoStock() throws Exception {
+        UUID otherPrescriptionId = new TransactionTemplate(transactionManager).execute(status -> {
+            Prescription other = Prescription.builder()
+                .patient(entityManager.merge(patient)).staff(entityManager.merge(doctorStaff))
+                .encounter(entityManager.merge(encounter)).hospital(entityManager.merge(hospital))
+                .assignment(entityManager.merge(doctorAssignment)).medicationName("Amoxicillin")
+                .quantity(BigDecimal.TEN).status(PrescriptionStatus.SIGNED).build();
+            entityManager.persist(other);
+            return other.getId();
+        });
+        DispenseRequestDTO second = request();
+        second.setPrescriptionId(otherPrescriptionId);
+
+        CompletableFuture<Object> waiter = race(
+            () -> dispenseService.markReadyForCollection(request()),
+            () -> dispenseService.createDispense(second));
+
+        assertThat(waiter.get(30, TimeUnit.SECONDS)).isNotNull();
+        assertThat(lotRemaining()).isEqualByComparingTo("30");
+        assertThat(((Number) entityManager.createNativeQuery(
+                "SELECT quantity_on_hand FROM clinical.inventory_items WHERE id = :id")
+            .setParameter("id", lot.getInventoryItem().getId())
+            .getSingleResult()).intValue()).isEqualTo(80);
     }
 
     // ── the state a hand-over leaves (B2) ────────────────────────────────
@@ -549,12 +579,12 @@ class PreparedFillConcurrencyPostgresIT {
         Role doctorRole = role("ROLE_DOCTOR", "Doctor");
         User doctor = user("doctor", n);
         entityManager.persist(doctor);
-        UserRoleHospitalAssignment doctorAssignment = UserRoleHospitalAssignment.builder()
+        doctorAssignment = UserRoleHospitalAssignment.builder()
             .assignmentCode("ASSIGN-PF-" + n).description("Doctor assignment")
             .user(doctor).hospital(hospital).role(doctorRole)
             .startDate(LocalDate.now()).assignedAt(LocalDateTime.now()).active(true).build();
         entityManager.persist(doctorAssignment);
-        Staff doctorStaff = Staff.builder()
+        doctorStaff = Staff.builder()
             .user(doctor).hospital(hospital).assignment(doctorAssignment)
             .jobTitle(JobTitle.PHYSICIAN).employmentType(EmploymentType.FULL_TIME)
             .licenseNumber("LIC-PF-" + n).name("Dr. Doctor").active(true).build();
@@ -574,7 +604,7 @@ class PreparedFillConcurrencyPostgresIT {
             .organizationId(organization.getId()).hospitalId(hospital.getId()).user(patientUser).build();
         entityManager.persist(patient);
 
-        Encounter encounter = Encounter.builder()
+        encounter = Encounter.builder()
             .patient(patient).staff(doctorStaff).hospital(hospital).assignment(doctorAssignment)
             .encounterType(EncounterType.CONSULTATION).encounterDate(LocalDateTime.now())
             .code("ENC-PF-" + n).build();

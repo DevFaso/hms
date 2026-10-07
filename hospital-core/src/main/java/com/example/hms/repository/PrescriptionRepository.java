@@ -121,6 +121,19 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
     @Query("select p from Prescription p where p.id = :id")
     Optional<Prescription> findByIdForUpdate(@Param("id") UUID id);
 
+    /**
+     * {@link #findByIdForUpdate}, but only within one hospital: the
+     * hospital is part of the locking query, so a caller can never take the
+     * row lock on another tenant's prescription (#825 security finding 3).
+     * Empty when the id is unknown OR belongs elsewhere; the caller answers
+     * both with the same 404. For hospital-scoped writes; a super-admin in
+     * global view (no hospital) uses {@link #findByIdForUpdate}.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Prescription p where p.id = :id and p.hospital.id = :hospitalId")
+    Optional<Prescription> findByIdAndHospitalIdForUpdate(@Param("id") UUID id,
+                                                          @Param("hospitalId") UUID hospitalId);
+
     /** Hospital-scoped tile count for the super-admin dashboard. */
     long countByHospital_Id(UUID hospitalId);
 

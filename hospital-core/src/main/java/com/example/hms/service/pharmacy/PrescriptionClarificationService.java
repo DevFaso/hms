@@ -176,7 +176,12 @@ public class PrescriptionClarificationService {
      * that might meet a prepared fill takes the prescription lock first).
      */
     private Prescription findInScopeForUpdate(UUID prescriptionId) {
-        return requireInScope(prescriptionRepository.findByIdForUpdate(prescriptionId)
+        // The hospital is in the locking query when one is pinned (#825
+        // security finding 3); a super-admin in global view has none.
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        return requireInScope((hospitalId != null
+                ? prescriptionRepository.findByIdAndHospitalIdForUpdate(prescriptionId, hospitalId)
+                : prescriptionRepository.findByIdForUpdate(prescriptionId))
                 .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND)));
     }
 

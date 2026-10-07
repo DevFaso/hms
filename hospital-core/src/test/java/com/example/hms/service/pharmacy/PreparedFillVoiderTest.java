@@ -101,6 +101,19 @@ class PreparedFillVoiderTest {
                 .status(DispenseStatus.PENDING)
                 .build();
         prepared.setId(UUID.randomUUID());
+        item.setId(UUID.randomUUID());
+        lot.setId(UUID.randomUUID());
+        // The atomic UPDATEs (#825 security finding 1), acting on the fixture as the database would.
+        org.mockito.Mockito.lenient().when(stockLotRepository.incrementRemaining(any(), any(), any()))
+                .thenAnswer(inv -> {
+                    lot.setRemainingQuantity(lot.getRemainingQuantity().add(inv.getArgument(1)));
+                    return 1;
+                });
+        org.mockito.Mockito.lenient().when(inventoryItemRepository.incrementOnHand(any(), any(), any()))
+                .thenAnswer(inv -> {
+                    item.setQuantityOnHand(item.getQuantityOnHand().add(inv.getArgument(1)));
+                    return 1;
+                });
     }
 
     @org.junit.jupiter.api.AfterEach
@@ -151,7 +164,9 @@ class PreparedFillVoiderTest {
         assertThatThrownBy(() -> voider.cancel(prepared, ReadyCancelReason.OTHER))
                 .isInstanceOf(ConflictException.class)
                 .hasMessage("This fill is no longer waiting for collection.");
-        verifyNoInteractions(stockLotRepository, inventoryItemRepository, stockTransactionRepository);
+        verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
+        verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+        verifyNoInteractions(stockTransactionRepository);
         verify(support, never()).notifyReadyCancelled(any(), any(), any());
         verify(support, never()).logAudit(any(), any(), any(), any());
     }
@@ -165,7 +180,9 @@ class PreparedFillVoiderTest {
 
         voider.cancel(prepared, ReadyCancelReason.NOT_COLLECTED);
 
-        verifyNoInteractions(stockLotRepository, inventoryItemRepository, stockTransactionRepository);
+        verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
+        verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+        verifyNoInteractions(stockTransactionRepository);
         verify(support).notifyReadyCancelled(patient, pharmacy, "Amoxicillin");
     }
 

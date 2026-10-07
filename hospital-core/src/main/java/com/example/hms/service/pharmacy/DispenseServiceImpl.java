@@ -290,6 +290,7 @@ public class DispenseServiceImpl implements DispenseService {
         if (idempotencyKey != null) {
             var replay = dispenseRepository.findByIdempotencyKey(idempotencyKey);
             if (replay.isPresent()) {
+                requireReplayInCallersHospital(replay.get());
                 log.info("[DISPENSE] idempotency replay hit — returning existing dispense id={} for key={}",
                         replay.get().getId(), idempotencyKey);
                 return dispenseMapper.toResponseDTO(replay.get());
@@ -305,6 +306,7 @@ public class DispenseServiceImpl implements DispenseService {
             if (idempotencyKey != null) {
                 var winner = dispenseRepository.findByIdempotencyKey(idempotencyKey);
                 if (winner.isPresent()) {
+                    requireReplayInCallersHospital(winner.get());
                     log.info("[DISPENSE] idempotency race resolved — returning winner dispense id={} for key={}",
                             winner.get().getId(), idempotencyKey);
                     return dispenseMapper.toResponseDTO(winner.get());
@@ -318,6 +320,20 @@ public class DispenseServiceImpl implements DispenseService {
                 throw new ConflictException(MessageUtil.resolve("dispense.ready.alreadyOpen"));
             }
             throw ex;
+        }
+    }
+
+    /**
+     * An idempotency key is a client value: a replay answers only with a
+     * dispense of the caller's own hospital, else exactly as a missing one
+     * (#825 security finding 4). Read as a scalar: the replay path runs
+     * outside any transaction, where the LAZY pharmacy cannot load.
+     */
+    private void requireReplayInCallersHospital(Dispense replay) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        UUID replayHospitalId = dispenseRepository.findHospitalIdById(replay.getId()).orElse(null);
+        if (hospitalId == null || !hospitalId.equals(replayHospitalId)) {
+            throw new ResourceNotFoundException("dispense.notfound");
         }
     }
 
@@ -535,7 +551,7 @@ public class DispenseServiceImpl implements DispenseService {
                 || !hospitalId.equals(pharmacy.getHospital().getId())) {
             throw dispenseNotFound();
         }
-        Prescription prescription = prescriptionRepository.findByIdForUpdate(prescriptionId)
+        Prescription prescription = prescriptionRepository.findByIdAndHospitalIdForUpdate(prescriptionId, hospitalId)
                 .orElseThrow(this::dispenseNotFound);
         // The row as it is now that nobody else can move it.
         return new LockedPreparedFill(resync(dispense), prescription);
@@ -590,6 +606,13 @@ public class DispenseServiceImpl implements DispenseService {
         }
         String existing = trimToNull(dispense.getNotes());
         dispense.setNotes(existing == null ? notes : existing + "\n" + notes);
+    }
+
+    /** Re-reads one entity after a bulk UPDATE changed its row; nothing else is touched. */
+    private void refreshIfManaged(Object entity) {
+        if (entityManager != null && entityManager.contains(entity)) {
+            entityManager.refresh(entity);
+        }
     }
 
     /**
@@ -690,7 +713,10 @@ public class DispenseServiceImpl implements DispenseService {
         // a withdrawal or a routing write of the same order, so the checks
         // below (and the open-preparation check) are made on a state nobody
         // else can change before this transaction commits.
-        Prescription prescription = prescriptionRepository.findByIdForUpdate(dto.getPrescriptionId())
+        // The hospital is in the locking query (#825 security finding 3):
+        // another tenant's prescription is never locked, only refused.
+        Prescription prescription = prescriptionRepository
+                .findByIdAndHospitalIdForUpdate(dto.getPrescriptionId(), hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
 
         // Tenant isolation: prescription must belong to the active hospital
@@ -793,19 +819,19 @@ public class DispenseServiceImpl implements DispenseService {
         }
         InventoryItem inventoryItem = stockLot.getInventoryItem();
         BigDecimal requested = dto.getQuantityDispensed();
-        if (stockLot.getRemainingQuantity().compareTo(requested) < 0) {
+        // Atomic in the database (#825 security finding 1): two fills of
+        // different orders from the same lot can no longer overwrite each
+        // other's decrement. 0 rows = not enough left at this instant.
+        LocalDateTime now = LocalDateTime.now(clock);
+        if (stockLotRepository.decrementRemaining(stockLot.getId(), requested, now) == 0) {
             throw new BusinessException("Insufficient lot stock: "
                     + stockLot.getRemainingQuantity() + " remaining, requested " + requested);
         }
-
-        stockLot.setRemainingQuantity(stockLot.getRemainingQuantity().subtract(requested));
-        stockLotRepository.save(stockLot);
-
-        if (inventoryItem.getQuantityOnHand().compareTo(requested) < 0) {
+        if (inventoryItemRepository.decrementOnHand(inventoryItem.getId(), requested, now) == 0) {
             throw new BusinessException("Insufficient inventory stock");
         }
-        inventoryItem.setQuantityOnHand(inventoryItem.getQuantityOnHand().subtract(requested));
-        inventoryItemRepository.save(inventoryItem);
+        refreshIfManaged(stockLot);
+        refreshIfManaged(inventoryItem);
 
         StockTransaction tx = StockTransaction.builder()
                 .inventoryItem(inventoryItem)
@@ -1008,6 +1034,13 @@ public class DispenseServiceImpl implements DispenseService {
         // another tenant's fill — more reachable now that the reads succeed.
         requireHospitalScopeForWrite();
         enforceHospitalScope(dispense.getPharmacy());
+        // Rule 1 (#825 security finding 2): the prescription lock first, as
+        // every other path that moves a fill takes it, so this cannot
+        // deadlock against a preparation of the same order; then the row
+        // as it is under that lock.
+        prescriptionRepository.findByIdForUpdate(dispense.getPrescription().getId())
+                .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
+        dispense = resync(dispense);
 
         if (dispense.getStatus() == DispenseStatus.CANCELLED) {
             throw new BusinessException("Dispense is already cancelled");
@@ -1021,12 +1054,12 @@ public class DispenseServiceImpl implements DispenseService {
         // Reverse stock if a lot was used
         if (dispense.getStockLot() != null) {
             StockLot lot = dispense.getStockLot();
-            lot.setRemainingQuantity(lot.getRemainingQuantity().add(dispense.getQuantityDispensed()));
-            stockLotRepository.save(lot);
-
             InventoryItem item = lot.getInventoryItem();
-            item.setQuantityOnHand(item.getQuantityOnHand().add(dispense.getQuantityDispensed()));
-            inventoryItemRepository.save(item);
+            LocalDateTime now = LocalDateTime.now(clock);
+            stockLotRepository.incrementRemaining(lot.getId(), dispense.getQuantityDispensed(), now);
+            inventoryItemRepository.incrementOnHand(item.getId(), dispense.getQuantityDispensed(), now);
+            refreshIfManaged(lot);
+            refreshIfManaged(item);
 
             User performer = resolveCurrentUser();
             StockTransaction reverseTx = StockTransaction.builder()

@@ -103,12 +103,18 @@ public class PreparedFillVoider {
         if (lot == null) {
             return;
         }
-        lot.setRemainingQuantity(lot.getRemainingQuantity().add(dispense.getQuantityDispensed()));
-        stockLotRepository.save(lot);
-
         InventoryItem item = lot.getInventoryItem();
-        item.setQuantityOnHand(item.getQuantityOnHand().add(dispense.getQuantityDispensed()));
-        inventoryItemRepository.save(item);
+        // Atomic in the database (#825 security finding 1): a return racing a
+        // fill of another order from the same lot cannot be lost.
+        LocalDateTime now = LocalDateTime.now(clock);
+        stockLotRepository.incrementRemaining(lot.getId(), dispense.getQuantityDispensed(), now);
+        inventoryItemRepository.incrementOnHand(item.getId(), dispense.getQuantityDispensed(), now);
+        if (entityManager.contains(lot)) {
+            entityManager.refresh(lot);
+        }
+        if (entityManager.contains(item)) {
+            entityManager.refresh(item);
+        }
 
         User performer = support.resolveCurrentUser();
         stockTransactionRepository.save(StockTransaction.builder()

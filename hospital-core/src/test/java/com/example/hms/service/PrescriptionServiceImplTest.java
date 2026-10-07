@@ -1326,14 +1326,14 @@ class PrescriptionServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
         PrescriptionRequestDTO request = buildRequest();
 
-        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.empty());
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.empty());
         ResourceNotFoundException missing = catchThrowableOfType(ResourceNotFoundException.class,
             () -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH));
 
         Prescription foreign = new Prescription();
         foreign.setId(prescriptionId);
         foreign.setHospital(encounter.getHospital());
-        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(foreign));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(foreign));
         ResourceNotFoundException refused = catchThrowableOfType(ResourceNotFoundException.class,
             () -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH));
 
@@ -1355,7 +1355,7 @@ class PrescriptionServiceImplTest {
         PrescriptionRequestDTO request = buildRequest();
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(actingHospitalId);
-        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(own));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(own));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
@@ -1371,6 +1371,22 @@ class PrescriptionServiceImplTest {
     }
 
     @Test
+    void theLockQueryCarriesTheActingHospital_soAnotherTenantsRowIsNeverLocked() {
+        // #825 security finding 3
+        UUID prescriptionId = UUID.randomUUID();
+        UUID actingHospitalId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(actingHospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(prescriptionId, actingHospitalId))
+            .thenReturn(Optional.empty());
+        PrescriptionRequestDTO request = buildRequest();
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(prescriptionRepository, never()).findByIdForUpdate(any());
+        verify(prescriptionRepository, never()).findById(any());
+    }
+
+    @Test
     void updateAtTheActingHospitalStillWorks() {
         UUID prescriptionId = UUID.randomUUID();
         Prescription own = new Prescription();
@@ -1379,7 +1395,7 @@ class PrescriptionServiceImplTest {
         PrescriptionRequestDTO request = buildRequest();
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(own));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(own));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));

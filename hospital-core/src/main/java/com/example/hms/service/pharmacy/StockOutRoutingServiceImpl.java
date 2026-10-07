@@ -595,7 +595,9 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         }
         // Locked (G15 rule 1): routing writes the prescription, a prepared
         // fill does not, so without the row lock both could commit.
-        Prescription prescription = requirePrescriptionInScope(prescriptionRepository.findByIdForUpdate(prescriptionId)
+        // The hospital is in the locking query (#825 security finding 3).
+        Prescription prescription = requirePrescriptionInScope(prescriptionRepository
+                .findByIdAndHospitalIdForUpdate(prescriptionId, hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound")), hospitalId);
         // G15 AC-10: a prepared fill holds stock for this order at the
         // counter; sending the order elsewhere first would leave a bag nobody
