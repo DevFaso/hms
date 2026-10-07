@@ -350,7 +350,7 @@ public class Hl7v2MessageBuilder {
             String[] pv1 = findSegment(segments, "PV1");
             String patientClass = field(pv1, 2);
             String assignedLocation = field(pv1, 3);
-            String visitNumber = firstComponent(field(pv1, 19));
+            String visitNumber = rawFirstComponent(field(pv1, 19));
             LocalDateTime admit = parseHl7DateTimeOrNull(field(pv1, 44));
             LocalDateTime discharge = parseHl7DateTimeOrNull(field(pv1, 45));
 
@@ -596,8 +596,20 @@ public class Hl7v2MessageBuilder {
      * separator first, then decode, so an escaped caret inside the component
      * ({@code WBC\S\1}) is data and not a split. Every identifier the
      * outbound builders escape (PID-3, OBR-2/OBR-3 order and accession
-     * numbers, OBX-3 test code) is read back through this.
+     * numbers, OBX-3 test code) is read back through this. Lab ORU paths
+     * only: the ADT parser keeps {@link #rawFirstComponent}.
      */
+    /**
+     * The ADT parser's split, exactly as before HL7 escapes were decoded on the
+     * lab paths: the first component as received, nothing decoded. ADT MRNs,
+     * names and merge ids are all read raw, and a visit number decoded here
+     * would stop matching the one already stored for the same visit.
+     */
+    private static String rawFirstComponent(String field) {
+        int idx = field.indexOf('^');
+        return idx >= 0 ? field.substring(0, idx) : field;
+    }
+
     private static String firstComponent(String field) {
         if (field == null) {
             return "";
