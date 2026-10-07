@@ -2643,4 +2643,20 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V178 — pharmacy "ready for collection" (audit gap G15).
+         clinical.dispenses: legacy PENDING rows -> COMPLETED (0 rows on dev
+         and prod, 2026-10-07); dispensed_at nullable; prepared_by (FK
+         security.users), ready_reminder_sent_at, cancel_reason; partial
+         UNIQUE uq_disp_one_pending_per_rx (one open preparation per
+         prescription) and partial idx_disp_pending_created for the
+         reminder sweep. No DO blocks.
+         ================================================================= -->
+    <changeSet id="V178-dispense-ready-for-collection" author="hms-team" runOnChange="false">
+        <sqlFile path="V178__dispense_ready_for_collection.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

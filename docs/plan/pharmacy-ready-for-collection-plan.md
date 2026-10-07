@@ -726,6 +726,13 @@ has no DO blocks. It does the following:
    - Nothing in `db/migration` constrains `prescriptions.status`.
    - *Coordinator to verify prod* with `\d clinical.dispenses`. Hand-run `R__`
      scripts are not visible in the repo.
+   - **Verified by the coordinator, read-only, 2026-10-07:** prod and dev
+     `clinical.dispenses` hold **0 rows** (so step 1's conversion is a no-op
+     there; it stays for other environments); the only CHECKs on
+     `clinical.dispenses` are `chk_disp_qty_positive`,
+     `ck_dispense_verification_status` and `ck_dispense_override_reason`
+     (none on `status`); `dispensed_at` is NOT NULL today;
+     `clinical.prescriptions` has no CHECK constraints.
 
 ### Decision: reuse `DispenseStatus.PENDING`, add no `PrescriptionStatus` value
 
@@ -1103,7 +1110,7 @@ After any merge, check the changelog and the i18n files by hand.
 
 ## 11. Task list
 
-- [ ] **T1 — V178 and the entity.** AC-18, AC-3 (index).
+- [x] **T1 — V178 and the entity.** AC-18, AC-3 (index).
   - `V178__dispense_ready_for_collection.sql` and `changelog.xml`.
   - `model/pharmacy/Dispense.java`:
     - make `dispensedAt` nullable;

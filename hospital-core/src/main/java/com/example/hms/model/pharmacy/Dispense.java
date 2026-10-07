@@ -2,6 +2,7 @@ package com.example.hms.model.pharmacy;
 
 import com.example.hms.enums.DispenseStatus;
 import com.example.hms.enums.DispenseVerificationStatus;
+import com.example.hms.enums.ReadyCancelReason;
 import com.example.hms.model.BaseEntity;
 import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.model.Patient;
@@ -55,7 +56,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"prescription", "patient", "pharmacy", "stockLot",
-    "dispensedByUser", "verifiedByUser", "medicationCatalogItem"})
+    "dispensedByUser", "verifiedByUser", "medicationCatalogItem", "preparedByUser"})
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class Dispense extends BaseEntity {
 
@@ -134,10 +135,35 @@ public class Dispense extends BaseEntity {
     @Convert(converter = EncryptedStringConverter.class)
     private String notes;
 
-    @NotNull
-    @Column(name = "dispensed_at", nullable = false)
+    /**
+     * When the fill was handed over. Null while the fill is prepared and
+     * waiting for collection ({@link DispenseStatus#PENDING}, G15); the
+     * one-step dispense keeps today's default of "now".
+     */
+    @Column(name = "dispensed_at")
     @Builder.Default
     private LocalDateTime dispensedAt = LocalDateTime.now();
+
+    /* ── Ready for collection (G15, V178) ───────────────────────────────── */
+    //
+    // The partial unique index uq_disp_one_pending_per_rx (one PENDING row
+    // per prescription) lives ONLY in V178: declared here as an @Index, H2
+    // would build a FULL unique index on prescription_id.
+
+    /** Who prepared the fill. Kept after hand-over overwrites dispensedBy. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "prepared_by",
+        foreignKey = @ForeignKey(name = "fk_disp_prepared_by"))
+    private User preparedByUser;
+
+    /** Claim stamp of the single "still waiting" reminder SMS. */
+    @Column(name = "ready_reminder_sent_at")
+    private LocalDateTime readyReminderSentAt;
+
+    /** Why a prepared fill was cancelled or voided. Null otherwise. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "cancel_reason", length = 40)
+    private ReadyCancelReason cancelReason;
 
     /**
      * Roadmap row 4 / T-68 — optional client-supplied idempotency key for
