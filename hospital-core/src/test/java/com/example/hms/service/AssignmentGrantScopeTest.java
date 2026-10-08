@@ -62,6 +62,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -244,14 +245,15 @@ class AssignmentGrantScopeTest {
             toSelf.setUserId(callerId);
             toSelf.setActive(true);
 
+            UserRoleHospitalAssignmentRequestDTO toSomeone = grant(superAdmin, null);
+
             assertThatThrownBy(() -> service.assignRole(toSelf)).isInstanceOf(AccessDeniedException.class);
-            assertThatThrownBy(() -> service.assignRole(grant(superAdmin, null)))
-                .isInstanceOf(AccessDeniedException.class);
+            assertThatThrownBy(() -> service.assignRole(toSomeone)).isInstanceOf(AccessDeniedException.class);
 
             assertNothingWritten();
             verify(userRepository, never()).findById(callerId);
             ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
-            verify(auditEventLogService, org.mockito.Mockito.times(2)).logEvent(audit.capture());
+            verify(auditEventLogService, times(2)).logEvent(audit.capture());
             assertThat(audit.getValue().getStatus()).isEqualTo(AuditStatus.FAILURE);
             assertThat(audit.getValue().getUserId()).isEqualTo(callerId);
         }
@@ -260,8 +262,9 @@ class AssignmentGrantScopeTest {
         @DisplayName("a ROLE_SUPER_ADMIN authority without the verified flag grants no SUPER_ADMIN either")
         void inflatedAuthorityIsNotSuperAdmin() {
             signIn(false, "ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN");
+            UserRoleHospitalAssignmentRequestDTO request = grant(superAdmin, null);
 
-            assertThatThrownBy(() -> service.assignRole(grant(superAdmin, null)))
+            assertThatThrownBy(() -> service.assignRole(request))
                 .isInstanceOf(AccessDeniedException.class);
             assertNothingWritten();
         }
@@ -270,8 +273,9 @@ class AssignmentGrantScopeTest {
         @DisplayName("a hospital admin cannot grant another admin role, even at their own hospital")
         void hospitalAdminCannotGrantAdminRoles() {
             signInAsHospitalAdminOfA();
+            UserRoleHospitalAssignmentRequestDTO request = grant(hospitalAdmin, hospitalA);
 
-            assertThatThrownBy(() -> service.assignRole(grant(hospitalAdmin, hospitalA)))
+            assertThatThrownBy(() -> service.assignRole(request))
                 .isInstanceOf(AccessDeniedException.class);
             assertNothingWritten();
         }
@@ -280,8 +284,9 @@ class AssignmentGrantScopeTest {
         @DisplayName("a hospital admin cannot grant at a hospital they do not administer")
         void hospitalAdminCannotGrantElsewhere() {
             signInAsHospitalAdminOfA();
+            UserRoleHospitalAssignmentRequestDTO request = grant(nurse, hospitalB);
 
-            assertThatThrownBy(() -> service.assignRole(grant(nurse, hospitalB)))
+            assertThatThrownBy(() -> service.assignRole(request))
                 .isInstanceOf(AccessDeniedException.class);
             assertNothingWritten();
         }
@@ -402,7 +407,8 @@ class AssignmentGrantScopeTest {
             UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
             dto.setActive(true);
 
-            assertAnswersAsMissing(foreign.getId(), () -> service.updateAssignment(foreign.getId(), dto));
+            UUID foreignId = foreign.getId();
+            assertAnswersAsMissing(foreignId, () -> service.updateAssignment(foreignId, dto));
             assertThat(foreign.getActive()).isFalse();
             assertNothingWritten();
         }
@@ -415,7 +421,8 @@ class AssignmentGrantScopeTest {
             UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
             dto.setActive(true);
 
-            assertThatThrownBy(() -> service.updateAssignment(own.getId(), dto))
+            UUID ownId = own.getId();
+            assertThatThrownBy(() -> service.updateAssignment(ownId, dto))
                 .isInstanceOf(BusinessException.class);
             assertThat(own.getActive()).isFalse();
             assertNothingWritten();
@@ -431,9 +438,10 @@ class AssignmentGrantScopeTest {
             UserRoleHospitalAssignmentRequestDTO promote = new UserRoleHospitalAssignmentRequestDTO();
             promote.setRoleId(hospitalAdmin.getId());
 
-            assertThatThrownBy(() -> service.updateAssignment(own.getId(), elsewhere))
+            UUID ownId = own.getId();
+            assertThatThrownBy(() -> service.updateAssignment(ownId, elsewhere))
                 .isInstanceOf(AccessDeniedException.class);
-            assertThatThrownBy(() -> service.updateAssignment(own.getId(), promote))
+            assertThatThrownBy(() -> service.updateAssignment(ownId, promote))
                 .isInstanceOf(AccessDeniedException.class);
             assertThat(own.getHospital()).isSameAs(hospitalA);
             assertThat(own.getRole()).isSameAs(nurse);
@@ -464,7 +472,8 @@ class AssignmentGrantScopeTest {
             UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
             dto.setUserId(other.getId());
 
-            assertThatThrownBy(() -> service.updateAssignment(own.getId(), dto))
+            UUID ownId = own.getId();
+            assertThatThrownBy(() -> service.updateAssignment(ownId, dto))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Create a new assignment");
             assertThat(own.getUser()).isSameAs(assignee);
@@ -485,8 +494,9 @@ class AssignmentGrantScopeTest {
             UserRoleHospitalAssignmentRequestDTO toKnown = new UserRoleHospitalAssignmentRequestDTO();
             toKnown.setUserId(known.getId());
 
-            Throwable unknownAnswer = catchThrowable(() -> service.updateAssignment(own.getId(), toUnknown));
-            Throwable knownAnswer = catchThrowable(() -> service.updateAssignment(own.getId(), toKnown));
+            UUID ownId = own.getId();
+            Throwable unknownAnswer = catchThrowable(() -> service.updateAssignment(ownId, toUnknown));
+            Throwable knownAnswer = catchThrowable(() -> service.updateAssignment(ownId, toKnown));
 
             assertThat(unknownAnswer).isExactlyInstanceOf(BusinessException.class);
             assertThat(knownAnswer).isExactlyInstanceOf(BusinessException.class)
@@ -603,8 +613,9 @@ class AssignmentGrantScopeTest {
             signInAsHospitalAdminOfA();
             UserRoleHospitalAssignment global = stored(row(account(UUID.randomUUID()), superAdmin, null, true));
 
-            assertAnswersAsMissing(global.getId(), () -> service.getAssignmentById(global.getId()));
-            assertAnswersAsMissing(global.getId(), () -> service.deactivateAssignment(global.getId()));
+            UUID globalId = global.getId();
+            assertAnswersAsMissing(globalId, () -> service.getAssignmentById(globalId));
+            assertAnswersAsMissing(globalId, () -> service.deactivateAssignment(globalId));
             assertThat(global.getActive()).isTrue();
         }
 
@@ -615,8 +626,9 @@ class AssignmentGrantScopeTest {
             UserRoleHospitalAssignment peer = stored(row(account(UUID.randomUUID()), hospitalAdmin, hospitalA, true));
 
             service.getAssignmentById(peer.getId());
-            assertAnswersAsMissing(peer.getId(), () -> service.deactivateAssignment(peer.getId()));
-            assertAnswersAsMissing(peer.getId(), () -> service.regenerateAssignmentCode(peer.getId(), false));
+            UUID peerId = peer.getId();
+            assertAnswersAsMissing(peerId, () -> service.deactivateAssignment(peerId));
+            assertAnswersAsMissing(peerId, () -> service.regenerateAssignmentCode(peerId, false));
             assertThat(peer.getActive()).isTrue();
             assertNothingWritten();
         }
@@ -661,7 +673,8 @@ class AssignmentGrantScopeTest {
             UserRoleHospitalAssignment here = stored(row(platformAdmin, nurse, hospitalA, true));
             when(assignmentRepository.findByUserId(platformAdmin.getId())).thenReturn(List.of(here));
 
-            assertAnswersAsMissing(here.getId(), () -> service.deactivateAssignment(here.getId()));
+            UUID hereId = here.getId();
+            assertAnswersAsMissing(hereId, () -> service.deactivateAssignment(hereId));
             assertThat(here.getActive()).isTrue();
             assertNothingWritten();
         }
@@ -772,8 +785,9 @@ class AssignmentGrantScopeTest {
         @DisplayName("a hospital admin may not delete a role: 403, nothing deleted")
         void hospitalAdminCannotDeleteARole() {
             signInAsHospitalAdminOfA();
+            UUID nurseRoleId = nurse.getId();
 
-            assertThatThrownBy(() -> service.deleteRole(nurse.getId())).isInstanceOf(AccessDeniedException.class);
+            assertThatThrownBy(() -> service.deleteRole(nurseRoleId)).isInstanceOf(AccessDeniedException.class);
             verify(roleRepository, never()).deleteById(any());
         }
 

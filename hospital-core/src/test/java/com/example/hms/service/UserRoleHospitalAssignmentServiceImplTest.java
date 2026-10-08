@@ -32,6 +32,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -108,9 +109,11 @@ class UserRoleHospitalAssignmentServiceImplTest {
         org.mockito.Mockito.lenient()
             .when(accountAccess.assignmentScope())
             .thenReturn(new com.example.hms.service.support.UserAccountAccess.AssignmentScope(true, java.util.Set.of()));
+        com.example.hms.service.support.UserAccountAccess.Grant anywhere =
+            mock(com.example.hms.service.support.UserAccountAccess.Grant.class);
         org.mockito.Mockito.lenient()
             .when(accountAccess.requireMayGrant(any()))
-            .thenReturn(org.mockito.Mockito.mock(com.example.hms.service.support.UserAccountAccess.Grant.class));
+            .thenReturn(anywhere);
     }
 
     // -----------------------------------------------------------------------

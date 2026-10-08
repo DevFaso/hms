@@ -62,6 +62,7 @@ import java.io.StringReader;
 import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -83,6 +84,7 @@ import org.springframework.context.i18n.LocaleContextHolder;
 @Transactional
 public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAssignmentService {
     private static final String UNKNOWN_ROLE = "UNKNOWN_ROLE";
+    private static final String AUDIT_ENTITY_ASSIGNMENT = "USER_ROLE_ASSIGNMENT";
 
 
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
@@ -325,20 +327,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private void enforceRoleScopeConstraints(UserRoleHospitalAssignmentRequestDTO dto, String roleCode,
                                              boolean adminRequest) {
         if (isRoleCode(roleCode, ROLE_SUPER_ADMIN)) {
-            if (dto.getHospitalId() != null
-                || (dto.getHospitalCode() != null && !dto.getHospitalCode().isBlank())
-                || (dto.getHospitalName() != null && !dto.getHospitalName().isBlank())) {
-                throw new BusinessException(DEFAULT_SUPER_ADMIN_SCOPE_MESSAGE);
-            }
-            // A SUPER_ADMIN row is active at once only when a verified
-            // super-admin grants it, or when account creation asks for it
-            // explicitly (the first-user bootstrap). Never by default: an
-            // /assignments request from anyone else starts inactive whatever
-            // it asks for (the grant check has refused it before this anyway).
-            boolean verifiedSuperAdmin = adminRequest && roleValidator.isSuperAdminFromJwtClaim();
-            if (dto.getActive() == null || (adminRequest && !verifiedSuperAdmin)) {
-                dto.setActive(verifiedSuperAdmin);
-            }
+            enforceSuperAdminScope(dto, adminRequest);
             return;
         }
 
@@ -357,6 +346,25 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // assignee verifies the confirmation code sent by email.  The assignment
         // is activated in verifyAssignmentByCode() after successful verification.
         dto.setActive(Boolean.FALSE);
+    }
+
+    /**
+     * A SUPER_ADMIN row is global, and active at once only when a verified
+     * super-admin grants it, or when account creation asks for it explicitly
+     * (the first-user bootstrap). Never by default: an admin request from
+     * anyone else starts inactive whatever it asks for, and the grant check
+     * has already refused it before this point.
+     */
+    private void enforceSuperAdminScope(UserRoleHospitalAssignmentRequestDTO dto, boolean adminRequest) {
+        if (dto.getHospitalId() != null
+            || (dto.getHospitalCode() != null && !dto.getHospitalCode().isBlank())
+            || (dto.getHospitalName() != null && !dto.getHospitalName().isBlank())) {
+            throw new BusinessException(DEFAULT_SUPER_ADMIN_SCOPE_MESSAGE);
+        }
+        boolean verifiedSuperAdmin = adminRequest && roleValidator.isSuperAdminFromJwtClaim();
+        if (dto.getActive() == null || (adminRequest && !verifiedSuperAdmin)) {
+            dto.setActive(verifiedSuperAdmin);
+        }
     }
 
     /* ===================== Update ===================== */
@@ -381,13 +389,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         String newRoleCode = getRoleCode(newRole);
         requireGrantAt(requireMayGrant(newRoleCode), newHospital, newRoleCode);
         requireActivationThroughCode(dto, target);
-        // A new role or hospital is a new grant: for anyone but a verified
-        // super-admin it starts over as a fresh POST would, inactive with a new
-        // code the holder must confirm. Decided before the mapper overwrites
-        // the row's current role and hospital.
-        boolean reinvite = !verifiedSuperAdmin
-            && (!newRole.getId().equals(target.getRole().getId())
-                || hasDifferentHospital(target.getHospital(), newHospital));
+        // Decided before the mapper overwrites the row's current role and hospital.
+        boolean reinvite = !verifiedSuperAdmin && isNewGrant(target, newRole, newHospital);
 
         enforcePatientInactiveConstraint(dto, newRole, target);
         checkTupleDuplicateOnUpdate(id, target, newUser, newRole, newHospital, locale);
@@ -399,11 +402,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         mapper.updateEntity(target, dto, newHospital, newRole, null);
         target.setUser(newUser);
         if (reinvite) {
-            target.setActive(false);
-            target.setAssignmentCode(generateAssignCode(newUser, newHospital));
-            target.setConfirmationCode(generateConfirmationCode());
-            target.setConfirmationSentAt(LocalDateTime.now());
-            target.setConfirmationVerifiedAt(null);
+            restartInvitation(target, newUser, newHospital);
         }
 
         UserRoleHospitalAssignment saved = assignmentRepository.save(target);
@@ -413,6 +412,24 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
         log.info("🔄 Updated assignment ID '{}' for user '{}'", id, newUser.getEmail());
         return toDtoWithLinks(saved);
+    }
+
+    /**
+     * A new role or hospital is a new grant: for anyone but a verified
+     * super-admin it starts over as a fresh POST would (see {@link #restartInvitation}).
+     */
+    private boolean isNewGrant(UserRoleHospitalAssignment target, Role newRole, Hospital newHospital) {
+        return !newRole.getId().equals(target.getRole().getId())
+            || hasDifferentHospital(target.getHospital(), newHospital);
+    }
+
+    /** The row starts over as a fresh POST: inactive, new codes, verification cleared. */
+    private void restartInvitation(UserRoleHospitalAssignment target, User holder, Hospital hospital) {
+        target.setActive(false);
+        target.setAssignmentCode(generateAssignCode(holder, hospital));
+        target.setConfirmationCode(generateConfirmationCode());
+        target.setConfirmationSentAt(LocalDateTime.now(ZoneId.systemDefault()));
+        target.setConfirmationVerifiedAt(null);
     }
 
     /**
@@ -586,7 +603,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .eventType(AuditEventType.ROLE_ASSIGNED)
             .eventDescription("Role assignment refused: the caller may not grant this role there")
             .details(Map.of("requestedRole", Objects.toString(roleCode, UNKNOWN_ROLE)))
-            .entityType("USER_ROLE_ASSIGNMENT")
+            .entityType(AUDIT_ENTITY_ASSIGNMENT)
             .status(AuditStatus.FAILURE)
             .build());
         return denied;
@@ -2013,7 +2030,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 .hospitalName(resolveHospitalName(hospital))
                 .resourceName(assigneeDisplay)
                 .resourceId(assignment.getId() != null ? assignment.getId().toString() : null)
-                .entityType("USER_ROLE_ASSIGNMENT")
+                .entityType(AUDIT_ENTITY_ASSIGNMENT)
                 .eventType(AuditEventType.ROLE_ASSIGNED)
                 .eventDescription(String.format("Assigned role '%s' to %s", roleDisplay, assigneeDisplay))
                 .status(AuditStatus.SUCCESS)
@@ -2048,7 +2065,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 .hospitalName(resolveHospitalName(assignment.getHospital()))
                 .resourceName(assigneeDisplay)
                 .resourceId(assignment.getId() != null ? assignment.getId().toString() : null)
-                .entityType("USER_ROLE_ASSIGNMENT")
+                .entityType(AUDIT_ENTITY_ASSIGNMENT)
                 .eventType(AuditEventType.ASSIGNMENT_CONFIRMED)
                 .eventDescription(String.format("Confirmed assignment '%s' for %s", roleDisplay, assigneeDisplay))
                 .status(AuditStatus.SUCCESS)

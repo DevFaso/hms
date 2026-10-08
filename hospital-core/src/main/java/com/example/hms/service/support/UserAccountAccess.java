@@ -305,7 +305,7 @@ public class UserAccountAccess {
     public AssignmentScope assignmentScope() {
         Caller caller = caller();
         return caller.superAdmin()
-            ? AssignmentScope.EVERYWHERE
+            ? AssignmentScope.SUPER_ADMIN_SCOPE
             : new AssignmentScope(false, administeredHospitals(caller));
     }
 
@@ -317,7 +317,7 @@ public class UserAccountAccess {
      */
     public record AssignmentScope(boolean everywhere, Set<UUID> hospitalIds) {
 
-        static final AssignmentScope EVERYWHERE = new AssignmentScope(true, Set.of());
+        static final AssignmentScope SUPER_ADMIN_SCOPE = new AssignmentScope(true, Set.of());
 
         public AssignmentScope {
             hospitalIds = Set.copyOf(hospitalIds);
