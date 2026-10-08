@@ -206,12 +206,24 @@ class AssignmentGrantScopeTest {
             .build());
     }
 
-    /** The signed-in caller's account, as the service resolves it from the principal's name. */
+    /** The signed-in caller's account, resolvable by id and by the principal's name. */
     private User callerAccount() {
         User caller = account(callerId);
+        when(userRepository.findById(callerId)).thenReturn(Optional.of(caller));
         when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(
             caller.getUsername(), caller.getUsername(), null)).thenReturn(Optional.of(caller));
         return caller;
+    }
+
+    /** A role change on a row of hospital A, the update that restarts the invitation. */
+    private UserRoleHospitalAssignmentRequestDTO roleChangeTo(Role role, UserRoleHospitalAssignment row) {
+        UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+        dto.setRoleId(role.getId());
+        org.mockito.Mockito.doAnswer(inv -> {
+            row.setRole(role);
+            return null;
+        }).when(mapper).updateEntity(row, dto, hospitalA, role, null);
+        return dto;
     }
 
     private UserRoleHospitalAssignmentRequestDTO grant(Role role, Hospital hospital) {
@@ -518,6 +530,7 @@ class AssignmentGrantScopeTest {
         @DisplayName("a role change by a hospital admin starts the row over: inactive, new code, notified")
         void aRoleChangeReinvites() {
             signInAsHospitalAdminOfA();
+            callerAccount();
             UserRoleHospitalAssignment own = stored(row(assignee, nurse, hospitalA, true));
             own.setAssignmentCode("OLD-CODE");
             own.setConfirmationVerifiedAt(LocalDateTime.now().minusDays(1));
@@ -560,6 +573,41 @@ class AssignmentGrantScopeTest {
 
             assertThat(own.getActive()).isFalse();
             assertThat(own.getRegisteredBy()).isSameAs(caller);
+        }
+
+        @Test
+        @DisplayName("the re-invite registrar is the caller's id, even when the principal's name resolves no account")
+        void aReinviteResolvesTheRegistrarById() {
+            signInAsHospitalAdminOfA();
+            User caller = account(callerId);
+            when(userRepository.findById(callerId)).thenReturn(Optional.of(caller));
+            UserRoleHospitalAssignment own = stored(row(assignee, nurse, hospitalA, true));
+            own.setRegisteredBy(account(UUID.randomUUID()));
+
+            service.updateAssignment(own.getId(), roleChangeTo(doctor, own));
+
+            assertThat(own.getRegisteredBy()).isSameAs(caller);
+        }
+
+        @Test
+        @DisplayName("a re-invite by a caller with no resolvable account is refused before the row changes")
+        void aReinviteWithoutACallerAccountIsRefused() {
+            signInAsHospitalAdminOfA();
+            when(userRepository.findById(callerId)).thenReturn(Optional.empty());
+            User formerRegistrar = account(UUID.randomUUID());
+            UserRoleHospitalAssignment own = stored(row(assignee, nurse, hospitalA, true));
+            own.setRegisteredBy(formerRegistrar);
+            UUID ownId = own.getId();
+            UserRoleHospitalAssignmentRequestDTO dto = roleChangeTo(doctor, own);
+
+            assertThatThrownBy(() -> service.updateAssignment(ownId, dto))
+                .isExactlyInstanceOf(BusinessException.class);
+            assertThat(own.getRole()).isSameAs(nurse);
+            assertThat(own.getActive()).isTrue();
+            assertThat(own.getRegisteredBy()).isSameAs(formerRegistrar);
+            assertThat(own.getConfirmationCode()).isEqualTo("123456");
+            assertNothingWritten();
+            org.mockito.Mockito.verifyNoInteractions(eventPublisher);
         }
 
         @Test
@@ -806,6 +854,25 @@ class AssignmentGrantScopeTest {
             assertThat(row.getActive()).isTrue();
             assertThat(row.getConfirmationVerifiedAt()).isNotNull();
             verify(assignmentRepository).save(row);
+        }
+
+        @Test
+        @DisplayName("a non-registrar admin gets the same refusal for the right code and a wrong one")
+        void aNonRegistrarLearnsNothingAboutTheCode() {
+            signInAsHospitalAdminOfA();
+            callerAccount();
+            UserRoleHospitalAssignment row = stored(row(assignee, nurse, hospitalA, false));
+            row.setRegisteredBy(account(UUID.randomUUID()));
+            UUID id = row.getId();
+
+            Throwable right = catchThrowable(() -> service.confirmAssignment(id, "123456"));
+            Throwable wrong = catchThrowable(() -> service.confirmAssignment(id, "999999"));
+
+            assertThat(right).isExactlyInstanceOf(BusinessException.class);
+            assertThat(wrong).isExactlyInstanceOf(BusinessException.class)
+                .hasMessage(right.getMessage());
+            assertThat(row.getActive()).isFalse();
+            assertNothingWritten();
         }
 
         @Test
