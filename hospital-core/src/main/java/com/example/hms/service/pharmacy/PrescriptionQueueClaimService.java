@@ -75,6 +75,7 @@ public class PrescriptionQueueClaimService {
     private static final String OPEN_PREPARATION = "dispense.ready.openPreparation";
     private static final String AUDIT_ENTITY = "PRESCRIPTION";
     private static final String PRESCRIPTION_SUFFIX = ", prescription ";
+    private static final String CLAIMED_AT_PREFIX = " (claimed ";
 
     private final PrescriptionQueueClaimRepository claimRepository;
     private final PrescriptionRepository prescriptionRepository;
@@ -207,12 +208,12 @@ public class PrescriptionQueueClaimService {
                 || (actorUserId != null && actorUserId.equals(holderId));
         if (plainRelease) {
             auditAfterCommit(actorUserId, AuditEventType.PRESCRIPTION_QUEUE_CLAIM_RELEASED,
-                    "Work-queue claim of user " + holderId + " (claimed " + claimedAt + ") released ("
+                    "Work-queue claim of user " + holderId + CLAIMED_AT_PREFIX + claimedAt + ") released ("
                             + reason.name() + ")" + PRESCRIPTION_SUFFIX + rxId,
                     rxId);
         } else {
             auditAfterCommit(actorUserId, AuditEventType.PRESCRIPTION_QUEUE_CLAIM_TAKEN_OVER,
-                    "Work-queue claim taken over from user " + holderId + " (claimed " + claimedAt
+                    "Work-queue claim taken over from user " + holderId + CLAIMED_AT_PREFIX + claimedAt
                             + ") by " + reason.name() + PRESCRIPTION_SUFFIX + rxId,
                     rxId);
         }
@@ -291,7 +292,7 @@ public class PrescriptionQueueClaimService {
         PrescriptionQueueClaim saved = claimRepository.save(claim);
         if (active) {
             auditAfterCommit(callerId, AuditEventType.PRESCRIPTION_QUEUE_CLAIM_TAKEN_OVER,
-                    "Work-queue claim taken over from user " + holderId + " (claimed " + previousClaimedAt
+                    "Work-queue claim taken over from user " + holderId + CLAIMED_AT_PREFIX + previousClaimedAt
                             + ")" + PRESCRIPTION_SUFFIX + rxId,
                     rxId);
         } else {
@@ -362,7 +363,7 @@ public class PrescriptionQueueClaimService {
                               LocalDateTime now) {
         LocalDateTime expiredAt = claimedAt != null ? claimedAt.plus(ttl) : null;
         auditAfterCommit(actorId, AuditEventType.PRESCRIPTION_QUEUE_CLAIM_EXPIRED,
-                "Work-queue claim of user " + holderId + " (claimed " + claimedAt + ") expired at "
+                "Work-queue claim of user " + holderId + CLAIMED_AT_PREFIX + claimedAt + ") expired at "
                         + expiredAt + ", found " + now + PRESCRIPTION_SUFFIX + prescriptionId,
                 prescriptionId);
     }

@@ -57,6 +57,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -687,7 +688,7 @@ class PrescriptionSmsDispatchServiceImplTest {
         verify(prescriptionRepository).save(rx);
         verify(prescriberNotifier).notifyPrescriber(rx, PrescriptionStatus.TRANSMISSION_FAILED);
         // G13 AC-12 / decision D7: a failed dispatch keeps the claim
-        org.mockito.Mockito.verifyNoInteractions(queueClaimService);
+        verifyNoInteractions(queueClaimService);
     }
 
     @Test

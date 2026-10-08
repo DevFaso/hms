@@ -51,6 +51,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -134,7 +136,7 @@ class PrescriptionQueueClaimServiceTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(prescriptionRepository.findByIdAndHospitalIdForUpdate(prescriptionId, hospitalId))
                 .thenReturn(Optional.of(prescription));
-        org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(caller.getId());
+        lenient().when(roleValidator.getCurrentUserId()).thenReturn(caller.getId());
     }
 
     private void claimable() {
@@ -146,7 +148,7 @@ class PrescriptionQueueClaimServiceTest {
 
     private List<AuditEventRequestDTO> audits() {
         ArgumentCaptor<AuditEventRequestDTO> captor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
-        verify(auditEventLogService, org.mockito.Mockito.atLeast(0)).logEvent(captor.capture());
+        verify(auditEventLogService, atLeast(0)).logEvent(captor.capture());
         return captor.getAllValues();
     }
 

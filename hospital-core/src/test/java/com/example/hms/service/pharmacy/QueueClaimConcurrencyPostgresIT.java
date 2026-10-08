@@ -318,7 +318,8 @@ class QueueClaimConcurrencyPostgresIT {
     void uniqueConstraintRefusesASecondRow() {
         as(pharmacist, () -> claims.claim(prescription.getId())).get();
 
-        assertThatThrownBy(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        assertThatThrownBy(() -> tx.executeWithoutResult(status ->
                 entityManager.createNativeQuery("""
                         INSERT INTO clinical.prescription_queue_claims
                             (id, prescription_id, claimed_by, claimed_at, created_at, updated_at)
@@ -339,15 +340,18 @@ class QueueClaimConcurrencyPostgresIT {
         as(pharmacist, () -> claims.claim(prescription.getId())).get();
         Mockito.clearInvocations(auditEventLogService);
 
-        assertThatThrownBy(() -> as(pharmacist, () -> new TransactionTemplate(transactionManager).execute(status -> {
-            Object filled = dispenseService.createDispenseTransactionally(request());
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        DispenseRequestDTO fill = request();
+        Supplier<Object> failingFill = as(pharmacist, () -> tx.execute(status -> {
+            Object filled = dispenseService.createDispenseTransactionally(fill);
             entityManager.flush();
             // Two PENDING copies of the new fill: the second trips
             // uq_disp_one_pending_per_rx, as a lost preparation race would.
             copyNewestDispenseAsPending();
             copyNewestDispenseAsPending();
             return filled;
-        })).get())
+        }));
+        assertThatThrownBy(failingFill::get)
             .isInstanceOf(org.hibernate.exception.ConstraintViolationException.class)
             .hasMessageContaining("uq_disp_one_pending_per_rx");
 

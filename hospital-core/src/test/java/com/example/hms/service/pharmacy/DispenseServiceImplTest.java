@@ -61,6 +61,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -280,7 +281,8 @@ class DispenseServiceImplTest {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
-            assertThatThrownBy(() -> service.createDispense(buildRequest())).isInstanceOf(BusinessException.class);
+            DispenseRequestDTO request = buildRequest();
+            assertThatThrownBy(() -> service.createDispense(request)).isInstanceOf(BusinessException.class);
             verify(queueClaimService, never()).releaseOnExit(any(), any(), any(), any());
         }
 
@@ -306,7 +308,7 @@ class DispenseServiceImplTest {
             List<com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO> rows =
                     service.getWorkQueue(pageable, com.example.hms.enums.QueueClaimFilter.ALL).getContent();
 
-            verify(queueClaimService, org.mockito.Mockito.times(1)).activeClaimsFor(any());
+            verify(queueClaimService, times(1)).activeClaimsFor(any());
             assertThat(rows.get(0).getClaim().getClaimedByName()).isEqualTo("Awa Sanou");
             assertThat(rows.get(0).getClaim().isMine()).isFalse();
             assertThat(rows.get(1).getClaim()).isNull();

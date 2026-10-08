@@ -208,8 +208,9 @@ class PrescriptionQueueClaimRepositoryTest {
         List<PrescriptionQueueClaim> claims = claimRepository.findByPrescription_IdIn(
                 List.of(mineActive.getId(), colleagueActive.getId(), unclaimed.getId()));
 
-        assertThat(claims).hasSize(2);
-        assertThat(claims).allSatisfy(c -> assertThat(c.getClaimedBy().getFirstName()).isNotBlank());
+        assertThat(claims)
+                .hasSize(2)
+                .allSatisfy(c -> assertThat(c.getClaimedBy().getFirstName()).isNotBlank());
     }
 
     @Test
