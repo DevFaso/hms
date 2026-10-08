@@ -55,6 +55,8 @@ class UserRoleHospitalAssignmentServiceImplTest {
     @Mock private com.example.hms.security.LoginAttemptService loginAttemptService;
     @Mock private com.example.hms.repository.StaffRepository staffRepository;
     @Mock private com.example.hms.repository.EncounterRepository encounterRepository;
+    /** The caller rules have their own tests (UserAccountAccessTest, AssignmentGrantScopeTest); here a super-admin's scope. */
+    @Mock private com.example.hms.service.support.UserAccountAccess accountAccess;
 
     @InjectMocks
     private UserRoleHospitalAssignmentServiceImpl service;
@@ -103,6 +105,12 @@ class UserRoleHospitalAssignmentServiceImplTest {
         org.mockito.Mockito.lenient()
             .when(assignmentLinkService.buildProfileCompletionUrl(anyString()))
             .thenReturn("https://app/complete/" + VALID_CODE);
+        org.mockito.Mockito.lenient()
+            .when(accountAccess.assignmentScope())
+            .thenReturn(new com.example.hms.service.support.UserAccountAccess.AssignmentScope(true, java.util.Set.of()));
+        org.mockito.Mockito.lenient()
+            .when(accountAccess.requireMayGrant(any()))
+            .thenReturn(org.mockito.Mockito.mock(com.example.hms.service.support.UserAccountAccess.Grant.class));
     }
 
     // -----------------------------------------------------------------------
@@ -537,8 +545,8 @@ class UserRoleHospitalAssignmentServiceImplTest {
 
     @Test
     void anAssignmentAnEncounterWasRecordedUnderCannotBeHardDeleted() {
-        UUID id = UUID.randomUUID();
-        when(assignmentRepository.existsById(id)).thenReturn(true);
+        UUID id = assignment.getId();
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
         when(staffRepository.existsByAssignment_Id(id)).thenReturn(false);
         when(encounterRepository.existsByAssignment_Id(id)).thenReturn(true);
 
@@ -550,8 +558,8 @@ class UserRoleHospitalAssignmentServiceImplTest {
 
     @Test
     void anUnreferencedAssignmentIsStillHardDeleted() {
-        UUID id = UUID.randomUUID();
-        when(assignmentRepository.existsById(id)).thenReturn(true);
+        UUID id = assignment.getId();
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
         when(staffRepository.existsByAssignment_Id(id)).thenReturn(false);
         when(encounterRepository.existsByAssignment_Id(id)).thenReturn(false);
 

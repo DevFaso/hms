@@ -286,6 +286,68 @@ public class UserAccountAccess {
     }
 
     /**
+     * Which existing hospital assignments the caller may read and change
+     * through {@code /assignments/{id}} and its siblings (get, update,
+     * regenerate the code, resend the invitation, deactivate, delete, retire a
+     * user's rows). The same people {@link #requireMayGrant} lets grant there:
+     * <ul>
+     *   <li>a super-admin (the verified context flag): every row, global rows
+     *       included;</li>
+     *   <li>a hospital admin: the rows at hospitals where they hold an ACTIVE
+     *       HOSPITAL_ADMIN assignment; to change one, its role must not be an
+     *       admin role, because admin roles are granted (and so administered)
+     *       by the super-admin only;</li>
+     *   <li>anyone else: nothing.</li>
+     * </ul>
+     * Callers answer a row outside the scope exactly as they answer a missing
+     * id, so the refusal is not an existence oracle.
+     */
+    public AssignmentScope assignmentScope() {
+        Caller caller = caller();
+        return caller.superAdmin()
+            ? AssignmentScope.EVERYWHERE
+            : new AssignmentScope(false, administeredHospitals(caller));
+    }
+
+    /**
+     * What {@link #assignmentScope} allows.
+     *
+     * @param everywhere  the super-admin's scope: every row
+     * @param hospitalIds otherwise, the hospitals the caller administers; empty means none
+     */
+    public record AssignmentScope(boolean everywhere, Set<UUID> hospitalIds) {
+
+        static final AssignmentScope EVERYWHERE = new AssignmentScope(true, Set.of());
+
+        public AssignmentScope {
+            hospitalIds = Set.copyOf(hospitalIds);
+        }
+
+        /** May the caller read this row? A global (hospital-less) row is the super-admin's. */
+        public boolean covers(UserRoleHospitalAssignment assignment) {
+            if (everywhere) {
+                return true;
+            }
+            UUID hospitalId = assignment == null ? null : hospitalIdOf(assignment);
+            return hospitalId != null && hospitalIds.contains(hospitalId);
+        }
+
+        /** May the caller change this row? Covered, and not an admin role's row unless a super-admin. */
+        public boolean mayChange(UserRoleHospitalAssignment assignment) {
+            return covers(assignment) && (everywhere || !ADMIN_ROLES.contains(roleCode(assignment.getRole())));
+        }
+
+        /**
+         * Is this account out of the caller's reach altogether? A super-admin's
+         * account is (any trace of the role, active or not): a hospital admin
+         * retires none of its rows, not even ones at their own hospital.
+         */
+        public boolean shields(User target, List<UserRoleHospitalAssignment> assignments) {
+            return !everywhere && target != null && holdsAny(target, assignments, Set.of(SUPER_ADMIN));
+        }
+    }
+
+    /**
      * The user directory (list and search) is for staff, and a staff member's
      * directory is their own hospitals. Throws {@link AccessDeniedException}
      * for everyone else, patients included.
