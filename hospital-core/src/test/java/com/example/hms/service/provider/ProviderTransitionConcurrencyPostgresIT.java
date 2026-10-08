@@ -74,7 +74,9 @@ import static org.mockito.Mockito.when;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
-@Import({ProviderOnboardingServiceImpl.class, ProviderTransitionConcurrencyPostgresIT.Config.class})
+@Import({ProviderOnboardingServiceImpl.class, com.example.hms.service.impl.HospitalLifecycleServiceImpl.class,
+        com.example.hms.service.HospitalServiceImpl.class, com.example.hms.mapper.HospitalMapper.class,
+        ProviderTransitionConcurrencyPostgresIT.Config.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class ProviderTransitionConcurrencyPostgresIT {
 
@@ -96,6 +98,9 @@ class ProviderTransitionConcurrencyPostgresIT {
         registry.add("spring.liquibase.enabled", () -> "true");
         registry.add("spring.sql.init.mode", () -> "never");
         registry.add("spring.datasource.hikari.maximum-pool-size", () -> "8");
+        // No caller identity on the racing threads: the archive step-up is
+        // not what these races are about.
+        registry.add("hms.hospital-lifecycle.require-mfa", () -> "false");
     }
 
     @TestConfiguration
@@ -109,8 +114,11 @@ class ProviderTransitionConcurrencyPostgresIT {
     @MockitoBean private RoleValidator roleValidator;
     @MockitoBean private HospitalLifecycleStatusService lifecycleStatusService;
     @MockitoBean private AuditEventLogService auditEventLogService;
+    @MockitoBean private com.example.hms.service.MfaService mfaService;
 
     @Autowired private ProviderOnboardingService onboardingService;
+    @Autowired private com.example.hms.service.HospitalLifecycleService lifecycleService;
+    @Autowired private com.example.hms.service.HospitalService hospitalService;
     @Autowired private HospitalRepository hospitalRepository;
     @Autowired private ProviderVerificationRepository verificationRepository;
     @Autowired private PlatformTransactionManager transactionManager;
@@ -124,6 +132,7 @@ class ProviderTransitionConcurrencyPostgresIT {
         MessageUtil.setMessageSource(TestMessageSources.bundles());
         LocaleContextHolder.setLocale(Locale.ENGLISH);
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
         providerId = onboardingService.create(request()).getId();
     }
 
@@ -157,7 +166,70 @@ class ProviderTransitionConcurrencyPostgresIT {
         assertThat(facility.isActive()).isFalse();
     }
 
+    @Test
+    @DisplayName("verify, then an archive that waits on it: the archive keeps the verified identity")
+    void verifyThenArchive() throws Exception {
+        CompletableFuture<Object> second = race(this::verifyRenamed, this::archive);
+
+        assertThat(second.get(30, TimeUnit.SECONDS)).isNotNull();
+        Hospital facility = hospitalRepository.findById(providerId).orElseThrow();
+        assertThat(facility.getLifecycleState()).isEqualTo(HospitalLifecycleState.ARCHIVED);
+        assertThat(facility.getName()).isEqualTo("Verified Trade Name");
+        assertThat(currentStatus()).isEqualTo(ProviderVerificationStatus.VERIFIED);
+    }
+
+    @Test
+    @DisplayName("archive, then a verify that waits on it: the verify is a 409; ARCHIVED, still SUBMITTED")
+    void archiveThenVerify() throws Exception {
+        CompletableFuture<Object> second = race(this::archive, this::verifyRenamed);
+
+        assertThat(causeOf(second)).isInstanceOf(ConflictException.class);
+        assertThat(hospitalRepository.findById(providerId).orElseThrow().getLifecycleState())
+            .isEqualTo(HospitalLifecycleState.ARCHIVED);
+        assertThat(currentStatus()).isEqualTo(ProviderVerificationStatus.SUBMITTED);
+    }
+
+    @Test
+    @DisplayName("verify, then a delete that waits on it: the delete is a 409; the VERIFIED provider stays")
+    void verifyThenDelete() throws Exception {
+        CompletableFuture<Object> second = race(this::verify, this::delete);
+
+        assertThat(causeOf(second)).isInstanceOf(ConflictException.class);
+        assertThat(hospitalRepository.findById(providerId)).isPresent();
+        assertThat(currentStatus()).isEqualTo(ProviderVerificationStatus.VERIFIED);
+    }
+
+    @Test
+    @DisplayName("delete, then a verify that waits on it: the verify finds nothing; no VERIFIED provider was deleted")
+    void deleteThenVerify() throws Exception {
+        CompletableFuture<Object> second = race(this::delete, this::verify);
+
+        assertThat(causeOf(second)).isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThat(hospitalRepository.findById(providerId)).isEmpty();
+        assertThat(verificationRepository.findFirstByHospital_IdOrderByCreatedAtDesc(providerId)).isEmpty();
+    }
+
     // ── harness ──────────────────────────────────────────────────────────
+
+    private Object verifyRenamed() {
+        ProviderCreateRequestDTO evidence = request();
+        evidence.getBusiness().setTradeName("Verified Trade Name");
+        return onboardingService.verify(providerId, ProviderVerifyRequestDTO.builder()
+            .ifuMatchesRccm(true).cnssMatchesRccm(true)
+            .corrections(ProviderVerifyRequestDTO.Corrections.builder().business(evidence.getBusiness()).build())
+            .build());
+    }
+
+    private Object archive() {
+        return lifecycleService.archive(providerId,
+            com.example.hms.payload.dto.superadmin.TenantLifecycleActionRequestDTO.builder().reason("Closed").build(),
+            null);
+    }
+
+    private Object delete() {
+        hospitalService.deleteHospital(providerId, Locale.ENGLISH);
+        return Boolean.TRUE;
+    }
 
     private Object verify() {
         return onboardingService.verify(providerId, ProviderVerifyRequestDTO.builder()

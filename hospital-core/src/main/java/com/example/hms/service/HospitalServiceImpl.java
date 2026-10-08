@@ -156,7 +156,11 @@ public class HospitalServiceImpl implements HospitalService {
     public void deleteHospital(UUID id, Locale locale) {
         validateSuperAdminOrThrow(locale);
 
-        Hospital hospital = getHospitalOrThrow(id);
+        // Locked before the "never verified" check: a VERIFY of this provider
+        // holds the same facility-row lock, so the two run one after the other
+        // and the check reads what the verify committed.
+        Hospital hospital = hospitalRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", id));
         // A provider onboarded by mistake may be deleted while it has never
         // been verified: it has never been ACTIVE, so no user has signed in
         // there and nothing was routed to it. Its verification history goes

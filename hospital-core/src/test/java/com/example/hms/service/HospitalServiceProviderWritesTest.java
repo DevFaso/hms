@@ -67,6 +67,7 @@ class HospitalServiceProviderWritesTest {
         pharmacy.setLifecycleState(HospitalLifecycleState.SUSPENDED);
         for (Hospital h : new Hospital[]{pharmacy, hospital}) {
             when(hospitalRepository.findById(h.getId())).thenReturn(Optional.of(h));
+            when(hospitalRepository.findByIdForUpdate(h.getId())).thenReturn(Optional.of(h));
         }
         organization.setId(UUID.randomUUID());
         when(organizationRepository.findById(organization.getId())).thenReturn(Optional.of(organization));

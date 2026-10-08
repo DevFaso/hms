@@ -210,6 +210,23 @@ class ProviderOnboardingServiceImplTest {
         }
     }
 
+    @Test
+    @DisplayName("the list ignores a client sort: page and size only, the query's own stable order")
+    void listDropsTheClientSort() {
+        when(verificationRepository.findLatestByFacilityTypes(any(), any(), any()))
+            .thenReturn(org.springframework.data.domain.Page.empty());
+
+        service.list(null, null, org.springframework.data.domain.PageRequest.of(2, 15,
+            org.springframework.data.domain.Sort.by("anyField")));
+
+        ArgumentCaptor<org.springframework.data.domain.Pageable> pageable =
+            ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        verify(verificationRepository).findLatestByFacilityTypes(any(), any(), pageable.capture());
+        assertThat(pageable.getValue().getPageNumber()).isEqualTo(2);
+        assertThat(pageable.getValue().getPageSize()).isEqualTo(15);
+        assertThat(pageable.getValue().getSort().isUnsorted()).isTrue();
+    }
+
     @Nested
     @DisplayName("verify (AC-2, AC-3)")
     class Verify {

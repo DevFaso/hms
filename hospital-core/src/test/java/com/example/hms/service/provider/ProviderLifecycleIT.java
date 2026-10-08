@@ -259,6 +259,28 @@ class ProviderLifecycleIT extends BaseIT {
         assertThat(hospitalRepository.findById(id)).isPresent();
     }
 
+    @Test
+    @DisplayName("the provider list is newest first and stable across pages: no row repeats, none is skipped")
+    void providerListIsStable() throws InterruptedException {
+        java.util.List<UUID> created = new java.util.ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            created.add(onboardingService.create(request(FacilityType.LABORATORY)).getId());
+            Thread.sleep(5);
+        }
+        java.util.Collections.reverse(created);
+
+        java.util.List<UUID> listed = new java.util.ArrayList<>();
+        for (int page = 0; page < 3; page++) {
+            onboardingService.list(FacilityType.LABORATORY, ProviderVerificationStatus.SUBMITTED,
+                    org.springframework.data.domain.PageRequest.of(page, 2,
+                        org.springframework.data.domain.Sort.by("legalName")))
+                .forEach(dto -> listed.add(dto.getId()));
+        }
+
+        assertThat(listed).doesNotHaveDuplicates();
+        assertThat(listed.stream().filter(created::contains).toList()).containsExactlyElementsOf(created);
+    }
+
     private UUID verifiedProvider() {
         UUID id = onboardingService.create(request(FacilityType.PHARMACY)).getId();
         onboardingService.verify(id, ProviderVerifyRequestDTO.builder()

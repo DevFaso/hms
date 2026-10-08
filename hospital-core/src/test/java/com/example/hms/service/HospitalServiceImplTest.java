@@ -480,7 +480,7 @@ class HospitalServiceImplTest {
             UUID id = UUID.randomUUID();
             Hospital existing = new Hospital();
             existing.setId(id);
-            when(hospitalRepository.findById(id)).thenReturn(Optional.of(existing));
+            when(hospitalRepository.findByIdForUpdate(id)).thenReturn(Optional.of(existing));
 
             hospitalService.deleteHospital(id, Locale.ENGLISH);
 
@@ -493,7 +493,7 @@ class HospitalServiceImplTest {
             setSuperAdmin();
             UUID id = UUID.randomUUID();
             stubMessage("hospital.notFound");
-            when(hospitalRepository.findById(id)).thenReturn(Optional.empty());
+            when(hospitalRepository.findByIdForUpdate(id)).thenReturn(Optional.empty());
 
             assertThrows(ResourceNotFoundException.class,
                     () -> hospitalService.deleteHospital(id, Locale.ENGLISH));

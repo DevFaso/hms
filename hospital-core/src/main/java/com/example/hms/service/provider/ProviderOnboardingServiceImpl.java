@@ -31,6 +31,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -137,7 +138,11 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
         } else {
             throw new BusinessException(MSG_TYPE_INVALID);
         }
-        return verificationRepository.findLatestByFacilityTypes(types, status, pageable)
+        // Page number and size only: the order is the query's own (newest
+        // first, then id), which keeps pages stable. A client sort is not
+        // honoured, so no arbitrary property reaches the query either.
+        Pageable stable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+        return verificationRepository.findLatestByFacilityTypes(types, status, stable)
             .map(v -> toResponse(v.getHospital(), v));
     }
 

@@ -97,7 +97,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     @Override
     public HospitalLifecycleResponseDTO suspend(UUID hospitalId, TenantLifecycleActionRequestDTO request, String mfaToken) {
-        Hospital hospital = loadOrThrow(hospitalId);
+        Hospital hospital = lockOrThrow(hospitalId);
         requireTransition(hospital, SUSPENDABLE, ACTION_SUSPEND);
         String reason = requireReason(request, ACTION_SUSPEND);
         requireStepUp(ACTION_SUSPEND, mfaToken);
@@ -120,8 +120,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
     public HospitalLifecycleResponseDTO restore(UUID hospitalId, TenantLifecycleActionRequestDTO request) {
         // Locked, like every provider transition: a restore racing a revoke
         // must see the verification the revoke committed.
-        Hospital hospital = hospitalRepository.findByIdForUpdate(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
+        Hospital hospital = lockOrThrow(hospitalId);
         requireTransition(hospital, RESTORABLE, ACTION_RESTORE);
         boolean awaitsVerification = awaitsVerification(hospital);
         if (!isRestorable(hospital, awaitsVerification)) {
@@ -156,7 +155,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     @Override
     public HospitalLifecycleResponseDTO archive(UUID hospitalId, TenantLifecycleActionRequestDTO request, String mfaToken) {
-        Hospital hospital = loadOrThrow(hospitalId);
+        Hospital hospital = lockOrThrow(hospitalId);
         requireTransition(hospital, ARCHIVABLE, ACTION_ARCHIVE);
         String reason = requireReason(request, ACTION_ARCHIVE);
         requireStepUp(ACTION_ARCHIVE, mfaToken);
@@ -175,7 +174,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     @Override
     public HospitalLifecycleResponseDTO schedulePurge(UUID hospitalId, TenantLifecycleActionRequestDTO request, String mfaToken) {
-        Hospital hospital = loadOrThrow(hospitalId);
+        Hospital hospital = lockOrThrow(hospitalId);
         requireTransition(hospital, PURGE_SCHEDULABLE, ACTION_SCHEDULE_PURGE);
         String reason = requireReason(request, ACTION_SCHEDULE_PURGE);
         requireStepUp(ACTION_SCHEDULE_PURGE, mfaToken);
@@ -202,7 +201,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     @Override
     public HospitalLifecycleResponseDTO cancelPurge(UUID hospitalId, TenantLifecycleActionRequestDTO request) {
-        Hospital hospital = loadOrThrow(hospitalId);
+        Hospital hospital = lockOrThrow(hospitalId);
         requireTransition(hospital, PURGE_CANCELLABLE, ACTION_CANCEL_PURGE);
 
         hospital.setLifecycleState(HospitalLifecycleState.ARCHIVED);
@@ -219,6 +218,19 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
     }
 
     // ── helpers ────────────────────────────────────────────────────────
+
+    /**
+     * The facility row for a lifecycle transition, locked (PESSIMISTIC_WRITE)
+     * before it is read. Hospital has no version column, so an unlocked
+     * transition racing a provider VERIFY would write its stale copy (old
+     * name, address, licence) over the verified one. Every lifecycle
+     * transition and every provider onboarding transition takes this one
+     * lock, the facility row, and nothing else.
+     */
+    private Hospital lockOrThrow(UUID hospitalId) {
+        return hospitalRepository.findByIdForUpdate(hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
+    }
 
     private Hospital loadOrThrow(UUID hospitalId) {
         return hospitalRepository.findById(hospitalId)

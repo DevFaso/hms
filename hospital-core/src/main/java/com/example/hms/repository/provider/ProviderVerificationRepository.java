@@ -54,7 +54,9 @@ public interface ProviderVerificationRepository extends JpaRepository<ProviderVe
     /**
      * The latest verification of every provider facility of these types,
      * narrowed to one status when given. "Latest" is the row no newer row of
-     * the same facility supersedes.
+     * the same facility supersedes. Ordered newest first, then by id, so
+     * pages never repeat or skip a row; callers pass an UNSORTED pageable
+     * (a sort from the pageable would be appended after this one).
      */
     @Query(value = """
         SELECT v FROM ProviderVerification v JOIN FETCH v.hospital h
@@ -63,6 +65,7 @@ public interface ProviderVerificationRepository extends JpaRepository<ProviderVe
           AND NOT EXISTS (
               SELECT 1 FROM ProviderVerification newer
               WHERE newer.hospital = v.hospital AND newer.createdAt > v.createdAt)
+        ORDER BY v.createdAt DESC, v.id DESC
         """,
         countQuery = """
         SELECT COUNT(v) FROM ProviderVerification v JOIN v.hospital h
