@@ -101,13 +101,13 @@ class PlatformAnalyticsServiceImplTest {
             when(labOrderRepository.count()).thenReturn(75L);
             when(prescriptionRepository.count()).thenReturn(60L);
             when(userRepository.count()).thenReturn(40L);
-            when(hospitalRepository.countByActiveTrue()).thenReturn(3L);
+            when(hospitalRepository.countActiveHospitals()).thenReturn(3L);
             when(appointmentRepository.countByAppointmentDateBetween(any(), any())).thenReturn(0L);
             when(appointmentRepository.findAll()).thenReturn(Collections.emptyList());
             when(encounterRepository.findAll()).thenReturn(Collections.emptyList());
             when(billingInvoiceRepository.findAll()).thenReturn(Collections.emptyList());
             when(departmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(hospitalRepository.findAll()).thenReturn(Collections.emptyList());
+            when(hospitalRepository.findAllHospitals()).thenReturn(Collections.emptyList());
             when(patientRepository.findAll()).thenReturn(Collections.emptyList());
 
             PlatformAnalyticsDTO result = service.getAnalytics(7);
@@ -132,7 +132,7 @@ class PlatformAnalyticsServiceImplTest {
             when(encounterRepository.findAll()).thenReturn(Collections.emptyList());
             when(billingInvoiceRepository.findAll()).thenReturn(Collections.emptyList());
             when(departmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(hospitalRepository.findAll()).thenReturn(Collections.emptyList());
+            when(hospitalRepository.findAllHospitals()).thenReturn(Collections.emptyList());
             when(patientRepository.findAll()).thenReturn(Collections.emptyList());
 
             PlatformAnalyticsDTO result = service.getAnalytics(3);
@@ -156,7 +156,7 @@ class PlatformAnalyticsServiceImplTest {
             when(encounterRepository.findAll()).thenReturn(Collections.emptyList());
             when(billingInvoiceRepository.findAll()).thenReturn(Collections.emptyList());
             when(departmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(hospitalRepository.findAll()).thenReturn(Collections.emptyList());
+            when(hospitalRepository.findAllHospitals()).thenReturn(Collections.emptyList());
             when(patientRepository.findAll()).thenReturn(Collections.emptyList());
 
             PlatformAnalyticsDTO result = service.getAnalytics(1);
@@ -179,7 +179,7 @@ class PlatformAnalyticsServiceImplTest {
             when(encounterRepository.findAll()).thenReturn(List.of(enc, encNull));
             when(billingInvoiceRepository.findAll()).thenReturn(Collections.emptyList());
             when(departmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(hospitalRepository.findAll()).thenReturn(Collections.emptyList());
+            when(hospitalRepository.findAllHospitals()).thenReturn(Collections.emptyList());
             when(patientRepository.findAll()).thenReturn(Collections.emptyList());
 
             PlatformAnalyticsDTO result = service.getAnalytics(1);
@@ -202,7 +202,7 @@ class PlatformAnalyticsServiceImplTest {
             when(encounterRepository.findAll()).thenReturn(Collections.emptyList());
             when(billingInvoiceRepository.findAll()).thenReturn(List.of(inv, invNull));
             when(departmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(hospitalRepository.findAll()).thenReturn(Collections.emptyList());
+            when(hospitalRepository.findAllHospitals()).thenReturn(Collections.emptyList());
             when(patientRepository.findAll()).thenReturn(Collections.emptyList());
 
             PlatformAnalyticsDTO result = service.getAnalytics(1);
@@ -228,7 +228,7 @@ class PlatformAnalyticsServiceImplTest {
             when(encounterRepository.findAll()).thenReturn(Collections.emptyList());
             when(billingInvoiceRepository.findAll()).thenReturn(Collections.emptyList());
             when(departmentRepository.findAll()).thenReturn(List.of(dept));
-            when(hospitalRepository.findAll()).thenReturn(Collections.emptyList());
+            when(hospitalRepository.findAllHospitals()).thenReturn(Collections.emptyList());
             when(patientRepository.findAll()).thenReturn(Collections.emptyList());
 
             PlatformAnalyticsDTO result = service.getAnalytics(1);
@@ -260,7 +260,7 @@ class PlatformAnalyticsServiceImplTest {
             when(encounterRepository.findAll()).thenReturn(Collections.emptyList());
             when(billingInvoiceRepository.findAll()).thenReturn(Collections.emptyList());
             when(departmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(hospitalRepository.findAll()).thenReturn(List.of(h1, h2));
+            when(hospitalRepository.findAllHospitals()).thenReturn(List.of(h1, h2));
             when(patientRepository.findAll()).thenReturn(List.of(p1, p2, pNull));
 
             PlatformAnalyticsDTO result = service.getAnalytics(1);
@@ -280,7 +280,7 @@ class PlatformAnalyticsServiceImplTest {
             when(encounterRepository.findAll()).thenReturn(Collections.emptyList());
             when(billingInvoiceRepository.findAll()).thenReturn(Collections.emptyList());
             when(departmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(hospitalRepository.findAll()).thenReturn(Collections.emptyList());
+            when(hospitalRepository.findAllHospitals()).thenReturn(Collections.emptyList());
             when(patientRepository.findAll()).thenReturn(Collections.emptyList());
 
             PlatformAnalyticsDTO result = service.getAnalytics(1);
@@ -298,7 +298,7 @@ class PlatformAnalyticsServiceImplTest {
             when(encounterRepository.findAll()).thenReturn(Collections.emptyList());
             when(billingInvoiceRepository.findAll()).thenReturn(Collections.emptyList());
             when(departmentRepository.findAll()).thenReturn(Collections.emptyList());
-            when(hospitalRepository.findAll()).thenReturn(Collections.emptyList());
+            when(hospitalRepository.findAllHospitals()).thenReturn(Collections.emptyList());
             when(patientRepository.findAll()).thenReturn(Collections.emptyList());
 
             PlatformAnalyticsDTO result = service.getAnalytics(7);
@@ -321,6 +321,6 @@ class PlatformAnalyticsServiceImplTest {
         when(labOrderRepository.count()).thenReturn(0L);
         when(prescriptionRepository.count()).thenReturn(0L);
         when(userRepository.count()).thenReturn(0L);
-        when(hospitalRepository.countByActiveTrue()).thenReturn(0L);
+        when(hospitalRepository.countActiveHospitals()).thenReturn(0L);
     }
 }

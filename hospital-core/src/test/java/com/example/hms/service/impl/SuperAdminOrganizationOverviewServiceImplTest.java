@@ -516,6 +516,45 @@ class SuperAdminOrganizationOverviewServiceImplTest {
     }
 
     @Test
+    void providerFacilitiesAreNeitherListedNorCountedAsOrganisationHospitals() {
+        Organization organization = Organization.builder().name("Sigma").code("SIGMA").active(true).build();
+        organization.setId(UUID.randomUUID());
+        Hospital clinic = Hospital.builder().name("Sigma Clinic").code("SC-1").active(true).build();
+        clinic.setId(UUID.randomUUID());
+        Hospital pharmacy = Hospital.builder().name("Sigma Pharmacy").code("SP-1").active(true).build();
+        pharmacy.setId(UUID.randomUUID());
+        pharmacy.setFacilityType(com.example.hms.enums.FacilityType.PHARMACY);
+        organization.addHospital(clinic);
+        organization.addHospital(pharmacy);
+        when(organizationRepository.findAll()).thenReturn(List.of(organization));
+
+        SuperAdminOrganizationHierarchyResponseDTO response = service.getOrganizationHierarchy(
+            false, false, null, null, 5, 5, Locale.CANADA);
+
+        assertThat(response.getTotalHospitals()).isEqualTo(1);
+        assertThat(response.getOrganizations().get(0).getHospitals())
+            .extracting(SuperAdminOrganizationHierarchyResponseDTO.HospitalHierarchyDTO::getHospitalName)
+            .containsExactly("Sigma Clinic");
+    }
+
+    @Test
+    void theLocalisationReferenceHospitalIsNeverAProvider() {
+        Organization organization = Organization.builder().name("Tau").code("TAU").active(true).build();
+        organization.setId(UUID.randomUUID());
+        Hospital pharmacy = Hospital.builder().name("Tau Pharmacy").code("TP-1").country("FR").active(true).build();
+        pharmacy.setId(UUID.randomUUID());
+        pharmacy.setFacilityType(com.example.hms.enums.FacilityType.PHARMACY);
+        organization.addHospital(pharmacy);
+
+        Object defaults = org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+            service, "mapLocalizationDefaults", organization);
+
+        // No clinical hospital: the platform default, not the pharmacy country.
+        assertThat(org.springframework.test.util.ReflectionTestUtils.getField(defaults, "fallbackLocale"))
+            .isEqualTo("en_US");
+    }
+
+    @Test
     void getOrganizationHierarchyReturnsEarlyWhenNoDirectoryDataRequested() {
         UUID orgId = UUID.randomUUID();
         Organization organization = Organization.builder()

@@ -24,6 +24,7 @@ import com.example.hms.service.OrganizationSecurityService;
 import com.example.hms.service.PatientService;
 import com.example.hms.service.SuperAdminOrganizationOverviewService;
 import com.example.hms.service.StaffService;
+import com.example.hms.security.provider.ClinicalHospitals;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -155,8 +156,10 @@ public class SuperAdminOrganizationOverviewServiceImpl implements SuperAdminOrga
         boolean organizationMatches = context.normalizedSearch() == null
             || matchesOrganizationSearch(organization, context.normalizedSearch());
 
+        // Clinical hospitals only: a pharmacy or laboratory is neither listed
+        // nor counted as an organisation hospital (provider plan AC-11).
         List<HospitalHierarchyDTO> hospitals = organization.getHospitals().stream()
-            .filter(Objects::nonNull)
+            .filter(ClinicalHospitals::isClinical)
             .filter(hospital -> context.activeOnly() == null || hospital.isActive() == context.activeOnly())
             .sorted(Comparator.comparing(this::resolveHospitalSortKey, String.CASE_INSENSITIVE_ORDER))
             .map(hospital -> mapHospitalHierarchy(
@@ -536,7 +539,11 @@ public class SuperAdminOrganizationOverviewServiceImpl implements SuperAdminOrga
     }
 
     private LocalizationDefaultsDTO mapLocalizationDefaults(Organization organization) {
-        Hospital referenceHospital = organization.getHospitals().stream().findFirst().orElse(null);
+        // The reference hospital is a clinical one, never a provider facility (AC-11).
+        Hospital referenceHospital = organization.getHospitals().stream()
+            .filter(ClinicalHospitals::isClinical)
+            .findFirst()
+            .orElse(null);
 
         String countryCode = referenceHospital != null && referenceHospital.getCountry() != null && !referenceHospital.getCountry().isBlank()
             ? normalizeRegionCode(referenceHospital.getCountry())

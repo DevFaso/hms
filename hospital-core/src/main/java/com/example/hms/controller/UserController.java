@@ -9,6 +9,7 @@ import com.example.hms.payload.dto.UserResponseDTO;
 import com.example.hms.payload.dto.UserSummaryDTO;
 import com.example.hms.service.UserService;
 import com.example.hms.utility.RoleValidator;
+import com.example.hms.security.provider.ClinicalHospitals;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -132,7 +133,12 @@ public class UserController {
 
     private ResponseEntity<UserResponseDTO> resolveHospitalFromName(AdminSignupRequest request) {
         if (request.getHospitalName() != null && !request.getHospitalName().isBlank()) {
-            var hospital = hospitalRepository.findByName(request.getHospitalName()).orElse(null);
+            // By NAME a hospital only: a provider facility is named by id (the
+            // path of its PROVIDER_ADMIN), and by name it answers as an unknown
+            // hospital (provider plan AC-11).
+            var hospital = hospitalRepository.findByName(request.getHospitalName())
+                .filter(ClinicalHospitals::isClinical)
+                .orElse(null);
             if (hospital == null) {
                 log.warn("[ADMIN REGISTER] Hospital not found for provided hospital name.");
                 return ResponseEntity.badRequest().build();

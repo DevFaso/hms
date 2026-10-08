@@ -124,6 +124,8 @@ class ActingScopeCoverageTest {
             allow(
                 "security/tenant/ActingScopeResolver.java", 3, "The resolver itself",
                 "security/TenantLifecycleGate.java", 1, "The lifecycle gate: a verified super-admin passes",
+                "security/provider/ProviderConfinementPolicy.java", 1,
+                "Provider confinement, a gate like the lifecycle one: a verified super-admin is never confined",
                 "security/SuperAdminAuthorities.java", 1, "The Q10 reconciliation reads the verified signal",
                 "fhir/FhirTenantBoundary.java", 2, VERIFIED_SIGNAL,
                 "controller/SuperAdminDashboardController.java", 1, VERIFIED_SIGNAL,

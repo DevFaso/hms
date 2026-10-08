@@ -5,6 +5,7 @@ import com.example.hms.model.Hospital;
 import com.example.hms.payload.dto.OrganizationRequestDTO;
 import com.example.hms.payload.dto.OrganizationResponseDTO;
 import com.example.hms.payload.dto.OrganizationSecurityPolicyResponseDTO;
+import com.example.hms.security.provider.ClinicalHospitals;
 import org.hibernate.Hibernate;
 import org.springframework.stereotype.Component;
 
@@ -80,7 +81,10 @@ public class OrganizationMapper {
             return Collections.emptyList();
         }
 
+        // An organisation lists (and so counts) its clinical hospitals only;
+        // a pharmacy or laboratory row is not one of them (provider plan AC-11).
         return hospitals.stream()
+            .filter(ClinicalHospitals::isClinical)
             .map(hospital -> OrganizationResponseDTO.HospitalMinimalDTO.builder()
                 .id(hospital.getId())
                 .name(hospital.getName())

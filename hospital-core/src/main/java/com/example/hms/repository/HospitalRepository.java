@@ -52,12 +52,16 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
      * 500 that hit {@code LabTestDefinitionRepository.search}. H2 is more
      * lenient. Same pattern as {@code UserRepository#searchByCriteria} and
      * {@code findAllWithDepartments} below.</p>
+     *
+     * <p>Clinical hospitals only (provider plan AC-11): a pharmacy or
+     * laboratory is not a scope a hospital page picks.</p>
      */
     @Query("SELECT h FROM Hospital h LEFT JOIN FETCH h.organization WHERE " +
             "(:name IS NULL OR LOWER(h.name) LIKE LOWER(CONCAT(CAST(:name AS string), '%'))) AND " +
             "(:city IS NULL OR LOWER(h.city) LIKE LOWER(CONCAT('%', CAST(:city AS string), '%'))) AND " +
             "(:state IS NULL OR LOWER(h.state) LIKE LOWER(CONCAT('%', CAST(:state AS string), '%'))) AND " +
-            "(:active IS NULL OR h.active = :active) " +
+            "(:active IS NULL OR h.active = :active) AND" +
+            " h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL " +
             "ORDER BY LOWER(h.name)")
     Slice<Hospital> searchHospitals(@Param("name") String name,
                                    @Param("city") String city,
@@ -71,8 +75,28 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
 
     Optional<Hospital> findByName(String name);
 
-    /* Dashboard count */
-    long countByActiveTrue();
+    /*
+     * Lists, counts and KPIs are CLINICAL by default (provider plan AC-11): a
+     * pharmacy or laboratory row is never a "hospital" there. A new list or
+     * count that must also return providers says so in its name
+     * (...AnyFacilityType, ...ByFacilityType). The by-id reads and the name
+     * or code lookups are not filtered; a clinical destination filters them
+     * with ClinicalHospitals.isClinical. HospitalRepositoryCallerCoverageTest
+     * holds every caller of an unfiltered list, count or lookup to a
+     * recorded reason.
+     */
+
+    /** Every clinical hospital: the super-admin's global scope, platform KPIs. */
+    @Query("SELECT h FROM Hospital h WHERE h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
+    List<Hospital> findAllHospitals();
+
+    /** Dashboard count: clinical hospitals. */
+    @Query("SELECT COUNT(h) FROM Hospital h WHERE h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
+    long countHospitals();
+
+    /** Dashboard count: active clinical hospitals. */
+    @Query("SELECT COUNT(h) FROM Hospital h WHERE h.active = true AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
+    long countActiveHospitals();
 
     /** B1: the laboratories a clinician may route an order to — every active hospital, by name. */
     List<Hospital> findByActiveTrueAndLifecycleStateOrderByNameAsc(com.example.hms.enums.HospitalLifecycleState lifecycleState);
@@ -107,7 +131,9 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
         + " AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
     List<Hospital> findByOrganizationIsNull();
 
-    List<Hospital> findByOrganizationIdOrderByNameAsc(UUID organizationId);
+    /** An organisation's clinical hospitals, by name. */
+    @Query("SELECT h FROM Hospital h WHERE h.organization.id = :organizationId AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL ORDER BY h.name ASC")
+    List<Hospital> findByOrganizationIdOrderByNameAsc(@Param("organizationId") UUID organizationId);
 
     @Query("""
       SELECT DISTINCT h FROM Hospital h
@@ -115,6 +141,7 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
       LEFT JOIN FETCH d.headOfDepartment hod
       LEFT JOIN FETCH hod.user u
       WHERE (:activeOnly IS NULL OR h.active = :activeOnly)
+    AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL
     AND (
       :hospitalQuery IS NULL OR :hospitalQuery = '' OR
       LOWER(CAST(h.name AS string)) LIKE LOWER(CONCAT('%', CAST(:hospitalQuery AS string), '%')) OR
@@ -128,6 +155,7 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     @Query("""
       SELECT h FROM Hospital h
       WHERE (:organizationId IS NULL OR h.organization.id = :organizationId)
+        AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL
         AND (:unassignedOnly IS NULL OR :unassignedOnly = false OR h.organization IS NULL)
         AND (
             :city IS NULL

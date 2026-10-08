@@ -48,6 +48,7 @@ import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import java.util.Set;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.provider.ClinicalHospitals;
 
 @Slf4j
 @Service
@@ -79,6 +80,7 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
             .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_WITH_ID, request.getPatientId()));
 
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
+            .filter(ClinicalHospitals::isClinical)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_WITH_ID, request.getHospitalId()));
 
         User midwife = resolveUserByUsername(username);

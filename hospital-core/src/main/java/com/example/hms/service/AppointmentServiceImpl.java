@@ -32,6 +32,7 @@ import com.example.hms.security.tenant.ActingScope;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.service.support.HospitalScopeUtils;
 import com.example.hms.specification.AppointmentSpecification;
+import com.example.hms.security.provider.ClinicalHospitals;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
@@ -496,15 +497,23 @@ public class AppointmentServiceImpl implements AppointmentService {
         return resolvePatient(request, currentUser.getUsername());
     }
 
+    /**
+     * The booking hospital, by id, code or name. A provider facility answers
+     * exactly as an unknown one: nobody books an appointment at a pharmacy or
+     * laboratory (provider plan AC-11).
+     */
     private Hospital resolveHospital(AppointmentRequestDTO request) {
         if (request.getHospitalId() != null) {
             return hospitalRepository.findById(request.getHospitalId())
+                .filter(ClinicalHospitals::isClinical)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", request.getHospitalId()));
         } else if (request.getHospitalCode() != null) {
             return hospitalRepository.findByCodeIgnoreCase(request.getHospitalCode())
+                .filter(ClinicalHospitals::isClinical)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", request.getHospitalCode()));
         } else if (request.getHospitalName() != null) {
             return hospitalRepository.findByNameIgnoreCase(request.getHospitalName())
+                .filter(ClinicalHospitals::isClinical)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", request.getHospitalName()));
         }
         throw new BusinessException("Hospital identifier required");
@@ -1068,7 +1077,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             return Set.of(pinnedHospitalId);
         }
         if (context.isGlobalView()) {
-            LinkedHashSet<UUID> superAdminScope = hospitalRepository.findAll().stream()
+            LinkedHashSet<UUID> superAdminScope = hospitalRepository.findAllHospitals().stream()
                 .map(Hospital::getId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 

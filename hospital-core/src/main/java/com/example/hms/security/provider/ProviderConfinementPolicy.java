@@ -122,7 +122,8 @@ public class ProviderConfinementPolicy {
             try {
                 answered = resolver.resolveException(request, response, null, notFound);
             } catch (RuntimeException resolverFailure) {
-                answered = null;
+                log.debug("[CONFINEMENT] Resolver failed ({}); answering a bare 404",
+                    resolverFailure.getClass().getSimpleName());
             }
         }
         if (answered == null && !response.isCommitted()) {

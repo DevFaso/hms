@@ -38,7 +38,7 @@ public class PlatformAnalyticsServiceImpl implements PlatformAnalyticsService {
         long totalLabOrders = labOrderRepository.count();
         long totalPrescriptions = prescriptionRepository.count();
         long totalUsers = userRepository.count();
-        long activeHospitals = hospitalRepository.countByActiveTrue();
+        long activeHospitals = hospitalRepository.countActiveHospitals();
 
         List<PlatformAnalyticsDTO.TrendPoint> appointmentTrend = buildAppointmentTrend(trendDays);
 
@@ -142,7 +142,7 @@ public class PlatformAnalyticsServiceImpl implements PlatformAnalyticsService {
                 .filter(a -> a.getHospital() != null)
                 .collect(Collectors.groupingBy(a -> a.getHospital().getId(), Collectors.counting()));
 
-        return hospitalRepository.findAll().stream()
+        return hospitalRepository.findAllHospitals().stream()
                 .filter(h -> h.isActive())
                 .map(h -> PlatformAnalyticsDTO.HospitalMetric.builder()
                         .hospitalName(h.getName())
