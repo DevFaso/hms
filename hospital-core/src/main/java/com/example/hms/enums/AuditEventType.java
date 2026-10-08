@@ -105,6 +105,14 @@ public enum AuditEventType {
     DISPENSE_HANDED_OVER,
     /** G15: a prepared fill was cancelled, or voided by the prescriber's withdrawal or edit. */
     DISPENSE_READY_CANCELLED,
+    /** G13: a pharmacist claimed a prescription on the work queue. */
+    PRESCRIPTION_QUEUE_CLAIMED,
+    /** G13: a work-queue claim ended (released, or the work on the order ended). */
+    PRESCRIPTION_QUEUE_CLAIM_RELEASED,
+    /** G13: another pharmacy-queue user took a claim over, explicitly or by acting on the order. */
+    PRESCRIPTION_QUEUE_CLAIM_TAKEN_OVER,
+    /** G13: a lapsed claim was found and removed by a later write. */
+    PRESCRIPTION_QUEUE_CLAIM_EXPIRED,
     MEDICATION_DEACTIVATED,
     PHARMACY_DEACTIVATED,
     MTM_REVIEW_STARTED,

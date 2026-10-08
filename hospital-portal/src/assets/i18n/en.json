@@ -5323,7 +5323,11 @@
         "WEBHOOK_ENDPOINT_UPDATED": "Webhook Updated",
         "DISPENSE_READY": "Fill prepared for collection",
         "DISPENSE_HANDED_OVER": "Prepared fill handed over",
-        "DISPENSE_READY_CANCELLED": "Prepared fill cancelled"
+        "DISPENSE_READY_CANCELLED": "Prepared fill cancelled",
+        "PRESCRIPTION_QUEUE_CLAIMED": "Work-queue prescription claimed",
+        "PRESCRIPTION_QUEUE_CLAIM_RELEASED": "Work-queue claim released",
+        "PRESCRIPTION_QUEUE_CLAIM_TAKEN_OVER": "Work-queue claim taken over",
+        "PRESCRIPTION_QUEUE_CLAIM_EXPIRED": "Work-queue claim expired"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -7450,6 +7454,25 @@
     "VERIF_UNCONFIRMED": "Unconfirmed"
   },
   "PHARMACY": {
+    "QUEUE_CLAIM": {
+      "BEING_PREPARED_BY": "Being prepared by {{name}}",
+      "MINE": "You are preparing this",
+      "SINCE": "since {{time}}",
+      "CLAIM": "Claim",
+      "RELEASE": "Release",
+      "TAKE_OVER": "Take over",
+      "TAKE_OVER_CONFIRM": "{{name}} has been preparing this prescription since {{time}}. Take it over?",
+      "CLAIMED": "You are now preparing this prescription.",
+      "RELEASED": "Prescription released.",
+      "TAKEN_OVER": "You have taken this prescription over.",
+      "FAILED": "Could not update who is preparing this prescription.",
+      "FILTER_LABEL": "Show",
+      "FILTER": {
+        "ALL": "All",
+        "MINE": "Mine",
+        "UNCLAIMED": "Unclaimed"
+      }
+    },
     "ATTENTION": {
       "PENDING_STOCK": "Out of stock — on back order",
       "PARTNER_REJECTED": "The partner pharmacy refused it — fill here or route elsewhere",

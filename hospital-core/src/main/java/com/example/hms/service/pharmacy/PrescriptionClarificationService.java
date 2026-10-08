@@ -2,6 +2,8 @@ package com.example.hms.service.pharmacy;
 
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.PrescriptionStatus;
+import com.example.hms.enums.QueueClaimExitActor;
+import com.example.hms.enums.QueueClaimReleaseReason;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Prescription;
@@ -88,6 +90,8 @@ public class PrescriptionClarificationService {
     private final Clock clock;
     /** G15: an open preparation blocks a clarification request (AC-10). */
     private final com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
+    /** G13: asking the prescriber a question ends the work-queue claim (plan rule 4). */
+    private final PrescriptionQueueClaimService queueClaimService;
 
     /**
      * @param reason the pharmacist's question; required, at most 1000 chars,
@@ -127,6 +131,8 @@ public class PrescriptionClarificationService {
         prescription.setClarificationResolvedAt(null);
         prescription.setClarificationResolvedByUserId(null);
         prescriptionRepository.save(prescription);
+        queueClaimService.releaseOnExit(prescription, QueueClaimReleaseReason.CLARIFICATION_REQUESTED,
+                pharmacistId, QueueClaimExitActor.QUEUE_ROLE);
 
         // The reason is clinical narrative and stays off the audit description.
         support.logAudit(AuditEventType.PRESCRIPTION_CLARIFICATION_REQUESTED,

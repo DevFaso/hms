@@ -5323,7 +5323,11 @@
         "WEBHOOK_ENDPOINT_UPDATED": "Webhook actualizado",
         "DISPENSE_READY": "Dispensación preparada para recoger",
         "DISPENSE_HANDED_OVER": "Dispensación preparada entregada",
-        "DISPENSE_READY_CANCELLED": "Dispensación preparada cancelada"
+        "DISPENSE_READY_CANCELLED": "Dispensación preparada cancelada",
+        "PRESCRIPTION_QUEUE_CLAIMED": "Receta asignada",
+        "PRESCRIPTION_QUEUE_CLAIM_RELEASED": "Asignación liberada",
+        "PRESCRIPTION_QUEUE_CLAIM_TAKEN_OVER": "Asignación relevada",
+        "PRESCRIPTION_QUEUE_CLAIM_EXPIRED": "Asignación caducada"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -7450,6 +7454,25 @@
     "VERIF_UNCONFIRMED": "Sin confirmar"
   },
   "PHARMACY": {
+    "QUEUE_CLAIM": {
+      "BEING_PREPARED_BY": "En preparación por {{name}}",
+      "MINE": "Usted está preparando esta receta",
+      "SINCE": "desde las {{time}}",
+      "CLAIM": "Hacerse cargo",
+      "RELEASE": "Liberar",
+      "TAKE_OVER": "Tomar el relevo",
+      "TAKE_OVER_CONFIRM": "{{name}} está preparando esta receta desde las {{time}}. ¿Tomar el relevo?",
+      "CLAIMED": "Ahora está preparando esta receta.",
+      "RELEASED": "Receta liberada.",
+      "TAKEN_OVER": "Ha tomado el relevo de esta receta.",
+      "FAILED": "No se pudo actualizar quién prepara esta receta.",
+      "FILTER_LABEL": "Mostrar",
+      "FILTER": {
+        "ALL": "Todas",
+        "MINE": "Las mías",
+        "UNCLAIMED": "Sin asignar"
+      }
+    },
     "ATTENTION": {
       "PENDING_STOCK": "Sin existencias — en pedido pendiente",
       "PARTNER_REJECTED": "La farmacia asociada la rechazó — dispense aquí o derive a otra",

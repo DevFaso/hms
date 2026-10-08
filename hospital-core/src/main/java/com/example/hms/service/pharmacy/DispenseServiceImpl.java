@@ -4,6 +4,9 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.DispenseCheck;
 import com.example.hms.enums.DispenseStatus;
 import com.example.hms.enums.PharmacyType;
+import com.example.hms.enums.QueueClaimExitActor;
+import com.example.hms.enums.QueueClaimFilter;
+import com.example.hms.enums.QueueClaimReleaseReason;
 import com.example.hms.enums.DispenseVerificationStatus;
 import com.example.hms.enums.ReadyCancelReason;
 import com.example.hms.enums.PrescriptionStatus;
@@ -30,6 +33,7 @@ import com.example.hms.payload.dto.pharmacy.CancelReadyRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseRequestDTO;
 import com.example.hms.payload.dto.pharmacy.HandOverRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseResponseDTO;
+import com.example.hms.payload.dto.pharmacy.WorkQueueClaimDTO;
 import com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PrescriptionRepository;
@@ -101,6 +105,8 @@ public class DispenseServiceImpl implements DispenseService {
     private final PreparedFillVoider preparedFillVoider;
     /** G15 B2/A1: resyncs the one row a conditional bulk UPDATE changed. */
     private final EntityManager entityManager;
+    /** G13: the work-queue claim; a fill or a preparation ends it (plan rule 4). */
+    private final PrescriptionQueueClaimService queueClaimService;
 
     /**
      * Roadmap row 4 / T-68 — self-proxy used by {@link #createDispense} so the
@@ -377,6 +383,12 @@ public class DispenseServiceImpl implements DispenseService {
             closeOutBackOrder(prescription);
         }
 
+        // G13 rule 4: the fill ends any work-queue claim, whatever its
+        // outcome (a partial fill included). Same transaction and lock; the
+        // audit is written after commit.
+        queueClaimService.releaseOnExit(prescription, QueueClaimReleaseReason.DISPENSED,
+                fill.actors().dispensedBy().getId(), QueueClaimExitActor.QUEUE_ROLE);
+
         // T-38 / G15: the dispensed receipt SMS — only when the Rx is now
         // fully DISPENSED, and only once the fill has committed.
         if (prescription.getStatus() == PrescriptionStatus.DISPENSED) {
@@ -430,6 +442,11 @@ public class DispenseServiceImpl implements DispenseService {
         dispense.setPreparedByUser(preparer);
         recordVerification(dispense, dto, fill.verification());
         Dispense saved = dispenseRepository.save(dispense);
+
+        // G13 rule 4 / AC-10: preparing ends the claim; a prepared row cannot
+        // be claimed until it is handed over or cancelled.
+        queueClaimService.releaseOnExit(fill.prescription(), QueueClaimReleaseReason.PREPARED,
+                preparer.getId(), QueueClaimExitActor.QUEUE_ROLE);
 
         UUID prescriptionId = fill.prescription().getId();
         logAudit(AuditEventType.DISPENSE_READY,
@@ -1130,12 +1147,11 @@ public class DispenseServiceImpl implements DispenseService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<WorkQueuePrescriptionDTO> getWorkQueue(Pageable pageable) {
+    public Page<WorkQueuePrescriptionDTO> getWorkQueue(Pageable pageable, QueueClaimFilter claimFilter) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        Page<Prescription> page = prescriptionRepository
-                .findByHospital_IdAndStatusIn(hospitalId,
-                        List.copyOf(WORK_QUEUE_STATUSES), pageable);
+        Page<Prescription> page = workQueuePage(hospitalId, claimFilter, pageable);
         List<Prescription> rows = page.getContent();
+        Map<UUID, WorkQueueClaimDTO> claims = queueClaimService.activeClaimsFor(rows);
         Map<UUID, RefillRequest> latestRefills = latestRefillsFor(rows);
         Map<UUID, PrescriptionRoutingDecision> latestDecisions = latestDecisionsFor(rows);
         Set<UUID> outstandingBackOrders = outstandingBackOrdersFor(rows);
@@ -1147,6 +1163,7 @@ public class DispenseServiceImpl implements DispenseService {
             WorkQueuePrescriptionDTO dto = toWorkQueueDTO(p, latestRefills.get(p.getId()),
                     latestDecisions.get(p.getId()), lastActions.get(p.getId()),
                     outstandingBackOrders.contains(p.getId()));
+            dto.setClaim(claims.get(p.getId()));
             if (prepared != null) {
                 dto.setReadyForCollection(toReadyForCollection(prepared));
                 // G15 AC-11: the lowest-precedence reason. A status or an
@@ -1159,6 +1176,30 @@ public class DispenseServiceImpl implements DispenseService {
             }
             return dto;
         });
+    }
+
+    /**
+     * G13: the queue page for a claim filter. MINE and UNCLAIMED have their
+     * own page and count queries; ALL (or claims switched off, or no caller
+     * id for MINE) is today's list.
+     */
+    private Page<Prescription> workQueuePage(UUID hospitalId, QueueClaimFilter claimFilter, Pageable pageable) {
+        List<PrescriptionStatus> statuses = List.copyOf(WORK_QUEUE_STATUSES);
+        QueueClaimFilter filter = claimFilter != null && queueClaimService.isEnabled()
+                ? claimFilter : QueueClaimFilter.ALL;
+        return switch (filter) {
+            case MINE -> {
+                UUID callerId = roleValidator.getCurrentUserId();
+                if (callerId == null) {
+                    throw new BusinessException("Unable to determine current user");
+                }
+                yield prescriptionRepository.findWorkQueueClaimedBy(hospitalId, statuses, callerId,
+                        queueClaimService.activeAfter(), pageable);
+            }
+            case UNCLAIMED -> prescriptionRepository.findWorkQueueUnclaimed(hospitalId, statuses,
+                    queueClaimService.activeAfter(), pageable);
+            case ALL -> prescriptionRepository.findByHospital_IdAndStatusIn(hospitalId, statuses, pageable);
+        };
     }
 
     /** G15: the open preparation of each order on the page, one query. */

@@ -1,14 +1,15 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { Router } from '@angular/router';
 import { DispensingComponent } from './dispensing';
 import { PharmacyService } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { OfflineDispenseQueueService } from './offline-dispense-queue.service';
 import { By } from '@angular/platform-browser';
-import { BehaviorSubject, of, throwError } from 'rxjs';
+import { BehaviorSubject, of, Subject, throwError } from 'rxjs';
 import { RoleContextService } from '../core/role-context.service';
 import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
 
@@ -952,5 +953,607 @@ describe('DispensingComponent — clarification control on the work queue', () =
     fixture.detectChanges();
 
     expect(pharmacySvc.getDispenseWorkQueue.calls.count()).toBe(before + 1);
+  });
+});
+
+describe('DispensingComponent — work-queue claim (G13)', () => {
+  let fixture: ComponentFixture<DispensingComponent>;
+  let component: DispensingComponent;
+  let pharmacySvc: jasmine.SpyObj<PharmacyService>;
+  let toast: jasmine.SpyObj<ToastService>;
+  let router: Router;
+
+  const colleagueClaim = {
+    prescriptionId: 'rx-1',
+    claimedByUserId: 'user-awa',
+    claimedByName: 'Awa Sanou',
+    claimedAt: '2026-10-07T09:05:00',
+    expiresAt: '2026-10-07T09:20:00',
+    mine: false,
+  };
+  const myClaim = { ...colleagueClaim, claimedByUserId: 'user-1', claimedByName: 'Me', mine: true };
+
+  function row(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'rx-1',
+      medicationName: 'Metformin 500mg',
+      dosage: '500mg',
+      quantity: 30,
+      status: 'SIGNED',
+      patient: { id: 'pat-1', firstName: 'John', lastName: 'Doe' },
+      ...overrides,
+    };
+  }
+
+  function page(rows: unknown[]) {
+    return of({
+      data: { content: rows, totalElements: rows.length, totalPages: 1, size: 20, number: 0 },
+    }) as never;
+  }
+
+  async function render(rowOverrides: Record<string, unknown> = {}, claimsOn = true) {
+    pharmacySvc = jasmine.createSpyObj('PharmacyService', [
+      'listPharmacies',
+      'getDispenseWorkQueue',
+      'listDispensesByPharmacy',
+      'listInventoryByPharmacy',
+      'listLotsByPharmacy',
+      'createDispense',
+      'cancelDispense',
+      'getDispenseSettings',
+      'markReady',
+      'claimQueueRow',
+      'takeOverQueueRow',
+      'releaseQueueRow',
+    ]);
+    pharmacySvc.getDispenseSettings.and.returnValue(
+      of({
+        data: {
+          readyForCollectionEnabled: true,
+          queueClaimEnabled: claimsOn,
+          queueClaimTtlMinutes: 15,
+        },
+      }) as never,
+    );
+    pharmacySvc.listPharmacies.and.returnValue(
+      of({
+        content: [
+          { id: 'ph-1', name: 'Main Pharmacy' },
+          { id: 'ph-2', name: 'Ward Pharmacy' },
+        ],
+        totalElements: 2,
+        totalPages: 1,
+        size: 100,
+        number: 0,
+      }) as never,
+    );
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(page([row(rowOverrides)]));
+    pharmacySvc.listDispensesByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
+    pharmacySvc.listInventoryByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
+    pharmacySvc.listLotsByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
+    pharmacySvc.releaseQueueRow.and.returnValue(of({ data: null }) as never);
+    toast = jasmine.createSpyObj('ToastService', ['success', 'error']);
+
+    const offlineQueueStub: Pick<
+      OfflineDispenseQueueService,
+      'pending$' | 'pending' | 'enqueue' | 'replayAll' | 'clear'
+    > = {
+      pending$: new BehaviorSubject<number>(0).asObservable(),
+      pending: 0,
+      enqueue: () => Promise.resolve({ id: 'k', request: {} as never, enqueuedAt: 0, attempts: 0 }),
+      replayAll: () => Promise.resolve({ succeeded: 0, failed: 0, remaining: 0 }),
+      clear: () => Promise.resolve(),
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [DispensingComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: PharmacyService, useValue: pharmacySvc },
+        {
+          provide: AuthService,
+          useValue: jasmine.createSpyObj('AuthService', [], {
+            currentProfile: () => ({ id: 'user-1' }),
+          }),
+        },
+        { provide: ToastService, useValue: toast },
+        { provide: OfflineDispenseQueueService, useValue: offlineQueueStub },
+      ],
+    }).compileComponents();
+
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('en', {
+      PHARMACY: {
+        QUEUE_CLAIM: {
+          BEING_PREPARED_BY: 'Being prepared by {{name}}',
+          MINE: 'You are preparing this',
+          SINCE: 'since {{time}}',
+          TAKE_OVER_CONFIRM:
+            '{{name}} has been preparing this prescription since {{time}}. Take it over?',
+        },
+      },
+    });
+    translate.use('en');
+    router = TestBed.inject(Router);
+    spyOn(router, 'navigate').and.resolveTo(true);
+
+    fixture = TestBed.createComponent(DispensingComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  }
+
+  function text(testId: string): string {
+    const el = fixture.nativeElement.querySelector(
+      `[data-testid="${testId}"]`,
+    ) as HTMLElement | null;
+    return el?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+  }
+
+  function exists(testId: string): boolean {
+    return !!fixture.nativeElement.querySelector(`[data-testid="${testId}"]`);
+  }
+
+  function click(testId: string): void {
+    (fixture.nativeElement.querySelector(`[data-testid="${testId}"]`) as HTMLElement).click();
+    fixture.detectChanges();
+  }
+
+  const conflict = (message: string) =>
+    throwError(() => ({ status: 409, error: { status: 409, message } }));
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  // ── the row ──
+
+  it("names a colleague's claim and how long it has run", async () => {
+    await render({ claim: colleagueClaim });
+    expect(text('rx-claim-rx-1')).toContain('Being prepared by Awa Sanou');
+    expect(text('rx-claim-rx-1')).toContain('since');
+  });
+
+  it('says so when the claim is mine', async () => {
+    await render({ claim: myClaim });
+    expect(text('rx-claim-rx-1')).toContain('You are preparing this');
+    expect(text('rx-claim-rx-1')).not.toContain('Being prepared by');
+  });
+
+  it('offers Claim on an unclaimed row, Release on mine, Take over on a colleague’s', async () => {
+    await render();
+    expect(exists('rx-claim-btn-rx-1')).toBeTrue();
+    expect(exists('rx-release-btn-rx-1')).toBeFalse();
+    expect(exists('rx-take-over-btn-rx-1')).toBeFalse();
+    TestBed.resetTestingModule();
+
+    await render({ claim: myClaim });
+    expect(exists('rx-release-btn-rx-1')).toBeTrue();
+    expect(exists('rx-claim-btn-rx-1')).toBeFalse();
+    TestBed.resetTestingModule();
+
+    await render({ claim: colleagueClaim });
+    expect(exists('rx-take-over-btn-rx-1')).toBeTrue();
+    expect(exists('rx-claim-btn-rx-1')).toBeFalse();
+  });
+
+  it('a prepared row offers no claim control', async () => {
+    await render({ readyForCollection: { dispenseId: 'd-1', readyAt: '2026-10-07T08:00:00' } });
+    expect(exists('rx-claim-btn-rx-1')).toBeFalse();
+    expect(exists('rx-hand-over-rx-1')).toBeTrue();
+  });
+
+  it('shows nothing of the claim when the server has it switched off', async () => {
+    await render({ claim: colleagueClaim }, false);
+    expect(exists('rx-claim-rx-1')).toBeFalse();
+    expect(exists('rx-take-over-btn-rx-1')).toBeFalse();
+    expect(exists('rx-claim-btn-rx-1')).toBeFalse();
+    expect(exists('claim-filter')).toBeFalse();
+
+    click('rx-dispense-rx-1');
+    expect(pharmacySvc.claimQueueRow).not.toHaveBeenCalled();
+    expect(component.showForm()).toBeTrue();
+  });
+
+  it('Claim, Release and Take over call their endpoints', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(of({ data: myClaim }) as never);
+    click('rx-claim-btn-rx-1');
+    expect(pharmacySvc.claimQueueRow).toHaveBeenCalledWith('rx-1');
+    expect(toast.success).toHaveBeenCalledWith('PHARMACY.QUEUE_CLAIM.CLAIMED');
+
+    component.releaseRow(row() as never);
+    expect(pharmacySvc.releaseQueueRow).toHaveBeenCalledWith('rx-1');
+
+    pharmacySvc.takeOverQueueRow.and.returnValue(of({ data: myClaim }) as never);
+    component.requestTakeOver(row({ claim: colleagueClaim }) as never);
+    fixture.detectChanges();
+    click('claim-take-over-confirm');
+    expect(pharmacySvc.takeOverQueueRow).toHaveBeenCalledWith('rx-1');
+    expect(toast.success).toHaveBeenCalledWith('PHARMACY.QUEUE_CLAIM.TAKEN_OVER');
+  });
+
+  // ── Dispense claims first ──
+
+  it('Dispense claims the row, then opens the form', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+
+    click('rx-dispense-rx-1');
+
+    expect(pharmacySvc.claimQueueRow).toHaveBeenCalledWith('rx-1');
+    expect(component.showForm()).toBeTrue();
+    expect(component.formClaimedRowId()).toBe('rx-1');
+  });
+
+  it('a 409 because a colleague holds it asks to take over, naming them; Cancel leaves the form closed', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      conflict('Another pharmacist is preparing this prescription.'),
+    );
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(page([row({ claim: colleagueClaim })]));
+
+    click('rx-dispense-rx-1');
+
+    expect(component.showForm()).toBeFalse();
+    expect(exists('claim-take-over')).toBeTrue();
+    expect(text('claim-take-over-text')).toContain(
+      'Awa Sanou has been preparing this prescription since',
+    );
+
+    click('claim-take-over-cancel');
+    expect(exists('claim-take-over')).toBeFalse();
+    expect(component.showForm()).toBeFalse();
+    expect(pharmacySvc.takeOverQueueRow).not.toHaveBeenCalled();
+  });
+
+  it('Take over in that confirm takes the claim and opens the form', async () => {
+    await render({ claim: colleagueClaim });
+    pharmacySvc.takeOverQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+
+    click('rx-dispense-rx-1');
+    expect(pharmacySvc.claimQueueRow).not.toHaveBeenCalled();
+    click('claim-take-over-confirm');
+
+    expect(pharmacySvc.takeOverQueueRow).toHaveBeenCalledWith('rx-1');
+    expect(component.showForm()).toBeTrue();
+    expect(component.formClaimedRowId()).toBe('rx-1');
+  });
+
+  it('a 409 under the Unclaimed filter still offers the take-over, though the row left that list', async () => {
+    await render();
+    click('claim-filter-UNCLAIMED');
+    pharmacySvc.claimQueueRow.and.returnValue(
+      conflict('Another pharmacist is preparing this prescription.'),
+    );
+    // The server omits a claimed row from UNCLAIMED; the unfiltered queue still has it.
+    pharmacySvc.getDispenseWorkQueue.and.callFake(((_p: number, _s: number, filter: string) =>
+      filter === 'UNCLAIMED' ? page([]) : page([row({ claim: colleagueClaim })])) as never);
+
+    click('rx-dispense-rx-1');
+
+    expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledWith(0, 20, 'UNCLAIMED');
+    expect(component.workQueue()).toEqual([]);
+    expect(exists('claim-take-over')).toBeTrue();
+    expect(text('claim-take-over-text')).toContain(
+      'Awa Sanou has been preparing this prescription',
+    );
+    expect(component.showForm()).toBeFalse();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('a 409 for a row no longer claimable says why, reloads the queue and opens no form', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      conflict('This prescription is no longer on the work queue.'),
+    );
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(page([]));
+    const before = pharmacySvc.getDispenseWorkQueue.calls.count();
+
+    click('rx-dispense-rx-1');
+
+    // the visible list, and the unfiltered lookup of the row
+    expect(pharmacySvc.getDispenseWorkQueue.calls.count()).toBe(before + 2);
+    expect(toast.error).toHaveBeenCalledWith('This prescription is no longer on the work queue.');
+    expect(component.showForm()).toBeFalse();
+    expect(component.claimAction()).toBeNull();
+  });
+
+  it('a network failure of the claim still opens the form (advisory), with a warning', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(throwError(() => ({ status: 0 })));
+
+    click('rx-dispense-rx-1');
+
+    expect(component.showForm()).toBeTrue();
+    expect(component.formClaimedRowId()).toBeNull();
+    expect(toast.error).toHaveBeenCalledWith('PHARMACY.QUEUE_CLAIM.FAILED');
+  });
+
+  // ── the form's own claim ──
+
+  it('closing the form releases the claim the form made', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+    click('rx-dispense-rx-1');
+
+    component.closeForm();
+
+    expect(pharmacySvc.releaseQueueRow).toHaveBeenCalledOnceWith('rx-1');
+    expect(component.formClaimedRowId()).toBeNull();
+  });
+
+  it('closing the form keeps a claim the form only renewed', async () => {
+    await render({ claim: myClaim });
+    pharmacySvc.claimQueueRow.and.returnValue(of({ data: { ...myClaim, renewed: true } }) as never);
+    click('rx-dispense-rx-1');
+
+    component.closeForm();
+
+    expect(pharmacySvc.releaseQueueRow).not.toHaveBeenCalled();
+  });
+
+  it('a dispense keeps nothing to release: the server ended the claim', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+    pharmacySvc.createDispense.and.returnValue(of({ data: { id: 'd-1' } }) as never);
+    click('rx-dispense-rx-1');
+
+    component.submitDispense();
+    component.closeForm();
+
+    expect(pharmacySvc.releaseQueueRow).not.toHaveBeenCalled();
+  });
+
+  it('a pharmacy change, opening a hand-over, or leaving the page releases the form’s claim', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+
+    click('rx-dispense-rx-1');
+    component.onPharmacyChange();
+    expect(pharmacySvc.releaseQueueRow).toHaveBeenCalledTimes(1);
+
+    click('rx-dispense-rx-1');
+    component.openHandOver(row({ id: 'rx-2' }) as never);
+    expect(pharmacySvc.releaseQueueRow).toHaveBeenCalledTimes(2);
+
+    click('rx-dispense-rx-1');
+    fixture.destroy();
+    expect(pharmacySvc.releaseQueueRow).toHaveBeenCalledTimes(3);
+  });
+
+  // ── Route ──
+
+  it('Route on a colleague’s row asks first; Cancel stays on the queue', async () => {
+    await render({ claim: colleagueClaim });
+
+    click('rx-route-rx-1');
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(exists('claim-take-over')).toBeTrue();
+
+    click('claim-take-over-cancel');
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it('Route on an unclaimed row goes straight to routing', async () => {
+    await render();
+    click('rx-route-rx-1');
+    expect(router.navigate).toHaveBeenCalledWith(['/pharmacy/stock-routing', 'rx-1']);
+  });
+
+  // ── the filter ──
+
+  it('the filter asks the server for claim=MINE / UNCLAIMED', async () => {
+    await render();
+
+    click('claim-filter-MINE');
+    expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledWith(0, 20, 'MINE');
+    click('claim-filter-UNCLAIMED');
+    expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledWith(0, 20, 'UNCLAIMED');
+    click('claim-filter-ALL');
+    expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledWith(0, 20, 'ALL');
+  });
+
+  // ── review round 1: the latest queue answer wins ──
+
+  function pageValue(rows: unknown[]) {
+    return {
+      data: { content: rows, totalElements: rows.length, totalPages: 1, size: 20, number: 0 },
+    };
+  }
+
+  it('the latest queue answer wins: an older ALL poll landing after the MINE answer is ignored', async () => {
+    await render();
+    const olderAll = new Subject<unknown>();
+    const newerMine = new Subject<unknown>();
+    pharmacySvc.getDispenseWorkQueue.and.returnValues(olderAll as never, newerMine as never);
+
+    component.loadWorkQueue(true); // the 60 s poll, still ALL
+    click('claim-filter-MINE');
+    newerMine.next(pageValue([row({ id: 'rx-mine', claim: myClaim })]));
+    olderAll.next(pageValue([row(), row({ id: 'rx-2' })]));
+
+    expect(component.claimFilter()).toBe('MINE');
+    expect(component.workQueue().map((r) => r.id)).toEqual(['rx-mine']);
+  });
+
+  it('two polls of the same filter: the older answer arriving last does not overwrite the newer', async () => {
+    await render();
+    const older = new Subject<unknown>();
+    const newer = new Subject<unknown>();
+    pharmacySvc.getDispenseWorkQueue.and.returnValues(older as never, newer as never);
+
+    component.loadWorkQueue(true);
+    component.loadWorkQueue(true);
+    newer.next(pageValue([row({ claim: colleagueClaim })]));
+    older.next(pageValue([row()]));
+
+    expect(component.workQueue()[0].claim?.claimedByName).toBe('Awa Sanou');
+  });
+
+  // ── review round 1: the form keeps its claim ──
+
+  function twoRows(): void {
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(
+      page([row(), row({ id: 'rx-2', claim: { ...colleagueClaim, prescriptionId: 'rx-2' } })]),
+    );
+    component.loadWorkQueue();
+    fixture.detectChanges();
+  }
+
+  it('Dispense on the row whose form is open does nothing, and Cancel still releases the form’s claim', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+    click('rx-dispense-rx-1');
+
+    pharmacySvc.claimQueueRow.and.returnValue(of({ data: { ...myClaim, renewed: true } }) as never);
+    click('rx-dispense-rx-1');
+
+    expect(pharmacySvc.claimQueueRow).toHaveBeenCalledTimes(1);
+    expect(component.formClaimedRowId()).toBe('rx-1');
+    component.closeForm();
+    expect(pharmacySvc.releaseQueueRow).toHaveBeenCalledOnceWith('rx-1');
+  });
+
+  it('a double click on Dispense sends one claim, and Cancel still releases it', async () => {
+    await render();
+    const first = new Subject<unknown>();
+    const second = new Subject<unknown>();
+    pharmacySvc.claimQueueRow.and.returnValues(first as never, second as never);
+
+    click('rx-dispense-rx-1');
+    click('rx-dispense-rx-1');
+    first.next({ data: { ...myClaim, renewed: false } });
+    second.next({ data: { ...myClaim, renewed: true } });
+    fixture.detectChanges();
+
+    expect(pharmacySvc.claimQueueRow).toHaveBeenCalledTimes(1);
+    expect(component.formClaimedRowId()).toBe('rx-1');
+    component.closeForm();
+    expect(pharmacySvc.releaseQueueRow).toHaveBeenCalledOnceWith('rx-1');
+  });
+
+  it('a renewed answer for the row the form already claimed keeps the form’s claim and the form', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+    click('rx-dispense-rx-1');
+    component.form.notes = 'typed already';
+
+    (
+      component as unknown as { openFormFor(rx: unknown, claimedByForm: boolean): void }
+    ).openFormFor(row(), false);
+
+    expect(component.formClaimedRowId()).toBe('rx-1');
+    expect(component.form.notes).toBe('typed already');
+  });
+
+  it('Dispense on a colleague’s row then Cancel keeps the open form and its claim', async () => {
+    await render();
+    twoRows();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+    click('rx-dispense-rx-1');
+
+    click('rx-dispense-rx-2');
+    expect(exists('claim-take-over')).toBeTrue();
+    click('claim-take-over-cancel');
+
+    expect(pharmacySvc.releaseQueueRow).not.toHaveBeenCalled();
+    expect(component.formClaimedRowId()).toBe('rx-1');
+    expect(component.showForm()).toBeTrue();
+    expect(component.selectedPrescription?.id).toBe('rx-1');
+  });
+
+  it('Dispense on a colleague’s row then Take over moves the form and only then releases the old claim', async () => {
+    await render();
+    twoRows();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+    click('rx-dispense-rx-1');
+    pharmacySvc.takeOverQueueRow.and.returnValue(
+      of({ data: { ...myClaim, prescriptionId: 'rx-2', renewed: false } }) as never,
+    );
+
+    click('rx-dispense-rx-2');
+    expect(pharmacySvc.releaseQueueRow).not.toHaveBeenCalled();
+    click('claim-take-over-confirm');
+
+    expect(pharmacySvc.releaseQueueRow).toHaveBeenCalledOnceWith('rx-1');
+    expect(component.formClaimedRowId()).toBe('rx-2');
+    expect(component.selectedPrescription?.id).toBe('rx-2');
+  });
+
+  // ── polling ──
+
+  describe('polling', () => {
+    afterEach(() => jasmine.clock().uninstall());
+
+    async function renderWithClock(): Promise<void> {
+      await render();
+      jasmine.clock().install();
+      // restart the timer under the mocked clock
+      (component as unknown as { stopQueuePolling(): void }).stopQueuePolling();
+      (component as unknown as { startQueuePolling(): void }).startQueuePolling();
+    }
+
+    it('reloads the queue every minute while the tab is visible', async () => {
+      await renderWithClock();
+      const before = pharmacySvc.getDispenseWorkQueue.calls.count();
+      jasmine.clock().tick(60_000);
+      expect(pharmacySvc.getDispenseWorkQueue.calls.count()).toBe(before + 1);
+    });
+
+    it('does not poll while the tab is hidden, and reloads when it becomes visible', async () => {
+      await renderWithClock();
+      const visibility = spyOnProperty(document, 'visibilityState', 'get').and.returnValue(
+        'hidden',
+      );
+      const before = pharmacySvc.getDispenseWorkQueue.calls.count();
+      jasmine.clock().tick(60_000);
+      expect(pharmacySvc.getDispenseWorkQueue.calls.count()).toBe(before);
+
+      visibility.and.returnValue('visible');
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(pharmacySvc.getDispenseWorkQueue.calls.count()).toBe(before + 1);
+    });
+
+    it('pauses while the form, a take-over confirm or a hand-over dialog is open', async () => {
+      await renderWithClock();
+      const before = pharmacySvc.getDispenseWorkQueue.calls.count();
+
+      component.showForm.set(true);
+      jasmine.clock().tick(60_000);
+      component.showForm.set(false);
+      component.claimAction.set({ rx: row() as never, purpose: 'takeOver' });
+      jasmine.clock().tick(60_000);
+      component.claimAction.set(null);
+      component.readyAction.set({ kind: 'handOver', rx: row() as never });
+      jasmine.clock().tick(60_000);
+
+      expect(pharmacySvc.getDispenseWorkQueue.calls.count()).toBe(before);
+    });
+
+    it('stops when the page is left', async () => {
+      await renderWithClock();
+      fixture.destroy();
+      const before = pharmacySvc.getDispenseWorkQueue.calls.count();
+      jasmine.clock().tick(180_000);
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(pharmacySvc.getDispenseWorkQueue.calls.count()).toBe(before);
+    });
   });
 });

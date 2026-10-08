@@ -333,12 +333,87 @@
     </div>
   }
 
+  <!-- G13: take a colleague's work-queue claim over (from Take over,
+       Dispense or Route on a row someone else is preparing) -->
+  @if (claimAction(); as action) {
+    <div
+      class="form-card form-card-accent"
+      role="alertdialog"
+      aria-labelledby="claim-take-over-title"
+      aria-describedby="claim-take-over-text"
+      data-testid="claim-take-over"
+    >
+      <div class="form-header">
+        <h3 id="claim-take-over-title">
+          <span class="material-symbols-outlined" aria-hidden="true">swap_horiz</span>
+          {{ 'PHARMACY.QUEUE_CLAIM.TAKE_OVER' | translate }}
+        </h3>
+      </div>
+      <div class="rx-summary">
+        <strong>{{ action.rx.medicationName }}</strong>
+        <span class="rx-meta">
+          {{ 'PHARMACY.PATIENT' | translate }}: {{ action.rx.patient?.firstName }}
+          {{ action.rx.patient?.lastName }}
+        </span>
+      </div>
+      <p id="claim-take-over-text" data-testid="claim-take-over-text">
+        {{
+          'PHARMACY.QUEUE_CLAIM.TAKE_OVER_CONFIRM'
+            | translate
+              : {
+                  name: claimShownFor(action.rx)?.claimedByName ?? '',
+                  time: (claimShownFor(action.rx)?.claimedAt | date: 'shortTime') ?? '',
+                }
+        }}
+      </p>
+      <div class="form-actions">
+        <button
+          type="button"
+          class="btn-secondary"
+          data-testid="claim-take-over-cancel"
+          (click)="cancelClaimAction()"
+        >
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          data-testid="claim-take-over-confirm"
+          [disabled]="claimSaving()"
+          (click)="confirmTakeOver()"
+        >
+          {{ 'PHARMACY.QUEUE_CLAIM.TAKE_OVER' | translate }}
+        </button>
+      </div>
+    </div>
+  }
+
   <!-- Work Queue -->
   <div class="section-card">
     <h2 class="section-title">
       <span class="material-symbols-outlined">assignment</span>
       {{ 'PHARMACY.WORK_QUEUE' | translate }}
     </h2>
+
+    <!-- G13: show every row, only mine, or only the rows nobody is preparing -->
+    @if (queueClaimEnabled()) {
+      <fieldset class="claim-filter" data-testid="claim-filter">
+        <legend>{{ 'PHARMACY.QUEUE_CLAIM.FILTER_LABEL' | translate }}</legend>
+        @for (option of claimFilters; track option.value) {
+          <label class="claim-filter__option">
+            <input
+              type="radio"
+              name="claimFilter"
+              [value]="option.value"
+              [checked]="claimFilter() === option.value"
+              [attr.data-testid]="'claim-filter-' + option.value"
+              (change)="setClaimFilter(option.value)"
+            />
+            {{ option.labelKey | translate }}
+          </label>
+        }
+      </fieldset>
+    }
 
     @if (queueLoading()) {
       <div class="loading-bar"></div>
@@ -399,6 +474,29 @@
                     <span class="refill-note">{{
                       'PHARMACY.READY_SINCE' | translate: { date: (ready.readyAt | date: 'short') }
                     }}</span>
+                  }
+                  <!-- G13: who is preparing this order (advisory) -->
+                  @if (queueClaimEnabled() && rx.claim; as claim) {
+                    <span
+                      class="claim-note"
+                      [class.claim-note--mine]="claim.mine"
+                      [attr.data-testid]="'rx-claim-' + rx.id"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">person_pin</span>
+                      @if (claim.mine) {
+                        {{ 'PHARMACY.QUEUE_CLAIM.MINE' | translate }}
+                      } @else {
+                        {{
+                          'PHARMACY.QUEUE_CLAIM.BEING_PREPARED_BY'
+                            | translate: { name: claim.claimedByName ?? '' }
+                        }}
+                      }
+                      ·
+                      {{
+                        'PHARMACY.QUEUE_CLAIM.SINCE'
+                          | translate: { time: (claim.claimedAt | date: 'shortTime') }
+                      }}
+                    </span>
                   }
                   <!-- Gap G5 — and separately, whether the prescriber has
                        answered. Separate because resolving a clarification
@@ -471,6 +569,57 @@
                       {{ 'PHARMACY.CANCEL_READY' | translate }}
                     </button>
                   } @else {
+                    <!-- G13: claim, release one's own, or take a colleague's over -->
+                    @if (queueClaimEnabled()) {
+                      @if (!rx.claim) {
+                        <button
+                          class="btn-action"
+                          type="button"
+                          [attr.data-testid]="'rx-claim-btn-' + rx.id"
+                          [attr.aria-label]="
+                            ('PHARMACY.QUEUE_CLAIM.CLAIM' | translate) + ' — ' + rx.medicationName
+                          "
+                          (click)="claimRow(rx)"
+                        >
+                          <span class="material-symbols-outlined" aria-hidden="true"
+                            >back_hand</span
+                          >
+                          {{ 'PHARMACY.QUEUE_CLAIM.CLAIM' | translate }}
+                        </button>
+                      } @else if (rx.claim.mine) {
+                        <button
+                          class="btn-action"
+                          type="button"
+                          [attr.data-testid]="'rx-release-btn-' + rx.id"
+                          [attr.aria-label]="
+                            ('PHARMACY.QUEUE_CLAIM.RELEASE' | translate) + ' — ' + rx.medicationName
+                          "
+                          (click)="releaseRow(rx)"
+                        >
+                          <span class="material-symbols-outlined" aria-hidden="true"
+                            >do_not_touch</span
+                          >
+                          {{ 'PHARMACY.QUEUE_CLAIM.RELEASE' | translate }}
+                        </button>
+                      } @else {
+                        <button
+                          class="btn-action"
+                          type="button"
+                          [attr.data-testid]="'rx-take-over-btn-' + rx.id"
+                          [attr.aria-label]="
+                            ('PHARMACY.QUEUE_CLAIM.TAKE_OVER' | translate) +
+                            ' — ' +
+                            rx.medicationName
+                          "
+                          (click)="requestTakeOver(rx)"
+                        >
+                          <span class="material-symbols-outlined" aria-hidden="true"
+                            >swap_horiz</span
+                          >
+                          {{ 'PHARMACY.QUEUE_CLAIM.TAKE_OVER' | translate }}
+                        </button>
+                      }
+                    }
                     <button
                       class="btn-action"
                       [attr.data-testid]="'rx-dispense-' + rx.id"
@@ -482,6 +631,7 @@
                     <button
                       class="btn-action"
                       type="button"
+                      [attr.data-testid]="'rx-route-' + rx.id"
                       (click)="routeFromQueue(rx)"
                       [title]="'PHARMACY.ROUTE_HINT' | translate"
                     >

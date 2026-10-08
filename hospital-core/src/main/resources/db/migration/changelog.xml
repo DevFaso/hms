@@ -2659,4 +2659,19 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V179 — pharmacy work-queue claim (audit gap G13).
+         New table clinical.prescription_queue_claims: one advisory claim
+         per prescription (uq_rx_queue_claim_prescription), FK to the
+         prescription and to security.users, both ON DELETE CASCADE;
+         created_at/updated_at (BaseEntity); idx_rx_queue_claim_user.
+         Expiry is computed from claimed_at, no sweep. No DO blocks.
+         ================================================================= -->
+    <changeSet id="V179-prescription-queue-claims" author="hms-team" runOnChange="false">
+        <sqlFile path="V179__prescription_queue_claims.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

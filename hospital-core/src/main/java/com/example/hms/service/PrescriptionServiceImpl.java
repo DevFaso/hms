@@ -89,6 +89,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler withdrawnOrders;
     /** G15: withdrawal and edit void an open preparation (rule 8). */
     private final com.example.hms.service.pharmacy.PreparedFillVoider preparedFills;
+    /** G13: a withdrawal or an edit ends the work-queue claim, as a plain release. */
+    private final com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaims;
     /** G15 AC-12: readiness on the patient-portal prescriptions read. */
     private final com.example.hms.service.pharmacy.ReadyForCollectionLookup readyForCollection;
 
@@ -705,6 +707,21 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
+     * G13: a prescriber's withdrawal (WITHDRAWN) or any other successful edit
+     * (CHANGED) ends the work-queue claim, audited as a RELEASE whoever acts:
+     * a prescriber ends the work, they do not take it over. Same transaction
+     * and row lock as the edit, so a rolled-back edit keeps the claim; the
+     * claim service makes no scope call (a global-view super-admin included).
+     */
+    private void releaseQueueClaimOnEdit(Prescription prescription, UUID actorUserId) {
+        PrescriptionStatus now = prescription.getStatus();
+        queueClaims.releaseOnExit(prescription, now != null && now.isWithdrawn()
+                ? com.example.hms.enums.QueueClaimReleaseReason.WITHDRAWN
+                : com.example.hms.enums.QueueClaimReleaseReason.CHANGED,
+            actorUserId, com.example.hms.enums.QueueClaimExitActor.OTHER);
+    }
+
+    /**
      * A declared safeguard cannot be quietly un-declared.
      *
      * <p>Making the controlled-substance flags writable (P2 #15's actual gap —
@@ -898,6 +915,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         pharmacistVerificationService.invalidateOnChange(existing);
         controlledSubstanceGuard.requireSafeguardsFor(existing, existing.getStatus());
         voidPreparedFillOnEdit(existing, statusBefore);
+        releaseQueueClaimOnEdit(existing, currentUserId);
 
         Prescription saved = prescriptionRepository.save(existing);
         PrescriptionResponseDTO response = prescriptionMapper.toResponseDTO(saved);

@@ -5289,7 +5289,11 @@
         "WEBHOOK_ENDPOINT_UPDATED": "Webhook modifié",
         "DISPENSE_READY": "Délivrance préparée pour retrait",
         "DISPENSE_HANDED_OVER": "Délivrance préparée remise",
-        "DISPENSE_READY_CANCELLED": "Délivrance préparée annulée"
+        "DISPENSE_READY_CANCELLED": "Délivrance préparée annulée",
+        "PRESCRIPTION_QUEUE_CLAIMED": "Ordonnance prise en charge",
+        "PRESCRIPTION_QUEUE_CLAIM_RELEASED": "Prise en charge libérée",
+        "PRESCRIPTION_QUEUE_CLAIM_TAKEN_OVER": "Prise en charge reprise",
+        "PRESCRIPTION_QUEUE_CLAIM_EXPIRED": "Prise en charge expirée"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -7450,6 +7454,25 @@
     "VERIF_UNCONFIRMED": "Non confirmée"
   },
   "PHARMACY": {
+    "QUEUE_CLAIM": {
+      "BEING_PREPARED_BY": "En préparation par {{name}}",
+      "MINE": "Vous préparez cette ordonnance",
+      "SINCE": "depuis {{time}}",
+      "CLAIM": "Prendre en charge",
+      "RELEASE": "Libérer",
+      "TAKE_OVER": "Reprendre",
+      "TAKE_OVER_CONFIRM": "{{name}} prépare cette ordonnance depuis {{time}}. La reprendre ?",
+      "CLAIMED": "Vous préparez maintenant cette ordonnance.",
+      "RELEASED": "Ordonnance libérée.",
+      "TAKEN_OVER": "Vous avez repris cette ordonnance.",
+      "FAILED": "Impossible de mettre à jour qui prépare cette ordonnance.",
+      "FILTER_LABEL": "Afficher",
+      "FILTER": {
+        "ALL": "Toutes",
+        "MINE": "Les miennes",
+        "UNCLAIMED": "Non prises en charge"
+      }
+    },
     "ATTENTION": {
       "PENDING_STOCK": "Rupture de stock — en commande",
       "PARTNER_REJECTED": "La pharmacie partenaire a refusé — délivrer ici ou réacheminer",

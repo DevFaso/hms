@@ -13,6 +13,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -109,6 +110,47 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
     /** Pharmacist work queue: dispensable prescriptions at a hospital, ordered by creation date. */
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
     Page<Prescription> findByHospital_IdAndStatusIn(UUID hospitalId, List<PrescriptionStatus> statuses, Pageable pageable);
+
+    /**
+     * G13 work queue, filter MINE: the rows of {@link #findByHospital_IdAndStatusIn}
+     * with an active claim by {@code userId}. Active means stamped after
+     * {@code activeAfter} (now minus the TTL, from the service clock), so a
+     * test can drive time. Its own count query, with the same predicate.
+     */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    @Query(value = "select p from Prescription p where p.hospital.id = :hospitalId and p.status in :statuses "
+            + "and exists (select c.id from PrescriptionQueueClaim c where c.prescription = p "
+            + "and c.claimedBy.id = :userId and c.claimedAt > :activeAfter)",
+        countQuery = "select count(p) from Prescription p where p.hospital.id = :hospitalId and p.status in :statuses "
+            + "and exists (select c.id from PrescriptionQueueClaim c where c.prescription = p "
+            + "and c.claimedBy.id = :userId and c.claimedAt > :activeAfter)")
+    Page<Prescription> findWorkQueueClaimedBy(@Param("hospitalId") UUID hospitalId,
+                                              @Param("statuses") List<PrescriptionStatus> statuses,
+                                              @Param("userId") UUID userId,
+                                              @Param("activeAfter") LocalDateTime activeAfter,
+                                              Pageable pageable);
+
+    /**
+     * G13 work queue, filter UNCLAIMED: the rows nobody holds an active claim
+     * on AND no fill is prepared for (a prepared row cannot be claimed, so it
+     * is not work someone could pick up). Its own count query, with the same
+     * predicate.
+     */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    @Query(value = "select p from Prescription p where p.hospital.id = :hospitalId and p.status in :statuses "
+            + "and not exists (select c.id from PrescriptionQueueClaim c where c.prescription = p "
+            + "and c.claimedAt > :activeAfter) "
+            + "and not exists (select d.id from Dispense d where d.prescription = p "
+            + "and d.status = com.example.hms.enums.DispenseStatus.PENDING)",
+        countQuery = "select count(p) from Prescription p where p.hospital.id = :hospitalId and p.status in :statuses "
+            + "and not exists (select c.id from PrescriptionQueueClaim c where c.prescription = p "
+            + "and c.claimedAt > :activeAfter) "
+            + "and not exists (select d.id from Dispense d where d.prescription = p "
+            + "and d.status = com.example.hms.enums.DispenseStatus.PENDING)")
+    Page<Prescription> findWorkQueueUnclaimed(@Param("hospitalId") UUID hospitalId,
+                                              @Param("statuses") List<PrescriptionStatus> statuses,
+                                              @Param("activeAfter") LocalDateTime activeAfter,
+                                              Pageable pageable);
 
     /**
      * The prescription with its row locked, for a caller about to make an
