@@ -369,3 +369,46 @@
   background-color: var(--surface-subtle, #f1f3f5);
   color: var(--text-muted, #6b7280);
 }
+
+// G13: who is preparing a work-queue row, and the All / Mine / Unclaimed filter.
+.claim-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+
+  .material-symbols-outlined {
+    font-size: 16px;
+  }
+
+  &--mine {
+    color: var(--primary);
+    font-weight: 600;
+  }
+}
+
+.claim-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+
+  legend {
+    float: left;
+    margin-right: 8px;
+    padding: 0;
+    font-weight: 600;
+  }
+
+  &__option {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+  }
+}
