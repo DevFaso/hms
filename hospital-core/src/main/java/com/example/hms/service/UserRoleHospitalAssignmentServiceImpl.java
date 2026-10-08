@@ -124,6 +124,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final String DEFAULT_ASSIGNMENT_ALREADY_CONFIRMED = "This assignment has already been confirmed.";
     private static final String DEFAULT_CONFIRMATION_ACTOR_MISMATCH = "Only the assigner who created this assignment can confirm it.";
     private static final String DEFAULT_ACTOR_RESOLUTION_FAILURE = "Unable to resolve the current user.";
+    private static final String DEFAULT_HOLDER_CHANGE =
+        "Only a super-admin can move an assignment to another person. Create a new assignment for that user.";
     private static final String DEFAULT_ACTIVATION_THROUGH_CODE =
         "Only a super-admin can activate an assignment directly. Send the holder a new code "
             + "(regenerate the code); the assignment activates when they confirm it.";
@@ -374,7 +376,16 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
         String newRoleCode = getRoleCode(newRole);
         requireGrantAt(requireMayGrant(newRoleCode), newHospital, newRoleCode);
+        boolean verifiedSuperAdmin = roleValidator.isSuperAdminFromJwtClaim();
+        requireSameHolder(newUser, target, verifiedSuperAdmin);
         requireActivationThroughCode(dto, target);
+        // A new role or hospital is a new grant: for anyone but a verified
+        // super-admin it starts over as a fresh POST would, inactive with a new
+        // code the holder must confirm. Decided before the mapper overwrites
+        // the row's current role and hospital.
+        boolean reinvite = !verifiedSuperAdmin
+            && (!newRole.getId().equals(target.getRole().getId())
+                || hasDifferentHospital(target.getHospital(), newHospital));
 
         enforcePatientInactiveConstraint(dto, newRole, target);
         checkTupleDuplicateOnUpdate(id, target, newUser, newRole, newHospital, locale);
@@ -385,10 +396,34 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
         mapper.updateEntity(target, dto, newHospital, newRole, null);
         target.setUser(newUser);
+        if (reinvite) {
+            target.setActive(false);
+            target.setAssignmentCode(generateAssignCode(newUser, newHospital));
+            target.setConfirmationCode(generateConfirmationCode());
+            target.setConfirmationSentAt(LocalDateTime.now());
+            target.setConfirmationVerifiedAt(null);
+        }
 
         UserRoleHospitalAssignment saved = assignmentRepository.save(target);
+        if (reinvite) {
+            eventPublisher.publishEvent(new AssignmentCreatedEvent(saved.getId()));
+            recordAssignmentAudit(saved);
+        }
         log.info("🔄 Updated assignment ID '{}' for user '{}'", id, newUser.getEmail());
         return toDtoWithLinks(saved);
+    }
+
+    /**
+     * Only a super-admin hands an existing row to another person. For anyone
+     * else that is a new grant to someone who never confirmed a code, so it
+     * goes through a new assignment and its own verification.
+     */
+    private static void requireSameHolder(User newUser, UserRoleHospitalAssignment target, boolean verifiedSuperAdmin) {
+        User current = target.getUser();
+        boolean holderChanged = current == null || !newUser.getId().equals(current.getId());
+        if (holderChanged && !verifiedSuperAdmin) {
+            throw new BusinessException(DEFAULT_HOLDER_CHANGE);
+        }
     }
 
     /**
@@ -497,9 +532,22 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
      * so the refusal is not an existence oracle.
      */
     private UserRoleHospitalAssignment findChangeable(UUID id) {
+        UserAccountAccess.AssignmentScope scope = accountAccess.assignmentScope();
         return assignmentRepository.findById(id)
-            .filter(found -> accountAccess.assignmentScope().mayChange(found))
+            .filter(scope::mayChange)
+            .filter(found -> !holderShielded(scope, found))
             .orElseThrow(() -> assignmentNotFound(id));
+    }
+
+    /**
+     * A super-admin's account is out of a hospital admin's reach row by row
+     * too, not only through {@code DELETE /user}: any trace of the role,
+     * active or not, by assignment or global role ({@link UserAccountAccess.AssignmentScope#shields}).
+     */
+    private boolean holderShielded(UserAccountAccess.AssignmentScope scope, UserRoleHospitalAssignment row) {
+        User holder = row.getUser();
+        return !scope.everywhere() && holder != null
+            && scope.shields(holder, assignmentRepository.findByUserId(holder.getId()));
     }
 
     private static ResourceNotFoundException assignmentNotFound(UUID id) {
