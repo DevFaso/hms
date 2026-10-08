@@ -69,6 +69,9 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
 
     static final String REVOKED_REASON = "PROVIDER_VERIFICATION_REVOKED";
 
+    /** The suspensions onboarding imposes itself, and so may lift on VERIFY. */
+    private static final Set<String> VERIFICATION_SUSPENSIONS = Set.of(PENDING_VERIFICATION_REASON, REVOKED_REASON);
+
     private static final String ENTITY_TYPE = "PROVIDER_FACILITY";
     private static final Set<FacilityType> PROVIDER_TYPES = EnumSet.of(FacilityType.PHARMACY, FacilityType.LABORATORY);
     private static final Set<ProviderVerificationStatus> RESUBMITTABLE =
@@ -107,14 +110,14 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
             .suspendedBy(currentActorId())
             .suspensionReason(PENDING_VERIFICATION_REASON)
             .build();
-        applyFacilityIdentity(facility, business);
-        facility = hospitalRepository.save(facility);
-
         ProviderVerification verification = new ProviderVerification();
-        verification.setHospital(facility);
         verification.setStatus(ProviderVerificationStatus.SUBMITTED);
         applyBusiness(verification, business);
         applyProfessional(verification, request.getProfessional());
+        applyFacilityIdentity(facility, verification);
+        facility = hospitalRepository.save(facility);
+
+        verification.setHospital(facility);
         verification = verificationRepository.save(verification);
 
         invalidateLifecycleCache();
@@ -157,7 +160,6 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
         ProviderVerifyRequestDTO.Corrections corrections = request == null ? null : request.getCorrections();
         if (corrections != null && corrections.getBusiness() != null) {
             applyBusiness(verification, corrections.getBusiness());
-            applyFacilityIdentity(facility, corrections.getBusiness());
         }
         if (corrections != null && corrections.getProfessional() != null) {
             applyProfessional(verification, corrections.getProfessional());
@@ -188,14 +190,25 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
         decide(verification, ProviderVerificationStatus.VERIFIED, null);
         saveVerifiedOrConflict(verification);
 
-        // VERIFY is the only way a provider becomes ACTIVE (AC-4), both
-        // switches together, in this transaction.
-        facility.setLifecycleState(HospitalLifecycleState.ACTIVE);
-        facility.setActive(true);
-        facility.setSuspendedAt(null);
-        facility.setSuspendedBy(null);
-        facility.setSuspensionReason(null);
+        // The facility carries the identity that was just verified: the
+        // evidence being verified (a resubmission included), with any
+        // corrections applied above. Never the identity of older evidence.
+        applyFacilityIdentity(facility, verification);
         facility.setLicenseNumber(verification.getLicenceNumber());
+        // VERIFY is the only way a provider becomes ACTIVE (AC-4), both
+        // switches together, in this transaction, but only out of a
+        // suspension that onboarding itself imposed (pending verification,
+        // or a revocation). An operator's suspension (the lifecycle endpoint,
+        // with its MFA step-up) outlives the verification: the facility stays
+        // SUSPENDED until the lifecycle restore lifts it, with its audit row.
+        String reason = facility.getSuspensionReason();
+        if (reason != null && VERIFICATION_SUSPENSIONS.contains(reason)) {
+            facility.setLifecycleState(HospitalLifecycleState.ACTIVE);
+            facility.setActive(true);
+            facility.setSuspendedAt(null);
+            facility.setSuspendedBy(null);
+            facility.setSuspensionReason(null);
+        }
         hospitalRepository.save(facility);
         invalidateLifecycleCache();
 
@@ -356,13 +369,12 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
     }
 
     /** The facility row shows the business as its evidence names it: name, phone, address. */
-    private static void applyFacilityIdentity(Hospital facility, ProviderBusinessIdentityDTO business) {
-        ProviderAddressDTO address = business.getAddress();
-        facility.setName(displayName(business));
-        facility.setPhoneNumber(business.getCompanyPhone().trim());
-        facility.setAddress(streetAddress(address));
-        facility.setCity(address.getCity().trim());
-        facility.setRegion(address.getRegion().trim());
+    private static void applyFacilityIdentity(Hospital facility, ProviderVerification v) {
+        facility.setName(v.getTradeName() != null ? v.getTradeName() : v.getLegalName());
+        facility.setPhoneNumber(v.getCompanyPhone());
+        facility.setAddress(streetAddress(v));
+        facility.setCity(v.getAddressCity());
+        facility.setRegion(v.getAddressRegion());
     }
 
     private static void applyProfessional(ProviderVerification v, ProviderProfessionalDTO professional) {
@@ -386,17 +398,12 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
         return raw.trim().replaceAll("\\s+", " ").toUpperCase(Locale.ROOT);
     }
 
-    private static String displayName(ProviderBusinessIdentityDTO business) {
-        String trade = blankToNull(business.getTradeName());
-        return trade != null ? trade : business.getLegalName().trim();
-    }
-
-    private static String streetAddress(ProviderAddressDTO address) {
+    private static String streetAddress(ProviderVerification v) {
         String joined = Stream.of(
-                labelled("Secteur", address.getSecteur()),
-                labelled("Section", address.getSection()),
-                labelled("Lot", address.getLot()),
-                labelled("Parcelle", address.getParcelle()))
+                labelled("Secteur", v.getAddressSecteur()),
+                labelled("Section", v.getAddressSection()),
+                labelled("Lot", v.getAddressLot()),
+                labelled("Parcelle", v.getAddressParcelle()))
             .filter(part -> !part.isEmpty())
             .collect(Collectors.joining(", "));
         return joined.isEmpty() ? null : joined;

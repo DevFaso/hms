@@ -341,6 +341,53 @@ class ProviderOnboardingServiceImplTest {
         }
 
         @Test
+        @DisplayName("the facility takes the identity of the evidence being verified, not an older one")
+        void verifyAppliesTheVerifiedIdentity() {
+            Hospital facility = provider();
+            facility.setName("Old Trade Name");
+            facility.setPhoneNumber("+226 11 11 11 11");
+            ProviderVerification v = submitted(facility);
+            v.setTradeName("New Trade Name");
+            v.setAddressCity("Bobo-Dioulasso");
+
+            service.verify(facility.getId(), verifyRequest(true, true));
+
+            assertThat(facility.getName()).isEqualTo("New Trade Name");
+            assertThat(facility.getPhoneNumber()).isEqualTo("+226 70 00 00 00");
+            assertThat(facility.getCity()).isEqualTo("Bobo-Dioulasso");
+        }
+
+        @Test
+        @DisplayName("a provider suspended by revocation is re-activated by VERIFY")
+        void verifyLiftsARevocationSuspension() {
+            Hospital facility = provider();
+            facility.setSuspensionReason(ProviderOnboardingServiceImpl.REVOKED_REASON);
+            submitted(facility);
+
+            service.verify(facility.getId(), verifyRequest(true, true));
+
+            assertThat(facility.getLifecycleState()).isEqualTo(HospitalLifecycleState.ACTIVE);
+            assertThat(facility.isActive()).isTrue();
+        }
+
+        @Test
+        @DisplayName("an operator's suspension outlives VERIFY: VERIFIED, but the facility stays SUSPENDED")
+        void verifyKeepsAnOperatorSuspension() {
+            Hospital facility = provider();
+            facility.setSuspensionReason("Fraud investigation");
+            ProviderVerification v = submitted(facility);
+
+            ProviderResponseDTO response = service.verify(facility.getId(), verifyRequest(true, true));
+
+            assertThat(v.getStatus()).isEqualTo(ProviderVerificationStatus.VERIFIED);
+            assertThat(facility.getLifecycleState()).isEqualTo(HospitalLifecycleState.SUSPENDED);
+            assertThat(facility.isActive()).isFalse();
+            assertThat(facility.getSuspensionReason()).isEqualTo("Fraud investigation");
+            assertThat(response.getLifecycleState()).isEqualTo(HospitalLifecycleState.SUSPENDED);
+            assertThat(response.isActive()).isFalse();
+        }
+
+        @Test
         @DisplayName("only a SUBMITTED verification can be verified")
         void notSubmitted() {
             Hospital facility = provider();
@@ -460,6 +507,7 @@ class ProviderOnboardingServiceImplTest {
         void revokeNeverLeavesArchiveOrPurge(HospitalLifecycleState state) {
             Hospital facility = provider();
             facility.setLifecycleState(state);
+            facility.setSuspensionReason(null);
             Instant purgeAt = Instant.parse("2026-11-08T00:00:00Z");
             facility.setPurgeScheduledFor(purgeAt);
             ProviderVerification v = submitted(facility);
@@ -510,6 +558,7 @@ class ProviderOnboardingServiceImplTest {
             .facilityType(FacilityType.PHARMACY)
             .active(false)
             .lifecycleState(HospitalLifecycleState.SUSPENDED)
+            .suspensionReason(ProviderOnboardingService.PENDING_VERIFICATION_REASON)
             .build();
         facility.setId(UUID.randomUUID());
         when(hospitalRepository.findById(facility.getId())).thenReturn(Optional.of(facility));

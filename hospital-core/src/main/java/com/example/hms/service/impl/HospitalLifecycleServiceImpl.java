@@ -123,9 +123,17 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
         Hospital hospital = hospitalRepository.findByIdForUpdate(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         requireTransition(hospital, RESTORABLE, ACTION_RESTORE);
+        boolean awaitsVerification = awaitsVerification(hospital);
+        if (!isRestorable(hospital, awaitsVerification)) {
+            throw new ConflictException(MessageUtil.resolveOrRaw("provider.not-verified"));
+        }
 
         HospitalLifecycleState previous = hospital.getLifecycleState();
-        HospitalLifecycleState target = restoreTarget(hospital);
+        // An unverified provider comes back to SUSPENDED, never ACTIVE: VERIFY
+        // is the only way a provider becomes ACTIVE (provider plan AC-4 / T22).
+        HospitalLifecycleState target = awaitsVerification
+            ? HospitalLifecycleState.SUSPENDED
+            : HospitalLifecycleState.ACTIVE;
         hospital.setLifecycleState(target);
         if (target == HospitalLifecycleState.ACTIVE) {
             hospital.setActive(true);
@@ -218,33 +226,31 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
     }
 
     /**
-     * Where a restore lands (provider plan AC-4 / T22: VERIFY is the only way
-     * a provider becomes ACTIVE).
-     * <ul>
-     *   <li>A hospital, or a provider whose current verification is VERIFIED:
-     *       ACTIVE, as before.</li>
-     *   <li>An unverified provider (submitted, rejected or revoked) that was
-     *       ARCHIVED: back to SUSPENDED and inactive, so it can be verified,
-     *       or re-submitted then verified. Never ACTIVE.</li>
-     *   <li>An unverified provider already SUSPENDED: nothing to restore;
-     *       409 {@code provider.not-verified} (VERIFY is the way on).</li>
-     * </ul>
+     * Is this facility a provider whose current verification is not VERIFIED
+     * (submitted, rejected, revoked, or none)? A hospital never is.
      */
-    private HospitalLifecycleState restoreTarget(Hospital hospital) {
+    private boolean awaitsVerification(Hospital hospital) {
         if (!hospital.isProvider()) {
-            return HospitalLifecycleState.ACTIVE;
+            return false;
         }
-        boolean verified = providerVerificationRepository
+        return providerVerificationRepository
             .findFirstByHospital_IdOrderByCreatedAtDesc(hospital.getId())
-            .map(v -> v.getStatus() == ProviderVerificationStatus.VERIFIED)
-            .orElse(false);
-        if (verified) {
-            return HospitalLifecycleState.ACTIVE;
-        }
-        if (hospital.getLifecycleState() == HospitalLifecycleState.SUSPENDED) {
-            throw new ConflictException(MessageUtil.resolveOrRaw("provider.not-verified"));
-        }
-        return HospitalLifecycleState.SUSPENDED;
+            .map(v -> v.getStatus() != ProviderVerificationStatus.VERIFIED)
+            .orElse(true);
+    }
+
+    /**
+     * The one rule for "may this be restored", read by {@link #restore} and by
+     * the snapshot's {@code canRestore}, so the button and the endpoint never
+     * disagree: a SUSPENDED or ARCHIVED facility, except an unverified provider
+     * that is already SUSPENDED (there is nothing to restore it to; VERIFY is
+     * the way on). An unverified provider that is ARCHIVED may be restored, and
+     * lands on SUSPENDED.
+     */
+    private boolean isRestorable(Hospital hospital, boolean awaitsVerification) {
+        HospitalLifecycleState state = hospital.getLifecycleState();
+        return RESTORABLE.contains(state)
+            && !(awaitsVerification && state == HospitalLifecycleState.SUSPENDED);
     }
 
     private void requireTransition(Hospital hospital, Set<HospitalLifecycleState> allowed, String action) {
@@ -361,7 +367,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
             .purgeReason(hospital.getPurgeReason())
             .purgedAt(hospital.getPurgedAt())
             .canSuspend(SUSPENDABLE.contains(state))
-            .canRestore(RESTORABLE.contains(state))
+            .canRestore(isRestorable(hospital, awaitsVerification(hospital)))
             .canArchive(ARCHIVABLE.contains(state))
             .canSchedulePurge(PURGE_SCHEDULABLE.contains(state))
             .canCancelPurge(PURGE_CANCELLABLE.contains(state))

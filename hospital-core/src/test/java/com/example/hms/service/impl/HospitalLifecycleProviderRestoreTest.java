@@ -129,6 +129,24 @@ class HospitalLifecycleProviderRestoreTest {
         verify(verificationRepository, never()).findFirstByHospital_IdOrderByCreatedAtDesc(any());
     }
 
+    @Test
+    @DisplayName("canRestore says exactly what restore does: false for an unverified SUSPENDED provider")
+    void canRestoreMatchesRestore() {
+        Hospital unverified = suspended(FacilityType.PHARMACY);
+        current(unverified, ProviderVerificationStatus.SUBMITTED);
+        Hospital archivedUnverified = suspended(FacilityType.PHARMACY);
+        archivedUnverified.setLifecycleState(HospitalLifecycleState.ARCHIVED);
+        current(archivedUnverified, ProviderVerificationStatus.REJECTED);
+        Hospital verified = suspended(FacilityType.LABORATORY);
+        current(verified, ProviderVerificationStatus.VERIFIED);
+        Hospital hospital = suspended(FacilityType.HOSPITAL);
+
+        assertThat(service().getLifecycle(unverified.getId()).isCanRestore()).isFalse();
+        assertThat(service().getLifecycle(archivedUnverified.getId()).isCanRestore()).isTrue();
+        assertThat(service().getLifecycle(verified.getId()).isCanRestore()).isTrue();
+        assertThat(service().getLifecycle(hospital.getId()).isCanRestore()).isTrue();
+    }
+
     private Hospital suspended(FacilityType type) {
         Hospital h = Hospital.builder()
             .name("F").code("F-" + UUID.randomUUID())

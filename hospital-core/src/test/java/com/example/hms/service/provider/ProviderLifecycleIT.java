@@ -186,6 +186,50 @@ class ProviderLifecycleIT extends BaseIT {
             .isEqualTo(HospitalLifecycleState.ACTIVE);
     }
 
+    @Test
+    @DisplayName("rejected, resubmitted with a new trade name, verified: the facility goes live under the new name")
+    void resubmittedIdentityIsTheOneThatGoesLive() {
+        ProviderCreateRequestDTO first = request(FacilityType.PHARMACY);
+        first.getBusiness().setTradeName("Old Name");
+        UUID id = onboardingService.create(first).getId();
+        onboardingService.reject(id, new ProviderDecisionRequestDTO("Wrong trade name"));
+        ProviderCreateRequestDTO evidence = request(FacilityType.PHARMACY);
+        evidence.getBusiness().setTradeName("Corrected Name");
+        evidence.getBusiness().setCompanyPhone("+22671111111");
+        onboardingService.resubmit(id, com.example.hms.payload.dto.provider.ProviderResubmitRequestDTO.builder()
+            .business(evidence.getBusiness()).professional(evidence.getProfessional()).build());
+
+        onboardingService.verify(id, ProviderVerifyRequestDTO.builder()
+            .ifuMatchesRccm(true).cnssMatchesRccm(true).build());
+
+        Hospital facility = hospitalRepository.findById(id).orElseThrow();
+        assertThat(facility.getName()).isEqualTo("Corrected Name");
+        assertThat(facility.getPhoneNumber()).isEqualTo("+22671111111");
+        assertThat(facility.getLifecycleState()).isEqualTo(HospitalLifecycleState.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("an operator suspension survives revoke, resubmit and verify; only the lifecycle restore lifts it")
+    void operatorSuspensionSurvivesReVerification() {
+        UUID id = verifiedProvider();
+        lifecycleService.suspend(id, TenantLifecycleActionRequestDTO.builder().reason("Fraud").build(), null);
+        onboardingService.revoke(id, new ProviderDecisionRequestDTO("Licence withdrawn"));
+        ProviderCreateRequestDTO evidence = request(FacilityType.PHARMACY);
+        onboardingService.resubmit(id, com.example.hms.payload.dto.provider.ProviderResubmitRequestDTO.builder()
+            .business(evidence.getBusiness()).professional(evidence.getProfessional()).build());
+
+        ProviderResponseDTO verified = onboardingService.verify(id, ProviderVerifyRequestDTO.builder()
+            .ifuMatchesRccm(true).cnssMatchesRccm(true).build());
+
+        assertThat(verified.getVerificationStatus()).isEqualTo(ProviderVerificationStatus.VERIFIED);
+        assertThat(verified.getLifecycleState()).isEqualTo(HospitalLifecycleState.SUSPENDED);
+        assertThat(lifecycleGate.isBlocked(userAt(id))).isTrue();
+        assertThat(lifecycleService.getLifecycle(id).isCanRestore()).isTrue();
+
+        lifecycleService.restore(id, null);
+        assertThat(lifecycleGate.isBlocked(userAt(id))).isFalse();
+    }
+
     private UUID verifiedProvider() {
         UUID id = onboardingService.create(request(FacilityType.PHARMACY)).getId();
         onboardingService.verify(id, ProviderVerifyRequestDTO.builder()
