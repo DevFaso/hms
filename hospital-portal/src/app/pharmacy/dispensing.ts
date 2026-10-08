@@ -199,6 +199,8 @@ export class DispensingComponent implements OnInit, OnDestroy {
     purpose: 'takeOver' | 'dispense' | 'route';
   } | null>(null);
   readonly claimSaving = signal(false);
+  /** The row whose Dispense claim request is in flight; a second click on it is ignored. */
+  readonly claimPendingRowId = signal<string | null>(null);
   /** The row whose claim the dispense form made (renewed:false); released when the form is left. */
   readonly formClaimedRowId = signal<string | null>(null);
   /** No background reload while the pharmacist is in a form or a dialog. */
@@ -620,9 +622,19 @@ export class DispensingComponent implements OnInit, OnDestroy {
       this.claimAction.set({ rx, purpose: 'dispense' });
       return;
     }
+    // A double click must not send a second claim: its renewed:true answer
+    // would make the form forget the claim it made.
+    if (this.claimPendingRowId() === rx.id) return;
+    this.claimPendingRowId.set(rx.id);
     this.svc.claimQueueRow(rx.id).subscribe({
-      next: (res) => this.openFormFor(rx, !res?.data?.renewed),
-      error: (err) => this.dispenseClaimFailed(rx, err),
+      next: (res) => {
+        this.claimPendingRowId.set(null);
+        this.openFormFor(rx, !res?.data?.renewed);
+      },
+      error: (err) => {
+        this.claimPendingRowId.set(null);
+        this.dispenseClaimFailed(rx, err);
+      },
     });
   }
 
@@ -636,7 +648,9 @@ export class DispensingComponent implements OnInit, OnDestroy {
   private openFormFor(rx: WorkQueuePrescription, claimedByForm: boolean): void {
     const previous = this.formClaimedRowId();
     if (previous && previous !== rx.id) this.releaseClaimOf(previous, false);
-    this.formClaimedRowId.set(claimedByForm ? rx.id : null);
+    // A renewed answer for the row the form already claimed: still the form's claim.
+    this.formClaimedRowId.set(claimedByForm || previous === rx.id ? rx.id : null);
+    if (this.showForm() && this.selectedPrescription?.id === rx.id) return;
     this.openForm(rx);
   }
 

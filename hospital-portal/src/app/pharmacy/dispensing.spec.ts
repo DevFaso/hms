@@ -1425,6 +1425,40 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
     expect(pharmacySvc.releaseQueueRow).toHaveBeenCalledOnceWith('rx-1');
   });
 
+  it('a double click on Dispense sends one claim, and Cancel still releases it', async () => {
+    await render();
+    const first = new Subject<unknown>();
+    const second = new Subject<unknown>();
+    pharmacySvc.claimQueueRow.and.returnValues(first as never, second as never);
+
+    click('rx-dispense-rx-1');
+    click('rx-dispense-rx-1');
+    first.next({ data: { ...myClaim, renewed: false } });
+    second.next({ data: { ...myClaim, renewed: true } });
+    fixture.detectChanges();
+
+    expect(pharmacySvc.claimQueueRow).toHaveBeenCalledTimes(1);
+    expect(component.formClaimedRowId()).toBe('rx-1');
+    component.closeForm();
+    expect(pharmacySvc.releaseQueueRow).toHaveBeenCalledOnceWith('rx-1');
+  });
+
+  it('a renewed answer for the row the form already claimed keeps the form’s claim and the form', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+    click('rx-dispense-rx-1');
+    component.form.notes = 'typed already';
+
+    (
+      component as unknown as { openFormFor(rx: unknown, claimedByForm: boolean): void }
+    ).openFormFor(row(), false);
+
+    expect(component.formClaimedRowId()).toBe('rx-1');
+    expect(component.form.notes).toBe('typed already');
+  });
+
   it('Dispense on a colleague’s row then Cancel keeps the open form and its claim', async () => {
     await render();
     twoRows();
