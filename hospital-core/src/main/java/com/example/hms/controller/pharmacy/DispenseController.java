@@ -1,13 +1,16 @@
 package com.example.hms.controller.pharmacy;
 
+import com.example.hms.enums.QueueClaimFilter;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.pharmacy.CancelReadyRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseResponseDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseSettingsDTO;
 import com.example.hms.payload.dto.pharmacy.HandOverRequestDTO;
+import com.example.hms.payload.dto.pharmacy.WorkQueueClaimDTO;
 import com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO;
 import com.example.hms.service.pharmacy.DispenseService;
+import com.example.hms.service.pharmacy.PrescriptionQueueClaimService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,6 +26,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
@@ -34,15 +38,55 @@ import java.util.UUID;
 public class DispenseController {
 
     private final DispenseService dispenseService;
+    private final PrescriptionQueueClaimService queueClaimService;
 
     @GetMapping("/work-queue")
     @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Pharmacist work queue",
-            description = "Paginated list of prescriptions ready for dispensing at the current hospital")
+            description = "Paginated list of prescriptions ready for dispensing at the current hospital. "
+                    + "claim=MINE lists the caller's active claims, claim=UNCLAIMED the rows nobody holds "
+                    + "and no fill is prepared for (G13); ignored when claims are off.")
     @ApiResponse(responseCode = "200", description = "Work queue retrieved")
+    @ApiResponse(responseCode = "400", description = "Unknown claim filter")
     public ResponseEntity<ApiResponseWrapper<Page<WorkQueuePrescriptionDTO>>> getWorkQueue(
-            @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-        return ResponseEntity.ok(ApiResponseWrapper.success(dispenseService.getWorkQueue(pageable)));
+            @PageableDefault(size = 20, sort = "createdAt") Pageable pageable,
+            @RequestParam(name = "claim", defaultValue = "ALL") QueueClaimFilter claim) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(dispenseService.getWorkQueue(pageable, claim)));
+    }
+
+    @PostMapping("/work-queue/{prescriptionId}/claim")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Claim a work-queue prescription",
+            description = "Say that the caller is preparing this order (G13). Advisory: nothing else is "
+                    + "refused because of it. Claiming one's own active claim renews it.")
+    @ApiResponse(responseCode = "200", description = "Claimed, or renewed (renewed=true)")
+    @ApiResponse(responseCode = "404", description = "Prescription outside scope, or claims are off")
+    @ApiResponse(responseCode = "409", description = "Held by another pharmacist, not on the queue, a fill is prepared, or a concurrent change")
+    public ResponseEntity<ApiResponseWrapper<WorkQueueClaimDTO>> claimQueueRow(@PathVariable UUID prescriptionId) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(queueClaimService.claim(prescriptionId)));
+    }
+
+    @PostMapping("/work-queue/{prescriptionId}/claim/take-over")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Take a work-queue claim over",
+            description = "Take a colleague's claim over, audited with the previous holder (G13)")
+    @ApiResponse(responseCode = "200", description = "Taken over (or claimed, when nobody held it)")
+    @ApiResponse(responseCode = "404", description = "Prescription outside scope, or claims are off")
+    @ApiResponse(responseCode = "409", description = "Not on the queue, a fill is prepared, or a concurrent change")
+    public ResponseEntity<ApiResponseWrapper<WorkQueueClaimDTO>> takeOverQueueRow(@PathVariable UUID prescriptionId) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(queueClaimService.takeOver(prescriptionId)));
+    }
+
+    @PostMapping("/work-queue/{prescriptionId}/claim/release")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Release a work-queue claim",
+            description = "Release one's own claim (G13). Nothing to release answers the same.")
+    @ApiResponse(responseCode = "200", description = "Released, or nothing to release")
+    @ApiResponse(responseCode = "404", description = "Prescription outside scope, or claims are off")
+    @ApiResponse(responseCode = "409", description = "Another pharmacist holds the claim, or a concurrent change")
+    public ResponseEntity<ApiResponseWrapper<Void>> releaseQueueRow(@PathVariable UUID prescriptionId) {
+        queueClaimService.release(prescriptionId);
+        return ResponseEntity.ok(ApiResponseWrapper.success(null));
     }
 
     @PostMapping
@@ -61,11 +105,16 @@ public class DispenseController {
     @GetMapping("/settings")
     @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Dispensing settings",
-            description = "Server-side switches the dispensing screen needs: whether a fill can be marked ready for collection")
+            description = "Server-side switches the dispensing screen needs: whether a fill can be marked ready "
+                    + "for collection, and whether work-queue claims are on and how long one lasts")
     @ApiResponse(responseCode = "200", description = "Settings returned")
     public ResponseEntity<ApiResponseWrapper<DispenseSettingsDTO>> getSettings() {
         return ResponseEntity.ok(ApiResponseWrapper.success(
-                new DispenseSettingsDTO(dispenseService.isReadyForCollectionEnabled())));
+                DispenseSettingsDTO.builder()
+                        .readyForCollectionEnabled(dispenseService.isReadyForCollectionEnabled())
+                        .queueClaimEnabled(queueClaimService.isEnabled())
+                        .queueClaimTtlMinutes(queueClaimService.ttl().toMinutes())
+                        .build()));
     }
 
     @PostMapping("/ready")

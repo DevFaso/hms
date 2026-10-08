@@ -68,6 +68,9 @@ class StockOutRoutingServiceImplBranchesTest {
     @Mock private PartnerNotificationChannel partnerChannel;
     @Mock private PrescriberPharmacyNotifier prescriberNotifier;
 
+    /** G13: the work-queue claim; exit-path releases are verified where they matter. */
+    @Mock private com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaimService;
+
     @InjectMocks
     private StockOutRoutingServiceImpl service;
 

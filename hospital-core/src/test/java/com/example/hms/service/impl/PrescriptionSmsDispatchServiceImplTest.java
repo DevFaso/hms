@@ -82,6 +82,9 @@ class PrescriptionSmsDispatchServiceImplTest {
     @Mock private com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
     @Mock private Authentication auth;
 
+    /** G13: the work-queue claim; exit-path releases are verified where they matter. */
+    @Mock private com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaimService;
+
     @InjectMocks private PrescriptionSmsDispatchServiceImpl service;
 
     private UUID prescriptionId;
@@ -221,6 +224,51 @@ class PrescriptionSmsDispatchServiceImplTest {
         assertThat(rx.getDispatchChannel()).isEqualTo("SMS");
         assertThat(rx.getDispatchStatus()).isEqualTo("SENT");
         assertThat(rx.getPharmacyId()).isEqualTo(pharmacyId);
+        // G13 AC-12: a successful dispatch ends the claim, DISPATCHED, by the
+        // resolveUserId actor; no queue role on this caller -> a plain release
+        verify(queueClaimService).releaseOnExit(rx,
+                com.example.hms.enums.QueueClaimReleaseReason.DISPATCHED, userId,
+                com.example.hms.enums.QueueClaimExitActor.OTHER);
+    }
+
+    private void stubSuccessfulDispatch() {
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        stubHappyPathCollaborators();
+        when(transmissionRepository.save(any(PrescriptionTransmission.class)))
+                .thenAnswer(inv -> {
+                    PrescriptionTransmission t = inv.getArgument(0);
+                    t.setId(UUID.randomUUID());
+                    return t;
+                });
+    }
+
+    @Test
+    @DisplayName("G13 AC-12: a PHARMACIST's dispatch is a queue-role exit (a take-over when another holds the claim)")
+    void dispatch_byAPharmacistIsAQueueRoleExit() {
+        stubSuccessfulDispatch();
+        lenient().when(authUtils.hasAuthority(eq(auth), anyString())).thenReturn(false);
+        when(authUtils.hasAuthority(auth, "ROLE_PHARMACIST")).thenReturn(true);
+
+        service.dispatch(auth, prescriptionId, requestForCurrentPharmacy());
+
+        verify(queueClaimService).releaseOnExit(rx,
+                com.example.hms.enums.QueueClaimReleaseReason.DISPATCHED, userId,
+                com.example.hms.enums.QueueClaimExitActor.QUEUE_ROLE);
+    }
+
+    @Test
+    @DisplayName("G13 AC-12: a DOCTOR's dispatch is never a take-over: OTHER, a plain release")
+    void dispatch_byADoctorIsAPlainRelease() {
+        stubSuccessfulDispatch();
+        lenient().when(authUtils.hasAuthority(eq(auth), anyString())).thenReturn(false);
+        lenient().when(authUtils.hasAuthority(auth, "ROLE_DOCTOR")).thenReturn(true);
+
+        service.dispatch(auth, prescriptionId, requestForCurrentPharmacy());
+
+        verify(queueClaimService).releaseOnExit(rx,
+                com.example.hms.enums.QueueClaimReleaseReason.DISPATCHED, userId,
+                com.example.hms.enums.QueueClaimExitActor.OTHER);
     }
 
     @Test
@@ -638,6 +686,8 @@ class PrescriptionSmsDispatchServiceImplTest {
         assertThat(rx.getPharmacyId()).as("the order is with no pharmacy").isNull();
         verify(prescriptionRepository).save(rx);
         verify(prescriberNotifier).notifyPrescriber(rx, PrescriptionStatus.TRANSMISSION_FAILED);
+        // G13 AC-12 / decision D7: a failed dispatch keeps the claim
+        org.mockito.Mockito.verifyNoInteractions(queueClaimService);
     }
 
     @Test

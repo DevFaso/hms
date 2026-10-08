@@ -115,6 +115,9 @@ class DispenseReadyForCollectionTest {
     @org.mockito.Spy
     private java.time.Clock clock = FIXED_CLOCK;
 
+    /** G13: the work-queue claim; exit-path releases are verified where they matter. */
+    @Mock private com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaimService;
+
     @InjectMocks
     private DispenseServiceImpl service;
 
@@ -478,7 +481,21 @@ class DispenseReadyForCollectionTest {
             assertThat(service.isReadyForCollectionEnabled()).isTrue();
         }
 
+        @Test
+        @DisplayName("G13 AC-9/AC-10: preparing ends the work-queue claim, PREPARED, by the preparer as a queue role")
+        void preparingEndsTheClaim() {
+            stubReadyPath(false);
+
+            service.markReadyForCollection(request());
+
+            verify(queueClaimService).releaseOnExit(prescription,
+                    com.example.hms.enums.QueueClaimReleaseReason.PREPARED, userId,
+                    com.example.hms.enums.QueueClaimExitActor.QUEUE_ROLE);
+        }
+
         private void assertNothingPrepared() {
+            // G13 AC-9: a refused preparation keeps the work-queue claim.
+            verify(queueClaimService, never()).releaseOnExit(any(), any(), any(), any());
             verify(dispenseRepository, never()).save(any());
             verify(stockLotRepository, never()).save(any());
             verify(stockTransactionRepository, never()).save(any());

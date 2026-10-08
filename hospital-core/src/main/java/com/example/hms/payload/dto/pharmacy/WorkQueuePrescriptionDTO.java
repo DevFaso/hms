@@ -91,6 +91,12 @@ public class WorkQueuePrescriptionDTO {
     private ReadyForCollection readyForCollection;
 
     /**
+     * G13: the active work-queue claim on this order ("being prepared by"),
+     * or null when nobody holds one or claims are off.
+     */
+    private WorkQueueClaimDTO claim;
+
+    /**
      * What the pharmacist needs in order to decide whether to hand medication
      * over: how many fills this authorization still has, and what the
      * prescriber last decided about the patient's request.

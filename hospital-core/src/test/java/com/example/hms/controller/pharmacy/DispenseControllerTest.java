@@ -1,18 +1,32 @@
 package com.example.hms.controller.pharmacy;
 
+import com.example.hms.enums.QueueClaimFilter;
+import com.example.hms.exception.GlobalExceptionHandler;
 import com.example.hms.payload.dto.pharmacy.DispenseRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseSettingsDTO;
 import com.example.hms.service.pharmacy.DispenseService;
+import com.example.hms.service.pharmacy.PrescriptionQueueClaimService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.lang.reflect.Method;
+import java.time.Duration;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * G15 AC-14 / AC-17: the ready-for-collection endpoints carry exactly the
@@ -49,7 +63,50 @@ class DispenseControllerTest {
     @Test
     @DisplayName("GET /settings has the gate of the work queue")
     void settingsHaveTheWorkQueueGate() throws Exception {
-        assertThat(gateOf("getSettings")).isEqualTo(gateOf("getWorkQueue", Pageable.class));
+        assertThat(gateOf("getSettings")).isEqualTo(gateOf("getWorkQueue", Pageable.class, QueueClaimFilter.class));
+    }
+
+    @Test
+    @DisplayName("G13 AC-14: claim, take-over and release have exactly the gate of the work queue")
+    void claimEndpointsHaveTheWorkQueueGate() throws Exception {
+        String queueGate = gateOf("getWorkQueue", Pageable.class, QueueClaimFilter.class);
+        assertThat(gateOf("claimQueueRow", UUID.class)).isEqualTo(queueGate);
+        assertThat(gateOf("takeOverQueueRow", UUID.class)).isEqualTo(queueGate);
+        assertThat(gateOf("releaseQueueRow", UUID.class)).isEqualTo(queueGate);
+    }
+
+    @Test
+    @DisplayName("G13 AC-16: GET /settings reports the claim flag and the TTL in minutes")
+    void settingsReportTheClaimFlagAndTtl() {
+        DispenseService service = mock(DispenseService.class);
+        PrescriptionQueueClaimService claims = mock(PrescriptionQueueClaimService.class);
+        when(claims.isEnabled()).thenReturn(true);
+        when(claims.ttl()).thenReturn(Duration.ofMinutes(15));
+
+        DispenseSettingsDTO settings = new DispenseController(service, claims).getSettings().getBody().getData();
+
+        assertThat(settings.isQueueClaimEnabled()).isTrue();
+        assertThat(settings.getQueueClaimTtlMinutes()).isEqualTo(15);
+    }
+
+    @Test
+    @DisplayName("G13 AC-13: claim= binds to the filter, defaults to ALL, and an unknown value is a 400")
+    void claimFilterBinding() throws Exception {
+        DispenseService service = mock(DispenseService.class);
+        PrescriptionQueueClaimService claims = mock(PrescriptionQueueClaimService.class);
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new DispenseController(service, claims))
+                .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+
+        mvc.perform(get("/pharmacy/dispense/work-queue").param("claim", "MINE")).andExpect(status().isOk());
+        verify(service).getWorkQueue(any(Pageable.class), eq(QueueClaimFilter.MINE));
+        mvc.perform(get("/pharmacy/dispense/work-queue")).andExpect(status().isOk());
+        verify(service).getWorkQueue(any(Pageable.class), eq(QueueClaimFilter.ALL));
+
+        mvc.perform(get("/pharmacy/dispense/work-queue").param("claim", "BOGUS"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(claims);
     }
 
     @Test
@@ -57,7 +114,9 @@ class DispenseControllerTest {
     void settingsReportTheFlag() {
         DispenseService service = mock(DispenseService.class);
         when(service.isReadyForCollectionEnabled()).thenReturn(false, true);
-        DispenseController controller = new DispenseController(service);
+        PrescriptionQueueClaimService claims = mock(PrescriptionQueueClaimService.class);
+        when(claims.ttl()).thenReturn(Duration.ofMinutes(15));
+        DispenseController controller = new DispenseController(service, claims);
 
         DispenseSettingsDTO off = controller.getSettings().getBody().getData();
         DispenseSettingsDTO on = controller.getSettings().getBody().getData();
