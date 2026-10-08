@@ -510,8 +510,24 @@ allow-list either.
 
 - *Given* a verified super-admin.
 - *When* they `POST /super-admin/providers` with a type (PHARMACY or
-  LABORATORY), name, code, city/region, phone and licence evidence (AC-2
-  fields).
+  LABORATORY), a code, and the two layers of evidence below.
+- **Legal identity of the business** (user decision 2026-10-07, Q2). The RCCM
+  extract is the authoritative source; the IFU and CNSS documents must agree
+  with it:
+  - legal name, and trade name (optional);
+  - legal structure (for example SARL);
+  - RCCM number, IFU number (tax id) and CNSS number;
+  - registered address: secteur, section, lot, parcelle, city, region;
+  - company phone;
+  - the manager's (gérant's) name and title;
+  - the date the business started.
+- **Professional layer:**
+  - pharmacy: the operating licence number and issuing authority, plus the
+    responsible pharmacist's name and Ordre national des pharmaciens number;
+  - lab: the ministry authorisation (number and authority), plus the
+    responsible biologist's name and Ordre number;
+  - the licence issue date (optional) and expiry date (optional, **never
+    required**).
 - *Then:*
   - a `hospital.hospitals` row is created with that `facility_type`,
     `active=false` and lifecycle **SUSPENDED** (the lifecycle gate reads only
@@ -522,14 +538,18 @@ allow-list either.
 
 **AC-2 — Verify.**
 
+- The super-admin checks the documents offline: the RCCM extract, the IFU and
+  CNSS documents, and the licence or authorisation. There is no upload in v1.
 - *When* the super-admin `POST /super-admin/providers/{id}/verify` with:
-  - the licence number;
-  - the issuing authority;
-  - the issue date;
-  - an optional expiry date;
-  - the responsible professional's name and professional registration number
-    (Ordre number);
+  - `ifuMatchesRccm=true` and `cnssMatchesRccm=true`: the IFU and CNSS
+    documents name the same business as the RCCM extract (legal name, and the
+    numbers as captured);
+  - corrections to any captured field, if the documents differ from what was
+    entered;
   - a free-text evidence note.
+- **Verification requires the RCCM, IFU and CNSS details to be consistent.**
+  Either confirmation false or absent → 400 `provider.identity.inconsistent`,
+  and the verification stays SUBMITTED.
 - *Then:*
   - the verification becomes VERIFIED, with `decided_by` and `decided_at`;
   - the facility becomes `active=true` and lifecycle ACTIVE, in the same
@@ -539,15 +559,23 @@ allow-list either.
 - `.../reject` with a reason sets REJECTED and keeps `active=false` and
   SUSPENDED (`PROVIDER_REJECTED`).
 - Rejection, and re-submission after it, are allowed.
-- An expiry date is **never** required, whatever the type (see the
-  "no expiring clinician licences" lesson).
+- **No expiry date is required anywhere**, whatever the type or document
+  (see the "no expiring clinician licences" lesson).
+- **These numbers identify the business, not a patient.** The RCCM, IFU, CNSS
+  and licence numbers, the company address and phone are not PHI: plain
+  columns, no `EncryptedStringConverter`. The gérant's and responsible
+  professional's names are staff personal data; like the numbers, they stay
+  out of logs and audit descriptions (§6.9).
 
 **AC-3 — No duplicate business.**
 
 - Verifying a facility whose (licence number, issuing authority) pair is
   already VERIFIED on another facility returns 409
   `provider.licence.duplicate`.
-- This is enforced by a partial unique index (§6.1).
+- Verifying a facility whose RCCM number, or IFU number, is already VERIFIED
+  on another facility returns 409 `provider.business.duplicate`. One business
+  is one facility in v1 (branches are P4, Q19, and will relax this).
+- Both are enforced by partial unique indexes (§6.1).
 
 **AC-4 — No access before verification.**
 
@@ -1001,6 +1029,24 @@ passes unmodified, except where it now needs `patientChoiceConfirmed`.
 - Patient-level endpoints (`findByPatientIdReadableOrPerformedAt`, `:106-113`)
   return only orders that L performs.
 
+**AC-46a — Prior results of the same tests (delta checks).**
+
+- *Given* `provider.lab.share-prior-results.enabled=true` and an order L
+  performs.
+- *When* L opens the order detail.
+- *Then* it carries `priorResults`: the patient's earlier **released**
+  results whose test definition is one of **the order's own test codes**, and
+  nothing else (rule 7).
+- A result of any other test is never returned, from any hospital.
+- With the setting off (the prod default), the field is absent from the JSON.
+- A patient's record-sharing opt-out excludes prior results from other
+  hospitals: they are chart data, unlike the order itself (rule 5).
+- Every read that returns prior results writes `RECORD_SHARE`, one row per
+  patient per source hospital (acting = L), deduplicated per day, and shown to
+  the patient as SHARED_WITH_PROVIDER (AC-15, AC-62).
+- **Requires clinical and CIL sign-off before the setting is enabled in
+  prod.**
+
 **AC-47 — Decline.**
 
 - `POST /lab-orders/{id}/decline-performing {reasonCode}`, by L's lab staff,
@@ -1100,16 +1146,23 @@ Re-linking or unlinking a row later never moves an existing grant.
 **Laboratory.** L keeps the orders it performed. Laboratories must keep their
 results.
 
-Patient erasure follows the existing patient purge paths. Defaults are in Q8.
+Patient erasure follows the existing patient purge paths.
+
+**User decision, 2026-10-07 (Q8): the recommended default is accepted** as
+written above.
 
 ### 5. Consent and opt-out
 
+**User decision, 2026-10-07 (Q9): the recommended default is accepted.**
+
 - The disclosure is **order-bound and for treatment**. The patient's choice of
   provider is recorded (`patient_choice_confirmed`), and no separate consent
-  row is required (Q9).
+  row is required.
 - `PatientRecordSharingOptOut` governs **chart reach**, so it does not block an
   order-bound disclosure. A patient who opted out can still have a
-  prescription filled where they choose.
+  prescription filled where they choose. It **does** exclude the chart data a
+  provider may see behind a setting when that data comes from another
+  hospital: a lab's prior results (AC-46a).
 - Every provider read is accounted (AC-15) and visible to the patient (AC-62).
 - **Legal sign-off is a prerequisite before prod enablement.** The decision
   record (`docs/compliance/cross-hospital-record-access-decision-record.md:212-219`)
@@ -1168,8 +1221,24 @@ The **queue** shows the patient's initials only.
 - The order reference.
 - The specimens and results L itself produced.
 
-**Never shown:** the chart, other labs' results, prior orders not performed by
-L, MRN, national ID, address, insurance.
+**Prior results of the same tests (user decision, 2026-10-07: "order minimum
+plus prior results of the same tests", for delta checks).**
+
+- Shown: the patient's earlier **released** results whose test definition is
+  one of the test codes **on this order**. Value, unit, reference range, flag,
+  the date, and the performing facility's name.
+- Capped at the most recent 5 per test code (configurable).
+- Behind its own setting, `provider.lab.share-prior-results.enabled`, default
+  **false** in prod, independent of every other flag.
+- **Requires clinical and legal (CIL) sign-off before it is enabled in prod**,
+  like the pharmacy allergies (rule 6).
+- Served only inside the order detail projection. The compare endpoints stay
+  closed to a provider (§6.4).
+- Every such read is accounted to the patient (AC-46a).
+
+**Never shown:** the chart, results of any other test, other labs' results
+beyond the same-test history above, prior orders not performed by L,
+allergies, MRN, national ID, address, insurance.
 
 ### 8. One state machine
 
@@ -1272,12 +1341,32 @@ CREATE TABLE hospital.provider_verifications (
   hospital_id UUID NOT NULL REFERENCES hospital.hospitals(id),
   status VARCHAR(20) NOT NULL
     CHECK (status IN ('SUBMITTED','VERIFIED','REJECTED','REVOKED')),
+  -- legal identity of the business (RCCM is authoritative); not PHI
+  legal_name VARCHAR(255) NOT NULL,
+  trade_name VARCHAR(255),
+  legal_structure VARCHAR(50) NOT NULL,     -- e.g. SARL, SA, SUARL, EI
+  rccm_number VARCHAR(50) NOT NULL,
+  ifu_number VARCHAR(30) NOT NULL,
+  cnss_number VARCHAR(30) NOT NULL,
+  address_secteur VARCHAR(50),
+  address_section VARCHAR(50),
+  address_lot VARCHAR(50),
+  address_parcelle VARCHAR(50),
+  address_city VARCHAR(100) NOT NULL,
+  address_region VARCHAR(100) NOT NULL,
+  company_phone VARCHAR(30) NOT NULL,
+  manager_name VARCHAR(200) NOT NULL,       -- the gérant
+  manager_title VARCHAR(100) NOT NULL,
+  business_started_on DATE NOT NULL,
+  ifu_matches_rccm BOOLEAN NOT NULL DEFAULT FALSE,
+  cnss_matches_rccm BOOLEAN NOT NULL DEFAULT FALSE,
+  -- professional layer
   licence_number VARCHAR(100) NOT NULL,
   licence_authority VARCHAR(200) NOT NULL,
   licence_issued_on DATE,
   licence_expires_on DATE,          -- optional, never required
   responsible_professional_name VARCHAR(200) NOT NULL,
-  responsible_professional_registration VARCHAR(100) NOT NULL,
+  responsible_professional_registration VARCHAR(100) NOT NULL,  -- Ordre number
   evidence_note TEXT,
   decided_by_user_id UUID,
   decided_at TIMESTAMP,
@@ -1291,6 +1380,15 @@ CREATE UNIQUE INDEX uq_provider_verification_current
 CREATE UNIQUE INDEX uq_provider_licence_verified
   ON hospital.provider_verifications(licence_authority, licence_number)
   WHERE status = 'VERIFIED';
+CREATE UNIQUE INDEX uq_provider_rccm_verified
+  ON hospital.provider_verifications(rccm_number)
+  WHERE status = 'VERIFIED';
+CREATE UNIQUE INDEX uq_provider_ifu_verified
+  ON hospital.provider_verifications(ifu_number)
+  WHERE status = 'VERIFIED';
+ALTER TABLE hospital.provider_verifications
+  ADD CONSTRAINT chk_provider_verified_consistent
+  CHECK (status <> 'VERIFIED' OR (ifu_matches_rccm AND cnss_matches_rccm));
 
 INSERT INTO "security".roles (id, code, name, description, created_at, updated_at)
   VALUES (gen_random_uuid(), 'ROLE_PROVIDER_ADMIN', 'ROLE_PROVIDER_ADMIN',
@@ -1632,8 +1730,8 @@ prefix is a shorthand, not a hole.
 | `POST /lab-results/{id}/acknowledge` | `:155` | **Deny.** Acknowledgement is the ordering side's act |
 | `POST /lab-results/{id}/critical-read-back` | `:176` | **Deny.** The handler admits DOCTOR, NURSE and MIDWIFE only; L sees the state on the result |
 | `DELETE /lab-results/{id}` | `:188` | **Deny.** A provider never deletes a result; it corrects one before release with `PUT` |
-| `GET /lab-results/{id}/compare` | `:204` | **Deny.** It reads the patient's previous results, which rule 7 excludes |
-| `GET /lab-results/patient/{patientId}/test/{testDefinitionId}/compare-sequential` | `:213` | **Deny**, same reason |
+| `GET /lab-results/{id}/compare` | `:204` | **Deny.** Same-test prior results reach L only inside the order projection, restricted to the order's test codes and behind their setting (rule 7, AC-46a) |
+| `GET /lab-results/patient/{patientId}/test/{testDefinitionId}/compare-sequential` | `:213` | **Deny**, same reason: it takes any patient and any test from the path |
 | `GET /lab-results/hospital/{hospitalId}/critical` | `:223` | **Deny: not reachable at a lab provider.** It is the ordering hospital's critical worklist. L sees its own critical results in its queue and on the result detail |
 | `GET /lab-results/hospital/{hospitalId}/critical/unacknowledged` | `:235` | **Deny**, same reason |
 | `POST /lab-results/critical-escalation/run` | `:57` | **Deny.** An operations trigger for the ordering hospital's escalation |
@@ -1660,7 +1758,7 @@ without being added to the frozen list, with a reason.
 
 | Method & path | Roles (plus the at-facility check) | Body → Response |
 |---|---|---|
-| `POST /super-admin/providers` | SUPER_ADMIN | `{facilityType, name, code, phone, email?, city, region, address?, licence{...}}` → `ProviderResponseDTO` (201) |
+| `POST /super-admin/providers` | SUPER_ADMIN | `{facilityType, code, email?, business{legalName, tradeName?, legalStructure, rccmNumber, ifuNumber, cnssNumber, address{secteur?, section?, lot?, parcelle?, city, region}, companyPhone, managerName, managerTitle, startedOn}, professional{licenceNumber, licenceAuthority, licenceIssuedOn?, licenceExpiresOn?, responsibleName, responsibleOrdreNumber}}` → `ProviderResponseDTO` (201) |
 | `GET /super-admin/providers?type=&status=` | SUPER_ADMIN | page of `ProviderResponseDTO` |
 | `POST /super-admin/providers/{id}/verify` / `reject` / `revoke` | SUPER_ADMIN | `{...evidence}` / `{reason}` → `ProviderResponseDTO` |
 | `PUT /super-admin/pharmacy-registry/{rowId}/provider` · `DELETE` | SUPER_ADMIN | `{providerId, confirmLicence}` |
@@ -1682,6 +1780,10 @@ Changed contracts:
 - `PerformingLabOptionDTO` gains `facilityType`.
 - `POST /lab-orders` and a performer change gain `patientChoiceConfirmed`,
   required when the performer is a LABORATORY facility (AC-40).
+- The lab order detail at a provider gains an optional `priorResults` array,
+  present only when `provider.lab.share-prior-results.enabled` is on (AC-46a).
+- `POST /super-admin/providers/{id}/verify` takes
+  `{ifuMatchesRccm, cnssMatchesRccm, corrections?, evidenceNote?}`.
 - The pharmacy offer detail gains an optional `allergies` array, present only
   when `provider.pharmacy.share-allergies.enabled` is on (rule 6).
 - The patient DTOs are unchanged in shape (P3 fills the existing fields).
@@ -1692,6 +1794,17 @@ Changed contracts:
 
 - `super-admin/providers/`: a list, a create form, a verify/reject/revoke
   dialog, and a link-registry-row dialog.
+  - The create form has two sections: **Business identity** (legal name,
+    trade name, legal structure, RCCM, IFU, CNSS, registered address as
+    secteur/section/lot/parcelle/city/region, company phone, gérant's name and
+    title, start date) and **Professional licence** (licence or ministry
+    authorisation number and authority, responsible pharmacist or biologist
+    and their Ordre number, optional issue and expiry dates). No field is an
+    expiry that must be filled.
+  - The verify dialog shows the captured identity beside two mandatory
+    checkboxes: "The IFU document matches the RCCM extract" and "The CNSS
+    document matches the RCCM extract". Verify stays disabled until both are
+    ticked (UX only; the backend enforces it).
 - `provider/`: `provider-home`, `pharmacy-offers` (queue), `pharmacy-offer-detail`
   (actions), `provider-staff`, `provider-profile`.
 
@@ -1741,7 +1854,8 @@ New message keys go into all four bundles (`messages.properties`, `_en`, `_fr`,
 - the prescriber event "pharmacy unavailable";
 - the error codes `offer.notfound`, `role.facility.incompatible`,
   `role.facility.mixed`, `provider.not-verified`, `mfa.enrollment.required`,
-  `provider.licence.duplicate`, `routing.patient-choice.required`,
+  `provider.licence.duplicate`, `provider.business.duplicate`,
+  `provider.identity.inconsistent`, `routing.patient-choice.required`,
   `routing.partner.on-platform`, `routing.partner.unavailable` and
   `routing.decision.changed`.
 
@@ -1749,7 +1863,9 @@ New message keys go into all four bundles (`messages.properties`, `_en`, `_fr`,
 
 - Audit rows carry ids and codes only.
 - Never put in an audit row or a log: a patient name, a phone, a licence
-  number, or clarification text.
+  number, an RCCM, IFU or CNSS number, the gérant's or responsible
+  professional's name, or clarification text. The business numbers are not
+  PHI, but audit rows carry ids and codes only.
 - USER-actor rows carry the assignment id, not the entity. This is the
   out-of-session lesson (#564).
 - Every provider read writes `RECORD_SHARE` (AC-15, AC-48).
@@ -1779,6 +1895,7 @@ New message keys go into all four bundles (`messages.properties`, `_en`, `_fr`,
 | `provider.pharmacy.sms-nudge.enabled` | true | The PHI-free nudge |
 | `pharmacy.partner.platform.remind-after` / `.auto-reject-after` | PT2H / PT4H | Platform timeouts |
 | `provider.lab.enabled` | false | LABORATORY facilities in the performing-lab picker |
+| `provider.lab.share-prior-results.enabled` | false | Prior released results of the order's own test codes on the lab provider's order detail (rule 7, AC-46a). **Needs clinical and CIL sign-off before it is turned on in prod.** Independent of every other flag |
 | `provider.pharmacy.share-allergies.enabled` | false | Active allergies on the pharmacy offer detail (rule 6). **Needs clinical and CIL sign-off before it is turned on in prod.** Independent of every other flag |
 
 - Flags are read with `@Value`, like `pharmacy.ready-for-collection.enabled`
@@ -1816,6 +1933,8 @@ New message keys go into all four bundles (`messages.properties`, `_en`, `_fr`,
 | T22 | An unverified provider is made ACTIVE through the generic lifecycle restore | The restore refuses a provider without a VERIFIED verification (AC-4) |
 | T23 | A provider sender injects ADT or merges over HL7 | ADT and merge from a provider-bound pair are refused (AC-43) |
 | T24 | Allergies reach a private pharmacy without sign-off | Their own setting, default off, enabled only after clinical and CIL sign-off (rule 6) |
+| T25 | A lab provider reads results beyond delta checks (other tests, the wider history) | Prior results are filtered to the order's own test codes, released only, capped, behind their own setting with sign-off, honour the opt-out for other hospitals' data, and are accounted (AC-46a); the compare endpoints stay closed (§6.4) |
+| T26 | A shell business, or one business posing as two | RCCM is authoritative, IFU and CNSS must agree with it before VERIFY; RCCM and IFU are unique among VERIFIED rows (AC-2, AC-3) |
 
 **Legal prerequisite.** Counsel/CIL must sign off before
 `provider.organisations.enabled` goes on in prod (rule 5). This extends the
@@ -1832,8 +1951,8 @@ open item in the decision record (`:212-219`).
 
 | Test | ACs | Falsify by reverting |
 |---|---|---|
-| `ProviderOnboardingServiceImplTest` (create, verify, reject, revoke, duplicate licence) | AC-1–3 | the partial unique index (IT) / the 409 mapping |
-| `ProviderOnboardingIT` (Testcontainers Postgres) | AC-3, V180 | V180's unique index |
+| `ProviderOnboardingServiceImplTest` (create with both evidence layers, verify, reject, revoke, duplicate licence, duplicate RCCM or IFU; verify refused with 400 when either `ifuMatchesRccm` or `cnssMatchesRccm` is false; create accepted with no expiry date) | AC-1–3 | the consistency check; the 409 mapping |
+| `ProviderOnboardingIT` (Testcontainers Postgres) | AC-2, AC-3, V180 | V180's unique indexes; `chk_provider_verified_consistent` |
 | `ProviderLifecycleIT`: a new provider is SUSPENDED and its user gets 423; the generic restore of an unverified provider answers 409; VERIFY makes it ACTIVE | AC-1, AC-4 | creating the row ACTIVE; the restore guard |
 | `UserAccountAccessTest` + `UserServiceImpl` provider-admin cases | AC-5, AC-6 | PROVIDER_ADMIN in `ADMIN_ROLES`; the compatibility check |
 | `ProviderRegistrarTest`: a PROVIDER_ADMIN cannot register a PATIENT | AC-6, T6 | the registrar split |
@@ -1884,6 +2003,8 @@ open item in the decision record (`:212-219`).
 | `ProviderCriticalValueIT`: a critical result entered at L notifies the ordering clinician at H in-app and by SMS, and escalation reaches H's admins, not L's staff | AC-45 | resolving the recipients from `performingHospital` instead of `hospital` (the test must then fail) |
 | Patient choice on a LABORATORY performer (create and change) | AC-40 | the `patientChoiceConfirmed` check |
 | Lab DTO projection JSON tests | AC-46 | the projection |
+| `ProviderLabPriorResultsTest`: an order for test A, with the patient holding released results for A and for B (at L and at another hospital) → `priorResults` holds the A results only; B is never returned; unreleased A results are not returned; setting off → field absent; opt-out → other hospitals' A results excluded | AC-46a, T25 | the test-code filter (remove it and the B result appears, so the test fails); the setting check |
+| `ProviderLabPriorResultsAccountingIT`: a detail read with prior results writes one `RECORD_SHARE` row per source hospital, deduplicated per day, visible in the disclosure report | AC-46a | the recorder call on the prior-results read |
 | Decline tests (before and after a specimen) | AC-47 | the specimen predicate |
 | `RECORD_SHARE` on the detail and specimen endpoints | AC-48 | the added calls |
 | Confinement: a lab provider calling `POST /lab-orders` gets 404 | AC-49 | the allow-list |
@@ -1925,6 +2046,8 @@ any PR that touches an entity.
    prod deploy. Then turn the flags on for prod.
    - `provider.pharmacy.share-allergies.enabled` stays off until its own
      clinical and CIL sign-off (rule 6), recorded separately.
+   - `provider.lab.share-prior-results.enabled` likewise stays off until its
+     own clinical and CIL sign-off (rule 7).
 5. P3 ships once the data exists.
 
 **2. Migrations.**
@@ -2004,8 +2127,8 @@ any PR that touches an entity.
 ## 10. Out of scope / open questions
 
 The decisions the user must make are marked **[USER]**, and each has a
-recommended default, so the work is not blocked. Q1, Q3, Q5 and Q6 are now
-decided (§10.1). §10.2 lists what is still open.
+recommended default, so the work is not blocked. Q1, Q2, Q3, Q5, Q6, Q7, Q8
+and Q9 are now decided (§10.1). §10.2 lists what is still open.
 
 ### 10.1 Decisions recorded (user, 2026-10-07, final)
 
@@ -2020,6 +2143,39 @@ decided (§10.1). §10.2 lists what is still open.
     default off.
   - **Requires clinical and legal (CIL) sign-off before it is enabled in
     prod.**
+- **Verification evidence (Q2): the business-registration model plus the
+  professional layer** (AC-1, AC-2, AC-3, §6.1).
+  - The facility's legal identity is verified from its official registration
+    documents. The **RCCM extract is authoritative**; the IFU (tax id) and
+    CNSS documents must agree with it.
+  - Captured: legal name, trade name (optional), legal structure (for example
+    SARL), RCCM, IFU and CNSS numbers, registered address
+    (secteur/section/lot/parcelle, city, region), company phone, the gérant's
+    name and title, and the date the business started.
+  - Kept as well: for a pharmacy, the operating licence number and authority
+    plus the responsible pharmacist's name and Ordre number; for a lab, the
+    ministry authorisation plus the responsible biologist's name and Ordre
+    number.
+  - The super-admin checks the documents offline. Verification requires the
+    RCCM, IFU and CNSS details to be consistent. No upload in v1.
+  - **No expiry date is required anywhere.**
+  - These numbers identify the business; they are not PHI.
+- **Lab data scope (Q7): order minimum plus prior results of the same tests**
+  for that patient, for delta checks (rule 7, AC-46a).
+  - Only the test codes the order carries. No other results, no chart, no
+    allergies.
+  - Behind its own setting, `provider.lab.share-prior-results.enabled`,
+    default off in prod.
+  - **Requires clinical and CIL sign-off before it is enabled.**
+  - Every read is accounted to the patient.
+- **Access after close (Q8): the recommended default is accepted** (rule 4).
+  A pharmacy keeps a read-only register of what it accepted and dispensed,
+  with the patient phone hidden after 30 days, and no access to anything it
+  never accepted. A lab keeps what it performed.
+- **Consent basis (Q9): the recommended default is accepted** (rule 5).
+  Order-bound, plus the patient's recorded choice; no separate consent row;
+  every read accounted and shown to the patient. **Needs counsel/CIL sign-off
+  before prod enablement.**
 
 Defaults chosen after the review (technical, recorded here so they are
 visible):
@@ -2036,30 +2192,11 @@ visible):
 
 ### 10.2 Open decisions (need the user; each has a recommended default)
 
-1. **Verification evidence (Q2).** Recommended default: for a pharmacy, the
-   operating licence number and issuing authority, plus the responsible
-   pharmacist's name and Ordre national des pharmaciens number; for a lab, the
-   ministry authorisation, plus the responsible biologist's name and Ordre
-   number. The super-admin checks the documents offline. No upload in v1. An
-   expiry date is optional and never required.
-2. **Lab data scope (Q7).** Recommended default: the rule-7 list (identity,
-   sex, date of birth and age, phone; the tests, specimen type, priority,
-   clinical indication and order notes; the ordering clinician's name and
-   phone). Nothing from the chart, no prior results, no allergies.
-3. **Access after the order closes (Q8).** Recommended default: a pharmacy
-   keeps a read-only register of what it accepted and dispensed, with the
-   patient phone hidden 30 days after closure, and loses access at once to
-   anything it never accepted; a lab keeps what it performed.
-4. **Consent basis (Q9).** Recommended default: no separate consent row. The
-   disclosure is order-bound, for treatment, and follows the patient's
-   recorded choice; the record-sharing opt-out does not block it; every read
-   is accounted and shown to the patient. **Needs counsel/CIL sign-off before
-   prod enablement** (alongside the allergies sign-off).
-5. **Notifications to providers (Q10).** Recommended default: in-app
+1. **Notifications to providers (Q10).** Recommended default: in-app
    notifications to the facility's workflow staff, plus a PHI-free SMS nudge
    (reference and facility name only) that `provider.pharmacy.sms-nudge.enabled`
    can switch off.
-6. **Out-of-v1 items (Q14–Q20, Q24).** Recommended default: all out of v1 and
+2. **Out-of-v1 items (Q14–Q20, Q24).** Recommended default: all out of v1 and
    recorded as tasklist debt, each needing its own plan (P4): partner stock;
    partial fills and substitution; billing and claims between parties; FHIR
    `MedicationDispense`; walk-in patients at providers; multi-branch chains
@@ -2072,13 +2209,15 @@ visible):
   - **Super-admin only**, after verifying the documents offline. This
     is the e-Keneya team.
   - Self-registration with a review queue comes later (P4).
-- **Q2 [USER] — What counts as verification?**
-  - **Pharmacy.** Default: the operating licence number and issuing authority,
-    plus the responsible pharmacist's name and Ordre national des pharmaciens
+- **Q2 — What counts as verification? DECIDED 2026-10-07 (§10.1).**
+  - **Business identity:** the RCCM extract (authoritative), with the IFU and
+    CNSS documents agreeing with it; the fields of AC-1.
+  - **Pharmacy:** the operating licence number and issuing authority, plus
+    the responsible pharmacist's name and Ordre national des pharmaciens
     number.
-  - **Lab.** Default: the ministry authorisation, plus the responsible
-    biologist and their Ordre number.
-  - No document upload in v1.
+  - **Lab:** the ministry authorisation, plus the responsible biologist and
+    their Ordre number.
+  - Checked offline; no document upload in v1; no expiry date required.
 - **Q3 — Pricing. DECIDED 2026-10-07 (§10.1).**
   - **Free during the pilot**, with no billing code in v1.
   - The commercial model is decided before general availability. Options: a
@@ -2102,17 +2241,21 @@ visible):
     (default off). **No diagnoses and no problem list.**
   - The decision record says allergies cannot cross yet (`:225-230`), so
     enabling the setting in prod **requires clinical and CIL sign-off**.
-- **Q7 [USER] — What a lab sees.**
-  - Default: the rule-7 list, including the clinical indication.
-  - No prior results, and nothing from the chart.
-- **Q8 [USER] — How long a provider keeps access after closure.**
-  - **Pharmacy.** Default:
+- **Q7 — What a lab sees. DECIDED 2026-10-07 (§10.1).**
+  - The rule-7 list, including the clinical indication.
+  - Plus prior released results of the order's own test codes, behind
+    `provider.lab.share-prior-results.enabled` (default off), after clinical
+    and CIL sign-off.
+  - Nothing else from the chart, and no allergies.
+- **Q8 — How long a provider keeps access after closure. DECIDED 2026-10-07
+  (§10.1): the default below is accepted.**
+  - **Pharmacy:**
     - it keeps a read-only record of what it accepted and dispensed;
     - the patient phone is hidden 30 days after closure;
     - it loses access immediately to anything it never accepted.
-  - **Lab.** Default: it keeps what it performed.
-- **Q9 [USER] — Consent.**
-  - Default: **no separate consent.** The disclosure is order-bound, for
+  - **Lab:** it keeps what it performed.
+- **Q9 — Consent. DECIDED 2026-10-07 (§10.1): the default below is accepted.**
+  - **No separate consent.** The disclosure is order-bound, for
     treatment, and follows the patient's recorded choice.
   - The opt-out does not block it (rule 5).
   - **Counsel/CIL sign-off is required before prod enablement.**
@@ -2215,7 +2358,9 @@ rule).
   - `MigrationRegistrationTest`, `LiquibaseSchemaIT`, `EntitySchemaValidationIT`.
 - [ ] **P1-T2 — Onboarding service and super-admin endpoints.** AC-1, AC-2,
   AC-3.
-  - `ProviderOnboardingService(Impl)` and `SuperAdminProviderController`.
+  - `ProviderOnboardingService(Impl)` and `SuperAdminProviderController`:
+    both evidence layers, the RCCM/IFU/CNSS consistency check, the
+    duplicate-business 409.
   - DTOs and `AuditEventType` (+4).
   - Message keys in 4 bundles.
   - `SecurityConfig` matchers.
@@ -2300,6 +2445,8 @@ rule).
     `MFA_REQUIRED_ROLES` update in the rollout notes.
 - [ ] **P1-T12 — Portal: super-admin providers page.** AC-1–3.
   - `super-admin/providers/` (list, create, verify/reject/revoke dialogs).
+  - The create form's two sections (business identity, professional
+    licence) and the verify dialog's two consistency checkboxes (§6.6).
   - Routes and nav.
   - EN/FR/ES keys and `PORTAL.ENUM`.
   - Karma tests, the axe route.
@@ -2405,8 +2552,12 @@ rule).
 - [ ] **P2-LAB-T3 — Minimum-necessary projection and accounting.** AC-46,
   AC-48, T13.
   - The lab order/result provider projection.
+  - Prior results of the order's own test codes behind
+    `provider.lab.share-prior-results.enabled`, with the opt-out exclusion and
+    their `RECORD_SHARE` rows (AC-46a).
   - `recordPerformedHereReach` on the detail and specimen reads.
-  - JSON field-set tests.
+  - JSON field-set tests, `ProviderLabPriorResultsTest`,
+    `ProviderLabPriorResultsAccountingIT`.
 - [ ] **P2-LAB-T4 — Decline.** AC-47.
   - `declinePerforming` and the endpoint.
   - The notifier.
