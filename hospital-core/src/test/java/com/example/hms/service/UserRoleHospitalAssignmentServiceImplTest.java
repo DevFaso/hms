@@ -174,9 +174,8 @@ class UserRoleHospitalAssignmentServiceImplTest {
         try {
             when(assignmentRepository.findById(assignment.getId()))
                 .thenReturn(Optional.of(assignment));
-            when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(
-                    "registrar", "registrar", null))
-                .thenReturn(Optional.of(registrar));
+            when(accountAccess.currentUserId()).thenReturn(Optional.of(registrar.getId()));
+            when(userRepository.findById(registrar.getId())).thenReturn(Optional.of(registrar));
             when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 

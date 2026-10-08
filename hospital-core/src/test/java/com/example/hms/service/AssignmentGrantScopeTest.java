@@ -206,12 +206,13 @@ class AssignmentGrantScopeTest {
             .build());
     }
 
-    /** The signed-in caller's account, resolvable by id and by the principal's name. */
+    /**
+     * The signed-in caller's account, resolvable by id only: its principal's
+     * name resolves nothing (a phone-login account), as the service must cope.
+     */
     private User callerAccount() {
         User caller = account(callerId);
         when(userRepository.findById(callerId)).thenReturn(Optional.of(caller));
-        when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(
-            caller.getUsername(), caller.getUsername(), null)).thenReturn(Optional.of(caller));
         return caller;
     }
 
@@ -843,17 +844,37 @@ class AssignmentGrantScopeTest {
         }
 
         @Test
-        @DisplayName("the registrar still confirms their hospital's row with its code")
+        @DisplayName("the registrar still confirms their hospital's row, identified by id when the name resolves nothing")
         void registrarConfirmsTheirRow() {
             signInAsHospitalAdminOfA();
             assignee.setActive(true);
             UserRoleHospitalAssignment row = pendingRowRegisteredByCaller(hospitalA);
+            when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(any(), any(), any()))
+                .thenReturn(Optional.empty());
 
             service.confirmAssignment(row.getId(), "123456");
 
             assertThat(row.getActive()).isTrue();
             assertThat(row.getConfirmationVerifiedAt()).isNotNull();
             verify(assignmentRepository).save(row);
+        }
+
+        @Test
+        @DisplayName("a caller with no resolvable account is refused whatever the code, nothing written")
+        void unresolvableCallerIsRefused() {
+            signInAsHospitalAdminOfA();
+            when(userRepository.findById(callerId)).thenReturn(Optional.empty());
+            UserRoleHospitalAssignment row = stored(row(assignee, nurse, hospitalA, false));
+            row.setRegisteredBy(account(callerId));
+            UUID id = row.getId();
+
+            Throwable right = catchThrowable(() -> service.confirmAssignment(id, "123456"));
+            Throwable wrong = catchThrowable(() -> service.confirmAssignment(id, "999999"));
+
+            assertThat(right).isExactlyInstanceOf(BusinessException.class);
+            assertThat(wrong).isExactlyInstanceOf(BusinessException.class).hasMessage(right.getMessage());
+            assertThat(row.getActive()).isFalse();
+            assertNothingWritten();
         }
 
         @Test

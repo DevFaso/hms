@@ -808,13 +808,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // compared: anyone else gets the same refusal whatever code they send,
         // so the endpoint is no oracle for guessing the holder's code.
         User registrar = assignment.getRegisteredBy();
-        User actor = resolveCurrentAuthenticatedUser().orElseThrow(() ->
-            new BusinessException(
-                messageSource.getMessage(
-                    MSG_ASSIGNMENT_ACTOR_MISMATCH,
-                    null,
-                    DEFAULT_ACTOR_RESOLUTION_FAILURE,
-                    locale)));
+        // By id, as a re-invite records the registrar (requireCallerAccount):
+        // a phone-login registrar's principal name resolves no account.
+        User actor = requireCallerAccount(locale);
 
         if (registrar == null || registrar.getId() == null || !registrar.getId().equals(actor.getId())) {
             throw new BusinessException(
@@ -2110,18 +2106,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         } catch (RuntimeException ex) {
             log.warn("⚠️ Failed to record assignment confirmation audit for assignment '{}': {}", assignment.getId(), ex.getMessage());
         }
-    }
-
-    private Optional<User> resolveCurrentAuthenticatedUser() {
-        String username = SecurityUtils.getCurrentUsername();
-        if (username == null || username.isBlank()) {
-            return Optional.empty();
-        }
-        return userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(
-            username,
-            username,
-            null
-        );
     }
 
     private List<String> buildRoleProfileChecklist(Role role) {
