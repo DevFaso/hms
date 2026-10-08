@@ -60,7 +60,9 @@ class HospitalLifecycleProviderRestoreTest {
         Hospital provider = suspended(FacilityType.PHARMACY);
         current(provider, status);
 
-        assertThatThrownBy(() -> service().restore(provider.getId(), null)).isInstanceOf(ConflictException.class);
+        HospitalLifecycleServiceImpl service = service();
+        UUID id = provider.getId();
+        assertThatThrownBy(() -> service.restore(id, null)).isInstanceOf(ConflictException.class);
         assertThat(provider.getLifecycleState()).isEqualTo(HospitalLifecycleState.SUSPENDED);
         assertThat(provider.isActive()).isFalse();
         verify(hospitalRepository, never()).save(any());
@@ -71,7 +73,9 @@ class HospitalLifecycleProviderRestoreTest {
     void noVerification() {
         Hospital provider = suspended(FacilityType.LABORATORY);
 
-        assertThatThrownBy(() -> service().restore(provider.getId(), null)).isInstanceOf(ConflictException.class);
+        HospitalLifecycleServiceImpl service = service();
+        UUID id = provider.getId();
+        assertThatThrownBy(() -> service.restore(id, null)).isInstanceOf(ConflictException.class);
     }
 
     @Test

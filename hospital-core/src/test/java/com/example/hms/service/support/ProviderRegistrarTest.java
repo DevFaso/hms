@@ -117,9 +117,9 @@ class ProviderRegistrarTest {
 
         UserAccountAccess.Grant grant = access.requireMayGrant(Set.of("PHARMACIST"));
 
-        assertThatThrownBy(() -> grant.requireAt(otherPharmacy.getId())).isInstanceOf(AccessDeniedException.class);
-        assertThatThrownBy(() -> grant.requireAt(hospital.getId())).isInstanceOf(AccessDeniedException.class);
-        assertThatThrownBy(() -> grant.requireAt(null)).isInstanceOf(AccessDeniedException.class);
+        assertRefusedAt(grant, otherPharmacy.getId());
+        assertRefusedAt(grant, hospital.getId());
+        assertRefusedAt(grant, null);
     }
 
     @Test
@@ -127,10 +127,8 @@ class ProviderRegistrarTest {
     void noAdminRole() {
         signInAsProviderAdminOf(pharmacy);
 
-        assertThatThrownBy(() -> access.requireMayGrant(Set.of("PROVIDER_ADMIN")))
-            .isInstanceOf(AccessDeniedException.class);
-        assertThatThrownBy(() -> access.requireMayGrant(Set.of("HOSPITAL_ADMIN")))
-            .isInstanceOf(AccessDeniedException.class);
+        assertGrantRefused(Set.of("PROVIDER_ADMIN"));
+        assertGrantRefused(Set.of("HOSPITAL_ADMIN"));
     }
 
     @Test
@@ -138,10 +136,8 @@ class ProviderRegistrarTest {
     void neverAPatient() {
         signInAsProviderAdminOf(pharmacy);
 
-        assertThatThrownBy(() -> access.requireMayGrant(Set.of("PATIENT")))
-            .isInstanceOf(AccessDeniedException.class);
-        assertThatThrownBy(() -> access.requireMayGrant(Set.of("PATIENT", "PHARMACIST")))
-            .isInstanceOf(AccessDeniedException.class);
+        assertGrantRefused(Set.of("PATIENT"));
+        assertGrantRefused(Set.of("PATIENT", "PHARMACIST"));
     }
 
     @Test
@@ -150,8 +146,7 @@ class ProviderRegistrarTest {
         signIn("ROLE_PROVIDER_ADMIN");
         callerHolds(assignment("ROLE_PROVIDER_ADMIN", pharmacy, false));
 
-        assertThatThrownBy(() -> access.requireMayGrant(Set.of("PHARMACIST")))
-            .isInstanceOf(AccessDeniedException.class);
+        assertGrantRefused(Set.of("PHARMACIST"));
     }
 
     @Test
@@ -160,8 +155,7 @@ class ProviderRegistrarTest {
         signIn("ROLE_HOSPITAL_ADMIN");
         callerHolds(assignment("ROLE_HOSPITAL_ADMIN", hospital, true));
 
-        assertThatThrownBy(() -> access.requireMayGrant(Set.of("PROVIDER_ADMIN")))
-            .isInstanceOf(AccessDeniedException.class);
+        assertGrantRefused(Set.of("PROVIDER_ADMIN"));
     }
 
     @Test
@@ -187,6 +181,14 @@ class ProviderRegistrarTest {
     }
 
     // ---------------------------------------------------------------- helpers
+
+    private void assertGrantRefused(Set<String> roles) {
+        assertThatThrownBy(() -> access.requireMayGrant(roles)).isInstanceOf(AccessDeniedException.class);
+    }
+
+    private static void assertRefusedAt(UserAccountAccess.Grant grant, UUID facilityId) {
+        assertThatThrownBy(() -> grant.requireAt(facilityId)).isInstanceOf(AccessDeniedException.class);
+    }
 
     private void signInAsProviderAdminOf(Hospital facility) {
         signIn("ROLE_PROVIDER_ADMIN");

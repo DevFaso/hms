@@ -256,7 +256,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
         facilityAssignmentGuard.requireCompatible(roleCode, hospital);
         User user = resolveUser(dto, locale);
-        facilityAssignmentGuard.requireSingleFacilityKind(user, hospital, null);
+        facilityAssignmentGuard.requireSingleFacilityKind(user, roleCode, hospital, null);
         checkActiveDoctorConflict(dto, user, role, hospital, locale);
         checkExistingAssignment(user, role, hospital, locale);
 
@@ -412,7 +412,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
 
         if (Boolean.TRUE.equals(target.getActive())) {
-            facilityAssignmentGuard.requireSingleFacilityKind(newUser, newHospital, target.getId());
+            facilityAssignmentGuard.requireSingleFacilityKind(newUser, newRoleCode, newHospital, target.getId());
         }
         UserRoleHospitalAssignment saved = assignmentRepository.save(target);
         if (reinvite) {
@@ -922,8 +922,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private void activateVerifiedAssignment(UserRoleHospitalAssignment assignment, String source) {
         // One kind of facility per user: two pending rows, one at a hospital
         // and one at a provider, cannot both come on.
-        facilityAssignmentGuard.requireSingleFacilityKind(assignment.getUser(), assignment.getHospital(),
-            assignment.getId());
+        facilityAssignmentGuard.requireSingleFacilityKind(assignment.getUser(), getRoleCode(assignment.getRole()),
+            assignment.getHospital(), assignment.getId());
         // Mark the assignment as verified AND activate it. An existing
         // timestamp is preserved: the healing path re-runs activation for
         // rows an older registrar confirm stamped without activating.

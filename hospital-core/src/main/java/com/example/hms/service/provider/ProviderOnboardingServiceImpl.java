@@ -154,6 +154,7 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
         Hospital facility = loadProvider(providerId);
         ProviderVerification verification = currentVerification(facility);
         requireStatus(verification, EnumSet.of(ProviderVerificationStatus.SUBMITTED));
+        requirePendingLifecycle(facility);
 
         ProviderVerifyRequestDTO.Corrections corrections = request == null ? null : request.getCorrections();
         if (corrections != null && corrections.getBusiness() != null) {
@@ -242,12 +243,19 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
         decide(verification, ProviderVerificationStatus.REVOKED, request.getReason());
         verificationRepository.save(verification);
 
-        // Rule 2: the same effects as a suspension.
-        facility.setLifecycleState(HospitalLifecycleState.SUSPENDED);
+        // Rule 2: the effects of a suspension, and never more. An ACTIVE
+        // provider becomes SUSPENDED. One already SUSPENDED keeps its
+        // suspension record. One ARCHIVED, purge-scheduled or purged stays
+        // exactly there: moving it back to SUSPENDED would silently cancel
+        // the archive or the purge, which only the lifecycle endpoints may
+        // do, with their own audit rows and step-up.
+        if (facility.getLifecycleState() == HospitalLifecycleState.ACTIVE) {
+            facility.setLifecycleState(HospitalLifecycleState.SUSPENDED);
+            facility.setSuspendedAt(Instant.now(clock));
+            facility.setSuspendedBy(currentActorId());
+            facility.setSuspensionReason(REVOKED_REASON);
+        }
         facility.setActive(false);
-        facility.setSuspendedAt(Instant.now(clock));
-        facility.setSuspendedBy(currentActorId());
-        facility.setSuspensionReason(REVOKED_REASON);
         hospitalRepository.save(facility);
         invalidateLifecycleCache();
 
@@ -273,6 +281,18 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
     private ProviderVerification currentVerification(Hospital facility) {
         return verificationRepository.findFirstByHospital_IdOrderByCreatedAtDesc(facility.getId())
             .orElseThrow(() -> new ResourceNotFoundException(MSG_NOT_FOUND));
+    }
+
+    /**
+     * VERIFY activates a provider that is waiting for it, and nothing else:
+     * the facility must be SUSPENDED. An ARCHIVED or purge-scheduled provider
+     * comes back only through the lifecycle restore (with its MFA step-up and
+     * its own audit rows), never as a side effect of a verification (409).
+     */
+    private static void requirePendingLifecycle(Hospital facility) {
+        if (facility.getLifecycleState() != HospitalLifecycleState.SUSPENDED) {
+            throw new ConflictException(MessageUtil.resolveOrRaw(MSG_WRONG_STATE, facility.getLifecycleState()));
+        }
     }
 
     private static void requireStatus(ProviderVerification verification, Set<ProviderVerificationStatus> allowed) {
@@ -335,7 +355,10 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
 
     private static void applyProfessional(ProviderVerification v, ProviderProfessionalDTO professional) {
         v.setLicenceNumber(identifier(professional.getLicenceNumber()));
-        v.setLicenceAuthority(professional.getLicenceAuthority().trim());
+        // The authority is half of the AC-3 uniqueness key, so it is held in
+        // the same single spelling as the number: "DGPML" and " dgpml " are
+        // one authority, for the duplicate check and for V180's index alike.
+        v.setLicenceAuthority(identifier(professional.getLicenceAuthority()));
         v.setLicenceIssuedOn(professional.getLicenceIssuedOn());
         v.setLicenceExpiresOn(professional.getLicenceExpiresOn());
         v.setResponsibleProfessionalName(professional.getResponsibleName().trim());

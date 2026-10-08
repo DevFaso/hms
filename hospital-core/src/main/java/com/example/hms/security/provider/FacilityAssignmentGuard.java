@@ -26,11 +26,17 @@ import java.util.UUID;
  *       PROVIDER_ADMIN and PHARMACIST only; a laboratory PROVIDER_ADMIN and
  *       the four LAB_* roles.</li>
  *   <li><b>One kind of facility per user</b> ({@code role.facility.mixed}):
- *       creating or activating an assignment at a facility is refused when the
- *       user holds an ACTIVE assignment at a facility of another type. A
- *       hospital-less row (the global PATIENT, the SUPER_ADMIN) is at no
- *       facility and never counts. Someone who really works in both places
- *       gets two accounts.</li>
+ *       creating or activating a STAFF assignment at a facility is refused
+ *       when the user holds an ACTIVE staff assignment at a facility of
+ *       another type. Someone who really works in both places gets two
+ *       accounts. PATIENT assignments are outside the rule both ways: they
+ *       never count and are never refused, whatever hospital they are bound
+ *       to (a registrar's PATIENT row carries the registering hospital, not
+ *       a null one), so a pharmacist can be a patient at a hospital. A
+ *       hospital-less row (the SUPER_ADMIN) is at no facility and never
+ *       counts either. The confinement filter (P1-T6) must therefore admit a
+ *       provider user's patient self-service paths for a hospital-bound
+ *       PATIENT row too, not only for a global one.</li>
  * </ul>
  *
  * <p>The JPA backstop on {@code UserRoleHospitalAssignment} repeats the
@@ -75,19 +81,22 @@ public class FacilityAssignmentGuard {
     }
 
     /**
+     * @param roleCode             the role of the row being created or activated;
+     *                             a PATIENT row is never refused
      * @param excludedAssignmentId the row being changed or activated, which
      *                             must not count against itself; {@code null} for a new row
      * @throws BusinessException {@code role.facility.mixed} when the user
-     *                           actively holds an assignment at a facility of
-     *                           another type than {@code hospital}
+     *                           actively holds a staff assignment at a
+     *                           facility of another type than {@code hospital}
      */
-    public void requireSingleFacilityKind(User user, Hospital hospital, UUID excludedAssignmentId) {
-        if (user == null || user.getId() == null || hospital == null) {
+    public void requireSingleFacilityKind(User user, String roleCode, Hospital hospital, UUID excludedAssignmentId) {
+        if (user == null || user.getId() == null || hospital == null || isPatient(roleCode)) {
             return;
         }
         FacilityType wanted = FacilityType.orHospital(hospital.getFacilityType());
         boolean mixed = assignmentRepository.findByUser_IdAndActiveTrue(user.getId()).stream()
             .filter(existing -> excludedAssignmentId == null || !excludedAssignmentId.equals(existing.getId()))
+            .filter(existing -> !isPatient(roleCodeOf(existing)))
             .map(UserRoleHospitalAssignment::getHospital)
             .filter(Objects::nonNull)
             .anyMatch(other -> FacilityType.orHospital(other.getFacilityType()) != wanted);
@@ -99,6 +108,18 @@ public class FacilityAssignmentGuard {
     /** Both checks, for a row at {@code hospital} in {@code roleCode}. */
     public void requireAssignable(User user, String roleCode, Hospital hospital, UUID excludedAssignmentId) {
         requireCompatible(roleCode, hospital);
-        requireSingleFacilityKind(user, hospital, excludedAssignmentId);
+        requireSingleFacilityKind(user, roleCode, hospital, excludedAssignmentId);
+    }
+
+    private static String roleCodeOf(UserRoleHospitalAssignment assignment) {
+        if (assignment.getRole() == null) {
+            return null;
+        }
+        String code = assignment.getRole().getCode();
+        return code != null ? code : assignment.getRole().getName();
+    }
+
+    private static boolean isPatient(String roleCode) {
+        return "PATIENT".equals(RoleFacilityCompatibility.bare(roleCode));
     }
 }

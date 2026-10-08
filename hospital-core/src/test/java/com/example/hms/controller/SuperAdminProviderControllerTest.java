@@ -48,8 +48,7 @@ class SuperAdminProviderControllerTest {
         List<Method> handlers = Arrays.stream(SuperAdminProviderController.class.getDeclaredMethods())
             .filter(m -> m.isAnnotationPresent(GetMapping.class) || m.isAnnotationPresent(PostMapping.class))
             .toList();
-        assertThat(handlers).hasSize(7);
-        assertThat(handlers).allSatisfy(m -> assertThat(m.getAnnotation(PreAuthorize.class).value())
+        assertThat(handlers).hasSize(7).allSatisfy(m -> assertThat(m.getAnnotation(PreAuthorize.class).value())
             .isEqualTo("hasAuthority('ROLE_SUPER_ADMIN')"));
     }
 

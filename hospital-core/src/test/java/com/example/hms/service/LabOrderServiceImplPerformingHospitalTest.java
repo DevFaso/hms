@@ -720,6 +720,45 @@ class LabOrderServiceImplPerformingHospitalTest {
         assertThat(service.listPerformingLabs()).hasSize(2);
     }
 
+    @Test
+    void aPharmacyIsNeverOfferedAsAPerformingLaboratory() {
+        Hospital pharmacy = hospital("Pharmacie du Marche", "PHA");
+        pharmacy.setFacilityType(com.example.hms.enums.FacilityType.PHARMACY);
+        Hospital laboratory = hospital("Private Laboratory", "PLB");
+        laboratory.setFacilityType(com.example.hms.enums.FacilityType.LABORATORY);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        when(hospitalRepository.findByActiveTrueAndLifecycleStateOrderByNameAsc(HospitalLifecycleState.ACTIVE))
+            .thenReturn(List.of(performing, pharmacy, laboratory));
+
+        assertThat(service.listPerformingLabs()).extracting(PerformingLabOptionDTO::getId)
+            .containsExactly(performing.getId(), laboratory.getId());
+    }
+
+    @Test
+    void createLabOrderRefusesAPharmacyAsThePerformingLaboratory() {
+        mockOrderLookups();
+        performing.setFacilityType(com.example.hms.enums.FacilityType.PHARMACY);
+        when(hospitalRepository.findById(performing.getId())).thenReturn(Optional.of(performing));
+
+        LabOrderRequestDTO request = request().performingHospitalId(performing.getId()).build();
+        assertThatThrownBy(() -> service.createLabOrder(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class);
+        verify(labOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void createLabOrderAcceptsALaboratoryFacility() {
+        mockOrderLookups();
+        performing.setFacilityType(com.example.hms.enums.FacilityType.LABORATORY);
+        when(hospitalRepository.findById(performing.getId())).thenReturn(Optional.of(performing));
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class))).thenReturn(mapped);
+
+        service.createLabOrder(request().performingHospitalId(performing.getId()).build(), Locale.ENGLISH);
+
+        verify(labOrderRepository).save(any(LabOrder.class));
+    }
+
     // ── fixtures ──────────────────────────────────────────────────────────
 
     private void mockOrderLookups() {

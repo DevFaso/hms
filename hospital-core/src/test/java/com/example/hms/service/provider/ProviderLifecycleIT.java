@@ -128,6 +128,24 @@ class ProviderLifecycleIT extends BaseIT {
         assertThat(hospitalRepository.findByOrganizationIsNull()).extracting(Hospital::getId).doesNotContain(id);
     }
 
+    @Test
+    @DisplayName("one licence is one facility, whatever the authority's case and spacing (AC-3)")
+    void licenceAuthorityIsCaseInsensitive() {
+        ProviderCreateRequestDTO first = request(FacilityType.PHARMACY);
+        first.getProfessional().setLicenceAuthority("DGPML");
+        ProviderCreateRequestDTO second = request(FacilityType.PHARMACY);
+        second.getProfessional().setLicenceAuthority("  dgpml ");
+        second.getProfessional().setLicenceNumber(first.getProfessional().getLicenceNumber());
+        UUID one = onboardingService.create(first).getId();
+        UUID two = onboardingService.create(second).getId();
+        onboardingService.verify(one, ProviderVerifyRequestDTO.builder()
+            .ifuMatchesRccm(true).cnssMatchesRccm(true).build());
+
+        assertThatThrownBy(() -> onboardingService.verify(two, ProviderVerifyRequestDTO.builder()
+            .ifuMatchesRccm(true).cnssMatchesRccm(true).build()))
+            .isInstanceOf(ConflictException.class);
+    }
+
     private UUID verifiedProvider() {
         UUID id = onboardingService.create(request(FacilityType.PHARMACY)).getId();
         onboardingService.verify(id, ProviderVerifyRequestDTO.builder()

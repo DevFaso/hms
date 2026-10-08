@@ -291,6 +291,22 @@ class UserRoleHospitalAssignmentCompatibilityTest {
         }
 
         @Test
+        @DisplayName("a pharmacist can become a patient at a hospital: PATIENT rows are outside the rule")
+        void pharmacistBecomesAPatient() {
+            holdsActive(row(assignee, pharmacist, pharmacy, true));
+
+            assertThatCode(() -> service.assignRole(grant(patient, hospital))).doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("a hospital-bound PATIENT row does not stop becoming a pharmacist")
+        void hospitalPatientBecomesAPharmacist() {
+            holdsActive(row(assignee, patient, hospital, true));
+
+            assertThatCode(() -> service.assignRole(grant(pharmacist, pharmacy))).doesNotThrowAnyException();
+        }
+
+        @Test
         @DisplayName("activation: a pending PHARMACIST row is not switched on beside an active DOCTOR row")
         void activationIsRefused() {
             UserRoleHospitalAssignment pending = row(assignee, pharmacist, pharmacy, false);

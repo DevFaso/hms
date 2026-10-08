@@ -97,8 +97,8 @@ class FacilityAssignmentGuardTest {
         when(assignmentRepository.findByUser_IdAndActiveTrue(user.getId()))
             .thenReturn(List.of(row(hospital)));
 
-        assertRefused(() -> guard.requireSingleFacilityKind(user, pharmacy, null), FacilityAssignmentGuard.MSG_MIXED);
-        assertThatCode(() -> guard.requireSingleFacilityKind(user, facility(FacilityType.HOSPITAL), null))
+        assertRefused(() -> guard.requireSingleFacilityKind(user, "ROLE_PHARMACIST", pharmacy, null), FacilityAssignmentGuard.MSG_MIXED);
+        assertThatCode(() -> guard.requireSingleFacilityKind(user, "ROLE_NURSE", facility(FacilityType.HOSPITAL), null))
             .doesNotThrowAnyException();
     }
 
@@ -110,8 +110,42 @@ class FacilityAssignmentGuardTest {
         when(assignmentRepository.findByUser_IdAndActiveTrue(user.getId()))
             .thenReturn(List.of(self, row(null)));
 
-        assertThatCode(() -> guard.requireSingleFacilityKind(user, facility(FacilityType.LABORATORY), self.getId()))
+        assertThatCode(() -> guard.requireSingleFacilityKind(user, "ROLE_LAB_SCIENTIST", facility(FacilityType.LABORATORY), self.getId()))
             .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("PATIENT rows are outside the rule: a pharmacist becomes a patient at a hospital")
+    void pharmacistBecomesAPatientAtAHospital() {
+        User user = user();
+        // Lenient: a PATIENT row is decided before any lookup.
+        org.mockito.Mockito.lenient().when(assignmentRepository.findByUser_IdAndActiveTrue(user.getId()))
+            .thenReturn(List.of(row("ROLE_PHARMACIST", facility(FacilityType.PHARMACY))));
+
+        assertThatCode(() -> guard.requireSingleFacilityKind(user, "ROLE_PATIENT", facility(FacilityType.HOSPITAL), null))
+            .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("and a hospital-bound PATIENT row does not block becoming a pharmacist")
+    void hospitalPatientBecomesAPharmacist() {
+        User user = user();
+        when(assignmentRepository.findByUser_IdAndActiveTrue(user.getId()))
+            .thenReturn(List.of(row("ROLE_PATIENT", facility(FacilityType.HOSPITAL))));
+
+        assertThatCode(() -> guard.requireSingleFacilityKind(user, "ROLE_PHARMACIST", facility(FacilityType.PHARMACY), null))
+            .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("but a nurse at a hospital cannot also be a pharmacist")
+    void nurseCannotAlsoBeAPharmacist() {
+        User user = user();
+        when(assignmentRepository.findByUser_IdAndActiveTrue(user.getId()))
+            .thenReturn(List.of(row("ROLE_NURSE", facility(FacilityType.HOSPITAL))));
+
+        assertRefused(() -> guard.requireSingleFacilityKind(user, "ROLE_PHARMACIST", facility(FacilityType.PHARMACY), null),
+            FacilityAssignmentGuard.MSG_MIXED);
     }
 
     @Test
@@ -147,8 +181,12 @@ class FacilityAssignmentGuardTest {
     }
 
     private static UserRoleHospitalAssignment row(Hospital hospital) {
+        return row("ROLE_DOCTOR", hospital);
+    }
+
+    private static UserRoleHospitalAssignment row(String roleCode, Hospital hospital) {
         Role role = new Role();
-        role.setCode("ROLE_DOCTOR");
+        role.setCode(roleCode);
         UserRoleHospitalAssignment a = new UserRoleHospitalAssignment();
         a.setId(UUID.randomUUID());
         a.setRole(role);

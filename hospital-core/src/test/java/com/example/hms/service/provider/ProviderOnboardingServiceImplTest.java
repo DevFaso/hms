@@ -31,6 +31,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -145,9 +147,23 @@ class ProviderOnboardingServiceImplTest {
         }
 
         @Test
+        @DisplayName("the licensing authority is held in one spelling, like the number")
+        void authorityIsNormalised() {
+            ProviderCreateRequestDTO request = createRequest(FacilityType.PHARMACY);
+            request.getProfessional().setLicenceAuthority("  dgpml   ouaga ");
+
+            service.create(request);
+
+            ArgumentCaptor<ProviderVerification> verification = ArgumentCaptor.forClass(ProviderVerification.class);
+            verify(verificationRepository).save(verification.capture());
+            assertThat(verification.getValue().getLicenceAuthority()).isEqualTo("DGPML OUAGA");
+        }
+
+        @Test
         @DisplayName("a HOSPITAL type is refused (400)")
         void hospitalTypeRefused() {
-            assertThatThrownBy(() -> service.create(createRequest(FacilityType.HOSPITAL)))
+            ProviderCreateRequestDTO request = createRequest(FacilityType.HOSPITAL);
+            assertThatThrownBy(() -> service.create(request))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(ex -> assertThat(((BusinessException) ex).getMessageKey())
                     .isEqualTo(ProviderOnboardingServiceImpl.MSG_TYPE_INVALID));
@@ -159,7 +175,9 @@ class ProviderOnboardingServiceImplTest {
         void duplicateCode() {
             when(hospitalRepository.findByCodeIgnoreCase("PH-OUAGA-1")).thenReturn(Optional.of(new Hospital()));
 
-            assertThatThrownBy(() -> service.create(createRequest(FacilityType.PHARMACY)))
+            ProviderCreateRequestDTO request = createRequest(FacilityType.PHARMACY);
+
+            assertThatThrownBy(() -> service.create(request))
                 .isInstanceOf(ConflictException.class);
             verify(hospitalRepository, never()).save(any());
         }
@@ -184,7 +202,9 @@ class ProviderOnboardingServiceImplTest {
         void unverifiedSuperAdmin() {
             when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
 
-            assertThatThrownBy(() -> service.create(createRequest(FacilityType.PHARMACY)))
+            ProviderCreateRequestDTO request = createRequest(FacilityType.PHARMACY);
+
+            assertThatThrownBy(() -> service.create(request))
                 .isInstanceOf(AccessDeniedException.class);
             verify(hospitalRepository, never()).save(any());
         }
@@ -242,7 +262,11 @@ class ProviderOnboardingServiceImplTest {
             when(verificationRepository.existsVerifiedLicenceElsewhere(facility.getId(), "DGPML", "LIC-77"))
                 .thenReturn(true);
 
-            assertThatThrownBy(() -> service.verify(facility.getId(), verifyRequest(true, true)))
+            UUID id = facility.getId();
+
+            ProviderVerifyRequestDTO request = verifyRequest(true, true);
+
+            assertThatThrownBy(() -> service.verify(id, request))
                 .isInstanceOf(ConflictException.class);
             assertThat(v.getStatus()).isEqualTo(ProviderVerificationStatus.SUBMITTED);
             assertThat(facility.isActive()).isFalse();
@@ -256,7 +280,11 @@ class ProviderOnboardingServiceImplTest {
             when(verificationRepository.existsVerifiedBusinessElsewhere(
                 eq(facility.getId()), anyString(), anyString())).thenReturn(true);
 
-            assertThatThrownBy(() -> service.verify(facility.getId(), verifyRequest(true, true)))
+            UUID id = facility.getId();
+
+            ProviderVerifyRequestDTO request = verifyRequest(true, true);
+
+            assertThatThrownBy(() -> service.verify(id, request))
                 .isInstanceOf(ConflictException.class);
             assertThat(facility.getLifecycleState()).isEqualTo(HospitalLifecycleState.SUSPENDED);
         }
@@ -269,7 +297,11 @@ class ProviderOnboardingServiceImplTest {
             when(verificationRepository.saveAndFlush(any())).thenThrow(new DataIntegrityViolationException(
                 "duplicate key value violates unique constraint \"uq_provider_rccm_verified\""));
 
-            assertThatThrownBy(() -> service.verify(facility.getId(), verifyRequest(true, true)))
+            UUID id = facility.getId();
+
+            ProviderVerifyRequestDTO request = verifyRequest(true, true);
+
+            assertThatThrownBy(() -> service.verify(id, request))
                 .isInstanceOf(ConflictException.class);
         }
 
@@ -290,13 +322,35 @@ class ProviderOnboardingServiceImplTest {
                 "00012345X");
         }
 
+        @ParameterizedTest(name = "a provider {0} is not activated by VERIFY (409), and stays {0}")
+        @EnumSource(value = HospitalLifecycleState.class, names = {"ARCHIVED", "PENDING_PURGE", "PURGED", "ACTIVE"})
+        void verifyNeedsAPendingProvider(HospitalLifecycleState state) {
+            Hospital facility = provider();
+            facility.setLifecycleState(state);
+            ProviderVerification v = submitted(facility);
+
+            UUID id = facility.getId();
+
+            ProviderVerifyRequestDTO request = verifyRequest(true, true);
+
+            assertThatThrownBy(() -> service.verify(id, request))
+                .isInstanceOf(ConflictException.class);
+            assertThat(facility.getLifecycleState()).isEqualTo(state);
+            assertThat(v.getStatus()).isEqualTo(ProviderVerificationStatus.SUBMITTED);
+            verify(hospitalRepository, never()).save(any());
+        }
+
         @Test
         @DisplayName("only a SUBMITTED verification can be verified")
         void notSubmitted() {
             Hospital facility = provider();
             submitted(facility).setStatus(ProviderVerificationStatus.REJECTED);
 
-            assertThatThrownBy(() -> service.verify(facility.getId(), verifyRequest(true, true)))
+            UUID id = facility.getId();
+
+            ProviderVerifyRequestDTO request = verifyRequest(true, true);
+
+            assertThatThrownBy(() -> service.verify(id, request))
                 .isInstanceOf(BusinessException.class);
         }
 
@@ -308,10 +362,12 @@ class ProviderOnboardingServiceImplTest {
             when(hospitalRepository.findById(hospital.getId())).thenReturn(Optional.of(hospital));
             UUID unknown = UUID.randomUUID();
 
+            UUID hospitalId = hospital.getId();
+            ProviderVerifyRequestDTO request = verifyRequest(true, true);
             Throwable notProvider = org.assertj.core.api.Assertions.catchThrowable(
-                () -> service.verify(hospital.getId(), verifyRequest(true, true)));
+                () -> service.verify(hospitalId, request));
             Throwable missing = org.assertj.core.api.Assertions.catchThrowable(
-                () -> service.verify(unknown, verifyRequest(true, true)));
+                () -> service.verify(unknown, request));
 
             assertThat(notProvider).isInstanceOf(ResourceNotFoundException.class);
             assertThat(missing).isInstanceOf(ResourceNotFoundException.class);
@@ -322,7 +378,8 @@ class ProviderOnboardingServiceImplTest {
             Hospital facility = provider();
             ProviderVerification v = submitted(facility);
 
-            assertThatThrownBy(() -> service.verify(facility.getId(), request))
+            UUID id = facility.getId();
+            assertThatThrownBy(() -> service.verify(id, request))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(ex -> assertThat(((BusinessException) ex).getMessageKey())
                     .isEqualTo(ProviderOnboardingServiceImpl.MSG_IDENTITY_INCONSISTENT));
@@ -374,8 +431,9 @@ class ProviderOnboardingServiceImplTest {
             Hospital facility = provider();
             submitted(facility);
 
-            assertThatThrownBy(() -> service.resubmit(facility.getId(),
-                new ProviderResubmitRequestDTO(business(), professional())))
+            UUID id = facility.getId();
+            ProviderResubmitRequestDTO request = new ProviderResubmitRequestDTO(business(), professional());
+            assertThatThrownBy(() -> service.resubmit(id, request))
                 .isInstanceOf(BusinessException.class);
         }
 
@@ -396,13 +454,48 @@ class ProviderOnboardingServiceImplTest {
             verify(lifecycleStatusService).invalidate();
         }
 
+        @ParameterizedTest(name = "revoke keeps a {0} provider where it is, and inactive")
+        @EnumSource(value = HospitalLifecycleState.class, names = {"ARCHIVED", "PENDING_PURGE", "PURGED"})
+        void revokeNeverLeavesArchiveOrPurge(HospitalLifecycleState state) {
+            Hospital facility = provider();
+            facility.setLifecycleState(state);
+            Instant purgeAt = Instant.parse("2026-11-08T00:00:00Z");
+            facility.setPurgeScheduledFor(purgeAt);
+            ProviderVerification v = submitted(facility);
+            v.setStatus(ProviderVerificationStatus.VERIFIED);
+
+            service.revoke(facility.getId(), new ProviderDecisionRequestDTO("Licence withdrawn"));
+
+            assertThat(v.getStatus()).isEqualTo(ProviderVerificationStatus.REVOKED);
+            assertThat(facility.getLifecycleState()).isEqualTo(state);
+            assertThat(facility.getPurgeScheduledFor()).isEqualTo(purgeAt);
+            assertThat(facility.getSuspensionReason()).isNull();
+            assertThat(facility.isActive()).isFalse();
+        }
+
+        @Test
+        @DisplayName("revoke of a suspended provider keeps its suspension record")
+        void revokeKeepsAnExistingSuspension() {
+            Hospital facility = provider();
+            facility.setSuspensionReason("Inspection");
+            ProviderVerification v = submitted(facility);
+            v.setStatus(ProviderVerificationStatus.VERIFIED);
+
+            service.revoke(facility.getId(), new ProviderDecisionRequestDTO("Licence withdrawn"));
+
+            assertThat(facility.getLifecycleState()).isEqualTo(HospitalLifecycleState.SUSPENDED);
+            assertThat(facility.getSuspensionReason()).isEqualTo("Inspection");
+        }
+
         @Test
         @DisplayName("revoke of an unverified provider is refused")
         void revokeUnverified() {
             Hospital facility = provider();
             submitted(facility);
 
-            assertThatThrownBy(() -> service.revoke(facility.getId(), new ProviderDecisionRequestDTO("x")))
+            UUID id = facility.getId();
+            ProviderDecisionRequestDTO request = new ProviderDecisionRequestDTO("x");
+            assertThatThrownBy(() -> service.revoke(id, request))
                 .isInstanceOf(BusinessException.class);
         }
     }
