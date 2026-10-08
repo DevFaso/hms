@@ -339,11 +339,6 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
     }
 
     /**
-     * Flush now, so a concurrent verify that slipped past the existence checks
-     * meets V180's partial unique indexes here and answers 409, not a generic
-     * 400 from the integrity handler.
-     */
-    /**
      * Flush the new facility now, so a concurrent create with the same code
      * that slipped past the lookup above meets the unique index here
      * (uq_hospital_provider_code on PostgreSQL, uq_hospital_code under H2)
@@ -363,6 +358,11 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
         }
     }
 
+    /**
+     * Flush now, so a concurrent verify that slipped past the existence checks
+     * meets V180's partial unique indexes here and answers 409, not a generic
+     * 400 from the integrity handler.
+     */
     private void saveVerifiedOrConflict(ProviderVerification verification) {
         try {
             verificationRepository.saveAndFlush(verification);
