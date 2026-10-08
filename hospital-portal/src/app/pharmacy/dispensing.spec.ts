@@ -1222,6 +1222,28 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
     expect(component.formClaimedRowId()).toBe('rx-1');
   });
 
+  it('a 409 under the Unclaimed filter still offers the take-over, though the row left that list', async () => {
+    await render();
+    click('claim-filter-UNCLAIMED');
+    pharmacySvc.claimQueueRow.and.returnValue(
+      conflict('Another pharmacist is preparing this prescription.'),
+    );
+    // The server omits a claimed row from UNCLAIMED; the unfiltered queue still has it.
+    pharmacySvc.getDispenseWorkQueue.and.callFake(((_p: number, _s: number, filter: string) =>
+      filter === 'UNCLAIMED' ? page([]) : page([row({ claim: colleagueClaim })])) as never);
+
+    click('rx-dispense-rx-1');
+
+    expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledWith(0, 20, 'UNCLAIMED');
+    expect(component.workQueue()).toEqual([]);
+    expect(exists('claim-take-over')).toBeTrue();
+    expect(text('claim-take-over-text')).toContain(
+      'Awa Sanou has been preparing this prescription',
+    );
+    expect(component.showForm()).toBeFalse();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
   it('a 409 for a row no longer claimable says why, reloads the queue and opens no form', async () => {
     await render();
     pharmacySvc.claimQueueRow.and.returnValue(
@@ -1232,7 +1254,8 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
 
     click('rx-dispense-rx-1');
 
-    expect(pharmacySvc.getDispenseWorkQueue.calls.count()).toBe(before + 1);
+    // the visible list, and the unfiltered lookup of the row
+    expect(pharmacySvc.getDispenseWorkQueue.calls.count()).toBe(before + 2);
     expect(toast.error).toHaveBeenCalledWith('This prescription is no longer on the work queue.');
     expect(component.showForm()).toBeFalse();
     expect(component.claimAction()).toBeNull();

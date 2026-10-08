@@ -61,6 +61,11 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** G13: how often the queue refreshes while the tab is visible (claims change under us). */
 export const QUEUE_POLL_MS = 60_000;
 
+/** G13: after a refused claim, the row's state is looked up in pages of this size... */
+const QUEUE_LOOKUP_PAGE_SIZE = 100;
+/** ...and at most this many pages. */
+const QUEUE_LOOKUP_MAX_PAGES = 10;
+
 /** G13: the remembered claim filter, a per-viewer convenience. */
 const CLAIM_FILTER_STORAGE_KEY = 'hms.pharmacy.queueClaimFilter';
 
@@ -653,18 +658,47 @@ export class DispensingComponent implements OnInit, OnDestroy {
       this.toast.error(
         err?.error?.message ?? this.translate.instant('PHARMACY.QUEUE_CLAIM.FAILED'),
       );
-    this.loadWorkQueue(
-      true,
-      () => {
-        const fresh = this.workQueue().find((row) => row.id === rx.id);
-        if (fresh && this.colleagueClaim(fresh) && !fresh.readyForCollection) {
-          this.claimAction.set({ rx: fresh, purpose: 'dispense' });
+    // The visible list refreshes with its own filter; the decision does not
+    // read it, because MINE / UNCLAIMED omit exactly the row a colleague has
+    // just claimed.
+    this.loadWorkQueue(true);
+    this.findQueueRowState(rx.id, 0, (fresh) => {
+      if (fresh && this.colleagueClaim(fresh) && !fresh.readyForCollection) {
+        this.claimAction.set({ rx: fresh, purpose: 'dispense' });
+      } else {
+        refused();
+      }
+    });
+  }
+
+  /**
+   * The row's current state, whatever filter is shown: walks the unfiltered
+   * queue (ALL) page by page until it finds the row, runs out of pages or
+   * reaches {@link QUEUE_LOOKUP_MAX_PAGES}. Null when not found (gone from
+   * the queue) or on a failure.
+   */
+  private findQueueRowState(
+    rowId: string,
+    pageNumber: number,
+    done: (row: WorkQueuePrescription | null) => void,
+  ): void {
+    this.svc.getDispenseWorkQueue(pageNumber, QUEUE_LOOKUP_PAGE_SIZE, 'ALL').subscribe({
+      next: (res) => {
+        const page = res?.data;
+        const hit = page?.content?.find((row) => row.id === rowId);
+        if (hit) {
+          done(hit);
+          return;
+        }
+        const next = pageNumber + 1;
+        if (next < (page?.totalPages ?? 0) && next < QUEUE_LOOKUP_MAX_PAGES) {
+          this.findQueueRowState(rowId, next, done);
         } else {
-          refused();
+          done(null);
         }
       },
-      refused,
-    );
+      error: () => done(null),
+    });
   }
 
   private openForm(rx: WorkQueuePrescription): void {
