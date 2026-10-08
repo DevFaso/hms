@@ -40,6 +40,8 @@ import java.util.UUID;
 @Service
 public class HospitalServiceImpl implements HospitalService {
 
+    private static final String HOSPITAL_NOT_FOUND = "hospital.notFound";
+
     private final HospitalRepository hospitalRepository;
     private final OrganizationRepository organizationRepository;
     private final HospitalMapper hospitalMapper;
@@ -160,7 +162,7 @@ public class HospitalServiceImpl implements HospitalService {
         // holds the same facility-row lock, so the two run one after the other
         // and the check reads what the verify committed.
         Hospital hospital = hospitalRepository.findByIdForUpdate(id)
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", id));
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND, id));
         // A provider onboarded by mistake may be deleted while it has never
         // been verified: it has never been ACTIVE, so no user has signed in
         // there and nothing was routed to it. Its verification history goes
@@ -267,12 +269,12 @@ public class HospitalServiceImpl implements HospitalService {
     private Hospital getClinicalHospitalOrThrow(UUID id) {
         return hospitalRepository.findById(id)
                 .filter(hospital -> !hospital.isProvider())
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", id));
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND, id));
     }
 
     private Hospital getHospitalOrThrow(UUID id) {
         return hospitalRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", id));
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND, id));
     }
 
     private List<Hospital> applyHospitalScope(List<Hospital> hospitals) {

@@ -261,12 +261,24 @@ class ProviderLifecycleIT extends BaseIT {
 
     @Test
     @DisplayName("the provider list is newest first and stable across pages: no row repeats, none is skipped")
-    void providerListIsStable() throws InterruptedException {
+    void providerListIsStable() {
         java.util.List<UUID> created = new java.util.ArrayList<>();
         for (int i = 0; i < 5; i++) {
             created.add(onboardingService.create(request(FacilityType.LABORATORY)).getId());
-            Thread.sleep(5);
         }
+        // Distinct submission times, set explicitly (a minute apart, in the
+        // future so they are the newest rows in the shared database): the
+        // order under test is deterministic, not a race against the clock.
+        entityManager.flush();
+        java.time.LocalDateTime base = java.time.LocalDateTime.now().plusDays(1);
+        for (int i = 0; i < created.size(); i++) {
+            entityManager.createNativeQuery(
+                    "UPDATE hospital.provider_verifications SET created_at = :at WHERE hospital_id = :id")
+                .setParameter("at", base.plusMinutes(i))
+                .setParameter("id", created.get(i))
+                .executeUpdate();
+        }
+        entityManager.clear();
         java.util.Collections.reverse(created);
 
         java.util.List<UUID> listed = new java.util.ArrayList<>();
