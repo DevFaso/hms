@@ -4609,11 +4609,15 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   reads, the own-pin reads) carry permanent reasons and are not debt.
   Moving each tagged call and deleting its allowance is the whole job.
 
-- **G13: a pharmacist cannot claim a work-queue prescription (2026-10-07).**
-  Nothing assigns a queued prescription to one pharmacist, so two can start
-  preparing the same order; only the dispense itself is protected
-  (`Prescription.version`, `@Version` at `Prescription.java:384`, refuses the
-  second write). Needed only for multi-pharmacist queues. Open.
+- **~~G13: a pharmacist cannot claim a work-queue prescription (2026-10-07).~~
+  Closed by #830** (2026-10-07, V179): advisory claim / release / take-over
+  on the dispensing queue, ended by every exit write, audited after commit.
+
+- **G13 residual: the claim is not shown on `/pharmacy/stock-routing/:id` nor in the shared clarification dialog (2026-10-07, left by #830).** The server still records the implicit take-over. Open.
+- **G13 residual: the previous holder is not told their row was taken over, in-app or by push (2026-10-07, left by #830).** Open.
+- **G13 residual: no claim on the lab, imaging or any other work queue (2026-10-07, left by #830).** Open.
+- **G13 residual: no purge of claim rows left by paths that do not release them (2026-10-07, left by #830).** They are invisible once the order leaves the queue and harmless; only a prescription delete removes them. Open.
+- **G13 residual: claim updates reach other pharmacists by 60 s polling, not server push (SSE/WebSocket) (2026-10-07, left by #830).** Open.
 
 - **The patient SMS in `PartnerExchangeService.applyReply` is sent before
   commit (2026-10-07, left by #812).** `channel.notifyPatientAccepted`
