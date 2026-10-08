@@ -127,6 +127,24 @@ class ProviderVerificationSchemaIT {
     }
 
     @Test
+    @DisplayName("deleting a facility deletes its verification history (ON DELETE CASCADE)")
+    void verificationsGoWithTheFacility() throws Exception {
+        try (Connection conn = connection(); Statement stmt = conn.createStatement()) {
+            UUID facility = hospital(stmt, "PHARMACY");
+            verification(stmt, facility, "REJECTED", unique(), false, false);
+            verification(stmt, facility, "SUBMITTED", unique(), false, false);
+
+            stmt.executeUpdate("DELETE FROM hospital.hospitals WHERE id = '" + facility + "'");
+
+            try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM hospital.provider_verifications "
+                    + "WHERE hospital_id = '" + facility + "'")) {
+                assertThat(rs.next()).isTrue();
+                assertThat(rs.getInt(1)).isZero();
+            }
+        }
+    }
+
+    @Test
     @DisplayName("ROLE_PROVIDER_ADMIN is seeded by V180")
     void roleSeeded() throws Exception {
         try (Connection conn = connection(); Statement stmt = conn.createStatement();

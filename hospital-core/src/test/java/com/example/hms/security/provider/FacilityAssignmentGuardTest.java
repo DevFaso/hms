@@ -26,6 +26,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /** The role/facility table (provider plan §3.2) and one kind of facility per user (§3.2a). */
@@ -119,7 +120,7 @@ class FacilityAssignmentGuardTest {
     void pharmacistBecomesAPatientAtAHospital() {
         User user = user();
         // Lenient: a PATIENT row is decided before any lookup.
-        org.mockito.Mockito.lenient().when(assignmentRepository.findByUser_IdAndActiveTrue(user.getId()))
+        lenient().when(assignmentRepository.findByUser_IdAndActiveTrue(user.getId()))
             .thenReturn(List.of(row("ROLE_PHARMACIST", facility(FacilityType.PHARMACY))));
 
         assertThatCode(() -> guard.requireSingleFacilityKind(user, "ROLE_PATIENT", facility(FacilityType.HOSPITAL), null))

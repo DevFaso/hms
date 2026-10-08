@@ -27,9 +27,11 @@
 -- 5. ROLE_PROVIDER_ADMIN, seeded here only (RoleSeeder is local-only and is
 --    not changed), in the shape of V26 and V43.
 --
--- The FK to hospital.hospitals has no cascade: tenant purge changes state
--- only today. Whoever ships row-level hospital deletion must delete a
--- facility's verification rows first.
+-- The FK to hospital.hospitals is ON DELETE CASCADE: the verification
+-- history belongs to the facility and goes with it. DELETE /hospitals/{id}
+-- exists, and a provider onboarded by mistake is removed through it while
+-- it has never been verified (the service refuses a provider that has ever
+-- been VERIFIED; that one is retired through the lifecycle instead).
 --
 -- No DO blocks. Forward-only; harmless to the previous application version
 -- (it never reads the new column or table).
@@ -79,7 +81,7 @@ CREATE TABLE IF NOT EXISTS hospital.provider_verifications (
     created_at                            TIMESTAMP NOT NULL,
     updated_at                            TIMESTAMP NOT NULL,
     CONSTRAINT fk_provider_verification_hospital FOREIGN KEY (hospital_id)
-        REFERENCES hospital.hospitals (id),
+        REFERENCES hospital.hospitals (id) ON DELETE CASCADE,
     CONSTRAINT chk_provider_verification_status
         CHECK (status IN ('SUBMITTED', 'VERIFIED', 'REJECTED', 'REVOKED')),
     CONSTRAINT chk_provider_verified_consistent

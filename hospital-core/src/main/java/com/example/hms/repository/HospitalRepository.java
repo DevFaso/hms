@@ -77,13 +77,6 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     /** B1: the laboratories a clinician may route an order to — every active hospital, by name. */
     List<Hospital> findByActiveTrueAndLifecycleStateOrderByNameAsc(com.example.hms.enums.HospitalLifecycleState lifecycleState);
 
-    /* Organization-related queries */
-    /**
-     * Clinical hospitals with no organisation: the input of the two boot jobs
-     * that attach such rows to an organisation and seed its policies. A
-     * provider facility (PHARMACY, LABORATORY) is never returned, so it is
-     * never attached to a hospital organisation (provider plan AC-11).
-     */
     /**
      * The facility row, locked for a state change (provider onboarding and
      * the lifecycle restore). Every provider transition takes this lock
@@ -94,6 +87,13 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     @Query("SELECT h FROM Hospital h WHERE h.id = :id")
     Optional<Hospital> findByIdForUpdate(@Param("id") UUID id);
 
+    /* Organization-related queries */
+    /**
+     * Clinical hospitals with no organisation: the input of the two boot jobs
+     * that attach such rows to an organisation and seed its policies. A
+     * provider facility (PHARMACY, LABORATORY) is never returned, so it is
+     * never attached to a hospital organisation (provider plan AC-11).
+     */
     @Query("SELECT h FROM Hospital h WHERE h.organization IS NULL"
         + " AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
     List<Hospital> findByOrganizationIsNull();

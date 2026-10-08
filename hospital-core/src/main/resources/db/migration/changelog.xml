@@ -2679,7 +2679,7 @@
          hospital.hospitals.facility_type (HOSPITAL default, CHECK of three
          values, index); new table hospital.provider_verifications (the
          RCCM/IFU/CNSS identity and the licence layer, created_at/updated_at
-         for BaseEntity, FK to the facility, status CHECK, VERIFIED needs both
+         for BaseEntity, FK to the facility ON DELETE CASCADE, status CHECK, VERIFIED needs both
          consistency flags); partial unique indexes (one current verification
          per facility; VERIFIED licence pair, RCCM and IFU unique);
          ROLE_PROVIDER_ADMIN seeded. No DO blocks.

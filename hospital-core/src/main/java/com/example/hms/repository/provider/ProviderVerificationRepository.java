@@ -25,6 +25,9 @@ public interface ProviderVerificationRepository extends JpaRepository<ProviderVe
     /** Does the facility hold a verification in this status? The lifecycle restore guard (AC-4). */
     boolean existsByHospital_IdAndStatus(UUID hospitalId, ProviderVerificationStatus status);
 
+    /** Has the facility ever held a verification in one of these statuses? The delete guard. */
+    boolean existsByHospital_IdAndStatusIn(UUID hospitalId, Collection<ProviderVerificationStatus> statuses);
+
     /** Another facility already VERIFIED with this (authority, licence) pair (AC-3). */
     @Query("""
         SELECT COUNT(v) > 0 FROM ProviderVerification v

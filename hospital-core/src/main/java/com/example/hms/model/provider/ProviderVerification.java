@@ -12,6 +12,8 @@ import jakarta.persistence.ForeignKey;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -55,7 +57,9 @@ import java.util.UUID;
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class ProviderVerification extends BaseEntity {
 
+    /** ON DELETE CASCADE, as V180 declares it: the history goes with the facility. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     @JoinColumn(name = "hospital_id", nullable = false,
         foreignKey = @ForeignKey(name = "fk_provider_verification_hospital"))
     private Hospital hospital;

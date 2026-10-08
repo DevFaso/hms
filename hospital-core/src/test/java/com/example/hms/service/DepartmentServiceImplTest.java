@@ -534,19 +534,19 @@ class DepartmentServiceImplTest {
         UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
             .user(user).hospital(hospital).active(true).build();
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        org.mockito.Mockito.lenient().when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Neurology", hospitalId))
+        lenient().when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Neurology", hospitalId))
             .thenReturn(false);
-        org.mockito.Mockito.lenient().when(authService.getCurrentUserId()).thenReturn(userId);
-        org.mockito.Mockito.lenient().when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        lenient().when(authService.getCurrentUserId()).thenReturn(userId);
+        lenient().when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
-        org.mockito.Mockito.lenient().when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment)))
+        lenient().when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment)))
             .thenReturn(department);
-        org.mockito.Mockito.lenient().when(departmentRepository.save(department)).thenReturn(department);
+        lenient().when(departmentRepository.save(department)).thenReturn(department);
 
         assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
             .isInstanceOf(ResourceNotFoundException.class)
             .satisfies(ex -> assertThat(((ResourceNotFoundException) ex).getMessageKey()).isEqualTo("hospital.notfound"));
-        verify(departmentRepository, org.mockito.Mockito.never()).save(any());
+        verify(departmentRepository, never()).save(any());
     }
 
     @Test

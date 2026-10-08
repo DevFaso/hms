@@ -62,6 +62,8 @@ class HospitalServiceImplTest {
     private MessageSource messageSource;
     @Mock
     private RoleValidator roleValidator;
+    @Mock
+    private com.example.hms.repository.provider.ProviderVerificationRepository providerVerificationRepository;
 
     private HospitalMapper hospitalMapper;
     private HospitalServiceImpl hospitalService;
@@ -70,7 +72,8 @@ class HospitalServiceImplTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         hospitalMapper = new HospitalMapper();
-        hospitalService = new HospitalServiceImpl(hospitalRepository, organizationRepository, hospitalMapper, messageSource, roleValidator);
+        hospitalService = new HospitalServiceImpl(hospitalRepository, organizationRepository, hospitalMapper, messageSource, roleValidator,
+            providerVerificationRepository);
     }
 
     @AfterEach
@@ -475,7 +478,9 @@ class HospitalServiceImplTest {
         void happyPath() {
             setSuperAdmin();
             UUID id = UUID.randomUUID();
-            when(hospitalRepository.existsById(id)).thenReturn(true);
+            Hospital existing = new Hospital();
+            existing.setId(id);
+            when(hospitalRepository.findById(id)).thenReturn(Optional.of(existing));
 
             hospitalService.deleteHospital(id, Locale.ENGLISH);
 
@@ -488,7 +493,7 @@ class HospitalServiceImplTest {
             setSuperAdmin();
             UUID id = UUID.randomUUID();
             stubMessage("hospital.notFound");
-            when(hospitalRepository.existsById(id)).thenReturn(false);
+            when(hospitalRepository.findById(id)).thenReturn(Optional.empty());
 
             assertThrows(ResourceNotFoundException.class,
                     () -> hospitalService.deleteHospital(id, Locale.ENGLISH));

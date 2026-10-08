@@ -1,5 +1,9 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.ProviderVerificationStatus;
+import com.example.hms.exception.ConflictException;
+import com.example.hms.repository.provider.ProviderVerificationRepository;
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.HospitalMapper;
 import com.example.hms.model.Department;
@@ -41,18 +45,21 @@ public class HospitalServiceImpl implements HospitalService {
     private final HospitalMapper hospitalMapper;
     private final MessageSource messageSource;
     private final RoleValidator roleValidator;
+    private final ProviderVerificationRepository providerVerificationRepository;
 
 
     public HospitalServiceImpl(HospitalRepository hospitalRepository,
                                OrganizationRepository organizationRepository,
                                HospitalMapper hospitalMapper,
                                MessageSource messageSource,
-                               RoleValidator roleValidator) {
+                               RoleValidator roleValidator,
+                               ProviderVerificationRepository providerVerificationRepository) {
         this.hospitalRepository = hospitalRepository;
         this.organizationRepository = organizationRepository;
         this.hospitalMapper = hospitalMapper;
         this.messageSource = messageSource;
         this.roleValidator = roleValidator;
+        this.providerVerificationRepository = providerVerificationRepository;
     }
 
     @Override
@@ -133,7 +140,7 @@ public class HospitalServiceImpl implements HospitalService {
     @Transactional
     public HospitalResponseDTO updateHospital(UUID id, HospitalRequestDTO dto, Locale locale) {
         validateSuperAdminOrThrow(locale);
-        Hospital hospital = getHospitalOrThrow(id);
+        Hospital hospital = getClinicalHospitalOrThrow(id);
         validateAddressFields(dto, locale);
         hospitalMapper.updateHospitalFromDto(dto, hospital);
         if (dto.getOrganizationId() != null) {
@@ -149,8 +156,16 @@ public class HospitalServiceImpl implements HospitalService {
     public void deleteHospital(UUID id, Locale locale) {
         validateSuperAdminOrThrow(locale);
 
-        if (!hospitalRepository.existsById(id)) {
-            throw new ResourceNotFoundException("hospital.notFound", id);
+        Hospital hospital = getHospitalOrThrow(id);
+        // A provider onboarded by mistake may be deleted while it has never
+        // been verified: it has never been ACTIVE, so no user has signed in
+        // there and nothing was routed to it. Its verification history goes
+        // with it (V180: ON DELETE CASCADE). Once verified (even if revoked
+        // since) it may have staff, orders and audit trail: it is retired
+        // through the lifecycle (suspend, archive, purge), not deleted (409).
+        if (hospital.isProvider() && providerVerificationRepository.existsByHospital_IdAndStatusIn(id,
+                java.util.EnumSet.of(ProviderVerificationStatus.VERIFIED, ProviderVerificationStatus.REVOKED))) {
+            throw new ConflictException(MessageUtil.resolveOrRaw("provider.delete.verified"));
         }
 
         hospitalRepository.deleteById(id);
@@ -221,7 +236,7 @@ public class HospitalServiceImpl implements HospitalService {
     @Transactional
     public HospitalResponseDTO assignHospitalToOrganization(UUID hospitalId, UUID organizationId, Locale locale) {
         validateSuperAdminOrThrow(locale);
-        Hospital hospital = getHospitalOrThrow(hospitalId);
+        Hospital hospital = getClinicalHospitalOrThrow(hospitalId);
         Organization organization = getOrganizationOrThrow(organizationId);
         hospital.setOrganization(organization);
         Hospital saved = hospitalRepository.save(hospital);
@@ -232,10 +247,23 @@ public class HospitalServiceImpl implements HospitalService {
     @Transactional
     public HospitalResponseDTO unassignHospitalFromOrganization(UUID hospitalId, Locale locale) {
         validateSuperAdminOrThrow(locale);
-        Hospital hospital = getHospitalOrThrow(hospitalId);
+        Hospital hospital = getClinicalHospitalOrThrow(hospitalId);
         hospital.setOrganization(null);
         Hospital saved = hospitalRepository.save(hospital);
         return hospitalMapper.toHospitalDTO(saved);
+    }
+
+    /**
+     * A hospital for one of the generic super-admin writes (edit, organisation
+     * link and unlink). A provider facility answers exactly as an unknown id:
+     * it is edited only through /super-admin/providers, whose rules (VERIFY is
+     * the only way to ACTIVE; never attached to a hospital organisation,
+     * provider plan AC-4 and AC-11) the generic writes would skip.
+     */
+    private Hospital getClinicalHospitalOrThrow(UUID id) {
+        return hospitalRepository.findById(id)
+                .filter(hospital -> !hospital.isProvider())
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", id));
     }
 
     private Hospital getHospitalOrThrow(UUID id) {

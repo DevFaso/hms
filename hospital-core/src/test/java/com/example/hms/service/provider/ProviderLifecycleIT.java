@@ -54,6 +54,9 @@ class ProviderLifecycleIT extends BaseIT {
     @Autowired private HospitalLifecycleService lifecycleService;
     @Autowired private TenantLifecycleGate lifecycleGate;
     @Autowired private HospitalRepository hospitalRepository;
+    @Autowired private com.example.hms.service.HospitalService hospitalService;
+    @Autowired private com.example.hms.repository.provider.ProviderVerificationRepository verificationRepository;
+    @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager entityManager;
 
     @BeforeEach
     void signInAsVerifiedSuperAdmin() {
@@ -228,6 +231,32 @@ class ProviderLifecycleIT extends BaseIT {
 
         lifecycleService.restore(id, null);
         assertThat(lifecycleGate.isBlocked(userAt(id))).isFalse();
+    }
+
+    @Test
+    @DisplayName("DELETE of a provider onboarded by mistake removes it and its verification history")
+    void deleteUnverifiedProvider() {
+        UUID id = onboardingService.create(request(FacilityType.LABORATORY)).getId();
+        onboardingService.reject(id, new ProviderDecisionRequestDTO("Wrong business"));
+        entityManager.flush();
+        entityManager.clear();
+
+        hospitalService.deleteHospital(id, java.util.Locale.ENGLISH);
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(hospitalRepository.findById(id)).isEmpty();
+        assertThat(verificationRepository.findFirstByHospital_IdOrderByCreatedAtDesc(id)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("DELETE of a provider that has been verified is refused (409); it stays")
+    void deleteVerifiedProviderIsRefused() {
+        UUID id = verifiedProvider();
+
+        assertThatThrownBy(() -> hospitalService.deleteHospital(id, java.util.Locale.ENGLISH))
+            .isInstanceOf(ConflictException.class);
+        assertThat(hospitalRepository.findById(id)).isPresent();
     }
 
     private UUID verifiedProvider() {
