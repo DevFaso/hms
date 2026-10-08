@@ -472,6 +472,31 @@ class AssignmentGrantScopeTest {
         }
 
         @Test
+        @DisplayName("a holder change to an unknown user id gets the same 400 as a known one: no user oracle")
+        void aHolderChangeIsRefusedBeforeTheUserLookup() {
+            signInAsHospitalAdminOfA();
+            UUID unknown = UUID.randomUUID();
+            when(userRepository.findById(unknown)).thenReturn(Optional.empty());
+            User known = account(UUID.randomUUID());
+            when(userRepository.findById(known.getId())).thenReturn(Optional.of(known));
+            UserRoleHospitalAssignment own = stored(row(assignee, nurse, hospitalA, true));
+            UserRoleHospitalAssignmentRequestDTO toUnknown = new UserRoleHospitalAssignmentRequestDTO();
+            toUnknown.setUserId(unknown);
+            UserRoleHospitalAssignmentRequestDTO toKnown = new UserRoleHospitalAssignmentRequestDTO();
+            toKnown.setUserId(known.getId());
+
+            Throwable unknownAnswer = catchThrowable(() -> service.updateAssignment(own.getId(), toUnknown));
+            Throwable knownAnswer = catchThrowable(() -> service.updateAssignment(own.getId(), toKnown));
+
+            assertThat(unknownAnswer).isExactlyInstanceOf(BusinessException.class);
+            assertThat(knownAnswer).isExactlyInstanceOf(BusinessException.class)
+                .hasMessage(unknownAnswer.getMessage());
+            verify(userRepository, never()).findById(unknown);
+            verify(userRepository, never()).findById(known.getId());
+            assertNothingWritten();
+        }
+
+        @Test
         @DisplayName("a role change by a hospital admin starts the row over: inactive, new code, notified")
         void aRoleChangeReinvites() {
             signInAsHospitalAdminOfA();

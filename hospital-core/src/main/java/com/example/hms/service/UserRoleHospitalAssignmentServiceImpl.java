@@ -369,6 +369,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // after the change one the caller could have granted (the create rule,
         // on the new role at the new hospital).
         UserRoleHospitalAssignment target = findChangeable(id);
+        boolean verifiedSuperAdmin = roleValidator.isSuperAdminFromJwtClaim();
+        // Before any user lookup: a 404 for an unknown id against a 400 for a
+        // known one would tell the caller which user ids exist platform-wide.
+        requireSameHolder(dto.getUserId(), target, verifiedSuperAdmin);
 
         User newUser = resolveUserForUpdate(dto, target);
         Role newRole = resolveRoleForUpdate(dto, target, locale);
@@ -376,8 +380,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
         String newRoleCode = getRoleCode(newRole);
         requireGrantAt(requireMayGrant(newRoleCode), newHospital, newRoleCode);
-        boolean verifiedSuperAdmin = roleValidator.isSuperAdminFromJwtClaim();
-        requireSameHolder(newUser, target, verifiedSuperAdmin);
         requireActivationThroughCode(dto, target);
         // A new role or hospital is a new grant: for anyone but a verified
         // super-admin it starts over as a fresh POST would, inactive with a new
@@ -418,9 +420,11 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
      * else that is a new grant to someone who never confirmed a code, so it
      * goes through a new assignment and its own verification.
      */
-    private static void requireSameHolder(User newUser, UserRoleHospitalAssignment target, boolean verifiedSuperAdmin) {
+    private static void requireSameHolder(UUID requestedUserId, UserRoleHospitalAssignment target,
+                                          boolean verifiedSuperAdmin) {
         User current = target.getUser();
-        boolean holderChanged = current == null || !newUser.getId().equals(current.getId());
+        boolean holderChanged = requestedUserId != null
+            && (current == null || !requestedUserId.equals(current.getId()));
         if (holderChanged && !verifiedSuperAdmin) {
             throw new BusinessException(DEFAULT_HOLDER_CHANGE);
         }
