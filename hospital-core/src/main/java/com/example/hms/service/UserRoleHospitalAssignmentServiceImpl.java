@@ -42,7 +42,6 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
-import com.example.hms.security.SecurityUtils;
 import com.example.hms.service.support.UserAccountAccess;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -262,10 +261,13 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         assignment.setConfirmationSentAt(LocalDateTime.now());
         assignment.setConfirmationVerifiedAt(null);
 
-        User registrar = resolveRegistrar(dto);
-        if (registrar != null) {
-            assignment.setRegisteredBy(registrar);
-        }
+        // The registrar is the caller, by id, never a request field: it is the
+        // one person /confirm accepts. An /assignments write needs one; account
+        // creation has one only when an admin registers (none on
+        // self-registration or bootstrap).
+        assignment.setRegisteredBy(adminRequest
+            ? requireCallerAccount(locale)
+            : accountAccess.currentUserId().flatMap(userRepository::findById).orElse(null));
 
         UserRoleHospitalAssignment saved = assignmentRepository.save(assignment);
 
@@ -306,22 +308,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             new Object[]{null},
             DEFAULT_USER_NOT_FOUND_PREFIX + "<unknown>",
             locale));
-    }
-
-    private User resolveRegistrar(UserRoleHospitalAssignmentRequestDTO dto) {
-        if (dto.getRegisteredByUserId() != null) {
-            return userRepository.findById(dto.getRegisteredByUserId()).orElseThrow(() ->
-                new ResourceNotFoundException(MSG_USER_NOT_FOUND, dto.getRegisteredByUserId()));
-        }
-
-        String principal = SecurityUtils.getCurrentUsername();
-        if (principal == null || principal.isBlank()) {
-            return null;
-        }
-
-        return userRepository.findByUsername(principal)
-            .or(() -> userRepository.findByEmail(principal))
-            .orElse(null);
     }
 
     private void enforceRoleScopeConstraints(UserRoleHospitalAssignmentRequestDTO dto, String roleCode,
@@ -398,11 +384,14 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (Boolean.TRUE.equals(dto.getActive())) {
             checkActiveDoctorConflict(dto, newUser, newRole, newHospital, locale);
         }
+        // Resolved before anything on the row changes: a re-invite with no
+        // registrar would leave a row nobody can confirm.
+        User newRegistrar = reinvite ? requireCallerAccount(locale) : null;
 
-        mapper.updateEntity(target, dto, newHospital, newRole, null);
+        mapper.updateEntity(target, dto, newHospital, newRole);
         target.setUser(newUser);
         if (reinvite) {
-            restartInvitation(target, newUser, newHospital);
+            restartInvitation(target, newUser, newHospital, newRegistrar);
         }
 
         UserRoleHospitalAssignment saved = assignmentRepository.save(target);
@@ -423,13 +412,39 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             || hasDifferentHospital(target.getHospital(), newHospital);
     }
 
-    /** The row starts over as a fresh POST: inactive, new codes, verification cleared. */
-    private void restartInvitation(UserRoleHospitalAssignment target, User holder, Hospital hospital) {
+    /**
+     * The row starts over as a fresh POST: inactive, new codes, verification
+     * cleared, and the caller as its registrar. The registrar receives the new
+     * code and is the one {@link #confirmAssignment} accepts; keeping the
+     * original one would hand the new grant to someone the caller chose
+     * nothing about, who may hold no rights at the new hospital.
+     */
+    private void restartInvitation(UserRoleHospitalAssignment target, User holder, Hospital hospital,
+                                   User registrar) {
+        target.setRegisteredBy(registrar);
         target.setActive(false);
         target.setAssignmentCode(generateAssignCode(holder, hospital));
         target.setConfirmationCode(generateConfirmationCode());
         target.setConfirmationSentAt(LocalDateTime.now(ZoneId.systemDefault()));
         target.setConfirmationVerifiedAt(null);
+    }
+
+    /**
+     * The caller's own account, by the same id {@link UserAccountAccess#assignmentScope}
+     * decided the caller's scope with, not by the principal's name (an OIDC
+     * token without a username, or a phone-keyed account, would not resolve).
+     *
+     * @throws BusinessException when the caller has no resolvable account
+     */
+    private User requireCallerAccount(Locale locale) {
+        return accountAccess.currentUserId()
+            .flatMap(userRepository::findById)
+            .orElseThrow(() -> new BusinessException(
+                messageSource.getMessage(
+                    MSG_ASSIGNMENT_ACTOR_MISMATCH,
+                    null,
+                    DEFAULT_ACTOR_RESOLUTION_FAILURE,
+                    locale)));
     }
 
     /**
@@ -761,8 +776,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                     locale));
         }
 
-        UserRoleHospitalAssignment assignment = assignmentRepository.findById(assignmentId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND, assignmentId));
+        // Confirming activates the row, so it takes the scope every other
+        // change by id takes: a row the caller may not change answers exactly
+        // as a missing id, before anything else about the row is checked.
+        UserRoleHospitalAssignment assignment = findChangeable(assignmentId);
 
         if (assignment.getConfirmationVerifiedAt() != null) {
             throw new BusinessException(
@@ -773,24 +790,13 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                     locale));
         }
 
-        String expectedCode = assignment.getConfirmationCode();
-        if (expectedCode == null || !expectedCode.equalsIgnoreCase(sanitizedCode)) {
-            throw new BusinessException(
-                messageSource.getMessage(
-                    MSG_ASSIGNMENT_INVALID_CODE,
-                    null,
-                    DEFAULT_CONFIRMATION_CODE_INVALID,
-                    locale));
-        }
-
+        // Only the registrar confirms, and that is decided BEFORE the code is
+        // compared: anyone else gets the same refusal whatever code they send,
+        // so the endpoint is no oracle for guessing the holder's code.
         User registrar = assignment.getRegisteredBy();
-        User actor = resolveCurrentAuthenticatedUser().orElseThrow(() ->
-            new BusinessException(
-                messageSource.getMessage(
-                    MSG_ASSIGNMENT_ACTOR_MISMATCH,
-                    null,
-                    DEFAULT_ACTOR_RESOLUTION_FAILURE,
-                    locale)));
+        // By id, as a re-invite records the registrar (requireCallerAccount):
+        // a phone-login registrar's principal name resolves no account.
+        User actor = requireCallerAccount(locale);
 
         if (registrar == null || registrar.getId() == null || !registrar.getId().equals(actor.getId())) {
             throw new BusinessException(
@@ -798,6 +804,16 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                     MSG_ASSIGNMENT_ACTOR_MISMATCH,
                     null,
                     DEFAULT_CONFIRMATION_ACTOR_MISMATCH,
+                    locale));
+        }
+
+        String expectedCode = assignment.getConfirmationCode();
+        if (expectedCode == null || !expectedCode.equalsIgnoreCase(sanitizedCode)) {
+            throw new BusinessException(
+                messageSource.getMessage(
+                    MSG_ASSIGNMENT_INVALID_CODE,
+                    null,
+                    DEFAULT_CONFIRMATION_CODE_INVALID,
                     locale));
         }
 
@@ -1303,7 +1319,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .hospitalId(hospitalId)
             .active(request.getActive())
             .startDate(request.getStartDate())
-            .registeredByUserId(request.getRegisteredByUserId())
             .build();
     }
 
@@ -1440,13 +1455,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             builder.startDate(startDate);
         }
 
-        UUID registrarId = parseUuid(getColumnValue(tokens, headerIndex, "registered_by_user_id", "registrar_id"));
-        if (registrarId == null) {
-            registrarId = options.getRegisteredByUserId();
-        }
-        if (registrarId != null) {
-            builder.registeredByUserId(registrarId);
-        }
     }
 
     private Map<String, Integer> buildHeaderIndex(String[] headers) {
@@ -2076,18 +2084,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         } catch (RuntimeException ex) {
             log.warn("⚠️ Failed to record assignment confirmation audit for assignment '{}': {}", assignment.getId(), ex.getMessage());
         }
-    }
-
-    private Optional<User> resolveCurrentAuthenticatedUser() {
-        String username = SecurityUtils.getCurrentUsername();
-        if (username == null || username.isBlank()) {
-            return Optional.empty();
-        }
-        return userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(
-            username,
-            username,
-            null
-        );
     }
 
     private List<String> buildRoleProfileChecklist(Role role) {

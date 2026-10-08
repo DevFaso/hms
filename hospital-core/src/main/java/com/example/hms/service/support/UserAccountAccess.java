@@ -288,8 +288,9 @@ public class UserAccountAccess {
     /**
      * Which existing hospital assignments the caller may read and change
      * through {@code /assignments/{id}} and its siblings (get, update,
-     * regenerate the code, resend the invitation, deactivate, delete, retire a
-     * user's rows). The same people {@link #requireMayGrant} lets grant there:
+     * regenerate the code, resend the invitation, the registrar's confirm,
+     * deactivate, delete, retire a user's rows). The same people
+     * {@link #requireMayGrant} lets grant there:
      * <ul>
      *   <li>a super-admin (the verified context flag): every row, global rows
      *       included;</li>

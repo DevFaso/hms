@@ -51,7 +51,7 @@ public class UserRoleAssignmentMultiRequestDTO {
     @Schema(description = "Optional start date for created assignments")
     private LocalDate startDate;
 
-    @Schema(description = "Registrar user ID (defaults to authenticated principal when absent)")
+    @Schema(description = "Ignored: the registrar is always the authenticated caller", deprecated = true)
     private UUID registeredByUserId;
 
     @Builder.Default
