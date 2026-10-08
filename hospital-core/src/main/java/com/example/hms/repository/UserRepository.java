@@ -123,11 +123,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * Scope (UserAccountAccess.requireDirectoryAccess): with :scoped = false
      * (the super-admin) every account, the deleted view included on request.
      * With :scoped = true only LIVE accounts holding an assignment, any role,
-     * active or confirmed, at one of :hospitalIds. A pending row (inactive
-     * and never confirmed) does not count: anyone with a grant can create
-     * one for any user, so it must not list another hospital's user here
-     * (UserAccountAccess.grantsAccountVisibility; the same rule in Java).
-     * EXISTS, not a join, so an
+     * active or not, at one of :hospitalIds; EXISTS, not a join, so an
      * account assigned at two of those hospitals is one row. The scope is in
      * the query: filtering a global page in memory would load other tenants'
      * rows and break the paging. An unscoped call passes DIRECTORY_UNSCOPED,
@@ -141,8 +137,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                    AND EXISTS (
                        SELECT 1 FROM UserRoleHospitalAssignment ha
                        WHERE ha.user = u
-                         AND ha.hospital.id IN :hospitalIds
-                         AND (ha.active = true OR ha.confirmationVerifiedAt IS NOT NULL))))
+                         AND ha.hospital.id IN :hospitalIds)))
         """;
 
     /*
@@ -150,9 +145,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * assignment at one of the caller's hospitals, and a global UserRole does
      * not count: otherwise a nurse at A searching role=HOSPITAL_ADMIN would
      * find A's receptionist because that account administers hospital B,
-     * which is another tenant's fact. Active or confirmed, as the list's
-     * scope is: a pending row grants a role here no more than it lists the
-     * account.
+     * which is another tenant's fact. Active or not, as the list's scope is:
+     * an admin-registered nurse whose assignment waits for her emailed code
+     * is listed by GET /users and must be found by role=NURSE too.
      * Unscoped (the super-admin), the role filter is unchanged: an active
      * assignment anywhere, or a global UserRole.
      */
@@ -171,8 +166,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                     JOIN a.role r
                     WHERE a.user = u
                       AND ((:scoped = false AND a.active = true)
-                           OR (:scoped = true AND a.hospital.id IN :hospitalIds
-                               AND (a.active = true OR a.confirmationVerifiedAt IS NOT NULL)))
+                           OR (:scoped = true AND a.hospital.id IN :hospitalIds))
                       AND (LOWER(r.code) = LOWER(cast(:role AS string)) OR LOWER(r.name) = LOWER(cast(:role AS string)))
                 )
                 OR (:scoped = false

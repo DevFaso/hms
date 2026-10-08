@@ -529,22 +529,18 @@ class UserEndpointAuthorizationIT extends BaseIT {
     @DisplayName("a staff member at A lists and searches only accounts assigned at A, with correct paging totals")
     void directoryIsScopedToTheCallersHospitals() throws Exception {
         // Assigned at A but not yet verified (inactive, as every admin-registered
-        // account starts): a pending row lists nobody until its holder confirms.
+        // account starts): staff-list's picker must still offer it.
         User pendingA = account("pendA", "ROLE_NURSE", hospitalA);
         deactivateAssignments(pendingA);
-        // Confirmed, then switched off (a former employee): still listed at A.
-        User formerA = account("formA", "ROLE_NURSE", hospitalA);
-        deactivateAssignments(formerA);
-        confirmAssignments(formerA);
         // Assigned at A and at B: one row, not two.
         User dualAB = account("dual", "ROLE_DOCTOR", hospitalA);
         assignAlso(dualAB, "ROLE_DOCTOR", hospitalB);
         List<UUID> atA = List.of(adminA.getId(), receptionistA.getId(), nurseA.getId(), patientA.getId(),
-            formerA.getId(), dualAB.getId());
+            pendingA.getId(), dualAB.getId());
 
         String nurse = hms(nurseA, "ROLE_NURSE");
         var all = page(get("/users").param("size", "100"), nurse);
-        assertThat(ids(all)).containsExactlyInAnyOrderElementsOf(atA).doesNotContain(pendingA.getId());
+        assertThat(ids(all)).containsExactlyInAnyOrderElementsOf(atA);
         assertThat(total(all)).isEqualTo(atA.size());
 
         // Paging: one row per page, the total still counts the whole scope.
@@ -633,22 +629,16 @@ class UserEndpointAuthorizationIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("a scoped role search, like the list, skips a nurse still waiting for her code until she confirms")
-    void scopedRoleSearchSkipsAPendingAccount() throws Exception {
+    @DisplayName("a scoped role search finds an admin-registered nurse still waiting for her code, as the list does")
+    void scopedRoleSearchFindsAPendingAccount() throws Exception {
         User pendingNurse = account("pendN", "ROLE_NURSE", hospitalA);
         deactivateAssignments(pendingNurse);
         String receptionist = hms(receptionistA, "ROLE_RECEPTIONIST");
 
-        assertThat(ids(page(get("/users").param("size", "100"), receptionist))).doesNotContain(pendingNurse.getId());
-        var nurses = page(get("/users/search").param("role", "ROLE_NURSE").param("size", "100"), receptionist);
-        assertThat(ids(nurses)).containsExactly(nurseA.getId());
-        assertThat(total(nurses)).isEqualTo(1);
-
-        // Once her code is confirmed she is listed and found, active or not.
-        confirmAssignments(pendingNurse);
         assertThat(ids(page(get("/users").param("size", "100"), receptionist))).contains(pendingNurse.getId());
-        assertThat(ids(page(get("/users/search").param("role", "ROLE_NURSE").param("size", "100"), receptionist)))
-            .containsExactlyInAnyOrder(nurseA.getId(), pendingNurse.getId());
+        var nurses = page(get("/users/search").param("role", "ROLE_NURSE").param("size", "100"), receptionist);
+        assertThat(ids(nurses)).containsExactlyInAnyOrder(nurseA.getId(), pendingNurse.getId());
+        assertThat(total(nurses)).isEqualTo(2);
         // A nurse assigned only at B, pending or not, stays out.
         User pendingAtB = account("pendB", "ROLE_NURSE", hospitalB);
         deactivateAssignments(pendingAtB);
@@ -659,12 +649,6 @@ class UserEndpointAuthorizationIT extends BaseIT {
     private void deactivateAssignments(User user) {
         List<UserRoleHospitalAssignment> rows = assignmentRepository.findByUserId(user.getId());
         rows.forEach(a -> a.setActive(false));
-        assignmentRepository.saveAll(rows);
-    }
-
-    private void confirmAssignments(User user) {
-        List<UserRoleHospitalAssignment> rows = assignmentRepository.findByUserId(user.getId());
-        rows.forEach(a -> a.setConfirmationVerifiedAt(LocalDateTime.now().minusDays(1)));
         assignmentRepository.saveAll(rows);
     }
 
