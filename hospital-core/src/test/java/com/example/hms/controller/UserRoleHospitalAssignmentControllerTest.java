@@ -130,7 +130,7 @@ class UserRoleHospitalAssignmentControllerTest {
                     .channel("SMS").purpose("ACTIVATION").outcome("MOCKED")
                     .target("+226*****56").build());
             return null;
-        }).when(assignmentService).sendNotifications(assignmentId);
+        }).when(assignmentService).resendNotifications(assignmentId);
 
         mockMvc.perform(post("/assignments/{assignmentId}/resend-notification", assignmentId))
             .andExpect(status().isOk())

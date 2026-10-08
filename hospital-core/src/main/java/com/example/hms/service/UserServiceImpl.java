@@ -899,7 +899,7 @@ public class UserServiceImpl implements UserService {
             // pre-approval override that used to force staff assignments
             // active here was exactly what made the verification email
             // theater (option A decision, 2026-09-02).
-            assignmentService.assignRole(UserRoleHospitalAssignmentRequestDTO.builder()
+            assignmentService.assignRoleOnAccountCreation(UserRoleHospitalAssignmentRequestDTO.builder()
                     .userId(userId)
                     .roleId(roleId)
                     .hospitalId(hospitalId) // may be null for global
@@ -1399,7 +1399,7 @@ public class UserServiceImpl implements UserService {
         // correct default per role.
         Role role = roleRepository.getReferenceById(roleId);
         Boolean active = ROLE_SUPER_ADMIN.equalsIgnoreCase(role.getCode()) ? Boolean.TRUE : null;
-        assignmentService.assignRole(UserRoleHospitalAssignmentRequestDTO.builder()
+        assignmentService.assignRoleOnAccountCreation(UserRoleHospitalAssignmentRequestDTO.builder()
                 .userId(userId)
                 .roleId(roleId)
                 .hospitalId(hospitalId)

@@ -43,6 +43,7 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
 import com.example.hms.security.SecurityUtils;
+import com.example.hms.service.support.UserAccountAccess;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -50,6 +51,7 @@ import org.springframework.context.MessageSource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -60,6 +62,7 @@ import java.io.StringReader;
 import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -81,6 +84,7 @@ import org.springframework.context.i18n.LocaleContextHolder;
 @Transactional
 public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAssignmentService {
     private static final String UNKNOWN_ROLE = "UNKNOWN_ROLE";
+    private static final String AUDIT_ENTITY_ASSIGNMENT = "USER_ROLE_ASSIGNMENT";
 
 
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
@@ -122,6 +126,11 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final String DEFAULT_ASSIGNMENT_ALREADY_CONFIRMED = "This assignment has already been confirmed.";
     private static final String DEFAULT_CONFIRMATION_ACTOR_MISMATCH = "Only the assigner who created this assignment can confirm it.";
     private static final String DEFAULT_ACTOR_RESOLUTION_FAILURE = "Unable to resolve the current user.";
+    private static final String DEFAULT_HOLDER_CHANGE =
+        "Only a super-admin can move an assignment to another person. Create a new assignment for that user.";
+    private static final String DEFAULT_ACTIVATION_THROUGH_CODE =
+        "Only a super-admin can activate an assignment directly. Send the holder a new code "
+            + "(regenerate the code); the assignment activates when they confirm it.";
     private static final long CONFIRMATION_CODE_EXPIRY_HOURS = 48;
     private static final List<String> DEFAULT_PROFILE_CHECKLIST = List.of(
         "Review and confirm your personal information",
@@ -184,6 +193,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private final MessageSource messageSource;
     private final com.example.hms.utility.RoleValidator roleValidator;
     private final ApplicationEventPublisher eventPublisher;
+    private final UserAccountAccess accountAccess;
 
     /* ===================== Create ===================== */
 
@@ -205,20 +215,43 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     @Override
     public UserRoleHospitalAssignmentResponseDTO assignRole(UserRoleHospitalAssignmentRequestDTO dto) {
         Locale locale = Locale.getDefault();
-        UserRoleHospitalAssignment assignment = createAssignment(dto, locale, true);
+        UserRoleHospitalAssignment assignment = createAssignment(dto, locale, true, true);
         return toDtoWithLinks(assignment);
     }
 
+    @Override
+    public UserRoleHospitalAssignmentResponseDTO assignRoleOnAccountCreation(UserRoleHospitalAssignmentRequestDTO dto) {
+        Locale locale = Locale.getDefault();
+        UserRoleHospitalAssignment assignment = createAssignment(dto, locale, true, false);
+        return toDtoWithLinks(assignment);
+    }
+
+    /**
+     * @param adminRequest true for the {@code /assignments} writes (single,
+     *                     multi-scope, bulk): the caller may grant only what
+     *                     {@link UserAccountAccess#requireMayGrant} allows, at
+     *                     a hospital it allows, checked before anything is
+     *                     saved. False only for {@link #assignRoleOnAccountCreation},
+     *                     whose caller has already decided the grant.
+     */
     private UserRoleHospitalAssignment createAssignment(UserRoleHospitalAssignmentRequestDTO dto,
                                                         Locale locale,
-                                                        boolean sendNotifications) {
-        User user = resolveUser(dto, locale);
+                                                        boolean sendNotifications,
+                                                        boolean adminRequest) {
         Role role = resolveRole(dto, locale);
         String roleCode = getRoleCode(role);
+        // The role first, before anything about the assignee is looked up, so
+        // a refused caller learns nothing from the user lookup either; then
+        // the hospital once it is resolved. The same two steps as admin-register.
+        UserAccountAccess.Grant grant = adminRequest ? requireMayGrant(roleCode) : null;
 
-        enforceRoleScopeConstraints(dto, roleCode);
+        enforceRoleScopeConstraints(dto, roleCode, adminRequest);
 
         Hospital hospital = resolveHospitalHumanAware(dto, role, locale);
+        if (grant != null) {
+            requireGrantAt(grant, hospital, roleCode);
+        }
+        User user = resolveUser(dto, locale);
         checkActiveDoctorConflict(dto, user, role, hospital, locale);
         checkExistingAssignment(user, role, hospital, locale);
 
@@ -291,14 +324,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .orElse(null);
     }
 
-    private void enforceRoleScopeConstraints(UserRoleHospitalAssignmentRequestDTO dto, String roleCode) {
+    private void enforceRoleScopeConstraints(UserRoleHospitalAssignmentRequestDTO dto, String roleCode,
+                                             boolean adminRequest) {
         if (isRoleCode(roleCode, ROLE_SUPER_ADMIN)) {
-            if (dto.getHospitalId() != null
-                || (dto.getHospitalCode() != null && !dto.getHospitalCode().isBlank())
-                || (dto.getHospitalName() != null && !dto.getHospitalName().isBlank())) {
-                throw new BusinessException(DEFAULT_SUPER_ADMIN_SCOPE_MESSAGE);
-            }
-            // SUPER_ADMIN assignments are immediately active (bootstrap / global admin).
+            enforceSuperAdminScope(dto, adminRequest);
             return;
         }
 
@@ -319,18 +348,49 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         dto.setActive(Boolean.FALSE);
     }
 
+    /**
+     * A SUPER_ADMIN row is global, and active at once only when a verified
+     * super-admin grants it, or when account creation asks for it explicitly
+     * (the first-user bootstrap). Never by default: an admin request from
+     * anyone else starts inactive whatever it asks for, and the grant check
+     * has already refused it before this point.
+     */
+    private void enforceSuperAdminScope(UserRoleHospitalAssignmentRequestDTO dto, boolean adminRequest) {
+        if (dto.getHospitalId() != null
+            || (dto.getHospitalCode() != null && !dto.getHospitalCode().isBlank())
+            || (dto.getHospitalName() != null && !dto.getHospitalName().isBlank())) {
+            throw new BusinessException(DEFAULT_SUPER_ADMIN_SCOPE_MESSAGE);
+        }
+        boolean verifiedSuperAdmin = adminRequest && roleValidator.isSuperAdminFromJwtClaim();
+        if (dto.getActive() == null || (adminRequest && !verifiedSuperAdmin)) {
+            dto.setActive(verifiedSuperAdmin);
+        }
+    }
+
     /* ===================== Update ===================== */
 
     @Override
     public UserRoleHospitalAssignmentResponseDTO updateAssignment(UUID id, UserRoleHospitalAssignmentRequestDTO dto) {
         final Locale locale = Locale.getDefault();
 
-        UserRoleHospitalAssignment target = assignmentRepository.findById(id).orElseThrow(() ->
-            new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND, id));
+        // The row as it stands must be one the caller may change, and the row
+        // after the change one the caller could have granted (the create rule,
+        // on the new role at the new hospital).
+        UserRoleHospitalAssignment target = findChangeable(id);
+        boolean verifiedSuperAdmin = roleValidator.isSuperAdminFromJwtClaim();
+        // Before any user lookup: a 404 for an unknown id against a 400 for a
+        // known one would tell the caller which user ids exist platform-wide.
+        requireSameHolder(dto.getUserId(), target, verifiedSuperAdmin);
 
         User newUser = resolveUserForUpdate(dto, target);
         Role newRole = resolveRoleForUpdate(dto, target, locale);
         Hospital newHospital = resolveHospitalForUpdate(dto, target, newRole, locale);
+
+        String newRoleCode = getRoleCode(newRole);
+        requireGrantAt(requireMayGrant(newRoleCode), newHospital, newRoleCode);
+        requireActivationThroughCode(dto, target);
+        // Decided before the mapper overwrites the row's current role and hospital.
+        boolean reinvite = !verifiedSuperAdmin && isNewGrant(target, newRole, newHospital);
 
         enforcePatientInactiveConstraint(dto, newRole, target);
         checkTupleDuplicateOnUpdate(id, target, newUser, newRole, newHospital, locale);
@@ -341,10 +401,64 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
         mapper.updateEntity(target, dto, newHospital, newRole, null);
         target.setUser(newUser);
+        if (reinvite) {
+            restartInvitation(target, newUser, newHospital);
+        }
 
         UserRoleHospitalAssignment saved = assignmentRepository.save(target);
+        if (reinvite) {
+            eventPublisher.publishEvent(new AssignmentCreatedEvent(saved.getId()));
+            recordAssignmentAudit(saved);
+        }
         log.info("🔄 Updated assignment ID '{}' for user '{}'", id, newUser.getEmail());
         return toDtoWithLinks(saved);
+    }
+
+    /**
+     * A new role or hospital is a new grant: for anyone but a verified
+     * super-admin it starts over as a fresh POST would (see {@link #restartInvitation}).
+     */
+    private boolean isNewGrant(UserRoleHospitalAssignment target, Role newRole, Hospital newHospital) {
+        return !newRole.getId().equals(target.getRole().getId())
+            || hasDifferentHospital(target.getHospital(), newHospital);
+    }
+
+    /** The row starts over as a fresh POST: inactive, new codes, verification cleared. */
+    private void restartInvitation(UserRoleHospitalAssignment target, User holder, Hospital hospital) {
+        target.setActive(false);
+        target.setAssignmentCode(generateAssignCode(holder, hospital));
+        target.setConfirmationCode(generateConfirmationCode());
+        target.setConfirmationSentAt(LocalDateTime.now(ZoneId.systemDefault()));
+        target.setConfirmationVerifiedAt(null);
+    }
+
+    /**
+     * Only a super-admin hands an existing row to another person. For anyone
+     * else that is a new grant to someone who never confirmed a code, so it
+     * goes through a new assignment and its own verification.
+     */
+    private static void requireSameHolder(UUID requestedUserId, UserRoleHospitalAssignment target,
+                                          boolean verifiedSuperAdmin) {
+        User current = target.getUser();
+        boolean holderChanged = requestedUserId != null
+            && (current == null || !requestedUserId.equals(current.getId()));
+        if (holderChanged && !verifiedSuperAdmin) {
+            throw new BusinessException(DEFAULT_HOLDER_CHANGE);
+        }
+    }
+
+    /**
+     * Only a super-admin switches an assignment on by hand. Anyone else's
+     * inactive row is activated by its holder's confirmation code (or the
+     * registrar's confirm): the verification that ticking "active" would
+     * otherwise skip. A fresh code is the regenerate path.
+     */
+    private void requireActivationThroughCode(UserRoleHospitalAssignmentRequestDTO dto,
+                                              UserRoleHospitalAssignment target) {
+        if (Boolean.TRUE.equals(dto.getActive()) && !Boolean.TRUE.equals(target.getActive())
+                && !roleValidator.isSuperAdminFromJwtClaim()) {
+            throw new BusinessException(DEFAULT_ACTIVATION_THROUGH_CODE);
+        }
     }
 
     private User resolveUserForUpdate(UserRoleHospitalAssignmentRequestDTO dto,
@@ -427,9 +541,72 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     @Override
     @Transactional(readOnly = true)
     public UserRoleHospitalAssignmentResponseDTO getAssignmentById(UUID id) {
-        UserRoleHospitalAssignment assignment = assignmentRepository.findById(id).orElseThrow(() ->
-            new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND, id));
+        UserRoleHospitalAssignment assignment = assignmentRepository.findById(id)
+            .filter(found -> accountAccess.assignmentScope().covers(found))
+            .orElseThrow(() -> assignmentNotFound(id));
         return toDtoWithLinks(assignment);
+    }
+
+    /**
+     * The row, when the caller may change it ({@link UserAccountAccess#assignmentScope}).
+     * A row outside the caller's scope answers exactly as a missing id does,
+     * so the refusal is not an existence oracle.
+     */
+    private UserRoleHospitalAssignment findChangeable(UUID id) {
+        UserAccountAccess.AssignmentScope scope = accountAccess.assignmentScope();
+        return assignmentRepository.findById(id)
+            .filter(scope::mayChange)
+            .filter(found -> !holderShielded(scope, found))
+            .orElseThrow(() -> assignmentNotFound(id));
+    }
+
+    /**
+     * A super-admin's account is out of a hospital admin's reach row by row
+     * too, not only through {@code DELETE /user}: any trace of the role,
+     * active or not, by assignment or global role ({@link UserAccountAccess.AssignmentScope#shields}).
+     */
+    private boolean holderShielded(UserAccountAccess.AssignmentScope scope, UserRoleHospitalAssignment row) {
+        User holder = row.getUser();
+        return !scope.everywhere() && holder != null
+            && scope.shields(holder, assignmentRepository.findByUserId(holder.getId()));
+    }
+
+    private static ResourceNotFoundException assignmentNotFound(UUID id) {
+        return new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND, id);
+    }
+
+    private UserAccountAccess.Grant requireMayGrant(String roleCode) {
+        try {
+            return accountAccess.requireMayGrant(Set.of(Objects.toString(roleCode, UNKNOWN_ROLE)));
+        } catch (AccessDeniedException denied) {
+            throw refusedGrant(roleCode, denied);
+        }
+    }
+
+    /** A {@code null} hospital is a global row: the super-admin's only. */
+    private void requireGrantAt(UserAccountAccess.Grant grant, Hospital hospital, String roleCode) {
+        try {
+            grant.requireAt(hospital == null ? null : hospital.getId());
+        } catch (AccessDeniedException denied) {
+            throw refusedGrant(roleCode, denied);
+        }
+    }
+
+    /**
+     * A grant the caller may not make, recorded: one FAILURE row with the
+     * actor id and the requested role code only. Returned for the caller to
+     * throw, a 403: what may be granted is not an existence question.
+     */
+    private AccessDeniedException refusedGrant(String roleCode, AccessDeniedException denied) {
+        auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+            .userId(accountAccess.currentUserId().orElse(null))
+            .eventType(AuditEventType.ROLE_ASSIGNED)
+            .eventDescription("Role assignment refused: the caller may not grant this role there")
+            .details(Map.of("requestedRole", Objects.toString(roleCode, UNKNOWN_ROLE)))
+            .entityType(AUDIT_ENTITY_ASSIGNMENT)
+            .status(AuditStatus.FAILURE)
+            .build());
+        return denied;
     }
 
     @Override
@@ -506,7 +683,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             UserRoleHospitalAssignment assignment = createAssignment(
                 buildSingleAssignmentRequest(requestDTO, null),
                 locale,
-                requestDTO.isSendNotifications());
+                requestDTO.isSendNotifications(),
+                true);
             successes.add(toDtoWithLinks(assignment));
             return UserRoleAssignmentBatchResponseDTO.builder()
                 .requestedAssignments(1)
@@ -519,7 +697,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         for (UUID hospitalId : hospitalIds) {
             UserRoleHospitalAssignmentRequestDTO singleRequest = buildSingleAssignmentRequest(requestDTO, hospitalId);
             try {
-                UserRoleHospitalAssignment assignment = createAssignment(singleRequest, locale, requestDTO.isSendNotifications());
+                UserRoleHospitalAssignment assignment = createAssignment(singleRequest, locale, requestDTO.isSendNotifications(), true);
                 successes.add(toDtoWithLinks(assignment));
             } catch (ConflictException conflict) {
                 if (!requestDTO.isSkipConflicts()) {
@@ -530,7 +708,11 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                     .scopeLabel("hospital:" + hospitalId)
                     .message(conflict.getMessage())
                     .build());
-            } catch (BusinessException | ResourceNotFoundException ex) {
+            } catch (BusinessException | ResourceNotFoundException | AccessDeniedException ex) {
+                // A scope the caller may not grant at is reported like any
+                // other refused scope: nothing was saved for it (the grant is
+                // checked before the save), and the scopes the caller does
+                // administer still go through.
                 failures.add(UserRoleAssignmentFailureDTO.builder()
                     .hospitalId(hospitalId)
                     .scopeLabel("hospital:" + hospitalId)
@@ -550,8 +732,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public UserRoleHospitalAssignmentResponseDTO regenerateAssignmentCode(UUID assignmentId, boolean resendNotifications) {
-        UserRoleHospitalAssignment assignment = assignmentRepository.findById(assignmentId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND, assignmentId));
+        UserRoleHospitalAssignment assignment = findChangeable(assignmentId);
 
         assignment.setAssignmentCode(generateAssignCode(assignment.getUser(), assignment.getHospital()));
         assignment.setConfirmationCode(generateConfirmationCode());
@@ -848,9 +1029,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public void deleteAssignment(UUID id) {
-        if (!assignmentRepository.existsById(id)) {
-            throw new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND, id);
-        }
+        findChangeable(id);
         // Prevent deletion if a Staff record still references this assignment.
         // Deleting it would leave the staff row with a dangling FK and cause a 500
         // on every /api/staff call that touches that row.
@@ -874,8 +1053,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public void deactivateAssignment(UUID id) {
-        UserRoleHospitalAssignment assignment = assignmentRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND, id));
+        UserRoleHospitalAssignment assignment = findChangeable(id);
         if (!retire(assignment)) {
             log.info("⏭️ Assignment ID '{}' is already inactive with no live invitation — no change.", id);
             return;
@@ -935,8 +1113,45 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             deactivated.size(), assignments.size(), userId);
     }
 
+    /**
+     * {@code DELETE /assignments/user/{userId}}: retires the user's rows the
+     * caller may change ({@link UserAccountAccess#assignmentScope}). A
+     * super-admin retires every row, as {@link #deleteAllAssignmentsForUser}
+     * does; a hospital admin only the rows at hospitals they administer, never
+     * an admin role's row, and none at all of a super-admin's account. Rows
+     * outside the scope are left untouched and unreported, the same answer as
+     * for a user with none.
+     */
+    @Override
+    public void retireAssignmentsForUserWithinCallerScope(UUID userId) {
+        UserAccountAccess.AssignmentScope scope = accountAccess.assignmentScope();
+        if (scope.everywhere()) {
+            deleteAllAssignmentsForUser(userId);
+            return;
+        }
+        List<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUserId(userId);
+        boolean shielded = userRepository.findById(userId)
+            .map(user -> scope.shields(user, assignments))
+            .orElse(false);
+        List<UserRoleHospitalAssignment> deactivated = shielded
+            ? List.of()
+            : assignments.stream()
+                .filter(scope::mayChange)
+                .filter(UserRoleHospitalAssignmentServiceImpl::retire)
+                .toList();
+        if (!deactivated.isEmpty()) {
+            assignmentRepository.saveAll(deactivated);
+        }
+        log.info("🔒 Deactivated {} assignment(s) for user ID '{}' within the caller's scope.",
+            deactivated.size(), userId);
+    }
+
+    /** Roles are platform-wide: deleting one is the super-admin's alone. */
     @Override
     public void deleteRole(UUID roleId) {
+        if (!roleValidator.isSuperAdminFromJwtClaim()) {
+            throw new AccessDeniedException("Access denied");
+        }
         final Locale locale = Locale.getDefault();
         List<UserRoleHospitalAssignment> attached = assignmentRepository.findByRoleId(roleId);
         if (!attached.isEmpty()) {
@@ -1098,7 +1313,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                                                   UserRoleAssignmentBulkImportRequestDTO options) {
         try {
             UserRoleHospitalAssignmentRequestDTO request = buildRequestFromCsvRow(tokens, headerIndex, options);
-            UserRoleHospitalAssignment assignment = createAssignment(request, Locale.getDefault(), options.isSendNotifications());
+            UserRoleHospitalAssignment assignment = createAssignment(request, Locale.getDefault(), options.isSendNotifications(), true);
 
             UserRoleAssignmentBulkImportResultDTO result = UserRoleAssignmentBulkImportResultDTO.builder()
                 .rowNumber(rowNumber)
@@ -1118,7 +1333,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 throw conflict;
             }
             return BulkImportOutcome.skipped(buildFailureResult(rowNumber, tokens, headerIndex, conflict.getMessage()));
-        } catch (BusinessException | ResourceNotFoundException ex) {
+        } catch (BusinessException | ResourceNotFoundException | AccessDeniedException ex) {
+            // A row the caller may not grant fails on its own, nothing saved
+            // for it; the rest of the file still imports.
             return BulkImportOutcome.failed(buildFailureResult(rowNumber, tokens, headerIndex, ex.getMessage()));
         }
     }
@@ -1813,7 +2030,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 .hospitalName(resolveHospitalName(hospital))
                 .resourceName(assigneeDisplay)
                 .resourceId(assignment.getId() != null ? assignment.getId().toString() : null)
-                .entityType("USER_ROLE_ASSIGNMENT")
+                .entityType(AUDIT_ENTITY_ASSIGNMENT)
                 .eventType(AuditEventType.ROLE_ASSIGNED)
                 .eventDescription(String.format("Assigned role '%s' to %s", roleDisplay, assigneeDisplay))
                 .status(AuditStatus.SUCCESS)
@@ -1848,7 +2065,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 .hospitalName(resolveHospitalName(assignment.getHospital()))
                 .resourceName(assigneeDisplay)
                 .resourceId(assignment.getId() != null ? assignment.getId().toString() : null)
-                .entityType("USER_ROLE_ASSIGNMENT")
+                .entityType(AUDIT_ENTITY_ASSIGNMENT)
                 .eventType(AuditEventType.ASSIGNMENT_CONFIRMED)
                 .eventDescription(String.format("Confirmed assignment '%s' for %s", roleDisplay, assigneeDisplay))
                 .status(AuditStatus.SUCCESS)
@@ -1898,8 +2115,17 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     @Override
     public void sendNotifications(UUID assignmentId) {
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(assignmentId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND, assignmentId));
-        log.info("📧 Sending notifications for assignment '{}'", assignmentId);
+            .orElseThrow(() -> assignmentNotFound(assignmentId));
+        notifyAssignee(assignment);
+    }
+
+    @Override
+    public void resendNotifications(UUID assignmentId) {
+        notifyAssignee(findChangeable(assignmentId));
+    }
+
+    private void notifyAssignee(UserRoleHospitalAssignment assignment) {
+        log.info("📧 Sending notifications for assignment '{}'", assignment.getId());
         sendAssignmentEmailNotification(assignment);
         sendAssignmentSmsNotifications(assignment);
     }
