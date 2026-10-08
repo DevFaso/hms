@@ -4620,7 +4620,7 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 - **G13 residual: claim updates reach other pharmacists by 60 s polling, not server push (SSE/WebSocket) (2026-10-07, left by #830).** Open.
 - **Pharmacy work queue: releasing your only claim on the last page of the Mine filter can reload an empty page (pre-existing paging, made likelier by G13 #830).** Open.
 - **Assignments: an admin can attach another hospital's existing account and then see it.** Needs its own design: holder-only acceptance for existing accounts (not the registrar's code), likely an accepted-by-holder date + backfill so old/retired rows stay visible. Open (from #829/#831 review).
-- **Assignments: create accepts `dto.registeredByUserId` from the caller, so an admin can name any user as registrar.** Open.
+- **~~Assignments: create accepts `dto.registeredByUserId` from the caller, so an admin can name any user as registrar.~~ Closed by #831**: the registrar is always the caller, resolved by id; request fields are ignored on create and update.
 - **Users: `POST /users/admin-register` reuses an existing identity matched by email/username/licence, which may attach a row to another hospital's user and expose the account.** Check as part of the attach-and-see item above. Open.
 
 - **The patient SMS in `PartnerExchangeService.applyReply` is sent before

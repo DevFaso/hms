@@ -42,7 +42,6 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
-import com.example.hms.security.SecurityUtils;
 import com.example.hms.service.support.UserAccountAccess;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -262,10 +261,13 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         assignment.setConfirmationSentAt(LocalDateTime.now());
         assignment.setConfirmationVerifiedAt(null);
 
-        User registrar = resolveRegistrar(dto);
-        if (registrar != null) {
-            assignment.setRegisteredBy(registrar);
-        }
+        // The registrar is the caller, by id, never a request field: it is the
+        // one person /confirm accepts. An /assignments write needs one; account
+        // creation has one only when an admin registers (none on
+        // self-registration or bootstrap).
+        assignment.setRegisteredBy(adminRequest
+            ? requireCallerAccount(locale)
+            : accountAccess.currentUserId().flatMap(userRepository::findById).orElse(null));
 
         UserRoleHospitalAssignment saved = assignmentRepository.save(assignment);
 
@@ -306,22 +308,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             new Object[]{null},
             DEFAULT_USER_NOT_FOUND_PREFIX + "<unknown>",
             locale));
-    }
-
-    private User resolveRegistrar(UserRoleHospitalAssignmentRequestDTO dto) {
-        if (dto.getRegisteredByUserId() != null) {
-            return userRepository.findById(dto.getRegisteredByUserId()).orElseThrow(() ->
-                new ResourceNotFoundException(MSG_USER_NOT_FOUND, dto.getRegisteredByUserId()));
-        }
-
-        String principal = SecurityUtils.getCurrentUsername();
-        if (principal == null || principal.isBlank()) {
-            return null;
-        }
-
-        return userRepository.findByUsername(principal)
-            .or(() -> userRepository.findByEmail(principal))
-            .orElse(null);
     }
 
     private void enforceRoleScopeConstraints(UserRoleHospitalAssignmentRequestDTO dto, String roleCode,
@@ -402,7 +388,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // registrar would leave a row nobody can confirm.
         User newRegistrar = reinvite ? requireCallerAccount(locale) : null;
 
-        mapper.updateEntity(target, dto, newHospital, newRole, null);
+        mapper.updateEntity(target, dto, newHospital, newRole);
         target.setUser(newUser);
         if (reinvite) {
             restartInvitation(target, newUser, newHospital, newRegistrar);
@@ -1333,7 +1319,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .hospitalId(hospitalId)
             .active(request.getActive())
             .startDate(request.getStartDate())
-            .registeredByUserId(request.getRegisteredByUserId())
             .build();
     }
 
@@ -1470,13 +1455,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             builder.startDate(startDate);
         }
 
-        UUID registrarId = parseUuid(getColumnValue(tokens, headerIndex, "registered_by_user_id", "registrar_id"));
-        if (registrarId == null) {
-            registrarId = options.getRegisteredByUserId();
-        }
-        if (registrarId != null) {
-            builder.registeredByUserId(registrarId);
-        }
     }
 
     private Map<String, Integer> buildHeaderIndex(String[] headers) {

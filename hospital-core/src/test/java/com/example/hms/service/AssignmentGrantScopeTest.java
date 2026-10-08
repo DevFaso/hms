@@ -204,6 +204,8 @@ class AssignmentGrantScopeTest {
             .principalUserId(callerId)
             .superAdmin(verifiedSuperAdmin)
             .build());
+        // The caller's account resolves by id (the registrar of what they create).
+        when(userRepository.findById(callerId)).thenReturn(Optional.of(account(callerId)));
     }
 
     /**
@@ -223,7 +225,7 @@ class AssignmentGrantScopeTest {
         org.mockito.Mockito.doAnswer(inv -> {
             row.setRole(role);
             return null;
-        }).when(mapper).updateEntity(row, dto, hospitalA, role, null);
+        }).when(mapper).updateEntity(row, dto, hospitalA, role);
         return dto;
     }
 
@@ -325,6 +327,84 @@ class AssignmentGrantScopeTest {
             verify(assignmentRepository).save(saved.capture());
             assertThat(saved.getValue().getHospital()).isSameAs(hospitalA);
             assertThat(saved.getValue().getActive()).isFalse();
+        }
+
+        @Test
+        @DisplayName("a phone-login admin is the registrar of the row they create, and can confirm it")
+        void phoneLoginAdminRegistersAndConfirms() {
+            signInAsHospitalAdminOfA();
+            User caller = callerAccount();
+            when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(any(), any(), any()))
+                .thenReturn(Optional.empty());
+            when(userRepository.findByUsername(anyString())).thenReturn(Optional.empty());
+            when(userRepository.findByEmail(anyString())).thenReturn(Optional.empty());
+            assignee.setActive(true);
+
+            service.assignRole(grant(nurse, hospitalA));
+
+            ArgumentCaptor<UserRoleHospitalAssignment> saved = ArgumentCaptor.forClass(UserRoleHospitalAssignment.class);
+            verify(assignmentRepository).save(saved.capture());
+            UserRoleHospitalAssignment created = saved.getValue();
+            assertThat(created.getRegisteredBy()).isSameAs(caller);
+
+            created.setId(UUID.randomUUID());
+            stored(created);
+            service.confirmAssignment(created.getId(), created.getConfirmationCode());
+            assertThat(created.getActive()).isTrue();
+        }
+
+        @Test
+        @DisplayName("a registrar named in the request is ignored: the caller is the registrar")
+        void requestedRegistrarIsIgnored() {
+            signInAsHospitalAdminOfA();
+            User caller = callerAccount();
+            User accomplice = account(UUID.randomUUID());
+            when(userRepository.findById(accomplice.getId())).thenReturn(Optional.of(accomplice));
+            UserRoleHospitalAssignmentRequestDTO dto = grant(nurse, hospitalA);
+            dto.setRegisteredByUserId(accomplice.getId());
+
+            service.assignRole(dto);
+
+            ArgumentCaptor<UserRoleHospitalAssignment> saved = ArgumentCaptor.forClass(UserRoleHospitalAssignment.class);
+            verify(assignmentRepository).save(saved.capture());
+            assertThat(saved.getValue().getRegisteredBy()).isSameAs(caller);
+            verify(userRepository, never()).findById(accomplice.getId());
+        }
+
+        @Test
+        @DisplayName("an /assignments create by a caller with no resolvable account is refused, nothing saved")
+        void createWithoutACallerAccountIsRefused() {
+            signInAsHospitalAdminOfA();
+            when(userRepository.findById(callerId)).thenReturn(Optional.empty());
+            UserRoleHospitalAssignmentRequestDTO dto = grant(nurse, hospitalA);
+
+            assertThatThrownBy(() -> service.assignRole(dto)).isExactlyInstanceOf(BusinessException.class);
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("account creation with no signed-in caller (self-registration, bootstrap) has no registrar")
+        void accountCreationWithoutACallerHasNoRegistrar() {
+            service.assignRoleOnAccountCreation(grant(nurse, hospitalA));
+
+            ArgumentCaptor<UserRoleHospitalAssignment> saved = ArgumentCaptor.forClass(UserRoleHospitalAssignment.class);
+            verify(assignmentRepository).save(saved.capture());
+            assertThat(saved.getValue().getRegisteredBy()).isNull();
+        }
+
+        @Test
+        @DisplayName("account creation by an admin (admin-register) has that admin as registrar, by id")
+        void accountCreationByAnAdminHasThemAsRegistrar() {
+            signInAsHospitalAdminOfA();
+            User caller = callerAccount();
+            UserRoleHospitalAssignmentRequestDTO dto = grant(nurse, hospitalA);
+            dto.setRegisteredByUserId(UUID.randomUUID());
+
+            service.assignRoleOnAccountCreation(dto);
+
+            ArgumentCaptor<UserRoleHospitalAssignment> saved = ArgumentCaptor.forClass(UserRoleHospitalAssignment.class);
+            verify(assignmentRepository).save(saved.capture());
+            assertThat(saved.getValue().getRegisteredBy()).isSameAs(caller);
         }
 
         @Test
@@ -542,7 +622,7 @@ class AssignmentGrantScopeTest {
                 own.setRole(doctor);
                 own.setActive(true);
                 return null;
-            }).when(mapper).updateEntity(own, dto, hospitalA, doctor, null);
+            }).when(mapper).updateEntity(own, dto, hospitalA, doctor);
 
             service.updateAssignment(own.getId(), dto);
 
@@ -568,7 +648,7 @@ class AssignmentGrantScopeTest {
             org.mockito.Mockito.doAnswer(inv -> {
                 own.setRole(doctor);
                 return null;
-            }).when(mapper).updateEntity(own, dto, hospitalA, doctor, null);
+            }).when(mapper).updateEntity(own, dto, hospitalA, doctor);
 
             service.updateAssignment(own.getId(), dto);
 
@@ -609,6 +689,29 @@ class AssignmentGrantScopeTest {
             assertThat(own.getConfirmationCode()).isEqualTo("123456");
             assertNothingWritten();
             org.mockito.Mockito.verifyNoInteractions(eventPublisher);
+        }
+
+        @Test
+        @DisplayName("an edit carrying a registrar id keeps the registrar (the real mapper)")
+        void anEditCannotChangeTheRegistrar() {
+            signInAsHospitalAdminOfA();
+            User registrar = account(UUID.randomUUID());
+            User other = account(UUID.randomUUID());
+            when(userRepository.findById(other.getId())).thenReturn(Optional.of(other));
+            UserRoleHospitalAssignment own = stored(row(assignee, nurse, hospitalA, true));
+            own.setRegisteredBy(registrar);
+            UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+            dto.setRegisteredByUserId(other.getId());
+            dto.setStartDate(java.time.LocalDate.now());
+            org.mockito.Mockito.doAnswer(inv -> {
+                new UserRoleHospitalAssignmentMapper().updateEntity(own, dto, inv.getArgument(2), inv.getArgument(3));
+                return null;
+            }).when(mapper).updateEntity(own, dto, hospitalA, nurse);
+
+            service.updateAssignment(own.getId(), dto);
+
+            assertThat(own.getRegisteredBy()).isSameAs(registrar);
+            verify(assignmentRepository).save(own);
         }
 
         @Test
@@ -674,7 +777,7 @@ class AssignmentGrantScopeTest {
 
             service.updateAssignment(foreign.getId(), dto);
 
-            verify(mapper).updateEntity(foreign, dto, hospitalB, nurse, null);
+            verify(mapper).updateEntity(foreign, dto, hospitalB, nurse);
             verify(assignmentRepository).save(foreign);
         }
     }
