@@ -127,6 +127,8 @@ class UserRoleHospitalAssignmentCompatibilityTest {
             when(hospitalRepository.findById(h.getId())).thenReturn(Optional.of(h));
         }
         when(userRepository.findById(assignee.getId())).thenReturn(Optional.of(assignee));
+        // #831: a create records the signed-in caller, resolved by id, as the registrar.
+        when(userRepository.findById(callerId)).thenReturn(Optional.of(account(callerId)));
         when(mapper.toEntity(any(), any(), any(), any())).thenAnswer(inv -> {
             UserRoleHospitalAssignmentRequestDTO dto = inv.getArgument(0);
             UserRoleHospitalAssignment a = new UserRoleHospitalAssignment();
