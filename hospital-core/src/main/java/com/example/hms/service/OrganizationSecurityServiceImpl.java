@@ -311,7 +311,9 @@ public class OrganizationSecurityServiceImpl implements OrganizationSecurityServ
 
         // Apply policies based on organization type
         switch (organizationType) {
-            case GOVERNMENT_AGENCY, RESEARCH_INSTITUTION -> applyHighSecurityPolicies(organization);
+            // Provider counters are often shared PCs (provider plan T4): high.
+            case GOVERNMENT_AGENCY, RESEARCH_INSTITUTION, PHARMACY, LABORATORY ->
+                applyHighSecurityPolicies(organization);
             case HEALTHCARE_NETWORK, HOSPITAL_CHAIN, ACADEMIC_MEDICAL_CENTER -> applyMediumSecurityPolicies(organization);
             default -> applyStandardSecurityPolicies(organization);
         }

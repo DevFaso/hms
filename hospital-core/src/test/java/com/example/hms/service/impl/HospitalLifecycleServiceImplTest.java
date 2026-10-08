@@ -47,6 +47,7 @@ class HospitalLifecycleServiceImplTest {
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private HospitalLifecycleStatusService lifecycleStatusService;
     @Mock private MfaService mfaService;
+    @Mock private com.example.hms.repository.provider.ProviderVerificationRepository providerVerificationRepository;
 
     /**
      * Fixed instant, deliberately in the future: a time that is past on the

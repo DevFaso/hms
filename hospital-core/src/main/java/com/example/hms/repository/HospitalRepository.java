@@ -76,6 +76,14 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     List<Hospital> findByActiveTrueAndLifecycleStateOrderByNameAsc(com.example.hms.enums.HospitalLifecycleState lifecycleState);
 
     /* Organization-related queries */
+    /**
+     * Clinical hospitals with no organisation: the input of the two boot jobs
+     * that attach such rows to an organisation and seed its policies. A
+     * provider facility (PHARMACY, LABORATORY) is never returned, so it is
+     * never attached to a hospital organisation (provider plan AC-11).
+     */
+    @Query("SELECT h FROM Hospital h WHERE h.organization IS NULL"
+        + " AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
     List<Hospital> findByOrganizationIsNull();
 
     List<Hospital> findByOrganizationIdOrderByNameAsc(UUID organizationId);

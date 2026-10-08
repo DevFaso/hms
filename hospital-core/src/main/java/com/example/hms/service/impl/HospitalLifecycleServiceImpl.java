@@ -3,7 +3,11 @@ package com.example.hms.service.impl;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.HospitalLifecycleState;
+import com.example.hms.enums.ProviderVerificationStatus;
 import com.example.hms.exception.BusinessRuleException;
+import com.example.hms.exception.ConflictException;
+import com.example.hms.repository.provider.ProviderVerificationRepository;
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.exception.UnauthorizedException;
 import com.example.hms.model.Hospital;
@@ -75,6 +79,8 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
     private final MfaService mfaService;
     /** Same tenant-lifecycle clock as {@code OrganizationLifecycleServiceImpl} (TimeConfig). */
     private final Clock clock;
+    /** A provider facility comes back ACTIVE only on a VERIFIED verification (provider plan AC-4). */
+    private final ProviderVerificationRepository providerVerificationRepository;
 
     @Value("${hms.hospital-lifecycle.require-mfa:true}")
     private boolean requireMfa;
@@ -113,6 +119,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
     public HospitalLifecycleResponseDTO restore(UUID hospitalId, TenantLifecycleActionRequestDTO request) {
         Hospital hospital = loadOrThrow(hospitalId);
         requireTransition(hospital, RESTORABLE, ACTION_RESTORE);
+        requireVerifiedIfProvider(hospital);
 
         HospitalLifecycleState previous = hospital.getLifecycleState();
         hospital.setLifecycleState(HospitalLifecycleState.ACTIVE);
@@ -195,6 +202,26 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
     private Hospital loadOrThrow(UUID hospitalId) {
         return hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
+    }
+
+    /**
+     * Provider plan AC-4 / T22: VERIFY is the only way a provider becomes
+     * ACTIVE. The restore refuses a provider facility whose current
+     * verification is not VERIFIED (never verified, rejected or revoked) with
+     * 409 {@code provider.not-verified}; a verified provider that was
+     * suspended comes back as any hospital does.
+     */
+    private void requireVerifiedIfProvider(Hospital hospital) {
+        if (!hospital.isProvider()) {
+            return;
+        }
+        boolean verified = providerVerificationRepository
+            .findFirstByHospital_IdOrderByCreatedAtDesc(hospital.getId())
+            .map(v -> v.getStatus() == ProviderVerificationStatus.VERIFIED)
+            .orElse(false);
+        if (!verified) {
+            throw new ConflictException(MessageUtil.resolveOrRaw("provider.not-verified"));
+        }
     }
 
     private void requireTransition(Hospital hospital, Set<HospitalLifecycleState> allowed, String action) {

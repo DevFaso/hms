@@ -1,0 +1,171 @@
+package com.example.hms.service.provider;
+
+import com.example.hms.BaseIT;
+import com.example.hms.enums.FacilityType;
+import com.example.hms.enums.HospitalLifecycleState;
+import com.example.hms.enums.ProviderVerificationStatus;
+import com.example.hms.exception.ConflictException;
+import com.example.hms.model.Hospital;
+import com.example.hms.payload.dto.provider.ProviderAddressDTO;
+import com.example.hms.payload.dto.provider.ProviderBusinessIdentityDTO;
+import com.example.hms.payload.dto.provider.ProviderCreateRequestDTO;
+import com.example.hms.payload.dto.provider.ProviderDecisionRequestDTO;
+import com.example.hms.payload.dto.provider.ProviderProfessionalDTO;
+import com.example.hms.payload.dto.provider.ProviderResponseDTO;
+import com.example.hms.payload.dto.provider.ProviderVerifyRequestDTO;
+import com.example.hms.payload.dto.superadmin.TenantLifecycleActionRequestDTO;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.security.TenantLifecycleGate;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.service.HospitalLifecycleService;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.util.Set;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+/**
+ * Provider plan AC-1, AC-4, AC-16 and T22 on the real services and the real
+ * (unchanged) {@link TenantLifecycleGate}:
+ *
+ * <ul>
+ *   <li>a new provider is SUSPENDED, so a user assigned there is answered 423
+ *       by the gate (both auth paths call the same gate);</li>
+ *   <li>the generic hospital-lifecycle restore refuses an unverified provider
+ *       with 409; VERIFY is what makes it ACTIVE;</li>
+ *   <li>a verified provider suspended later is blocked again, and its restore
+ *       is allowed; a revoked one is refused again;</li>
+ *   <li>the boot jobs' finder never returns a provider.</li>
+ * </ul>
+ */
+@Transactional
+class ProviderLifecycleIT extends BaseIT {
+
+    @Autowired private ProviderOnboardingService onboardingService;
+    @Autowired private HospitalLifecycleService lifecycleService;
+    @Autowired private TenantLifecycleGate lifecycleGate;
+    @Autowired private HospitalRepository hospitalRepository;
+
+    @BeforeEach
+    void signInAsVerifiedSuperAdmin() {
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(UUID.randomUUID())
+            .superAdmin(true)
+            .build());
+    }
+
+    @AfterEach
+    void clear() {
+        HospitalContextHolder.clear();
+    }
+
+    @Test
+    @DisplayName("created SUSPENDED and inactive: a user assigned there is blocked (423)")
+    void newProviderBlocksItsUsers() {
+        ProviderResponseDTO created = onboardingService.create(request(FacilityType.PHARMACY));
+
+        assertThat(created.getLifecycleState()).isEqualTo(HospitalLifecycleState.SUSPENDED);
+        assertThat(created.isActive()).isFalse();
+        assertThat(lifecycleGate.isBlocked(userAt(created.getId()))).isTrue();
+    }
+
+    @Test
+    @DisplayName("the generic restore of an unverified provider answers 409; VERIFY makes it ACTIVE")
+    void restoreNeedsVerification() {
+        UUID id = onboardingService.create(request(FacilityType.LABORATORY)).getId();
+
+        assertThatThrownBy(() -> lifecycleService.restore(id, null)).isInstanceOf(ConflictException.class);
+        assertThat(hospitalRepository.findById(id).orElseThrow().getLifecycleState())
+            .isEqualTo(HospitalLifecycleState.SUSPENDED);
+
+        ProviderResponseDTO verified = onboardingService.verify(id, ProviderVerifyRequestDTO.builder()
+            .ifuMatchesRccm(true).cnssMatchesRccm(true).build());
+
+        assertThat(verified.getVerificationStatus()).isEqualTo(ProviderVerificationStatus.VERIFIED);
+        Hospital facility = hospitalRepository.findById(id).orElseThrow();
+        assertThat(facility.getLifecycleState()).isEqualTo(HospitalLifecycleState.ACTIVE);
+        assertThat(facility.isActive()).isTrue();
+        assertThat(lifecycleGate.isBlocked(userAt(id))).isFalse();
+    }
+
+    @Test
+    @DisplayName("suspend a verified provider: blocked again; its restore is allowed (AC-16)")
+    void suspendAndRestoreAVerifiedProvider() {
+        UUID id = verifiedProvider();
+
+        lifecycleService.suspend(id, TenantLifecycleActionRequestDTO.builder().reason("Inspection").build(), null);
+        assertThat(lifecycleGate.isBlocked(userAt(id))).isTrue();
+
+        lifecycleService.restore(id, null);
+        assertThat(lifecycleGate.isBlocked(userAt(id))).isFalse();
+    }
+
+    @Test
+    @DisplayName("a revoked provider is suspended, and the generic restore refuses it again")
+    void revokedProviderStaysOut() {
+        UUID id = verifiedProvider();
+
+        onboardingService.revoke(id, new ProviderDecisionRequestDTO("Licence withdrawn"));
+
+        assertThat(lifecycleGate.isBlocked(userAt(id))).isTrue();
+        assertThatThrownBy(() -> lifecycleService.restore(id, null)).isInstanceOf(ConflictException.class);
+    }
+
+    @Test
+    @DisplayName("the boot jobs never see a provider without an organisation")
+    void bootFinderSkipsProviders() {
+        UUID id = onboardingService.create(request(FacilityType.PHARMACY)).getId();
+
+        assertThat(hospitalRepository.findByOrganizationIsNull()).extracting(Hospital::getId).doesNotContain(id);
+    }
+
+    private UUID verifiedProvider() {
+        UUID id = onboardingService.create(request(FacilityType.PHARMACY)).getId();
+        onboardingService.verify(id, ProviderVerifyRequestDTO.builder()
+            .ifuMatchesRccm(true).cnssMatchesRccm(true).build());
+        return id;
+    }
+
+    private static HospitalContext userAt(UUID facilityId) {
+        return HospitalContext.builder()
+            .principalUserId(UUID.randomUUID())
+            .permittedHospitalIds(Set.of(facilityId))
+            .build();
+    }
+
+    /** Unique numbers per call: the H2 database is shared by every test in the context. */
+    private static ProviderCreateRequestDTO request(FacilityType type) {
+        String n = UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        return ProviderCreateRequestDTO.builder()
+            .facilityType(type)
+            .code("PRV-" + n)
+            .business(ProviderBusinessIdentityDTO.builder()
+                .legalName("Business " + n + " SARL")
+                .legalStructure("SARL")
+                .rccmNumber("RCCM-" + n)
+                .ifuNumber("IFU-" + n)
+                .cnssNumber("CNSS-" + n)
+                .address(ProviderAddressDTO.builder().city("Ouagadougou").region("Centre").build())
+                .companyPhone("+22670000000")
+                .managerName("Manager " + n)
+                .managerTitle("Gérant")
+                .startedOn(LocalDate.of(2020, 1, 1))
+                .build())
+            .professional(ProviderProfessionalDTO.builder()
+                .licenceNumber("LIC-" + n)
+                .licenceAuthority("Authority")
+                .responsibleName("Responsible " + n)
+                .responsibleOrdreNumber("ORD-" + n)
+                .build())
+            .build();
+    }
+}
