@@ -201,6 +201,8 @@ export class DispensingComponent implements OnInit, OnDestroy {
     () => this.showForm() || this.claimAction() !== null || this.readyAction() !== null,
   );
   private pollHandle: ReturnType<typeof setInterval> | null = null;
+  /** The work-queue request in flight; a newer one cancels it, so the latest answer wins. */
+  private queueRequest: Subscription | null = null;
   private visibilityHandler: (() => void) | null = null;
 
   ngOnInit(): void {
@@ -231,6 +233,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
       window.removeEventListener('online', this.onlineHandler);
     }
     this.stopQueuePolling();
+    this.queueRequest?.unsubscribe();
     // Best effort: a claim the form made is let go when the page is left.
     this.releaseFormClaim(false);
   }
@@ -344,21 +347,35 @@ export class DispensingComponent implements OnInit, OnDestroy {
    * @param quiet a background refresh (G13 polling): no loading bar, no
    *              error toast; the rows already on screen stay until it lands
    */
-  loadWorkQueue(quiet = false): void {
+  loadWorkQueue(quiet = false, onLoaded?: () => void, onFailed?: () => void): void {
     if (!quiet) this.queueLoading.set(true);
-    const filter = this.queueClaimEnabled() ? this.claimFilter() : 'ALL';
-    this.svc.getDispenseWorkQueue(this.queuePage, 20, filter).subscribe({
+    const filter = this.currentQueueFilter();
+    const pageNumber = this.queuePage;
+    // The poll, the visibility refresh, the post-claim reload, the settings
+    // reload and the filter change all land here: only the latest request's
+    // answer may be applied, never an older one that happens to arrive last.
+    this.queueRequest?.unsubscribe();
+    this.queueRequest = this.svc.getDispenseWorkQueue(pageNumber, 20, filter).subscribe({
       next: (res) => {
+        this.queueLoading.set(false);
+        // Belt and braces: an answer for a filter or page no longer shown is dropped.
+        if (filter !== this.currentQueueFilter() || pageNumber !== this.queuePage) return;
         const page = res?.data;
         this.workQueue.set(page?.content ?? []);
         this.queueTotalPages = page?.totalPages ?? 0;
-        this.queueLoading.set(false);
+        onLoaded?.();
       },
       error: () => {
         this.queueLoading.set(false);
         if (!quiet) this.toast.error(this.translate.instant('PHARMACY.WORK_QUEUE_LOAD_FAILED'));
+        onFailed?.();
       },
     });
+  }
+
+  /** The filter the queue is listed by: the chosen one when claims are on, else ALL. */
+  private currentQueueFilter(): QueueClaimFilter {
+    return this.queueClaimEnabled() ? this.claimFilter() : 'ALL';
   }
 
   // ── G13: work-queue claim ──
@@ -425,8 +442,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
         this.claimSaving.set(false);
         this.claimAction.set(null);
         if (action.purpose === 'dispense') {
-          this.formClaimedRowId.set(res?.data?.renewed ? null : action.rx.id);
-          this.openForm(action.rx);
+          this.openFormFor(action.rx, !res?.data?.renewed);
         } else if (action.purpose === 'route') {
           this.router.navigate(['/pharmacy/stock-routing', action.rx.id]);
         } else {
@@ -453,6 +469,10 @@ export class DispensingComponent implements OnInit, OnDestroy {
     const rowId = this.formClaimedRowId();
     if (!rowId) return;
     this.formClaimedRowId.set(null);
+    this.releaseClaimOf(rowId, reload);
+  }
+
+  private releaseClaimOf(rowId: string, reload: boolean): void {
     this.svc.releaseQueueRow(rowId).subscribe({
       next: () => {
         if (reload) this.loadWorkQueue(true);
@@ -588,20 +608,31 @@ export class DispensingComponent implements OnInit, OnDestroy {
       this.openForm(rx);
       return;
     }
-    if (this.formClaimedRowId() && this.formClaimedRowId() !== rx.id) {
-      this.releaseFormClaim(false);
-    }
+    // The row whose form is already open: nothing to do, and the claim the
+    // form made stays the form's (a re-claim would come back renewed).
+    if (this.showForm() && this.selectedPrescription?.id === rx.id) return;
     if (this.colleagueClaim(rx)) {
       this.claimAction.set({ rx, purpose: 'dispense' });
       return;
     }
     this.svc.claimQueueRow(rx.id).subscribe({
-      next: (res) => {
-        this.formClaimedRowId.set(res?.data?.renewed ? null : rx.id);
-        this.openForm(rx);
-      },
+      next: (res) => this.openFormFor(rx, !res?.data?.renewed),
       error: (err) => this.dispenseClaimFailed(rx, err),
     });
+  }
+
+  /**
+   * Opens the form on {@code rx}. Only now, with the new form actually
+   * opening, is the previous form's own claim let go: a cancelled take-over
+   * confirm or a refused claim leaves the open form and its claim alone.
+   *
+   * @param claimedByForm the claim call created the claim (renewed:false)
+   */
+  private openFormFor(rx: WorkQueuePrescription, claimedByForm: boolean): void {
+    const previous = this.formClaimedRowId();
+    if (previous && previous !== rx.id) this.releaseClaimOf(previous, false);
+    this.formClaimedRowId.set(claimedByForm ? rx.id : null);
+    this.openForm(rx);
   }
 
   /**
@@ -615,29 +646,25 @@ export class DispensingComponent implements OnInit, OnDestroy {
   ): void {
     if (err?.status !== 409) {
       this.toast.error(this.translate.instant('PHARMACY.QUEUE_CLAIM.FAILED'));
-      this.openForm(rx);
+      this.openFormFor(rx, false);
       return;
     }
-    const filter = this.claimFilter();
-    this.svc.getDispenseWorkQueue(this.queuePage, 20, filter).subscribe({
-      next: (res) => {
-        const page = res?.data;
-        this.workQueue.set(page?.content ?? []);
-        this.queueTotalPages = page?.totalPages ?? 0;
+    const refused = () =>
+      this.toast.error(
+        err?.error?.message ?? this.translate.instant('PHARMACY.QUEUE_CLAIM.FAILED'),
+      );
+    this.loadWorkQueue(
+      true,
+      () => {
         const fresh = this.workQueue().find((row) => row.id === rx.id);
         if (fresh && this.colleagueClaim(fresh) && !fresh.readyForCollection) {
           this.claimAction.set({ rx: fresh, purpose: 'dispense' });
         } else {
-          this.toast.error(
-            err?.error?.message ?? this.translate.instant('PHARMACY.QUEUE_CLAIM.FAILED'),
-          );
+          refused();
         }
       },
-      error: () =>
-        this.toast.error(
-          err?.error?.message ?? this.translate.instant('PHARMACY.QUEUE_CLAIM.FAILED'),
-        ),
-    });
+      refused,
+    );
   }
 
   private openForm(rx: WorkQueuePrescription): void {

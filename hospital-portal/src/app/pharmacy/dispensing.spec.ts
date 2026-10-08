@@ -9,7 +9,7 @@ import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { OfflineDispenseQueueService } from './offline-dispense-queue.service';
 import { By } from '@angular/platform-browser';
-import { BehaviorSubject, of, throwError } from 'rxjs';
+import { BehaviorSubject, of, Subject, throwError } from 'rxjs';
 import { RoleContextService } from '../core/role-context.service';
 import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
 
@@ -1337,6 +1337,107 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
     expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledWith(0, 20, 'UNCLAIMED');
     click('claim-filter-ALL');
     expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledWith(0, 20, 'ALL');
+  });
+
+  // ── review round 1: the latest queue answer wins ──
+
+  function pageValue(rows: unknown[]) {
+    return {
+      data: { content: rows, totalElements: rows.length, totalPages: 1, size: 20, number: 0 },
+    };
+  }
+
+  it('the latest queue answer wins: an older ALL poll landing after the MINE answer is ignored', async () => {
+    await render();
+    const olderAll = new Subject<unknown>();
+    const newerMine = new Subject<unknown>();
+    pharmacySvc.getDispenseWorkQueue.and.returnValues(olderAll as never, newerMine as never);
+
+    component.loadWorkQueue(true); // the 60 s poll, still ALL
+    click('claim-filter-MINE');
+    newerMine.next(pageValue([row({ id: 'rx-mine', claim: myClaim })]));
+    olderAll.next(pageValue([row(), row({ id: 'rx-2' })]));
+
+    expect(component.claimFilter()).toBe('MINE');
+    expect(component.workQueue().map((r) => r.id)).toEqual(['rx-mine']);
+  });
+
+  it('two polls of the same filter: the older answer arriving last does not overwrite the newer', async () => {
+    await render();
+    const older = new Subject<unknown>();
+    const newer = new Subject<unknown>();
+    pharmacySvc.getDispenseWorkQueue.and.returnValues(older as never, newer as never);
+
+    component.loadWorkQueue(true);
+    component.loadWorkQueue(true);
+    newer.next(pageValue([row({ claim: colleagueClaim })]));
+    older.next(pageValue([row()]));
+
+    expect(component.workQueue()[0].claim?.claimedByName).toBe('Awa Sanou');
+  });
+
+  // ── review round 1: the form keeps its claim ──
+
+  function twoRows(): void {
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(
+      page([row(), row({ id: 'rx-2', claim: { ...colleagueClaim, prescriptionId: 'rx-2' } })]),
+    );
+    component.loadWorkQueue();
+    fixture.detectChanges();
+  }
+
+  it('Dispense on the row whose form is open does nothing, and Cancel still releases the form’s claim', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+    click('rx-dispense-rx-1');
+
+    pharmacySvc.claimQueueRow.and.returnValue(of({ data: { ...myClaim, renewed: true } }) as never);
+    click('rx-dispense-rx-1');
+
+    expect(pharmacySvc.claimQueueRow).toHaveBeenCalledTimes(1);
+    expect(component.formClaimedRowId()).toBe('rx-1');
+    component.closeForm();
+    expect(pharmacySvc.releaseQueueRow).toHaveBeenCalledOnceWith('rx-1');
+  });
+
+  it('Dispense on a colleague’s row then Cancel keeps the open form and its claim', async () => {
+    await render();
+    twoRows();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+    click('rx-dispense-rx-1');
+
+    click('rx-dispense-rx-2');
+    expect(exists('claim-take-over')).toBeTrue();
+    click('claim-take-over-cancel');
+
+    expect(pharmacySvc.releaseQueueRow).not.toHaveBeenCalled();
+    expect(component.formClaimedRowId()).toBe('rx-1');
+    expect(component.showForm()).toBeTrue();
+    expect(component.selectedPrescription?.id).toBe('rx-1');
+  });
+
+  it('Dispense on a colleague’s row then Take over moves the form and only then releases the old claim', async () => {
+    await render();
+    twoRows();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+    click('rx-dispense-rx-1');
+    pharmacySvc.takeOverQueueRow.and.returnValue(
+      of({ data: { ...myClaim, prescriptionId: 'rx-2', renewed: false } }) as never,
+    );
+
+    click('rx-dispense-rx-2');
+    expect(pharmacySvc.releaseQueueRow).not.toHaveBeenCalled();
+    click('claim-take-over-confirm');
+
+    expect(pharmacySvc.releaseQueueRow).toHaveBeenCalledOnceWith('rx-1');
+    expect(component.formClaimedRowId()).toBe('rx-2');
+    expect(component.selectedPrescription?.id).toBe('rx-2');
   });
 
   // ── polling ──
