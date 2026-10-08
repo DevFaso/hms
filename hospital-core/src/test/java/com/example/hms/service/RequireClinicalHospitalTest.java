@@ -27,6 +27,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -40,7 +41,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
@@ -70,6 +71,20 @@ class RequireClinicalHospitalTest {
         return hospital;
     }
 
+    /**
+     * The provider answer is exactly the answer of a miss at the same site:
+     * the same exception, with the same message, as when the lookup finds
+     * nothing.
+     */
+    static void assertAnsweredAsAMiss(ThrowingCallable call, Runnable makeItAMiss) {
+        Throwable asProvider = catchThrowable(call);
+        makeItAMiss.run();
+        Throwable asMiss = catchThrowable(call);
+        assertThat(asProvider).isInstanceOf(ResourceNotFoundException.class);
+        assertThat(asMiss).isNotNull();
+        assertThat(asProvider).hasSameClassAs(asMiss).hasMessage(asMiss.getMessage());
+    }
+
     static Patient patient() {
         Patient patient = new Patient();
         patient.setId(UUID.randomUUID());
@@ -97,10 +112,12 @@ class RequireClinicalHospitalTest {
             AppointmentRequestDTO byName = new AppointmentRequestDTO();
             byName.setHospitalName("Pharmacie du Centre");
 
-            for (AppointmentRequestDTO request : new AppointmentRequestDTO[] {byId, byCode, byName}) {
-                assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "resolveHospital", request))
-                    .isInstanceOf(ResourceNotFoundException.class);
-            }
+            assertAnsweredAsAMiss(() -> ReflectionTestUtils.invokeMethod(service, "resolveHospital", byId),
+                () -> when(hospitalRepository.findById(PROVIDER_ID)).thenReturn(Optional.empty()));
+            assertAnsweredAsAMiss(() -> ReflectionTestUtils.invokeMethod(service, "resolveHospital", byCode),
+                () -> when(hospitalRepository.findByCodeIgnoreCase("PHC")).thenReturn(Optional.empty()));
+            assertAnsweredAsAMiss(() -> ReflectionTestUtils.invokeMethod(service, "resolveHospital", byName),
+                () -> when(hospitalRepository.findByNameIgnoreCase("Pharmacie du Centre")).thenReturn(Optional.empty()));
         }
 
         @Test
@@ -142,16 +159,14 @@ class RequireClinicalHospitalTest {
 
         @Test
         void referringFromAProviderIsNotFound() {
-            assertThatThrownBy(() -> service.createReferral(request(PROVIDER_ID, null)))
-                .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("hospital.notFound");
+            assertAnsweredAsAMiss(() -> service.createReferral(request(PROVIDER_ID, null)),
+                () -> when(hospitalRepository.findById(PROVIDER_ID)).thenReturn(Optional.empty()));
         }
 
         @Test
         void referringToAProviderIsNotFound() {
-            assertThatThrownBy(() -> service.createReferral(request(HOSPITAL_ID, PROVIDER_ID)))
-                .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("generalReferral.receivingHospital.notFound");
+            assertAnsweredAsAMiss(() -> service.createReferral(request(HOSPITAL_ID, PROVIDER_ID)),
+                () -> when(hospitalRepository.findById(PROVIDER_ID)).thenReturn(Optional.empty()));
         }
     }
 
@@ -176,9 +191,8 @@ class RequireClinicalHospitalTest {
             request.setPatientId(UUID.randomUUID());
             request.setHospitalId(PROVIDER_ID);
 
-            assertThatThrownBy(() -> service.createConsultation(request, UUID.randomUUID()))
-                .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("hospital.notFound");
+            assertAnsweredAsAMiss(() -> service.createConsultation(request, UUID.randomUUID()),
+                () -> when(hospitalRepository.findById(PROVIDER_ID)).thenReturn(Optional.empty()));
         }
     }
 
@@ -199,9 +213,8 @@ class RequireClinicalHospitalTest {
             request.setPatientId(UUID.randomUUID());
             request.setHospitalId(PROVIDER_ID);
 
-            assertThatThrownBy(() -> service.createReferral(request, "midwife"))
-                .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("hospital.notFoundWithId");
+            assertAnsweredAsAMiss(() -> service.createReferral(request, "midwife"),
+                () -> when(hospitalRepository.findById(PROVIDER_ID)).thenReturn(Optional.empty()));
         }
     }
 
@@ -225,9 +238,9 @@ class RequireClinicalHospitalTest {
             request.setStaffId(UUID.randomUUID());
             request.setHospitalId(PROVIDER_ID);
 
-            assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "resolveEncounterResolution",
-                    request, Locale.ENGLISH, null))
-                .isInstanceOf(ResourceNotFoundException.class);
+            assertAnsweredAsAMiss(() -> ReflectionTestUtils.invokeMethod(service, "resolveEncounterResolution",
+                    request, Locale.ENGLISH, null),
+                () -> when(hospitalRepository.findById(PROVIDER_ID)).thenReturn(Optional.empty()));
         }
 
         @Test
@@ -236,10 +249,9 @@ class RequireClinicalHospitalTest {
             EncounterRequestDTO request = new EncounterRequestDTO();
             request.setHospitalIdentifier("PHC");
 
-            assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "resolveHospitalId",
-                    request, Locale.ENGLISH))
-                .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("hospital.notFoundByIdentifier");
+            assertAnsweredAsAMiss(() -> ReflectionTestUtils.invokeMethod(service, "resolveHospitalId",
+                    request, Locale.ENGLISH),
+                () -> when(hospitalRepository.findByNameOrCodeOrEmail("PHC")).thenReturn(Optional.empty()));
         }
     }
 
@@ -269,9 +281,8 @@ class RequireClinicalHospitalTest {
 
         @Test
         void invoiceAtAProviderIsNotFound() {
-            assertThatThrownBy(() -> service.createInvoice(request(), Locale.ENGLISH))
-                .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("hospital.notFoundByIdentifier");
+            assertAnsweredAsAMiss(() -> service.createInvoice(request(), Locale.ENGLISH),
+                () -> when(hospitalRepository.findByNameIgnoreCase("Pharmacie du Centre")).thenReturn(Optional.empty()));
         }
 
         @Test
@@ -281,9 +292,8 @@ class RequireClinicalHospitalTest {
             when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(existing));
             when(roleValidator.requireActiveHospitalId()).thenReturn(null);
 
-            assertThatThrownBy(() -> service.updateInvoice(invoiceId, request(), Locale.ENGLISH))
-                .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("hospital.notFoundByIdentifier");
+            assertAnsweredAsAMiss(() -> service.updateInvoice(invoiceId, request(), Locale.ENGLISH),
+                () -> when(hospitalRepository.findByNameIgnoreCase("Pharmacie du Centre")).thenReturn(Optional.empty()));
         }
     }
 
@@ -305,16 +315,14 @@ class RequireClinicalHospitalTest {
             PatientHospitalRegistrationRequestDTO byId = new PatientHospitalRegistrationRequestDTO();
             byId.setPatientId(UUID.randomUUID());
             byId.setHospitalId(PROVIDER_ID);
-            assertThatThrownBy(() -> service.registerPatient(byId))
-                .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("hospital.notFound");
+            assertAnsweredAsAMiss(() -> service.registerPatient(byId),
+                () -> when(hospitalRepository.findById(PROVIDER_ID)).thenReturn(Optional.empty()));
 
             PatientHospitalRegistrationRequestDTO byName = new PatientHospitalRegistrationRequestDTO();
             byName.setPatientId(UUID.randomUUID());
             byName.setHospitalName("Pharmacie du Centre");
-            assertThatThrownBy(() -> service.registerPatient(byName))
-                .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("hospital.notFoundByIdentifier");
+            assertAnsweredAsAMiss(() -> service.registerPatient(byName),
+                () -> when(hospitalRepository.findByName("Pharmacie du Centre")).thenReturn(Optional.empty()));
         }
     }
 
