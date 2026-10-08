@@ -209,6 +209,20 @@ class ProviderTransitionConcurrencyPostgresIT {
         assertThat(verificationRepository.findFirstByHospital_IdOrderByCreatedAtDesc(providerId)).isEmpty();
     }
 
+    @Test
+    @DisplayName("two creates with one code: the second waits on the index, then 409; one provider has the code")
+    void createVersusCreateWithOneCode() throws Exception {
+        ProviderCreateRequestDTO first = request();
+        ProviderCreateRequestDTO second = request();
+        second.setCode(first.getCode());
+
+        CompletableFuture<Object> loser = race(() -> onboardingService.create(first),
+            () -> onboardingService.create(second));
+
+        assertThat(causeOf(loser)).isInstanceOf(ConflictException.class);
+        assertThat(hospitalRepository.findByCodeIgnoreCase(first.getCode())).isPresent();
+    }
+
     // ── harness ──────────────────────────────────────────────────────────
 
     private Object verifyRenamed() {

@@ -116,7 +116,7 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
         applyBusiness(verification, business);
         applyProfessional(verification, request.getProfessional());
         applyFacilityIdentity(facility, verification);
-        facility = hospitalRepository.save(facility);
+        facility = saveNewFacilityOrConflict(facility);
 
         verification.setHospital(facility);
         verification = verificationRepository.save(verification);
@@ -343,6 +343,26 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
      * meets V180's partial unique indexes here and answers 409, not a generic
      * 400 from the integrity handler.
      */
+    /**
+     * Flush the new facility now, so a concurrent create with the same code
+     * that slipped past the lookup above meets the unique index here
+     * (uq_hospital_provider_code on PostgreSQL, uq_hospital_code under H2)
+     * and answers the same 409 as the lookup, not the generic integrity 400.
+     * The failed flush leaves the transaction rollback-only; the exception
+     * thrown here rolls it back, and nothing else runs in it.
+     */
+    private Hospital saveNewFacilityOrConflict(Hospital facility) {
+        try {
+            return hospitalRepository.saveAndFlush(facility);
+        } catch (DataIntegrityViolationException ex) {
+            String detail = String.valueOf(ex.getMostSpecificCause().getMessage()).toLowerCase(Locale.ROOT);
+            if (detail.contains("uq_hospital_provider_code") || detail.contains("uq_hospital_code")) {
+                throw new ConflictException("code:" + MessageUtil.resolveOrRaw(MSG_CODE_DUPLICATE));
+            }
+            throw ex;
+        }
+    }
+
     private void saveVerifiedOrConflict(ProviderVerification verification) {
         try {
             verificationRepository.saveAndFlush(verification);

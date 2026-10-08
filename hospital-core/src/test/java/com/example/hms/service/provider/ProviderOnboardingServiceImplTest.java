@@ -53,6 +53,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -90,6 +91,13 @@ class ProviderOnboardingServiceImplTest {
             }
             return h;
         });
+        when(hospitalRepository.saveAndFlush(any())).thenAnswer(inv -> {
+            Hospital h = inv.getArgument(0);
+            if (h.getId() == null) {
+                h.setId(UUID.randomUUID());
+            }
+            return h;
+        });
         when(verificationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(verificationRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
         HospitalContextHolder.setContext(HospitalContext.builder().principalUserId(actorId).superAdmin(true).build());
@@ -110,7 +118,7 @@ class ProviderOnboardingServiceImplTest {
             ProviderResponseDTO response = service.create(createRequest(FacilityType.PHARMACY));
 
             ArgumentCaptor<Hospital> facility = ArgumentCaptor.forClass(Hospital.class);
-            verify(hospitalRepository).save(facility.capture());
+            verify(hospitalRepository).saveAndFlush(facility.capture());
             assertThat(facility.getValue().getFacilityType()).isEqualTo(FacilityType.PHARMACY);
             assertThat(facility.getValue().isActive()).isFalse();
             assertThat(facility.getValue().getLifecycleState()).isEqualTo(HospitalLifecycleState.SUSPENDED);
@@ -167,7 +175,7 @@ class ProviderOnboardingServiceImplTest {
                 .isInstanceOf(BusinessException.class)
                 .satisfies(ex -> assertThat(((BusinessException) ex).getMessageKey())
                     .isEqualTo(ProviderOnboardingServiceImpl.MSG_TYPE_INVALID));
-            verify(hospitalRepository, never()).save(any());
+            verify(hospitalRepository, never()).saveAndFlush(any());
         }
 
         @Test
@@ -179,7 +187,32 @@ class ProviderOnboardingServiceImplTest {
 
             assertThatThrownBy(() -> service.create(request))
                 .isInstanceOf(ConflictException.class);
-            verify(hospitalRepository, never()).save(any());
+            verify(hospitalRepository, never()).saveAndFlush(any());
+        }
+
+        @Test
+        @DisplayName("a create that loses a race on the code index answers the same 409 as the lookup")
+        void createRaceOnTheCodeIsAConflict() {
+            doThrow(new DataIntegrityViolationException(
+                "duplicate key value violates unique constraint \"uq_hospital_provider_code\""))
+                .when(hospitalRepository).saveAndFlush(any());
+            ProviderCreateRequestDTO request = createRequest(FacilityType.PHARMACY);
+
+            assertThatThrownBy(() -> service.create(request))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageStartingWith("code:");
+            verify(verificationRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("any other integrity failure on create is not dressed up as a duplicate code")
+        void otherIntegrityFailuresPassThrough() {
+            doThrow(new DataIntegrityViolationException(
+                "null value in column \"name\" violates not-null constraint"))
+                .when(hospitalRepository).saveAndFlush(any());
+            ProviderCreateRequestDTO request = createRequest(FacilityType.PHARMACY);
+
+            assertThatThrownBy(() -> service.create(request)).isInstanceOf(DataIntegrityViolationException.class);
         }
 
         @Test
@@ -206,7 +239,7 @@ class ProviderOnboardingServiceImplTest {
 
             assertThatThrownBy(() -> service.create(request))
                 .isInstanceOf(AccessDeniedException.class);
-            verify(hospitalRepository, never()).save(any());
+            verify(hospitalRepository, never()).saveAndFlush(any());
         }
     }
 

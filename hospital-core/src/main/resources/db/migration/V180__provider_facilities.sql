@@ -46,6 +46,16 @@ ALTER TABLE hospital.hospitals
 CREATE INDEX IF NOT EXISTS idx_hospital_facility_type
     ON hospital.hospitals (facility_type);
 
+-- A provider's code is unique among providers, so two concurrent creates
+-- with one code cannot both commit (the loser gets 409). The JPA entity
+-- declares uq_hospital_code over every row, but no migration ever built it
+-- on PostgreSQL; a full index is left out here because existing hospital
+-- rows have not been checked for duplicates. No provider row exists before
+-- V180, so this partial index cannot fail on deploy.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_hospital_provider_code
+    ON hospital.hospitals (code)
+    WHERE facility_type <> 'HOSPITAL';
+
 CREATE TABLE IF NOT EXISTS hospital.provider_verifications (
     id                                    UUID PRIMARY KEY,
     hospital_id                           UUID NOT NULL,

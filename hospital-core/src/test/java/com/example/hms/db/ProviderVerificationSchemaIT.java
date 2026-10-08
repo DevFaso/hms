@@ -145,6 +145,21 @@ class ProviderVerificationSchemaIT {
     }
 
     @Test
+    @DisplayName("a provider's code is unique among providers; hospital rows are not constrained by V180")
+    void providerCodeIsUnique() throws Exception {
+        try (Connection conn = connection(); Statement stmt = conn.createStatement()) {
+            String code = "PRV-" + unique();
+            stmt.executeUpdate("INSERT INTO hospital.hospitals (id, name, code, active, facility_type, created_at, "
+                + "updated_at) VALUES ('" + UUID.randomUUID() + "', 'A', '" + code + "', FALSE, 'PHARMACY', NOW(), NOW())");
+            assertThatThrownBy(() -> stmt.executeUpdate("INSERT INTO hospital.hospitals (id, name, code, active, "
+                + "facility_type, created_at, updated_at) VALUES ('" + UUID.randomUUID() + "', 'B', '" + code
+                + "', FALSE, 'LABORATORY', NOW(), NOW())"))
+                .isInstanceOf(SQLException.class)
+                .hasMessageContaining("uq_hospital_provider_code");
+        }
+    }
+
+    @Test
     @DisplayName("ROLE_PROVIDER_ADMIN is seeded by V180")
     void roleSeeded() throws Exception {
         try (Connection conn = connection(); Statement stmt = conn.createStatement();
