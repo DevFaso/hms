@@ -2127,8 +2127,9 @@ any PR that touches an entity.
 ## 10. Out of scope / open questions
 
 The decisions the user must make are marked **[USER]**, and each has a
-recommended default, so the work is not blocked. Q1, Q2, Q3, Q5, Q6, Q7, Q8
-and Q9 are now decided (§10.1). §10.2 lists what is still open.
+recommended default, so the work is not blocked. Every product decision is
+now recorded (§10.1), and §10.2 is empty. Q4 and Q22 were never raised as open:
+their defaults stand as written below.
 
 ### 10.1 Decisions recorded (user, 2026-10-07, final)
 
@@ -2176,6 +2177,30 @@ and Q9 are now decided (§10.1). §10.2 lists what is still open.
   Order-bound, plus the patient's recorded choice; no separate consent row;
   every read accounted and shown to the patient. **Needs counsel/CIL sign-off
   before prod enablement.**
+- **Notifications to providers (Q10): the recommended default is accepted**
+  (rule 11). In-app notifications to the facility's workflow staff, plus a
+  PHI-free SMS nudge (the reference and the facility name only) behind
+  `provider.pharmacy.sms-nudge.enabled`.
+- **Out of v1 (Q14–Q20, Q24): "do what is really recommended".** All of these
+  stay out of v1. Each is its own `tasklist.md` debt line under Standing
+  platform debt, and each needs its own plan before work starts (P4):
+  partner stock; partial fills and substitution; billing and claims between
+  parties; FHIR `MedicationDispense`; walk-in patients at providers;
+  multi-branch chains (one site per facility row in v1); provider-owned lab
+  catalogs; self-registration with a review queue; document upload; patient
+  self-routing in the app. Providers not on the platform keep today's paths
+  (Q20).
+
+Defaults that follow from the user's decisions (proposed in the Q2/Q7
+revision, accepted by the user on 2026-10-07):
+
+- A patient's record-sharing opt-out excludes **other hospitals'** prior
+  results from a lab provider's view: they are chart data, unlike the order
+  itself (rule 5, AC-46a).
+- The RCCM and IFU numbers are unique among VERIFIED facilities: one business
+  is one facility in v1. Multi-branch chains (P4) will relax this (AC-3).
+- `business_started_on` is required: the date is always on the RCCM extract
+  (§6.1).
 
 Defaults chosen after the review (technical, recorded here so they are
 visible):
@@ -2190,18 +2215,12 @@ visible):
 - `/lab-results/hospital/{id}/critical` is not reachable at a lab provider
   (§6.4).
 
-### 10.2 Open decisions (need the user; each has a recommended default)
+### 10.2 Open decisions
 
-1. **Notifications to providers (Q10).** Recommended default: in-app
-   notifications to the facility's workflow staff, plus a PHI-free SMS nudge
-   (reference and facility name only) that `provider.pharmacy.sms-nudge.enabled`
-   can switch off.
-2. **Out-of-v1 items (Q14–Q20, Q24).** Recommended default: all out of v1 and
-   recorded as tasklist debt, each needing its own plan (P4): partner stock;
-   partial fills and substitution; billing and claims between parties; FHIR
-   `MedicationDispense`; walk-in patients at providers; multi-branch chains
-   (one site per facility row in v1); provider-owned lab catalogs;
-   self-registration and document upload; patient self-routing in the app.
+No open product decisions (2026-10-07). What remains before prod is sign-off,
+not a decision: counsel/CIL on the consent basis (rule 5), and clinical plus
+CIL on the two settings, pharmacy allergies (rule 6) and lab prior results
+(rule 7).
 
 ### Product and business
 
@@ -2259,41 +2278,41 @@ visible):
     treatment, and follows the patient's recorded choice.
   - The opt-out does not block it (rule 5).
   - **Counsel/CIL sign-off is required before prod enablement.**
-- **Q10 [USER] — Notifying providers.** Default: in-app notifications plus a
-  PHI-free SMS nudge.
+- **Q10 — Notifying providers. DECIDED 2026-10-07 (§10.1): the default is
+  accepted.** In-app notifications plus a PHI-free SMS nudge.
 - **Q11 — SMS replies on PLATFORM offers.** Default: **still accepted**, as a
   connectivity fallback (AC-30).
 - **Q12 — MFA for every provider user.** Default: **yes** (AC-13).
 - **Q13 — Pharmacy timeouts.** Default: the same as SMS (2 h reminder, 4 h
   auto-reject), configurable, and paused during a clarification.
-- **Q14 [USER] — Partial fills and generic substitution at a partner
+- **Q14 — (DECIDED 2026-10-07, §10.1) Partial fills and generic substitution at a partner
   pharmacy.**
   - Default: **out of v1.** The pharmacy refuses, or asks for a
     clarification.
   - P4 adds partial and substitute with the prescriber's approval.
-- **Q15 [USER] — Partner stock on e-Keneya.** Default: **out of v1** (P4).
-- **Q16 [USER] — Payments and billing between parties.** Default: **out of
+- **Q15 — (DECIDED 2026-10-07, §10.1) Partner stock on e-Keneya.** Default: **out of v1** (P4).
+- **Q16 — (DECIDED 2026-10-07, §10.1) Payments and billing between parties.** Default: **out of
   v1.** The patient pays the provider directly, outside e-Keneya. Insurance
   claims by providers are P4.
-- **Q17 — FHIR `MedicationDispense`.**
+- **Q17 — (DECIDED 2026-10-07, §10.1) FHIR `MedicationDispense`.**
   - Default: out of v1.
   - `MedicationRequest` exists (`fhir/mapper/MedicationRequestFhirMapper.java:29`,
     `fhir/provider/MedicationRequestFhirResourceProvider.java:40-49`);
     `MedicationDispense` does not.
   - A provider bean auto-advertises (`fhir/FhirConfig.java:23-26`, `:71`), so
     P4 is cheap.
-- **Q18 [USER] — Walk-in patients** who go straight to a private lab or
+- **Q18 — (DECIDED 2026-10-07, §10.1) Walk-in patients** who go straight to a private lab or
   pharmacy without a hospital order.
   - Default: **out of v1.** Orders and prescriptions originate from a
     participating hospital.
   - Walk-ins would need patient registration at providers, which the v1 fence
     forbids by design.
-- **Q19 [USER] — Providers with several branches.**
+- **Q19 — (DECIDED 2026-10-07, §10.1) Providers with several branches.**
   - Default: **one organisation, with branches as sites.** v1 onboards one
     site per facility row. A chain is an `Organization` of type PHARMACY or
     LABORATORY that groups its facility rows.
   - Staff who work across branches hold one assignment per branch.
-- **Q20 [USER] — Providers not on the platform.**
+- **Q20 — (DECIDED 2026-10-07, §10.1) Providers not on the platform.**
   - Default: **today's paths are kept.**
     - Pharmacies: SMS.
     - Labs: manual result entry, or HL7 into the ordering hospital through its
@@ -2307,7 +2326,7 @@ visible):
   - An optional expiry date is recorded and shown, and never required.
 - **Q23 — May a lab decline an order?** Default: **yes**, before any specimen
   (AC-47).
-- **Q24 [USER] — Lab test catalog and reference ranges at a private lab.**
+- **Q24 — (DECIDED 2026-10-07, §10.1) Lab test catalog and reference ranges at a private lab.**
   - Default: v1 uses the order's existing definition and its ranges.
   - A provider-owned catalog is P4. Until then, a private lab that uses
     different units sees "Not graded: units differ" (#819), which is safe.
@@ -2315,9 +2334,13 @@ visible):
   provider-facing screens. Hospital screens keep "hôpital". The code keeps
   `Hospital`.
 
-### Out of scope, recorded as tasklist debt in each phase's last task
+### Out of scope, recorded as tasklist debt
 
-- Self-registration.
+The ten P4 items below were added to `tasklist.md` (Standing platform debt)
+with this revision, one line each. The residuals after them are recorded by
+each phase's last task.
+
+- Self-registration with a review queue.
 - Document upload.
 - Partner stock.
 - Partial fills and substitution.
@@ -2329,8 +2352,8 @@ visible):
 - Patient self-routing in the app.
 - Row-level hospital deletion, when it ships, must delete
   `provider_verifications` rows first (§6.1).
-- The allergies sign-off (rule 6) and the consent sign-off (rule 5), tracked
-  until both are recorded.
+- The allergies sign-off (rule 6), the lab prior-results sign-off (rule 7) and
+  the consent sign-off (rule 5), tracked until all three are recorded.
 - The confinement timing residual (T2).
 - The SMS reply code "4 <ref>" for ready. The G15 plan already records it.
 
