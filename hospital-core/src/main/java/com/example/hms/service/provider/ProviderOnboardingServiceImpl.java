@@ -67,8 +67,6 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
     static final String MSG_BUSINESS_DUPLICATE = "provider.business.duplicate";
     static final String MSG_WRONG_STATE = "provider.verification.state";
 
-    /** The suspension reason a new provider carries until it is verified; a code, not prose. */
-    static final String PENDING_VERIFICATION_REASON = "PROVIDER_PENDING_VERIFICATION";
     static final String REVOKED_REASON = "PROVIDER_VERIFICATION_REVOKED";
 
     private static final String ENTITY_TYPE = "PROVIDER_FACILITY";
@@ -151,7 +149,7 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
     @Override
     public ProviderResponseDTO verify(UUID providerId, ProviderVerifyRequestDTO request) {
         requireVerifiedSuperAdmin();
-        Hospital facility = loadProvider(providerId);
+        Hospital facility = lockProvider(providerId);
         ProviderVerification verification = currentVerification(facility);
         requireStatus(verification, EnumSet.of(ProviderVerificationStatus.SUBMITTED));
         requirePendingLifecycle(facility);
@@ -208,7 +206,7 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
     @Override
     public ProviderResponseDTO reject(UUID providerId, ProviderDecisionRequestDTO request) {
         requireVerifiedSuperAdmin();
-        Hospital facility = loadProvider(providerId);
+        Hospital facility = lockProvider(providerId);
         ProviderVerification verification = currentVerification(facility);
         requireStatus(verification, EnumSet.of(ProviderVerificationStatus.SUBMITTED));
         decide(verification, ProviderVerificationStatus.REJECTED, request.getReason());
@@ -221,7 +219,7 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
     @Override
     public ProviderResponseDTO resubmit(UUID providerId, ProviderResubmitRequestDTO request) {
         requireVerifiedSuperAdmin();
-        Hospital facility = loadProvider(providerId);
+        Hospital facility = lockProvider(providerId);
         requireStatus(currentVerification(facility), RESUBMITTABLE);
 
         ProviderVerification next = new ProviderVerification();
@@ -237,7 +235,7 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
     @Override
     public ProviderResponseDTO revoke(UUID providerId, ProviderDecisionRequestDTO request) {
         requireVerifiedSuperAdmin();
-        Hospital facility = loadProvider(providerId);
+        Hospital facility = lockProvider(providerId);
         ProviderVerification verification = currentVerification(facility);
         requireStatus(verification, EnumSet.of(ProviderVerificationStatus.VERIFIED));
         decide(verification, ProviderVerificationStatus.REVOKED, request.getReason());
@@ -271,6 +269,19 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
         }
     }
 
+    /**
+     * The provider for a state transition, its row locked (PESSIMISTIC_WRITE)
+     * before any status is read. Verify, reject, resubmit and revoke of one
+     * provider, and its lifecycle restore, therefore run one at a time, and
+     * the verification read that follows sees what the previous one
+     * committed. The hospital row is the only lock these paths take.
+     */
+    private Hospital lockProvider(UUID providerId) {
+        return hospitalRepository.findByIdForUpdate(providerId)
+            .filter(Hospital::isProvider)
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_NOT_FOUND));
+    }
+
     /** A facility that is not a provider answers exactly as an unknown id. */
     private Hospital loadProvider(UUID providerId) {
         return hospitalRepository.findById(providerId)
@@ -295,9 +306,10 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
         }
     }
 
+    /** A transition from the wrong state is a conflict (409): another decision got there first. */
     private static void requireStatus(ProviderVerification verification, Set<ProviderVerificationStatus> allowed) {
         if (!allowed.contains(verification.getStatus())) {
-            throw new BusinessException(MSG_WRONG_STATE, verification.getStatus());
+            throw new ConflictException(MessageUtil.resolveOrRaw(MSG_WRONG_STATE, verification.getStatus()));
         }
     }
 

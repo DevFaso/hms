@@ -141,9 +141,49 @@ class ProviderLifecycleIT extends BaseIT {
         onboardingService.verify(one, ProviderVerifyRequestDTO.builder()
             .ifuMatchesRccm(true).cnssMatchesRccm(true).build());
 
-        assertThatThrownBy(() -> onboardingService.verify(two, ProviderVerifyRequestDTO.builder()
-            .ifuMatchesRccm(true).cnssMatchesRccm(true).build()))
+        ProviderVerifyRequestDTO confirmed = ProviderVerifyRequestDTO.builder()
+            .ifuMatchesRccm(true).cnssMatchesRccm(true).build();
+        assertThatThrownBy(() -> onboardingService.verify(two, confirmed))
             .isInstanceOf(ConflictException.class);
+    }
+
+    @Test
+    @DisplayName("archived before verification: restore brings it back SUSPENDED, then VERIFY makes it ACTIVE")
+    void archivedUnverifiedProviderCanStillBeVerified() {
+        UUID id = onboardingService.create(request(FacilityType.PHARMACY)).getId();
+        lifecycleService.archive(id, TenantLifecycleActionRequestDTO.builder().reason("Paused").build(), null);
+
+        lifecycleService.restore(id, null);
+
+        Hospital restored = hospitalRepository.findById(id).orElseThrow();
+        assertThat(restored.getLifecycleState()).isEqualTo(HospitalLifecycleState.SUSPENDED);
+        assertThat(restored.isActive()).isFalse();
+        assertThat(lifecycleGate.isBlocked(userAt(id))).isTrue();
+
+        onboardingService.verify(id, ProviderVerifyRequestDTO.builder()
+            .ifuMatchesRccm(true).cnssMatchesRccm(true).build());
+        assertThat(hospitalRepository.findById(id).orElseThrow().getLifecycleState())
+            .isEqualTo(HospitalLifecycleState.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("archived and revoked: restore brings it back SUSPENDED; resubmit and VERIFY reopen it")
+    void archivedRevokedProviderComesBackPending() {
+        UUID id = verifiedProvider();
+        lifecycleService.archive(id, TenantLifecycleActionRequestDTO.builder().reason("Closed").build(), null);
+        onboardingService.revoke(id, new ProviderDecisionRequestDTO("Licence withdrawn"));
+
+        lifecycleService.restore(id, null);
+
+        assertThat(hospitalRepository.findById(id).orElseThrow().getLifecycleState())
+            .isEqualTo(HospitalLifecycleState.SUSPENDED);
+        ProviderCreateRequestDTO evidence = request(FacilityType.PHARMACY);
+        onboardingService.resubmit(id, com.example.hms.payload.dto.provider.ProviderResubmitRequestDTO.builder()
+            .business(evidence.getBusiness()).professional(evidence.getProfessional()).build());
+        onboardingService.verify(id, ProviderVerifyRequestDTO.builder()
+            .ifuMatchesRccm(true).cnssMatchesRccm(true).build());
+        assertThat(hospitalRepository.findById(id).orElseThrow().getLifecycleState())
+            .isEqualTo(HospitalLifecycleState.ACTIVE);
     }
 
     private UUID verifiedProvider() {

@@ -7,6 +7,7 @@ import com.example.hms.enums.ProviderVerificationStatus;
 import com.example.hms.exception.BusinessRuleException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.repository.provider.ProviderVerificationRepository;
+import com.example.hms.service.provider.ProviderOnboardingService;
 import com.example.hms.utility.MessageUtil;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.exception.UnauthorizedException;
@@ -117,17 +118,29 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     @Override
     public HospitalLifecycleResponseDTO restore(UUID hospitalId, TenantLifecycleActionRequestDTO request) {
-        Hospital hospital = loadOrThrow(hospitalId);
+        // Locked, like every provider transition: a restore racing a revoke
+        // must see the verification the revoke committed.
+        Hospital hospital = hospitalRepository.findByIdForUpdate(hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         requireTransition(hospital, RESTORABLE, ACTION_RESTORE);
-        requireVerifiedIfProvider(hospital);
 
         HospitalLifecycleState previous = hospital.getLifecycleState();
-        hospital.setLifecycleState(HospitalLifecycleState.ACTIVE);
-        hospital.setActive(true);
+        HospitalLifecycleState target = restoreTarget(hospital);
+        hospital.setLifecycleState(target);
+        if (target == HospitalLifecycleState.ACTIVE) {
+            hospital.setActive(true);
+        } else {
+            // An unverified provider comes back to where onboarding left it:
+            // SUSPENDED and inactive, waiting for VERIFY.
+            hospital.setActive(false);
+            hospital.setSuspendedAt(Instant.now(clock));
+            hospital.setSuspendedBy(currentActorId());
+            hospital.setSuspensionReason(ProviderOnboardingService.PENDING_VERIFICATION_REASON);
+        }
         hospitalRepository.save(hospital);
         invalidateStatusCache();
 
-        String description = "Hospital restored from " + previous
+        String description = "Hospital restored from " + previous + " to " + target
             + (request != null && request.getReason() != null ? ": " + request.getReason() : "");
         recordAudit(hospital, AuditEventType.HOSPITAL_RESTORED, description);
         return toResponse(hospital);
@@ -205,23 +218,33 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
     }
 
     /**
-     * Provider plan AC-4 / T22: VERIFY is the only way a provider becomes
-     * ACTIVE. The restore refuses a provider facility whose current
-     * verification is not VERIFIED (never verified, rejected or revoked) with
-     * 409 {@code provider.not-verified}; a verified provider that was
-     * suspended comes back as any hospital does.
+     * Where a restore lands (provider plan AC-4 / T22: VERIFY is the only way
+     * a provider becomes ACTIVE).
+     * <ul>
+     *   <li>A hospital, or a provider whose current verification is VERIFIED:
+     *       ACTIVE, as before.</li>
+     *   <li>An unverified provider (submitted, rejected or revoked) that was
+     *       ARCHIVED: back to SUSPENDED and inactive, so it can be verified,
+     *       or re-submitted then verified. Never ACTIVE.</li>
+     *   <li>An unverified provider already SUSPENDED: nothing to restore;
+     *       409 {@code provider.not-verified} (VERIFY is the way on).</li>
+     * </ul>
      */
-    private void requireVerifiedIfProvider(Hospital hospital) {
+    private HospitalLifecycleState restoreTarget(Hospital hospital) {
         if (!hospital.isProvider()) {
-            return;
+            return HospitalLifecycleState.ACTIVE;
         }
         boolean verified = providerVerificationRepository
             .findFirstByHospital_IdOrderByCreatedAtDesc(hospital.getId())
             .map(v -> v.getStatus() == ProviderVerificationStatus.VERIFIED)
             .orElse(false);
-        if (!verified) {
+        if (verified) {
+            return HospitalLifecycleState.ACTIVE;
+        }
+        if (hospital.getLifecycleState() == HospitalLifecycleState.SUSPENDED) {
             throw new ConflictException(MessageUtil.resolveOrRaw("provider.not-verified"));
         }
+        return HospitalLifecycleState.SUSPENDED;
     }
 
     private void requireTransition(Hospital hospital, Set<HospitalLifecycleState> allowed, String action) {

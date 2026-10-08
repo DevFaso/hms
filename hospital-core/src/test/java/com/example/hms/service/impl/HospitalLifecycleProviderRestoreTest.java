@@ -54,7 +54,35 @@ class HospitalLifecycleProviderRestoreTest {
             mfaService, Clock.fixed(Instant.parse("2026-10-08T09:00:00Z"), ZoneOffset.UTC), verificationRepository);
     }
 
-    @ParameterizedTest(name = "a provider whose current verification is {0} is not restored (409)")
+    @ParameterizedTest(name = "an ARCHIVED provider whose verification is {0} comes back SUSPENDED and inactive, never ACTIVE")
+    @EnumSource(value = ProviderVerificationStatus.class, names = {"SUBMITTED", "REJECTED", "REVOKED"})
+    void archivedUnverifiedProviderReturnsToPending(ProviderVerificationStatus status) {
+        Hospital provider = suspended(FacilityType.PHARMACY);
+        provider.setLifecycleState(HospitalLifecycleState.ARCHIVED);
+        current(provider, status);
+        when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service().restore(provider.getId(), null);
+
+        assertThat(provider.getLifecycleState()).isEqualTo(HospitalLifecycleState.SUSPENDED);
+        assertThat(provider.isActive()).isFalse();
+        assertThat(provider.getSuspensionReason()).isEqualTo("PROVIDER_PENDING_VERIFICATION");
+    }
+
+    @Test
+    @DisplayName("an ARCHIVED, VERIFIED provider is restored ACTIVE")
+    void archivedVerifiedProviderIsRestored() {
+        Hospital provider = suspended(FacilityType.LABORATORY);
+        provider.setLifecycleState(HospitalLifecycleState.ARCHIVED);
+        current(provider, ProviderVerificationStatus.VERIFIED);
+
+        service().restore(provider.getId(), null);
+
+        assertThat(provider.getLifecycleState()).isEqualTo(HospitalLifecycleState.ACTIVE);
+        assertThat(provider.isActive()).isTrue();
+    }
+
+    @ParameterizedTest(name = "a SUSPENDED provider whose current verification is {0} is not restored (409)")
     @EnumSource(value = ProviderVerificationStatus.class, names = {"SUBMITTED", "REJECTED", "REVOKED"})
     void unverifiedProviderIsRefused(ProviderVerificationStatus status) {
         Hospital provider = suspended(FacilityType.PHARMACY);
@@ -110,6 +138,7 @@ class HospitalLifecycleProviderRestoreTest {
             .build();
         h.setId(UUID.randomUUID());
         when(hospitalRepository.findById(h.getId())).thenReturn(Optional.of(h));
+        when(hospitalRepository.findByIdForUpdate(h.getId())).thenReturn(Optional.of(h));
         return h;
     }
 

@@ -139,7 +139,7 @@ class HospitalLifecycleServiceImplTest {
         hospital.setLifecycleState(HospitalLifecycleState.SUSPENDED);
         hospital.setActive(false);
         hospital.setSuspendedAt(NOW);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
 
         HospitalLifecycleResponseDTO result = service.restore(hospitalId, null);

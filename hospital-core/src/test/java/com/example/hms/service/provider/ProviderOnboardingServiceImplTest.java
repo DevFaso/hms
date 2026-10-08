@@ -351,7 +351,7 @@ class ProviderOnboardingServiceImplTest {
             ProviderVerifyRequestDTO request = verifyRequest(true, true);
 
             assertThatThrownBy(() -> service.verify(id, request))
-                .isInstanceOf(BusinessException.class);
+                .isInstanceOf(ConflictException.class);
         }
 
         @Test
@@ -360,6 +360,7 @@ class ProviderOnboardingServiceImplTest {
             Hospital hospital = new Hospital();
             hospital.setId(UUID.randomUUID());
             when(hospitalRepository.findById(hospital.getId())).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findByIdForUpdate(hospital.getId())).thenReturn(Optional.of(hospital));
             UUID unknown = UUID.randomUUID();
 
             UUID hospitalId = hospital.getId();
@@ -434,7 +435,7 @@ class ProviderOnboardingServiceImplTest {
             UUID id = facility.getId();
             ProviderResubmitRequestDTO request = new ProviderResubmitRequestDTO(business(), professional());
             assertThatThrownBy(() -> service.resubmit(id, request))
-                .isInstanceOf(BusinessException.class);
+                .isInstanceOf(ConflictException.class);
         }
 
         @Test
@@ -496,7 +497,7 @@ class ProviderOnboardingServiceImplTest {
             UUID id = facility.getId();
             ProviderDecisionRequestDTO request = new ProviderDecisionRequestDTO("x");
             assertThatThrownBy(() -> service.revoke(id, request))
-                .isInstanceOf(BusinessException.class);
+                .isInstanceOf(ConflictException.class);
         }
     }
 
@@ -512,6 +513,7 @@ class ProviderOnboardingServiceImplTest {
             .build();
         facility.setId(UUID.randomUUID());
         when(hospitalRepository.findById(facility.getId())).thenReturn(Optional.of(facility));
+        when(hospitalRepository.findByIdForUpdate(facility.getId())).thenReturn(Optional.of(facility));
         return facility;
     }
 

@@ -24,6 +24,12 @@ import java.util.UUID;
  */
 public interface ProviderOnboardingService {
 
+    /**
+     * The suspension reason of a provider waiting for VERIFY (new, or brought
+     * back from an archive unverified); a code, not prose.
+     */
+    String PENDING_VERIFICATION_REASON = "PROVIDER_PENDING_VERIFICATION";
+
     /** AC-1: a SUSPENDED, inactive facility and a SUBMITTED verification. */
     ProviderResponseDTO create(ProviderCreateRequestDTO request);
 
