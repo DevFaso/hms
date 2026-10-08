@@ -423,8 +423,15 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             || hasDifferentHospital(target.getHospital(), newHospital);
     }
 
-    /** The row starts over as a fresh POST: inactive, new codes, verification cleared. */
+    /**
+     * The row starts over as a fresh POST: inactive, new codes, verification
+     * cleared, and the caller as its registrar. The registrar receives the new
+     * code and is the one {@link #confirmAssignment} accepts; keeping the
+     * original one would hand the new grant to someone the caller chose
+     * nothing about, who may hold no rights at the new hospital.
+     */
     private void restartInvitation(UserRoleHospitalAssignment target, User holder, Hospital hospital) {
+        target.setRegisteredBy(resolveCurrentAuthenticatedUser().orElse(null));
         target.setActive(false);
         target.setAssignmentCode(generateAssignCode(holder, hospital));
         target.setConfirmationCode(generateConfirmationCode());
@@ -761,8 +768,11 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                     locale));
         }
 
-        UserRoleHospitalAssignment assignment = assignmentRepository.findById(assignmentId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND, assignmentId));
+        // Confirming activates the row, so it takes the scope every other
+        // change by id takes: a row the caller may not change answers exactly
+        // as a missing id, before the code is looked at, so neither the code
+        // nor the answer tells an out-of-scope caller anything about the row.
+        UserRoleHospitalAssignment assignment = findChangeable(assignmentId);
 
         if (assignment.getConfirmationVerifiedAt() != null) {
             throw new BusinessException(

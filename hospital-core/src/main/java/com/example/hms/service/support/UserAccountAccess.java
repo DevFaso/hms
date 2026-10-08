@@ -53,6 +53,16 @@ import java.util.stream.Collectors;
  *       who could reset the password and sign in as them. Admins are
  *       administered by the super-admin only, so one hospital admin cannot
  *       take over a peer.</li>
+ *   <li><b>Pending rows</b>: an assignment that is inactive AND whose code was
+ *       never confirmed ({@link #grantsAccountVisibility}) is an invitation,
+ *       not a footprint. It gives no hospital a view of the account, in
+ *       {@link #canView}, {@link #canAdminister} and the directory query
+ *       alike: creating a row needs no consent from its holder, so otherwise
+ *       an admin could attach one to another hospital's user and read that
+ *       account. The row itself stays visible through {@code /assignments}
+ *       ({@link #assignmentScope}); only the account record waits until the
+ *       holder confirms. A pending row still counts AGAINST access (the admin
+ *       roles that shield an account, the "every assignment here" rule).</li>
  *   <li><b>Grant</b> (admin-register): a super-admin grants any role at any
  *       hospital; a hospital admin grants non-admin roles at hospitals they
  *       administer; every other registrar grants PATIENT only, at a hospital
@@ -154,8 +164,9 @@ public class UserAccountAccess {
 
     /**
      * May the caller read this account's full record? Self; a super-admin; or
-     * a hospital admin of any hospital the account is assigned to, unless the
-     * account is a super-admin's.
+     * a hospital admin of any hospital where the account holds an assignment
+     * that is active or confirmed ({@link #grantsAccountVisibility}), unless
+     * the account is a super-admin's.
      */
     public boolean canView(User target) {
         if (target == null) {
@@ -171,7 +182,22 @@ public class UserAccountAccess {
         }
         List<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUserId(target.getId());
         return !holdsAny(target, assignments, Set.of(SUPER_ADMIN))
-            && assignments.stream().map(UserAccountAccess::hospitalIdOf).anyMatch(administered::contains);
+            && assignments.stream()
+                .filter(UserAccountAccess::grantsAccountVisibility)
+                .map(UserAccountAccess::hospitalIdOf)
+                .anyMatch(administered::contains);
+    }
+
+    /**
+     * Does this assignment give its hospital a view of the holder's account?
+     * Active, or confirmed by its code (a former employee's switched-off row
+     * still counts). A row both inactive and never confirmed is a pending
+     * invitation, which anyone with a grant can create for any user, so it
+     * opens nothing until its holder confirms it.
+     */
+    public static boolean grantsAccountVisibility(UserRoleHospitalAssignment assignment) {
+        return assignment != null
+            && (Boolean.TRUE.equals(assignment.getActive()) || assignment.getConfirmationVerifiedAt() != null);
     }
 
     /** May the caller edit another person's account, or restore it? */
@@ -288,8 +314,9 @@ public class UserAccountAccess {
     /**
      * Which existing hospital assignments the caller may read and change
      * through {@code /assignments/{id}} and its siblings (get, update,
-     * regenerate the code, resend the invitation, deactivate, delete, retire a
-     * user's rows). The same people {@link #requireMayGrant} lets grant there:
+     * regenerate the code, resend the invitation, the registrar's confirm,
+     * deactivate, delete, retire a user's rows). The same people
+     * {@link #requireMayGrant} lets grant there:
      * <ul>
      *   <li>a super-admin (the verified context flag): every row, global rows
      *       included;</li>
@@ -355,19 +382,22 @@ public class UserAccountAccess {
      * <ul>
      *   <li>A super-admin (the verified context flag) sees every account.</li>
      *   <li>Anyone else holding an ACTIVE assignment in a role other than
-     *       PATIENT sees the accounts that hold an assignment, in any role and
-     *       active or not, at a hospital where the caller holds such an
-     *       assignment. The caller's own PATIENT assignments do not widen it:
+     *       PATIENT sees the accounts that hold an assignment, in any role,
+     *       active or confirmed ({@link #grantsAccountVisibility}), at a
+     *       hospital where the caller holds such an assignment. The caller's
+     *       own PATIENT assignments do not widen it:
      *       a nurse at A who is a patient at B does not see B's staff.</li>
      * </ul>
      *
-     * <p>The target's assignment counts whether active or not because every
-     * admin-registered account starts with INACTIVE assignments until its
-     * holder verifies the emailed code (option A, 2026-09-02): the staff
-     * page's account picker must still offer the nurse the hospital admin
-     * registered five minutes ago. A former employee whose assignment was
-     * switched off stays visible to the hospital that employed them, which
-     * already holds that account; what is closed is the cross-tenant view.
+     * <p>A pending row (inactive and never confirmed) does not count: creating
+     * one needs no consent from its holder, so it must not open another
+     * hospital's user to this one. The cost: an account the hospital admin
+     * registered a moment ago (option A, 2026-09-02: it starts inactive until
+     * the emailed code is confirmed) is listed only once its holder confirms;
+     * until then the pending row is on {@code /assignments}. A former
+     * employee whose assignment was switched off after confirming stays
+     * visible to the hospital that employed them, which already holds that
+     * account; what is closed is the cross-tenant view.
      * A global assignment (no hospital) matches no hospital, so platform
      * accounts are the super-admin's to see.
      *
@@ -444,7 +474,13 @@ public class UserAccountAccess {
         boolean assignedOnlyHere = assignments.stream()
             .map(UserAccountAccess::hospitalIdOf)
             .allMatch(hospitalId -> hospitalId != null && administered.contains(hospitalId));
-        if (!assignedOnlyHere) {
+        // Every row counts against (pending ones included); only a row that is
+        // active or confirmed can be the one that puts the account here.
+        boolean confirmedHere = assignments.stream()
+            .filter(UserAccountAccess::grantsAccountVisibility)
+            .map(UserAccountAccess::hospitalIdOf)
+            .anyMatch(administered::contains);
+        if (!assignedOnlyHere || !confirmedHere) {
             return false;
         }
         // A patient's footprint is also its registrations: one assignment here

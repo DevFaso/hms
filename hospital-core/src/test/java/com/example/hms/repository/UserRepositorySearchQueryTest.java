@@ -75,10 +75,14 @@ class UserRepositorySearchQueryTest {
                     .contains("u.isDeleted = false");
         }
         // Scoped, a role only counts through an assignment at the caller's
-        // hospitals, active or not (as the list's scope); unscoped, an active one.
+        // hospitals, active or confirmed (as the list's scope: a pending row
+        // opens nothing); unscoped, an active one.
         assertThat(UserRepository.DIRECTORY_SEARCH_FILTERS)
-                .contains("(:scoped = true AND a.hospital.id IN :hospitalIds)")
+                .contains("(:scoped = true AND a.hospital.id IN :hospitalIds")
+                .contains("AND (a.active = true OR a.confirmationVerifiedAt IS NOT NULL)))")
                 .contains("(:scoped = false AND a.active = true)");
+        assertThat(UserRepository.DIRECTORY_VISIBLE)
+                .contains("AND (ha.active = true OR ha.confirmationVerifiedAt IS NOT NULL)");
         String globalRole = UserRepository.DIRECTORY_SEARCH_FILTERS.substring(
                 UserRepository.DIRECTORY_SEARCH_FILTERS.indexOf("OR (:scoped = false"));
         assertThat(globalRole).as("a global UserRole counts only unscoped")

@@ -4618,6 +4618,7 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 - **G13 residual: no claim on the lab, imaging or any other work queue (2026-10-07, left by #830).** Open.
 - **G13 residual: no purge of claim rows left by paths that do not release them (2026-10-07, left by #830).** They are invisible once the order leaves the queue and harmless; only a prescription delete removes them. Open.
 - **G13 residual: claim updates reach other pharmacists by 60 s polling, not server push (SSE/WebSocket) (2026-10-07, left by #830).** Open.
+- **Pharmacy work queue: releasing your only claim on the last page of the Mine filter can reload an empty page (pre-existing paging, made likelier by G13 #830).** Open.
 
 - **The patient SMS in `PartnerExchangeService.applyReply` is sent before
   commit (2026-10-07, left by #812).** `channel.notifyPatientAccepted`
