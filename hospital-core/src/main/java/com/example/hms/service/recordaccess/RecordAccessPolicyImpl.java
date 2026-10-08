@@ -132,6 +132,15 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
                 RecordAccessDenialReason.HOSPITAL_UNKNOWN, null);
         }
         Hospital h = hospital.get();
+        // A provider facility (pharmacy, laboratory) never reads a chart here:
+        // first, before the posture, the opt-out, the staff row, a
+        // registration (even one planted by SQL), the carriers and
+        // break-the-glass (provider plan §3.3, AC-9). Its work reaches
+        // patient data only through the order-bound grant (P2).
+        if (h.isProvider()) {
+            return RecordAccessDecision.refused(patientId, hospitalId, actorUserId,
+                RecordAccessDenialReason.PROVIDER_FACILITY, null);
+        }
         RecordAccessPosture posture = h.getRecordAccessPosture() != null
             ? h.getRecordAccessPosture() : RecordAccessPosture.TREATMENT_PRESUMED;
 

@@ -138,9 +138,22 @@ public class PatientHospitalRegistration extends BaseEntity {
     @PrePersist
     @PreUpdate
     private void normalize() {
+        requireClinicalHospital();
         ensureTemporalDefaults();
         ensurePatientFullName();
         normalizeTextualFields();
+    }
+
+    /**
+     * A patient registers at a hospital only. A registration is the treatment
+     * relationship (E9 #58), so one at a pharmacy or laboratory would open the
+     * chart to it (provider plan §3.3, AC-10). The backstop; the registration
+     * service refuses a provider first, with the not-found answer.
+     */
+    private void requireClinicalHospital() {
+        if (hospital != null && hospital.isProvider()) {
+            throw new IllegalStateException("registration.hospital.notClinical");
+        }
     }
 
     private void ensureTemporalDefaults() {

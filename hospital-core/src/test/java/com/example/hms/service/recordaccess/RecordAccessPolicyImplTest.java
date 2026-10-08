@@ -91,6 +91,39 @@ class RecordAccessPolicyImplTest {
     }
 
     @Test
+    @DisplayName("a provider facility → PROVIDER_FACILITY first: with a staff row, a planted registration and a live break-glass session")
+    void providerFacilityIsRefusedFirst() {
+        hospital.setFacilityType(com.example.hms.enums.FacilityType.PHARMACY);
+        PatientHospitalRegistration planted = new PatientHospitalRegistration();
+        planted.setId(UUID.randomUUID());
+        when(registrationRepository.findByPatientIdAndHospitalId(patient, hospitalId)).thenReturn(Optional.of(planted));
+        BreakGlassSession session = new BreakGlassSession();
+        session.setId(UUID.randomUUID());
+        when(breakGlassGate.liveSession(actor, patient, hospitalId)).thenReturn(Optional.of(session));
+
+        RecordAccessDecision d = policy.decide(actor, patient, hospitalId);
+
+        assertThat(d.permitted()).isFalse();
+        assertThat(d.reason()).isEqualTo(RecordAccessDenialReason.PROVIDER_FACILITY);
+        verify(optOutRepository, never()).existsByPatient_IdAndRevokedAtIsNull(any());
+        verify(staffRepository, never()).findByUserIdAndHospitalId(any(), any());
+        verify(registrationRepository, never()).findByPatientIdAndHospitalId(any(), any());
+        verify(resolver, never()).resolve(any(), any(), any());
+        verify(breakGlassGate, never()).liveSession(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("a laboratory is refused the same way, and reads no other hospital's rows")
+    void laboratoryReadsOnlyItself() {
+        hospital.setFacilityType(com.example.hms.enums.FacilityType.LABORATORY);
+
+        assertThat(policy.decide(actor, patient, hospitalId).reason())
+            .isEqualTo(RecordAccessDenialReason.PROVIDER_FACILITY);
+        assertThat(policy.readableHospitalIds(actor, patient, hospitalId)).containsExactly(hospitalId);
+        verify(registrationRepository, never()).findByPatientId(any());
+    }
+
+    @Test
     @DisplayName("unknown hospital → HOSPITAL_UNKNOWN, and nothing else is consulted")
     void hospitalUnknown() {
         UUID other = UUID.randomUUID();

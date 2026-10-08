@@ -247,6 +247,25 @@ class BreakGlassServiceImplTest {
         }
 
         @Test
+        @DisplayName("a provider facility answers exactly as an unknown hospital, and no session is saved")
+        void declareAtAProviderIsRefusedAsUnknown() {
+            when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
+            hospital.setFacilityType(com.example.hms.enums.FacilityType.PHARMACY);
+            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+
+            BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
+                .patientId(patientId)
+                .hospitalId(hospitalId)
+                .reason("Override needed for trauma chart.")
+                .build();
+
+            assertThatThrownBy(() -> service.declare(req))
+                .isInstanceOf(ResourceNotFoundException.class);
+            verify(sessionRepository, never()).save(any());
+            verify(patientRepository, never()).findById(any());
+        }
+
+        @Test
         @DisplayName("404s when hospital is unknown")
         void declareUnknownHospital() {
             when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
