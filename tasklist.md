@@ -4665,6 +4665,66 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   settings, or back-merge each one. A repository-settings decision for the
   user. Open.
 
+- **External providers (P4): Partner stock on e-Keneya.** Out of v1 by the
+  user's decision of 2026-10-07. A provider pharmacy's stock held in e-Keneya,
+  so a `Dispense` row can exist at a provider
+  (`DispenseServiceImpl.requireDispensary` widened). Q15. Needs its own plan
+  before work starts (`docs/plan/external-provider-organisations-plan.md`,
+  §10.1). Open.
+
+- **External providers (P4): Partial fills and generic substitution at a
+  partner pharmacy.** Out of v1 by the user's decision of 2026-10-07. With the
+  prescriber's approval; in v1 the pharmacy refuses or asks for a
+  clarification. Q14. Needs its own plan before work starts
+  (`docs/plan/external-provider-organisations-plan.md`, §10.1). Open.
+
+- **External providers (P4): Billing and claims between parties.** Out of v1
+  by the user's decision of 2026-10-07. Provider invoicing and insurance
+  claims by providers; in v1 the patient pays the provider directly, outside
+  e-Keneya. Q16. Needs its own plan before work starts
+  (`docs/plan/external-provider-organisations-plan.md`, §10.1). Open.
+
+- **External providers (P4): FHIR `MedicationDispense`.** Out of v1 by the
+  user's decision of 2026-10-07. Mapper and resource provider for partner
+  dispenses (`MedicationRequest` exists; a provider bean auto-advertises).
+  Q17. Needs its own plan before work starts
+  (`docs/plan/external-provider-organisations-plan.md`, §10.1). Open.
+
+- **External providers (P4): Walk-in patients at a provider.** Out of v1 by
+  the user's decision of 2026-10-07. A patient going straight to a private lab
+  or pharmacy without a hospital order; needs a new fence design, since v1
+  forbids registration at providers. Q18. Needs its own plan before work
+  starts (`docs/plan/external-provider-organisations-plan.md`, §10.1). Open.
+
+- **External providers (P4): Multi-branch provider chains.** Out of v1 by the
+  user's decision of 2026-10-07. An `Organization` of type PHARMACY or
+  LABORATORY grouping its facility rows; v1 is one site per facility row, and
+  the RCCM/IFU uniqueness among verified facilities must be relaxed. Q19.
+  Needs its own plan before work starts
+  (`docs/plan/external-provider-organisations-plan.md`, §10.1). Open.
+
+- **External providers (P4): Provider-owned lab catalogs.** Out of v1 by the
+  user's decision of 2026-10-07. A private lab's own test definitions and
+  reference ranges; v1 uses the order's definition, and a unit mismatch shows
+  "Not graded: units differ" (#819). Q24. Needs its own plan before work
+  starts (`docs/plan/external-provider-organisations-plan.md`, §10.1). Open.
+
+- **External providers (P4): Provider self-registration with a review queue.**
+  Out of v1 by the user's decision of 2026-10-07. In v1, onboarding is super-admin
+  only (Q1). Needs its own plan before work starts
+  (`docs/plan/external-provider-organisations-plan.md`, §10.1). Open.
+
+- **External providers (P4): Document upload for provider verification.** Out
+  of v1 by the user's decision of 2026-10-07. The RCCM, IFU, CNSS and licence
+  documents are checked offline in v1 (Q2). Needs its own plan before work
+  starts (`docs/plan/external-provider-organisations-plan.md`, §10.1). Open.
+
+- **External providers (P4): Patient self-routing in the app.** Out of v1 by
+  the user's decision of 2026-10-07. The patient picks the pharmacy or lab in
+  the app; in v1 the patient chooses and staff record it (Q5). Needs its own
+  plan before work starts
+  (`docs/plan/external-provider-organisations-plan.md`, §10.1). Open.
+
 ## Open clinical questions — kept open on purpose, not forgotten
 
 These are questions only a clinician can settle. None of them blocks anything:
