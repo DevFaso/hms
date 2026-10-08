@@ -87,6 +87,15 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     @Query("SELECT h FROM Hospital h WHERE h.id = :id")
     Optional<Hospital> findByIdForUpdate(@Param("id") UUID id);
 
+    /**
+     * The provider facility types (never HOSPITAL) among {@code ids}: the
+     * confinement filter's one lookup per request, over the caller's
+     * permitted set (provider plan §3.3). Empty for a hospital user.
+     */
+    @Query("SELECT DISTINCT h.facilityType FROM Hospital h WHERE h.id IN :ids"
+        + " AND h.facilityType <> com.example.hms.enums.FacilityType.HOSPITAL")
+    List<com.example.hms.enums.FacilityType> findProviderFacilityTypesByIdIn(@Param("ids") Collection<UUID> ids);
+
     /* Organization-related queries */
     /**
      * Clinical hospitals with no organisation: the input of the two boot jobs

@@ -30,6 +30,8 @@ import java.util.UUID;
  * <ul>
  *   <li>{@code /user/**} — allowed; Spring's user-destination resolver scopes
  *       these to the subscribing principal's own session.</li>
+ *   <li>A provider user (an active assignment at a pharmacy or laboratory)
+ *       may subscribe to nothing else (provider plan §6.4).</li>
  *   <li>{@code /topic/emergency-broadcast} — allowed; system-wide by design.</li>
  *   <li>{@code /topic/notifications} — allowed; broadcast fallback used only
  *       when a notification has no recipient username.</li>
@@ -68,8 +70,19 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
             throw denied(user, destination, "missing principal or destination");
         }
 
-        if (destination.startsWith(USER_DESTINATION_PREFIX)
-                || EMERGENCY_BROADCAST_TOPIC.equals(destination)
+        if (destination.startsWith(USER_DESTINATION_PREFIX)) {
+            return message;
+        }
+
+        // Provider rule (provider plan §6.4, T21): a user with a live
+        // assignment at a pharmacy or laboratory subscribes to /user/** only.
+        // A hospital's emergency alerts, the unaddressed notifications
+        // broadcast and every patient tracker are no business of theirs.
+        if (isProviderUser(user)) {
+            throw denied(user, destination, "provider users may subscribe to /user/** only");
+        }
+
+        if (EMERGENCY_BROADCAST_TOPIC.equals(destination)
                 || NOTIFICATIONS_BROADCAST_TOPIC.equals(destination)) {
             return message;
         }
@@ -103,6 +116,17 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
         if (!assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(userId, hospitalId)) {
             throw denied(user, destination, "no active assignment at hospital");
         }
+    }
+
+    /**
+     * True when the subscriber holds an active assignment at a provider
+     * facility. A principal that carries no user id cannot be told apart, so
+     * it is treated as one (fail closed): the ws-ticket handshake always
+     * carries the user id, so no real subscriber falls here.
+     */
+    private boolean isProviderUser(Principal user) {
+        UUID userId = resolveUserId(user);
+        return userId == null || assignmentRepository.existsActiveAtProviderFacility(userId);
     }
 
     private static boolean hasAuthority(Principal user, String authority) {

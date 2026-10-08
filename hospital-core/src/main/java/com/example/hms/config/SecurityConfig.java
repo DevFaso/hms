@@ -252,6 +252,13 @@ public class SecurityConfig {
      */
     private final ObjectProvider<com.example.hms.service.apikey.ApiKeyService> apiKeyServiceProvider;
 
+    /**
+     * Provider confinement (provider plan §6.4). ObjectProvider for the same
+     * reason as above: in a {@code @WebMvcTest} slice there is no policy bean
+     * and the filter passes every request through.
+     */
+    private final ObjectProvider<com.example.hms.security.provider.ProviderConfinementPolicy> providerConfinementPolicyProvider;
+
     @Value("${app.cors.allowed-origins:http://localhost:4200}")
     private String allowedOrigins;
 
@@ -931,6 +938,14 @@ public class SecurityConfig {
                     }
                 }
             }, UsernamePasswordAuthenticationFilter.class);
+
+        // Provider confinement: after both context filters (the legacy one
+        // above, the Keycloak one after BearerTokenAuthenticationFilter) and
+        // before AuthorizationFilter, so a confined caller gets the unmapped
+        // path's 404 for a hospital endpoint, never a URL matcher's 403.
+        http.addFilterBefore(
+            new com.example.hms.security.provider.ProviderFacilityConfinementFilter(providerConfinementPolicyProvider),
+            org.springframework.security.web.access.intercept.AuthorizationFilter.class);
 
         // ── Hardened HTTP response headers ──────────────────────────────────
         http.headers(headers -> headers

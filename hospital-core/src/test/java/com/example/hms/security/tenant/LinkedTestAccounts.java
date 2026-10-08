@@ -65,6 +65,31 @@ public final class LinkedTestAccounts {
         return saved;
     }
 
+    /** A provider facility row (a PHARMACY or LABORATORY), lifecycle ACTIVE as a verified one is. */
+    public Hospital provider(String name, com.example.hms.enums.FacilityType type) {
+        Hospital saved = hospital(name);
+        saved.setFacilityType(type);
+        return hospitals.save(saved);
+    }
+
+    /** One more active assignment for an existing account ({@code null} hospital: a global row). */
+    public void assign(User user, UUID hospitalId, String roleCode) {
+        String code = roleCode.startsWith("ROLE_") ? roleCode : "ROLE_" + roleCode;
+        Hospital at = hospitalId == null ? null : hospitals.findById(hospitalId).orElseThrow();
+        Role role = roles.findByCode(code).orElseGet(() -> roles.save(Role.builder()
+            .name(code).code(code).description(code + " role").build()));
+        assignmentIds.add(assignments.save(UserRoleHospitalAssignment.builder()
+            .assignmentCode("ASSIGN-LTA-" + UUID.randomUUID().toString().substring(0, 8))
+            .description(code + " assignment")
+            .user(user)
+            .hospital(at)
+            .role(role)
+            .startDate(LocalDate.now())
+            .assignedAt(LocalDateTime.now())
+            .active(true)
+            .build()).getId());
+    }
+
     /**
      * An active local account holding each role at {@code hospitalId} ({@code null}: a global
      * assignment). The username is {@code username} plus a unique suffix; read it back from the
