@@ -122,7 +122,7 @@ public class UserRoleHospitalAssignmentController {
         log.info("📧 Resending notifications for assignment '{}'", assignmentId);
         com.example.hms.utility.ActivationDeliveryTracker.open();
         try {
-            assignmentService.sendNotifications(assignmentId);
+            assignmentService.resendNotifications(assignmentId);
             return ResponseEntity.ok(com.example.hms.utility.ActivationDeliveryTracker.close());
         } finally {
             com.example.hms.utility.ActivationDeliveryTracker.close();
@@ -247,12 +247,12 @@ public class UserRoleHospitalAssignmentController {
     @DeleteMapping("/user/{userId}")
     public ResponseEntity<Void> deleteAllForUser(@PathVariable UUID userId) {
         log.warn("🔒 Deactivating all assignments for user ID {}", userId);
-        assignmentService.deleteAllAssignmentsForUser(userId);
+        assignmentService.retireAssignmentsForUserWithinCallerScope(userId);
         return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "Delete a role if it's not assigned")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @DeleteMapping("/role/{roleId}")
     public ResponseEntity<Void> deleteRoleIfUnassigned(@PathVariable UUID roleId) {
         log.warn("🔐 Attempting to delete role ID {}", roleId);

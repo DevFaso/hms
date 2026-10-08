@@ -127,6 +127,9 @@ class PrescriptionServiceImplTest {
     private java.time.Clock clock = java.time.Clock.fixed(
         java.time.Instant.parse("2026-09-22T10:30:00Z"), java.time.ZoneOffset.UTC);
 
+    /** G13: the work-queue claim; exit-path releases are verified where they matter. */
+    @Mock private com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaimService;
+
     @InjectMocks
     private PrescriptionServiceImpl prescriptionService;
 
@@ -3432,6 +3435,56 @@ class PrescriptionServiceImplTest {
             requestWithStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED), Locale.ENGLISH);
 
         verifyNoInteractions(preparedFills);
+    }
+
+    // ═══════════════ G13: withdrawal and edit end the work-queue claim (AC-11) ═══════════════
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.PrescriptionStatus.class,
+        names = {"CANCELLED", "DISCONTINUED"})
+    void withdrawalEndsTheQueueClaimAsAPlainRelease(com.example.hms.enums.PrescriptionStatus withdrawnTo) {
+        // global view (no pinned hospital): findByIdForUpdate, a super-admin's path; no scope call here
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = stubUpdateTo(prescriptionId,
+            com.example.hms.enums.PrescriptionStatus.SIGNED, withdrawnTo);
+        UUID actor = UUID.randomUUID();
+        when(authService.getCurrentUserId()).thenReturn(actor);
+
+        prescriptionService.updatePrescription(prescriptionId, requestWithStatus(withdrawnTo), Locale.ENGLISH);
+
+        verify(queueClaimService).releaseOnExit(existing,
+            com.example.hms.enums.QueueClaimReleaseReason.WITHDRAWN, actor,
+            com.example.hms.enums.QueueClaimExitActor.OTHER);
+    }
+
+    @Test
+    void anyEditEndsTheQueueClaimAsChanged() {
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = stubUpdateTo(prescriptionId,
+            com.example.hms.enums.PrescriptionStatus.SIGNED,
+            com.example.hms.enums.PrescriptionStatus.SIGNED);
+        UUID actor = UUID.randomUUID();
+        when(authService.getCurrentUserId()).thenReturn(actor);
+
+        prescriptionService.updatePrescription(prescriptionId, buildRequest(), Locale.ENGLISH);
+
+        verify(queueClaimService).releaseOnExit(existing,
+            com.example.hms.enums.QueueClaimReleaseReason.CHANGED, actor,
+            com.example.hms.enums.QueueClaimExitActor.OTHER);
+    }
+
+    @Test
+    void aRefusedEditKeepsTheQueueClaim() {
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        PrescriptionRequestDTO request = requestWithStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class);
+        verifyNoInteractions(queueClaimService);
     }
 
     @Test

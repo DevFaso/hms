@@ -520,6 +520,36 @@ class DepartmentServiceImplTest {
     }
 
     @Test
+    void createDepartment_atAProviderFacility_answersAsAnUnknownHospital() {
+        // Provider plan AC-11: departments are clinical, so a pharmacy is not a
+        // department destination; the same call at a hospital succeeds
+        // (createDepartment_success_minimal). The super-admin's HOSPITAL_ADMIN
+        // auto-provisioning therefore never targets a provider either.
+        hospital.setFacilityType(com.example.hms.enums.FacilityType.PHARMACY);
+        DepartmentRequestDTO dto = new DepartmentRequestDTO();
+        dto.setHospitalId(hospitalId);
+        dto.setName("Neurology");
+        dto.setCode("neuro");
+        UUID userId = UUID.randomUUID();
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).active(true).build();
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        lenient().when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Neurology", hospitalId))
+            .thenReturn(false);
+        lenient().when(authService.getCurrentUserId()).thenReturn(userId);
+        lenient().when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+            .thenReturn(Optional.of(assignment));
+        lenient().when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment)))
+            .thenReturn(department);
+        lenient().when(departmentRepository.save(department)).thenReturn(department);
+
+        assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .satisfies(ex -> assertThat(((ResourceNotFoundException) ex).getMessageKey()).isEqualTo("hospital.notfound"));
+        verify(departmentRepository, never()).save(any());
+    }
+
+    @Test
     void createDepartment_resolveHospitalByName() {
         DepartmentRequestDTO dto = new DepartmentRequestDTO();
         dto.setHospitalName("Test Hospital");

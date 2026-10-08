@@ -314,9 +314,33 @@ export const READY_CANCEL_REASONS = [
 ] as const;
 export type ReadyCancelReason = (typeof READY_CANCEL_REASONS)[number];
 
-/** G15: GET /pharmacy/dispense/settings. */
+/** G15: GET /pharmacy/dispense/settings (G13 adds the work-queue claim switch and TTL). */
 export interface DispenseSettings {
   readyForCollectionEnabled: boolean;
+  /** G13: whether work-queue claims are on; absent from an older backend. */
+  queueClaimEnabled?: boolean;
+  /** G13: how long a claim lasts without being renewed, in minutes. */
+  queueClaimTtlMinutes?: number;
+}
+
+/** G13: which work-queue rows to list, by claim. */
+export type QueueClaimFilter = 'ALL' | 'MINE' | 'UNCLAIMED';
+
+/**
+ * G13: an active work-queue claim ("being prepared by"). Advisory: it never
+ * blocks a dispense or any other action. Times are the server's zone-less
+ * local timestamps.
+ */
+export interface WorkQueueClaim {
+  prescriptionId: string;
+  claimedByUserId: string;
+  claimedByName?: string;
+  claimedAt: string;
+  expiresAt?: string;
+  /** True only for the caller's own claim. */
+  mine: boolean;
+  /** Claim and take-over answers only: true when the caller already held it. */
+  renewed?: boolean;
 }
 
 /** G15: the fill prepared for a work-queue row and waiting for collection. */
@@ -361,6 +385,8 @@ export interface WorkQueuePrescription {
    * preparation cancelled, never dispensed or routed.
    */
   readyForCollection?: WorkQueueReadyForCollection;
+  /** G13: who is preparing this order; absent when nobody holds an active claim. */
+  claim?: WorkQueueClaim;
   /**
    * True when the row is not a plain fill and the pharmacist should look
    * before dispensing; {@link attentionReason} says which. Absent (rather
@@ -783,11 +809,42 @@ export class PharmacyService {
 
   // ── Dispensing ──
 
-  getDispenseWorkQueue(page = 0, size = 20): Observable<ApiResponse<Page<WorkQueuePrescription>>> {
-    const params = new HttpParams().set('page', page).set('size', size);
+  getDispenseWorkQueue(
+    page = 0,
+    size = 20,
+    claim: QueueClaimFilter = 'ALL',
+  ): Observable<ApiResponse<Page<WorkQueuePrescription>>> {
+    let params = new HttpParams().set('page', page).set('size', size);
+    if (claim !== 'ALL') params = params.set('claim', claim);
     return this.http.get<ApiResponse<Page<WorkQueuePrescription>>>(
       '/pharmacy/dispense/work-queue',
       { params },
+    );
+  }
+
+  // ── Work-queue claim (G13) ──
+
+  /** Claim a queue row, or renew one's own claim; 409 when a colleague holds it. */
+  claimQueueRow(prescriptionId: string): Observable<ApiResponse<WorkQueueClaim>> {
+    return this.http.post<ApiResponse<WorkQueueClaim>>(
+      `/pharmacy/dispense/work-queue/${prescriptionId}/claim`,
+      null,
+    );
+  }
+
+  /** Take a colleague's claim over; audited with the previous holder. */
+  takeOverQueueRow(prescriptionId: string): Observable<ApiResponse<WorkQueueClaim>> {
+    return this.http.post<ApiResponse<WorkQueueClaim>>(
+      `/pharmacy/dispense/work-queue/${prescriptionId}/claim/take-over`,
+      null,
+    );
+  }
+
+  /** Release one's own claim; nothing to release answers the same. */
+  releaseQueueRow(prescriptionId: string): Observable<ApiResponse<null>> {
+    return this.http.post<ApiResponse<null>>(
+      `/pharmacy/dispense/work-queue/${prescriptionId}/claim/release`,
+      null,
     );
   }
 

@@ -99,9 +99,11 @@ public class UserAccountAccess {
     private static final String SUPER_ADMIN = "SUPER_ADMIN";
     private static final String HOSPITAL_ADMIN = "HOSPITAL_ADMIN";
     private static final String PATIENT = "PATIENT";
+    /** The administrator of an external provider facility (provider plan §6.3). */
+    private static final String PROVIDER_ADMIN = "PROVIDER_ADMIN";
 
     /** Roles only a super-admin grants, and whose holders only a super-admin administers. */
-    static final Set<String> ADMIN_ROLES = Set.of(SUPER_ADMIN, HOSPITAL_ADMIN, "ADMIN");
+    static final Set<String> ADMIN_ROLES = Set.of(SUPER_ADMIN, HOSPITAL_ADMIN, "ADMIN", PROVIDER_ADMIN);
 
     /** The admin-register roles, bare; the same constant feeds the annotations and SecurityConfig. */
     static final Set<String> REGISTRAR_ROLES = Arrays.stream(
@@ -224,7 +226,9 @@ public class UserAccountAccess {
      *   <li>hospital admin: no admin role, at a hospital where they hold an
      *       active HOSPITAL_ADMIN assignment;</li>
      *   <li>any other registrar: PATIENT only, at a hospital where they
-     *       actively hold a registrar role.</li>
+     *       actively hold a registrar role;</li>
+     *   <li>provider admin: no admin role and never PATIENT, at a provider
+     *       facility where they hold an active PROVIDER_ADMIN assignment.</li>
      * </ul>
      *
      * @throws AccessDeniedException when no hospital could make this role set allowed
@@ -244,12 +248,22 @@ public class UserAccountAccess {
         Set<UUID> registrarHospitals = caller.presentsAny(REGISTRAR_ROLES)
             ? caller.hospitalsWhereHolding(REGISTRAR_ROLES)
             : Set.of();
-        boolean asAdmin = nonAdminRoles && !adminHospitals.isEmpty();
+        // A provider admin registers staff at its own facility only, like a
+        // hospital admin, and never a PATIENT account: PROVIDER_ADMIN is on
+        // PROVIDER_REGISTRAR_AUTHORITIES, not on the patient registrar list.
+        // What may be held there is the facility guard's to say (a 400).
+        Set<UUID> providerHospitals = nonAdminRoles && !roles.contains(PATIENT)
+            ? providerAdministeredHospitals(caller)
+            : Set.of();
+        Set<UUID> grantHospitals = providerHospitals.isEmpty() ? adminHospitals
+            : java.util.stream.Stream.concat(adminHospitals.stream(), providerHospitals.stream())
+                .collect(Collectors.toUnmodifiableSet());
+        boolean asAdmin = nonAdminRoles && !grantHospitals.isEmpty();
         boolean asRegistrar = patientOnly && !registrarHospitals.isEmpty();
         if (!asAdmin && !asRegistrar) {
             throw new AccessDeniedException("Access denied");
         }
-        return new Grant(false, asAdmin, adminHospitals, asRegistrar, registrarHospitals);
+        return new Grant(false, asAdmin, grantHospitals, asRegistrar, registrarHospitals);
     }
 
     /** What {@link #requireMayGrant} allowed, waiting for the hospital the registration resolves to. */
@@ -282,6 +296,69 @@ public class UserAccountAccess {
                 throw new AccessDeniedException("Access denied");
             }
             return hospitalId;
+        }
+    }
+
+    /**
+     * Which existing hospital assignments the caller may read and change
+     * through {@code /assignments/{id}} and its siblings (get, update,
+     * regenerate the code, resend the invitation, the registrar's confirm,
+     * deactivate, delete, retire a user's rows). The same people
+     * {@link #requireMayGrant} lets grant there:
+     * <ul>
+     *   <li>a super-admin (the verified context flag): every row, global rows
+     *       included;</li>
+     *   <li>a hospital admin: the rows at hospitals where they hold an ACTIVE
+     *       HOSPITAL_ADMIN assignment; to change one, its role must not be an
+     *       admin role, because admin roles are granted (and so administered)
+     *       by the super-admin only;</li>
+     *   <li>anyone else: nothing.</li>
+     * </ul>
+     * Callers answer a row outside the scope exactly as they answer a missing
+     * id, so the refusal is not an existence oracle.
+     */
+    public AssignmentScope assignmentScope() {
+        Caller caller = caller();
+        return caller.superAdmin()
+            ? AssignmentScope.SUPER_ADMIN_SCOPE
+            : new AssignmentScope(false, administeredHospitals(caller));
+    }
+
+    /**
+     * What {@link #assignmentScope} allows.
+     *
+     * @param everywhere  the super-admin's scope: every row
+     * @param hospitalIds otherwise, the hospitals the caller administers; empty means none
+     */
+    public record AssignmentScope(boolean everywhere, Set<UUID> hospitalIds) {
+
+        static final AssignmentScope SUPER_ADMIN_SCOPE = new AssignmentScope(true, Set.of());
+
+        public AssignmentScope {
+            hospitalIds = Set.copyOf(hospitalIds);
+        }
+
+        /** May the caller read this row? A global (hospital-less) row is the super-admin's. */
+        public boolean covers(UserRoleHospitalAssignment assignment) {
+            if (everywhere) {
+                return true;
+            }
+            UUID hospitalId = assignment == null ? null : hospitalIdOf(assignment);
+            return hospitalId != null && hospitalIds.contains(hospitalId);
+        }
+
+        /** May the caller change this row? Covered, and not an admin role's row unless a super-admin. */
+        public boolean mayChange(UserRoleHospitalAssignment assignment) {
+            return covers(assignment) && (everywhere || !ADMIN_ROLES.contains(roleCode(assignment.getRole())));
+        }
+
+        /**
+         * Is this account out of the caller's reach altogether? A super-admin's
+         * account is (any trace of the role, active or not): a hospital admin
+         * retires none of its rows, not even ones at their own hospital.
+         */
+        public boolean shields(User target, List<UserRoleHospitalAssignment> assignments) {
+            return !everywhere && target != null && holdsAny(target, assignments, Set.of(SUPER_ADMIN));
         }
     }
 
@@ -372,6 +449,14 @@ public class UserAccountAccess {
             return Set.of();
         }
         return caller.hospitalsWhereHolding(Set.of(HOSPITAL_ADMIN));
+    }
+
+    /** Provider facilities where the caller holds an ACTIVE PROVIDER_ADMIN assignment, if they present the role at all. */
+    private static Set<UUID> providerAdministeredHospitals(Caller caller) {
+        if (caller.id() == null || !caller.presentsAny(Set.of(PROVIDER_ADMIN))) {
+            return Set.of();
+        }
+        return caller.hospitalsWhereHolding(Set.of(PROVIDER_ADMIN));
     }
 
     private boolean administers(Caller caller, User target, List<UserRoleHospitalAssignment> assignments) {

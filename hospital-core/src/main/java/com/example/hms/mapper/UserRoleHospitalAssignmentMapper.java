@@ -79,7 +79,9 @@ public class UserRoleHospitalAssignmentMapper {
         Hospital hospital,
         Role role
     ) {
-    final Boolean isActive = dto.getActive() != null ? dto.getActive() : Boolean.TRUE;
+    // Inactive unless the service decided otherwise: activation is the
+    // confirmation code's (or a verified super-admin's) to give.
+    final Boolean isActive = dto.getActive() != null ? dto.getActive() : Boolean.FALSE;
 
     return UserRoleHospitalAssignment.builder()
             .assignmentCode(dto.getAssignmentCode())
@@ -102,8 +104,7 @@ public class UserRoleHospitalAssignmentMapper {
         UserRoleHospitalAssignment target,
         UserRoleHospitalAssignmentRequestDTO dto,
         Hospital hospital,
-        Role role,
-        User registeredBy
+        Role role
     ) {
         if (dto.getAssignmentCode() != null) {
             target.setAssignmentCode(dto.getAssignmentCode());
@@ -124,11 +125,8 @@ public class UserRoleHospitalAssignmentMapper {
         if (role != null || dto.getRoleId() != null || (dto.getRoleName() != null && !dto.getRoleName().isBlank())) {
             target.setRole(role);
         }
-
-        // registeredBy is metadata; set only when explicitly provided
-        if (dto.getRegisteredByUserId() != null) {
-            target.setRegisteredBy(registeredBy);
-        }
+        // registeredBy is never taken from the request: the registrar is the
+        // one person /confirm accepts, so only the service sets it, to the caller.
     }
 
     /* ---------- Helpers ---------- */

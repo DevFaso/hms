@@ -1,5 +1,6 @@
 package com.example.hms.service.pharmacy;
 
+import com.example.hms.enums.QueueClaimFilter;
 import com.example.hms.payload.dto.pharmacy.CancelReadyRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseResponseDTO;
@@ -54,5 +55,13 @@ public interface DispenseService {
     DispenseResponseDTO cancelDispense(UUID id);
 
     /** Paginated list of prescriptions ready to dispense at the caller's active hospital. */
-    Page<WorkQueuePrescriptionDTO> getWorkQueue(Pageable pageable);
+    default Page<WorkQueuePrescriptionDTO> getWorkQueue(Pageable pageable) {
+        return getWorkQueue(pageable, QueueClaimFilter.ALL);
+    }
+
+    /**
+     * G13: the work queue, filtered by claim ({@link QueueClaimFilter}); each
+     * row carries its active claim. The filter is ignored when claims are off.
+     */
+    Page<WorkQueuePrescriptionDTO> getWorkQueue(Pageable pageable, QueueClaimFilter claimFilter);
 }

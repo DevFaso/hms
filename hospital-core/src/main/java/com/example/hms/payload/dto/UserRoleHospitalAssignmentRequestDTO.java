@@ -50,7 +50,7 @@ public class UserRoleHospitalAssignmentRequestDTO {
     @Schema(description = "Whether this assignment is active (default true if null)")
     private Boolean active;
 
-    @Schema(description = "User who is registering this assignment (auditing)")
+    @Schema(description = "Ignored: the registrar is always the authenticated caller", deprecated = true)
     private UUID registeredByUserId;
 
     @Schema(description = "Assignment start date (inclusive)")

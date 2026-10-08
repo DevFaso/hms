@@ -21,9 +21,21 @@ import java.util.UUID;
 public interface UserRoleHospitalAssignmentService {
 
     /**
-     * Create a new user-role-hospital assignment.
+     * Create a new user-role-hospital assignment on an {@code /assignments}
+     * request: the caller may grant only what
+     * {@code UserAccountAccess.requireMayGrant} allows, at a hospital it
+     * allows (403 otherwise, nothing saved).
      */
     UserRoleHospitalAssignmentResponseDTO assignRole(UserRoleHospitalAssignmentRequestDTO requestDTO);
+
+    /**
+     * Create an assignment for an account being created, without the caller
+     * grant check: for {@code UserService} only, whose callers have already
+     * decided the grant (admin-register's {@code requireMayGrant}, public
+     * patient self-registration, the first-user bootstrap). Never call it from
+     * a controller.
+     */
+    UserRoleHospitalAssignmentResponseDTO assignRoleOnAccountCreation(UserRoleHospitalAssignmentRequestDTO requestDTO);
 
     /**
      * Update an existing assignment.
@@ -66,8 +78,18 @@ public interface UserRoleHospitalAssignmentService {
     /**
      * Retire all assignments of a specific user by DEACTIVATING them. The rows
      * are kept: clinical records keep the assignment they were recorded under.
+     * No caller check: for {@code UserService.deleteUser}, which has already
+     * decided the caller may delete the account. Never call it from a controller.
      */
     void deleteAllAssignmentsForUser(UUID userId);
+
+    /**
+     * {@code DELETE /assignments/user/{userId}}: retire the user's assignments
+     * the caller may change. A super-admin: every row. A hospital admin: the
+     * rows at hospitals they administer, never an admin role's row, and none
+     * of a super-admin's account.
+     */
+    void retireAssignmentsForUserWithinCallerScope(UUID userId);
 
     /**
      * Delete a role (only if unassigned).
@@ -122,4 +144,10 @@ public interface UserRoleHospitalAssignmentService {
      * the admin "resend notification" endpoint.
      */
     void sendNotifications(UUID assignmentId);
+
+    /**
+     * The admin "resend notification" endpoint: {@link #sendNotifications}
+     * for a row the caller may change; any other row answers as a missing one.
+     */
+    void resendNotifications(UUID assignmentId);
 }

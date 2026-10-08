@@ -105,6 +105,14 @@ public enum AuditEventType {
     DISPENSE_HANDED_OVER,
     /** G15: a prepared fill was cancelled, or voided by the prescriber's withdrawal or edit. */
     DISPENSE_READY_CANCELLED,
+    /** G13: a pharmacist claimed a prescription on the work queue. */
+    PRESCRIPTION_QUEUE_CLAIMED,
+    /** G13: a work-queue claim ended (released, or the work on the order ended). */
+    PRESCRIPTION_QUEUE_CLAIM_RELEASED,
+    /** G13: another pharmacy-queue user took a claim over, explicitly or by acting on the order. */
+    PRESCRIPTION_QUEUE_CLAIM_TAKEN_OVER,
+    /** G13: a lapsed claim was found and removed by a later write. */
+    PRESCRIPTION_QUEUE_CLAIM_EXPIRED,
     MEDICATION_DEACTIVATED,
     PHARMACY_DEACTIVATED,
     MTM_REVIEW_STARTED,
@@ -195,6 +203,15 @@ public enum AuditEventType {
     PRO_INSTRUMENT_IMPORTED,
     PRO_RESPONSE_RECORDED,
     PRO_ALERT_ACKNOWLEDGED,
+
+    // External provider facilities (D5, provider plan §6.3). Past tense per
+    // the naming convention above. Rows carry the facility id, its type and
+    // the verification status only: never a business number or a name.
+    PROVIDER_CREATED,
+    PROVIDER_EVIDENCE_RESUBMITTED,
+    PROVIDER_VERIFIED,
+    PROVIDER_REJECTED,
+    PROVIDER_VERIFICATION_REVOKED,
 
     OTHER
 }

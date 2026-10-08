@@ -4838,6 +4838,7 @@
         "PHARMACY_VERIFIER": "Vérificateur(trice) en pharmacie",
         "PHYSICIAN": "Praticien(ne)",
         "PHYSIOTHERAPIST": "Kinésithérapeute",
+        "PROVIDER_ADMIN": "Administrateur(trice) d’établissement prestataire",
         "QUALITY_MANAGER": "Responsable qualité",
         "RADIOLOGIST": "Radiologue",
         "RECEPTIONIST": "Réceptionniste",
@@ -5244,6 +5245,11 @@
         "PROGRAM_ENROLLED": "Inscription à un programme",
         "PROGRAM_STATUS_CHANGED": "Statut de programme modifié",
         "PROGRAM_VISIT_RECORDED": "Visite de programme enregistrée",
+        "PROVIDER_CREATED": "Établissement prestataire créé",
+        "PROVIDER_EVIDENCE_RESUBMITTED": "Justificatifs du prestataire soumis à nouveau",
+        "PROVIDER_REJECTED": "Prestataire refusé",
+        "PROVIDER_VERIFICATION_REVOKED": "Vérification du prestataire révoquée",
+        "PROVIDER_VERIFIED": "Prestataire vérifié",
         "PRO_ALERT_ACKNOWLEDGED": "Alerte PRO acquittée",
         "PRO_INSTRUMENT_IMPORTED": "Questionnaire PRO importé",
         "PRO_RESPONSE_RECORDED": "Réponse PRO enregistrée",
@@ -5289,7 +5295,11 @@
         "WEBHOOK_ENDPOINT_UPDATED": "Webhook modifié",
         "DISPENSE_READY": "Délivrance préparée pour retrait",
         "DISPENSE_HANDED_OVER": "Délivrance préparée remise",
-        "DISPENSE_READY_CANCELLED": "Délivrance préparée annulée"
+        "DISPENSE_READY_CANCELLED": "Délivrance préparée annulée",
+        "PRESCRIPTION_QUEUE_CLAIMED": "Ordonnance prise en charge",
+        "PRESCRIPTION_QUEUE_CLAIM_RELEASED": "Prise en charge libérée",
+        "PRESCRIPTION_QUEUE_CLAIM_TAKEN_OVER": "Prise en charge reprise",
+        "PRESCRIPTION_QUEUE_CLAIM_EXPIRED": "Prise en charge expirée"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -5416,7 +5426,9 @@
         "HEALTH_SYSTEM": "Système de santé",
         "HOSPITAL": "Hôpital",
         "HOSPITAL_CHAIN": "Chaîne hospitalière",
+        "LABORATORY": "Laboratoire",
         "PEDIATRIC_SYSTEM": "Système pédiatrique",
+        "PHARMACY": "Pharmacie",
         "PRIVATE_PRACTICE": "Cabinet privé",
         "REGIONAL_NETWORK": "Réseau régional",
         "RESEARCH_INSTITUTION": "Institut de recherche",
@@ -7450,6 +7462,25 @@
     "VERIF_UNCONFIRMED": "Non confirmée"
   },
   "PHARMACY": {
+    "QUEUE_CLAIM": {
+      "BEING_PREPARED_BY": "En préparation par {{name}}",
+      "MINE": "Vous préparez cette ordonnance",
+      "SINCE": "depuis {{time}}",
+      "CLAIM": "Prendre en charge",
+      "RELEASE": "Libérer",
+      "TAKE_OVER": "Reprendre",
+      "TAKE_OVER_CONFIRM": "{{name}} prépare cette ordonnance depuis {{time}}. La reprendre ?",
+      "CLAIMED": "Vous préparez maintenant cette ordonnance.",
+      "RELEASED": "Ordonnance libérée.",
+      "TAKEN_OVER": "Vous avez repris cette ordonnance.",
+      "FAILED": "Impossible de mettre à jour qui prépare cette ordonnance.",
+      "FILTER_LABEL": "Afficher",
+      "FILTER": {
+        "ALL": "Toutes",
+        "MINE": "Les miennes",
+        "UNCLAIMED": "Non prises en charge"
+      }
+    },
     "ATTENTION": {
       "PENDING_STOCK": "Rupture de stock — en commande",
       "PARTNER_REJECTED": "La pharmacie partenaire a refusé — délivrer ici ou réacheminer",

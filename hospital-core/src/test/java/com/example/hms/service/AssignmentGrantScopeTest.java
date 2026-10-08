@@ -1,0 +1,1114 @@
+package com.example.hms.service;
+
+import com.example.hms.enums.AuditStatus;
+import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.mapper.UserRoleHospitalAssignmentMapper;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Role;
+import com.example.hms.model.User;
+import com.example.hms.model.UserRole;
+import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
+import com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO;
+import com.example.hms.payload.dto.assignment.UserRoleAssignmentBatchResponseDTO;
+import com.example.hms.payload.dto.assignment.UserRoleAssignmentBulkImportRequestDTO;
+import com.example.hms.payload.dto.assignment.UserRoleAssignmentBulkImportResponseDTO;
+import com.example.hms.payload.dto.assignment.UserRoleAssignmentMultiRequestDTO;
+import com.example.hms.repository.EncounterRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.RoleRepository;
+import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.CustomUserDetails;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScopeTestSupport;
+import com.example.hms.service.support.UserAccountAccess;
+import com.example.hms.utility.RoleValidator;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.function.Executable;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.context.MessageSource;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.AuthorityUtils;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/**
+ * What an {@code /assignments} caller may grant, and which existing rows it
+ * may read or change, through the real {@link UserAccountAccess} rules: a
+ * hospital admin grants non-admin roles at the hospitals they administer and
+ * manages the rows there; a verified super-admin does anything. A row outside
+ * the caller's scope answers exactly as a missing id.
+ */
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
+class AssignmentGrantScopeTest {
+
+    @Mock private SmsService smsService;
+    @Mock private EmailService emailService;
+    @Mock private AuditEventLogService auditEventLogService;
+    @Mock private AssignmentLinkService assignmentLinkService;
+    @Mock private UserRepository userRepository;
+    @Mock private RoleRepository roleRepository;
+    @Mock private HospitalRepository hospitalRepository;
+    @Mock private com.example.hms.repository.UserRoleRepository userRoleRepository;
+    @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Mock private com.example.hms.repository.OrganizationRepository organizationRepository;
+    @Mock private StaffRepository staffRepository;
+    @Mock private EncounterRepository encounterRepository;
+    @Mock private PatientRepository patientRepository;
+    @Mock private PatientHospitalRegistrationRepository registrationRepository;
+    @Mock private UserRoleHospitalAssignmentMapper mapper;
+    @Mock private MessageSource messageSource;
+    @Mock private com.example.hms.security.provider.FacilityAssignmentGuard facilityAssignmentGuard;
+    @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
+
+    @InjectMocks
+    private UserRoleHospitalAssignmentServiceImpl service;
+
+    private final UUID callerId = UUID.randomUUID();
+    private final Hospital hospitalA = hospital("HA");
+    private final Hospital hospitalB = hospital("HB");
+    private final Role nurse = role("ROLE_NURSE");
+    private final Role doctor = role("ROLE_DOCTOR");
+    private final Role hospitalAdmin = role("ROLE_HOSPITAL_ADMIN");
+    private final Role superAdmin = role("ROLE_SUPER_ADMIN");
+    private final User assignee = account(UUID.randomUUID());
+
+    @BeforeEach
+    void setUp() {
+        RoleValidator roleValidator = new RoleValidator(assignmentRepository, ActingScopeTestSupport.resolver());
+        UserAccountAccess access = new UserAccountAccess(assignmentRepository, patientRepository,
+            registrationRepository, staffRepository, roleValidator);
+        ReflectionTestUtils.setField(service, "roleValidator", roleValidator);
+        ReflectionTestUtils.setField(service, "accountAccess", access);
+
+        when(messageSource.getMessage(anyString(), any(), anyString(), any()))
+            .thenAnswer(inv -> inv.getArgument(2));
+        for (Role r : List.of(nurse, doctor, hospitalAdmin, superAdmin)) {
+            when(roleRepository.findById(r.getId())).thenReturn(Optional.of(r));
+        }
+        for (Hospital h : List.of(hospitalA, hospitalB)) {
+            when(hospitalRepository.findById(h.getId())).thenReturn(Optional.of(h));
+        }
+        when(userRepository.findById(assignee.getId())).thenReturn(Optional.of(assignee));
+        when(mapper.toEntity(any(), any(), any(), any())).thenAnswer(inv -> {
+            UserRoleHospitalAssignmentRequestDTO dto = inv.getArgument(0);
+            UserRoleHospitalAssignment a = new UserRoleHospitalAssignment();
+            a.setUser(inv.getArgument(1));
+            a.setHospital(inv.getArgument(2));
+            a.setRole(inv.getArgument(3));
+            a.setActive(dto.getActive());
+            return a;
+        });
+        when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+        HospitalContextHolder.clear();
+    }
+
+    // ---------------------------------------------------------------- helpers
+
+    private static Hospital hospital(String code) {
+        Hospital h = new Hospital();
+        h.setId(UUID.randomUUID());
+        h.setCode(code);
+        h.setName("Hospital " + code);
+        return h;
+    }
+
+    private static Role role(String code) {
+        Role r = new Role();
+        r.setId(UUID.randomUUID());
+        r.setCode(code);
+        r.setName(code);
+        return r;
+    }
+
+    private static User account(UUID id) {
+        User u = new User();
+        u.setId(id);
+        u.setUsername("u-" + id.toString().substring(0, 8));
+        u.setUserRoles(new HashSet<>());
+        return u;
+    }
+
+    private static UserRoleHospitalAssignment row(User user, Role role, Hospital hospital, boolean active) {
+        UserRoleHospitalAssignment a = new UserRoleHospitalAssignment();
+        a.setId(UUID.randomUUID());
+        a.setUser(user);
+        a.setRole(role);
+        a.setHospital(hospital);
+        a.setActive(active);
+        a.setConfirmationCode("123456");
+        a.setCreatedAt(LocalDateTime.now().minusDays(1));
+        return a;
+    }
+
+    private UserRoleHospitalAssignment stored(UserRoleHospitalAssignment a) {
+        when(assignmentRepository.findById(a.getId())).thenReturn(Optional.of(a));
+        return a;
+    }
+
+    /** A hospital admin of hospital A only: the verified super-admin flag is off. */
+    private void signInAsHospitalAdminOfA() {
+        signIn(false, "ROLE_HOSPITAL_ADMIN");
+        when(assignmentRepository.findByUser_IdAndActiveTrue(callerId))
+            .thenReturn(List.of(row(account(callerId), hospitalAdmin, hospitalA, true)));
+    }
+
+    private void signInAsSuperAdmin() {
+        signIn(true, "ROLE_SUPER_ADMIN");
+    }
+
+    private void signIn(boolean verifiedSuperAdmin, String... authorities) {
+        var details = new CustomUserDetails(account(callerId), AuthorityUtils.createAuthorityList(authorities));
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+            details, "n/a", AuthorityUtils.createAuthorityList(authorities)));
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(callerId)
+            .superAdmin(verifiedSuperAdmin)
+            .build());
+        // The caller's account resolves by id (the registrar of what they create).
+        when(userRepository.findById(callerId)).thenReturn(Optional.of(account(callerId)));
+    }
+
+    /**
+     * The signed-in caller's account, resolvable by id only: its principal's
+     * name resolves nothing (a phone-login account), as the service must cope.
+     */
+    private User callerAccount() {
+        User caller = account(callerId);
+        when(userRepository.findById(callerId)).thenReturn(Optional.of(caller));
+        return caller;
+    }
+
+    /** A role change on a row of hospital A, the update that restarts the invitation. */
+    private UserRoleHospitalAssignmentRequestDTO roleChangeTo(Role role, UserRoleHospitalAssignment row) {
+        UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+        dto.setRoleId(role.getId());
+        org.mockito.Mockito.doAnswer(inv -> {
+            row.setRole(role);
+            return null;
+        }).when(mapper).updateEntity(row, dto, hospitalA, role);
+        return dto;
+    }
+
+    private UserRoleHospitalAssignmentRequestDTO grant(Role role, Hospital hospital) {
+        UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+        dto.setUserId(assignee.getId());
+        dto.setRoleId(role.getId());
+        dto.setHospitalId(hospital == null ? null : hospital.getId());
+        return dto;
+    }
+
+    /** The answer for a row the caller may not touch is the answer for no row at all. */
+    private void assertAnswersAsMissing(UUID id, Executable call) {
+        ResourceNotFoundException missing = new ResourceNotFoundException("roleAssignment.notFound", id);
+        Throwable thrown = catchThrowable(call::execute);
+        assertThat(thrown).isExactlyInstanceOf(ResourceNotFoundException.class)
+            .hasMessage(missing.getMessage());
+        assertThat(((ResourceNotFoundException) thrown).getMessageKey()).isEqualTo(missing.getMessageKey());
+        assertThat(((ResourceNotFoundException) thrown).getArgs()).containsExactly(id);
+    }
+
+    private void assertNothingWritten() {
+        verify(assignmentRepository, never()).save(any());
+        verify(assignmentRepository, never()).saveAll(any());
+        verify(assignmentRepository, never()).deleteById(any());
+    }
+
+    // ------------------------------------------------------------------ tests
+
+    @Nested
+    @DisplayName("creating an assignment")
+    class Create {
+
+        @Test
+        @DisplayName("a hospital admin cannot grant SUPER_ADMIN, to anyone or themselves; nothing is saved")
+        void hospitalAdminCannotGrantSuperAdmin() {
+            signInAsHospitalAdminOfA();
+            when(userRepository.findById(callerId)).thenReturn(Optional.of(account(callerId)));
+            UserRoleHospitalAssignmentRequestDTO toSelf = grant(superAdmin, null);
+            toSelf.setUserId(callerId);
+            toSelf.setActive(true);
+
+            UserRoleHospitalAssignmentRequestDTO toSomeone = grant(superAdmin, null);
+
+            assertThatThrownBy(() -> service.assignRole(toSelf)).isInstanceOf(AccessDeniedException.class);
+            assertThatThrownBy(() -> service.assignRole(toSomeone)).isInstanceOf(AccessDeniedException.class);
+
+            assertNothingWritten();
+            verify(userRepository, never()).findById(callerId);
+            ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+            verify(auditEventLogService, times(2)).logEvent(audit.capture());
+            assertThat(audit.getValue().getStatus()).isEqualTo(AuditStatus.FAILURE);
+            assertThat(audit.getValue().getUserId()).isEqualTo(callerId);
+        }
+
+        @Test
+        @DisplayName("a ROLE_SUPER_ADMIN authority without the verified flag grants no SUPER_ADMIN either")
+        void inflatedAuthorityIsNotSuperAdmin() {
+            signIn(false, "ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN");
+            UserRoleHospitalAssignmentRequestDTO request = grant(superAdmin, null);
+
+            assertThatThrownBy(() -> service.assignRole(request))
+                .isInstanceOf(AccessDeniedException.class);
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("a hospital admin cannot grant another admin role, even at their own hospital")
+        void hospitalAdminCannotGrantAdminRoles() {
+            signInAsHospitalAdminOfA();
+            UserRoleHospitalAssignmentRequestDTO request = grant(hospitalAdmin, hospitalA);
+
+            assertThatThrownBy(() -> service.assignRole(request))
+                .isInstanceOf(AccessDeniedException.class);
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("a hospital admin cannot grant at a hospital they do not administer")
+        void hospitalAdminCannotGrantElsewhere() {
+            signInAsHospitalAdminOfA();
+            UserRoleHospitalAssignmentRequestDTO request = grant(nurse, hospitalB);
+
+            assertThatThrownBy(() -> service.assignRole(request))
+                .isInstanceOf(AccessDeniedException.class);
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("a hospital admin still grants a staff role at their hospital, inactive until confirmed")
+        void hospitalAdminGrantsAtTheirHospital() {
+            signInAsHospitalAdminOfA();
+            UserRoleHospitalAssignmentRequestDTO dto = grant(nurse, hospitalA);
+            dto.setActive(true);
+
+            service.assignRole(dto);
+
+            ArgumentCaptor<UserRoleHospitalAssignment> saved = ArgumentCaptor.forClass(UserRoleHospitalAssignment.class);
+            verify(assignmentRepository).save(saved.capture());
+            assertThat(saved.getValue().getHospital()).isSameAs(hospitalA);
+            assertThat(saved.getValue().getActive()).isFalse();
+        }
+
+        @Test
+        @DisplayName("a phone-login admin is the registrar of the row they create, and can confirm it")
+        void phoneLoginAdminRegistersAndConfirms() {
+            signInAsHospitalAdminOfA();
+            User caller = callerAccount();
+            when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(any(), any(), any()))
+                .thenReturn(Optional.empty());
+            when(userRepository.findByUsername(anyString())).thenReturn(Optional.empty());
+            when(userRepository.findByEmail(anyString())).thenReturn(Optional.empty());
+            assignee.setActive(true);
+
+            service.assignRole(grant(nurse, hospitalA));
+
+            ArgumentCaptor<UserRoleHospitalAssignment> saved = ArgumentCaptor.forClass(UserRoleHospitalAssignment.class);
+            verify(assignmentRepository).save(saved.capture());
+            UserRoleHospitalAssignment created = saved.getValue();
+            assertThat(created.getRegisteredBy()).isSameAs(caller);
+
+            created.setId(UUID.randomUUID());
+            stored(created);
+            service.confirmAssignment(created.getId(), created.getConfirmationCode());
+            assertThat(created.getActive()).isTrue();
+        }
+
+        @Test
+        @DisplayName("a registrar named in the request is ignored: the caller is the registrar")
+        void requestedRegistrarIsIgnored() {
+            signInAsHospitalAdminOfA();
+            User caller = callerAccount();
+            User accomplice = account(UUID.randomUUID());
+            when(userRepository.findById(accomplice.getId())).thenReturn(Optional.of(accomplice));
+            UserRoleHospitalAssignmentRequestDTO dto = grant(nurse, hospitalA);
+            dto.setRegisteredByUserId(accomplice.getId());
+
+            service.assignRole(dto);
+
+            ArgumentCaptor<UserRoleHospitalAssignment> saved = ArgumentCaptor.forClass(UserRoleHospitalAssignment.class);
+            verify(assignmentRepository).save(saved.capture());
+            assertThat(saved.getValue().getRegisteredBy()).isSameAs(caller);
+            verify(userRepository, never()).findById(accomplice.getId());
+        }
+
+        @Test
+        @DisplayName("an /assignments create by a caller with no resolvable account is refused, nothing saved")
+        void createWithoutACallerAccountIsRefused() {
+            signInAsHospitalAdminOfA();
+            when(userRepository.findById(callerId)).thenReturn(Optional.empty());
+            UserRoleHospitalAssignmentRequestDTO dto = grant(nurse, hospitalA);
+
+            assertThatThrownBy(() -> service.assignRole(dto)).isExactlyInstanceOf(BusinessException.class);
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("account creation with no signed-in caller (self-registration, bootstrap) has no registrar")
+        void accountCreationWithoutACallerHasNoRegistrar() {
+            service.assignRoleOnAccountCreation(grant(nurse, hospitalA));
+
+            ArgumentCaptor<UserRoleHospitalAssignment> saved = ArgumentCaptor.forClass(UserRoleHospitalAssignment.class);
+            verify(assignmentRepository).save(saved.capture());
+            assertThat(saved.getValue().getRegisteredBy()).isNull();
+        }
+
+        @Test
+        @DisplayName("account creation by an admin (admin-register) has that admin as registrar, by id")
+        void accountCreationByAnAdminHasThemAsRegistrar() {
+            signInAsHospitalAdminOfA();
+            User caller = callerAccount();
+            UserRoleHospitalAssignmentRequestDTO dto = grant(nurse, hospitalA);
+            dto.setRegisteredByUserId(UUID.randomUUID());
+
+            service.assignRoleOnAccountCreation(dto);
+
+            ArgumentCaptor<UserRoleHospitalAssignment> saved = ArgumentCaptor.forClass(UserRoleHospitalAssignment.class);
+            verify(assignmentRepository).save(saved.capture());
+            assertThat(saved.getValue().getRegisteredBy()).isSameAs(caller);
+        }
+
+        @Test
+        @DisplayName("a verified super-admin grants SUPER_ADMIN, active at once")
+        void superAdminGrantsSuperAdmin() {
+            signInAsSuperAdmin();
+
+            service.assignRole(grant(superAdmin, null));
+
+            ArgumentCaptor<UserRoleHospitalAssignment> saved = ArgumentCaptor.forClass(UserRoleHospitalAssignment.class);
+            verify(assignmentRepository).save(saved.capture());
+            assertThat(saved.getValue().getRole()).isSameAs(superAdmin);
+            assertThat(saved.getValue().getActive()).isTrue();
+        }
+
+        @Test
+        @DisplayName("account creation's own SUPER_ADMIN row is active only when asked for explicitly")
+        void accountCreationSuperAdminRowIsNeverActiveByDefault() {
+            UserRoleHospitalAssignmentRequestDTO dto = grant(superAdmin, null);
+
+            service.assignRoleOnAccountCreation(dto);
+
+            ArgumentCaptor<UserRoleHospitalAssignment> saved = ArgumentCaptor.forClass(UserRoleHospitalAssignment.class);
+            verify(assignmentRepository).save(saved.capture());
+            assertThat(saved.getValue().getActive()).isFalse();
+        }
+
+        @Test
+        @DisplayName("a verified super-admin grants at any hospital")
+        void superAdminGrantsAnywhere() {
+            signInAsSuperAdmin();
+
+            service.assignRole(grant(hospitalAdmin, hospitalB));
+
+            verify(assignmentRepository).save(any());
+        }
+
+        @Test
+        @DisplayName("multi-scope: a hospital the admin does not administer is reported, the others still go through")
+        void multiScopeReportsTheRefusedScope() {
+            signInAsHospitalAdminOfA();
+            UserRoleAssignmentMultiRequestDTO request = new UserRoleAssignmentMultiRequestDTO();
+            request.setUserId(assignee.getId());
+            request.setRoleId(nurse.getId());
+            request.setHospitalIds(List.of(hospitalA.getId(), hospitalB.getId()));
+            request.setSkipConflicts(true);
+
+            UserRoleAssignmentBatchResponseDTO result = service.assignRoleToMultipleScopes(request);
+
+            assertThat(result.getCreatedAssignments()).isEqualTo(1);
+            assertThat(result.getFailures()).singleElement()
+                .satisfies(f -> assertThat(f.getHospitalId()).isEqualTo(hospitalB.getId()));
+            ArgumentCaptor<UserRoleHospitalAssignment> saved = ArgumentCaptor.forClass(UserRoleHospitalAssignment.class);
+            verify(assignmentRepository).save(saved.capture());
+            assertThat(saved.getValue().getHospital()).isSameAs(hospitalA);
+        }
+
+        @Test
+        @DisplayName("multi-scope with no hospital (a global grant) is refused outright for a hospital admin")
+        void multiScopeGlobalGrantIsRefused() {
+            signInAsHospitalAdminOfA();
+            UserRoleAssignmentMultiRequestDTO request = new UserRoleAssignmentMultiRequestDTO();
+            request.setUserId(assignee.getId());
+            request.setRoleId(superAdmin.getId());
+
+            assertThatThrownBy(() -> service.assignRoleToMultipleScopes(request))
+                .isInstanceOf(AccessDeniedException.class);
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("bulk import: a row the admin may not grant fails on its own, nothing saved for it")
+        void bulkImportFailsTheRefusedRow() {
+            signInAsHospitalAdminOfA();
+            String csv = "user_id,role_id,hospital_id\n"
+                + assignee.getId() + "," + nurse.getId() + "," + hospitalB.getId() + "\n"
+                + assignee.getId() + "," + superAdmin.getId() + ",\n";
+            UserRoleAssignmentBulkImportRequestDTO request = UserRoleAssignmentBulkImportRequestDTO.builder()
+                .csvContent(csv)
+                .delimiter(",")
+                .skipConflicts(true)
+                .build();
+
+            UserRoleAssignmentBulkImportResponseDTO result = service.bulkImportAssignments(request);
+
+            assertThat(result.getCreated()).isZero();
+            assertThat(result.getFailed()).isEqualTo(2);
+            assertNothingWritten();
+        }
+    }
+
+    @Nested
+    @DisplayName("updating an assignment")
+    class Update {
+
+        @Test
+        @DisplayName("an inactive row at another hospital cannot be switched on: it answers as missing")
+        void foreignInactiveRowCannotBeActivated() {
+            signInAsHospitalAdminOfA();
+            UserRoleHospitalAssignment foreign = stored(row(assignee, nurse, hospitalB, false));
+            UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+            dto.setActive(true);
+
+            UUID foreignId = foreign.getId();
+            assertAnswersAsMissing(foreignId, () -> service.updateAssignment(foreignId, dto));
+            assertThat(foreign.getActive()).isFalse();
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("a hospital admin cannot switch on even their own hospital's row by hand")
+        void ownInactiveRowActivatesOnlyThroughItsCode() {
+            signInAsHospitalAdminOfA();
+            UserRoleHospitalAssignment own = stored(row(assignee, nurse, hospitalA, false));
+            UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+            dto.setActive(true);
+
+            UUID ownId = own.getId();
+            assertThatThrownBy(() -> service.updateAssignment(ownId, dto))
+                .isInstanceOf(BusinessException.class);
+            assertThat(own.getActive()).isFalse();
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("a hospital admin cannot move their row to another hospital, or to an admin role")
+        void updateKeepsTheGrantRule() {
+            signInAsHospitalAdminOfA();
+            UserRoleHospitalAssignment own = stored(row(assignee, nurse, hospitalA, true));
+            UserRoleHospitalAssignmentRequestDTO elsewhere = new UserRoleHospitalAssignmentRequestDTO();
+            elsewhere.setHospitalId(hospitalB.getId());
+            UserRoleHospitalAssignmentRequestDTO promote = new UserRoleHospitalAssignmentRequestDTO();
+            promote.setRoleId(hospitalAdmin.getId());
+
+            UUID ownId = own.getId();
+            assertThatThrownBy(() -> service.updateAssignment(ownId, elsewhere))
+                .isInstanceOf(AccessDeniedException.class);
+            assertThatThrownBy(() -> service.updateAssignment(ownId, promote))
+                .isInstanceOf(AccessDeniedException.class);
+            assertThat(own.getHospital()).isSameAs(hospitalA);
+            assertThat(own.getRole()).isSameAs(nurse);
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("a hospital admin still edits their hospital's staff row")
+        void hospitalAdminEditsOwnRow() {
+            signInAsHospitalAdminOfA();
+            UserRoleHospitalAssignment own = stored(row(assignee, nurse, hospitalA, true));
+            UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+            dto.setActive(true);
+            dto.setStartDate(java.time.LocalDate.now());
+
+            service.updateAssignment(own.getId(), dto);
+
+            verify(assignmentRepository).save(own);
+        }
+
+        @Test
+        @DisplayName("a hospital admin cannot hand a row to another person: 400, nothing saved")
+        void aHolderChangeIsRefused() {
+            signInAsHospitalAdminOfA();
+            User other = account(UUID.randomUUID());
+            when(userRepository.findById(other.getId())).thenReturn(Optional.of(other));
+            UserRoleHospitalAssignment own = stored(row(assignee, nurse, hospitalA, true));
+            UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+            dto.setUserId(other.getId());
+
+            UUID ownId = own.getId();
+            assertThatThrownBy(() -> service.updateAssignment(ownId, dto))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Create a new assignment");
+            assertThat(own.getUser()).isSameAs(assignee);
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("a holder change to an unknown user id gets the same 400 as a known one: no user oracle")
+        void aHolderChangeIsRefusedBeforeTheUserLookup() {
+            signInAsHospitalAdminOfA();
+            UUID unknown = UUID.randomUUID();
+            when(userRepository.findById(unknown)).thenReturn(Optional.empty());
+            User known = account(UUID.randomUUID());
+            when(userRepository.findById(known.getId())).thenReturn(Optional.of(known));
+            UserRoleHospitalAssignment own = stored(row(assignee, nurse, hospitalA, true));
+            UserRoleHospitalAssignmentRequestDTO toUnknown = new UserRoleHospitalAssignmentRequestDTO();
+            toUnknown.setUserId(unknown);
+            UserRoleHospitalAssignmentRequestDTO toKnown = new UserRoleHospitalAssignmentRequestDTO();
+            toKnown.setUserId(known.getId());
+
+            UUID ownId = own.getId();
+            Throwable unknownAnswer = catchThrowable(() -> service.updateAssignment(ownId, toUnknown));
+            Throwable knownAnswer = catchThrowable(() -> service.updateAssignment(ownId, toKnown));
+
+            assertThat(unknownAnswer).isExactlyInstanceOf(BusinessException.class);
+            assertThat(knownAnswer).isExactlyInstanceOf(BusinessException.class)
+                .hasMessage(unknownAnswer.getMessage());
+            verify(userRepository, never()).findById(unknown);
+            verify(userRepository, never()).findById(known.getId());
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("a role change by a hospital admin starts the row over: inactive, new code, notified")
+        void aRoleChangeReinvites() {
+            signInAsHospitalAdminOfA();
+            callerAccount();
+            UserRoleHospitalAssignment own = stored(row(assignee, nurse, hospitalA, true));
+            own.setAssignmentCode("OLD-CODE");
+            own.setConfirmationVerifiedAt(LocalDateTime.now().minusDays(1));
+            UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+            dto.setRoleId(doctor.getId());
+            dto.setActive(true);
+            org.mockito.Mockito.doAnswer(inv -> {
+                own.setRole(doctor);
+                own.setActive(true);
+                return null;
+            }).when(mapper).updateEntity(own, dto, hospitalA, doctor);
+
+            service.updateAssignment(own.getId(), dto);
+
+            assertThat(own.getRole()).isSameAs(doctor);
+            assertThat(own.getActive()).isFalse();
+            assertThat(own.getConfirmationCode()).isNotEqualTo("123456");
+            assertThat(own.getAssignmentCode()).isNotEqualTo("OLD-CODE");
+            assertThat(own.getConfirmationVerifiedAt()).isNull();
+            verify(assignmentRepository).save(own);
+            verify(eventPublisher).publishEvent(any(com.example.hms.event.AssignmentCreatedEvent.class));
+        }
+
+        @Test
+        @DisplayName("a re-invite makes the caller the registrar: the old one gets no new code to confirm")
+        void aReinviteMakesTheCallerTheRegistrar() {
+            signInAsHospitalAdminOfA();
+            User caller = callerAccount();
+            User formerRegistrar = account(UUID.randomUUID());
+            UserRoleHospitalAssignment own = stored(row(assignee, nurse, hospitalA, true));
+            own.setRegisteredBy(formerRegistrar);
+            UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+            dto.setRoleId(doctor.getId());
+            org.mockito.Mockito.doAnswer(inv -> {
+                own.setRole(doctor);
+                return null;
+            }).when(mapper).updateEntity(own, dto, hospitalA, doctor);
+
+            service.updateAssignment(own.getId(), dto);
+
+            assertThat(own.getActive()).isFalse();
+            assertThat(own.getRegisteredBy()).isSameAs(caller);
+        }
+
+        @Test
+        @DisplayName("the re-invite registrar is the caller's id, even when the principal's name resolves no account")
+        void aReinviteResolvesTheRegistrarById() {
+            signInAsHospitalAdminOfA();
+            User caller = account(callerId);
+            when(userRepository.findById(callerId)).thenReturn(Optional.of(caller));
+            UserRoleHospitalAssignment own = stored(row(assignee, nurse, hospitalA, true));
+            own.setRegisteredBy(account(UUID.randomUUID()));
+
+            service.updateAssignment(own.getId(), roleChangeTo(doctor, own));
+
+            assertThat(own.getRegisteredBy()).isSameAs(caller);
+        }
+
+        @Test
+        @DisplayName("a re-invite by a caller with no resolvable account is refused before the row changes")
+        void aReinviteWithoutACallerAccountIsRefused() {
+            signInAsHospitalAdminOfA();
+            when(userRepository.findById(callerId)).thenReturn(Optional.empty());
+            User formerRegistrar = account(UUID.randomUUID());
+            UserRoleHospitalAssignment own = stored(row(assignee, nurse, hospitalA, true));
+            own.setRegisteredBy(formerRegistrar);
+            UUID ownId = own.getId();
+            UserRoleHospitalAssignmentRequestDTO dto = roleChangeTo(doctor, own);
+
+            assertThatThrownBy(() -> service.updateAssignment(ownId, dto))
+                .isExactlyInstanceOf(BusinessException.class);
+            assertThat(own.getRole()).isSameAs(nurse);
+            assertThat(own.getActive()).isTrue();
+            assertThat(own.getRegisteredBy()).isSameAs(formerRegistrar);
+            assertThat(own.getConfirmationCode()).isEqualTo("123456");
+            assertNothingWritten();
+            org.mockito.Mockito.verifyNoInteractions(eventPublisher);
+        }
+
+        @Test
+        @DisplayName("an edit carrying a registrar id keeps the registrar (the real mapper)")
+        void anEditCannotChangeTheRegistrar() {
+            signInAsHospitalAdminOfA();
+            User registrar = account(UUID.randomUUID());
+            User other = account(UUID.randomUUID());
+            when(userRepository.findById(other.getId())).thenReturn(Optional.of(other));
+            UserRoleHospitalAssignment own = stored(row(assignee, nurse, hospitalA, true));
+            own.setRegisteredBy(registrar);
+            UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+            dto.setRegisteredByUserId(other.getId());
+            dto.setStartDate(java.time.LocalDate.now());
+            org.mockito.Mockito.doAnswer(inv -> {
+                new UserRoleHospitalAssignmentMapper().updateEntity(own, dto, inv.getArgument(2), inv.getArgument(3));
+                return null;
+            }).when(mapper).updateEntity(own, dto, hospitalA, nurse);
+
+            service.updateAssignment(own.getId(), dto);
+
+            assertThat(own.getRegisteredBy()).isSameAs(registrar);
+            verify(assignmentRepository).save(own);
+        }
+
+        @Test
+        @DisplayName("an edit that keeps the role and hospital keeps the registrar")
+        void aPlainEditKeepsTheRegistrar() {
+            signInAsHospitalAdminOfA();
+            callerAccount();
+            User registrar = account(UUID.randomUUID());
+            UserRoleHospitalAssignment own = stored(row(assignee, nurse, hospitalA, true));
+            own.setRegisteredBy(registrar);
+            UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+            dto.setRoleId(nurse.getId());
+            dto.setHospitalId(hospitalA.getId());
+
+            service.updateAssignment(own.getId(), dto);
+
+            assertThat(own.getRegisteredBy()).isSameAs(registrar);
+        }
+
+        @Test
+        @DisplayName("an edit that keeps the role and hospital does not start the row over")
+        void aPlainEditKeepsTheRowActive() {
+            signInAsHospitalAdminOfA();
+            UserRoleHospitalAssignment own = stored(row(assignee, nurse, hospitalA, true));
+            UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+            dto.setUserId(assignee.getId());
+            dto.setRoleId(nurse.getId());
+            dto.setHospitalId(hospitalA.getId());
+
+            service.updateAssignment(own.getId(), dto);
+
+            assertThat(own.getActive()).isTrue();
+            assertThat(own.getConfirmationCode()).isEqualTo("123456");
+            org.mockito.Mockito.verifyNoInteractions(eventPublisher);
+        }
+
+        @Test
+        @DisplayName("a verified super-admin changes the holder and the role and the row stays as it was")
+        void superAdminChangesHolderAndRole() {
+            signInAsSuperAdmin();
+            User other = account(UUID.randomUUID());
+            when(userRepository.findById(other.getId())).thenReturn(Optional.of(other));
+            UserRoleHospitalAssignment row = stored(row(assignee, nurse, hospitalB, true));
+            UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+            dto.setUserId(other.getId());
+            dto.setRoleId(doctor.getId());
+
+            service.updateAssignment(row.getId(), dto);
+
+            assertThat(row.getUser()).isSameAs(other);
+            assertThat(row.getActive()).isTrue();
+            assertThat(row.getConfirmationCode()).isEqualTo("123456");
+            org.mockito.Mockito.verifyNoInteractions(eventPublisher);
+        }
+
+        @Test
+        @DisplayName("a verified super-admin switches a row on directly, anywhere")
+        void superAdminActivatesDirectly() {
+            signInAsSuperAdmin();
+            UserRoleHospitalAssignment foreign = stored(row(assignee, nurse, hospitalB, false));
+            UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+            dto.setActive(true);
+
+            service.updateAssignment(foreign.getId(), dto);
+
+            verify(mapper).updateEntity(foreign, dto, hospitalB, nurse);
+            verify(assignmentRepository).save(foreign);
+        }
+    }
+
+    @Nested
+    @DisplayName("reading and changing an existing row by id")
+    class ById {
+
+        @Test
+        @DisplayName("another hospital's row: get, regenerate, resend, deactivate and delete all answer as missing")
+        void foreignRowAnswersAsMissing() {
+            signInAsHospitalAdminOfA();
+            UserRoleHospitalAssignment foreign = stored(row(assignee, nurse, hospitalB, true));
+            UUID id = foreign.getId();
+
+            assertAnswersAsMissing(id, () -> service.getAssignmentById(id));
+            assertAnswersAsMissing(id, () -> service.regenerateAssignmentCode(id, true));
+            assertAnswersAsMissing(id, () -> service.resendNotifications(id));
+            assertAnswersAsMissing(id, () -> service.deactivateAssignment(id));
+            assertAnswersAsMissing(id, () -> service.deleteAssignment(id));
+
+            assertThat(foreign.getActive()).isTrue();
+            assertThat(foreign.getConfirmationCode()).isEqualTo("123456");
+            assertNothingWritten();
+            org.mockito.Mockito.verifyNoInteractions(emailService, smsService, eventPublisher);
+        }
+
+        @Test
+        @DisplayName("a global (super-admin) row is out of a hospital admin's reach")
+        void globalRowAnswersAsMissing() {
+            signInAsHospitalAdminOfA();
+            UserRoleHospitalAssignment global = stored(row(account(UUID.randomUUID()), superAdmin, null, true));
+
+            UUID globalId = global.getId();
+            assertAnswersAsMissing(globalId, () -> service.getAssignmentById(globalId));
+            assertAnswersAsMissing(globalId, () -> service.deactivateAssignment(globalId));
+            assertThat(global.getActive()).isTrue();
+        }
+
+        @Test
+        @DisplayName("a peer hospital admin's row at the same hospital may be read but not changed")
+        void peerAdminRowIsReadOnly() {
+            signInAsHospitalAdminOfA();
+            UserRoleHospitalAssignment peer = stored(row(account(UUID.randomUUID()), hospitalAdmin, hospitalA, true));
+
+            service.getAssignmentById(peer.getId());
+            UUID peerId = peer.getId();
+            assertAnswersAsMissing(peerId, () -> service.deactivateAssignment(peerId));
+            assertAnswersAsMissing(peerId, () -> service.regenerateAssignmentCode(peerId, false));
+            assertThat(peer.getActive()).isTrue();
+            assertNothingWritten();
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+        @org.junit.jupiter.params.provider.ValueSource(strings = {"update", "regenerate", "resend", "deactivate", "delete"})
+        @DisplayName("a super-admin's non-admin row at the admin's own hospital answers as missing")
+        void superAdminsRowIsShielded(String endpoint) {
+            signInAsHospitalAdminOfA();
+            User platformAdmin = account(UUID.randomUUID());
+            UserRoleHospitalAssignment global = row(platformAdmin, superAdmin, null, false);
+            UserRoleHospitalAssignment here = stored(row(platformAdmin, nurse, hospitalA, true));
+            when(assignmentRepository.findByUserId(platformAdmin.getId())).thenReturn(List.of(global, here));
+            UUID id = here.getId();
+            UserRoleHospitalAssignmentRequestDTO edit = new UserRoleHospitalAssignmentRequestDTO();
+            edit.setActive(false);
+
+            Executable call = switch (endpoint) {
+                case "update" -> () -> service.updateAssignment(id, edit);
+                case "regenerate" -> () -> service.regenerateAssignmentCode(id, true);
+                case "resend" -> () -> service.resendNotifications(id);
+                case "deactivate" -> () -> service.deactivateAssignment(id);
+                default -> () -> service.deleteAssignment(id);
+            };
+
+            assertAnswersAsMissing(id, call);
+            assertThat(here.getActive()).isTrue();
+            assertThat(here.getConfirmationCode()).isEqualTo("123456");
+            assertNothingWritten();
+            org.mockito.Mockito.verifyNoInteractions(emailService, smsService, eventPublisher);
+        }
+
+        @Test
+        @DisplayName("…also when the super-admin role is only a global role")
+        void superAdminByGlobalRoleRowIsShielded() {
+            signInAsHospitalAdminOfA();
+            User platformAdmin = account(UUID.randomUUID());
+            UserRole link = new UserRole();
+            link.setUser(platformAdmin);
+            link.setRole(superAdmin);
+            platformAdmin.getUserRoles().add(link);
+            UserRoleHospitalAssignment here = stored(row(platformAdmin, nurse, hospitalA, true));
+            when(assignmentRepository.findByUserId(platformAdmin.getId())).thenReturn(List.of(here));
+
+            UUID hereId = here.getId();
+            assertAnswersAsMissing(hereId, () -> service.deactivateAssignment(hereId));
+            assertThat(here.getActive()).isTrue();
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("a hospital admin still manages their hospital's staff rows")
+        void hospitalAdminManagesOwnRows() {
+            signInAsHospitalAdminOfA();
+            UserRoleHospitalAssignment own = stored(row(assignee, nurse, hospitalA, true));
+
+            service.getAssignmentById(own.getId());
+            service.regenerateAssignmentCode(own.getId(), false);
+            service.deactivateAssignment(own.getId());
+
+            assertThat(own.getActive()).isFalse();
+            verify(assignmentRepository, org.mockito.Mockito.atLeast(2)).save(own);
+        }
+
+        @Test
+        @DisplayName("a verified super-admin manages any row")
+        void superAdminManagesAnyRow() {
+            signInAsSuperAdmin();
+            UserRoleHospitalAssignment foreign = stored(row(assignee, nurse, hospitalB, true));
+
+            service.getAssignmentById(foreign.getId());
+            service.deactivateAssignment(foreign.getId());
+            service.deleteAssignment(foreign.getId());
+
+            verify(assignmentRepository).deleteById(foreign.getId());
+        }
+    }
+
+    @Nested
+    @DisplayName("confirming as the registrar")
+    class Confirm {
+
+        private UserRoleHospitalAssignment pendingRowRegisteredByCaller(Hospital hospital) {
+            UserRoleHospitalAssignment row = stored(row(assignee, nurse, hospital, false));
+            row.setRegisteredBy(callerAccount());
+            return row;
+        }
+
+        @Test
+        @DisplayName("another hospital's row answers as a missing id, with the right code or a wrong one")
+        void foreignRowAnswersAsMissing() {
+            signInAsHospitalAdminOfA();
+            UserRoleHospitalAssignment foreign = pendingRowRegisteredByCaller(hospitalB);
+            UUID id = foreign.getId();
+            UUID unknown = UUID.randomUUID();
+            when(assignmentRepository.findById(unknown)).thenReturn(Optional.empty());
+
+            assertAnswersAsMissing(id, () -> service.confirmAssignment(id, "123456"));
+            assertAnswersAsMissing(id, () -> service.confirmAssignment(id, "999999"));
+            assertAnswersAsMissing(unknown, () -> service.confirmAssignment(unknown, "123456"));
+
+            assertThat(foreign.getActive()).isFalse();
+            assertThat(foreign.getConfirmationVerifiedAt()).isNull();
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("a registrar who no longer administers the row's hospital cannot activate it")
+        void registrarWithoutAdminThereAnswersAsMissing() {
+            signIn(false, "ROLE_HOSPITAL_ADMIN");
+            when(assignmentRepository.findByUser_IdAndActiveTrue(callerId)).thenReturn(List.of());
+            UserRoleHospitalAssignment row = pendingRowRegisteredByCaller(hospitalA);
+            UUID id = row.getId();
+
+            assertAnswersAsMissing(id, () -> service.confirmAssignment(id, "123456"));
+            assertThat(row.getActive()).isFalse();
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("the registrar still confirms their hospital's row, identified by id when the name resolves nothing")
+        void registrarConfirmsTheirRow() {
+            signInAsHospitalAdminOfA();
+            assignee.setActive(true);
+            UserRoleHospitalAssignment row = pendingRowRegisteredByCaller(hospitalA);
+            when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(any(), any(), any()))
+                .thenReturn(Optional.empty());
+
+            service.confirmAssignment(row.getId(), "123456");
+
+            assertThat(row.getActive()).isTrue();
+            assertThat(row.getConfirmationVerifiedAt()).isNotNull();
+            verify(assignmentRepository).save(row);
+        }
+
+        @Test
+        @DisplayName("a caller with no resolvable account is refused whatever the code, nothing written")
+        void unresolvableCallerIsRefused() {
+            signInAsHospitalAdminOfA();
+            when(userRepository.findById(callerId)).thenReturn(Optional.empty());
+            UserRoleHospitalAssignment row = stored(row(assignee, nurse, hospitalA, false));
+            row.setRegisteredBy(account(callerId));
+            UUID id = row.getId();
+
+            Throwable right = catchThrowable(() -> service.confirmAssignment(id, "123456"));
+            Throwable wrong = catchThrowable(() -> service.confirmAssignment(id, "999999"));
+
+            assertThat(right).isExactlyInstanceOf(BusinessException.class);
+            assertThat(wrong).isExactlyInstanceOf(BusinessException.class).hasMessage(right.getMessage());
+            assertThat(row.getActive()).isFalse();
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("a non-registrar admin gets the same refusal for the right code and a wrong one")
+        void aNonRegistrarLearnsNothingAboutTheCode() {
+            signInAsHospitalAdminOfA();
+            callerAccount();
+            UserRoleHospitalAssignment row = stored(row(assignee, nurse, hospitalA, false));
+            row.setRegisteredBy(account(UUID.randomUUID()));
+            UUID id = row.getId();
+
+            Throwable right = catchThrowable(() -> service.confirmAssignment(id, "123456"));
+            Throwable wrong = catchThrowable(() -> service.confirmAssignment(id, "999999"));
+
+            assertThat(right).isExactlyInstanceOf(BusinessException.class);
+            assertThat(wrong).isExactlyInstanceOf(BusinessException.class)
+                .hasMessage(right.getMessage());
+            assertThat(row.getActive()).isFalse();
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("an admin of the row's hospital who is not its registrar is still refused")
+        void anotherAdminIsNotTheRegistrar() {
+            signInAsHospitalAdminOfA();
+            callerAccount();
+            UserRoleHospitalAssignment row = stored(row(assignee, nurse, hospitalA, false));
+            row.setRegisteredBy(account(UUID.randomUUID()));
+            UUID id = row.getId();
+
+            assertThatThrownBy(() -> service.confirmAssignment(id, "123456"))
+                .isExactlyInstanceOf(BusinessException.class);
+            assertThat(row.getActive()).isFalse();
+            assertNothingWritten();
+        }
+    }
+
+    @Nested
+    @DisplayName("retiring every assignment of a user")
+    class RetireUser {
+
+        @Test
+        @DisplayName("a hospital admin leaves a super-admin's account untouched, even its rows at their hospital")
+        void superAdminAccountIsShielded() {
+            signInAsHospitalAdminOfA();
+            User platformAdmin = account(UUID.randomUUID());
+            UserRoleHospitalAssignment global = row(platformAdmin, superAdmin, null, true);
+            UserRoleHospitalAssignment here = row(platformAdmin, nurse, hospitalA, true);
+            when(userRepository.findById(platformAdmin.getId())).thenReturn(Optional.of(platformAdmin));
+            when(assignmentRepository.findByUserId(platformAdmin.getId())).thenReturn(List.of(global, here));
+
+            service.retireAssignmentsForUserWithinCallerScope(platformAdmin.getId());
+
+            assertThat(global.getActive()).isTrue();
+            assertThat(here.getActive()).isTrue();
+            assertThat(here.getConfirmationCode()).isEqualTo("123456");
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("…also when the super-admin role is only a global role")
+        void superAdminByGlobalRoleIsShielded() {
+            signInAsHospitalAdminOfA();
+            User platformAdmin = account(UUID.randomUUID());
+            UserRole link = new UserRole();
+            link.setUser(platformAdmin);
+            link.setRole(superAdmin);
+            platformAdmin.getUserRoles().add(link);
+            UserRoleHospitalAssignment here = row(platformAdmin, nurse, hospitalA, true);
+            when(userRepository.findById(platformAdmin.getId())).thenReturn(Optional.of(platformAdmin));
+            when(assignmentRepository.findByUserId(platformAdmin.getId())).thenReturn(List.of(here));
+
+            service.retireAssignmentsForUserWithinCallerScope(platformAdmin.getId());
+
+            assertThat(here.getActive()).isTrue();
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("a hospital admin retires only the rows at their hospital")
+        void hospitalAdminRetiresOnlyTheirRows() {
+            signInAsHospitalAdminOfA();
+            UserRoleHospitalAssignment here = row(assignee, nurse, hospitalA, true);
+            UserRoleHospitalAssignment elsewhere = row(assignee, nurse, hospitalB, true);
+            when(assignmentRepository.findByUserId(assignee.getId())).thenReturn(List.of(here, elsewhere));
+
+            service.retireAssignmentsForUserWithinCallerScope(assignee.getId());
+
+            assertThat(here.getActive()).isFalse();
+            assertThat(elsewhere.getActive()).isTrue();
+            verify(assignmentRepository).saveAll(List.of(here));
+        }
+
+        @Test
+        @DisplayName("a verified super-admin retires every row")
+        void superAdminRetiresEverything() {
+            signInAsSuperAdmin();
+            UserRoleHospitalAssignment here = row(assignee, nurse, hospitalA, true);
+            UserRoleHospitalAssignment elsewhere = row(assignee, nurse, hospitalB, true);
+            when(assignmentRepository.findByUserId(assignee.getId())).thenReturn(List.of(here, elsewhere));
+
+            service.retireAssignmentsForUserWithinCallerScope(assignee.getId());
+
+            assertThat(Arrays.asList(here.getActive(), elsewhere.getActive())).containsOnly(false);
+        }
+    }
+
+    @Nested
+    @DisplayName("deleting a role")
+    class DeleteRole {
+
+        @Test
+        @DisplayName("a hospital admin may not delete a role: 403, nothing deleted")
+        void hospitalAdminCannotDeleteARole() {
+            signInAsHospitalAdminOfA();
+            UUID nurseRoleId = nurse.getId();
+
+            assertThatThrownBy(() -> service.deleteRole(nurseRoleId)).isInstanceOf(AccessDeniedException.class);
+            verify(roleRepository, never()).deleteById(any());
+        }
+
+        @Test
+        @DisplayName("a verified super-admin deletes an unassigned role")
+        void superAdminDeletesARole() {
+            signInAsSuperAdmin();
+            when(assignmentRepository.findByRoleId(nurse.getId())).thenReturn(List.of());
+
+            service.deleteRole(nurse.getId());
+
+            verify(roleRepository).deleteById(nurse.getId());
+        }
+    }
+}

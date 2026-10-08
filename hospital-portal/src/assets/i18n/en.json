@@ -4872,6 +4872,7 @@
         "PHARMACY_VERIFIER": "Pharmacy Verifier",
         "PHYSICIAN": "Physician",
         "PHYSIOTHERAPIST": "Physiotherapist",
+        "PROVIDER_ADMIN": "Provider Administrator",
         "QUALITY_MANAGER": "Quality Manager",
         "RADIOLOGIST": "Radiologist",
         "RECEPTIONIST": "Receptionist",
@@ -5278,6 +5279,11 @@
         "PROGRAM_ENROLLED": "Program Enrolment",
         "PROGRAM_STATUS_CHANGED": "Program Status Changed",
         "PROGRAM_VISIT_RECORDED": "Program Visit Recorded",
+        "PROVIDER_CREATED": "Provider Facility Created",
+        "PROVIDER_EVIDENCE_RESUBMITTED": "Provider Evidence Resubmitted",
+        "PROVIDER_REJECTED": "Provider Rejected",
+        "PROVIDER_VERIFICATION_REVOKED": "Provider Verification Revoked",
+        "PROVIDER_VERIFIED": "Provider Verified",
         "PRO_ALERT_ACKNOWLEDGED": "PRO Alert Acknowledged",
         "PRO_INSTRUMENT_IMPORTED": "PRO Instrument Imported",
         "PRO_RESPONSE_RECORDED": "PRO Response Recorded",
@@ -5323,7 +5329,11 @@
         "WEBHOOK_ENDPOINT_UPDATED": "Webhook Updated",
         "DISPENSE_READY": "Fill prepared for collection",
         "DISPENSE_HANDED_OVER": "Prepared fill handed over",
-        "DISPENSE_READY_CANCELLED": "Prepared fill cancelled"
+        "DISPENSE_READY_CANCELLED": "Prepared fill cancelled",
+        "PRESCRIPTION_QUEUE_CLAIMED": "Work-queue prescription claimed",
+        "PRESCRIPTION_QUEUE_CLAIM_RELEASED": "Work-queue claim released",
+        "PRESCRIPTION_QUEUE_CLAIM_TAKEN_OVER": "Work-queue claim taken over",
+        "PRESCRIPTION_QUEUE_CLAIM_EXPIRED": "Work-queue claim expired"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -5450,7 +5460,9 @@
         "HEALTH_SYSTEM": "Health System",
         "HOSPITAL": "Hospital",
         "HOSPITAL_CHAIN": "Hospital Chain",
+        "LABORATORY": "Laboratory",
         "PEDIATRIC_SYSTEM": "Pediatric System",
+        "PHARMACY": "Pharmacy",
         "PRIVATE_PRACTICE": "Private Practice",
         "REGIONAL_NETWORK": "Regional Network",
         "RESEARCH_INSTITUTION": "Research Institution",
@@ -7450,6 +7462,25 @@
     "VERIF_UNCONFIRMED": "Unconfirmed"
   },
   "PHARMACY": {
+    "QUEUE_CLAIM": {
+      "BEING_PREPARED_BY": "Being prepared by {{name}}",
+      "MINE": "You are preparing this",
+      "SINCE": "since {{time}}",
+      "CLAIM": "Claim",
+      "RELEASE": "Release",
+      "TAKE_OVER": "Take over",
+      "TAKE_OVER_CONFIRM": "{{name}} has been preparing this prescription since {{time}}. Take it over?",
+      "CLAIMED": "You are now preparing this prescription.",
+      "RELEASED": "Prescription released.",
+      "TAKEN_OVER": "You have taken this prescription over.",
+      "FAILED": "Could not update who is preparing this prescription.",
+      "FILTER_LABEL": "Show",
+      "FILTER": {
+        "ALL": "All",
+        "MINE": "Mine",
+        "UNCLAIMED": "Unclaimed"
+      }
+    },
     "ATTENTION": {
       "PENDING_STOCK": "Out of stock — on back order",
       "PARTNER_REJECTED": "The partner pharmacy refused it — fill here or route elsewhere",

@@ -5,6 +5,8 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.PharmacyType;
 import com.example.hms.enums.PrescriptionStatus;
+import com.example.hms.enums.QueueClaimExitActor;
+import com.example.hms.enums.QueueClaimReleaseReason;
 import com.example.hms.enums.RoutingDecisionStatus;
 import com.example.hms.enums.RoutingType;
 import com.example.hms.exception.BusinessException;
@@ -27,6 +29,7 @@ import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.PrescriptionSmsDispatchService;
 import com.example.hms.service.SmsService;
 import com.example.hms.service.pharmacy.PrescriberPharmacyNotifier;
+import com.example.hms.service.pharmacy.PrescriptionQueueClaimService;
 import com.example.hms.service.pharmacy.partner.PartnerNotificationChannel;
 import com.example.hms.utility.TransactionCallbacks;
 import lombok.RequiredArgsConstructor;
@@ -117,6 +120,15 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
     private final AuditEventLogService auditEventLogService;
     /** G15: an open preparation blocks a dispatch (AC-10). */
     private final com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
+    /**
+     * G13: a successful dispatch ends the work-queue claim; a failed one
+     * (TRANSMISSION_FAILED) keeps it, the order being the hospital's again.
+     */
+    private final PrescriptionQueueClaimService queueClaimService;
+
+    /** The work-queue gate: these roles take a claim over by acting on it (G13). */
+    private static final List<String> QUEUE_ROLES = List.of(
+            "ROLE_PHARMACIST", "ROLE_PHARMACY_VERIFIER", "ROLE_HOSPITAL_ADMIN", ROLE_SUPER_ADMIN);
 
     /**
      * {@code noRollbackFor}: a provider failure throws
@@ -178,6 +190,8 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
 
         supersedeOpenDecisions(rx, openOffers, pharmacy);
         applyDispatchToPrescription(rx, pharmacy, phone, transmission);
+        queueClaimService.releaseOnExit(rx, QueueClaimReleaseReason.DISPATCHED, decidedBy.getId(),
+                queueExitActor(auth));
         log.info("Dispatched prescription {} via SMS to pharmacy {} ({}); routing decision {}",
                 prescriptionId, pharmacy.getId(), phone, decision.getId());
 
@@ -475,6 +489,19 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
                         prescriptionId, auditEx.getClass().getSimpleName());
             }
         });
+    }
+
+    /**
+     * G13: a pharmacy-queue role acting over a colleague's claim takes it
+     * over; a DOCTOR, NURSE or MIDWIFE dispatch ends it as a plain release.
+     */
+    private QueueClaimExitActor queueExitActor(Authentication auth) {
+        for (String role : QUEUE_ROLES) {
+            if (authUtils.hasAuthority(auth, role)) {
+                return QueueClaimExitActor.QUEUE_ROLE;
+            }
+        }
+        return QueueClaimExitActor.OTHER;
     }
 
     /** The prescriber saw the error on their own screen; a notification would only repeat it. */

@@ -4872,6 +4872,7 @@
         "PHARMACY_VERIFIER": "Verificador(a) de farmacia",
         "PHYSICIAN": "Facultativo(a)",
         "PHYSIOTHERAPIST": "Fisioterapeuta",
+        "PROVIDER_ADMIN": "Administrador(a) de establecimiento proveedor",
         "QUALITY_MANAGER": "Gestor(a) de Calidad",
         "RADIOLOGIST": "Radiólogo(a)",
         "RECEPTIONIST": "Recepcionista",
@@ -5278,6 +5279,11 @@
         "PROGRAM_ENROLLED": "Inscripción a programa",
         "PROGRAM_STATUS_CHANGED": "Estado de programa modificado",
         "PROGRAM_VISIT_RECORDED": "Visita de programa registrada",
+        "PROVIDER_CREATED": "Establecimiento proveedor creado",
+        "PROVIDER_EVIDENCE_RESUBMITTED": "Documentación del proveedor reenviada",
+        "PROVIDER_REJECTED": "Proveedor rechazado",
+        "PROVIDER_VERIFICATION_REVOKED": "Verificación del proveedor revocada",
+        "PROVIDER_VERIFIED": "Proveedor verificado",
         "PRO_ALERT_ACKNOWLEDGED": "Alerta PRO confirmada",
         "PRO_INSTRUMENT_IMPORTED": "Instrumento PRO importado",
         "PRO_RESPONSE_RECORDED": "Respuesta PRO registrada",
@@ -5323,7 +5329,11 @@
         "WEBHOOK_ENDPOINT_UPDATED": "Webhook actualizado",
         "DISPENSE_READY": "Dispensación preparada para recoger",
         "DISPENSE_HANDED_OVER": "Dispensación preparada entregada",
-        "DISPENSE_READY_CANCELLED": "Dispensación preparada cancelada"
+        "DISPENSE_READY_CANCELLED": "Dispensación preparada cancelada",
+        "PRESCRIPTION_QUEUE_CLAIMED": "Receta asignada",
+        "PRESCRIPTION_QUEUE_CLAIM_RELEASED": "Asignación liberada",
+        "PRESCRIPTION_QUEUE_CLAIM_TAKEN_OVER": "Asignación relevada",
+        "PRESCRIPTION_QUEUE_CLAIM_EXPIRED": "Asignación caducada"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -5450,7 +5460,9 @@
         "HEALTH_SYSTEM": "Sistema de salud",
         "HOSPITAL": "Hospital",
         "HOSPITAL_CHAIN": "Cadena hospitalaria",
+        "LABORATORY": "Laboratorio",
         "PEDIATRIC_SYSTEM": "Sistema pediátrico",
+        "PHARMACY": "Farmacia",
         "PRIVATE_PRACTICE": "Consulta privada",
         "REGIONAL_NETWORK": "Red regional",
         "RESEARCH_INSTITUTION": "Institución de investigación",
@@ -7450,6 +7462,25 @@
     "VERIF_UNCONFIRMED": "Sin confirmar"
   },
   "PHARMACY": {
+    "QUEUE_CLAIM": {
+      "BEING_PREPARED_BY": "En preparación por {{name}}",
+      "MINE": "Usted está preparando esta receta",
+      "SINCE": "desde las {{time}}",
+      "CLAIM": "Hacerse cargo",
+      "RELEASE": "Liberar",
+      "TAKE_OVER": "Tomar el relevo",
+      "TAKE_OVER_CONFIRM": "{{name}} está preparando esta receta desde las {{time}}. ¿Tomar el relevo?",
+      "CLAIMED": "Ahora está preparando esta receta.",
+      "RELEASED": "Receta liberada.",
+      "TAKEN_OVER": "Ha tomado el relevo de esta receta.",
+      "FAILED": "No se pudo actualizar quién prepara esta receta.",
+      "FILTER_LABEL": "Mostrar",
+      "FILTER": {
+        "ALL": "Todas",
+        "MINE": "Las mías",
+        "UNCLAIMED": "Sin asignar"
+      }
+    },
     "ATTENTION": {
       "PENDING_STOCK": "Sin existencias — en pedido pendiente",
       "PARTNER_REJECTED": "La farmacia asociada la rechazó — dispense aquí o derive a otra",

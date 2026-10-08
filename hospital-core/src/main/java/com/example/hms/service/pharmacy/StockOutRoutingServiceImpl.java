@@ -4,6 +4,8 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.DispenseStatus;
 import com.example.hms.enums.PharmacyType;
 import com.example.hms.enums.PrescriptionStatus;
+import com.example.hms.enums.QueueClaimExitActor;
+import com.example.hms.enums.QueueClaimReleaseReason;
 import com.example.hms.enums.RoutingDecisionStatus;
 import com.example.hms.enums.RoutingType;
 import com.example.hms.exception.BusinessException;
@@ -63,6 +65,12 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     private final com.example.hms.service.pharmacy.partner.PartnerNotificationChannel partnerChannel;
     private final PrescriberPharmacyNotifier prescriberNotifier;
     private final com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler withdrawnOrders;
+    /**
+     * G13: routing, printing and back-ordering end the work-queue claim
+     * (plan rule 4). The unlocked partner writers (accept/reject, no-show,
+     * confirm) never touch it: they do not hold the prescription row lock.
+     */
+    private final PrescriptionQueueClaimService queueClaimService;
 
     private static final String AUDIT_ENTITY = "PRESCRIPTION_ROUTING";
 
@@ -252,6 +260,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 prescription, targetPharmacy, currentUser, patient, remaining);
         PrescriptionRoutingDecision decision = routingMapper.toEntity(dto, ctx);
         PrescriptionRoutingDecision saved = routingDecisionRepository.save(decision);
+        queueClaimService.releaseOnExit(prescription, QueueClaimReleaseReason.ROUTED,
+                currentUser.getId(), QueueClaimExitActor.QUEUE_ROLE);
 
         logAudit(AuditEventType.PRESCRIPTION_SENT_TO_PARTNER,
                 PRESCRIPTION_PREFIX + prescriptionId + " routed to partner pharmacy " + targetPharmacy.getName(),
@@ -297,6 +307,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 .decidedAt(LocalDateTime.now())
                 .build();
         PrescriptionRoutingDecision saved = routingDecisionRepository.save(decision);
+        queueClaimService.releaseOnExit(prescription, QueueClaimReleaseReason.ROUTED,
+                currentUser.getId(), QueueClaimExitActor.QUEUE_ROLE);
 
         logAudit(AuditEventType.PRESCRIPTION_PRINTED,
                 PRESCRIPTION_PREFIX + prescriptionId + " printed for patient",
@@ -337,6 +349,9 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 .decidedAt(LocalDateTime.now())
                 .build();
         PrescriptionRoutingDecision saved = routingDecisionRepository.save(decision);
+        // Restock may take days, far beyond the claim's TTL (decision D6).
+        queueClaimService.releaseOnExit(prescription, QueueClaimReleaseReason.BACK_ORDERED,
+                currentUser.getId(), QueueClaimExitActor.QUEUE_ROLE);
 
         logAudit(AuditEventType.PRESCRIPTION_BACKORDER,
                 PRESCRIPTION_PREFIX + prescriptionId + " placed on back order"

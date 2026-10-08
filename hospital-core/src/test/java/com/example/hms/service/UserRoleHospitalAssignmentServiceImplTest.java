@@ -32,6 +32,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -51,10 +52,13 @@ class UserRoleHospitalAssignmentServiceImplTest {
     @Mock private OrganizationRepository organizationRepository;
     @Mock private UserRoleHospitalAssignmentMapper mapper;
     @Mock private MessageSource messageSource;
+    @Mock private com.example.hms.security.provider.FacilityAssignmentGuard facilityAssignmentGuard;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
     @Mock private com.example.hms.security.LoginAttemptService loginAttemptService;
     @Mock private com.example.hms.repository.StaffRepository staffRepository;
     @Mock private com.example.hms.repository.EncounterRepository encounterRepository;
+    /** The caller rules have their own tests (UserAccountAccessTest, AssignmentGrantScopeTest); here a super-admin's scope. */
+    @Mock private com.example.hms.service.support.UserAccountAccess accountAccess;
 
     @InjectMocks
     private UserRoleHospitalAssignmentServiceImpl service;
@@ -103,6 +107,14 @@ class UserRoleHospitalAssignmentServiceImplTest {
         org.mockito.Mockito.lenient()
             .when(assignmentLinkService.buildProfileCompletionUrl(anyString()))
             .thenReturn("https://app/complete/" + VALID_CODE);
+        org.mockito.Mockito.lenient()
+            .when(accountAccess.assignmentScope())
+            .thenReturn(new com.example.hms.service.support.UserAccountAccess.AssignmentScope(true, java.util.Set.of()));
+        com.example.hms.service.support.UserAccountAccess.Grant anywhere =
+            mock(com.example.hms.service.support.UserAccountAccess.Grant.class);
+        org.mockito.Mockito.lenient()
+            .when(accountAccess.requireMayGrant(any()))
+            .thenReturn(anywhere);
     }
 
     // -----------------------------------------------------------------------
@@ -163,9 +175,8 @@ class UserRoleHospitalAssignmentServiceImplTest {
         try {
             when(assignmentRepository.findById(assignment.getId()))
                 .thenReturn(Optional.of(assignment));
-            when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(
-                    "registrar", "registrar", null))
-                .thenReturn(Optional.of(registrar));
+            when(accountAccess.currentUserId()).thenReturn(Optional.of(registrar.getId()));
+            when(userRepository.findById(registrar.getId())).thenReturn(Optional.of(registrar));
             when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -537,8 +548,8 @@ class UserRoleHospitalAssignmentServiceImplTest {
 
     @Test
     void anAssignmentAnEncounterWasRecordedUnderCannotBeHardDeleted() {
-        UUID id = UUID.randomUUID();
-        when(assignmentRepository.existsById(id)).thenReturn(true);
+        UUID id = assignment.getId();
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
         when(staffRepository.existsByAssignment_Id(id)).thenReturn(false);
         when(encounterRepository.existsByAssignment_Id(id)).thenReturn(true);
 
@@ -550,8 +561,8 @@ class UserRoleHospitalAssignmentServiceImplTest {
 
     @Test
     void anUnreferencedAssignmentIsStillHardDeleted() {
-        UUID id = UUID.randomUUID();
-        when(assignmentRepository.existsById(id)).thenReturn(true);
+        UUID id = assignment.getId();
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
         when(staffRepository.existsByAssignment_Id(id)).thenReturn(false);
         when(encounterRepository.existsByAssignment_Id(id)).thenReturn(false);
 

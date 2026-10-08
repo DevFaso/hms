@@ -76,6 +76,7 @@ class UserServiceImplTest {
     @Mock private com.example.hms.security.LoginAttemptService loginAttemptService;
     @Mock private AssignmentLinkService assignmentLinkService;
     @Mock private UserAccountAccess accountAccess;
+    @Mock private com.example.hms.security.provider.FacilityAssignmentGuard facilityAssignmentGuard;
 
     @InjectMocks
     private UserServiceImpl userService;
@@ -361,7 +362,7 @@ class UserServiceImplTest {
             org.mockito.ArgumentCaptor<com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO>
                 assignCaptor = org.mockito.ArgumentCaptor.forClass(
                     com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO.class);
-            verify(assignmentService).assignRole(assignCaptor.capture());
+            verify(assignmentService).assignRoleOnAccountCreation(assignCaptor.capture());
             assertThat(assignCaptor.getValue().getActive())
                 .as("the assignment request must also start inactive")
                 .isFalse();

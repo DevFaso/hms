@@ -53,6 +53,7 @@ class PrescriptionClarificationServiceTest {
     @Mock private PharmacyServiceSupport support;
     @Mock private PrescriberPharmacyNotifier prescriberNotifier;
     @Mock private com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
+    @Mock private PrescriptionQueueClaimService queueClaimService;
 
     private PrescriptionClarificationService service;
 
@@ -67,7 +68,7 @@ class PrescriptionClarificationServiceTest {
     @BeforeEach
     void setUp() {
         service = new PrescriptionClarificationService(prescriptionRepository, staffRepository,
-                roleValidator, support, prescriberNotifier, CLOCK, dispenseRepository);
+                roleValidator, support, prescriberNotifier, CLOCK, dispenseRepository, queueClaimService);
         hospital = new Hospital();
         hospital.setId(hospitalId);
         prescription = new Prescription();
@@ -114,6 +115,10 @@ class PrescriptionClarificationServiceTest {
             assertThat(description.getValue()).doesNotContain("rénal");
 
             verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.PENDING_CLARIFICATION);
+            // G13 AC-8/AC-9: the question ends the work-queue claim
+            verify(queueClaimService).releaseOnExit(prescription,
+                    com.example.hms.enums.QueueClaimReleaseReason.CLARIFICATION_REQUESTED, pharmacistId,
+                    com.example.hms.enums.QueueClaimExitActor.QUEUE_ROLE);
         }
 
         @Test
@@ -177,6 +182,8 @@ class PrescriptionClarificationServiceTest {
                     .hasMessageContaining("DISPENSED");
             verify(prescriptionRepository, never()).save(any());
             verify(prescriberNotifier, never()).notifyPrescriber(any(), any());
+            // G13 AC-9: a refused question keeps the claim
+            verifyNoInteractions(queueClaimService);
         }
 
         @Test

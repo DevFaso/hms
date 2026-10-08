@@ -68,6 +68,9 @@ class StockOutRoutingServiceImplTest {
     @Mock private PrescriberPharmacyNotifier prescriberNotifier;
     @Mock private com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler withdrawnOrders;
 
+    /** G13: the work-queue claim; exit-path releases are verified where they matter. */
+    @Mock private com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaimService;
+
     @InjectMocks
     private StockOutRoutingServiceImpl service;
 
@@ -246,6 +249,10 @@ class StockOutRoutingServiceImplTest {
         // T-40 / G14: patient notified out-of-stock with the partner routing sentence
         verify(support).notifyOutOfStock(patient, prescription.getMedicationName(),
                 PharmacyServiceSupport.OUT_OF_STOCK_PARTNER, "Partner Pharmacy");
+        // G13 AC-8/AC-9: routing ends the work-queue claim, ROUTED, by the router as a queue role
+        verify(queueClaimService).releaseOnExit(prescription,
+                com.example.hms.enums.QueueClaimReleaseReason.ROUTED, userId,
+                com.example.hms.enums.QueueClaimExitActor.QUEUE_ROLE);
     }
 
     @Test
@@ -509,6 +516,10 @@ class StockOutRoutingServiceImplTest {
         // T-40 / G14: patient notified out-of-stock with the print-for-patient sentence
         verify(support).notifyOutOfStock(patient, prescription.getMedicationName(),
                 PharmacyServiceSupport.OUT_OF_STOCK_PRINT);
+        // G13: printing for the patient ends the claim as ROUTED
+        verify(queueClaimService).releaseOnExit(prescription,
+                com.example.hms.enums.QueueClaimReleaseReason.ROUTED, userId,
+                com.example.hms.enums.QueueClaimExitActor.QUEUE_ROLE);
     }
 
     @Test
@@ -534,6 +545,10 @@ class StockOutRoutingServiceImplTest {
                 eq(PharmacyServiceSupport.OUT_OF_STOCK_BACKORDER_DATED), contains("-"));
         // G6: the prescriber hears about the back order
         verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.PENDING_STOCK);
+        // G13 (decision D6): a back order ends the claim, BACK_ORDERED
+        verify(queueClaimService).releaseOnExit(prescription,
+                com.example.hms.enums.QueueClaimReleaseReason.BACK_ORDERED, userId,
+                com.example.hms.enums.QueueClaimExitActor.QUEUE_ROLE);
     }
 
     @Nested
@@ -833,6 +848,8 @@ class StockOutRoutingServiceImplTest {
         assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.COMPLETED);
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_DISPENSED);
         verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.PARTNER_DISPENSED);
+        // G13 rule 4: the unlocked partner writers never touch the claim
+        verifyNoInteractions(queueClaimService);
     }
 
     @Test
@@ -902,6 +919,8 @@ class StockOutRoutingServiceImplTest {
             assertThat(prescription.getPharmacyId()).isNull();
             assertThat(prescription.getPharmacyName()).isNull();
             verify(prescriptionRepository).save(prescription);
+            // G13 rule 4 / decision D13: a no-show keeps the claim
+            verifyNoInteractions(queueClaimService);
         }
 
         @Test

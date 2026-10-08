@@ -58,7 +58,7 @@ public class UserController {
         description = "SUPER/HOSPITAL_ADMIN can register any role. RECEPTIONIST can only register PATIENT; hospital is resolved from JWT."
     )
     @PostMapping("/admin-register")
-    @PreAuthorize("hasAnyAuthority(" + SecurityConstants.USER_REGISTRAR_AUTHORITIES + ")")
+    @PreAuthorize("hasAnyAuthority(" + SecurityConstants.ADMIN_REGISTER_AUTHORITIES + ")")
     public ResponseEntity<UserResponseDTO> adminRegister(
         @Valid @RequestBody AdminSignupRequest request,
         Authentication auth // inject instead of pulling from SecurityContextHolder

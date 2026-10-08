@@ -61,6 +61,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -108,6 +109,9 @@ class DispenseServiceImplTest {
     /** The service's own clock, so dispensedAt and scanVerifiedAt are pinned too. */
     @org.mockito.Spy
     private java.time.Clock clock = FIXED_CLOCK;
+
+    /** G13: the work-queue claim; exit-path releases are verified where they matter. */
+    @Mock private com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaimService;
 
     @InjectMocks
     private DispenseServiceImpl service;
@@ -235,6 +239,127 @@ class DispenseServiceImplTest {
                 .build();
         d.setId(dispenseId);
         return d;
+    }
+
+    @Nested
+    @DisplayName("G13: the work-queue claim")
+    class QueueClaim {
+
+        private void stubFullFill(DispenseRequestDTO dto) {
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
+                    .thenReturn(BigDecimal.TEN);
+            when(prescriptionRepository.save(any(Prescription.class))).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(DispenseResponseDTO.builder().id(dispenseId).build());
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        }
+
+        @Test
+        @DisplayName("AC-8/AC-9: a one-step fill ends the claim in its transaction: DISPENSED, the dispenser, QUEUE_ROLE")
+        void oneStepFillEndsTheClaim() {
+            DispenseRequestDTO dto = buildRequest();
+            stubFullFill(dto);
+
+            service.createDispense(dto);
+
+            verify(queueClaimService).releaseOnExit(prescription,
+                    com.example.hms.enums.QueueClaimReleaseReason.DISPENSED, userId,
+                    com.example.hms.enums.QueueClaimExitActor.QUEUE_ROLE);
+        }
+
+        @Test
+        @DisplayName("AC-9: a refused fill (400, not dispensable) keeps the claim: no release")
+        void refusedFillKeepsTheClaim() {
+            prescription.setStatus(PrescriptionStatus.PENDING_CLARIFICATION);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+
+            DispenseRequestDTO request = buildRequest();
+            assertThatThrownBy(() -> service.createDispense(request)).isInstanceOf(BusinessException.class);
+            verify(queueClaimService, never()).releaseOnExit(any(), any(), any(), any());
+        }
+
+        private com.example.hms.payload.dto.pharmacy.WorkQueueClaimDTO claimDto(boolean mine) {
+            return com.example.hms.payload.dto.pharmacy.WorkQueueClaimDTO.builder()
+                    .prescriptionId(prescriptionId).claimedByUserId(UUID.randomUUID())
+                    .claimedByName("Awa Sanou").mine(mine).build();
+        }
+
+        @Test
+        @DisplayName("AC-2: each row carries its active claim from ONE batched lookup per page; rows without one carry none")
+        void queueRowsCarryTheirClaim() {
+            Pageable pageable = PageRequest.of(0, 20);
+            Prescription other = new Prescription();
+            other.setId(UUID.randomUUID());
+            other.setStatus(PrescriptionStatus.SIGNED);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+                    .thenReturn(new PageImpl<>(List.of(prescription, other)));
+            when(queueClaimService.activeClaimsFor(List.of(prescription, other)))
+                    .thenReturn(java.util.Map.of(prescriptionId, claimDto(false)));
+
+            List<com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO> rows =
+                    service.getWorkQueue(pageable, com.example.hms.enums.QueueClaimFilter.ALL).getContent();
+
+            verify(queueClaimService, times(1)).activeClaimsFor(any());
+            assertThat(rows.get(0).getClaim().getClaimedByName()).isEqualTo("Awa Sanou");
+            assertThat(rows.get(0).getClaim().isMine()).isFalse();
+            assertThat(rows.get(1).getClaim()).isNull();
+        }
+
+        @Test
+        @DisplayName("AC-13: MINE pages the caller's active claims, with the clock's activeAfter")
+        void mineUsesItsOwnQuery() {
+            Pageable pageable = PageRequest.of(0, 20);
+            java.time.LocalDateTime activeAfter = java.time.LocalDateTime.now(FIXED_CLOCK).minusMinutes(15);
+            when(queueClaimService.isEnabled()).thenReturn(true);
+            when(queueClaimService.activeAfter()).thenReturn(activeAfter);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(prescriptionRepository.findWorkQueueClaimedBy(eq(hospitalId), any(), eq(userId), eq(activeAfter),
+                    eq(pageable))).thenReturn(new PageImpl<>(List.of(prescription)));
+
+            assertThat(service.getWorkQueue(pageable, com.example.hms.enums.QueueClaimFilter.MINE).getContent())
+                    .hasSize(1);
+            verify(prescriptionRepository, never()).findByHospital_IdAndStatusIn(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("AC-13: UNCLAIMED has its own query")
+        void unclaimedUsesItsOwnQuery() {
+            Pageable pageable = PageRequest.of(0, 20);
+            java.time.LocalDateTime activeAfter = java.time.LocalDateTime.now(FIXED_CLOCK).minusMinutes(15);
+            when(queueClaimService.isEnabled()).thenReturn(true);
+            when(queueClaimService.activeAfter()).thenReturn(activeAfter);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findWorkQueueUnclaimed(eq(hospitalId), any(), eq(activeAfter), eq(pageable)))
+                    .thenReturn(new PageImpl<>(List.of(prescription)));
+
+            assertThat(service.getWorkQueue(pageable, com.example.hms.enums.QueueClaimFilter.UNCLAIMED).getContent())
+                    .hasSize(1);
+            verify(prescriptionRepository, never()).findByHospital_IdAndStatusIn(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("AC-16: with claims off, claim=MINE is ignored and the list is ALL")
+        void flagOffIgnoresTheFilter() {
+            Pageable pageable = PageRequest.of(0, 20);
+            when(queueClaimService.isEnabled()).thenReturn(false);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+                    .thenReturn(new PageImpl<>(List.of(prescription)));
+
+            assertThat(service.getWorkQueue(pageable, com.example.hms.enums.QueueClaimFilter.MINE).getContent())
+                    .hasSize(1);
+            verify(prescriptionRepository, never()).findWorkQueueClaimedBy(any(), any(), any(), any(), any());
+        }
     }
 
     @Nested

@@ -85,6 +85,9 @@ class PrescriptionServiceImplPatientOwnershipTest {
     private java.time.Clock clock = java.time.Clock.fixed(
         java.time.Instant.parse("2026-09-25T09:00:00Z"), java.time.ZoneOffset.UTC);
 
+    /** G13: the work-queue claim; exit-path releases are verified where they matter. */
+    @Mock private com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaimService;
+
     @InjectMocks
     private PrescriptionServiceImpl service;
 

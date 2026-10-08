@@ -105,6 +105,8 @@ public class UserServiceImpl implements UserService {
     private final PatientRepository patientRepository;
     private final PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
     private final UserAccountAccess accountAccess;
+    /** Role/facility compatibility (provider plan §3.2), checked before anything is saved. */
+    private final com.example.hms.security.provider.FacilityAssignmentGuard facilityAssignmentGuard;
 
     @Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -333,6 +335,11 @@ public class UserServiceImpl implements UserService {
         } catch (AccessDeniedException denied) {
             throw refusedGrant(roleNames, denied);
         }
+        // Allowed to grant here, and the roles must also be ones this kind of
+        // facility takes: a 400 before the account or any assignment exists.
+        // The one-kind-of-facility rule needs the account, so it runs where
+        // each assignment is created (UserRoleHospitalAssignmentServiceImpl).
+        facilityAssignmentGuard.requireCompatible(roleNames, staffContextHospitalId);
 
         // ---- 2) Resolve Roles ----
         final Set<Role> roles = roleNames.stream()
@@ -899,7 +906,7 @@ public class UserServiceImpl implements UserService {
             // pre-approval override that used to force staff assignments
             // active here was exactly what made the verification email
             // theater (option A decision, 2026-09-02).
-            assignmentService.assignRole(UserRoleHospitalAssignmentRequestDTO.builder()
+            assignmentService.assignRoleOnAccountCreation(UserRoleHospitalAssignmentRequestDTO.builder()
                     .userId(userId)
                     .roleId(roleId)
                     .hospitalId(hospitalId) // may be null for global
@@ -1399,7 +1406,7 @@ public class UserServiceImpl implements UserService {
         // correct default per role.
         Role role = roleRepository.getReferenceById(roleId);
         Boolean active = ROLE_SUPER_ADMIN.equalsIgnoreCase(role.getCode()) ? Boolean.TRUE : null;
-        assignmentService.assignRole(UserRoleHospitalAssignmentRequestDTO.builder()
+        assignmentService.assignRoleOnAccountCreation(UserRoleHospitalAssignmentRequestDTO.builder()
                 .userId(userId)
                 .roleId(roleId)
                 .hospitalId(hospitalId)
