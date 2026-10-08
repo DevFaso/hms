@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import com.example.hms.security.provider.RoleFacilityCompatibility;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.ForeignKey;
@@ -113,6 +114,15 @@ public class UserRoleHospitalAssignment extends BaseEntity {
         boolean isGlobalOnlyRole = "ROLE_SUPER_ADMIN".equals(roleKey) || "SYSTEM_ADMIN".equals(roleKey);
         if (Boolean.TRUE.equals(active) && isGlobalOnlyRole && hospital != null) {
             throw new IllegalStateException("Super Admins must not be assigned to a hospital (global only).");
+        }
+
+        // Provider plan §3.2, the BACKSTOP only: the control is the 400 that
+        // FacilityAssignmentGuard raises before anything is saved. A throw here
+        // surfaces as a 500, which the multi-scope loop cannot record as a
+        // per-hospital failure. Unlike the rule above it fires whatever
+        // `active` says: an inactive incompatible row could be switched on later.
+        if (hospital != null && !RoleFacilityCompatibility.isCompatible(roleKey, hospital.getFacilityType())) {
+            throw new IllegalStateException("This role cannot be held at this kind of facility.");
         }
     }
 }

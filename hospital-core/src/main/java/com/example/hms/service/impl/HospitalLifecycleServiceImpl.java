@@ -3,7 +3,12 @@ package com.example.hms.service.impl;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.HospitalLifecycleState;
+import com.example.hms.enums.ProviderVerificationStatus;
 import com.example.hms.exception.BusinessRuleException;
+import com.example.hms.exception.ConflictException;
+import com.example.hms.repository.provider.ProviderVerificationRepository;
+import com.example.hms.service.provider.ProviderOnboardingService;
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.exception.UnauthorizedException;
 import com.example.hms.model.Hospital;
@@ -75,6 +80,8 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
     private final MfaService mfaService;
     /** Same tenant-lifecycle clock as {@code OrganizationLifecycleServiceImpl} (TimeConfig). */
     private final Clock clock;
+    /** A provider facility comes back ACTIVE only on a VERIFIED verification (provider plan AC-4). */
+    private final ProviderVerificationRepository providerVerificationRepository;
 
     @Value("${hms.hospital-lifecycle.require-mfa:true}")
     private boolean requireMfa;
@@ -90,7 +97,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     @Override
     public HospitalLifecycleResponseDTO suspend(UUID hospitalId, TenantLifecycleActionRequestDTO request, String mfaToken) {
-        Hospital hospital = loadOrThrow(hospitalId);
+        Hospital hospital = lockOrThrow(hospitalId);
         requireTransition(hospital, SUSPENDABLE, ACTION_SUSPEND);
         String reason = requireReason(request, ACTION_SUSPEND);
         requireStepUp(ACTION_SUSPEND, mfaToken);
@@ -111,16 +118,36 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     @Override
     public HospitalLifecycleResponseDTO restore(UUID hospitalId, TenantLifecycleActionRequestDTO request) {
-        Hospital hospital = loadOrThrow(hospitalId);
+        // Locked, like every provider transition: a restore racing a revoke
+        // must see the verification the revoke committed.
+        Hospital hospital = lockOrThrow(hospitalId);
         requireTransition(hospital, RESTORABLE, ACTION_RESTORE);
+        boolean awaitsVerification = awaitsVerification(hospital);
+        if (!isRestorable(hospital, awaitsVerification)) {
+            throw new ConflictException(MessageUtil.resolveOrRaw("provider.not-verified"));
+        }
 
         HospitalLifecycleState previous = hospital.getLifecycleState();
-        hospital.setLifecycleState(HospitalLifecycleState.ACTIVE);
-        hospital.setActive(true);
+        // An unverified provider comes back to SUSPENDED, never ACTIVE: VERIFY
+        // is the only way a provider becomes ACTIVE (provider plan AC-4 / T22).
+        HospitalLifecycleState target = awaitsVerification
+            ? HospitalLifecycleState.SUSPENDED
+            : HospitalLifecycleState.ACTIVE;
+        hospital.setLifecycleState(target);
+        if (target == HospitalLifecycleState.ACTIVE) {
+            hospital.setActive(true);
+        } else {
+            // An unverified provider comes back to where onboarding left it:
+            // SUSPENDED and inactive, waiting for VERIFY.
+            hospital.setActive(false);
+            hospital.setSuspendedAt(Instant.now(clock));
+            hospital.setSuspendedBy(currentActorId());
+            hospital.setSuspensionReason(ProviderOnboardingService.PENDING_VERIFICATION_REASON);
+        }
         hospitalRepository.save(hospital);
         invalidateStatusCache();
 
-        String description = "Hospital restored from " + previous
+        String description = "Hospital restored from " + previous + " to " + target
             + (request != null && request.getReason() != null ? ": " + request.getReason() : "");
         recordAudit(hospital, AuditEventType.HOSPITAL_RESTORED, description);
         return toResponse(hospital);
@@ -128,7 +155,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     @Override
     public HospitalLifecycleResponseDTO archive(UUID hospitalId, TenantLifecycleActionRequestDTO request, String mfaToken) {
-        Hospital hospital = loadOrThrow(hospitalId);
+        Hospital hospital = lockOrThrow(hospitalId);
         requireTransition(hospital, ARCHIVABLE, ACTION_ARCHIVE);
         String reason = requireReason(request, ACTION_ARCHIVE);
         requireStepUp(ACTION_ARCHIVE, mfaToken);
@@ -147,7 +174,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     @Override
     public HospitalLifecycleResponseDTO schedulePurge(UUID hospitalId, TenantLifecycleActionRequestDTO request, String mfaToken) {
-        Hospital hospital = loadOrThrow(hospitalId);
+        Hospital hospital = lockOrThrow(hospitalId);
         requireTransition(hospital, PURGE_SCHEDULABLE, ACTION_SCHEDULE_PURGE);
         String reason = requireReason(request, ACTION_SCHEDULE_PURGE);
         requireStepUp(ACTION_SCHEDULE_PURGE, mfaToken);
@@ -174,7 +201,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     @Override
     public HospitalLifecycleResponseDTO cancelPurge(UUID hospitalId, TenantLifecycleActionRequestDTO request) {
-        Hospital hospital = loadOrThrow(hospitalId);
+        Hospital hospital = lockOrThrow(hospitalId);
         requireTransition(hospital, PURGE_CANCELLABLE, ACTION_CANCEL_PURGE);
 
         hospital.setLifecycleState(HospitalLifecycleState.ARCHIVED);
@@ -192,9 +219,50 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     // ── helpers ────────────────────────────────────────────────────────
 
+    /**
+     * The facility row for a lifecycle transition, locked (PESSIMISTIC_WRITE)
+     * before it is read. Hospital has no version column, so an unlocked
+     * transition racing a provider VERIFY would write its stale copy (old
+     * name, address, licence) over the verified one. Every lifecycle
+     * transition and every provider onboarding transition takes this one
+     * lock, the facility row, and nothing else.
+     */
+    private Hospital lockOrThrow(UUID hospitalId) {
+        return hospitalRepository.findByIdForUpdate(hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
+    }
+
     private Hospital loadOrThrow(UUID hospitalId) {
         return hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
+    }
+
+    /**
+     * Is this facility a provider whose current verification is not VERIFIED
+     * (submitted, rejected, revoked, or none)? A hospital never is.
+     */
+    private boolean awaitsVerification(Hospital hospital) {
+        if (!hospital.isProvider()) {
+            return false;
+        }
+        return providerVerificationRepository
+            .findFirstByHospital_IdOrderByCreatedAtDesc(hospital.getId())
+            .map(v -> v.getStatus() != ProviderVerificationStatus.VERIFIED)
+            .orElse(true);
+    }
+
+    /**
+     * The one rule for "may this be restored", read by {@link #restore} and by
+     * the snapshot's {@code canRestore}, so the button and the endpoint never
+     * disagree: a SUSPENDED or ARCHIVED facility, except an unverified provider
+     * that is already SUSPENDED (there is nothing to restore it to; VERIFY is
+     * the way on). An unverified provider that is ARCHIVED may be restored, and
+     * lands on SUSPENDED.
+     */
+    private boolean isRestorable(Hospital hospital, boolean awaitsVerification) {
+        HospitalLifecycleState state = hospital.getLifecycleState();
+        return RESTORABLE.contains(state)
+            && !(awaitsVerification && state == HospitalLifecycleState.SUSPENDED);
     }
 
     private void requireTransition(Hospital hospital, Set<HospitalLifecycleState> allowed, String action) {
@@ -311,7 +379,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
             .purgeReason(hospital.getPurgeReason())
             .purgedAt(hospital.getPurgedAt())
             .canSuspend(SUSPENDABLE.contains(state))
-            .canRestore(RESTORABLE.contains(state))
+            .canRestore(isRestorable(hospital, awaitsVerification(hospital)))
             .canArchive(ARCHIVABLE.contains(state))
             .canSchedulePurge(PURGE_SCHEDULABLE.contains(state))
             .canCancelPurge(PURGE_CANCELLABLE.contains(state))

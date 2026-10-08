@@ -93,6 +93,7 @@ class AssignmentGrantScopeTest {
     @Mock private PatientHospitalRegistrationRepository registrationRepository;
     @Mock private UserRoleHospitalAssignmentMapper mapper;
     @Mock private MessageSource messageSource;
+    @Mock private com.example.hms.security.provider.FacilityAssignmentGuard facilityAssignmentGuard;
     @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @InjectMocks

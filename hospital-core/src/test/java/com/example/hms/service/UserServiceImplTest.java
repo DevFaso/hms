@@ -76,6 +76,7 @@ class UserServiceImplTest {
     @Mock private com.example.hms.security.LoginAttemptService loginAttemptService;
     @Mock private AssignmentLinkService assignmentLinkService;
     @Mock private UserAccountAccess accountAccess;
+    @Mock private com.example.hms.security.provider.FacilityAssignmentGuard facilityAssignmentGuard;
 
     @InjectMocks
     private UserServiceImpl userService;

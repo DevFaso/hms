@@ -181,7 +181,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             performing = hospitalRepository.findById(requested)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", requested));
             if (!isRoutableLab(performing)) {
-                throw new BusinessException("The performing laboratory must be an active hospital.");
+                throw new BusinessException("The performing laboratory must be an active hospital or laboratory.");
             }
         }
         requirePerformerChangeAllowed(base, performing);
@@ -257,7 +257,18 @@ public class LabOrderServiceImpl implements LabOrderService {
 
     private static boolean isRoutableLab(Hospital hospital) {
         return hospital.isActive()
-            && hospital.getLifecycleState() == com.example.hms.enums.HospitalLifecycleState.ACTIVE;
+            && hospital.getLifecycleState() == com.example.hms.enums.HospitalLifecycleState.ACTIVE
+            && performsLabWork(hospital);
+    }
+
+    /**
+     * A hospital or a laboratory may perform a test; a pharmacy may not: no
+     * lab role can be held there (provider plan §3.2), so an order routed to
+     * it would sit where nobody can collect, enter or release it.
+     */
+    private static boolean performsLabWork(Hospital hospital) {
+        return com.example.hms.enums.FacilityType.orHospital(hospital.getFacilityType())
+            != com.example.hms.enums.FacilityType.PHARMACY;
     }
 
     @Override
@@ -268,6 +279,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             .findByActiveTrueAndLifecycleStateOrderByNameAsc(com.example.hms.enums.HospitalLifecycleState.ACTIVE)
             .stream()
             .filter(h -> !h.getId().equals(actingHospitalId))
+            .filter(LabOrderServiceImpl::performsLabWork)
             .map(h -> com.example.hms.payload.dto.PerformingLabOptionDTO.builder()
                 .id(h.getId())
                 .name(h.getName())

@@ -52,6 +52,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
     @Mock private OrganizationRepository organizationRepository;
     @Mock private UserRoleHospitalAssignmentMapper mapper;
     @Mock private MessageSource messageSource;
+    @Mock private com.example.hms.security.provider.FacilityAssignmentGuard facilityAssignmentGuard;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
     @Mock private com.example.hms.security.LoginAttemptService loginAttemptService;
     @Mock private com.example.hms.repository.StaffRepository staffRepository;

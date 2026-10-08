@@ -5,7 +5,9 @@ import com.example.hms.model.Hospital;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -75,7 +77,25 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     /** B1: the laboratories a clinician may route an order to — every active hospital, by name. */
     List<Hospital> findByActiveTrueAndLifecycleStateOrderByNameAsc(com.example.hms.enums.HospitalLifecycleState lifecycleState);
 
+    /**
+     * The facility row, locked for a state change (provider onboarding and
+     * the lifecycle restore). Every provider transition takes this lock
+     * first, so a verify, a reject, a revoke, a resubmit and a restore of one
+     * provider are serialised and each re-reads the state the last one left.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT h FROM Hospital h WHERE h.id = :id")
+    Optional<Hospital> findByIdForUpdate(@Param("id") UUID id);
+
     /* Organization-related queries */
+    /**
+     * Clinical hospitals with no organisation: the input of the two boot jobs
+     * that attach such rows to an organisation and seed its policies. A
+     * provider facility (PHARMACY, LABORATORY) is never returned, so it is
+     * never attached to a hospital organisation (provider plan AC-11).
+     */
+    @Query("SELECT h FROM Hospital h WHERE h.organization IS NULL"
+        + " AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
     List<Hospital> findByOrganizationIsNull();
 
     List<Hospital> findByOrganizationIdOrderByNameAsc(UUID organizationId);

@@ -99,9 +99,11 @@ public class UserAccountAccess {
     private static final String SUPER_ADMIN = "SUPER_ADMIN";
     private static final String HOSPITAL_ADMIN = "HOSPITAL_ADMIN";
     private static final String PATIENT = "PATIENT";
+    /** The administrator of an external provider facility (provider plan §6.3). */
+    private static final String PROVIDER_ADMIN = "PROVIDER_ADMIN";
 
     /** Roles only a super-admin grants, and whose holders only a super-admin administers. */
-    static final Set<String> ADMIN_ROLES = Set.of(SUPER_ADMIN, HOSPITAL_ADMIN, "ADMIN");
+    static final Set<String> ADMIN_ROLES = Set.of(SUPER_ADMIN, HOSPITAL_ADMIN, "ADMIN", PROVIDER_ADMIN);
 
     /** The admin-register roles, bare; the same constant feeds the annotations and SecurityConfig. */
     static final Set<String> REGISTRAR_ROLES = Arrays.stream(
@@ -224,7 +226,9 @@ public class UserAccountAccess {
      *   <li>hospital admin: no admin role, at a hospital where they hold an
      *       active HOSPITAL_ADMIN assignment;</li>
      *   <li>any other registrar: PATIENT only, at a hospital where they
-     *       actively hold a registrar role.</li>
+     *       actively hold a registrar role;</li>
+     *   <li>provider admin: no admin role and never PATIENT, at a provider
+     *       facility where they hold an active PROVIDER_ADMIN assignment.</li>
      * </ul>
      *
      * @throws AccessDeniedException when no hospital could make this role set allowed
@@ -244,12 +248,22 @@ public class UserAccountAccess {
         Set<UUID> registrarHospitals = caller.presentsAny(REGISTRAR_ROLES)
             ? caller.hospitalsWhereHolding(REGISTRAR_ROLES)
             : Set.of();
-        boolean asAdmin = nonAdminRoles && !adminHospitals.isEmpty();
+        // A provider admin registers staff at its own facility only, like a
+        // hospital admin, and never a PATIENT account: PROVIDER_ADMIN is on
+        // PROVIDER_REGISTRAR_AUTHORITIES, not on the patient registrar list.
+        // What may be held there is the facility guard's to say (a 400).
+        Set<UUID> providerHospitals = nonAdminRoles && !roles.contains(PATIENT)
+            ? providerAdministeredHospitals(caller)
+            : Set.of();
+        Set<UUID> grantHospitals = providerHospitals.isEmpty() ? adminHospitals
+            : java.util.stream.Stream.concat(adminHospitals.stream(), providerHospitals.stream())
+                .collect(Collectors.toUnmodifiableSet());
+        boolean asAdmin = nonAdminRoles && !grantHospitals.isEmpty();
         boolean asRegistrar = patientOnly && !registrarHospitals.isEmpty();
         if (!asAdmin && !asRegistrar) {
             throw new AccessDeniedException("Access denied");
         }
-        return new Grant(false, asAdmin, adminHospitals, asRegistrar, registrarHospitals);
+        return new Grant(false, asAdmin, grantHospitals, asRegistrar, registrarHospitals);
     }
 
     /** What {@link #requireMayGrant} allowed, waiting for the hospital the registration resolves to. */
@@ -435,6 +449,14 @@ public class UserAccountAccess {
             return Set.of();
         }
         return caller.hospitalsWhereHolding(Set.of(HOSPITAL_ADMIN));
+    }
+
+    /** Provider facilities where the caller holds an ACTIVE PROVIDER_ADMIN assignment, if they present the role at all. */
+    private static Set<UUID> providerAdministeredHospitals(Caller caller) {
+        if (caller.id() == null || !caller.presentsAny(Set.of(PROVIDER_ADMIN))) {
+            return Set.of();
+        }
+        return caller.hospitalsWhereHolding(Set.of(PROVIDER_ADMIN));
     }
 
     private boolean administers(Caller caller, User target, List<UserRoleHospitalAssignment> assignments) {

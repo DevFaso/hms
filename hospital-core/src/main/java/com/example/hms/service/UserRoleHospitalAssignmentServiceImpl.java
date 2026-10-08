@@ -76,6 +76,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.springframework.context.i18n.LocaleContextHolder;
+import com.example.hms.security.provider.FacilityAssignmentGuard;
 
 @Service
 @RequiredArgsConstructor
@@ -193,6 +194,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private final com.example.hms.utility.RoleValidator roleValidator;
     private final ApplicationEventPublisher eventPublisher;
     private final UserAccountAccess accountAccess;
+    /** Role/facility compatibility and one kind of facility per user (provider plan §3.2, §3.2a). */
+    private final FacilityAssignmentGuard facilityAssignmentGuard;
 
     /* ===================== Create ===================== */
 
@@ -250,7 +253,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (grant != null) {
             requireGrantAt(grant, hospital, roleCode);
         }
+        facilityAssignmentGuard.requireCompatible(roleCode, hospital);
         User user = resolveUser(dto, locale);
+        facilityAssignmentGuard.requireSingleFacilityKind(user, roleCode, hospital, null);
         checkActiveDoctorConflict(dto, user, role, hospital, locale);
         checkExistingAssignment(user, role, hospital, locale);
 
@@ -374,6 +379,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
         String newRoleCode = getRoleCode(newRole);
         requireGrantAt(requireMayGrant(newRoleCode), newHospital, newRoleCode);
+        facilityAssignmentGuard.requireCompatible(newRoleCode, newHospital);
         requireActivationThroughCode(dto, target);
         // Decided before the mapper overwrites the row's current role and hospital.
         boolean reinvite = !verifiedSuperAdmin && isNewGrant(target, newRole, newHospital);
@@ -394,6 +400,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             restartInvitation(target, newUser, newHospital, newRegistrar);
         }
 
+        if (Boolean.TRUE.equals(target.getActive())) {
+            facilityAssignmentGuard.requireSingleFacilityKind(newUser, newRoleCode, newHospital, target.getId());
+        }
         UserRoleHospitalAssignment saved = assignmentRepository.save(target);
         if (reinvite) {
             eventPublisher.publishEvent(new AssignmentCreatedEvent(saved.getId()));
@@ -927,6 +936,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     }
 
     private void activateVerifiedAssignment(UserRoleHospitalAssignment assignment, String source) {
+        // One kind of facility per user: two pending rows, one at a hospital
+        // and one at a provider, cannot both come on.
+        facilityAssignmentGuard.requireSingleFacilityKind(assignment.getUser(), getRoleCode(assignment.getRole()),
+            assignment.getHospital(), assignment.getId());
         // Mark the assignment as verified AND activate it. An existing
         // timestamp is preserved: the healing path re-runs activation for
         // rows an older registrar confirm stamped without activating.
@@ -1301,6 +1314,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                     .orElseThrow(() -> new ResourceNotFoundException(MSG_ORGANIZATION_NOT_FOUND, organizationId));
                 organization.getHospitals().stream()
                     .filter(Objects::nonNull)
+                    // A role assigned "to an organisation" lands at its
+                    // hospitals only, never at a provider facility (AC-11).
+                    .filter(hospital -> !hospital.isProvider())
                     .map(Hospital::getId)
                     .filter(Objects::nonNull)
                     .forEach(hospitalIds::add);

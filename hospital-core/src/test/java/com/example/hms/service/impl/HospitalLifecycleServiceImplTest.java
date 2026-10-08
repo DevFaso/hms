@@ -47,6 +47,7 @@ class HospitalLifecycleServiceImplTest {
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private HospitalLifecycleStatusService lifecycleStatusService;
     @Mock private MfaService mfaService;
+    @Mock private com.example.hms.repository.provider.ProviderVerificationRepository providerVerificationRepository;
 
     /**
      * Fixed instant, deliberately in the future: a time that is past on the
@@ -94,7 +95,7 @@ class HospitalLifecycleServiceImplTest {
 
     @Test
     void suspendTransitionsActiveHospitalAndEmitsAudit() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
 
         HospitalLifecycleResponseDTO result = service.suspend(hospitalId, withReason("ops review"), null);
@@ -115,7 +116,7 @@ class HospitalLifecycleServiceImplTest {
 
     @Test
     void suspendRequiresAReason() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         TenantLifecycleActionRequestDTO blank = withReason("  ");
         assertThatThrownBy(() -> service.suspend(hospitalId, blank, null))
             .isInstanceOf(BusinessRuleException.class)
@@ -126,7 +127,7 @@ class HospitalLifecycleServiceImplTest {
     @Test
     void suspendRejectsAlreadySuspendedHospital() {
         hospital.setLifecycleState(HospitalLifecycleState.SUSPENDED);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         TenantLifecycleActionRequestDTO req = withReason("ops");
         assertThatThrownBy(() -> service.suspend(hospitalId, req, null))
             .isInstanceOf(BusinessRuleException.class)
@@ -138,7 +139,7 @@ class HospitalLifecycleServiceImplTest {
         hospital.setLifecycleState(HospitalLifecycleState.SUSPENDED);
         hospital.setActive(false);
         hospital.setSuspendedAt(NOW);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
 
         HospitalLifecycleResponseDTO result = service.restore(hospitalId, null);
@@ -150,7 +151,7 @@ class HospitalLifecycleServiceImplTest {
 
     @Test
     void archiveTransitionsActiveAndCanLaterSchedulePurge() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
 
         service.archive(hospitalId, withReason("offboarded"), null);
@@ -166,7 +167,7 @@ class HospitalLifecycleServiceImplTest {
     @Test
     void schedulePurgeOnlyValidFromArchived() {
         // ACTIVE → schedule-purge is rejected.
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         TenantLifecycleActionRequestDTO req = withReason("nope");
         assertThatThrownBy(() -> service.schedulePurge(hospitalId, req, null))
             .isInstanceOf(BusinessRuleException.class)
@@ -177,7 +178,7 @@ class HospitalLifecycleServiceImplTest {
     void cancelPurgeRevertsToArchived() {
         hospital.setLifecycleState(HospitalLifecycleState.PENDING_PURGE);
         hospital.setPurgeScheduledFor(NOW.plusSeconds(3600));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
 
         HospitalLifecycleResponseDTO result = service.cancelPurge(hospitalId, null);
@@ -205,7 +206,7 @@ class HospitalLifecycleServiceImplTest {
     @Test
     void enrolledActorWithoutTokenIsRejected() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         when(mfaService.isMfaEnabled(actorId)).thenReturn(true);
 
         assertThatThrownBy(() -> service.suspend(hospitalId, withReason("ops"), null))
@@ -217,7 +218,7 @@ class HospitalLifecycleServiceImplTest {
     @Test
     void enrolledActorWithInvalidCodeIsRejected() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         when(mfaService.isMfaEnabled(actorId)).thenReturn(true);
         when(mfaService.verifyCode(actorId, "000000")).thenReturn(false);
 
@@ -229,7 +230,7 @@ class HospitalLifecycleServiceImplTest {
     @Test
     void enrolledActorWithValidCodePassesAndPersists() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
         when(mfaService.isMfaEnabled(actorId)).thenReturn(true);
         when(mfaService.verifyCode(actorId, "123456")).thenReturn(true);
@@ -242,7 +243,7 @@ class HospitalLifecycleServiceImplTest {
     void unenrolledActorInNonStrictModeAuditsAndProceeds() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
         ReflectionTestUtils.setField(service, "requireMfaStrict", false);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
         when(mfaService.isMfaEnabled(actorId)).thenReturn(false);
 
@@ -258,7 +259,7 @@ class HospitalLifecycleServiceImplTest {
     void unenrolledActorInStrictModeIsRejected() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
         ReflectionTestUtils.setField(service, "requireMfaStrict", true);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         when(mfaService.isMfaEnabled(actorId)).thenReturn(false);
 
         assertThatThrownBy(() -> service.suspend(hospitalId, withReason("ops"), null))
@@ -270,7 +271,7 @@ class HospitalLifecycleServiceImplTest {
     @Test
     void mfaEnrollmentLookupFailureFailsClosed() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         when(mfaService.isMfaEnabled(actorId)).thenThrow(new RuntimeException("MFA service down"));
 
         assertThatThrownBy(() -> service.suspend(hospitalId, withReason("ops"), "123456"))
@@ -280,7 +281,7 @@ class HospitalLifecycleServiceImplTest {
 
     @Test
     void archiveAndDefaultPurgeDateComeFromTheInjectedClock() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
 
         service.archive(hospitalId, withReason("offboarded"), null);

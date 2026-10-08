@@ -204,6 +204,15 @@ public enum AuditEventType {
     PRO_RESPONSE_RECORDED,
     PRO_ALERT_ACKNOWLEDGED,
 
+    // External provider facilities (D5, provider plan §6.3). Past tense per
+    // the naming convention above. Rows carry the facility id, its type and
+    // the verification status only: never a business number or a name.
+    PROVIDER_CREATED,
+    PROVIDER_EVIDENCE_RESUBMITTED,
+    PROVIDER_VERIFIED,
+    PROVIDER_REJECTED,
+    PROVIDER_VERIFICATION_REVOKED,
+
     OTHER
 }
 

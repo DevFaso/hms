@@ -66,6 +66,20 @@ public class SecurityConstants {
         "'ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE'";
 
     /**
+     * The other way into {@code POST /users/admin-register}: the administrator
+     * of an external provider facility, registering staff at that facility
+     * (provider plan §6.3). Kept OUT of {@link #USER_REGISTRAR_AUTHORITIES}:
+     * every role on that list may register PATIENT accounts, and a provider
+     * admin never may. The admin-register annotation and its
+     * {@code SecurityConfig} matcher read both lists.
+     */
+    public static final String PROVIDER_REGISTRAR_AUTHORITIES = "'ROLE_PROVIDER_ADMIN'";
+
+    /** Every authority admitted to {@code POST /users/admin-register}: both registrar lists. */
+    public static final String ADMIN_REGISTER_AUTHORITIES =
+        USER_REGISTRAR_AUTHORITIES + "," + PROVIDER_REGISTRAR_AUTHORITIES;
+
+    /**
      * The authorities of a quoted SpEL fragment such as
      * {@link #USER_REGISTRAR_AUTHORITIES}, for the places that need them as
      * values (a {@code requestMatchers(...).hasAnyAuthority(...)} rule), so

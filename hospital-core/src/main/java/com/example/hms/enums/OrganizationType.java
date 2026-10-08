@@ -18,7 +18,11 @@ public enum OrganizationType {
     PRIVATE_PRACTICE("Private Practice"),
     RESEARCH_INSTITUTION("Research Institution"),
     ACADEMIC_CENTER("Academic Center"),
-    ACADEMIC_MEDICAL_CENTER("Academic Medical Center");
+    ACADEMIC_MEDICAL_CENTER("Academic Medical Center"),
+    /** A pharmacy chain grouping provider facilities (D5; one site per facility in v1). */
+    PHARMACY("Pharmacy"),
+    /** A laboratory group grouping provider facilities (D5; one site per facility in v1). */
+    LABORATORY("Laboratory");
 
     private final String displayName;
 

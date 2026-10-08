@@ -2674,4 +2674,21 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V180 — external provider facilities (D5 P1, plan in PR #828).
+         hospital.hospitals.facility_type (HOSPITAL default, CHECK of three
+         values, index); uq_hospital_provider_code (partial, providers only); new table hospital.provider_verifications (the
+         RCCM/IFU/CNSS identity and the licence layer, created_at/updated_at
+         for BaseEntity, FK to the facility ON DELETE CASCADE, status CHECK, VERIFIED needs both
+         consistency flags); partial unique indexes (one current verification
+         per facility; VERIFIED licence pair, RCCM and IFU unique);
+         ROLE_PROVIDER_ADMIN seeded. No DO blocks.
+         ================================================================= -->
+    <changeSet id="V180-provider-facilities" author="hms-team" runOnChange="false">
+        <sqlFile path="V180__provider_facilities.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

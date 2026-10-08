@@ -599,10 +599,11 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST)
 
                 // Allow all clinical staff to register users via admin-register
-                // The same list as UserController's two @PreAuthorize annotations;
-                // what each registrar may GRANT is UserAccountAccess.requireMayGrant.
+                // The same lists as UserController's admin-register annotation:
+                // the patient registrars plus the provider registrar (provider
+                // plan §6.3); what each may GRANT is UserAccountAccess.requireMayGrant.
                 .requestMatchers(HttpMethod.POST, "/users/admin-register")
-                .hasAnyAuthority(SecurityConstants.authorities(SecurityConstants.USER_REGISTRAR_AUTHORITIES))
+                .hasAnyAuthority(SecurityConstants.authorities(SecurityConstants.ADMIN_REGISTER_AUTHORITIES))
 
                 // -------------------- Hospitals (tenant-safe) --------------------
                 // /me/hospital and /me/hospitals return only the caller's assigned hospital(s).
@@ -631,6 +632,11 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, API_HOSPITALS_PATTERN).hasAuthority(ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.PATCH, API_HOSPITALS_PATTERN).hasAuthority(ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.DELETE, API_HOSPITALS_PATTERN).hasAuthority(ROLE_SUPER_ADMIN)
+
+                // External provider onboarding (D5): super-admin only; the
+                // service then requires a verified (live) super-admin.
+                .requestMatchers("/super-admin/providers", "/super-admin/providers/**")
+                .hasAuthority(ROLE_SUPER_ADMIN)
 
                 // Organizations and security management
                 .requestMatchers("/organizations/**")

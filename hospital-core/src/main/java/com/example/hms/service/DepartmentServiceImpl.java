@@ -661,13 +661,23 @@ public class DepartmentServiceImpl implements DepartmentService {
         }
     }
 
+    /**
+     * The hospital a department belongs to. Departments are a clinical
+     * structure: a provider facility (pharmacy, laboratory) has none, so it
+     * answers exactly as an unknown hospital (provider plan AC-11, the
+     * requireClinicalHospital rule at this destination). That also keeps the
+     * super-admin's HOSPITAL_ADMIN auto-provisioning below from ever
+     * targeting a provider, where the role cannot be held.
+     */
     private Hospital resolveHospital(DepartmentRequestDTO dto) {
         if (dto.getHospitalId() != null) {
             return hospitalRepository.findById(dto.getHospitalId())
+                .filter(hospital -> !hospital.isProvider())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", dto.getHospitalId()));
         }
 
         return hospitalRepository.findByNameIgnoreCase(dto.getHospitalName())
+            .filter(hospital -> !hospital.isProvider())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", dto.getHospitalName()));
     }
 
