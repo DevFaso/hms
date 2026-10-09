@@ -388,12 +388,7 @@ public class EmailServiceImpl implements EmailService {
         mailSender.send(mime -> {
             var multipart = attachment != null;
             var helper = new MimeMessageHelper(mime, multipart, "UTF-8");
-            if (senderAddress != null) {
-                // The helper's UTF-8 encoding RFC 2047-encodes a non-ASCII name.
-                if (senderName != null) helper.setFrom(senderAddress, senderName);
-                else helper.setFrom(senderAddress);
-            }
-            if (replyToAddress != null) helper.setReplyTo(replyToAddress);
+            applySender(helper);
             helper.setTo(to.toArray(String[]::new));
             if (cc != null && !cc.isEmpty()) helper.setCc(cc.toArray(String[]::new));
             if (bcc != null && !bcc.isEmpty()) helper.setBcc(bcc.toArray(String[]::new));
@@ -406,6 +401,17 @@ public class EmailServiceImpl implements EmailService {
                 helper.addAttachment(filename, res, contentType != null ? contentType : "application/pdf");
             }
         });
+    }
+
+    /** The configured From and Reply-To; nothing when unset, as before. */
+    private void applySender(MimeMessageHelper helper) throws jakarta.mail.MessagingException,
+            java.io.UnsupportedEncodingException {
+        if (senderAddress != null) {
+            // The helper's UTF-8 encoding RFC 2047-encodes a non-ASCII name.
+            if (senderName != null) helper.setFrom(senderAddress, senderName);
+            else helper.setFrom(senderAddress);
+        }
+        if (replyToAddress != null) helper.setReplyTo(replyToAddress);
     }
 
     // -------------------------------------------------------------------------
