@@ -1539,8 +1539,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.impersonation.refreshActive().subscribe({ error: () => undefined });
 
     // MVP-7b: subscribe to /topic/emergency-broadcast so a super-admin
-    // broadcast surfaces in the banner across every authenticated route.
-    this.emergencyBroadcast.connect();
+    // broadcast surfaces in the banner across every authenticated route. A
+    // provider user may not subscribe to it (the server refuses), so the
+    // socket is not even opened for one.
+    if (!this.roleContext.providerUser()) {
+      this.emergencyBroadcast.connect();
+    }
 
     // P3 #23a: poll the persisted downtime state — unlike the broadcast,
     // this survives login/refresh, so late arrivals still see the banner.

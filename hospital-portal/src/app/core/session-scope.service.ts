@@ -58,6 +58,7 @@ export class SessionScopeService {
   applyBootstrap(bootstrap: SessionBootstrapResponse, extras: ProfileExtras = {}): void {
     const roles = bootstrap.roles?.length ? bootstrap.roles : this.auth.getRoles();
     this.roleContext.setRoles(roles);
+    this.roleContext.setProviderUser(bootstrap.providerUser === true);
     const permitted = (bootstrap.permittedHospitalIds ?? []).filter((id) => !!id);
     this.applyScope(permitted, bootstrap.primaryHospitalId ?? null);
     this.roleContext.markSuperAdminGlobalDefaults();

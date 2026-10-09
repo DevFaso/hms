@@ -99,6 +99,7 @@ describe('ImpersonationService', () => {
 
     roleContext = jasmine.createSpyObj<RoleContextService>('RoleContextService', [
       'setRoles',
+      'setProviderUser',
       'setPermittedHospitalIds',
       'markSuperAdminGlobalDefaults',
     ]);

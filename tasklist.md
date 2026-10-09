@@ -4741,6 +4741,10 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 
 - **External providers: `ActingScopeResolver.liveContext` walks the assignments three times** (the collect loop, `providerFacilityTypes`, `staffHospitalIds`); fold them into the one loop (found in #835's round-8 review). Open.
 
+- **External providers: `NotificationServiceImpl.isUnconfinedStaff` recomputes the live context** for a broadcast mark even when the request's holder already carries the caller's own; reuse a matching holder context (found in #835's round-9 review). Open.
+
+- **External providers: the confinement filter's fallback discards a non-confined context it computed**, and `ActingScopeResolver.ensureContext` computes it again later in the request; keep it for the request (found in #835's round-9 review). Open.
+
 ## Open clinical questions — kept open on purpose, not forgotten
 
 These are questions only a clinician can settle. None of them blocks anything:

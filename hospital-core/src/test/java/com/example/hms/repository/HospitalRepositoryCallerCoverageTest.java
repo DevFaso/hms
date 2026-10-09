@@ -136,10 +136,6 @@ class HospitalRepositoryCallerCoverageTest {
             "the assignment target by code: a provider is a valid target, held to RoleFacilityCompatibility (slice 1)"),
         entry("UserRoleHospitalAssignmentServiceImpl#findByNameIgnoreCase",
             "the assignment target by name: a provider is a valid target, held to RoleFacilityCompatibility (slice 1)"),
-        entry("SuperAdminLabOrderServiceImpl#findByCodeIgnoreCase",
-            "super-admin lab-order lookup by hospital code; a lab provider performs lab orders"),
-        entry("SuperAdminLabOrderServiceImpl#findByNameIgnoreCase",
-            "super-admin lab-order lookup by hospital name; a lab provider performs lab orders"),
         entry("UserServiceImpl#findByCodeIgnoreCase", "the dev default hospital by its fixed code"),
         entry("DevSyntheticDataSeeder#findByCodeIgnoreCase", "dev seed data, by the seed's own fixed codes"));
 

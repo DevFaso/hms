@@ -11,6 +11,8 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.security.auth.TenantRoleAssignment;
 import com.example.hms.security.auth.TenantRoleAssignmentAccessor;
+import com.example.hms.security.provider.ProviderConfinementPolicy;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -134,6 +136,9 @@ public class AuthBootstrapServiceImpl implements AuthBootstrapService {
                 .roles(roles)
                 .superAdmin(isSuperAdmin)
                 .hospitalAdmin(isHospitalAdmin)
+                // The confinement rule itself, over the assignments already read.
+                .providerUser(!ProviderConfinementPolicy.providerTypes(
+                        ActingScopeResolver.liveContext(user.getId(), user.getUsername(), assignments)).isEmpty())
                 .primaryHospitalId(primaryHospitalId)
                 .primaryHospitalName(primaryHospitalName)
                 .permittedHospitalIds(permittedHospitalIds)

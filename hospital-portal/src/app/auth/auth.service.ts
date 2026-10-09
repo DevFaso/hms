@@ -26,6 +26,8 @@ export interface SessionBootstrapResponse {
   roles: string[];
   superAdmin: boolean;
   hospitalAdmin: boolean;
+  /** Confined to a provider facility (pharmacy or laboratory). */
+  providerUser?: boolean;
   primaryHospitalId?: string;
   primaryHospitalName?: string;
   permittedHospitalIds?: string[];

@@ -48,6 +48,19 @@ export class RoleContextService {
 
   readonly activeHospitalIdSignal = computed(() => this._activeHospitalId());
 
+  private readonly _providerUser = signal<boolean>(false);
+
+  /**
+   * The caller is confined to a provider facility (pharmacy or laboratory),
+   * as the session bootstrap states it: what such a user may not reach (the
+   * emergency-broadcast socket) is not attempted.
+   */
+  readonly providerUser = computed(() => this._providerUser());
+
+  setProviderUser(providerUser: boolean): void {
+    this._providerUser.set(providerUser);
+  }
+
   /** True when the current user holds ROLE_SUPER_ADMIN. */
   readonly isSuperAdmin = computed(() => this._activeRoles().includes('ROLE_SUPER_ADMIN'));
 

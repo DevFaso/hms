@@ -251,6 +251,37 @@ class AuthBootstrapServiceImplTest {
     }
 
     @Nested
+    @DisplayName("resolveCurrentSession — provider user")
+    class ProviderUser {
+
+        @Test
+        @DisplayName("providerUser is the confinement rule: a pharmacist at a pharmacy is one; a hospital pharmacist, a patient registered at a lab, and a super-admin are not")
+        void flagsAProviderUser() {
+            UUID pharmacy = UUID.randomUUID();
+            when(userRepository.findByUsername("pharm")).thenReturn(Optional.of(staffUser));
+            when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(USER_ID)).thenReturn(Optional.empty());
+            when(patientRepository.findByUserId(USER_ID)).thenReturn(Optional.empty());
+
+            when(tenantRoleAssignmentAccessor.findAssignmentsForUser(USER_ID)).thenReturn(List.of(
+                new TenantRoleAssignment(pharmacy, null, "ROLE_PHARMACIST", "PHARMACIST", true, FacilityType.PHARMACY)));
+            assertThat(service.resolveCurrentSession("pharm").isProviderUser()).isTrue();
+
+            when(tenantRoleAssignmentAccessor.findAssignmentsForUser(USER_ID))
+                .thenReturn(List.of(activeAssignment(HOSPITAL_ID, "ROLE_PHARMACIST")));
+            assertThat(service.resolveCurrentSession("pharm").isProviderUser()).isFalse();
+
+            when(tenantRoleAssignmentAccessor.findAssignmentsForUser(USER_ID)).thenReturn(List.of(
+                new TenantRoleAssignment(pharmacy, null, "ROLE_PATIENT", "PATIENT", true, FacilityType.LABORATORY)));
+            assertThat(service.resolveCurrentSession("pharm").isProviderUser()).isFalse();
+
+            when(tenantRoleAssignmentAccessor.findAssignmentsForUser(USER_ID)).thenReturn(List.of(
+                activeAssignment(null, "ROLE_SUPER_ADMIN"),
+                new TenantRoleAssignment(pharmacy, null, "ROLE_PHARMACIST", "PHARMACIST", true, FacilityType.PHARMACY)));
+            assertThat(service.resolveCurrentSession("pharm").isProviderUser()).isFalse();
+        }
+    }
+
+    @Nested
     @DisplayName("resolveCurrentSession — unknown user")
     class UnknownUser {
 

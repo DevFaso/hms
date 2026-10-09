@@ -927,7 +927,7 @@ describe('ShellComponent — onNavKeydown (row 11 keyboard reorder)', () => {
  * with a live badge AND a redundant nav row that carried no count.
  */
 describe('ShellComponent — inbox surfaces live in the topbar', () => {
-  function build(roles: string[], activeRole: string) {
+  function build(roles: string[], activeRole: string, providerUser = false) {
     // Same shape as the harness above: ngOnInit calls getUserProfile, so a
     // partial stub blows up on the first detectChanges.
     const authStub = jasmine.createSpyObj<AuthService>('AuthService', [
@@ -1014,8 +1014,25 @@ describe('ShellComponent — inbox surfaces live in the topbar', () => {
     const roleContext = TestBed.inject(RoleContextService);
     roleContext.setRoles(roles);
     roleContext.activeRole = activeRole;
+    roleContext.setProviderUser(providerUser);
     return TestBed.createComponent(ShellComponent);
   }
+
+  it('opens the emergency-broadcast socket for staff', () => {
+    build(['ROLE_DOCTOR'], 'ROLE_DOCTOR').detectChanges();
+    const broadcast = TestBed.inject(
+      EmergencyBroadcastService,
+    ) as jasmine.SpyObj<EmergencyBroadcastService>;
+    expect(broadcast.connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('never opens it for a provider user (the server refuses them the topic)', () => {
+    build(['ROLE_PHARMACIST'], 'ROLE_PHARMACIST', true).detectChanges();
+    const broadcast = TestBed.inject(
+      EmergencyBroadcastService,
+    ) as jasmine.SpyObj<EmergencyBroadcastService>;
+    expect(broadcast.connect).not.toHaveBeenCalled();
+  });
 
   it('drops all three from the side-nav for staff', () => {
     const fixture = build(['ROLE_DOCTOR'], 'ROLE_DOCTOR');
