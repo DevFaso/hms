@@ -130,15 +130,17 @@ class RecordAccessPolicyImplTest {
     }
 
     @Test
-    @DisplayName("with a request context, the readable set reads the caller's provider types: no hospital query")
+    @DisplayName("with the actor's own context, the readable set reads the acting facility's type from it: no hospital query")
     void readableSetReadsTheContext() {
+        UUID laboratoryId = UUID.randomUUID();
         try {
             HospitalContextHolder.setContext(
                 HospitalContext.builder()
                     .principalUserId(actor)
                     .providerFacilityTypes(Set.of(FacilityType.LABORATORY))
+                    .hospitalFacilityTypes(Map.of(laboratoryId, FacilityType.LABORATORY))
                     .build());
-            assertThat(policy.readableHospitalIds(actor, null, hospitalId)).isEmpty();
+            assertThat(policy.readableHospitalIds(actor, null, laboratoryId)).isEmpty();
 
             HospitalContextHolder.setContext(
                 HospitalContext.builder()
@@ -150,6 +152,48 @@ class RecordAccessPolicyImplTest {
             assertThat(policy.readableHospitalIds(actor, null, hospitalId)).containsExactly(hospitalId);
 
             verify(hospitalRepository, never()).findById(any());
+        } finally {
+            HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
+    @DisplayName("a confined caller (a lab worker who is also a patient) acting at a CLINICAL hospital is not acting at a provider")
+    void confinementDoesNotDecideTheActingFacility() {
+        UUID laboratoryId = UUID.randomUUID();
+        try {
+            HospitalContextHolder.setContext(HospitalContext.builder()
+                .principalUserId(actor)
+                .assignedRoles(Set.of("ROLE_LAB_SCIENTIST", "ROLE_PATIENT"))
+                .providerFacilityTypes(Set.of(FacilityType.LABORATORY))
+                .permittedHospitalIds(Set.of(laboratoryId, hospitalId))
+                .hospitalFacilityTypes(Map.of(laboratoryId, FacilityType.LABORATORY, hospitalId, FacilityType.HOSPITAL))
+                .build());
+
+            assertThat(policy.readableHospitalIds(actor, null, hospitalId)).containsExactly(hospitalId);
+            assertThat(policy.readableHospitalIds(actor, patient, laboratoryId)).isEmpty();
+            verify(hospitalRepository, never()).findById(any());
+        } finally {
+            HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
+    @DisplayName("another actor's context vouches for nothing: the acting facility is looked up")
+    void anotherActorsContextIsNotTrusted() {
+        UUID pharmacyId = UUID.randomUUID();
+        Hospital pharmacy = new Hospital();
+        pharmacy.setId(pharmacyId);
+        pharmacy.setFacilityType(FacilityType.PHARMACY);
+        when(hospitalRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        try {
+            // The ambient context says HOSPITAL for that id, but it is someone else's.
+            HospitalContextHolder.setContext(HospitalContext.builder()
+                .principalUserId(UUID.randomUUID())
+                .hospitalFacilityTypes(Map.of(pharmacyId, FacilityType.HOSPITAL))
+                .build());
+            assertThat(policy.readableHospitalIds(actor, patient, pharmacyId)).isEmpty();
+            verify(hospitalRepository).findById(pharmacyId);
         } finally {
             HospitalContextHolder.clear();
         }

@@ -24,7 +24,6 @@ import com.example.hms.service.PatientDocumentService;
 import com.example.hms.service.PatientPortalService;
 import com.example.hms.service.pharmacy.PharmacyClaimService;
 import com.example.hms.service.pharmacy.PharmacyPaymentService;
-import java.util.Optional;
 import org.assertj.core.api.Assertions;
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,6 +53,7 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.hasSize;
@@ -421,8 +421,8 @@ class PatientPortalControllerPhase2Test {
         }
 
         @Test
-        @DisplayName("a broadcast (no recipient): any patient marks it, 200, through the real service")
-        void broadcastIsMarked() throws Exception {
+        @DisplayName("a broadcast (no recipient): 200 as always, and left unread (its one flag is everyone's)")
+        void broadcastIsNotMarked() throws Exception {
             UUID id = UUID.randomUUID();
             NotificationRepository repository = mock(NotificationRepository.class);
             Notification broadcast = Notification.builder().id(id).message("announcement").read(false).build();
@@ -432,10 +432,11 @@ class PatientPortalControllerPhase2Test {
                 mock(UserRepository.class));
             when(notificationService.markAsRead(id, "patient.jane"))
                 .thenAnswer(invocation -> real.markAsRead(id, "patient.jane"));
+            when(notificationService.isBroadcast(id)).thenAnswer(invocation -> real.isBroadcast(id));
 
             mockMvc.perform(put("/me/patient/notifications/{notificationId}/read", id).principal(auth))
                     .andExpect(status().isOk());
-            Assertions.assertThat(broadcast.isRead()).isTrue();
+            Assertions.assertThat(broadcast.isRead()).isFalse();
         }
 
         private String normalise(String body, UUID id) {

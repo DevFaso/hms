@@ -40,6 +40,20 @@ class LiveContextProviderTypesTest {
     }
 
     @Test
+    @DisplayName("a PATIENT row at a laboratory confines nobody: a patient-only user there is not a provider user")
+    void patientRowAtAProviderConfinesNobody() {
+        UUID laboratory = UUID.randomUUID();
+        HospitalContext context = ActingScopeResolver.liveContext(UUID.randomUUID(), "pat", List.of(
+            new TenantRoleAssignment(laboratory, null, "ROLE_PATIENT", "PATIENT", true, FacilityType.LABORATORY)));
+
+        assertThat(context.getProviderFacilityTypes()).isEmpty();
+        assertThat(context.getStaffHospitalIds()).isEmpty();
+        // The facility is still known for what it is.
+        assertThat(context.getHospitalFacilityTypes()).containsExactlyEntriesOf(
+            Map.of(laboratory, FacilityType.LABORATORY));
+    }
+
+    @Test
     @DisplayName("an assignment at a facility cannot be built without its type (no fail-open default)")
     void facilityRowNeedsItsType() {
         Assertions.assertThatThrownBy(() ->

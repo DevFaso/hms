@@ -171,14 +171,16 @@ public class ActingScopeResolver {
 
     /**
      * The provider facility types (PHARMACY, LABORATORY) among the active
-     * assignments at a facility: what confines the caller (provider plan
-     * section 3.3). Never HOSPITAL; empty for a hospital user.
+     * assignments at a facility in a role other than PATIENT: what confines
+     * the caller (provider plan section 3.3). Where they work, as
+     * {@link #staffHospitalIds}: a PATIENT row is outside the one-kind rule
+     * (#832) and confines nobody. Never HOSPITAL; empty for a hospital user.
      */
     private static Set<FacilityType> providerFacilityTypes(List<TenantRoleAssignment> assignments) {
         Set<FacilityType> types = EnumSet.noneOf(FacilityType.class);
         for (TenantRoleAssignment assignment : assignments == null ? List.<TenantRoleAssignment>of() : assignments) {
             if (assignment.active() && assignment.hospitalId() != null && assignment.facilityType() != null
-                && assignment.facilityType().isProvider()) {
+                && assignment.facilityType().isProvider() && !ROLE_PATIENT.equals(roleCode(assignment))) {
                 types.add(assignment.facilityType());
             }
         }

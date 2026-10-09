@@ -8,9 +8,7 @@ import com.example.hms.enums.TreatmentRelationshipKind;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
-import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
-import com.example.hms.security.provider.ProviderConfinementPolicy;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRecordSharingOptOutRepository;
@@ -91,7 +89,7 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
         // A provider facility reads no chart rows at all, not even its own
         // id's (provider plan section 3.3, AC-9): the same PROVIDER_FACILITY
         // gate as decide, so the readable set is empty.
-        if (actingHospitalId != null && actsAtProvider(actingHospitalId)) {
+        if (actingHospitalId != null && actsAtProvider(actorUserId, actingHospitalId)) {
             return readable;
         }
         if (actingHospitalId != null) {
@@ -117,27 +115,22 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
     }
 
     /**
-     * The acting facility is a pharmacy or a laboratory. Read from the
-     * caller's live context when it can be (no query): a caller confined as a
-     * provider acts at a provider, and the type of each of the caller's own
-     * facilities is carried. Any other facility (a context built by hand, a
-     * super-admin naming one, an unconfined caller passing another facility's
-     * id, no request context) is looked up.
+     * The acting facility passed in is a pharmacy or a laboratory. The
+     * facility decides, never the ambient confinement: a provider user who is
+     * also a patient, reading at a clinical acting hospital, is not acting at
+     * a provider. The type is read from the actor's own live context when it
+     * carries that facility (no query); any other facility (a context built by
+     * hand, another actor's context, a super-admin or an unconfined caller
+     * naming another facility, no request context) is looked up.
      */
-    private boolean actsAtProvider(UUID actingHospitalId) {
-        Optional<HospitalContext> context = HospitalContextHolder.getContext();
-        if (context.isPresent()) {
-            if (!ProviderConfinementPolicy.providerTypes(context.get()).isEmpty()) {
-                return true;
-            }
-            FacilityType known = context.get().getHospitalFacilityTypes().get(actingHospitalId);
-            if (known != null) {
-                return known.isProvider();
-            }
+    private boolean actsAtProvider(UUID actorUserId, UUID actingHospitalId) {
+        FacilityType known = HospitalContextHolder.getContext()
+            .filter(context -> actorUserId != null && actorUserId.equals(context.getPrincipalUserId()))
+            .map(context -> context.getHospitalFacilityTypes().get(actingHospitalId))
+            .orElse(null);
+        if (known != null) {
+            return known.isProvider();
         }
-        // Not one of the caller's own facilities (a context built by hand, a
-        // super-admin, or an unconfined caller passing another facility's id):
-        // the acting facility itself decides, one lookup.
         return hospitalRepository.findById(actingHospitalId).map(Hospital::isProvider).orElse(false);
     }
 

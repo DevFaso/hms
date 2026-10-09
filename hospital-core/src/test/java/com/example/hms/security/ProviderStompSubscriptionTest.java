@@ -46,6 +46,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -399,6 +400,31 @@ class ProviderStompSubscriptionTest {
         Message<byte[]> provider = freshSessionSubscribe("/topic/notifications", ticketUser("ROLE_PHARMACIST"));
         assertThatThrownBy(() -> interceptor.preSend(provider, channel)).isInstanceOf(AccessDeniedException.class);
         verify(assignmentAccessor, times(1)).findAssignmentsForUser(userId);
+    }
+
+    @Test
+    @DisplayName("a non-database failure is remembered for the TTL: refused without re-querying, then asked again")
+    void nonDatabaseFailureIsNegativeCachedForTheTtl() {
+        Principal pharmacist = ticketUser("ROLE_PHARMACIST");
+        doThrow(new IllegalArgumentException("An assignment at a facility needs its facility type"))
+            .doReturn(List.of(new TenantRoleAssignment(hospitalId, null, "ROLE_PHARMACIST", "PHARMACIST",
+                true, FacilityType.HOSPITAL)))
+            .when(assignmentAccessor).findAssignmentsForUser(userId);
+
+        Message<byte[]> first = freshSessionSubscribe("/topic/emergency-broadcast", pharmacist);
+        assertThatThrownBy(() -> interceptor.preSend(first, channel)).isInstanceOf(AccessDeniedException.class);
+        for (int i = 0; i < 3; i++) {
+            Message<byte[]> again = subscribe("/topic/notifications", pharmacist);
+            assertThatThrownBy(() -> interceptor.preSend(again, channel)).isInstanceOf(AccessDeniedException.class);
+            Message<byte[]> send = frame(StompCommand.SEND, "/app/chat.sendMessage", pharmacist);
+            assertThatThrownBy(() -> interceptor.preSend(send, channel)).isInstanceOf(AccessDeniedException.class);
+        }
+        verify(assignmentAccessor, times(1)).findAssignmentsForUser(userId);
+
+        afterTheTtl();
+        Message<byte[]> afterTtl = subscribe("/topic/notifications", pharmacist);
+        assertThat(interceptor.preSend(afterTtl, channel)).isSameAs(afterTtl);
+        verify(assignmentAccessor, times(2)).findAssignmentsForUser(userId);
     }
 
     @Test

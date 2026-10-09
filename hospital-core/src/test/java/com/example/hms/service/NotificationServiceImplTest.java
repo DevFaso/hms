@@ -283,23 +283,43 @@ class NotificationServiceImplTest {
         }
 
         @Test
-        @DisplayName("a broadcast (no recipient, or a blank one) is marked by any user, on its one read flag")
-        void broadcastIsMarkedByAnyone() {
+        @DisplayName("a broadcast (no recipient, or a blank one) is never marked as one's own")
+        void broadcastIsNeverMarkedAsOnesOwn() {
             for (String recipient : new String[] {null, " "}) {
-                Notification broadcast = Notification.builder()
-                        .id(notificationId)
-                        .message("system-wide announcement")
-                        .recipientUsername(recipient)
-                        .createdAt(LocalDateTime.now())
-                        .read(false)
-                        .build();
+                Notification broadcast = broadcast(recipient);
                 when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(broadcast));
 
-                assertThat(service.markAsRead(notificationId, username)).isTrue();
+                assertThat(service.markAsRead(notificationId, username)).isFalse();
+                assertThat(service.isBroadcast(notificationId)).isTrue();
 
-                assertThat(broadcast.isRead()).isTrue();
-                verify(notificationRepository).save(broadcast);
+                assertThat(broadcast.isRead()).isFalse();
             }
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("markBroadcastAsRead sets a broadcast's one flag, and touches nothing else")
+        void markBroadcastAsReadMarksBroadcastsOnly() {
+            Notification broadcast = broadcast(null);
+            when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(broadcast));
+            assertThat(service.markBroadcastAsRead(notificationId)).isTrue();
+            assertThat(broadcast.isRead()).isTrue();
+            verify(notificationRepository).save(broadcast);
+
+            when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(sampleNotification));
+            assertThat(service.markBroadcastAsRead(notificationId)).isFalse();
+            assertThat(service.isBroadcast(notificationId)).isFalse();
+            assertThat(sampleNotification.isRead()).isFalse();
+        }
+
+        private Notification broadcast(String recipient) {
+            return Notification.builder()
+                    .id(notificationId)
+                    .message("system-wide announcement")
+                    .recipientUsername(recipient)
+                    .createdAt(LocalDateTime.now())
+                    .read(false)
+                    .build();
         }
     }
 

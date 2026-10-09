@@ -721,8 +721,11 @@ public class PatientPortalController {
     public ResponseEntity<ApiResponseWrapper<Void>> markNotificationRead(
             Authentication auth, @PathVariable UUID notificationId) {
         // The caller's OWN notification only; someone else's answers exactly as
-        // an unknown id, the same 404 as PUT /notifications/{id}/read.
-        if (!notificationService.markAsRead(notificationId, auth.getName())) {
+        // an unknown id, the same 404 as PUT /notifications/{id}/read. A
+        // broadcast is never marked here (its one read flag is everyone's): it
+        // answers 200 and is left as it is, as this endpoint always did.
+        if (!notificationService.markAsRead(notificationId, auth.getName())
+            && !notificationService.isBroadcast(notificationId)) {
             throw new ResourceNotFoundException("notification.notFound", notificationId);
         }
         return ResponseEntity.ok(ApiResponseWrapper.success(null));

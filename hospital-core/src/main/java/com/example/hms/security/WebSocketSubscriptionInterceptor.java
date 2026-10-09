@@ -250,8 +250,13 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
             return new Caller(null, true, recent ? cached.context() : null);
         } catch (RuntimeException failure) {
             // Not a database outage: no answer at all, so fail closed (as an
-            // unlinked caller), never "unavailable".
+            // unlinked caller), never "unavailable". Remembered for the TTL
+            // (refused throughout), so a broken resolution is not re-queried
+            // on every frame of the session.
             log.warn("[STOMP] Caller resolution failed ({}); refused", failure.getClass().getSimpleName());
+            if (session != null) {
+                session.put(RESOLUTION_ATTRIBUTE, new Resolution(null, now));
+            }
             return new Caller(null, false, null);
         }
     }

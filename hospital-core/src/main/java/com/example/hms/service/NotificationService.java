@@ -17,10 +17,22 @@ public interface NotificationService {
     Notification createNotification(String message, String recipientUsername, String type);
     /**
      * Marks the caller's OWN notification read. {@code false} when the id names
-     * no notification or one addressed to someone else: the caller cannot
-     * tell the two apart. There is deliberately no overload without an owner.
+     * no notification, one addressed to someone else, or a broadcast: the
+     * caller cannot tell the first two apart. There is deliberately no
+     * overload without an owner.
      */
     boolean markAsRead(UUID notificationId, String ownerUsername);
+
+    /**
+     * Marks a broadcast (no recipient: a system-wide announcement) read, on its
+     * ONE global flag, so it reads as read for everyone. {@code false} for any
+     * other id. Callers decide who may do this (staff, never a confined
+     * provider user, never the patient portal).
+     */
+    boolean markBroadcastAsRead(UUID notificationId);
+
+    /** True when the id names a broadcast (no recipient). */
+    boolean isBroadcast(UUID notificationId);
     long countUnreadForUser(String username);
     int markAllReadForUser(String username);
 

@@ -4733,6 +4733,12 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   plan before work starts
   (`docs/plan/external-provider-organisations-plan.md`, §10.1). Open.
 
+- **External providers: `ProviderCallerResolver` derives the live context a second time** (the STOMP interceptor and the confinement filter's fallback), beside `ActingScopeResolver.liveContext` and `KeycloakHospitalContextResolver`; fold it into the one resolver (found in #835's round-7 review). Open.
+
+- **External providers: a confined request looks its handler up twice** (`ProviderConfinementPolicy.allows`, then the DispatcherServlet); carry the first lookup's result instead (found in #835's round-7 review). Open.
+
+- **External providers: `RecordAccessPolicyImpl.readableHospitalIds` re-reads the acting hospital** (`findById` in `actsAtProvider`, `evaluate` and the per-registration loop) within one request; read it once (found in #835's round-7 review). Open.
+
 ## Open clinical questions — kept open on purpose, not forgotten
 
 These are questions only a clinician can settle. None of them blocks anything:

@@ -6,6 +6,9 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Notification;
 import com.example.hms.payload.dto.portal.NotificationPreferenceDTO;
 import com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.provider.ProviderConfinementPolicy;
 import com.example.hms.service.NotificationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,10 +27,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.security.Principal;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+
+import static com.example.hms.config.SecurityConstants.ROLE_PATIENT;
 
 @RestController
 @RequestMapping("/notifications")
@@ -63,7 +69,10 @@ public class NotificationController {
     /**
      * Marks the caller's OWN notification read. Someone else's notification
      * answers exactly as an unknown id (404): the handler used to mark any
-     * notification read by id, with no owner check.
+     * notification read by id, with no owner check. A broadcast (no
+     * recipient) has ONE read flag, shared by everyone: staff may set it, as
+     * before; a confined provider user, a patient or a caller with no live
+     * context may not, and it answers as a foreign id.
      */
     @PutMapping("/{id}/read")
     @PreAuthorize("isAuthenticated()")
@@ -71,10 +80,25 @@ public class NotificationController {
         if (principal == null) {
             return ResponseEntity.status(401).build();
         }
-        if (!notificationService.markAsRead(id, principal.getName())) {
+        if (!notificationService.markAsRead(id, principal.getName())
+            && !(isUnconfinedStaff() && notificationService.markBroadcastAsRead(id))) {
             throw new ResourceNotFoundException("notification.notFound", id);
         }
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * A caller holding a live role other than PATIENT (a verified super-admin
+     * included) who is not confined to a provider facility: who may flip a
+     * broadcast's shared read flag.
+     */
+    private static boolean isUnconfinedStaff() {
+        HospitalContext context = HospitalContextHolder.getContext().orElse(null);
+        if (context == null || !ProviderConfinementPolicy.providerTypes(context).isEmpty()) {
+            return false;
+        }
+        Set<String> roles = context.getAssignedRoles();
+        return roles != null && roles.stream().anyMatch(role -> !ROLE_PATIENT.equals(role));
     }
 
     @PatchMapping("/read-all")
