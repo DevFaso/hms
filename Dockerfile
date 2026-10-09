@@ -121,7 +121,7 @@ fi
 # that request, not kill the whole process.
 HEAP_PCT="${JVM_HEAP_PERCENT:-70}"
 case "${HEAP_PCT}" in
-  [0-9]|[0-9][0-9]) ;;
+  [0-9]|[0-9][0-9]|[0-9][0-9][0-9]) ;;
   *) echo "[entrypoint] Invalid JVM_HEAP_PERCENT='${HEAP_PCT}'; using 70" >&2; HEAP_PCT=70 ;;
 esac
 if [ "${HEAP_PCT}" -lt 10 ]; then HEAP_PCT=10; fi
