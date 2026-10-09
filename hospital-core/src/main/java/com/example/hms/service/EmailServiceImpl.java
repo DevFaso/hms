@@ -81,6 +81,7 @@ public class EmailServiceImpl implements EmailService {
     // with a sender verified for its domain (a transactional provider with the
     // domain's SPF/DKIM): a From the SMTP login is not authorised for fails
     // DMARC alignment, and Gmail rewrites an unverified alias to the account.
+    // Keep e-keneya.com's DMARC at p=none until outbound mail is aligned.
     @Value("${app.mail.from:}")
     private String fromSetting;
 

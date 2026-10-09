@@ -4818,9 +4818,11 @@ they stay visible instead of living in a javadoc.
   redeploy checked healthy; the settings are recorded in
   `docs/runbooks/railway-env-matrix.md` §3a.
   - Done: `hms-backend-core` (prod) and `hms-backend-dev` at 2 GB with
-    `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=70` (about 1.4 GB heap). Dev also
-    has `-XX:+ExitOnOutOfMemoryError`; prod does not, because `railway.toml`
-    allows only 3 restarts and a request-scoped OOM is better survived there.
+    `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=70` (about 1.4 GB heap). No
+    `ExitOnOutOfMemoryError`, by decision: a request-scoped OOM should fail
+    that request, not kill the process. #839 moves the heap default into the
+    image (`JDK_JAVA_OPTIONS=-XX:MaxRAMPercentage=65`); once it is deployed,
+    remove both hand-set `JAVA_TOOL_OPTIONS` variables.
   - Done: `hms-keycloak-dev` at 2 GB (1.5 GB failed to boot; 2 GB redeployed
     healthy). `hms-keycloak-prod` failed at 1.5 GB too and stays at the
     platform default, set to sleep when idle (unused: portal
@@ -4828,8 +4830,8 @@ they stay visible instead of living in a javadoc.
   - Open: confirm `hms-keycloak-prod` actually sleeps (DB traffic can keep it
     awake); if not, cap it at 2 GB as dev now is.
   - Open: verify the effective heap on both backends (`jvm.memory.max`, area
-    heap, about 1.4 GB) and re-measure memory in 24-48 h. A limit that is too
-    small ends as a CRASHED deployment (exit 137); `hms-backend-core` also runs
+    heap, about 1.4 GB) and re-measure memory in 24-48 h. A limit too small for
+    the whole process ends as exit 137, then CRASHED; `hms-backend-core` also runs
     the OpenTelemetry agent when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, so if it
     is killed, raise it to 2.5 GB.
   - Open: a usage alert rather than a hard usage limit; a hard limit takes
@@ -4838,14 +4840,14 @@ they stay visible instead of living in a javadoc.
 - **App email sender (2026-10-09).** #836 adds optional `MAIL_FROM`,
   `MAIL_FROM_NAME`, `MAIL_REPLY_TO` (unset = unchanged). Inbound mail for
   support@/contact@/noreply@ is routed by the MX records; SPF lists Google
-  for outbound, DMARC is `p=none`. Prod already has `MAIL_FROM=noreply@` and
-  `MAIL_REPLY_TO=support@` set (they act once #836 is synced). While prod
-  sends through Gmail SMTP (the login is a consumer @gmail.com account, so
-  its envelope sender and DKIM are gmail.com), it has no verified "Send mail as" for
-  noreply@, so Gmail rewrites the From back to the account: harmless, and no
-  effect. Never verify that alias on the Gmail login instead: mail would then
-  carry an @e-keneya.com From that neither SPF nor DKIM aligns with, and
-  receivers spam-folder it. Open, owner decision: move outbound mail to a dedicated sender
+  for outbound, DMARC is `p=none`. `MAIL_FROM` was removed from prod on
+  2026-10-09: through the consumer @gmail.com login it only worked because
+  Gmail rewrites an unverified alias, and verifying the alias would send an
+  @e-keneya.com From that neither SPF nor DKIM aligns with (spam-foldered).
+  `MAIL_REPLY_TO=support@` stays: once #836 is synced, replies to app mail go
+  to support@ (forwarded to the owner's inbox) and the display name becomes
+  "e-Keneya". Keep DMARC at `p=none` until outbound mail moves to a sender
+  aligned with e-keneya.com. Open, owner decision: move outbound mail to a dedicated sender
   (recommended: a transactional provider such as Brevo or Resend with
   e-keneya.com verified); that switch needs the provider in SPF and its DKIM
   record, then `MAIL_FROM`, then DMARC can be tightened. Keep

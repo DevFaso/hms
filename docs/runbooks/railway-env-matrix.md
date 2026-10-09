@@ -30,7 +30,7 @@ MediHub (project)
 │   └── hospital-portal-dev
 └── prod      (environment)   ◄─ tracks branch `main`
     ├── hms-keycloak-prod         + hms-keycloak-prod-db
-    ├── hms-backend-prod          + hms-db-prod
+    ├── hms-backend-core          + hms-db-prod   (the prod backend; not "hms-backend-prod")
     └── hospital-portal-prod
 ```
 
@@ -147,16 +147,19 @@ service is `hms-backend-core`, dev is `hms-backend-dev`):
 | Service | Memory limit | `JAVA_TOOL_OPTIONS` | Sleep when idle |
 | --- | --- | --- | --- |
 | `hms-backend-core` (prod) | 2 GB | `-XX:MaxRAMPercentage=70` | off |
-| `hms-backend-dev` | 2 GB | `-XX:MaxRAMPercentage=70 -XX:+ExitOnOutOfMemoryError` | off |
+| `hms-backend-dev` | 2 GB | `-XX:MaxRAMPercentage=70` | off |
 | `hms-keycloak-prod` | platform default (1.5 GB failed to boot) | none | on, requested; confirm it actually sleeps (DB traffic can keep it awake) |
 | `hms-keycloak-dev` | 2 GB | none | off (hms-backend-dev needs it at boot and for JWKS refresh) |
 
-`ExitOnOutOfMemoryError` is on dev only: `railway.toml` restarts on failure at
-most 3 times, after which the deployment shows **CRASHED** and stays down until
-a manual redeploy. On prod a request-scoped OOM is better survived than turned
-into a process exit. A limit that is too small therefore shows up as a CRASHED
-deployment (exit 137), not as FAILED (FAILED is build or deploy-time
-healthcheck).
+No `ExitOnOutOfMemoryError`, by decision: it would turn one oversized request
+into a kill of the whole process. A request-scoped OOM fails that request and
+the heap recovers; `railway.toml` keeps `on_failure` with 3 restarts. A limit
+that is too small for the whole process (heap plus metaspace, threads and the
+OpenTelemetry agent) shows up as a kernel kill, exit 137, and a **CRASHED**
+deployment once the 3 restarts are spent (FAILED is for builds and deploy-time
+healthchecks). The service variables above override the image default only
+until #839 (heap default in the image via `JDK_JAVA_OPTIONS`) is deployed;
+after that they are redundant and can be removed.
 
 ---
 
@@ -182,8 +185,12 @@ To audit the matrix against reality without touching anything:
 
 ```bash
 # Per env, per service, list configured variables (names only — values stay in Railway)
-for env in dev prod; do
-  for svc in hms-keycloak-$env hms-backend-$env hospital-portal-$env; do
+# The prod backend is hms-backend-core and the portals are hms-frontend-<env>,
+# so the service names are listed per environment rather than templated.
+for pair in "dev:hms-keycloak-dev hms-backend-dev hms-frontend-dev" \
+            "prod:hms-keycloak-prod hms-backend-core hms-frontend-prod"; do
+  env=${pair%%:*}
+  for svc in ${pair#*:}; do
     echo "=== $env / $svc ==="
     railway environment $env
     railway service $svc
