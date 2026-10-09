@@ -4812,30 +4812,26 @@ they stay visible instead of living in a javadoc.
 - Set the repository variable `PLAY_APP_PUBLISHED` to `true` after the first
   Play publish (#791); until then `stage_and_submit` is refused.
 - **Hosting memory limits (2026-10-09).** The hosting bill had doubled in two
-  months, almost all of it RAM: services ran with the platform's 32 GB default
-  limit, so the JVMs (Keycloak especially) grew unchecked. Owner-approved
-  changes, applied one service at a time with each redeploy checked healthy.
-  The settings are recorded in `docs/runbooks/railway-env-matrix.md`
-  ("Resources").
-  - Done: hms-backend-core and hms-backend-dev at 2 GB with
-    `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=70 -XX:+ExitOnOutOfMemoryError`
-    (about 1.4 GB heap; a heap OOM exits and restarts instead of leaving a
-    broken JVM). Both restarted healthy.
-  - hms-keycloak-prod / -dev failed to boot at 1.5 GB (cause not yet read from
-    the deploy log); the limit was put back to the default and both
-    recovered. hms-keycloak-prod (unused: portal `oidc.enabled=false`, no
-    `OIDC_*` on hms-backend-core) is set to sleep when idle. hms-keycloak-dev
-    must stay awake: hms-backend-dev fetches its issuer at boot
-    (`OidcResourceServerConfig`).
-  - Open: verify the effective heap on both backends (`jvm.memory.max`,
-    area heap, about 1.4 GB), not only that the flag was parsed; re-measure
-    memory in 24-48 h. `railway.toml` allows 3 restarts, so a limit that is
-    too small ends as a FAILED deploy, not a loop. hms-backend-core also runs
-    the OpenTelemetry agent when `OTEL_EXPORTER_OTLP_ENDPOINT` is set; if it is
-    killed by the container (exit 137, no Java OOM), raise it to 2.5 GB.
-  - Done: hms-keycloak-dev capped at 2 GB, redeployed healthy.
-  - Open: confirm hms-keycloak-prod actually sleeps (background DB traffic
-    can keep it awake); if it does not, cap it at 2 GB as dev now is.
+  months, almost all of it RAM: services ran with the plan's per-service
+  maximum as their memory limit, so the JVMs (Keycloak especially) grew
+  unchecked. Owner-approved changes, applied one service at a time with each
+  redeploy checked healthy; the settings are recorded in
+  `docs/runbooks/railway-env-matrix.md` §3a.
+  - Done: `hms-backend-core` (prod) and `hms-backend-dev` at 2 GB with
+    `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=70` (about 1.4 GB heap). Dev also
+    has `-XX:+ExitOnOutOfMemoryError`; prod does not, because `railway.toml`
+    allows only 3 restarts and a request-scoped OOM is better survived there.
+  - Done: `hms-keycloak-dev` at 2 GB (1.5 GB failed to boot; 2 GB redeployed
+    healthy). `hms-keycloak-prod` failed at 1.5 GB too and stays at the
+    platform default, set to sleep when idle (unused: portal
+    `oidc.enabled=false`, no `OIDC_*` on `hms-backend-core`).
+  - Open: confirm `hms-keycloak-prod` actually sleeps (DB traffic can keep it
+    awake); if not, cap it at 2 GB as dev now is.
+  - Open: verify the effective heap on both backends (`jvm.memory.max`, area
+    heap, about 1.4 GB) and re-measure memory in 24-48 h. A limit that is too
+    small ends as a CRASHED deployment (exit 137); `hms-backend-core` also runs
+    the OpenTelemetry agent when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, so if it
+    is killed, raise it to 2.5 GB.
   - Open: a usage alert rather than a hard usage limit; a hard limit takes
     every service offline when reached, prod included.
   - Open, later: one shared dev Keycloak with a realm per project.
@@ -4844,7 +4840,8 @@ they stay visible instead of living in a javadoc.
   support@/contact@/noreply@ is routed by the MX records; SPF lists Google
   for outbound, DMARC is `p=none`. Prod already has `MAIL_FROM=noreply@` and
   `MAIL_REPLY_TO=support@` set (they act once #836 is synced). While prod
-  sends through Gmail SMTP, the login has no verified "Send mail as" for
+  sends through Gmail SMTP (the login is a consumer @gmail.com account, so
+  its envelope sender and DKIM are gmail.com), it has no verified "Send mail as" for
   noreply@, so Gmail rewrites the From back to the account: harmless, and no
   effect. Never verify that alias on the Gmail login instead: mail would then
   carry an @e-keneya.com From that neither SPF nor DKIM aligns with, and

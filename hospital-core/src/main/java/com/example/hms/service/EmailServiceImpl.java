@@ -77,10 +77,10 @@ public class EmailServiceImpl implements EmailService {
     // that contains a comma). Unset, no From header is set and the server
     // supplies its own, exactly as before these settings existed. JavaMail
     // also takes the SMTP envelope sender (bounces, SPF) from the From header
-    // unless spring.mail.properties.mail.smtp.from is set. With Gmail SMTP a
-    // From on another domain must be a verified "Send mail as" address of the
-    // login (otherwise Gmail rewrites it), and that mail is DKIM-signed as
-    // gmail.com: keep e-keneya.com's DMARC at p=none while sending this way.
+    // unless spring.mail.properties.mail.smtp.from is set. Set MAIL_FROM only
+    // with a sender verified for its domain (a transactional provider with the
+    // domain's SPF/DKIM): a From the SMTP login is not authorised for fails
+    // DMARC alignment, and Gmail rewrites an unverified alias to the account.
     @Value("${app.mail.from:}")
     private String fromSetting;
 
