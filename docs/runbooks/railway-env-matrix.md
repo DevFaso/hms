@@ -157,12 +157,12 @@ the heap recovers; `railway.toml` keeps `on_failure` with 3 restarts. A limit
 that is too small for the whole process (heap plus metaspace, threads and the
 OpenTelemetry agent) shows up as a kernel kill, exit 137, and a **CRASHED**
 deployment once the 3 restarts are spent (FAILED is for builds and deploy-time
-healthchecks). Once #839 is deployed, the image's entrypoint sizes the heap itself:
-`JVM_HEAP_PERCENT` (default 60) of the service's memory limit, or of at most 2 GiB when
-the service has no limit or one above 16 GiB (it logs a warning then); the
-startup log's `gc,init` line shows the result. The `JAVA_TOOL_OPTIONS`
-variables above then lose to the command line and can be removed; to change
-the heap, change the service's memory limit or `JVM_HEAP_PERCENT`.
+healthchecks). Once #839 is deployed, the image's entrypoint sets the heap itself:
+`JVM_HEAP_PERCENT` (default 70, clamped to 10-90) of the service's memory limit,
+logged at startup (`gc,init`, "Heap Max Capacity"). Every service must have a
+memory limit, or the JVM sizes from the platform's per-service maximum. The
+`JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=70` variables above then lose to the
+command line (same value, so the heap does not change) and can be removed.
 
 ---
 
