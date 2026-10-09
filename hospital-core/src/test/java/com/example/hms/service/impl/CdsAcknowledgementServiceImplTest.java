@@ -143,7 +143,9 @@ class CdsAcknowledgementServiceImplTest {
         // What findClinicalById answers for a pharmacy or laboratory id.
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.acknowledge(auth, buildRequest(CdsAcknowledgementAction.ACKNOWLEDGED, null)))
+        CdsAcknowledgementRequestDTO request = buildRequest(CdsAcknowledgementAction.ACKNOWLEDGED, null);
+
+        assertThatThrownBy(() -> service.acknowledge(auth, request))
                 .isInstanceOf(ResourceNotFoundException.class);
         verify(repository, never()).save(any());
     }
