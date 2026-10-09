@@ -177,6 +177,13 @@ class ProviderStompSubscriptionTest {
         return subscribe(destination, user);
     }
 
+    /** A new STOMP session for {@code user}: its CONNECT frame, now. */
+    private void freshSessionConnect(Principal user) {
+        session.clear();
+        Message<byte[]> connect = frame(StompCommand.CONNECT, null, user);
+        assertThat(interceptor.preSend(connect, channel)).isSameAs(connect);
+    }
+
     private static RuntimeException dbDown() {
         return new DataAccessResourceFailureException("db down");
     }
@@ -303,7 +310,8 @@ class ProviderStompSubscriptionTest {
         Principal nurse = ticketUser("ROLE_NURSE");
 
         for (String broadcast : List.of("/topic/emergency-broadcast", "/topic/notifications")) {
-            Message<byte[]> message = freshSessionSubscribe(broadcast, nurse);
+            freshSessionConnect(nurse);
+            Message<byte[]> message = subscribe(broadcast, nurse);
             assertThat(interceptor.preSend(message, channel)).as(broadcast).isSameAs(message);
         }
         Message<byte[]> send = frame(StompCommand.SEND, "/app/chat.sendMessage", nurse);
@@ -390,7 +398,8 @@ class ProviderStompSubscriptionTest {
         Principal nurse = ticketUser("ROLE_NURSE");
 
         for (String broadcast : List.of("/topic/emergency-broadcast", "/topic/notifications")) {
-            Message<byte[]> message = freshSessionSubscribe(broadcast, nurse);
+            freshSessionConnect(nurse);
+            Message<byte[]> message = subscribe(broadcast, nurse);
             assertThat(interceptor.preSend(message, channel)).as(broadcast).isSameAs(message);
         }
         verifyNoInteractions(assignmentAccessor);
@@ -400,6 +409,41 @@ class ProviderStompSubscriptionTest {
         Message<byte[]> provider = freshSessionSubscribe("/topic/notifications", ticketUser("ROLE_PHARMACIST"));
         assertThatThrownBy(() -> interceptor.preSend(provider, channel)).isInstanceOf(AccessDeniedException.class);
         verify(assignmentAccessor, times(1)).findAssignmentsForUser(userId);
+    }
+
+    @Test
+    @DisplayName("the ws-ticket's roles vouch for the CONNECT window only: an assignment activated mid-session loses the broadcasts after the TTL")
+    void ticketRolesVouchForTheConnectWindowOnly() {
+        Principal nurse = ticketUser("ROLE_NURSE");
+        freshSessionConnect(nurse);
+        Message<byte[]> early = subscribe("/topic/emergency-broadcast", nurse);
+        assertThat(interceptor.preSend(early, channel)).isSameAs(early);
+        verifyNoInteractions(assignmentAccessor);
+
+        // Activated after login: a pharmacist row at the pharmacy. The ticket still says NURSE.
+        holds(nurse(), pharmacist());
+        afterTheTtl();
+        for (String broadcast : List.of("/topic/emergency-broadcast", "/topic/notifications")) {
+            Message<byte[]> late = subscribe(broadcast, nurse);
+            assertThatThrownBy(() -> interceptor.preSend(late, channel)).as(broadcast)
+                .isInstanceOf(AccessDeniedException.class);
+        }
+        verify(assignmentAccessor, times(1)).findAssignmentsForUser(userId);
+    }
+
+    @Test
+    @DisplayName("past the CONNECT window the ws-ticket's roles no longer vouch while the database is down; no CONNECT seen, no vouching")
+    void ticketRolesDoNotVouchPastTheWindowWhenTheDatabaseIsDown() {
+        when(assignmentAccessor.findAssignmentsForUser(userId)).thenThrow(dbDown());
+        Principal nurse = ticketUser("ROLE_NURSE");
+
+        freshSessionConnect(nurse);
+        afterTheTtl();
+        Message<byte[]> late = subscribe("/topic/emergency-broadcast", nurse);
+        assertThatThrownBy(() -> interceptor.preSend(late, channel)).isInstanceOf(AccessDeniedException.class);
+
+        Message<byte[]> noConnect = freshSessionSubscribe("/topic/notifications", nurse);
+        assertThatThrownBy(() -> interceptor.preSend(noConnect, channel)).isInstanceOf(AccessDeniedException.class);
     }
 
     @Test

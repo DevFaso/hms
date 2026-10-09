@@ -141,8 +141,10 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
      * even when the reader's hospital presumes treatment.
      */
     private static boolean disclosesOnTreatmentPresumption(Hospital source) {
-        if (source == null || source.getId() == null
+        if (source == null || source.getId() == null || source.isProvider()
             || source.getIsolationMode() == TenantIsolationMode.SCHEMA) {
+            // A provider facility keeps no chart (AC-9): a registration there
+            // (legacy, or planted) adds nothing to the readable set.
             return false;
         }
         RecordAccessPosture posture = source.getRecordAccessPosture();

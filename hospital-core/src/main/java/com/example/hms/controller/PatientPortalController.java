@@ -724,8 +724,7 @@ public class PatientPortalController {
         // an unknown id, the same 404 as PUT /notifications/{id}/read. A
         // broadcast is never marked here (its one read flag is everyone's): it
         // answers 200 and is left as it is, as this endpoint always did.
-        if (!notificationService.markAsRead(notificationId, auth.getName())
-            && !notificationService.isBroadcast(notificationId)) {
+        if (notificationService.markAsRead(notificationId, auth, false) == NotificationService.ReadOutcome.NOT_FOUND) {
             throw new ResourceNotFoundException("notification.notFound", notificationId);
         }
         return ResponseEntity.ok(ApiResponseWrapper.success(null));

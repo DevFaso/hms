@@ -1,5 +1,11 @@
 package com.example.hms.service;
 
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.provider.ProviderCallerResolver;
+import com.example.hms.security.provider.ProviderConfinementPolicy;
+import java.security.Principal;
+import java.util.Set;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -22,6 +28,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import static com.example.hms.config.SecurityConstants.ROLE_PATIENT;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -30,6 +38,9 @@ public class NotificationServiceImpl implements NotificationService {
     private final NotificationWebSocketController notificationWebSocketController;
     private final NotificationPreferenceRepository notificationPreferenceRepository;
     private final UserRepository userRepository;
+    // Who may flip a broadcast's shared read flag is decided on the caller's
+    // live context; an ObjectProvider, so no bean cycle forms through it.
+    private final ObjectProvider<ProviderCallerResolver> callerResolverProvider;
 
     @Override
         public List<Notification> getNotificationsForUser(String username) {
@@ -101,39 +112,50 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
-    public boolean markAsRead(UUID notificationId, String ownerUsername) {
-        if (notificationId == null || ownerUsername == null) {
-            return false;
+    public ReadOutcome markAsRead(UUID notificationId, Principal caller, boolean broadcastsMayBeMarked) {
+        if (notificationId == null || caller == null || caller.getName() == null) {
+            return ReadOutcome.NOT_FOUND;
         }
-        return notificationRepository.findById(notificationId)
-            .filter(n -> !isBroadcast(n) && ownerUsername.equals(n.getRecipientUsername()))
-            .map(n -> {
-                n.setRead(true);
-                notificationRepository.save(n);
-                return true;
-            })
-            .orElse(false);
+        Notification notification = notificationRepository.findById(notificationId).orElse(null);
+        if (notification == null) {
+            return ReadOutcome.NOT_FOUND;
+        }
+        if (isBroadcast(notification)) {
+            if (!broadcastsMayBeMarked || !isUnconfinedStaff(caller)) {
+                return ReadOutcome.BROADCAST_LEFT_UNREAD;
+            }
+        } else if (!caller.getName().equals(notification.getRecipientUsername())) {
+            return ReadOutcome.NOT_FOUND;
+        }
+        notification.setRead(true);
+        notificationRepository.save(notification);
+        return ReadOutcome.MARKED;
     }
 
-    @Override
-    public boolean markBroadcastAsRead(UUID notificationId) {
-        if (notificationId == null) {
+    /**
+     * The caller's LIVE context, resolved from the principal as the context
+     * filters resolve it: a role other than PATIENT (a verified super-admin
+     * included), and not confined to a provider facility. A caller that
+     * cannot be resolved, or links no local account, is not.
+     */
+    private boolean isUnconfinedStaff(Principal caller) {
+        ProviderCallerResolver resolver = callerResolverProvider.getIfAvailable();
+        if (resolver == null) {
             return false;
         }
-        return notificationRepository.findById(notificationId)
-            .filter(NotificationServiceImpl::isBroadcast)
-            .map(n -> {
-                n.setRead(true);
-                notificationRepository.save(n);
-                return true;
-            })
-            .orElse(false);
-    }
-
-    @Override
-    public boolean isBroadcast(UUID notificationId) {
-        return notificationId != null
-            && notificationRepository.findById(notificationId).filter(NotificationServiceImpl::isBroadcast).isPresent();
+        HospitalContext context;
+        try {
+            context = resolver.liveContext(caller);
+        } catch (RuntimeException unavailable) {
+            log.warn("Live context unavailable ({}); broadcast left unread", unavailable.getClass().getSimpleName());
+            return false;
+        }
+        if (context == null || context.getPrincipalUserId() == null
+            || !ProviderConfinementPolicy.providerTypes(context).isEmpty()) {
+            return false;
+        }
+        Set<String> roles = context.getAssignedRoles();
+        return roles != null && roles.stream().anyMatch(role -> !ROLE_PATIENT.equals(role));
     }
 
     /** No recipient: sent to everyone on the broadcast topic (as {@code NotificationWebSocketController} sends it). */

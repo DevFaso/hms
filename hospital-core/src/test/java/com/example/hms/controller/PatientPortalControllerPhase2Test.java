@@ -18,6 +18,8 @@ import com.example.hms.payload.dto.pro.ProSelfReportDTO;
 import com.example.hms.repository.NotificationPreferenceRepository;
 import com.example.hms.repository.NotificationRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.security.provider.ProviderCallerResolver;
+import com.example.hms.service.NotificationService.ReadOutcome;
 import com.example.hms.service.NotificationService;
 import com.example.hms.service.NotificationServiceImpl;
 import com.example.hms.service.PatientDocumentService;
@@ -25,6 +27,7 @@ import com.example.hms.service.PatientPortalService;
 import com.example.hms.service.pharmacy.PharmacyClaimService;
 import com.example.hms.service.pharmacy.PharmacyPaymentService;
 import org.assertj.core.api.Assertions;
+import org.springframework.beans.factory.ObjectProvider;
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -394,7 +397,7 @@ class PatientPortalControllerPhase2Test {
         @DisplayName("the caller's own notification: 200")
         void ownNotificationIsMarked() throws Exception {
             UUID id = UUID.randomUUID();
-            when(notificationService.markAsRead(id, "patient.jane")).thenReturn(true);
+            when(notificationService.markAsRead(eq(id), any(), eq(false))).thenReturn(ReadOutcome.MARKED);
 
             mockMvc.perform(put("/me/patient/notifications/{notificationId}/read", id).principal(auth))
                     .andExpect(status().isOk());
@@ -405,8 +408,8 @@ class PatientPortalControllerPhase2Test {
         void foreignOrUnknownNotificationIsNotFound() throws Exception {
             UUID foreign = UUID.randomUUID();
             UUID unknown = UUID.randomUUID();
-            when(notificationService.markAsRead(foreign, "patient.jane")).thenReturn(false);
-            when(notificationService.markAsRead(unknown, "patient.jane")).thenReturn(false);
+            when(notificationService.markAsRead(eq(foreign), any(), eq(false))).thenReturn(ReadOutcome.NOT_FOUND);
+            when(notificationService.markAsRead(eq(unknown), any(), eq(false))).thenReturn(ReadOutcome.NOT_FOUND);
 
             String asForeign = mockMvc.perform(put("/me/patient/notifications/{notificationId}/read", foreign)
                             .principal(auth))
@@ -427,12 +430,13 @@ class PatientPortalControllerPhase2Test {
             NotificationRepository repository = mock(NotificationRepository.class);
             Notification broadcast = Notification.builder().id(id).message("announcement").read(false).build();
             when(repository.findById(id)).thenReturn(Optional.of(broadcast));
+            @SuppressWarnings("unchecked")
+            ObjectProvider<ProviderCallerResolver> noResolver = mock(ObjectProvider.class);
             NotificationService real = new NotificationServiceImpl(repository,
                 mock(NotificationWebSocketController.class), mock(NotificationPreferenceRepository.class),
-                mock(UserRepository.class));
-            when(notificationService.markAsRead(id, "patient.jane"))
-                .thenAnswer(invocation -> real.markAsRead(id, "patient.jane"));
-            when(notificationService.isBroadcast(id)).thenAnswer(invocation -> real.isBroadcast(id));
+                mock(UserRepository.class), noResolver);
+            when(notificationService.markAsRead(eq(id), any(), eq(false)))
+                .thenAnswer(invocation -> real.markAsRead(id, invocation.getArgument(1), invocation.getArgument(2)));
 
             mockMvc.perform(put("/me/patient/notifications/{notificationId}/read", id).principal(auth))
                     .andExpect(status().isOk());

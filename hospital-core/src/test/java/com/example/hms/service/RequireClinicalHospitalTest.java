@@ -6,6 +6,7 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.BillingInvoice;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
+import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.AdminSignupRequest;
@@ -23,10 +24,13 @@ import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.pharmacy.PharmacyRepository;
+import com.example.hms.security.provider.ClinicalHospitals;
 import com.example.hms.service.impl.ConsultationServiceImpl;
 import com.example.hms.service.impl.GeneralReferralServiceImpl;
 import com.example.hms.service.impl.ObgynReferralServiceImpl;
 import com.example.hms.utility.RoleValidator;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -49,6 +53,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -101,6 +107,54 @@ class RequireClinicalHospitalTest {
         Patient patient = new Patient();
         patient.setId(UUID.randomUUID());
         return patient;
+    }
+
+    @Nested
+    @ExtendWith(MockitoExtension.class)
+    @MockitoSettings(strictness = Strictness.LENIENT)
+    @DisplayName("patient pharmacy directory")
+    class PharmacyDirectory {
+        @Mock private PatientRepository patientRepository;
+        @Mock private HospitalRepository hospitalRepository;
+        @Mock private PatientHospitalRegistrationRepository registrationRepository;
+        @Mock private PharmacyRepository pharmacyRepository;
+        @InjectMocks private PharmacyDirectoryServiceImpl service;
+
+        @Test
+        @DisplayName("a provider's id is not found, never swapped for the patient's primary hospital")
+        void providerIdIsNotFound() {
+            Patient patient = patient();
+            // The patient's primary hospital (an active registration): the old
+            // fallback would have answered with its dispensary instead.
+            PatientHospitalRegistration primary = new PatientHospitalRegistration();
+            primary.setHospital(hospital());
+            primary.setActive(true);
+            patient.getHospitalRegistrations().add(primary);
+            when(patientRepository.findById(patient.getId())).thenReturn(Optional.of(patient));
+            // A planted (or legacy) registration at the provider gets past the registration check.
+            when(registrationRepository.isPatientRegisteredInHospitalFixed(patient.getId(), PROVIDER_ID))
+                .thenReturn(true);
+            when(hospitalRepository.findClinicalById(any()))
+                .thenAnswer(inv -> Optional.of(pharmacy()).filter(h -> h.getId().equals(inv.getArgument(0)))
+                    .filter(ClinicalHospitals::isClinical));
+
+            assertAnsweredAsAMiss(() -> service.listPatientPharmacies(patient.getId(), PROVIDER_ID),
+                () -> when(hospitalRepository.findClinicalById(any())).thenReturn(Optional.empty()));
+            verify(pharmacyRepository, never()).findByHospitalIdAndActiveTrueOrderByNameAsc(any());
+        }
+
+        @Test
+        @DisplayName("a clinical hospital resolves")
+        void hospitalResolves() {
+            Patient patient = patient();
+            when(patientRepository.findById(patient.getId())).thenReturn(Optional.of(patient));
+            when(registrationRepository.isPatientRegisteredInHospitalFixed(patient.getId(), HOSPITAL_ID))
+                .thenReturn(true);
+            when(hospitalRepository.findClinicalById(HOSPITAL_ID)).thenReturn(Optional.of(hospital()));
+            when(pharmacyRepository.findByHospitalIdAndActiveTrueOrderByNameAsc(HOSPITAL_ID)).thenReturn(List.of());
+
+            assertThat(service.listPatientPharmacies(patient.getId(), HOSPITAL_ID)).isNotNull();
+        }
     }
 
     @Nested

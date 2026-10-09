@@ -5,6 +5,8 @@ import com.example.hms.security.auth.TenantRoleAssignment;
 import com.example.hms.security.auth.TenantRoleAssignmentAccessor;
 import com.example.hms.security.oidc.KeycloakHospitalContextResolver;
 import com.example.hms.security.provider.ProviderCallerResolver;
+import java.util.HashMap;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,6 +43,7 @@ class WebSocketSubscriptionInterceptorTest {
     private final MessageChannel channel = mock(MessageChannel.class);
     private final UUID userId = UUID.randomUUID();
     private final UUID hospitalId = UUID.randomUUID();
+    private final Map<String, Object> session = new HashMap<>();
 
     /** The ws-ticket principals of this test link through their own user id; no Keycloak resolver is needed. */
     @SuppressWarnings("unchecked")
@@ -82,6 +85,7 @@ class WebSocketSubscriptionInterceptorTest {
             accessor.setUser(user);
         }
         accessor.setSessionId("s1");
+        accessor.setSessionAttributes(session);
         return MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
     }
 
@@ -138,8 +142,10 @@ class WebSocketSubscriptionInterceptorTest {
     @Test
     void allowsUserScopedAndSystemBroadcastDestinations() {
         // A patient's ws-ticket holds no role a pharmacy or laboratory
-        // accepts: neither destination needs the assignments.
+        // accepts: within the CONNECT window neither destination needs the
+        // assignments.
         Principal user = userWithRoles("ROLE_PATIENT");
+        interceptor.preSend(frame(StompCommand.CONNECT, null, user), channel);
         for (String destination :
                 List.of(
                         "/user/topic/notifications",

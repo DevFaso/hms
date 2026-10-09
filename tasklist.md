@@ -4739,6 +4739,8 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 
 - **External providers: `RecordAccessPolicyImpl.readableHospitalIds` re-reads the acting hospital** (`findById` in `actsAtProvider`, `evaluate` and the per-registration loop) within one request; read it once (found in #835's round-7 review). Open.
 
+- **External providers: `ActingScopeResolver.liveContext` walks the assignments three times** (the collect loop, `providerFacilityTypes`, `staffHospitalIds`); fold them into the one loop (found in #835's round-8 review). Open.
+
 ## Open clinical questions — kept open on purpose, not forgotten
 
 These are questions only a clinician can settle. None of them blocks anything:

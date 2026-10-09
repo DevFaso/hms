@@ -64,8 +64,11 @@ import java.util.UUID;
  * ({@link ProviderCallerResolver}, linked as the context filters link it) and
  * {@link ProviderConfinementPolicy#providerTypes}, so a verified super-admin is
  * exempt. One resolution serves a frame (none for {@code /user/**}, and none
- * for the broadcasts when the ws-ticket's roles include no role a pharmacy or
- * laboratory accepts: such a caller cannot be a provider user) and is
+ * for the broadcasts within {@link #RESOLUTION_TTL} of the session's CONNECT
+ * when the ws-ticket's roles include no role a pharmacy or laboratory
+ * accepts: such a caller cannot be a provider user YET; the roles are the
+ * handshake's, so past that window the caller is resolved live like anyone,
+ * and an assignment activated mid-session counts) and is
  * kept in the STOMP session for {@link #RESOLUTION_TTL}, so a grant, a
  * revocation or a demotion counts within that window without an assignment
  * query on every frame.
@@ -76,7 +79,8 @@ import java.util.UUID;
  * resolution "unavailable": SEND and the tracker are refused, but the two
  * broadcast topics stay open to a caller known not to be a provider user (the
  * session's last resolution said so, no older than {@link #LAST_KNOWN_MAX_AGE},
- * or the ws-ticket's roles include no role a pharmacy or laboratory accepts),
+ * or, within the CONNECT window, the ws-ticket's roles include no role a
+ * pharmacy or laboratory accepts),
  * so a database hiccup never silently cuts a clinician off the emergency
  * alerts. That case is logged. Any other failure fails closed everywhere.
  */
@@ -92,6 +96,9 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
 
     /** Session attribute holding the last successful resolution of the caller. */
     static final String RESOLUTION_ATTRIBUTE = WebSocketSubscriptionInterceptor.class.getName() + ".resolution";
+
+    /** When the session's CONNECT frame was seen: the ws-ticket's roles vouch for {@link #RESOLUTION_TTL} after it. */
+    static final String CONNECTED_AT_ATTRIBUTE = WebSocketSubscriptionInterceptor.class.getName() + ".connectedAt";
 
     /** The application destination prefix ({@code WebSocketConfig}): the only place a client may SEND. */
     static final String APPLICATION_DESTINATION_PREFIX = "/app/";
@@ -122,6 +129,14 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(message);
+        if (StompCommand.CONNECT.equals(accessor.getCommand())
+            || StompCommand.STOMP.equals(accessor.getCommand())) {
+            Map<String, Object> session = accessor.getSessionAttributes();
+            if (session != null) {
+                session.put(CONNECTED_AT_ATTRIBUTE, clock.instant());
+            }
+            return message;
+        }
         if (StompCommand.SEND.equals(accessor.getCommand())) {
             // Provider rule for @MessageMapping: closed, as HTTP /chat/send is.
             // A SEND with no principal is refused, as a SUBSCRIBE is.
@@ -158,9 +173,10 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
 
         boolean broadcast = EMERGENCY_BROADCAST_TOPIC.equals(destination)
             || NOTIFICATIONS_BROADCAST_TOPIC.equals(destination);
-        if (broadcast && cannotHoldAProviderRole(user)) {
-            // No role a pharmacy or laboratory accepts: cannot be a provider
-            // user. No lookup (a reconnect storm costs no database read).
+        if (broadcast && ticketVouches(accessor, user)) {
+            // No role a pharmacy or laboratory accepts, at the handshake just
+            // now: cannot be a provider user. No lookup (a reconnect storm
+            // costs no database read).
             return message;
         }
 
@@ -196,8 +212,9 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
             }
             return;
         }
-        boolean knownNonProvider = (caller.lastKnown() != null && !isProvider(caller.lastKnown()))
-            || cannotHoldAProviderRole(user);
+        // The ws-ticket's roles already had their say (the CONNECT window,
+        // before any resolution); past it only a recent resolution vouches.
+        boolean knownNonProvider = caller.lastKnown() != null && !isProvider(caller.lastKnown());
         if (!knownNonProvider) {
             throw denied(user, destination, "caller could not be resolved");
         }
@@ -274,8 +291,22 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
     }
 
     /**
-     * Without a database: the ws-ticket's account holds no role a pharmacy or
-     * laboratory accepts, so it cannot hold a provider assignment.
+     * The ws-ticket's roles vouch for the caller: none is a role a pharmacy or
+     * laboratory accepts, and the session's CONNECT was at most
+     * {@link #RESOLUTION_TTL} ago (the roles are the handshake's; an
+     * assignment activated since must count). No CONNECT seen: no vouching.
+     */
+    private boolean ticketVouches(StompHeaderAccessor accessor, Principal user) {
+        Map<String, Object> session = accessor.getSessionAttributes();
+        if (session == null || !(session.get(CONNECTED_AT_ATTRIBUTE) instanceof Instant connectedAt)) {
+            return false;
+        }
+        return !clock.instant().isAfter(connectedAt.plus(RESOLUTION_TTL)) && cannotHoldAProviderRole(user);
+    }
+
+    /**
+     * The ws-ticket's account holds no role a pharmacy or laboratory accepts,
+     * so it could not hold a provider assignment when the ticket was issued.
      */
     private static boolean cannotHoldAProviderRole(Principal user) {
         if (!(user instanceof Authentication auth) || !(auth.getPrincipal() instanceof HospitalUserDetails)) {
