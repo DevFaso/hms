@@ -67,6 +67,19 @@ public class EmailServiceImpl implements EmailService {
     @Value("${spring.mail.properties.mail.smtp.auth:true}")
     private String smtpAuthProperty;
 
+    // The From and Reply-To every mail carries. Empty From leaves the SMTP
+    // account's own address in place (Gmail's default). A From on another
+    // domain must be a verified "Send mail as" address of that account, or
+    // Gmail rewrites it back to the account's address.
+    @Value("${app.mail.from:}")
+    private String fromAddress;
+
+    @Value("${app.mail.from-name:e-Keneya}")
+    private String fromName;
+
+    @Value("${app.mail.reply-to:}")
+    private String replyTo;
+
     private static final DateTimeFormatter CLOCK_TIME = DateTimeFormatter.ofPattern("HH:mm");
 
     // Bundle keys used by more than one mail.
@@ -320,6 +333,12 @@ public class EmailServiceImpl implements EmailService {
         mailSender.send(mime -> {
             var multipart = attachment != null;
             var helper = new MimeMessageHelper(mime, multipart, "UTF-8");
+            if (fromAddress != null && !fromAddress.isBlank()) {
+                helper.setFrom(fromAddress.trim(), fromName);
+            }
+            if (replyTo != null && !replyTo.isBlank()) {
+                helper.setReplyTo(replyTo.trim());
+            }
             helper.setTo(to.toArray(String[]::new));
             if (cc != null && !cc.isEmpty()) helper.setCc(cc.toArray(String[]::new));
             if (bcc != null && !bcc.isEmpty()) helper.setBcc(bcc.toArray(String[]::new));

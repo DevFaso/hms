@@ -170,6 +170,45 @@ class EmailServiceImplTest {
             assertThat(message.getRecipients(jakarta.mail.Message.RecipientType.CC)).hasSize(1);
             verify(mailOutbox, never()).enqueue(any(), any(), any(), any(), any());
         }
+
+        private MimeMessage sentMessage() throws Exception {
+            doNothing().when(mailSender).send(any(MimeMessagePreparator.class));
+            emailService.sendWithAttachment(List.of("awa@example.com"), List.of(), List.of(),
+                "Subject", "<p>Body</p>", null, null, null);
+            ArgumentCaptor<MimeMessagePreparator> captor = ArgumentCaptor.forClass(MimeMessagePreparator.class);
+            verify(mailSender).send(captor.capture());
+            MimeMessage message = new MimeMessage(Session.getInstance(new Properties()));
+            captor.getValue().prepare(message);
+            return message;
+        }
+
+        @Test
+        @DisplayName("a configured From and Reply-To are set on every mail")
+        void configuredSenderIsUsed() throws Exception {
+            ReflectionTestUtils.setField(emailService, "fromAddress", " noreply@e-keneya.com ");
+            ReflectionTestUtils.setField(emailService, "fromName", "e-Keneya");
+            ReflectionTestUtils.setField(emailService, "replyTo", "support@e-keneya.com");
+
+            MimeMessage message = sentMessage();
+
+            var from = (jakarta.mail.internet.InternetAddress) message.getFrom()[0];
+            assertThat(from.getAddress()).isEqualTo("noreply@e-keneya.com");
+            assertThat(from.getPersonal()).isEqualTo("e-Keneya");
+            assertThat(((jakarta.mail.internet.InternetAddress) message.getReplyTo()[0]).getAddress())
+                .isEqualTo("support@e-keneya.com");
+        }
+
+        @Test
+        @DisplayName("with no From configured the mail carries none, so the SMTP account's address applies")
+        void noSenderConfiguredLeavesFromUnset() throws Exception {
+            ReflectionTestUtils.setField(emailService, "fromAddress", "");
+            ReflectionTestUtils.setField(emailService, "replyTo", "");
+
+            MimeMessage message = sentMessage();
+
+            assertThat(message.getHeader("From")).isNull();
+            assertThat(message.getHeader("Reply-To")).isNull();
+        }
     }
 
     // =========================================================================
