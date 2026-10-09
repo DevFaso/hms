@@ -27,11 +27,11 @@ MediHub (project)
 ├── dev       (environment)   ◄─ tracks branch `develop`
 │   ├── hms-keycloak-dev          + hms-keycloak-dev-db (Postgres)
 │   ├── hms-backend-dev           + hms-db-dev (Postgres)
-│   └── hospital-portal-dev
+│   └── hms-frontend-dev
 └── prod      (environment)   ◄─ tracks branch `main`
     ├── hms-keycloak-prod         + hms-keycloak-prod-db
     ├── hms-backend-core          + hms-db-prod   (the prod backend; not "hms-backend-prod")
-    └── hospital-portal-prod
+    └── hms-frontend-prod
 ```
 
 > **Why per-env service names** (rather than one shared service name
@@ -101,10 +101,10 @@ app.auth.oidc.required=${OIDC_REQUIRED:false}
 
 | Variable | Type | dev | prod | Notes |
 | --- | --- | --- | --- | --- |
-| `OIDC_ISSUER_URI` | public | `https://hms-keycloak-dev-dev.up.railway.app/realms/hms` | `https://hms-keycloak-prod-prod.up.railway.app/realms/hms` | **MUST** match the `hms-keycloak-<env>` `KC_HOSTNAME` value above + `/realms/hms`. When unset, the OIDC bean graph stays off and the backend is pre-S-03 behavior. **Prod is unset today** (the SSO cutover has not happened) and `hms-keycloak-prod` is set to sleep. The backend fetches the issuer's discovery document at boot and the JWKS at runtime (`OidcResourceServerConfig`); a sleeping Keycloak wakes on that request but the cold start can time the fetch out. Turn `hms-keycloak-prod`'s sleep OFF before setting this on prod, and keep it off: `hms-keycloak-dev` never sleeps for the same reason. |
+| `OIDC_ISSUER_URI` | public | `https://hms-keycloak-dev-dev.up.railway.app/realms/hms` | `https://hms-keycloak-prod-prod.up.railway.app/realms/hms` | **MUST** match the `hms-keycloak-<env>` `KC_HOSTNAME` value above + `/realms/hms`. When unset, the OIDC bean graph stays off and the backend is pre-S-03 behavior. **Prod is unset today** (the SSO cutover has not happened) and `hms-keycloak-prod` is set to sleep. The backend fetches the issuer's discovery document at boot and the JWKS at runtime (`OidcResourceServerConfig`); the boot-time fetch runs while the decoder bean is created, so if the sleeping Keycloak is slow to wake the Spring context fails and the backend does not start. Turn `hms-keycloak-prod`'s sleep OFF before setting this on prod, and keep it off: `hms-keycloak-dev` never sleeps for the same reason. |
 | `OIDC_AUDIENCE` | public | `hms-backend` | `hms-backend` | **MUST.** Strict `aud` claim validation. The realm export hard-codes this audience on the issued tokens; mismatch → all KC-issued tokens rejected by the resource server. |
 | `OIDC_REQUIRED` | public | per phase plan (see [keycloak-implementation-gaps.md](../keycloak-implementation-gaps.md) §3 Phase 3) | per phase plan | **MUST.** Controls whether legacy `POST /api/auth/login` returns 410. The intended per-env value is documented in the gaps doc; this matrix only owns the *contract*, not the schedule. |
-| `JVM_HEAP_PERCENT` | public | unset (70) | unset (70) | Optional, read by the Dockerfile entrypoint once #839 is deployed: the heap is this percent (clamped 10-90) of the service's memory limit (§3a). Set it only to change the heap; `JAVA_TOOL_OPTIONS` percentages lose to it. |
+| `JVM_HEAP_PERCENT` | public | unset (70) | unset (70) | Optional, read by the Dockerfile entrypoint once #839 is deployed: the heap is this percent (clamped 10-90) of the service's memory limit (§3a). Set it only to change the heap. A `MaxRAMPercentage` in `JAVA_TOOL_OPTIONS` loses to it; an `-Xmx` there overrides it. |
 | `JWT_SECRET` | secret | (env-specific) | (env-specific) | **MUST.** HMAC signing for the legacy issuer (still active until Phase 4 cleanup). 32-byte minimum. |
 | `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` / `JWT_PREVIOUS_PUBLIC_KEY` | secret | unset (HMAC mode) | unset | RS256 mode is Phase 6; leave unset for now. When set in any env, that env switches to RS256 — must be set in lockstep with the matching public key on JWT consumers. |
 | `DATABASE_URL` (or `SPRING_DATASOURCE_URL` + USERNAME / PASSWORD) | derived | `${{hms-db-dev.DATABASE_URL}}` | same, `-prod` | **MUST.** Application Postgres — separate DB from `hms-keycloak-<env>-db`. |
@@ -121,7 +121,7 @@ If the first line is absent in any env, `OIDC_ISSUER_URI` is unset.
 
 ---
 
-## 3. `hospital-portal-<env>` (Angular) — one per environment
+## 3. `hms-frontend-<env>` (Angular, `hospital-portal`) — one per environment
 
 Portal env vars are baked at build time into [`hospital-portal/src/environments/environment.<env>.ts`](../../hospital-portal/src/environments/), so the "matrix" here is what those files
 **must agree with** the matching `hms-keycloak-<env>` `KC_HOSTNAME`. There is
@@ -149,12 +149,14 @@ service is `hms-backend-core`, dev is `hms-backend-dev`):
 | --- | --- | --- | --- |
 | `hms-backend-core` (prod) | 2 GB | `-XX:MaxRAMPercentage=70` | off |
 | `hms-backend-dev` | 2 GB | `-XX:MaxRAMPercentage=70` | off |
-| `hms-keycloak-prod` | platform default (1.5 GB failed to boot) | none | on, requested; confirm it actually sleeps (DB traffic can keep it awake) |
+| `hms-keycloak-prod` | 2 GB (1.5 GB failed to boot) | none | on, requested; confirm it actually sleeps (DB traffic can keep it awake) |
 | `hms-keycloak-dev` | 2 GB | none | off (hms-backend-dev needs it at boot and for JWKS refresh) |
 
 No `ExitOnOutOfMemoryError`, by decision: it would turn one oversized request
 into a kill of the whole process. A request-scoped OOM fails that request and
-the heap recovers; `railway.toml` keeps `on_failure` with 3 restarts. A limit
+the heap recovers. An OOM can also land in a background thread (scheduler,
+pool housekeeper, exporter) and stop it while health stays UP; the
+`HmsHeapHigh` alert is the signal for that, not a process exit; `railway.toml` keeps `on_failure` with 3 restarts. A limit
 that is too small for the whole process (heap plus metaspace, threads and the
 OpenTelemetry agent) shows up as a kernel kill, exit 137, and a **CRASHED**
 deployment once the 3 restarts are spent (FAILED is for builds and deploy-time

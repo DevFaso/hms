@@ -4823,17 +4823,18 @@ they stay visible instead of living in a javadoc.
     that request, not kill the process. #839 makes the image's entrypoint set the heap
     (`JVM_HEAP_PERCENT`, default 70, of the service's limit); once it is
     deployed, remove both hand-set `JAVA_TOOL_OPTIONS` variables (same value).
-  - Done: `hms-keycloak-dev` at 2 GB (1.5 GB failed to boot; 2 GB redeployed
-    healthy). `hms-keycloak-prod` failed at 1.5 GB too and stays at the
-    platform default, set to sleep when idle (unused: portal
+  - Done: `hms-keycloak-dev` and `hms-keycloak-prod` at 2 GB (1.5 GB failed to
+    boot; 2 GB redeployed healthy). `hms-keycloak-prod` is also set to sleep
+    when idle (unused: portal
     `oidc.enabled=false`, no `OIDC_*` on `hms-backend-core`).
   - Open: confirm `hms-keycloak-prod` actually sleeps (DB traffic can keep it
-    awake); if not, cap it at 2 GB as dev now is.
+    awake); it is capped at 2 GB either way.
   - Open: verify the effective heap on both backends (`jvm.memory.max`, area
     heap, about 1.4 GB) and re-measure memory in 24-48 h. A limit too small for
     the whole process ends as exit 137, then CRASHED; `hms-backend-core` also runs
-    the OpenTelemetry agent when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, so if it
-    is killed, raise it to 2.5 GB.
+    the OpenTelemetry agent when `OTEL_EXPORTER_OTLP_ENDPOINT` is set; if it is
+    killed for non-heap memory, lower `JVM_HEAP_PERCENT` (after #839) rather
+    than raising the limit, since the heap grows with the limit.
   - Open: a usage alert rather than a hard usage limit; a hard limit takes
     every service offline when reached, prod included.
   - Open, later: one shared dev Keycloak with a realm per project.
@@ -4845,8 +4846,9 @@ they stay visible instead of living in a javadoc.
   Gmail rewrites an unverified alias, and verifying the alias would send an
   @e-keneya.com From that neither SPF nor DKIM aligns with (spam-foldered).
   `MAIL_REPLY_TO=support@` stays: once #836 is synced, replies to app mail go
-  to support@ (forwarded to the owner's inbox) and the display name becomes
-  "e-Keneya". Keep DMARC at `p=none` until outbound mail moves to a sender
+  to support@ (forwarded to the owner's inbox). `MAIL_FROM_NAME` only applies
+  together with `MAIL_FROM`, so the sender name stays the Gmail account's until
+  the provider switch. Keep DMARC at `p=none` until outbound mail moves to a sender
   aligned with e-keneya.com. Open, owner decision: move outbound mail to a dedicated sender
   (recommended: a transactional provider such as Brevo or Resend with
   e-keneya.com verified); that switch needs the provider in SPF and its DKIM
