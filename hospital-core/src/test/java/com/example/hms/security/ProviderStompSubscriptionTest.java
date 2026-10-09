@@ -44,6 +44,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -314,7 +315,7 @@ class ProviderStompSubscriptionTest {
 
         // A hospital pharmacist resolved earlier in the session as a non-provider.
         session.clear();
-        org.mockito.Mockito.doReturn(List.of(new TenantRoleAssignment(hospitalId, null, "ROLE_PHARMACIST", "PHARMACIST",
+        doReturn(List.of(new TenantRoleAssignment(hospitalId, null, "ROLE_PHARMACIST", "PHARMACIST",
                 true, FacilityType.HOSPITAL)))
             .doThrow(new IllegalStateException("db down"))
             .when(assignmentAccessor).findAssignmentsForUser(userId);
