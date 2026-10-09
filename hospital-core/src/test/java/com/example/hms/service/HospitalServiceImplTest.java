@@ -13,6 +13,7 @@ import com.example.hms.payload.dto.HospitalWithDepartmentsDTO;
 import com.example.hms.payload.dto.DepartmentSummaryDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.OrganizationRepository;
+import com.example.hms.security.provider.ClinicalHospitals;
 import com.example.hms.utility.RoleValidator;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.security.context.HospitalContext;
@@ -24,7 +25,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.springframework.context.MessageSource;
 import org.springframework.data.domain.Page;
@@ -72,9 +75,9 @@ class HospitalServiceImplTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
-        org.mockito.Mockito.lenient().when(hospitalRepository.findClinicalById(org.mockito.ArgumentMatchers.any()))
+        Mockito.lenient().when(hospitalRepository.findClinicalById(ArgumentMatchers.any()))
             .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
-                .filter(com.example.hms.security.provider.ClinicalHospitals::isClinical));
+                .filter(ClinicalHospitals::isClinical));
         hospitalMapper = new HospitalMapper();
         hospitalService = new HospitalServiceImpl(hospitalRepository, organizationRepository, hospitalMapper, messageSource, roleValidator,
             providerVerificationRepository);

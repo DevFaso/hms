@@ -11,12 +11,15 @@ import com.example.hms.payload.dto.HospitalRequestDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.repository.provider.ProviderVerificationRepository;
+import com.example.hms.security.provider.ClinicalHospitals;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -61,9 +64,9 @@ class HospitalServiceProviderWritesTest {
     @BeforeEach
     void setUp() {
         // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
-        org.mockito.Mockito.lenient().when(hospitalRepository.findClinicalById(org.mockito.ArgumentMatchers.any()))
+        Mockito.lenient().when(hospitalRepository.findClinicalById(ArgumentMatchers.any()))
             .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
-                .filter(com.example.hms.security.provider.ClinicalHospitals::isClinical));
+                .filter(ClinicalHospitals::isClinical));
         service = new HospitalServiceImpl(hospitalRepository, organizationRepository, new HospitalMapper(),
             messageSource, roleValidator, verificationRepository);
         when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);

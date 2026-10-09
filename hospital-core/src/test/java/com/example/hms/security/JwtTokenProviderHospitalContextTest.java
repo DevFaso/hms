@@ -1,5 +1,6 @@
 package com.example.hms.security;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.security.auth.TenantRoleAssignment;
 import com.example.hms.security.auth.TenantRoleAssignmentAccessor;
 import com.example.hms.security.context.HospitalContext;
@@ -110,7 +111,7 @@ class JwtTokenProviderHospitalContextTest {
         when(accessor.findAssignmentsForUser(USER_ID)).thenReturn(List.of(nurseAt(HOSPITAL_A, ORG_A)));
         String token = provider.generateAccessToken(new TokenUserDescriptor(USER_ID, USERNAME, List.of("ROLE_NURSE")));
 
-        TenantRoleAssignment revoked = new TenantRoleAssignment(HOSPITAL_A, ORG_A, "ROLE_NURSE", "Nurse", false, com.example.hms.enums.FacilityType.HOSPITAL);
+        TenantRoleAssignment revoked = new TenantRoleAssignment(HOSPITAL_A, ORG_A, "ROLE_NURSE", "Nurse", false, FacilityType.HOSPITAL);
         when(accessor.findAssignmentsForUser(USER_ID)).thenReturn(List.of(revoked));
 
         HospitalContext ctx = provider.extractHospitalContext(token, nurseAuthentication());
@@ -142,7 +143,7 @@ class JwtTokenProviderHospitalContextTest {
     }
 
     private static TenantRoleAssignment nurseAt(UUID hospitalId, UUID organizationId) {
-        return new TenantRoleAssignment(hospitalId, organizationId, "ROLE_NURSE", "Nurse", true, com.example.hms.enums.FacilityType.HOSPITAL);
+        return new TenantRoleAssignment(hospitalId, organizationId, "ROLE_NURSE", "Nurse", true, FacilityType.HOSPITAL);
     }
 
     /** The shape the username/password login produces: a HospitalUserDetails principal, no Jwt token. */

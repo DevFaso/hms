@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.model.Notification;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
 import com.example.hms.payload.dto.PatientVitalSignResponseDTO;
 import com.example.hms.payload.dto.discharge.DischargeSummaryResponseDTO;
@@ -14,11 +15,17 @@ import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.payload.dto.pro.ProInstrumentViewDTO;
 import com.example.hms.payload.dto.pro.ProResponseCreateDTO;
 import com.example.hms.payload.dto.pro.ProSelfReportDTO;
+import com.example.hms.repository.NotificationPreferenceRepository;
+import com.example.hms.repository.NotificationRepository;
+import com.example.hms.repository.UserRepository;
 import com.example.hms.service.NotificationService;
+import com.example.hms.service.NotificationServiceImpl;
 import com.example.hms.service.PatientDocumentService;
 import com.example.hms.service.PatientPortalService;
 import com.example.hms.service.pharmacy.PharmacyClaimService;
 import com.example.hms.service.pharmacy.PharmacyPaymentService;
+import java.util.Optional;
+import org.assertj.core.api.Assertions;
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -409,8 +416,26 @@ class PatientPortalControllerPhase2Test {
                             .principal(auth))
                     .andExpect(status().isNotFound())
                     .andReturn().getResponse().getContentAsString();
-            org.assertj.core.api.Assertions.assertThat(normalise(asForeign, foreign))
+            Assertions.assertThat(normalise(asForeign, foreign))
                 .isEqualTo(normalise(asUnknown, unknown));
+        }
+
+        @Test
+        @DisplayName("a broadcast (no recipient): any patient marks it, 200, through the real service")
+        void broadcastIsMarked() throws Exception {
+            UUID id = UUID.randomUUID();
+            NotificationRepository repository = mock(NotificationRepository.class);
+            Notification broadcast = Notification.builder().id(id).message("announcement").read(false).build();
+            when(repository.findById(id)).thenReturn(Optional.of(broadcast));
+            NotificationService real = new NotificationServiceImpl(repository,
+                mock(NotificationWebSocketController.class), mock(NotificationPreferenceRepository.class),
+                mock(UserRepository.class));
+            when(notificationService.markAsRead(id, "patient.jane"))
+                .thenAnswer(invocation -> real.markAsRead(id, "patient.jane"));
+
+            mockMvc.perform(put("/me/patient/notifications/{notificationId}/read", id).principal(auth))
+                    .andExpect(status().isOk());
+            Assertions.assertThat(broadcast.isRead()).isTrue();
         }
 
         private String normalise(String body, UUID id) {

@@ -1,8 +1,14 @@
 package com.example.hms.controller;
 
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.model.Notification;
+import com.example.hms.repository.NotificationPreferenceRepository;
+import com.example.hms.repository.NotificationRepository;
+import com.example.hms.repository.UserRepository;
 import com.example.hms.service.NotificationService;
 import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.service.NotificationServiceImpl;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -55,6 +61,22 @@ class NotificationControllerOwnerTest {
         assertThat(asUnknown).isInstanceOf(ResourceNotFoundException.class);
         assertThat(asForeign.getMessage().replace(foreign.toString(), "<id>"))
             .isEqualTo(asUnknown.getMessage().replace(unknown.toString(), "<id>"));
+    }
+
+    @Test
+    @DisplayName("a broadcast (no recipient) is marked by any authenticated user, through the real service")
+    void broadcastIsMarkedByAnyone() {
+        UUID id = UUID.randomUUID();
+        NotificationRepository repository = mock(NotificationRepository.class);
+        Notification broadcast = Notification.builder().id(id).message("announcement").read(false).build();
+        when(repository.findById(id)).thenReturn(Optional.of(broadcast));
+        NotificationController withRealService = new NotificationController(
+            new NotificationServiceImpl(repository, mock(NotificationWebSocketController.class),
+                mock(NotificationPreferenceRepository.class), mock(UserRepository.class)),
+            mock(ControllerAuthUtils.class));
+
+        assertThat(withRealService.markAsRead(id, nurse).getStatusCode().value()).isEqualTo(200);
+        assertThat(broadcast.isRead()).isTrue();
     }
 
     @Test

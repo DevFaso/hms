@@ -10,12 +10,17 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PostPersist;
+import jakarta.persistence.PostUpdate;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -148,20 +153,20 @@ public class PatientHospitalRegistration extends BaseEntity {
      * with an initializer is outside the builder and the all-args
      * constructor, and it has no getter, no setter and no toString.
      */
-    @jakarta.persistence.Transient
+    @Transient
     @Getter(AccessLevel.NONE)
     @Setter(AccessLevel.NONE)
     private final LoadedState loaded = new LoadedState();
 
     /** What the row held when it was last loaded or written. */
     private static final class LoadedState {
-        private java.util.UUID hospitalId;
+        private UUID hospitalId;
         private boolean active;
     }
 
-    @jakarta.persistence.PostLoad
-    @jakarta.persistence.PostPersist
-    @jakarta.persistence.PostUpdate
+    @PostLoad
+    @PostPersist
+    @PostUpdate
     private void rememberLoadedHospital() {
         loaded.hospitalId = hospital == null ? null : hospital.getId();
         loaded.active = active;
@@ -177,8 +182,8 @@ public class PatientHospitalRegistration extends BaseEntity {
      */
     @PreUpdate
     private void normalizeOnUpdate() {
-        java.util.UUID hospitalId = hospital == null ? null : hospital.getId();
-        boolean moved = !java.util.Objects.equals(hospitalId, loaded.hospitalId);
+        UUID hospitalId = hospital == null ? null : hospital.getId();
+        boolean moved = !Objects.equals(hospitalId, loaded.hospitalId);
         boolean reactivated = active && !loaded.active;
         if (moved || reactivated) {
             requireClinicalHospital();

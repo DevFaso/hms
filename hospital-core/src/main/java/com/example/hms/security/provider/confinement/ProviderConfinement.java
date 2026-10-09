@@ -4,7 +4,9 @@ import com.example.hms.enums.FacilityType;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * The confinement decision (provider plan §3.3, §6.4), as a pure function of
@@ -70,8 +72,8 @@ public final class ProviderConfinement {
      * @param callerUserId the caller's local user id; {@code null} never matches an own-id entry
      */
     public static boolean allowsRequest(Set<FacilityType> providerTypes, boolean patientHolder, String method,
-                                        String handlerPattern, java.util.Map<String, String> uriVariables,
-                                        java.util.UUID callerUserId) {
+                                        String handlerPattern, Map<String, String> uriVariables,
+                                        UUID callerUserId) {
         if (!allows(providerTypes, patientHolder, method, handlerPattern)) {
             return false;
         }

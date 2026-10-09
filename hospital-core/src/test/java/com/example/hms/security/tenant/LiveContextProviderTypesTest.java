@@ -3,6 +3,8 @@ package com.example.hms.security.tenant;
 import com.example.hms.enums.FacilityType;
 import com.example.hms.security.auth.TenantRoleAssignment;
 import com.example.hms.security.context.HospitalContext;
+import java.util.Map;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -32,15 +34,18 @@ class LiveContextProviderTypesTest {
         assertThat(context.getPermittedHospitalIds()).containsExactlyInAnyOrder(pharmacy, hospital);
         // Works at the pharmacy; is only a patient at the hospital.
         assertThat(context.getStaffHospitalIds()).containsExactly(pharmacy);
+        // The kind of each of its facilities rides along, from the same read.
+        assertThat(context.getHospitalFacilityTypes())
+            .containsExactlyInAnyOrderEntriesOf(Map.of(pharmacy, FacilityType.PHARMACY, hospital, FacilityType.HOSPITAL));
     }
 
     @Test
     @DisplayName("an assignment at a facility cannot be built without its type (no fail-open default)")
     void facilityRowNeedsItsType() {
-        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+        Assertions.assertThatThrownBy(() ->
                 new TenantRoleAssignment(pharmacy, null, "ROLE_PHARMACIST", "PHARMACIST", true, null))
             .isInstanceOf(IllegalArgumentException.class);
-        org.assertj.core.api.Assertions.assertThatCode(() ->
+        Assertions.assertThatCode(() ->
                 new TenantRoleAssignment(null, null, "ROLE_SUPER_ADMIN", "SUPER_ADMIN", true, null))
             .doesNotThrowAnyException();
     }
@@ -56,5 +61,7 @@ class LiveContextProviderTypesTest {
 
         assertThat(inactive.getProviderFacilityTypes()).isEmpty();
         assertThat(doctor.getProviderFacilityTypes()).isEmpty();
+        assertThat(inactive.getHospitalFacilityTypes()).isEmpty();
+        assertThat(doctor.getHospitalFacilityTypes()).containsExactlyEntriesOf(Map.of(hospital, FacilityType.HOSPITAL));
     }
 }

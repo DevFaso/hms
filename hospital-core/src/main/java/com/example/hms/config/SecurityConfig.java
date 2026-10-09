@@ -6,6 +6,10 @@ import com.example.hms.security.RoleExpansion;
 import com.example.hms.security.HospitalUserDetailsService;
 import com.example.hms.security.oidc.KeycloakHospitalContextFilter;
 import com.example.hms.security.oidc.KeycloakJwtAuthenticationConverter;
+import com.example.hms.security.provider.ProviderCallerResolver;
+import com.example.hms.security.provider.ProviderConfinementPolicy;
+import com.example.hms.security.provider.ProviderFacilityConfinementFilter;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +35,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
@@ -257,8 +262,9 @@ public class SecurityConfig {
      * reason as above: in a {@code @WebMvcTest} slice there is no policy bean
      * and the filter passes every request through.
      */
-    private final ObjectProvider<com.example.hms.security.provider.ProviderConfinementPolicy> providerConfinementPolicyProvider;
-    private final ObjectProvider<com.example.hms.security.provider.ProviderCallerResolver> providerCallerResolverProvider;
+    private final ObjectProvider<ProviderConfinementPolicy> providerConfinementPolicyProvider;
+    private final ObjectProvider<ProviderCallerResolver> providerCallerResolverProvider;
+    private final ObjectProvider<ActingScopeResolver> actingScopeResolverProvider;
 
     @Value("${app.cors.allowed-origins:http://localhost:4200}")
     private String allowedOrigins;
@@ -945,9 +951,9 @@ public class SecurityConfig {
         // before AuthorizationFilter, so a confined caller gets the unmapped
         // path's 404 for a hospital endpoint, never a URL matcher's 403.
         http.addFilterBefore(
-            new com.example.hms.security.provider.ProviderFacilityConfinementFilter(providerConfinementPolicyProvider,
-                providerCallerResolverProvider),
-            org.springframework.security.web.access.intercept.AuthorizationFilter.class);
+            new ProviderFacilityConfinementFilter(providerConfinementPolicyProvider,
+                providerCallerResolverProvider, actingScopeResolverProvider),
+            AuthorizationFilter.class);
 
         // ── Hardened HTTP response headers ──────────────────────────────────
         http.headers(headers -> headers

@@ -1,5 +1,6 @@
 package com.example.hms.security.auth;
 
+import com.example.hms.enums.FacilityType;
 import java.util.UUID;
 
 /**
@@ -14,7 +15,7 @@ public record TenantRoleAssignment(
     // The type of the assignment's facility (null for a global row), read from
     // the hospital already fetched with the assignment: the provider
     // confinement costs no query of its own (provider plan section 3.3).
-    com.example.hms.enums.FacilityType facilityType
+    FacilityType facilityType
 ) {
 
     /**

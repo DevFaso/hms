@@ -4,9 +4,9 @@ import com.example.hms.enums.FacilityType;
 import com.example.hms.security.ApiKeyAuthenticationFilter;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
-import com.example.hms.security.context.HospitalContextRequestOverrides;
-import com.example.hms.security.provider.confinement.ProviderConfinement;
 import com.example.hms.security.provider.confinement.CommonProviderConfinement;
+import com.example.hms.security.provider.confinement.ProviderConfinement;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -41,8 +41,10 @@ import java.util.Set;
  * <p><b>Fail closed.</b> An authenticated principal that arrives with no
  * context built (the ws-ticket handshake, or a context filter that failed and
  * let the request through) is not taken as unconfined: its live context is
- * computed here, by the same computation, from the principal. If that cannot
- * be done, the request is refused. Only a partner API key, which is no user,
+ * computed here, by the same computation, from the principal, and its
+ * {@code X-Hospital-Id} is applied and, when refused, answered (audit row and
+ * 403) by {@link ActingScopeResolver#answerRefusedHeader}, the one code path
+ * both context filters use. If that cannot be done, the request is refused. Only a partner API key, which is no user,
  * and an anonymous request skip it. A principal naming no local account has no
  * assignment, so no provider types.
  *
@@ -57,11 +59,14 @@ public class ProviderFacilityConfinementFilter extends OncePerRequestFilter {
 
     private final ObjectProvider<ProviderConfinementPolicy> policyProvider;
     private final ObjectProvider<ProviderCallerResolver> callerResolverProvider;
+    private final ObjectProvider<ActingScopeResolver> scopeResolverProvider;
 
     public ProviderFacilityConfinementFilter(ObjectProvider<ProviderConfinementPolicy> policyProvider,
-                                             ObjectProvider<ProviderCallerResolver> callerResolverProvider) {
+                                             ObjectProvider<ProviderCallerResolver> callerResolverProvider,
+                                             ObjectProvider<ActingScopeResolver> scopeResolverProvider) {
         this.policyProvider = policyProvider;
         this.callerResolverProvider = callerResolverProvider;
+        this.scopeResolverProvider = scopeResolverProvider;
     }
 
     @Override
@@ -86,24 +91,30 @@ public class ProviderFacilityConfinementFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
             return;
         }
-        HospitalContext context = fallbackContext(authentication);
+        ActingScopeResolver scopeResolver = scopeResolverProvider.getIfAvailable();
+        HospitalContext context = scopeResolver == null ? null : fallbackContext(authentication);
         if (context == null) {
             policy.refuse(request, response);
             return;
         }
-        if (context.getPrincipalUserId() == null || ProviderConfinementPolicy.providerTypes(context).isEmpty()) {
+        // X-Hospital-Id exactly as both context filters apply it, and a refused
+        // one answered by the same code: audited, holders cleared, 403.
+        HospitalContext live = scopeResolver.withHeader(context, request);
+        if (scopeResolver.answerRefusedHeader(live, response)) {
+            return;
+        }
+        if (live.getPrincipalUserId() == null || ProviderConfinementPolicy.providerTypes(live).isEmpty()) {
             // Not confined: links no local account, or holds no provider type.
             // Nothing is kept, so the request goes on exactly as it would have
             // (code that reads the holder directly treats "no context" as it
             // always has; ensureContext computes it on first use).
-            decide(policy, context, request, response, filterChain);
+            decide(policy, live, request, response, filterChain);
             return;
         }
         // A confined caller: kept for the rest of this request, so nothing
         // downstream computes it again (ensureContext reads the holder first)
-        // and every reader sees the confined context. X-Hospital-Id is applied
-        // as ensureContext applies it; cleared when the request leaves this filter.
-        HospitalContext live = HospitalContextRequestOverrides.applyRequestOverrides(context, request);
+        // and every reader sees the confined context. Cleared when the request
+        // leaves this filter.
         HospitalContextHolder.setContext(live);
         try {
             decide(policy, live, request, response, filterChain);
@@ -125,10 +136,8 @@ public class ProviderFacilityConfinementFilter extends OncePerRequestFilter {
 
     /** The SockJS/STOMP transport ({@code /ws-chat/**}), on the path within the application. */
     private static boolean isStompHandshake(HttpServletRequest request) {
-        String uri = request.getRequestURI();
-        String context = request.getContextPath() == null ? "" : request.getContextPath();
-        String path = uri == null ? "" : uri.substring(Math.min(context.length(), uri.length()));
-        return ProviderConfinement.underAny(path, CommonProviderConfinement.NON_MVC_PREFIXES);
+        return ProviderConfinement.underAny(ProviderConfinementPolicy.pathWithinApplication(request),
+            CommonProviderConfinement.NON_MVC_PREFIXES);
     }
 
     /** The live context of a principal that arrived without one, or {@code null} when it cannot be computed. */

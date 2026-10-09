@@ -1,5 +1,6 @@
 package com.example.hms.service.recordaccess;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.enums.RecordAccessDenialReason;
 import com.example.hms.enums.RecordAccessPosture;
 import com.example.hms.enums.TenantIsolationMode;
@@ -117,9 +118,11 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
 
     /**
      * The acting facility is a pharmacy or a laboratory. Read from the
-     * caller's live context when there is one (no query): a caller confined
-     * as a provider acts at a provider. Only a verified super-admin (who may
-     * name any facility) or a call with no request context looks the row up.
+     * caller's live context when it can be (no query): a caller confined as a
+     * provider acts at a provider, and the type of each of the caller's own
+     * facilities is carried. Any other facility (a context built by hand, a
+     * super-admin naming one, an unconfined caller passing another facility's
+     * id, no request context) is looked up.
      */
     private boolean actsAtProvider(UUID actingHospitalId) {
         Optional<HospitalContext> context = HospitalContextHolder.getContext();
@@ -127,10 +130,14 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
             if (!ProviderConfinementPolicy.providerTypes(context.get()).isEmpty()) {
                 return true;
             }
-            if (!context.get().isSuperAdmin()) {
-                return false;
+            FacilityType known = context.get().getHospitalFacilityTypes().get(actingHospitalId);
+            if (known != null) {
+                return known.isProvider();
             }
         }
+        // Not one of the caller's own facilities (a context built by hand, a
+        // super-admin, or an unconfined caller passing another facility's id):
+        // the acting facility itself decides, one lookup.
         return hospitalRepository.findById(actingHospitalId).map(Hospital::isProvider).orElse(false);
     }
 

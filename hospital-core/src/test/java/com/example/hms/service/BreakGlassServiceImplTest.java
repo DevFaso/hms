@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.exception.UnauthorizedAccessException;
@@ -16,6 +17,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.provider.ClinicalHospitals;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -23,8 +25,10 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.TestingAuthenticationToken;
@@ -82,9 +86,9 @@ class BreakGlassServiceImplTest {
     @BeforeEach
     void setUp() {
         // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
-        org.mockito.Mockito.lenient().when(hospitalRepository.findClinicalById(org.mockito.ArgumentMatchers.any()))
+        Mockito.lenient().when(hospitalRepository.findClinicalById(ArgumentMatchers.any()))
             .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
-                .filter(com.example.hms.security.provider.ClinicalHospitals::isClinical));
+                .filter(ClinicalHospitals::isClinical));
         userId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
         patientId = UUID.randomUUID();
@@ -254,7 +258,7 @@ class BreakGlassServiceImplTest {
         @DisplayName("a provider facility answers exactly as an unknown hospital, and no session is saved")
         void declareAtAProviderIsRefusedAsUnknown() {
             when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
-            hospital.setFacilityType(com.example.hms.enums.FacilityType.PHARMACY);
+            hospital.setFacilityType(FacilityType.PHARMACY);
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
 
             BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
@@ -580,7 +584,7 @@ class BreakGlassServiceImplTest {
         void auditFailureSwallowed() {
             stubAuthenticatedDoctor();
             when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            org.mockito.Mockito.doThrow(new RuntimeException("audit DB down"))
+            Mockito.doThrow(new RuntimeException("audit DB down"))
                 .when(auditService).logEvent(any());
 
             BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()

@@ -39,7 +39,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The work behind {@link ProviderFacilityConfinementFilter} (provider plan
@@ -58,11 +60,13 @@ import java.util.concurrent.ConcurrentHashMap;
  *       URI, so a path that only looks allowed cannot land on another handler.</li>
  *   <li><b>Refusal.</b> The answer of an unmapped path, produced by the same
  *       exception resolvers from the same exception, so the two cannot be told
- *       apart. A request that maps to an ALLOWED path but not with this method,
- *       media type or parameters goes on, so MVC answers its 405, 415, 406 or
- *       400 as for anyone. Which handler patterns are allowed for a kind of
- *       caller is indexed once, from the handler mapping and the static
- *       allow-lists, so that case checks the allowed patterns only.</li>
+ *       apart. A request MVC would answer itself goes on only where that
+ *       answer discloses nothing the caller may not reach: a 405 or an
+ *       {@code OPTIONS} (whose {@code Allow} header lists every method the path
+ *       maps) only when the caller may reach EVERY handler matching the path;
+ *       a 415, 406 or 400 only when a handler the caller may reach (its method,
+ *       the request's own, on the allow-list, and its own-id constraint met)
+ *       matches the path. Anything else gets the unmapped answer.</li>
  * </ul>
  *
  * <p>A plain component, not a {@code Filter}: {@code @WebMvcTest} slices scan
@@ -82,11 +86,10 @@ public class ProviderConfinementPolicy implements SmartInitializingSingleton {
     private final ObjectProvider<HandlerExceptionResolver> exceptionResolverProvider;
 
     /** Every handler pattern, read once from the handler mapping (an immutable list, published atomically). */
-    private final java.util.concurrent.atomic.AtomicReference<List<HandlerPattern>> handlerPatterns =
-        new java.util.concurrent.atomic.AtomicReference<>();
+    private final AtomicReference<List<HandlerPattern>> handlerPatterns = new AtomicReference<>();
 
     /** Per kind of caller (provider types, patient holder): the handler patterns some method of which is allowed. */
-    private final Map<String, List<PathPattern>> allowedPatterns = new ConcurrentHashMap<>();
+    private final Map<String, List<HandlerPattern>> allowedPatterns = new ConcurrentHashMap<>();
 
     public ProviderConfinementPolicy(
             @Qualifier("requestMappingHandlerMapping") ObjectProvider<RequestMappingHandlerMapping> handlerMappingProvider,
@@ -133,13 +136,14 @@ public class ProviderConfinementPolicy implements SmartInitializingSingleton {
         if (mapping == null) {
             return ProviderConfinement.allowsNonMvc(request.getMethod(), pathWithinApplication(request));
         }
+        UUID callerUserId = context == null ? null : context.getPrincipalUserId();
         Map<String, Object> before = attributes(request);
         try {
             ServletRequestPathUtils.parseAndCache(request);
             if (HttpMethod.OPTIONS.matches(request.getMethod())) {
-                // MVC answers OPTIONS itself (no handler pattern is matched):
-                // allowed on a path some allowed handler serves, as for anyone.
-                return matchesAnAllowedPath(mapping, request, providerTypes, patientHolder);
+                // MVC answers OPTIONS itself, with every method the path maps
+                // in its Allow header: only where the caller may reach them all.
+                return mayReachEveryHandlerOf(mapping, request, providerTypes, patientHolder, callerUserId);
             }
             HandlerExecutionChain chain = mapping.getHandler(request);
             if (chain == null) {
@@ -148,14 +152,18 @@ public class ProviderConfinementPolicy implements SmartInitializingSingleton {
             Object pattern = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
             return pattern instanceof String matched
                 && ProviderConfinement.allowsRequest(providerTypes, patientHolder, request.getMethod(), matched,
-                    uriVariables(request), context == null ? null : context.getPrincipalUserId());
-        } catch (HttpRequestMethodNotSupportedException | HttpMediaTypeNotSupportedException
-                 | HttpMediaTypeNotAcceptableException | UnsatisfiedServletRequestParameterException partialMatch) {
-            // The path is mapped, but not with this method, media type or
-            // parameters. On an allowed path MVC answers that (405, 415, 406,
-            // 400) as it does for anyone; on any other path the caller gets
-            // the unmapped answer.
-            return matchesAnAllowedPath(mapping, request, providerTypes, patientHolder);
+                    uriVariables(request), callerUserId);
+        } catch (HttpRequestMethodNotSupportedException wrongMethod) {
+            // The path is mapped, not for this method: MVC's 405 lists every
+            // method the path maps (Allow), so only where the caller may reach
+            // every one of them; otherwise the unmapped answer.
+            return mayReachEveryHandlerOf(mapping, request, providerTypes, patientHolder, callerUserId);
+        } catch (HttpMediaTypeNotSupportedException | HttpMediaTypeNotAcceptableException
+                 | UnsatisfiedServletRequestParameterException partialMatch) {
+            // The path is mapped for this method, but not with this media type
+            // or these parameters: MVC's 415, 406 or 400 only where a handler
+            // the caller may reach, for this method, matches the path.
+            return mayReachAHandlerFor(mapping, request, providerTypes, patientHolder, callerUserId);
         } catch (Exception noMatch) {
             return false;
         } finally {
@@ -189,29 +197,67 @@ public class ProviderConfinementPolicy implements SmartInitializingSingleton {
         }
     }
 
-    /** Some handler pattern this kind of caller may reach matches the request's path (the path is already parsed). */
-    private boolean matchesAnAllowedPath(RequestMappingHandlerMapping mapping, HttpServletRequest request,
-                                         Set<FacilityType> providerTypes, boolean patientHolder) {
+    /**
+     * 405 and {@code OPTIONS}: at least one handler matches the request's path
+     * (already parsed), and the caller may reach EVERY method of EVERY one of
+     * them, own-id constraint included, so the {@code Allow} header names
+     * nothing hidden. Scans every handler pattern; only a confined caller's
+     * wrong-method or {@code OPTIONS} request comes here.
+     */
+    private boolean mayReachEveryHandlerOf(RequestMappingHandlerMapping mapping, HttpServletRequest request,
+                                           Set<FacilityType> providerTypes, boolean patientHolder,
+                                           UUID callerUserId) {
         PathContainer path = ServletRequestPathUtils.getParsedRequestPath(request).pathWithinApplication();
-        for (PathPattern allowed : allowedPatterns(mapping, providerTypes, patientHolder)) {
-            if (allowed.matches(path)) {
+        boolean matched = false;
+        for (HandlerPattern handler : handlerPatterns(mapping)) {
+            PathPattern.PathMatchInfo match = handler.pattern().matchAndExtract(path);
+            if (match == null) {
+                continue;
+            }
+            for (String method : handler.methods()) {
+                if (!ProviderConfinement.allowsRequest(providerTypes, patientHolder, method,
+                        handler.pattern().getPatternString(), match.getUriVariables(), callerUserId)) {
+                    return false;
+                }
+            }
+            matched = true;
+        }
+        return matched;
+    }
+
+    /**
+     * 415, 406 and 400: a handler the caller may reach (an allowed handler
+     * mapped for the request's own method, its own-id constraint met) matches
+     * the request's path (already parsed).
+     */
+    private boolean mayReachAHandlerFor(RequestMappingHandlerMapping mapping, HttpServletRequest request,
+                                        Set<FacilityType> providerTypes, boolean patientHolder, UUID callerUserId) {
+        PathContainer path = ServletRequestPathUtils.getParsedRequestPath(request).pathWithinApplication();
+        String method = HttpMethod.HEAD.matches(request.getMethod()) ? HttpMethod.GET.name() : request.getMethod();
+        for (HandlerPattern handler : allowedPatterns(mapping, providerTypes, patientHolder)) {
+            if (!handler.methods().contains(method)) {
+                continue;
+            }
+            PathPattern.PathMatchInfo match = handler.pattern().matchAndExtract(path);
+            if (match != null && ProviderConfinement.allowsRequest(providerTypes, patientHolder, method,
+                    handler.pattern().getPatternString(), match.getUriVariables(), callerUserId)) {
                 return true;
             }
         }
         return false;
     }
 
-    /** The handler patterns some method of which this kind of caller may reach; computed once per kind. */
-    private List<PathPattern> allowedPatterns(RequestMappingHandlerMapping mapping, Set<FacilityType> providerTypes,
-                                              boolean patientHolder) {
+    /** The handlers some method of which this kind of caller may reach; computed once per kind. */
+    private List<HandlerPattern> allowedPatterns(RequestMappingHandlerMapping mapping, Set<FacilityType> providerTypes,
+                                                 boolean patientHolder) {
         String key = new TreeSet<>(providerTypes.stream().map(Enum::name).toList()) + "|" + patientHolder;
         return allowedPatterns.computeIfAbsent(key, k -> {
-            List<PathPattern> allowed = new ArrayList<>();
+            List<HandlerPattern> allowed = new ArrayList<>();
             for (HandlerPattern handler : handlerPatterns(mapping)) {
                 for (String method : handler.methods()) {
                     if (ProviderConfinement.allows(providerTypes, patientHolder, method,
                             handler.pattern().getPatternString())) {
-                        allowed.add(handler.pattern());
+                        allowed.add(handler);
                         break;
                     }
                 }
@@ -249,7 +295,12 @@ public class ProviderConfinementPolicy implements SmartInitializingSingleton {
         return variables instanceof Map<?, ?> map ? (Map<String, String>) map : Map.of();
     }
 
-    private static String pathWithinApplication(HttpServletRequest request) {
+    /**
+     * The request's path within the application (no context path), as Spring
+     * parses it: the one computation this policy and the confinement filter
+     * share. Empty when the URI cannot be parsed.
+     */
+    public static String pathWithinApplication(HttpServletRequest request) {
         try {
             return RequestPath.parse(request.getRequestURI(), request.getContextPath())
                 .pathWithinApplication().value();

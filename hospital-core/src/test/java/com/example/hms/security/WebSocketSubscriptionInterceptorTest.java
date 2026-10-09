@@ -28,6 +28,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -136,7 +137,8 @@ class WebSocketSubscriptionInterceptorTest {
 
     @Test
     void allowsUserScopedAndSystemBroadcastDestinations() {
-        holds(at(null, "ROLE_PATIENT"));
+        // A patient's ws-ticket holds no role a pharmacy or laboratory
+        // accepts: neither destination needs the assignments.
         Principal user = userWithRoles("ROLE_PATIENT");
         for (String destination :
                 List.of(
@@ -147,6 +149,7 @@ class WebSocketSubscriptionInterceptorTest {
             Message<byte[]> message = frame(StompCommand.SUBSCRIBE, destination, user);
             assertThat(interceptor.preSend(message, channel)).isSameAs(message);
         }
+        verifyNoInteractions(assignmentAccessor);
     }
 
     @Test

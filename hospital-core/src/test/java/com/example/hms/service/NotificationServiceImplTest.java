@@ -281,6 +281,26 @@ class NotificationServiceImplTest {
             assertThat(notification.isRead()).isFalse();
             verify(notificationRepository, never()).save(any());
         }
+
+        @Test
+        @DisplayName("a broadcast (no recipient, or a blank one) is marked by any user, on its one read flag")
+        void broadcastIsMarkedByAnyone() {
+            for (String recipient : new String[] {null, " "}) {
+                Notification broadcast = Notification.builder()
+                        .id(notificationId)
+                        .message("system-wide announcement")
+                        .recipientUsername(recipient)
+                        .createdAt(LocalDateTime.now())
+                        .read(false)
+                        .build();
+                when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(broadcast));
+
+                assertThat(service.markAsRead(notificationId, username)).isTrue();
+
+                assertThat(broadcast.isRead()).isTrue();
+                verify(notificationRepository).save(broadcast);
+            }
+        }
     }
 
     // ── getPreferences ───────────────────────────────────────────────────────

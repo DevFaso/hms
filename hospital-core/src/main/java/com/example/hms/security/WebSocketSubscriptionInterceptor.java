@@ -52,14 +52,20 @@ import java.util.UUID;
  *       which only ever carries frames through the user-destination resolver.</li>
  * </ul>
  *
- * <p>SEND frames (the {@code @MessageMapping} handlers, e.g.
- * {@code /app/chat.sendMessage}) are refused without a principal, and to a
- * provider user, as their HTTP twins are by the confinement filter.
+ * <p>SEND frames go to the application only ({@code /app/**}, the
+ * {@code @MessageMapping} handlers, e.g. {@code /app/chat.sendMessage}), for
+ * everyone: a client SEND straight to a broker destination ({@code /topic},
+ * {@code /queue}, {@code /user}) would forge an emergency broadcast, a tracker
+ * event or a message in another user's queue, and is refused. A SEND is also
+ * refused without a principal, and to a provider user, as its HTTP twin is by
+ * the confinement filter.
  *
  * <p><b>Who the caller is</b> is decided exactly as on HTTP: the live context
  * ({@link ProviderCallerResolver}, linked as the context filters link it) and
  * {@link ProviderConfinementPolicy#providerTypes}, so a verified super-admin is
- * exempt. One resolution serves a frame (none for {@code /user/**}) and is
+ * exempt. One resolution serves a frame (none for {@code /user/**}, and none
+ * for the broadcasts when the ws-ticket's roles include no role a pharmacy or
+ * laboratory accepts: such a caller cannot be a provider user) and is
  * kept in the STOMP session for {@link #RESOLUTION_TTL}, so a grant, a
  * revocation or a demotion counts within that window without an assignment
  * query on every frame.
@@ -86,6 +92,9 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
 
     /** Session attribute holding the last successful resolution of the caller. */
     static final String RESOLUTION_ATTRIBUTE = WebSocketSubscriptionInterceptor.class.getName() + ".resolution";
+
+    /** The application destination prefix ({@code WebSocketConfig}): the only place a client may SEND. */
+    static final String APPLICATION_DESTINATION_PREFIX = "/app/";
 
     private static final String USER_DESTINATION_PREFIX = "/user/";
     private static final String EMERGENCY_BROADCAST_TOPIC = "/topic/emergency-broadcast";
@@ -120,6 +129,12 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
             if (sender == null) {
                 throw denied(null, accessor.getDestination(), "missing principal");
             }
+            String target = accessor.getDestination();
+            if (target == null || !target.startsWith(APPLICATION_DESTINATION_PREFIX)) {
+                // A broker destination: a forged broadcast, tracker event or
+                // message in someone else's queue. Refused for everyone.
+                throw denied(sender, target, "clients send to the application (/app/**) only");
+            }
             Caller caller = resolve(accessor, sender);
             if (caller.unavailable() || isProvider(caller.context())) {
                 throw denied(sender, accessor.getDestination(), "provider users may not send STOMP messages");
@@ -141,10 +156,17 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
             return message;
         }
 
+        boolean broadcast = EMERGENCY_BROADCAST_TOPIC.equals(destination)
+            || NOTIFICATIONS_BROADCAST_TOPIC.equals(destination);
+        if (broadcast && cannotHoldAProviderRole(user)) {
+            // No role a pharmacy or laboratory accepts: cannot be a provider
+            // user. No lookup (a reconnect storm costs no database read).
+            return message;
+        }
+
         Caller caller = resolve(accessor, user);
 
-        if (EMERGENCY_BROADCAST_TOPIC.equals(destination)
-                || NOTIFICATIONS_BROADCAST_TOPIC.equals(destination)) {
+        if (broadcast) {
             authorizeBroadcast(user, caller, destination);
             return message;
         }

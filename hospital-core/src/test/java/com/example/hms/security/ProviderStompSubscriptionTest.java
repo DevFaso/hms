@@ -18,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -176,7 +177,7 @@ class ProviderStompSubscriptionTest {
     }
 
     private static RuntimeException dbDown() {
-        return new org.springframework.dao.DataAccessResourceFailureException("db down");
+        return new DataAccessResourceFailureException("db down");
     }
 
     private void afterTheTtl() {
@@ -264,9 +265,10 @@ class ProviderStompSubscriptionTest {
     @DisplayName("a mid-session grant counts once the TTL has passed, and not before")
     void midSessionGrantCountsAfterTheTtl() {
         when(assignmentAccessor.findAssignmentsForUser(userId))
-            .thenReturn(List.of(nurse()))
+            .thenReturn(List.of(new TenantRoleAssignment(hospitalId, null, "ROLE_PHARMACIST", "PHARMACIST",
+                true, FacilityType.HOSPITAL)))
             .thenReturn(List.of(pharmacist()));
-        Principal user = ticketUser("ROLE_NURSE");
+        Principal user = ticketUser("ROLE_PHARMACIST");
 
         Message<byte[]> first = subscribe("/topic/notifications", user);
         assertThat(interceptor.preSend(first, channel)).isSameAs(first);
@@ -347,8 +349,56 @@ class ProviderStompSubscriptionTest {
         when(assignmentAccessor.findAssignmentsForUser(userId))
             .thenThrow(new IllegalArgumentException("An assignment at a facility needs its facility type"));
 
-        Message<byte[]> broadcast = freshSessionSubscribe("/topic/emergency-broadcast", ticketUser("ROLE_NURSE"));
+        Message<byte[]> broadcast = freshSessionSubscribe("/topic/emergency-broadcast", ticketUser("ROLE_PHARMACIST"));
         assertThatThrownBy(() -> interceptor.preSend(broadcast, channel)).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("clients SEND to the application (/app/**) only: a broker destination is refused for everyone")
+    void clientsSendToTheApplicationOnly() {
+        UUID someoneElse = UUID.randomUUID();
+        List<String> brokerDestinations = List.of("/topic/emergency-broadcast",
+            "/user/" + someoneElse + "/queue/notifications", "/queue/replies", "/topic/patient-tracker/" + hospitalId);
+
+        holds(nurse());
+        Principal nurse = ticketUser("ROLE_NURSE");
+        for (String forged : brokerDestinations) {
+            Message<byte[]> send = frame(StompCommand.SEND, forged, nurse);
+            assertThatThrownBy(() -> interceptor.preSend(send, channel)).as("nurse -> " + forged)
+                .isInstanceOf(AccessDeniedException.class);
+        }
+        Message<byte[]> noDestination = frame(StompCommand.SEND, null, nurse);
+        assertThatThrownBy(() -> interceptor.preSend(noDestination, channel))
+            .isInstanceOf(AccessDeniedException.class);
+        Message<byte[]> chat = frame(StompCommand.SEND, "/app/chat.sendMessage", nurse);
+        assertThat(interceptor.preSend(chat, channel)).isSameAs(chat);
+
+        session.clear();
+        holds(new TenantRoleAssignment(hospitalId, null, "ROLE_PATIENT", "PATIENT", true, FacilityType.HOSPITAL));
+        Principal patient = ticketUser("ROLE_PATIENT");
+        for (String forged : brokerDestinations) {
+            Message<byte[]> send = frame(StompCommand.SEND, forged, patient);
+            assertThatThrownBy(() -> interceptor.preSend(send, channel)).as("patient -> " + forged)
+                .isInstanceOf(AccessDeniedException.class);
+        }
+    }
+
+    @Test
+    @DisplayName("broadcasts for a ws-ticket holding no role a pharmacy or laboratory accepts: allowed with no lookup")
+    void broadcastsFastPathForRolesNoProviderAccepts() {
+        Principal nurse = ticketUser("ROLE_NURSE");
+
+        for (String broadcast : List.of("/topic/emergency-broadcast", "/topic/notifications")) {
+            Message<byte[]> message = freshSessionSubscribe(broadcast, nurse);
+            assertThat(interceptor.preSend(message, channel)).as(broadcast).isSameAs(message);
+        }
+        verifyNoInteractions(assignmentAccessor);
+
+        // A role a pharmacy accepts still resolves, and a provider is refused.
+        holds(pharmacist());
+        Message<byte[]> provider = freshSessionSubscribe("/topic/notifications", ticketUser("ROLE_PHARMACIST"));
+        assertThatThrownBy(() -> interceptor.preSend(provider, channel)).isInstanceOf(AccessDeniedException.class);
+        verify(assignmentAccessor, times(1)).findAssignmentsForUser(userId);
     }
 
     @Test

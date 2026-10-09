@@ -3,21 +3,26 @@ package com.example.hms.service;
 import com.example.hms.controller.UserController;
 import com.example.hms.enums.FacilityType;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.model.BillingInvoice;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
+import com.example.hms.model.User;
 import com.example.hms.payload.dto.AdminSignupRequest;
 import com.example.hms.payload.dto.AppointmentRequestDTO;
 import com.example.hms.payload.dto.BillingInvoiceRequestDTO;
 import com.example.hms.payload.dto.EncounterRequestDTO;
 import com.example.hms.payload.dto.GeneralReferralRequestDTO;
 import com.example.hms.payload.dto.PatientHospitalRegistrationRequestDTO;
+import com.example.hms.payload.dto.PatientRequestDTO;
 import com.example.hms.payload.dto.consultation.ConsultationRequestDTO;
 import com.example.hms.payload.dto.referral.ObgynReferralCreateRequestDTO;
+import com.example.hms.repository.BillingInvoiceRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.UserRepository;
 import com.example.hms.service.impl.ConsultationServiceImpl;
 import com.example.hms.service.impl.GeneralReferralServiceImpl;
 import com.example.hms.service.impl.ObgynReferralServiceImpl;
@@ -267,10 +272,10 @@ class RequireClinicalHospitalTest {
     @ExtendWith(MockitoExtension.class)
     @MockitoSettings(strictness = Strictness.LENIENT)
     @DisplayName("billing invoice (create and update)")
-    class BillingInvoice {
+    class Invoice {
         @Mock private HospitalRepository hospitalRepository;
         @Mock private PatientRepository patientRepository;
-        @Mock private com.example.hms.repository.BillingInvoiceRepository invoiceRepository;
+        @Mock private BillingInvoiceRepository invoiceRepository;
         @Mock private RoleValidator roleValidator;
         @InjectMocks private BillingInvoiceServiceImpl service;
 
@@ -295,7 +300,7 @@ class RequireClinicalHospitalTest {
 
         @Test
         void invoiceMovedToAProviderIsNotFound() {
-            com.example.hms.model.BillingInvoice existing = new com.example.hms.model.BillingInvoice();
+            BillingInvoice existing = new BillingInvoice();
             UUID invoiceId = UUID.randomUUID();
             when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(existing));
             when(roleValidator.requireActiveHospitalId()).thenReturn(null);
@@ -340,16 +345,16 @@ class RequireClinicalHospitalTest {
     @DisplayName("patient creation at a provider (createPatient): not found, never the entity backstop 400")
     class PatientCreation {
         @Mock private HospitalRepository hospitalRepository;
-        @Mock private com.example.hms.repository.UserRepository userRepository;
+        @Mock private UserRepository userRepository;
         @InjectMocks private PatientServiceImpl service;
 
         @Test
         void creatingAPatientAtAProviderIsAMiss() {
-            com.example.hms.model.User user = new com.example.hms.model.User();
+            User user = new User();
             user.setId(UUID.randomUUID());
             when(userRepository.findById(any())).thenReturn(Optional.of(user));
             when(hospitalRepository.findById(PROVIDER_ID)).thenReturn(Optional.of(pharmacy()));
-            com.example.hms.payload.dto.PatientRequestDTO request = new com.example.hms.payload.dto.PatientRequestDTO();
+            PatientRequestDTO request = new PatientRequestDTO();
             request.setUserId(user.getId());
             request.setHospitalId(PROVIDER_ID);
 

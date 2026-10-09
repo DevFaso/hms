@@ -1,5 +1,6 @@
 package com.example.hms.security.tenant;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Role;
 import com.example.hms.model.User;
@@ -66,7 +67,7 @@ public final class LinkedTestAccounts {
     }
 
     /** A provider facility row (a PHARMACY or LABORATORY), lifecycle ACTIVE as a verified one is. */
-    public Hospital provider(String name, com.example.hms.enums.FacilityType type) {
+    public Hospital provider(String name, FacilityType type) {
         Hospital saved = hospital(name);
         saved.setFacilityType(type);
         return hospitals.save(saved);

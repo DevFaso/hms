@@ -1,5 +1,6 @@
 package com.example.hms.repository;
 
+import java.util.Arrays;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.asm.ClassReader;
@@ -306,7 +307,7 @@ class HospitalRepositoryCallerCoverageTest {
 
     private static Resource[] mainClasses() throws IOException {
         Resource[] all = new PathMatchingResourcePatternResolver().getResources("classpath*:com/example/hms/**/*.class");
-        return java.util.Arrays.stream(all)
+        return Arrays.stream(all)
             .filter(resource -> {
                 try {
                     return resource.getURL().toString().contains("/main/");

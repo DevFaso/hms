@@ -1,5 +1,6 @@
 package com.example.hms.service.recordaccess;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.enums.RecordAccessDenialReason;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.enums.RecordAccessPosture;
@@ -10,6 +11,10 @@ import com.example.hms.model.Staff;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRecordSharingOptOutRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -93,7 +98,7 @@ class RecordAccessPolicyImplTest {
     @Test
     @DisplayName("a provider facility → PROVIDER_FACILITY first: with a staff row, a planted registration and a live break-glass session")
     void providerFacilityIsRefusedFirst() {
-        hospital.setFacilityType(com.example.hms.enums.FacilityType.PHARMACY);
+        hospital.setFacilityType(FacilityType.PHARMACY);
         PatientHospitalRegistration planted = new PatientHospitalRegistration();
         planted.setId(UUID.randomUUID());
         when(registrationRepository.findByPatientIdAndHospitalId(patient, hospitalId)).thenReturn(Optional.of(planted));
@@ -115,7 +120,7 @@ class RecordAccessPolicyImplTest {
     @Test
     @DisplayName("a laboratory is refused the same way, and its readable set is empty, its own id included")
     void laboratoryReadsNothing() {
-        hospital.setFacilityType(com.example.hms.enums.FacilityType.LABORATORY);
+        hospital.setFacilityType(FacilityType.LABORATORY);
 
         assertThat(policy.decide(actor, patient, hospitalId).reason())
             .isEqualTo(RecordAccessDenialReason.PROVIDER_FACILITY);
@@ -128,23 +133,57 @@ class RecordAccessPolicyImplTest {
     @DisplayName("with a request context, the readable set reads the caller's provider types: no hospital query")
     void readableSetReadsTheContext() {
         try {
-            com.example.hms.security.context.HospitalContextHolder.setContext(
-                com.example.hms.security.context.HospitalContext.builder()
+            HospitalContextHolder.setContext(
+                HospitalContext.builder()
                     .principalUserId(actor)
-                    .providerFacilityTypes(java.util.Set.of(com.example.hms.enums.FacilityType.LABORATORY))
+                    .providerFacilityTypes(Set.of(FacilityType.LABORATORY))
                     .build());
             assertThat(policy.readableHospitalIds(actor, null, hospitalId)).isEmpty();
 
-            com.example.hms.security.context.HospitalContextHolder.setContext(
-                com.example.hms.security.context.HospitalContext.builder()
+            HospitalContextHolder.setContext(
+                HospitalContext.builder()
                     .principalUserId(actor)
-                    .assignedRoles(java.util.Set.of("ROLE_DOCTOR"))
+                    .assignedRoles(Set.of("ROLE_DOCTOR"))
+                    .permittedHospitalIds(Set.of(hospitalId))
+                    .hospitalFacilityTypes(Map.of(hospitalId, FacilityType.HOSPITAL))
                     .build());
             assertThat(policy.readableHospitalIds(actor, null, hospitalId)).containsExactly(hospitalId);
 
             verify(hospitalRepository, never()).findById(any());
         } finally {
-            com.example.hms.security.context.HospitalContextHolder.clear();
+            HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
+    @DisplayName("an unconfined context does not vouch for a facility it does not carry: the acting facility itself decides")
+    void theActingFacilityItselfDecides() {
+        UUID pharmacyId = UUID.randomUUID();
+        Hospital pharmacy = new Hospital();
+        pharmacy.setId(pharmacyId);
+        pharmacy.setFacilityType(FacilityType.PHARMACY);
+        when(hospitalRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        try {
+            // A context built by a worker, acting at a pharmacy: no provider
+            // types, no facility types of its own.
+            HospitalContextHolder.setContext(HospitalContext.builder()
+                .activeHospitalId(pharmacyId)
+                .assignedRoles(Set.of("ROLE_DOCTOR"))
+                .build());
+            assertThat(policy.readableHospitalIds(actor, patient, pharmacyId)).isEmpty();
+
+            // A hospital doctor (unconfined) passing a provider's id.
+            HospitalContextHolder.setContext(HospitalContext.builder()
+                .principalUserId(actor)
+                .assignedRoles(Set.of("ROLE_DOCTOR"))
+                .permittedHospitalIds(Set.of(hospitalId))
+                .hospitalFacilityTypes(Map.of(hospitalId, FacilityType.HOSPITAL))
+                .build());
+            assertThat(policy.readableHospitalIds(actor, patient, pharmacyId)).isEmpty();
+            verify(hospitalRepository, times(2)).findById(pharmacyId);
+            verify(registrationRepository, never()).findByPatientId(any());
+        } finally {
+            HospitalContextHolder.clear();
         }
     }
 

@@ -22,6 +22,7 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.security.provider.ClinicalHospitals;
 import com.example.hms.service.support.UserAccountAccess;
 import com.example.hms.utility.UserDisplayUtil;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,8 +31,10 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -89,9 +92,9 @@ class UserServiceImplTest {
     @BeforeEach
     void setUp() {
         // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
-        org.mockito.Mockito.lenient().when(hospitalRepository.findClinicalById(org.mockito.ArgumentMatchers.any()))
+        Mockito.lenient().when(hospitalRepository.findClinicalById(ArgumentMatchers.any()))
             .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
-                .filter(com.example.hms.security.provider.ClinicalHospitals::isClinical));
+                .filter(ClinicalHospitals::isClinical));
         userId = UUID.randomUUID();
         user = new User();
         user.setId(userId);
@@ -117,7 +120,7 @@ class UserServiceImplTest {
         lenient().when(accountAccess.canView(any())).thenReturn(true);
         lenient().when(accountAccess.canDelete(any())).thenReturn(true);
         // Registration runs as a super-admin: the grant check resolves the hospital and allows.
-        UserAccountAccess.Grant anywhere = org.mockito.Mockito.mock(UserAccountAccess.Grant.class);
+        UserAccountAccess.Grant anywhere = Mockito.mock(UserAccountAccess.Grant.class);
         lenient().when(anywhere.requireAt(any())).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(accountAccess.requireMayGrant(any())).thenReturn(anywhere);
     }
@@ -338,7 +341,7 @@ class UserServiceImplTest {
             createdAssignment.setRole(superAdminRole);
             createdAssignment.setActive(false);
             when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(
-                    any(), org.mockito.ArgumentMatchers.isNull(), any()))
+                    any(), ArgumentMatchers.isNull(), any()))
                 .thenReturn(Optional.of(createdAssignment));
             when(userRepository.findByIdWithRolesAndProfiles(any(UUID.class)))
                 .thenAnswer(inv -> {
@@ -374,7 +377,7 @@ class UserServiceImplTest {
             // The old pre-approval override force-activated the reloaded
             // assignment and saved it; that save must never come back.
             assertThat(createdAssignment.getActive()).isFalse();
-            verify(assignmentRepository, org.mockito.Mockito.never()).save(any());
+            verify(assignmentRepository, Mockito.never()).save(any());
         }
 
         @Test
@@ -1273,7 +1276,7 @@ class UserServiceImplTest {
             created.setRole(superAdminRole);
             created.setActive(false);
             when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(
-                    any(), org.mockito.ArgumentMatchers.isNull(), any()))
+                    any(), ArgumentMatchers.isNull(), any()))
                 .thenReturn(Optional.of(created));
             when(userRepository.findByIdWithRolesAndProfiles(any(UUID.class)))
                 .thenAnswer(inv -> {
@@ -1574,7 +1577,7 @@ class UserServiceImplTest {
             assertThatThrownBy(() -> userService.deleteUser(userId))
                     .isInstanceOf(ResourceNotFoundException.class);
             assertThat(user.isDeleted()).isFalse();
-            verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(r ->
+            verify(auditEventLogService).logEvent(ArgumentMatchers.argThat(r ->
                     r.getStatus() == com.example.hms.enums.AuditStatus.FAILURE
                             && r.getEventType() == com.example.hms.enums.AuditEventType.USER_DELETE));
             verify(userRepository, never()).save(any());
@@ -1592,7 +1595,7 @@ class UserServiceImplTest {
                     .isInstanceOf(ResourceNotFoundException.class);
             assertThat(user.isDeleted()).isTrue();
             verify(userRepository, never()).save(any());
-            verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(r ->
+            verify(auditEventLogService).logEvent(ArgumentMatchers.argThat(r ->
                     r.getStatus() == com.example.hms.enums.AuditStatus.FAILURE));
         }
 

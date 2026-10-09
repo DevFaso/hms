@@ -10,6 +10,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.NestedExceptionUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -47,7 +48,7 @@ class PatientHospitalRegistrationProviderFlushIT extends BaseIT {
 
     /** The backstop's refusal, thrown as is or wrapped by the transaction. */
     private static void refusedByTheBackstop(Throwable thrown) {
-        Throwable cause = org.springframework.core.NestedExceptionUtils.getMostSpecificCause(thrown);
+        Throwable cause = NestedExceptionUtils.getMostSpecificCause(thrown);
         assertThat(cause).isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("registration.hospital.notClinical");
     }

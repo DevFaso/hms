@@ -25,13 +25,16 @@ import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.provider.ClinicalHospitals;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.nio.charset.StandardCharsets;
@@ -105,9 +108,9 @@ class LabOrderServiceImplTest {
     @BeforeEach
     void setUp() {
         // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
-        org.mockito.Mockito.lenient().when(hospitalRepository.findClinicalById(org.mockito.ArgumentMatchers.any()))
+        Mockito.lenient().when(hospitalRepository.findClinicalById(ArgumentMatchers.any()))
             .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
-                .filter(com.example.hms.security.provider.ClinicalHospitals::isClinical));
+                .filter(ClinicalHospitals::isClinical));
         patientId = UUID.randomUUID();
         staffId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();

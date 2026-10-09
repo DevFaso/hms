@@ -1,6 +1,7 @@
 package com.example.hms.security.tenant;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.enums.FacilityType;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.HospitalScopeRefusedException;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -95,11 +96,11 @@ class ActingScopeResolverTest {
     }
 
     private static TenantRoleAssignment at(UUID hospital, String role) {
-        return new TenantRoleAssignment(hospital, ORG, role, role, true, com.example.hms.enums.FacilityType.HOSPITAL);
+        return new TenantRoleAssignment(hospital, ORG, role, role, true, FacilityType.HOSPITAL);
     }
 
     private static TenantRoleAssignment revokedAt(UUID hospital, String role) {
-        return new TenantRoleAssignment(hospital, ORG, role, role, false, com.example.hms.enums.FacilityType.HOSPITAL);
+        return new TenantRoleAssignment(hospital, ORG, role, role, false, FacilityType.HOSPITAL);
     }
 
     private static TenantRoleAssignment superAdmin() {
@@ -111,7 +112,7 @@ class ActingScopeResolverTest {
     class PatientOwnership {
 
         private TenantRoleAssignment patientAt(UUID hospital) {
-            return new TenantRoleAssignment(hospital, ORG, "ROLE_PATIENT", "ROLE_PATIENT", true, com.example.hms.enums.FacilityType.HOSPITAL);
+            return new TenantRoleAssignment(hospital, ORG, "ROLE_PATIENT", "ROLE_PATIENT", true, FacilityType.HOSPITAL);
         }
 
         @Test
@@ -201,7 +202,7 @@ class ActingScopeResolverTest {
         private final UUID orgB = UUID.randomUUID();
 
         private TenantRoleAssignment in(UUID organization, UUID hospital) {
-            return new TenantRoleAssignment(hospital, organization, "ROLE_DOCTOR", "ROLE_DOCTOR", true, com.example.hms.enums.FacilityType.HOSPITAL);
+            return new TenantRoleAssignment(hospital, organization, "ROLE_DOCTOR", "ROLE_DOCTOR", true, FacilityType.HOSPITAL);
         }
 
         @Test

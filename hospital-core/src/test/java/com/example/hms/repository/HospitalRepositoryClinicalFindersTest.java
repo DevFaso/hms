@@ -4,6 +4,7 @@ import com.example.hms.enums.FacilityType;
 import com.example.hms.enums.OrganizationType;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Organization;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -73,7 +74,7 @@ class HospitalRepositoryClinicalFindersTest {
     }
 
     private Set<UUID> ids(List<Hospital> rows) {
-        return rows.stream().map(Hospital::getId).collect(java.util.stream.Collectors.toSet());
+        return rows.stream().map(Hospital::getId).collect(Collectors.toSet());
     }
 
     private void assertClinicalOnly(List<Hospital> rows) {

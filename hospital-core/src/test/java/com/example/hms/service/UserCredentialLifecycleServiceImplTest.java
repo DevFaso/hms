@@ -11,8 +11,10 @@ import com.example.hms.payload.dto.credential.UserRecoveryContactRequestDTO;
 import com.example.hms.repository.UserMfaEnrollmentRepository;
 import com.example.hms.repository.UserRecoveryContactRepository;
 import com.example.hms.repository.UserRepository;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -86,26 +88,26 @@ class UserCredentialLifecycleServiceImplTest {
         when(recoveryContactRepository.findById(unknownId)).thenReturn(Optional.empty());
 
         for (boolean verify : new boolean[] {false, true}) {
-            Throwable asForeign = org.assertj.core.api.Assertions.catchThrowable(() -> {
+            Throwable asForeign = Assertions.catchThrowable(() -> {
                 if (verify) {
                     service.verifyRecoveryContact(caller, foreign.getId(), "123456");
                 } else {
                     service.sendRecoveryContactVerificationCode(caller, foreign.getId());
                 }
             });
-            Throwable asUnknown = org.assertj.core.api.Assertions.catchThrowable(() -> {
+            Throwable asUnknown = Assertions.catchThrowable(() -> {
                 if (verify) {
                     service.verifyRecoveryContact(caller, unknownId, "123456");
                 } else {
                     service.sendRecoveryContactVerificationCode(caller, unknownId);
                 }
             });
-            assertThat(asForeign).isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class)
+            assertThat(asForeign).isInstanceOf(ResourceNotFoundException.class)
                 .hasSameClassAs(asUnknown);
             assertThat(asForeign.getMessage().replace(foreign.getId().toString(), "<id>"))
                 .isEqualTo(asUnknown.getMessage().replace(unknownId.toString(), "<id>"));
         }
-        verify(recoveryContactRepository, never()).save(org.mockito.ArgumentMatchers.any());
+        verify(recoveryContactRepository, never()).save(ArgumentMatchers.any());
     }
 
     @Test

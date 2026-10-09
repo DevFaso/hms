@@ -105,14 +105,22 @@ public class NotificationServiceImpl implements NotificationService {
         if (notificationId == null || ownerUsername == null) {
             return false;
         }
+        // The recipient's own, or a broadcast (no recipient: a system-wide
+        // announcement pushed on /topic/notifications), which any
+        // authenticated user may mark, on its one global read flag as before.
         return notificationRepository.findById(notificationId)
-            .filter(n -> ownerUsername.equals(n.getRecipientUsername()))
+            .filter(n -> isBroadcast(n) || ownerUsername.equals(n.getRecipientUsername()))
             .map(n -> {
                 n.setRead(true);
                 notificationRepository.save(n);
                 return true;
             })
             .orElse(false);
+    }
+
+    /** No recipient: sent to everyone on the broadcast topic (as {@code NotificationWebSocketController} sends it). */
+    private static boolean isBroadcast(Notification notification) {
+        return notification.getRecipientUsername() == null || notification.getRecipientUsername().isBlank();
     }
 
     @Override

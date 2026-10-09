@@ -1,10 +1,18 @@
 package com.example.hms.security.provider;
 
 import com.example.hms.enums.FacilityType;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.ApiKeyAuthenticationFilter;
+import com.example.hms.security.HospitalScopeResponses;
+import com.example.hms.security.audit.CrossTenantReadAudit;
+import com.example.hms.security.auth.TenantRoleAssignmentAccessor;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import jakarta.servlet.FilterChain;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,6 +28,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.support.StaticWebApplicationContext;
 import org.springframework.web.servlet.HandlerExceptionResolver;
@@ -61,6 +70,8 @@ class ProviderFacilityConfinementFilterTest {
     private final HandlerExceptionResolver resolver = mock(HandlerExceptionResolver.class);
     private final ProviderCallerResolver callerResolver = mock(ProviderCallerResolver.class);
     private final FilterChain chain = mock(FilterChain.class);
+    private final CrossTenantReadAudit audit = mock(CrossTenantReadAudit.class);
+    private final ActingScopeResolver scopeResolver = scopeResolver(audit);
 
     @RestController
     static class StandInController {
@@ -94,8 +105,13 @@ class ProviderFacilityConfinementFilterTest {
             return "me";
         }
 
-        @GetMapping("/users/{id}")
+        @GetMapping(value = "/users/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
         String user(@PathVariable String id) {
+            return id;
+        }
+
+        @PutMapping("/users/{id}")
+        String updateUser(@PathVariable String id) {
             return id;
         }
     }
@@ -138,12 +154,22 @@ class ProviderFacilityConfinementFilterTest {
     }
 
     @SuppressWarnings("unchecked")
+    private static ActingScopeResolver scopeResolver(CrossTenantReadAudit audit) {
+        ObjectProvider<CrossTenantReadAudit> auditProvider = mock(ObjectProvider.class);
+        when(auditProvider.getIfAvailable()).thenReturn(audit);
+        return new ActingScopeResolver(mock(TenantRoleAssignmentAccessor.class),
+            mock(UserRoleHospitalAssignmentRepository.class), auditProvider);
+    }
+
+    @SuppressWarnings("unchecked")
     private ProviderFacilityConfinementFilter filter(ProviderConfinementPolicy policy) {
         ObjectProvider<ProviderConfinementPolicy> p = mock(ObjectProvider.class);
         when(p.getIfAvailable()).thenReturn(policy);
         ObjectProvider<ProviderCallerResolver> r = mock(ObjectProvider.class);
         when(r.getIfAvailable()).thenReturn(callerResolver);
-        return new ProviderFacilityConfinementFilter(p, r);
+        ObjectProvider<ActingScopeResolver> s = mock(ObjectProvider.class);
+        when(s.getIfAvailable()).thenReturn(scopeResolver);
+        return new ProviderFacilityConfinementFilter(p, r, s);
     }
 
     private HospitalContext context(Set<UUID> permitted, Set<FacilityType> providerTypes, Set<String> roles,
@@ -267,6 +293,74 @@ class ProviderFacilityConfinementFilterTest {
     }
 
     @Test
+    @DisplayName("a 405 or OPTIONS whose Allow header would name a hidden handler, and a 406 on someone else's id, are unmapped")
+    void partialMatchDisclosesNoHiddenHandler() {
+        ProviderConfinementPolicy policy = policy(mapping(), null);
+        UUID other = UUID.randomUUID();
+
+        // /users/{id} maps GET (own id only) and PUT (not allowed): MVC's 405
+        // and OPTIONS would list PUT in Allow, so neither goes on, own id or not.
+        assertThat(policy.allows(request("PATCH", "/users/" + other), pharmacist(false))).isFalse();
+        assertThat(policy.allows(request("PATCH", "/users/" + self), pharmacist(false))).isFalse();
+        assertThat(policy.allows(request("OPTIONS", "/users/" + self), pharmacist(false))).isFalse();
+        // GET /users/{id} produces JSON: a text/plain Accept is a 406 on the
+        // caller's own id only; on another id it is the unmapped answer.
+        MockHttpServletRequest ownAsText = get("/users/" + self);
+        ownAsText.addHeader("Accept", MediaType.TEXT_PLAIN_VALUE);
+        assertThat(policy.allows(ownAsText, pharmacist(false))).isTrue();
+        MockHttpServletRequest otherAsText = get("/users/" + other);
+        otherAsText.addHeader("Accept", MediaType.TEXT_PLAIN_VALUE);
+        assertThat(policy.allows(otherAsText, pharmacist(false))).isFalse();
+    }
+
+    @Test
+    @DisplayName("FALLBACK: a refused X-Hospital-Id is answered as both context filters answer it (audit row, holders cleared, 403)")
+    void fallbackAnswersARefusedHeaderAsTheContextFiltersDo() throws Exception {
+        UUID foreign = UUID.randomUUID();
+        MockHttpServletResponse expected = new MockHttpServletResponse();
+        HospitalScopeResponses.writeRefusal(expected, ActingScope.Reason.NOT_PERMITTED, foreign);
+
+        for (HospitalContext live : List.of(pharmacist(false),
+                context(Set.of(hospitalId), Set.of(), Set.of("ROLE_NURSE"), false))) {
+            Authentication someone = user("someone");
+            authenticated(someone);
+            when(callerResolver.liveContext(someone)).thenReturn(live);
+            MockHttpServletRequest request = get("/notifications");
+            request.addHeader("X-Hospital-Id", foreign.toString());
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            filter(policy(mapping(), null)).doFilter(request, response, chain);
+
+            assertThat(response.getStatus()).isEqualTo(403);
+            assertThat(response.getContentAsString()).isEqualTo(expected.getContentAsString());
+            assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+            assertThat(HospitalContextHolder.getContext()).isEmpty();
+        }
+        verify(chain, never()).doFilter(any(), any());
+        verify(audit, times(2)).recordRefusal(self, null, foreign, ActingScope.Reason.NOT_PERMITTED,
+            ActingScope.Source.HEADER);
+    }
+
+    @Test
+    @DisplayName("the STOMP transport is recognised on the path Spring parses, not on a blind cut of the URI")
+    void stompTransportIsReadOnTheParsedPath() throws Exception {
+        Authentication pharmacist = user("pharm");
+        authenticated(pharmacist);
+        when(callerResolver.liveContext(pharmacist)).thenReturn(pharmacist(false));
+        // The URI does not start with the context path: it names no path of
+        // the application, so it is not the transport either.
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/apx/ws-chat/123/abc/xhr_streaming");
+        request.setContextPath("/api");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter(policy(mapping(), null)).doFilter(request, response, chain);
+
+        verify(callerResolver).liveContext(pharmacist);
+        verify(chain, never()).doFilter(any(), any());
+        assertThat(response.getStatus()).isEqualTo(404);
+    }
+
+    @Test
     @DisplayName("the handler lookup leaves no request attribute behind and restores the ones it replaced")
     void lookupLeavesTheRequestClean() {
         ProviderConfinementPolicy policy = policy(mapping(), null);
@@ -381,7 +475,7 @@ class ProviderFacilityConfinementFilterTest {
         Authentication pharmacist = user("pharm");
         authenticated(pharmacist);
         when(callerResolver.liveContext(pharmacist)).thenReturn(pharmacist(false));
-        java.util.concurrent.atomic.AtomicReference<HospitalContext> seen = new java.util.concurrent.atomic.AtomicReference<>();
+        AtomicReference<HospitalContext> seen = new AtomicReference<>();
         FilterChain downstream = (request, response) -> seen.set(HospitalContextHolder.getContext().orElse(null));
 
         filter(policy(mapping(), null)).doFilter(get("/notifications"), new MockHttpServletResponse(), downstream);
@@ -399,8 +493,8 @@ class ProviderFacilityConfinementFilterTest {
         Authentication nurse = user("nurse");
         authenticated(nurse);
         when(callerResolver.liveContext(nurse)).thenReturn(context(Set.of(hospitalId), Set.of(), Set.of("ROLE_NURSE"), false));
-        java.util.concurrent.atomic.AtomicReference<java.util.Optional<HospitalContext>> seen =
-            new java.util.concurrent.atomic.AtomicReference<>();
+        AtomicReference<Optional<HospitalContext>> seen =
+            new AtomicReference<>();
         FilterChain downstream = (request, response) -> seen.set(HospitalContextHolder.getContext());
 
         filter(policy(mapping(), null)).doFilter(get("/patients/search"), new MockHttpServletResponse(), downstream);

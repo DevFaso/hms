@@ -120,11 +120,7 @@ public class KeycloakHospitalContextFilter extends OncePerRequestFilter {
                 }
 
                 // ── Refused X-Hospital-Id (design Q3, option A) ───────────
-                if (ActingScopeResolver.isRefusedHeader(context)) {
-                    actingScopeResolver.auditRefusedHeader(context);
-                    HospitalContextHolder.clear();
-                    SecurityContextHolder.clearContext();
-                    HospitalScopeResponses.writeRefusal(response, context.getScopeRefusal(), context.getRefusedHospitalId());
+                if (actingScopeResolver.answerRefusedHeader(context, response)) {
                     return;
                 }
 
