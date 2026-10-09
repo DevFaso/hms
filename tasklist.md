@@ -4833,10 +4833,9 @@ they stay visible instead of living in a javadoc.
     too small ends as a FAILED deploy, not a loop. hms-backend-core also runs
     the OpenTelemetry agent when `OTEL_EXPORTER_OTLP_ENDPOINT` is set; if it is
     killed by the container (exit 137, no Java OOM), raise it to 2.5 GB.
-  - Open: cap hms-keycloak-dev (2 GB being tried; if it fails, read the 1.5 GB
-    boot log and cap the heap with `JAVA_OPTS_KC_HEAP` instead), and confirm
-    hms-keycloak-prod actually sleeps (background DB traffic can keep it
-    awake).
+  - Done: hms-keycloak-dev capped at 2 GB, redeployed healthy.
+  - Open: confirm hms-keycloak-prod actually sleeps (background DB traffic
+    can keep it awake); if it does not, cap it at 2 GB as dev now is.
   - Open: a usage alert rather than a hard usage limit; a hard limit takes
     every service offline when reached, prod included.
   - Open, later: one shared dev Keycloak with a realm per project.

@@ -129,7 +129,7 @@ so an uncapped service grows until the bill does. Since 2026-10-09:
 | --- | --- | --- | --- |
 | backend (prod and dev) | 2 GB | `-XX:MaxRAMPercentage=70 -XX:+ExitOnOutOfMemoryError` | off |
 | `hms-keycloak-prod` | default (1.5 GB failed to boot) | none | **on** (unused until the SSO cutover; see `OIDC_ISSUER_URI`) |
-| `hms-keycloak-dev` | see tasklist (2 GB under test) | none | **off** (hms-backend-dev needs it at boot) |
+| `hms-keycloak-dev` | 2 GB | none | **off** (hms-backend-dev needs it at boot) |
 
 `ExitOnOutOfMemoryError` makes a heap OOM exit the JVM so the platform
 restarts it, instead of leaving a broken process running. `railway.toml`
