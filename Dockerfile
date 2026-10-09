@@ -109,7 +109,16 @@ if [ -n "${OTEL_EXPORTER_OTLP_ENDPOINT:-}" ] && [ -f /app/opentelemetry-javaagen
   echo "[entrypoint] OpenTelemetry agent enabled → ${OTEL_EXPORTER_OTLP_ENDPOINT}"
 fi
 
-exec su -s /bin/sh appuser -c "exec ${JAVA_BIN} ${OTEL_AGENT} -Dserver.port=${PORT} -jar /app/app.jar"
+# Size the heap from the container's memory limit, not the host's: with the
+# platform's per-service maximum as the limit an uncapped JVM grows until the
+# bill does. ExitOnOutOfMemoryError exits on a heap OOM so the platform
+# restarts a clean process (railway.toml: restart always) instead of leaving a
+# JVM whose worker threads may have died. Fixed here, not taken from an env
+# var, so nothing user-controlled reaches the `su -c` string; JAVA_TOOL_OPTIONS
+# can still add or override flags.
+JVM_MEMORY_OPTS="-XX:MaxRAMPercentage=70 -XX:+ExitOnOutOfMemoryError"
+
+exec su -s /bin/sh appuser -c "exec ${JAVA_BIN} ${JVM_MEMORY_OPTS} ${OTEL_AGENT} -Dserver.port=${PORT} -jar /app/app.jar"
 ENTRYPOINT_SH
 
 # Strip CRLF from the heredoc'd script in case the Dockerfile was checked out

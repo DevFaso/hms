@@ -20,8 +20,10 @@ watchPatterns = [
 [deploy]
 healthcheckPath = "/api/actuator/health"
 healthcheckTimeout = 180
-restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 3
+# Always restart: with ExitOnOutOfMemoryError (Dockerfile) a heap OOM exits the
+# JVM, and on_failure's 3-retry budget would otherwise leave the backend
+# CRASHED after the third one until a manual redeploy.
+restartPolicyType = "always"
 
 [deploy.healthcheck]
 path = "/api/actuator/health"
