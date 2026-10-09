@@ -109,45 +109,24 @@ if [ -n "${OTEL_EXPORTER_OTLP_ENDPOINT:-}" ] && [ -f /app/opentelemetry-javaagen
   echo "[entrypoint] OpenTelemetry agent enabled → ${OTEL_EXPORTER_OTLP_ENDPOINT}"
 fi
 
-# --- JVM memory: sized from this container's own limit ------------------------
-# Heap = JVM_HEAP_PERCENT (default 60) of the memory the JVM detects, which is
-# the container's cgroup limit. A service left at the platform's per-service
-# maximum (no limit, or one above 16 GiB) is sized from at most 2 GiB instead,
-# so an uncapped clone cannot grow the bill. -Xlog:gc+init logs the effective
-# heap at startup. To change the heap, change the service's memory limit or
-# JVM_HEAP_PERCENT; an -Xmx in JAVA_TOOL_OPTIONS would take precedence over
-# both. Only digits reach the `su -c` string below.
-# No ExitOnOutOfMemoryError and no metaspace cap, by decision: one oversized
-# request should fail that request, not kill or wedge the whole process.
-HEAP_PCT="${JVM_HEAP_PERCENT:-60}"
+# --- JVM memory: sized from this container's limit ----------------------------
+# Heap = JVM_HEAP_PERCENT (default 70, clamped to 10-90) of the container's
+# memory limit, which the JVM reads from cgroups. The service's memory limit is
+# the control: every service must have one, or the JVM sizes from the platform's
+# per-service maximum (docs/runbooks/railway-env-matrix.md §3a). -Xlog:gc+init
+# logs the effective heap at startup. An -Xmx in JAVA_TOOL_OPTIONS overrides
+# this; a MaxRAMPercentage there loses to it. HEAP_PCT is reduced to digits
+# before it reaches the `su -c` string below.
+# No ExitOnOutOfMemoryError, by decision: one oversized request should fail
+# that request, not kill the whole process.
+HEAP_PCT="${JVM_HEAP_PERCENT:-70}"
 case "${HEAP_PCT}" in
-  [1-9][0-9]) ;;
-  *) echo "[entrypoint] Invalid JVM_HEAP_PERCENT='${HEAP_PCT}' (10-90); using 60" >&2; HEAP_PCT=60 ;;
+  [0-9]|[0-9][0-9]) ;;
+  *) echo "[entrypoint] Invalid JVM_HEAP_PERCENT='${HEAP_PCT}'; using 70" >&2; HEAP_PCT=70 ;;
 esac
-if [ "${HEAP_PCT}" -gt 90 ]; then
-  echo "[entrypoint] JVM_HEAP_PERCENT=${HEAP_PCT} above 90; using 60" >&2
-  HEAP_PCT=60
-fi
-JVM_MAXRAM=""
-MEM_LIMIT="$(cat /sys/fs/cgroup/memory.max 2>/dev/null || cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || echo unknown)"
-UNCAPPED=""
-case "${MEM_LIMIT}" in
-  max) UNCAPPED=yes ;;
-  ''|*[!0-9]*) ;;
-  *) if [ "${#MEM_LIMIT}" -gt 11 ] || [ "${MEM_LIMIT}" -gt 17179869184 ]; then UNCAPPED=yes; fi ;;
-esac
-if [ -n "${UNCAPPED}" ]; then
-  # min(physical memory, 2 GiB), in MiB
-  MEM_TOTAL_MB="$(awk '/^MemTotal:/ {print int($2/1024)}' /proc/meminfo 2>/dev/null)"
-  CAP_MB=2048
-  case "${MEM_TOTAL_MB}" in
-    ''|*[!0-9]*) ;;
-    *) if [ "${MEM_TOTAL_MB}" -lt "${CAP_MB}" ]; then CAP_MB="${MEM_TOTAL_MB}"; fi ;;
-  esac
-  JVM_MAXRAM="-XX:MaxRAM=${CAP_MB}m"
-  echo "[entrypoint] No memory limit (or above 16 GiB): sizing the heap from ${CAP_MB} MiB. Set a limit on the service." >&2
-fi
-JVM_MEMORY_OPTS="-XX:MaxRAMPercentage=${HEAP_PCT} ${JVM_MAXRAM} -Xlog:gc+init"
+if [ "${HEAP_PCT}" -lt 10 ]; then HEAP_PCT=10; fi
+if [ "${HEAP_PCT}" -gt 90 ]; then HEAP_PCT=90; fi
+JVM_MEMORY_OPTS="-XX:MaxRAMPercentage=${HEAP_PCT} -Xlog:gc+init"
 
 exec su -s /bin/sh appuser -c "exec ${JAVA_BIN} ${JVM_MEMORY_OPTS} ${OTEL_AGENT} -Dserver.port=${PORT} -jar /app/app.jar"
 ENTRYPOINT_SH
