@@ -38,6 +38,16 @@ FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /app
 
+# JVM memory defaults for the runtime image. The heap is sized from the
+# container's memory limit (set per service on the platform), and a heap OOM
+# exits the JVM so the platform restarts a clean process instead of leaving
+# one whose worker threads (outbox, @Async) may have died while health stays
+# UP. An ENV default rather than command-line flags: a JAVA_TOOL_OPTIONS
+# variable on the service replaces it per environment, no rebuild needed.
+# No heap dump on OOM: a dump the size of the heap on the container disk is a
+# bigger risk than the OOM, and the OOM line itself is logged.
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=70 -XX:+ExitOnOutOfMemoryError"
+
 # Create non-root user that the JVM will run as after the entrypoint drops
 # privileges.  UID 10001 is used to avoid collisions with well-known system UIDs.
 RUN useradd -u 10001 -r -s /sbin/nologin appuser
@@ -109,16 +119,7 @@ if [ -n "${OTEL_EXPORTER_OTLP_ENDPOINT:-}" ] && [ -f /app/opentelemetry-javaagen
   echo "[entrypoint] OpenTelemetry agent enabled → ${OTEL_EXPORTER_OTLP_ENDPOINT}"
 fi
 
-# Size the heap from the container's memory limit, not the host's: with the
-# platform's per-service maximum as the limit an uncapped JVM grows until the
-# bill does. ExitOnOutOfMemoryError exits on a heap OOM so the platform
-# restarts a clean process (railway.toml: restart always) instead of leaving a
-# JVM whose worker threads may have died. Fixed here, not taken from an env
-# var, so nothing user-controlled reaches the `su -c` string; JAVA_TOOL_OPTIONS
-# can still add or override flags.
-JVM_MEMORY_OPTS="-XX:MaxRAMPercentage=70 -XX:+ExitOnOutOfMemoryError"
-
-exec su -s /bin/sh appuser -c "exec ${JAVA_BIN} ${JVM_MEMORY_OPTS} ${OTEL_AGENT} -Dserver.port=${PORT} -jar /app/app.jar"
+exec su -s /bin/sh appuser -c "exec ${JAVA_BIN} ${OTEL_AGENT} -Dserver.port=${PORT} -jar /app/app.jar"
 ENTRYPOINT_SH
 
 # Strip CRLF from the heredoc'd script in case the Dockerfile was checked out
