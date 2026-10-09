@@ -127,9 +127,12 @@ pipeline is broken.
 ## HmsHeapHigh  (`severity: ticket`)
 
 **What it means.** JVM heap is above 90% of its maximum for 10 minutes. The
-maximum comes from the image default (`JDK_JAVA_OPTIONS` in the Dockerfile:
-65% of the container limit, sized from at most 2 GB) or a service-level
-`JDK_JAVA_OPTIONS`; the startup log's `gc,init` lines show the value.
+maximum is set by the Dockerfile entrypoint: `JVM_HEAP_PERCENT` (default 60,
+allowed 10-90) of the container's memory limit; a service with no limit, or one
+above 16 GiB, is sized from at most 2 GiB. The startup log's `gc,init` line
+("Heap Max Capacity") shows the value. To raise it, raise the service's memory
+limit or `JVM_HEAP_PERCENT`; an `-Xmx` in `JAVA_TOOL_OPTIONS` would override
+both.
 
 1. Check the "JVM Memory Used" panel — is one area (Tenured/Eden) growing
    unboundedly? That signals a leak.
