@@ -38,20 +38,6 @@ FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /app
 
-# JVM memory defaults. The heap is 65% of the container's memory limit, but
-# never sized from more than 2 GB of RAM (MaxRAM), so a service left at the
-# platform's per-service maximum still gets about a 1.3 GB heap rather than
-# 65% of that maximum. Metaspace is capped too; the remainder of the limit is
-# for code cache, threads, GC structures and the OpenTelemetry agent.
-# -Xlog:gc+init logs the effective heap at startup, so it can be checked.
-# To change these for one service, set JDK_JAVA_OPTIONS on it (it replaces this
-# default). JAVA_TOOL_OPTIONS is read first, so its -XX flags lose to these
-# command-line defaults; only use it for flags not set here. The launcher logs
-# a "Picked up JDK_JAVA_OPTIONS" NOTE to stderr at each start; that is expected.
-# No ExitOnOutOfMemoryError, by decision: it would turn one oversized request
-# into a kill of the whole process, every in-flight request with it.
-ENV JDK_JAVA_OPTIONS="-XX:MaxRAM=2g -XX:MaxRAMPercentage=65 -XX:MaxMetaspaceSize=384m -Xlog:gc+init"
-
 # Create non-root user that the JVM will run as after the entrypoint drops
 # privileges.  UID 10001 is used to avoid collisions with well-known system UIDs.
 RUN useradd -u 10001 -r -s /sbin/nologin appuser
@@ -123,7 +109,33 @@ if [ -n "${OTEL_EXPORTER_OTLP_ENDPOINT:-}" ] && [ -f /app/opentelemetry-javaagen
   echo "[entrypoint] OpenTelemetry agent enabled → ${OTEL_EXPORTER_OTLP_ENDPOINT}"
 fi
 
-exec su -s /bin/sh appuser -c "exec ${JAVA_BIN} ${OTEL_AGENT} -Dserver.port=${PORT} -jar /app/app.jar"
+# --- JVM memory: sized from this container's own limit ------------------------
+# Heap = JVM_HEAP_PERCENT (default 60) of the container's memory limit, read
+# from cgroups. With no limit, or one above 4 GiB (a service left at the
+# platform's per-service maximum), the heap is sized as if the limit were 2 GiB
+# so an uncapped clone cannot grow the bill. Metaspace is capped; the rest of
+# the limit is for code cache, threads, GC structures and the OTEL agent.
+# -Xlog:gc+init logs the effective heap at startup. Only digits reach the
+# `su -c` string below (JVM_HEAP_PERCENT is validated like PORT).
+# No ExitOnOutOfMemoryError, by decision: one oversized request should fail
+# that request, not kill the process.
+HEAP_PCT="${JVM_HEAP_PERCENT:-60}"
+case "${HEAP_PCT}" in
+  ''|*[!0-9]*) HEAP_PCT=60 ;;
+esac
+if [ "${HEAP_PCT}" -lt 10 ] || [ "${HEAP_PCT}" -gt 90 ]; then HEAP_PCT=60; fi
+MEM_LIMIT="$(cat /sys/fs/cgroup/memory.max 2>/dev/null || cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || echo max)"
+JVM_MAXRAM=""
+case "${MEM_LIMIT}" in
+  ''|*[!0-9]*) JVM_MAXRAM="-XX:MaxRAM=2g" ;;
+  *) if [ "${MEM_LIMIT}" -gt 4294967296 ]; then JVM_MAXRAM="-XX:MaxRAM=2g"; fi ;;
+esac
+if [ -n "${JVM_MAXRAM}" ]; then
+  echo "[entrypoint] No memory limit (or above 4 GiB): sizing the heap from 2 GiB. Set a limit on the service." >&2
+fi
+JVM_MEMORY_OPTS="-XX:MaxRAMPercentage=${HEAP_PCT} ${JVM_MAXRAM} -XX:MaxMetaspaceSize=320m -Xlog:gc+init"
+
+exec su -s /bin/sh appuser -c "exec ${JAVA_BIN} ${JVM_MEMORY_OPTS} ${OTEL_AGENT} -Dserver.port=${PORT} -jar /app/app.jar"
 ENTRYPOINT_SH
 
 # Strip CRLF from the heredoc'd script in case the Dockerfile was checked out
