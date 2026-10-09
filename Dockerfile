@@ -38,15 +38,16 @@ FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /app
 
-# JVM memory defaults for the runtime image. The heap is sized from the
-# container's memory limit (set per service on the platform), and a heap OOM
-# exits the JVM so the platform restarts a clean process instead of leaving
-# one whose worker threads (outbox, @Async) may have died while health stays
-# UP. An ENV default rather than command-line flags: a JAVA_TOOL_OPTIONS
-# variable on the service replaces it per environment, no rebuild needed.
-# No heap dump on OOM: a dump the size of the heap on the container disk is a
-# bigger risk than the OOM, and the OOM line itself is logged.
-ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=70 -XX:+ExitOnOutOfMemoryError"
+# Heap sized from the container's memory limit (set per service on the
+# platform), leaving about a third of it for metaspace, code cache, threads,
+# GC structures and the OpenTelemetry agent. JDK_JAVA_OPTIONS is read by the
+# `java` launcher after JAVA_TOOL_OPTIONS, so a service-level JAVA_TOOL_OPTIONS
+# adds flags without dropping this default; a service JDK_JAVA_OPTIONS replaces
+# it on purpose. Run the image with a memory limit (`docker run -m 2g`): without
+# one the JVM takes 65% of the host's or Docker VM's memory.
+# No ExitOnOutOfMemoryError, by decision: it would turn one oversized request
+# into a kill of the whole process, every in-flight request with it.
+ENV JDK_JAVA_OPTIONS="-XX:MaxRAMPercentage=65"
 
 # Create non-root user that the JVM will run as after the entrypoint drops
 # privileges.  UID 10001 is used to avoid collisions with well-known system UIDs.

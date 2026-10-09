@@ -20,11 +20,8 @@ watchPatterns = [
 [deploy]
 healthcheckPath = "/api/actuator/health"
 healthcheckTimeout = 180
-# A heap OOM exits the JVM (JAVA_TOOL_OPTIONS in the Dockerfile), so allow
-# more restarts than 3 before the service is left CRASHED; still bounded, so a
-# failing boot (bad migration, missing variable) stops instead of looping.
 restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 10
+restartPolicyMaxRetries = 3
 
 [deploy.healthcheck]
 path = "/api/actuator/health"
