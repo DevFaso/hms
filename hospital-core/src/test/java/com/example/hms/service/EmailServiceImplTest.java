@@ -212,34 +212,34 @@ class EmailServiceImplTest {
         }
 
         @Test
-        @DisplayName("with no MAIL_FROM the SMTP account's address still carries the display name")
-        void displayNameAppliesToTheAccountAddress() throws Exception {
+        @DisplayName("with no MAIL_FROM no From header is set, so the server supplies its own as before")
+        void noMailFromLeavesTheServerDefault() throws Exception {
             sender("", "e-Keneya", "");
 
             MimeMessage message = sentMessage(List.of(), null);
 
-            assertThat(first(message.getFrom()).getAddress()).isEqualTo("noreply@example.test");
-            assertThat(first(message.getFrom()).getPersonal()).isEqualTo("e-Keneya");
+            assertThat(message.getHeader("From")).isNull();
         }
 
         @Test
-        @DisplayName("a blank display name sends the bare address, never an empty name")
+        @DisplayName("a blank display name, from either setting, sends the bare address")
         void blankDisplayNameIsDropped() throws Exception {
-            sender("noreply@e-keneya.com", "   ", "");
+            sender("\"   \" <noreply@e-keneya.com>", "   ", "");
 
             MimeMessage message = sentMessage(List.of(), null);
 
+            assertThat(first(message.getFrom()).getAddress()).isEqualTo("noreply@e-keneya.com");
             assertThat(first(message.getFrom()).getPersonal()).isNull();
         }
 
         @Test
-        @DisplayName("an invalid or multi-address setting is ignored, never fatal: mail falls back to the account address")
+        @DisplayName("an invalid, TLD-less or multi-address setting is ignored, never fatal")
         void invalidSettingsAreIgnored() throws Exception {
-            sender("not an address", "e-Keneya", "support@e-keneya.com, ops@e-keneya.com");
+            sender("noreply@e-keneya", "e-Keneya", "support@e-keneya.com, ops@e-keneya.com");
 
             MimeMessage message = sentMessage(List.of(), null);
 
-            assertThat(first(message.getFrom()).getAddress()).isEqualTo("noreply@example.test");
+            assertThat(message.getHeader("From")).isNull();
             assertThat(message.getHeader("Reply-To")).isNull();
         }
 
@@ -252,17 +252,6 @@ class EmailServiceImplTest {
 
             assertThat(message.getHeader("From")[0]).contains("=?UTF-8?").doesNotContain("é");
             assertThat(first(message.getFrom()).getPersonal()).isEqualTo("Clinique Médicale");
-        }
-
-        @Test
-        @DisplayName("an SMTP login that is not a clean address never breaks startup or sending")
-        void oddLoginIsNotFatal() throws Exception {
-            ReflectionTestUtils.setField(emailService, "configuredMailUsername", "a@b@c");
-            sender("", "e-Keneya", "");
-
-            MimeMessage message = sentMessage(List.of(), null);
-
-            assertThat(message.getHeader("From")).isNull();
         }
     }
 

@@ -74,13 +74,13 @@ public class EmailServiceImpl implements EmailService {
 
     // The From and Reply-To every mail carries, read once at startup by
     // initSender(). MAIL_FROM may be "addr" or "Name <addr>" (quote a name
-    // that contains a comma). With no From header set JavaMail also takes the
-    // envelope sender (bounces, SPF) from it on relays that keep it. Blank MAIL_FROM
-    // keeps the SMTP account's own address but still applies the display name.
-    // With Gmail SMTP a From on another domain must be a verified "Send mail
-    // as" address of the account (otherwise Gmail rewrites it), and its mail
-    // is DKIM-signed as gmail.com: keep e-keneya.com's DMARC at p=none while
-    // sending this way, or that mail fails DMARC.
+    // that contains a comma). Unset, no From header is set and the server
+    // supplies its own, exactly as before these settings existed. JavaMail
+    // also takes the SMTP envelope sender (bounces, SPF) from the From header
+    // unless spring.mail.properties.mail.smtp.from is set. With Gmail SMTP a
+    // From on another domain must be a verified "Send mail as" address of the
+    // login (otherwise Gmail rewrites it), and that mail is DKIM-signed as
+    // gmail.com: keep e-keneya.com's DMARC at p=none while sending this way.
     @Value("${app.mail.from:}")
     private String fromSetting;
 
@@ -90,69 +90,49 @@ public class EmailServiceImpl implements EmailService {
     @Value("${app.mail.reply-to:}")
     private String replyToSetting;
 
-    private InternetAddress senderAddress;
-    private InternetAddress replyToAddress;
+    private String senderAddress;
+    private String senderName;
+    private String replyToAddress;
 
     /**
      * Parses the sender settings once at startup. Mail is optional to the
      * clinical application, so a bad value never stops the boot: it is logged
-     * as an ERROR naming the variable and ignored, and mail goes out with the
-     * SMTP account's own address, exactly as before these settings existed.
+     * as an ERROR naming the variable and ignored.
      */
     @PostConstruct
     void initSender() {
-        String name = StringUtils.hasText(fromNameSetting) ? fromNameSetting.trim() : null;
-        senderAddress = StringUtils.hasText(fromSetting)
+        InternetAddress from = StringUtils.hasText(fromSetting)
             ? parseSingleOrNull("app.mail.from (MAIL_FROM)", fromSetting)
             : null;
-        if (senderAddress == null && configuredMailUsername != null && configuredMailUsername.contains("@")) {
-            // The SMTP login is a credential first: if it isn't a clean address
-            // the From is simply left to the server, never an error.
-            senderAddress = parseQuietly(configuredMailUsername);
+        senderAddress = from != null ? from.getAddress() : null;
+        if (from != null && StringUtils.hasText(from.getPersonal())) {
+            senderName = from.getPersonal().trim();
+        } else {
+            senderName = StringUtils.hasText(fromNameSetting) ? fromNameSetting.trim() : null;
         }
-        if (senderAddress != null) {
-            String personal = senderAddress.getPersonal() != null ? senderAddress.getPersonal() : name;
-            try {
-                // Re-set even a parsed name so non-ASCII is RFC 2047 encoded.
-                senderAddress.setPersonal(personal, "UTF-8");
-            } catch (java.io.UnsupportedEncodingException e) {
-                log.error("📧 MAIL_FROM_NAME cannot be encoded; sending without a display name");
-            }
-        } else if (name != null && StringUtils.hasText(fromNameSetting) && deliversRealEmail()) {
-            log.warn("📧 MAIL_FROM_NAME is set but there is no sender address to attach it to "
-                + "(set MAIL_FROM); mail goes out with the server's default From");
-        }
-        replyToAddress = StringUtils.hasText(replyToSetting)
+        InternetAddress reply = StringUtils.hasText(replyToSetting)
             ? parseSingleOrNull("app.mail.reply-to (MAIL_REPLY_TO)", replyToSetting)
             : null;
+        replyToAddress = reply != null ? reply.getAddress() : null;
         if (senderAddress != null && deliversRealEmail()) {
-            log.info("📧 Mail sender: {}{}", ActivationDeliveryTracker.maskEmail(senderAddress.getAddress()),
+            log.info("📧 Mail sender: {}{}", ActivationDeliveryTracker.maskEmail(senderAddress),
                 replyToAddress != null ? " (reply-to set)" : "");
         }
     }
 
+    /** One address that the recipients' own rule would accept, else null with an ERROR. */
     private static InternetAddress parseSingleOrNull(String setting, String value) {
         try {
             InternetAddress[] parsed = InternetAddress.parse(value.trim(), true);
-            if (parsed.length == 1) {
-                parsed[0].validate();
+            if (parsed.length == 1 && EmailAddresses.isDeliverable(parsed[0].getAddress())) {
                 return parsed[0];
             }
-            log.error("📧 {} must be exactly one address (quote a display name that contains a comma); "
-                + "ignoring it", setting);
+            log.error("📧 {} must be exactly one valid address (quote a display name that contains "
+                + "a comma); ignoring it", setting);
         } catch (AddressException e) {
             log.error("📧 {} is not a valid address; ignoring it", setting);
         }
         return null;
-    }
-
-    private static InternetAddress parseQuietly(String value) {
-        try {
-            InternetAddress[] parsed = InternetAddress.parse(value.trim(), true);
-            return parsed.length == 1 ? parsed[0] : null;
-        } catch (AddressException e) {
-            return null;
-        }
     }
 
     private static final DateTimeFormatter CLOCK_TIME = DateTimeFormatter.ofPattern("HH:mm");
@@ -408,7 +388,11 @@ public class EmailServiceImpl implements EmailService {
         mailSender.send(mime -> {
             var multipart = attachment != null;
             var helper = new MimeMessageHelper(mime, multipart, "UTF-8");
-            if (senderAddress != null) helper.setFrom(senderAddress);
+            if (senderAddress != null) {
+                // The helper's UTF-8 encoding RFC 2047-encodes a non-ASCII name.
+                if (senderName != null) helper.setFrom(senderAddress, senderName);
+                else helper.setFrom(senderAddress);
+            }
             if (replyToAddress != null) helper.setReplyTo(replyToAddress);
             helper.setTo(to.toArray(String[]::new));
             if (cc != null && !cc.isEmpty()) helper.setCc(cc.toArray(String[]::new));
