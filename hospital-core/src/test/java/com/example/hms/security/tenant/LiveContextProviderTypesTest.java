@@ -30,6 +30,8 @@ class LiveContextProviderTypesTest {
 
         assertThat(context.getProviderFacilityTypes()).containsExactly(FacilityType.PHARMACY);
         assertThat(context.getPermittedHospitalIds()).containsExactlyInAnyOrder(pharmacy, hospital);
+        // Works at the pharmacy; is only a patient at the hospital.
+        assertThat(context.getStaffHospitalIds()).containsExactly(pharmacy);
     }
 
     @Test

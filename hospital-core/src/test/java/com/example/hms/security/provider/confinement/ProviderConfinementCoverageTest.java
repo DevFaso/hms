@@ -88,6 +88,7 @@ class ProviderConfinementCoverageTest {
         entries.addAll(CommonProviderConfinement.PATIENT_SELF_SERVICE_RULES);
         entries.addAll(PharmacyConfinement.RULES);
         entries.addAll(LaboratoryConfinement.RULES);
+        entries.addAll(CommonProviderConfinement.WHOLESALE_EXCLUSIONS);
         for (ConfinementRule entry : entries) {
             assertThat(mapped).as("allow-list entry with no handler").contains(entry.method() + " " + entry.pattern());
             assertThat(entry.reason()).as("%s %s", entry.method(), entry.pattern()).isNotBlank();
@@ -118,6 +119,13 @@ class ProviderConfinementCoverageTest {
         assertThat(ProviderConfinement.allows(PHARMACY, true, "GET", "/me/patients/{patientId}/snapshot")).isFalse();
         assertThat(ProviderConfinement.allows(PHARMACY, true, "GET", "/me/patient/profile")).isTrue();
         assertThat(ProviderConfinement.allows(PHARMACY, false, "GET", "/me/patient/profile")).isFalse();
+    }
+
+    @Test
+    @DisplayName("POST /notifications (create for any recipient) is excluded from the /notifications prefix")
+    void createNotificationIsExcluded() {
+        assertThat(ProviderConfinement.allows(PHARMACY, true, "POST", "/notifications")).isFalse();
+        assertThat(ProviderConfinement.allows(PHARMACY, false, "GET", "/notifications")).isTrue();
     }
 
     @Test

@@ -110,6 +110,15 @@ public class HospitalContext {
     private final Set<com.example.hms.enums.FacilityType> providerFacilityTypes = Collections.emptySet();
 
     /**
+     * The hospitals where the caller holds a live active assignment in a role
+     * other than PATIENT: where they work, not where they are treated. A
+     * hospital-bound PATIENT row puts its hospital in {@link #permittedHospitalIds}
+     * but not here.
+     */
+    @Builder.Default
+    private final Set<UUID> staffHospitalIds = Collections.emptySet();
+
+    /**
      * This context acting at {@code hospitalId}, named explicitly: the active
      * organisation follows the hospital (null when the caller holds no
      * assignment there, e.g. a super-admin naming another tenant).

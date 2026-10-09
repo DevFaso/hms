@@ -7,6 +7,7 @@ import com.example.hms.security.provider.ProviderConfinementPolicy;
 import com.example.hms.security.provider.RoleFacilityCompatibility;
 import com.example.hms.service.PatientTrackerEventPublisher;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -16,6 +17,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.CannotCreateTransactionException;
 
 import java.security.Principal;
 import java.time.Clock;
@@ -41,9 +43,11 @@ import java.util.UUID;
  *   <li>{@code /topic/emergency-broadcast} — allowed; system-wide by design.</li>
  *   <li>{@code /topic/notifications} — allowed; broadcast fallback used only
  *       when a notification has no recipient username.</li>
- *   <li>{@code /topic/patient-tracker/{hospitalId}} — the hospital must be in
- *       the caller's live permitted set, or the caller a VERIFIED super-admin
- *       (a live SUPER_ADMIN assignment, not the handshake's authority).</li>
+ *   <li>{@code /topic/patient-tracker/{hospitalId}} — the caller must WORK
+ *       there (a live assignment at that hospital in a role other than
+ *       PATIENT: a patient registered there sees no other patient's status),
+ *       or be a VERIFIED super-admin (a live SUPER_ADMIN assignment, not the
+ *       handshake's authority).</li>
  *   <li>Everything else — denied. This includes raw {@code /topic/messages},
  *       which only ever carries frames through the user-destination resolver.</li>
  * </ul>
@@ -61,12 +65,14 @@ import java.util.UUID;
  * query on every frame.
  *
  * <p><b>Failure.</b> A caller that links no local account is a provider for
- * these rules (fail closed). A resolution that FAILS (the database is
- * unavailable) is not an answer: SEND and the tracker are refused, but the two
+ * these rules (fail closed). Only a DATABASE failure (a
+ * {@link DataAccessException}, or a transaction that could not start) makes a
+ * resolution "unavailable": SEND and the tracker are refused, but the two
  * broadcast topics stay open to a caller known not to be a provider user (the
- * session's last resolution said so, or the ws-ticket's roles include no role
- * a pharmacy or laboratory accepts), so a database hiccup never silently cuts
- * a clinician off the emergency alerts. That case is logged.
+ * session's last resolution said so, no older than {@link #LAST_KNOWN_MAX_AGE},
+ * or the ws-ticket's roles include no role a pharmacy or laboratory accepts),
+ * so a database hiccup never silently cuts a clinician off the emergency
+ * alerts. That case is logged. Any other failure fails closed everywhere.
  */
 @Slf4j
 @Component
@@ -74,6 +80,9 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
 
     /** How long one resolution of the caller serves a STOMP session. */
     static final Duration RESOLUTION_TTL = Duration.ofSeconds(20);
+
+    /** How old the session's last resolution may be to vouch for a caller while the database is down. */
+    static final Duration LAST_KNOWN_MAX_AGE = RESOLUTION_TTL.multipliedBy(5);
 
     /** Session attribute holding the last successful resolution of the caller. */
     static final String RESOLUTION_ATTRIBUTE = WebSocketSubscriptionInterceptor.class.getName() + ".resolution";
@@ -174,7 +183,7 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
             destination);
     }
 
-    /** The hospital is in the caller's live permitted set, or the caller is a verified super-admin. */
+    /** The caller works at the hospital (a non-PATIENT role there), or is a verified super-admin. */
     private static void authorizeTrackerSubscription(Principal user, HospitalContext caller, String destination) {
         if (caller.isSuperAdmin()) {
             return;
@@ -189,8 +198,8 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
             throw denied(user, destination, "malformed hospital id");
         }
 
-        if (caller.getPermittedHospitalIds() == null || !caller.getPermittedHospitalIds().contains(hospitalId)) {
-            throw denied(user, destination, "no active assignment at hospital");
+        if (caller.getStaffHospitalIds() == null || !caller.getStaffHospitalIds().contains(hospitalId)) {
+            throw denied(user, destination, "no active staff assignment at hospital");
         }
     }
 
@@ -213,9 +222,15 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
                 session.put(RESOLUTION_ATTRIBUTE, new Resolution(context, now));
             }
             return new Caller(context, false, context);
-        } catch (RuntimeException unavailable) {
+        } catch (DataAccessException | CannotCreateTransactionException unavailable) {
             log.warn("[STOMP] Live context unavailable ({})", unavailable.getClass().getSimpleName());
-            return new Caller(null, true, cached == null ? null : cached.context());
+            boolean recent = cached != null && !now.isAfter(cached.resolvedAt().plus(LAST_KNOWN_MAX_AGE));
+            return new Caller(null, true, recent ? cached.context() : null);
+        } catch (RuntimeException failure) {
+            // Not a database outage: no answer at all, so fail closed (as an
+            // unlinked caller), never "unavailable".
+            log.warn("[STOMP] Caller resolution failed ({}); refused", failure.getClass().getSimpleName());
+            return new Caller(null, false, null);
         }
     }
 

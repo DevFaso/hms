@@ -7,7 +7,6 @@ import com.example.hms.enums.TreatmentRelationshipKind;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
-import com.example.hms.config.SecurityConstants;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.security.provider.ProviderConfinementPolicy;
@@ -128,17 +127,11 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
             if (!ProviderConfinementPolicy.providerTypes(context.get()).isEmpty()) {
                 return true;
             }
-            if (!holdsSuperAdmin(context.get())) {
+            if (!context.get().isSuperAdmin()) {
                 return false;
             }
         }
         return hospitalRepository.findById(actingHospitalId).map(Hospital::isProvider).orElse(false);
-    }
-
-    /** The caller holds a live SUPER_ADMIN assignment (the context's own role set, from the live read). */
-    private static boolean holdsSuperAdmin(HospitalContext context) {
-        return context.getAssignedRoles() != null
-            && context.getAssignedRoles().contains(SecurityConstants.ROLE_SUPER_ADMIN);
     }
 
     /**

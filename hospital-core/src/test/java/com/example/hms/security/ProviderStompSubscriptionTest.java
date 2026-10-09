@@ -175,6 +175,10 @@ class ProviderStompSubscriptionTest {
         return subscribe(destination, user);
     }
 
+    private static RuntimeException dbDown() {
+        return new org.springframework.dao.DataAccessResourceFailureException("db down");
+    }
+
     private void afterTheTtl() {
         clock.advance(Duration.ofSeconds(21));
     }
@@ -292,7 +296,7 @@ class ProviderStompSubscriptionTest {
     @Test
     @DisplayName("database down: a known non-provider keeps the broadcasts; SEND and the tracker are refused")
     void unavailableResolutionKeepsBroadcastsForANonProvider() {
-        when(assignmentAccessor.findAssignmentsForUser(userId)).thenThrow(new IllegalStateException("db down"));
+        when(assignmentAccessor.findAssignmentsForUser(userId)).thenThrow(dbDown());
         Principal nurse = ticketUser("ROLE_NURSE");
 
         for (String broadcast : List.of("/topic/emergency-broadcast", "/topic/notifications")) {
@@ -309,7 +313,7 @@ class ProviderStompSubscriptionTest {
     @DisplayName("database down: a caller who could be a provider is refused the broadcasts, unless the session last said non-provider")
     void unavailableResolutionForAPossibleProvider() {
         Principal pharmacist = ticketUser("ROLE_PHARMACIST");
-        when(assignmentAccessor.findAssignmentsForUser(userId)).thenThrow(new IllegalStateException("db down"));
+        when(assignmentAccessor.findAssignmentsForUser(userId)).thenThrow(dbDown());
         Message<byte[]> unknown = freshSessionSubscribe("/topic/emergency-broadcast", pharmacist);
         assertThatThrownBy(() -> interceptor.preSend(unknown, channel)).isInstanceOf(AccessDeniedException.class);
 
@@ -317,13 +321,50 @@ class ProviderStompSubscriptionTest {
         session.clear();
         doReturn(List.of(new TenantRoleAssignment(hospitalId, null, "ROLE_PHARMACIST", "PHARMACIST",
                 true, FacilityType.HOSPITAL)))
-            .doThrow(new IllegalStateException("db down"))
+            .doThrow(dbDown())
             .when(assignmentAccessor).findAssignmentsForUser(userId);
         Message<byte[]> resolved = subscribe("/topic/notifications", pharmacist);
         assertThat(interceptor.preSend(resolved, channel)).isSameAs(resolved);
         afterTheTtl();
         Message<byte[]> lastKnown = subscribe("/topic/emergency-broadcast", pharmacist);
         assertThat(interceptor.preSend(lastKnown, channel)).isSameAs(lastKnown);
+    }
+
+    @Test
+    @DisplayName("a patient registered at a hospital (a hospital-bound PATIENT row) may not watch its tracker")
+    void patientMayNotWatchTheTracker() {
+        holds(new TenantRoleAssignment(hospitalId, null, "ROLE_PATIENT", "PATIENT", true, FacilityType.HOSPITAL));
+
+        Message<byte[]> tracker = subscribe("/topic/patient-tracker/" + hospitalId, ticketUser("ROLE_PATIENT"));
+        assertThatThrownBy(() -> interceptor.preSend(tracker, channel)).isInstanceOf(AccessDeniedException.class);
+        Message<byte[]> broadcast = subscribe("/topic/emergency-broadcast", ticketUser("ROLE_PATIENT"));
+        assertThat(interceptor.preSend(broadcast, channel)).isSameAs(broadcast);
+    }
+
+    @Test
+    @DisplayName("a failure that is not the database is no answer: fail closed, broadcasts included")
+    void nonDatabaseFailureFailsClosed() {
+        when(assignmentAccessor.findAssignmentsForUser(userId))
+            .thenThrow(new IllegalArgumentException("An assignment at a facility needs its facility type"));
+
+        Message<byte[]> broadcast = freshSessionSubscribe("/topic/emergency-broadcast", ticketUser("ROLE_NURSE"));
+        assertThatThrownBy(() -> interceptor.preSend(broadcast, channel)).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("database down: a last resolution older than five TTLs vouches for nobody")
+    void staleLastKnownDoesNotVouch() {
+        Principal pharmacist = ticketUser("ROLE_PHARMACIST");
+        doReturn(List.of(new TenantRoleAssignment(hospitalId, null, "ROLE_PHARMACIST", "PHARMACIST",
+                true, FacilityType.HOSPITAL)))
+            .doThrow(dbDown())
+            .when(assignmentAccessor).findAssignmentsForUser(userId);
+        Message<byte[]> resolved = freshSessionSubscribe("/topic/notifications", pharmacist);
+        assertThat(interceptor.preSend(resolved, channel)).isSameAs(resolved);
+
+        clock.advance(Duration.ofSeconds(101));
+        Message<byte[]> stale = subscribe("/topic/emergency-broadcast", pharmacist);
+        assertThatThrownBy(() -> interceptor.preSend(stale, channel)).isInstanceOf(AccessDeniedException.class);
     }
 
     @Test

@@ -127,6 +127,7 @@ public class ActingScopeResolver {
             .assignedRoles(Collections.unmodifiableSet(roles))
             .hospitalOrganizations(Collections.unmodifiableMap(hospitalOrganizations))
             .providerFacilityTypes(Collections.unmodifiableSet(providerTypes))
+            .staffHospitalIds(Collections.unmodifiableSet(staffHospitalIds(assignments)))
             // The organisation policies and plan gating read: the acting
             // hospital's (set again when a hospital is named), else the only
             // organisation held. Not a read scope.
@@ -171,6 +172,18 @@ public class ActingScopeResolver {
             }
         }
         return types;
+    }
+
+    /** The hospitals of the active assignments in a role other than PATIENT. */
+    private static Set<UUID> staffHospitalIds(List<TenantRoleAssignment> assignments) {
+        Set<UUID> staff = new LinkedHashSet<>();
+        for (TenantRoleAssignment assignment : assignments == null ? List.<TenantRoleAssignment>of() : assignments) {
+            if (assignment.active() && assignment.hospitalId() != null
+                && !ROLE_PATIENT.equals(roleCode(assignment))) {
+                staff.add(assignment.hospitalId());
+            }
+        }
+        return staff;
     }
 
     /** One active assignment's contribution to the live context. */

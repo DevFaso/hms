@@ -35,6 +35,9 @@ public final class ProviderConfinement {
             return false;
         }
         String verb = normalise(method);
+        if (anyMatches(CommonProviderConfinement.WHOLESALE_EXCLUSIONS, verb, handlerPattern)) {
+            return false;
+        }
         if (underAny(handlerPattern, CommonProviderConfinement.WHOLESALE_PREFIXES)
             || anyMatches(CommonProviderConfinement.RULES, verb, handlerPattern)) {
             return true;

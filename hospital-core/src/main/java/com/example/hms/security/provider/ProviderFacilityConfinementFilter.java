@@ -4,6 +4,9 @@ import com.example.hms.enums.FacilityType;
 import com.example.hms.security.ApiKeyAuthenticationFilter;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.context.HospitalContextRequestOverrides;
+import com.example.hms.security.provider.confinement.ProviderConfinement;
+import com.example.hms.security.provider.confinement.CommonProviderConfinement;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -71,27 +74,61 @@ public class ProviderFacilityConfinementFilter extends OncePerRequestFilter {
             return;
         }
         Optional<HospitalContext> built = HospitalContextHolder.getContext();
-        HospitalContext context;
         if (built.isPresent()) {
-            context = built.get();
-        } else {
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (!isUserPrincipal(authentication)) {
-                filterChain.doFilter(request, response);
-                return;
-            }
-            context = fallbackContext(authentication);
-            if (context == null) {
-                policy.refuse(request, response);
-                return;
-            }
+            decide(policy, built.get(), request, response, filterChain);
+            return;
         }
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (!isUserPrincipal(authentication) || isStompHandshake(request)) {
+            // No user, or the SockJS/STOMP transport: allowed for everyone
+            // (non-MVC), its frames confined by the STOMP interceptor. No
+            // fallback computation on every transport request.
+            filterChain.doFilter(request, response);
+            return;
+        }
+        HospitalContext context = fallbackContext(authentication);
+        if (context == null) {
+            policy.refuse(request, response);
+            return;
+        }
+        if (context.getPrincipalUserId() == null || ProviderConfinementPolicy.providerTypes(context).isEmpty()) {
+            // Not confined: links no local account, or holds no provider type.
+            // Nothing is kept, so the request goes on exactly as it would have
+            // (code that reads the holder directly treats "no context" as it
+            // always has; ensureContext computes it on first use).
+            decide(policy, context, request, response, filterChain);
+            return;
+        }
+        // A confined caller: kept for the rest of this request, so nothing
+        // downstream computes it again (ensureContext reads the holder first)
+        // and every reader sees the confined context. X-Hospital-Id is applied
+        // as ensureContext applies it; cleared when the request leaves this filter.
+        HospitalContext live = HospitalContextRequestOverrides.applyRequestOverrides(context, request);
+        HospitalContextHolder.setContext(live);
+        try {
+            decide(policy, live, request, response, filterChain);
+        } finally {
+            HospitalContextHolder.clear();
+        }
+    }
+
+    private static void decide(ProviderConfinementPolicy policy, HospitalContext context, HttpServletRequest request,
+                               HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
         Set<FacilityType> providerTypes = ProviderConfinementPolicy.providerTypes(context);
         if (providerTypes.isEmpty() || policy.allows(request, context)) {
             filterChain.doFilter(request, response);
             return;
         }
         policy.refuse(request, response);
+    }
+
+    /** The SockJS/STOMP transport ({@code /ws-chat/**}), on the path within the application. */
+    private static boolean isStompHandshake(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        String context = request.getContextPath() == null ? "" : request.getContextPath();
+        String path = uri == null ? "" : uri.substring(Math.min(context.length(), uri.length()));
+        return ProviderConfinement.underAny(path, CommonProviderConfinement.NON_MVC_PREFIXES);
     }
 
     /** The live context of a principal that arrived without one, or {@code null} when it cannot be computed. */

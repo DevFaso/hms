@@ -365,6 +365,50 @@ class ProviderFacilityConfinementFilterTest {
     }
 
     @Test
+    @DisplayName("the STOMP transport is never a fallback computation, for anyone")
+    void stompTransportSkipsTheFallback() throws Exception {
+        authenticated(user("nurse"));
+
+        filter(policy(mapping(), null)).doFilter(get("/ws-chat/123/abc/xhr_streaming"), new MockHttpServletResponse(), chain);
+
+        verify(chain).doFilter(any(), any());
+        verifyNoInteractions(callerResolver);
+    }
+
+    @Test
+    @DisplayName("a computed confining context is kept for the rest of the request, then cleared")
+    void computedContextIsKeptForTheRequest() throws Exception {
+        Authentication pharmacist = user("pharm");
+        authenticated(pharmacist);
+        when(callerResolver.liveContext(pharmacist)).thenReturn(pharmacist(false));
+        java.util.concurrent.atomic.AtomicReference<HospitalContext> seen = new java.util.concurrent.atomic.AtomicReference<>();
+        FilterChain downstream = (request, response) -> seen.set(HospitalContextHolder.getContext().orElse(null));
+
+        filter(policy(mapping(), null)).doFilter(get("/notifications"), new MockHttpServletResponse(), downstream);
+
+        assertThat(seen.get()).isNotNull();
+        assertThat(seen.get().getPrincipalUserId()).isEqualTo(self);
+        assertThat(seen.get().getProviderFacilityTypes()).containsExactly(FacilityType.PHARMACY);
+        assertThat(HospitalContextHolder.getContext()).isEmpty();
+        verify(callerResolver, times(1)).liveContext(pharmacist);
+    }
+
+    @Test
+    @DisplayName("a computed context that does not confine is not kept: the request goes on as it would have")
+    void nonConfiningContextIsNotKept() throws Exception {
+        Authentication nurse = user("nurse");
+        authenticated(nurse);
+        when(callerResolver.liveContext(nurse)).thenReturn(context(Set.of(hospitalId), Set.of(), Set.of("ROLE_NURSE"), false));
+        java.util.concurrent.atomic.AtomicReference<java.util.Optional<HospitalContext>> seen =
+            new java.util.concurrent.atomic.AtomicReference<>();
+        FilterChain downstream = (request, response) -> seen.set(HospitalContextHolder.getContext());
+
+        filter(policy(mapping(), null)).doFilter(get("/patients/search"), new MockHttpServletResponse(), downstream);
+
+        assertThat(seen.get()).isEmpty();
+    }
+
+    @Test
     @DisplayName("without a policy bean (a @WebMvcTest slice) the filter passes everything through")
     void noPolicyPassesThrough() throws Exception {
         actAs(pharmacist(false));

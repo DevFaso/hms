@@ -27,6 +27,15 @@ public final class CommonProviderConfinement {
      */
     public static final List<String> WHOLESALE_PREFIXES = List.of("/auth", "/notifications");
 
+    /**
+     * Handlers under a wholesale prefix that a provider user may NOT reach:
+     * the prefix is the caller's own notifications, and creating one for any
+     * recipient is not that.
+     */
+    public static final List<ConfinementRule> WHOLESALE_EXCLUSIONS = List.of(
+        new ConfinementRule("POST", "/notifications",
+            "creates a notification for ANY recipient (an administrator's act); not the caller's own notifications"));
+
     public static final List<ConfinementRule> RULES = List.of(
         new ConfinementRule("POST", "/users/admin-register",
             "a PROVIDER_ADMIN registers its own staff through the provider registrar list (plan §6.3);"
