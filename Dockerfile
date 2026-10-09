@@ -38,16 +38,19 @@ FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /app
 
-# Heap sized from the container's memory limit (set per service on the
-# platform), leaving about a third of it for metaspace, code cache, threads,
-# GC structures and the OpenTelemetry agent. JDK_JAVA_OPTIONS is read by the
-# `java` launcher after JAVA_TOOL_OPTIONS, so a service-level JAVA_TOOL_OPTIONS
-# adds flags without dropping this default; a service JDK_JAVA_OPTIONS replaces
-# it on purpose. Run the image with a memory limit (`docker run -m 2g`): without
-# one the JVM takes 65% of the host's or Docker VM's memory.
+# JVM memory defaults. The heap is 65% of the container's memory limit, but
+# never sized from more than 2 GB of RAM (MaxRAM), so a service left at the
+# platform's per-service maximum still gets about a 1.3 GB heap rather than
+# 65% of that maximum. Metaspace is capped too; the remainder of the limit is
+# for code cache, threads, GC structures and the OpenTelemetry agent.
+# -Xlog:gc+init logs the effective heap at startup, so it can be checked.
+# To change these for one service, set JDK_JAVA_OPTIONS on it (it replaces this
+# default). JAVA_TOOL_OPTIONS is read first, so its -XX flags lose to these
+# command-line defaults; only use it for flags not set here. The launcher logs
+# a "Picked up JDK_JAVA_OPTIONS" NOTE to stderr at each start; that is expected.
 # No ExitOnOutOfMemoryError, by decision: it would turn one oversized request
 # into a kill of the whole process, every in-flight request with it.
-ENV JDK_JAVA_OPTIONS="-XX:MaxRAMPercentage=65"
+ENV JDK_JAVA_OPTIONS="-XX:MaxRAM=2g -XX:MaxRAMPercentage=65 -XX:MaxMetaspaceSize=384m -Xlog:gc+init"
 
 # Create non-root user that the JVM will run as after the entrypoint drops
 # privileges.  UID 10001 is used to avoid collisions with well-known system UIDs.
