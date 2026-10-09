@@ -4820,9 +4820,10 @@ they stay visible instead of living in a javadoc.
   - Done: `hms-backend-core` (prod) and `hms-backend-dev` at 2 GB with
     `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=70` (about 1.4 GB heap). No
     `ExitOnOutOfMemoryError`, by decision: a request-scoped OOM should fail
-    that request, not kill the process. #839 moves the heap default into the
-    image (`JDK_JAVA_OPTIONS=-XX:MaxRAMPercentage=65`); once it is deployed,
-    remove both hand-set `JAVA_TOOL_OPTIONS` variables.
+    that request, not kill the process. #839 makes the image's entrypoint size
+    the heap from the container limit (`JVM_HEAP_PERCENT`, default 60; 2 GiB
+    when there is no limit); once it is deployed, remove both hand-set
+    `JAVA_TOOL_OPTIONS` variables.
   - Done: `hms-keycloak-dev` at 2 GB (1.5 GB failed to boot; 2 GB redeployed
     healthy). `hms-keycloak-prod` failed at 1.5 GB too and stays at the
     platform default, set to sleep when idle (unused: portal
