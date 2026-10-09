@@ -11,7 +11,6 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.stereotype.Component;
 
 import java.security.Principal;
-import java.util.UUID;
 
 /**
  * The caller's LIVE context from a principal, for the places that have no
@@ -62,10 +61,5 @@ public class ProviderCallerResolver {
             }
         }
         return ActingScopeResolver.unlinkedContext(name);
-    }
-
-    /** The principal's linked local account id, or {@code null} (the context's own principal id). */
-    public static UUID linkedUserId(HospitalContext context) {
-        return context == null ? null : context.getPrincipalUserId();
     }
 }

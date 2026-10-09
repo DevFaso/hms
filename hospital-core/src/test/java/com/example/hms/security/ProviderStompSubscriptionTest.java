@@ -30,9 +30,14 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 import java.security.Principal;
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -50,10 +55,9 @@ import static org.mockito.Mockito.when;
  * The STOMP provider rule (provider plan §6.4, AC-8, T21), decided exactly as
  * on HTTP: the caller's live context and its provider types, so a verified
  * super-admin is exempt. A provider user subscribes to {@code /user/**} only
- * and sends no STOMP message. The account is linked exactly as on HTTP: the
- * ws-ticket's user id, or the Keycloak resolver's appUserId rules (a live
- * account whose name matches the principal), nothing else. Resolved once per
- * frame that needs it, and never for {@code /user/**}.
+ * and sends no STOMP message. The account is linked exactly as on HTTP; one
+ * resolution serves a STOMP session for the TTL; a failed resolution refuses
+ * SEND and the tracker but keeps the broadcasts for a known non-provider.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -65,10 +69,40 @@ class ProviderStompSubscriptionTest {
     @Mock private MessageChannel channel;
 
     private WebSocketSubscriptionInterceptor interceptor;
+    private final MutableClock clock = new MutableClock(Instant.parse("2026-10-09T10:00:00Z"));
+    private final Map<String, Object> session = new HashMap<>();
 
     private final UUID userId = UUID.randomUUID();
     private final UUID pharmacyId = UUID.randomUUID();
     private final UUID hospitalId = UUID.randomUUID();
+
+    /** A clock the test moves forward. */
+    private static final class MutableClock extends Clock {
+        private Instant now;
+
+        MutableClock(Instant start) {
+            this.now = start;
+        }
+
+        void advance(Duration by) {
+            now = now.plus(by);
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return now;
+        }
+    }
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -78,8 +112,8 @@ class ProviderStompSubscriptionTest {
         KeycloakHospitalContextResolver keycloak = new KeycloakHospitalContextResolver(userRepository, actingScopeResolver);
         ObjectProvider<KeycloakHospitalContextResolver> keycloakProvider = mock(ObjectProvider.class);
         when(keycloakProvider.getIfAvailable()).thenReturn(keycloak);
-        interceptor = new WebSocketSubscriptionInterceptor(assignmentRepository,
-            new ProviderCallerResolver(assignmentAccessor, keycloakProvider));
+        interceptor = new WebSocketSubscriptionInterceptor(
+            new ProviderCallerResolver(assignmentAccessor, keycloakProvider), clock);
     }
 
     private void holds(TenantRoleAssignment... assignments) {
@@ -119,19 +153,29 @@ class ProviderStompSubscriptionTest {
         return account;
     }
 
-    private static Message<byte[]> frame(StompCommand command, String destination, Principal user) {
+    /** A frame of this test's STOMP session (its attributes persist across frames). */
+    private Message<byte[]> frame(StompCommand command, String destination, Principal user) {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(command);
         accessor.setDestination(destination);
         if (user != null) {
             accessor.setUser(user);
         }
         accessor.setSessionId("s1");
-        accessor.setSessionAttributes(new HashMap<>());
+        accessor.setSessionAttributes(session);
         return MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
     }
 
-    private static Message<byte[]> subscribe(String destination, Principal user) {
+    private Message<byte[]> subscribe(String destination, Principal user) {
         return frame(StompCommand.SUBSCRIBE, destination, user);
+    }
+
+    private Message<byte[]> freshSessionSubscribe(String destination, Principal user) {
+        session.clear();
+        return subscribe(destination, user);
+    }
+
+    private void afterTheTtl() {
+        clock.advance(Duration.ofSeconds(21));
     }
 
     @Test
@@ -150,8 +194,6 @@ class ProviderStompSubscriptionTest {
             assertThatThrownBy(() -> interceptor.preSend(message, channel))
                 .as(refused).isInstanceOf(AccessDeniedException.class);
         }
-        // Refused before the tracker's own assignment check could admit their facility.
-        verify(assignmentRepository, never()).existsByUserIdAndHospitalIdAndActiveTrue(any(), any());
     }
 
     @Test
@@ -186,33 +228,101 @@ class ProviderStompSubscriptionTest {
     }
 
     @Test
-    @DisplayName("a mid-session grant counts on the next frame: no session cache")
-    void midSessionGrantCountsOnTheNextFrame() {
+    @DisplayName("the tracker bypass is the LIVE super-admin flag: a demotion counts once the TTL has passed")
+    void demotedSuperAdminLosesTheTracker() {
+        when(assignmentAccessor.findAssignmentsForUser(userId))
+            .thenReturn(List.of(superAdmin()))
+            .thenReturn(List.of());
+        Principal admin = ticketUser("ROLE_SUPER_ADMIN");
+
+        Message<byte[]> before = subscribe("/topic/patient-tracker/" + hospitalId, admin);
+        assertThat(interceptor.preSend(before, channel)).isSameAs(before);
+        afterTheTtl();
+        Message<byte[]> after = subscribe("/topic/patient-tracker/" + hospitalId, admin);
+        assertThatThrownBy(() -> interceptor.preSend(after, channel)).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("the tracker admits a hospital in the live permitted set, with no query of its own")
+    void trackerUsesThePermittedSet() {
+        holds(nurse());
+        Principal nurse = ticketUser("ROLE_NURSE");
+
+        Message<byte[]> own = subscribe("/topic/patient-tracker/" + hospitalId, nurse);
+        assertThat(interceptor.preSend(own, channel)).isSameAs(own);
+        Message<byte[]> other = subscribe("/topic/patient-tracker/" + UUID.randomUUID(), nurse);
+        assertThatThrownBy(() -> interceptor.preSend(other, channel)).isInstanceOf(AccessDeniedException.class);
+        verifyNoInteractions(assignmentRepository);
+    }
+
+    @Test
+    @DisplayName("a mid-session grant counts once the TTL has passed, and not before")
+    void midSessionGrantCountsAfterTheTtl() {
         when(assignmentAccessor.findAssignmentsForUser(userId))
             .thenReturn(List.of(nurse()))
             .thenReturn(List.of(pharmacist()));
         Principal user = ticketUser("ROLE_NURSE");
 
-        Message<byte[]> before = subscribe("/topic/notifications", user);
-        assertThat(interceptor.preSend(before, channel)).isSameAs(before);
-        Message<byte[]> after = subscribe("/topic/notifications", user);
-        assertThatThrownBy(() -> interceptor.preSend(after, channel)).isInstanceOf(AccessDeniedException.class);
+        Message<byte[]> first = subscribe("/topic/notifications", user);
+        assertThat(interceptor.preSend(first, channel)).isSameAs(first);
+        Message<byte[]> withinTtl = subscribe("/topic/notifications", user);
+        assertThat(interceptor.preSend(withinTtl, channel)).isSameAs(withinTtl);
+        afterTheTtl();
+        Message<byte[]> afterTtl = subscribe("/topic/notifications", user);
+        assertThatThrownBy(() -> interceptor.preSend(afterTtl, channel)).isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
-    @DisplayName("one resolution per frame: none for /user/**, one for a tracker frame (its id is reused)")
-    void resolvedOncePerFrame() {
+    @DisplayName("one assignment read serves the session within the TTL; /user/** never resolves")
+    void oneResolutionPerSessionWithinTheTtl() {
         holds(nurse());
-        when(assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(userId, hospitalId)).thenReturn(true);
         Principal nurse = ticketUser("ROLE_NURSE");
 
         interceptor.preSend(subscribe("/user/queue/replies", nurse), channel);
         verifyNoInteractions(assignmentAccessor);
 
-        Message<byte[]> tracker = subscribe("/topic/patient-tracker/" + hospitalId, nurse);
-        assertThat(interceptor.preSend(tracker, channel)).isSameAs(tracker);
+        interceptor.preSend(subscribe("/topic/patient-tracker/" + hospitalId, nurse), channel);
+        for (int i = 0; i < 5; i++) {
+            interceptor.preSend(frame(StompCommand.SEND, "/app/chat.sendMessage", nurse), channel);
+        }
         verify(assignmentAccessor, times(1)).findAssignmentsForUser(userId);
-        verify(assignmentRepository).existsByUserIdAndHospitalIdAndActiveTrue(userId, hospitalId);
+    }
+
+    @Test
+    @DisplayName("database down: a known non-provider keeps the broadcasts; SEND and the tracker are refused")
+    void unavailableResolutionKeepsBroadcastsForANonProvider() {
+        when(assignmentAccessor.findAssignmentsForUser(userId)).thenThrow(new IllegalStateException("db down"));
+        Principal nurse = ticketUser("ROLE_NURSE");
+
+        for (String broadcast : List.of("/topic/emergency-broadcast", "/topic/notifications")) {
+            Message<byte[]> message = freshSessionSubscribe(broadcast, nurse);
+            assertThat(interceptor.preSend(message, channel)).as(broadcast).isSameAs(message);
+        }
+        Message<byte[]> send = frame(StompCommand.SEND, "/app/chat.sendMessage", nurse);
+        assertThatThrownBy(() -> interceptor.preSend(send, channel)).isInstanceOf(AccessDeniedException.class);
+        Message<byte[]> tracker = subscribe("/topic/patient-tracker/" + hospitalId, nurse);
+        assertThatThrownBy(() -> interceptor.preSend(tracker, channel)).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("database down: a caller who could be a provider is refused the broadcasts, unless the session last said non-provider")
+    void unavailableResolutionForAPossibleProvider() {
+        Principal pharmacist = ticketUser("ROLE_PHARMACIST");
+        when(assignmentAccessor.findAssignmentsForUser(userId)).thenThrow(new IllegalStateException("db down"));
+        Message<byte[]> unknown = freshSessionSubscribe("/topic/emergency-broadcast", pharmacist);
+        assertThatThrownBy(() -> interceptor.preSend(unknown, channel)).isInstanceOf(AccessDeniedException.class);
+
+        // A hospital pharmacist resolved earlier in the session as a non-provider.
+        session.clear();
+        org.mockito.Mockito.doReturn(List.of(new TenantRoleAssignment(hospitalId, null, "ROLE_PHARMACIST", "PHARMACIST",
+                true, FacilityType.HOSPITAL)))
+            .doThrow(new IllegalStateException("db down"))
+            .when(assignmentAccessor).findAssignmentsForUser(userId);
+        Message<byte[]> resolved = subscribe("/topic/notifications", pharmacist);
+        assertThat(interceptor.preSend(resolved, channel)).isSameAs(resolved);
+        afterTheTtl();
+        Message<byte[]> lastKnown = subscribe("/topic/emergency-broadcast", pharmacist);
+        assertThat(interceptor.preSend(lastKnown, channel)).isSameAs(lastKnown);
     }
 
     @Test
@@ -233,11 +343,13 @@ class ProviderStompSubscriptionTest {
     void jwtPrincipalIsLinkedAsOnHttp() {
         when(userRepository.findById(userId)).thenReturn(Optional.of(account("kc-nurse")));
         holds(nurse());
-        Message<byte[]> nurseBroadcast = subscribe("/topic/emergency-broadcast", keycloakUser("kc-nurse", "ROLE_NURSE"));
+        Message<byte[]> nurseBroadcast = freshSessionSubscribe("/topic/emergency-broadcast",
+            keycloakUser("kc-nurse", "ROLE_NURSE"));
         assertThat(interceptor.preSend(nurseBroadcast, channel)).isSameAs(nurseBroadcast);
 
         holds(pharmacist());
-        Message<byte[]> providerBroadcast = subscribe("/topic/notifications", keycloakUser("kc-nurse", "ROLE_PHARMACIST"));
+        Message<byte[]> providerBroadcast = freshSessionSubscribe("/topic/notifications",
+            keycloakUser("kc-nurse", "ROLE_PHARMACIST"));
         assertThatThrownBy(() -> interceptor.preSend(providerBroadcast, channel))
             .isInstanceOf(AccessDeniedException.class);
     }
@@ -247,7 +359,6 @@ class ProviderStompSubscriptionTest {
     void jwtFailingNamesMatchIsNotLinked() {
         when(userRepository.findById(userId)).thenReturn(Optional.of(account("someone-else")));
         holds(nurse());
-        when(assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(userId, hospitalId)).thenReturn(true);
 
         Message<byte[]> broadcast = subscribe("/topic/emergency-broadcast", keycloakUser("kc-nurse", "ROLE_NURSE"));
         assertThatThrownBy(() -> interceptor.preSend(broadcast, channel)).isInstanceOf(AccessDeniedException.class);
@@ -269,14 +380,5 @@ class ProviderStompSubscriptionTest {
         Message<byte[]> own = subscribe("/user/queue/replies", named);
         assertThat(interceptor.preSend(own, channel)).isSameAs(own);
         verifyNoInteractions(userRepository);
-    }
-
-    @Test
-    @DisplayName("a live context that cannot be computed is a refusal, never a pass")
-    void unavailableContextFailsClosed() {
-        when(assignmentAccessor.findAssignmentsForUser(userId)).thenThrow(new IllegalStateException("db down"));
-        Message<byte[]> broadcast = subscribe("/topic/emergency-broadcast", ticketUser("ROLE_NURSE"));
-
-        assertThatThrownBy(() -> interceptor.preSend(broadcast, channel)).isInstanceOf(AccessDeniedException.class);
     }
 }

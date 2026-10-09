@@ -1,12 +1,11 @@
 package com.example.hms.security;
 
-import com.example.hms.config.SecurityConstants;
-import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.enums.FacilityType;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.provider.ProviderCallerResolver;
 import com.example.hms.security.provider.ProviderConfinementPolicy;
+import com.example.hms.security.provider.RoleFacilityCompatibility;
 import com.example.hms.service.PatientTrackerEventPublisher;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -19,6 +18,10 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Component;
 
 import java.security.Principal;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -38,41 +41,65 @@ import java.util.UUID;
  *   <li>{@code /topic/emergency-broadcast} — allowed; system-wide by design.</li>
  *   <li>{@code /topic/notifications} — allowed; broadcast fallback used only
  *       when a notification has no recipient username.</li>
- *   <li>{@code /topic/patient-tracker/{hospitalId}} — requires an active
- *       assignment at that hospital, or {@code ROLE_SUPER_ADMIN} (super-admin
- *       assignments are global, so they have no per-hospital rows).</li>
+ *   <li>{@code /topic/patient-tracker/{hospitalId}} — the hospital must be in
+ *       the caller's live permitted set, or the caller a VERIFIED super-admin
+ *       (a live SUPER_ADMIN assignment, not the handshake's authority).</li>
  *   <li>Everything else — denied. This includes raw {@code /topic/messages},
  *       which only ever carries frames through the user-destination resolver.</li>
  * </ul>
  *
  * <p>SEND frames (the {@code @MessageMapping} handlers, e.g.
- * {@code /app/chat.sendMessage}) are refused to a provider user, as their HTTP
- * twins are by the confinement filter; for everyone else SEND, CONNECT and the
- * rest pass through.
+ * {@code /app/chat.sendMessage}) are refused without a principal, and to a
+ * provider user, as their HTTP twins are by the confinement filter.
  *
- * <p><b>Who is a provider user</b> is decided exactly as on HTTP: the caller's
- * live context ({@link ProviderCallerResolver}, the same computation as the
- * context filters) and {@link ProviderConfinementPolicy#providerTypes}, so a
- * verified super-admin is exempt. The account is linked exactly as on HTTP
- * (the ws-ticket's user id, or the Keycloak resolver's appUserId rules;
- * nothing else). It is asked once per SUBSCRIBE (outside {@code /user/**}) and
- * per SEND frame, and the tracker check reuses that resolved id. There is no
- * session cache, so an assignment granted or revoked mid-session counts
- * on the next frame. A principal that names no live local account cannot be
- * told apart from a provider user and is treated as one (fail closed); an
- * identified hospital user keeps everything they had.
+ * <p><b>Who the caller is</b> is decided exactly as on HTTP: the live context
+ * ({@link ProviderCallerResolver}, linked as the context filters link it) and
+ * {@link ProviderConfinementPolicy#providerTypes}, so a verified super-admin is
+ * exempt. One resolution serves a frame (none for {@code /user/**}) and is
+ * kept in the STOMP session for {@link #RESOLUTION_TTL}, so a grant, a
+ * revocation or a demotion counts within that window without an assignment
+ * query on every frame.
+ *
+ * <p><b>Failure.</b> A caller that links no local account is a provider for
+ * these rules (fail closed). A resolution that FAILS (the database is
+ * unavailable) is not an answer: SEND and the tracker are refused, but the two
+ * broadcast topics stay open to a caller known not to be a provider user (the
+ * session's last resolution said so, or the ws-ticket's roles include no role
+ * a pharmacy or laboratory accepts), so a database hiccup never silently cuts
+ * a clinician off the emergency alerts. That case is logged.
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
+
+    /** How long one resolution of the caller serves a STOMP session. */
+    static final Duration RESOLUTION_TTL = Duration.ofSeconds(20);
+
+    /** Session attribute holding the last successful resolution of the caller. */
+    static final String RESOLUTION_ATTRIBUTE = WebSocketSubscriptionInterceptor.class.getName() + ".resolution";
 
     private static final String USER_DESTINATION_PREFIX = "/user/";
     private static final String EMERGENCY_BROADCAST_TOPIC = "/topic/emergency-broadcast";
     private static final String NOTIFICATIONS_BROADCAST_TOPIC = "/topic/notifications";
 
-    private final UserRoleHospitalAssignmentRepository assignmentRepository;
+    /** A successful resolution of the caller and when it was made. */
+    private record Resolution(HospitalContext context, Instant resolvedAt) {
+    }
+
+    /**
+     * The caller for one frame: the live context, or {@code unavailable} when
+     * it could not be computed (with the session's last known one, if any).
+     */
+    private record Caller(HospitalContext context, boolean unavailable, HospitalContext lastKnown) {
+    }
+
     private final ProviderCallerResolver callerResolver;
+    private final Clock clock;
+
+    public WebSocketSubscriptionInterceptor(ProviderCallerResolver callerResolver, Clock clock) {
+        this.callerResolver = callerResolver;
+        this.clock = clock;
+    }
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -84,7 +111,8 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
             if (sender == null) {
                 throw denied(null, accessor.getDestination(), "missing principal");
             }
-            if (isProvider(resolveOnce(sender))) {
+            Caller caller = resolve(accessor, sender);
+            if (caller.unavailable() || isProvider(caller.context())) {
                 throw denied(sender, accessor.getDestination(), "provider users may not send STOMP messages");
             }
             return message;
@@ -104,31 +132,51 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
             return message;
         }
 
-        // Provider rule (provider plan §6.4, T21): a user with a live
-        // assignment at a pharmacy or laboratory subscribes to /user/** only.
-        // A hospital's emergency alerts, the unaddressed notifications
-        // broadcast and every patient tracker are no business of theirs.
-        // Resolved once for this frame; /user/** above costs nothing.
-        HospitalContext caller = resolveOnce(user);
-        if (isProvider(caller)) {
-            throw denied(user, destination, "provider users may subscribe to /user/** only");
-        }
+        Caller caller = resolve(accessor, user);
 
         if (EMERGENCY_BROADCAST_TOPIC.equals(destination)
                 || NOTIFICATIONS_BROADCAST_TOPIC.equals(destination)) {
+            authorizeBroadcast(user, caller, destination);
             return message;
         }
 
+        // Provider rule (provider plan §6.4, T21): a user with a live
+        // assignment at a pharmacy or laboratory subscribes to /user/** only.
+        if (caller.unavailable() || isProvider(caller.context())) {
+            throw denied(user, destination, "provider users may subscribe to /user/** only");
+        }
+
         if (destination.startsWith(PatientTrackerEventPublisher.TOPIC_PREFIX)) {
-            authorizeTrackerSubscription(user, caller, destination);
+            authorizeTrackerSubscription(user, caller.context(), destination);
             return message;
         }
 
         throw denied(user, destination, "destination not in the subscription whitelist");
     }
 
-    private void authorizeTrackerSubscription(Principal user, HospitalContext caller, String destination) {
-        if (hasAuthority(user, SecurityConstants.ROLE_SUPER_ADMIN)) {
+    /**
+     * The two broadcasts: refused to a provider user. A failed resolution is
+     * not an answer: a caller known not to be a provider keeps them.
+     */
+    private void authorizeBroadcast(Principal user, Caller caller, String destination) {
+        if (!caller.unavailable()) {
+            if (isProvider(caller.context())) {
+                throw denied(user, destination, "provider users may subscribe to /user/** only");
+            }
+            return;
+        }
+        boolean knownNonProvider = (caller.lastKnown() != null && !isProvider(caller.lastKnown()))
+            || cannotHoldAProviderRole(user);
+        if (!knownNonProvider) {
+            throw denied(user, destination, "caller could not be resolved");
+        }
+        log.warn("[STOMP] Live context unavailable; broadcast {} kept for a caller known not to be a provider user",
+            destination);
+    }
+
+    /** The hospital is in the caller's live permitted set, or the caller is a verified super-admin. */
+    private static void authorizeTrackerSubscription(Principal user, HospitalContext caller, String destination) {
+        if (caller.isSuperAdmin()) {
             return;
         }
 
@@ -141,33 +189,40 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
             throw denied(user, destination, "malformed hospital id");
         }
 
-        UUID userId = ProviderCallerResolver.linkedUserId(caller);
-        if (userId == null) {
-            throw denied(user, destination, "principal carries no user id");
-        }
-        if (!assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(userId, hospitalId)) {
+        if (caller.getPermittedHospitalIds() == null || !caller.getPermittedHospitalIds().contains(hospitalId)) {
             throw denied(user, destination, "no active assignment at hospital");
         }
     }
 
     /**
-     * The caller's live context, linked exactly as on HTTP, computed once for
-     * the frame; {@code null} when it cannot be computed.
+     * The caller's live context, linked exactly as on HTTP: the session's
+     * resolution while it is younger than {@link #RESOLUTION_TTL}, else a new
+     * one, kept for the next frames. A failure is reported as such, with the
+     * session's last known resolution.
      */
-    private HospitalContext resolveOnce(Principal user) {
+    private Caller resolve(StompHeaderAccessor accessor, Principal user) {
+        Map<String, Object> session = accessor.getSessionAttributes();
+        Resolution cached = session != null && session.get(RESOLUTION_ATTRIBUTE) instanceof Resolution r ? r : null;
+        Instant now = clock.instant();
+        if (cached != null && now.isBefore(cached.resolvedAt().plus(RESOLUTION_TTL))) {
+            return new Caller(cached.context(), false, cached.context());
+        }
         try {
-            return callerResolver.liveContext(user);
+            HospitalContext context = callerResolver.liveContext(user);
+            if (session != null) {
+                session.put(RESOLUTION_ATTRIBUTE, new Resolution(context, now));
+            }
+            return new Caller(context, false, context);
         } catch (RuntimeException unavailable) {
-            log.warn("[STOMP] Live context unavailable ({}); treated as a provider user",
-                unavailable.getClass().getSimpleName());
-            return null;
+            log.warn("[STOMP] Live context unavailable ({})", unavailable.getClass().getSimpleName());
+            return new Caller(null, true, cached == null ? null : cached.context());
         }
     }
 
     /**
      * The HTTP rule: the live context's provider types, empty for a verified
-     * super-admin. A caller that links no local account, or whose context
-     * cannot be computed, is treated as a provider (fail closed).
+     * super-admin. A caller that links no local account is treated as a
+     * provider (fail closed).
      */
     private static boolean isProvider(HospitalContext context) {
         if (context == null || context.getPrincipalUserId() == null) {
@@ -176,13 +231,22 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
         return !ProviderConfinementPolicy.providerTypes(context).isEmpty();
     }
 
-    private static boolean hasAuthority(Principal user, String authority) {
-        if (!(user instanceof Authentication auth)) {
+    /**
+     * Without a database: the ws-ticket's account holds no role a pharmacy or
+     * laboratory accepts, so it cannot hold a provider assignment.
+     */
+    private static boolean cannotHoldAProviderRole(Principal user) {
+        if (!(user instanceof Authentication auth) || !(auth.getPrincipal() instanceof HospitalUserDetails)) {
             return false;
         }
-        return auth.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .anyMatch(authority::equals);
+        for (GrantedAuthority authority : auth.getAuthorities()) {
+            String role = RoleFacilityCompatibility.bare(authority.getAuthority());
+            if (RoleFacilityCompatibility.providerRoles(FacilityType.PHARMACY).contains(role)
+                || RoleFacilityCompatibility.providerRoles(FacilityType.LABORATORY).contains(role)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static AccessDeniedException denied(Principal user, String destination, String reason) {

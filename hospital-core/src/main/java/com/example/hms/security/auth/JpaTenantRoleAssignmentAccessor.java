@@ -38,7 +38,9 @@ public class JpaTenantRoleAssignmentAccessor implements TenantRoleAssignmentAcce
         com.example.hms.enums.FacilityType facilityType = null;
         if (assignment.getHospital() != null) {
             hospitalId = assignment.getHospital().getId();
-            facilityType = com.example.hms.enums.FacilityType.orHospital(assignment.getHospital().getFacilityType());
+            // The raw type (V180: NOT NULL, default HOSPITAL): a row without one is
+            // refused by TenantRoleAssignment instead of read as "not a provider".
+            facilityType = assignment.getHospital().getFacilityType();
             Organization org = assignment.getHospital().getOrganization();
             if (org != null) {
                 organizationId = org.getId();

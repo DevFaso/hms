@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.security.tenant.HospitalScopeExempt;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
@@ -719,7 +720,11 @@ public class PatientPortalController {
     @PreAuthorize("hasAuthority('ROLE_PATIENT')")
     public ResponseEntity<ApiResponseWrapper<Void>> markNotificationRead(
             Authentication auth, @PathVariable UUID notificationId) {
-        notificationService.markAsRead(notificationId, auth.getName());
+        // The caller's OWN notification only; someone else's answers exactly as
+        // an unknown id, the same 404 as PUT /notifications/{id}/read.
+        if (!notificationService.markAsRead(notificationId, auth.getName())) {
+            throw new ResourceNotFoundException("notification.notFound", notificationId);
+        }
         return ResponseEntity.ok(ApiResponseWrapper.success(null));
     }
 

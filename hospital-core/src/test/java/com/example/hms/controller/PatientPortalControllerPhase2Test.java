@@ -378,6 +378,47 @@ class PatientPortalControllerPhase2Test {
     // ══════════════════════════════════════════════════════════════════════
 
     @Nested
+    @DisplayName("PUT /me/patient/notifications/{notificationId}/read")
+    class MarkNotificationRead {
+
+        @Autowired private NotificationService notificationService;
+
+        @Test
+        @DisplayName("the caller's own notification: 200")
+        void ownNotificationIsMarked() throws Exception {
+            UUID id = UUID.randomUUID();
+            when(notificationService.markAsRead(id, "patient.jane")).thenReturn(true);
+
+            mockMvc.perform(put("/me/patient/notifications/{notificationId}/read", id).principal(auth))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("someone else's or an unknown notification: the same 404")
+        void foreignOrUnknownNotificationIsNotFound() throws Exception {
+            UUID foreign = UUID.randomUUID();
+            UUID unknown = UUID.randomUUID();
+            when(notificationService.markAsRead(foreign, "patient.jane")).thenReturn(false);
+            when(notificationService.markAsRead(unknown, "patient.jane")).thenReturn(false);
+
+            String asForeign = mockMvc.perform(put("/me/patient/notifications/{notificationId}/read", foreign)
+                            .principal(auth))
+                    .andExpect(status().isNotFound())
+                    .andReturn().getResponse().getContentAsString();
+            String asUnknown = mockMvc.perform(put("/me/patient/notifications/{notificationId}/read", unknown)
+                            .principal(auth))
+                    .andExpect(status().isNotFound())
+                    .andReturn().getResponse().getContentAsString();
+            org.assertj.core.api.Assertions.assertThat(normalise(asForeign, foreign))
+                .isEqualTo(normalise(asUnknown, unknown));
+        }
+
+        private String normalise(String body, UUID id) {
+            return body.replace(id.toString(), "<id>").replaceAll("\"timestamp\":\"[^\"]*\"", "");
+        }
+    }
+
+    @Nested
     @DisplayName("GET /me/patient/after-visit-summaries")
     class AfterVisitSummaries {
 

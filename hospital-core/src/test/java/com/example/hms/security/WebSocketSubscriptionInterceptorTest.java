@@ -1,10 +1,16 @@
 package com.example.hms.security;
 
-import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.enums.FacilityType;
+import com.example.hms.security.auth.TenantRoleAssignment;
+import com.example.hms.security.auth.TenantRoleAssignmentAccessor;
+import com.example.hms.security.oidc.KeycloakHospitalContextResolver;
+import com.example.hms.security.provider.ProviderCallerResolver;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -15,42 +21,45 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.security.Principal;
+import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class WebSocketSubscriptionInterceptorTest {
 
-    @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
-    @Mock private com.example.hms.repository.UserRepository userRepository;
-    @Mock private com.example.hms.security.auth.TenantRoleAssignmentAccessor assignmentAccessor;
+    @Mock private TenantRoleAssignmentAccessor assignmentAccessor;
 
     private WebSocketSubscriptionInterceptor interceptor;
-
-    /** The ws-ticket principals of this test link through their own user id; no Keycloak resolver is needed. */
-    @SuppressWarnings("unchecked")
-    private static org.springframework.beans.factory.ObjectProvider<com.example.hms.security.oidc.KeycloakHospitalContextResolver>
-            keycloakResolverProvider() {
-        return mock(org.springframework.beans.factory.ObjectProvider.class);
-    }
-
-    @org.junit.jupiter.api.BeforeEach
-    void wire() {
-        interceptor = new WebSocketSubscriptionInterceptor(assignmentRepository,
-            new com.example.hms.security.provider.ProviderCallerResolver(assignmentAccessor, keycloakResolverProvider()));
-    }
 
     private final MessageChannel channel = mock(MessageChannel.class);
     private final UUID userId = UUID.randomUUID();
     private final UUID hospitalId = UUID.randomUUID();
+
+    /** The ws-ticket principals of this test link through their own user id; no Keycloak resolver is needed. */
+    @SuppressWarnings("unchecked")
+    private static ObjectProvider<KeycloakHospitalContextResolver> keycloakResolverProvider() {
+        return mock(ObjectProvider.class);
+    }
+
+    @BeforeEach
+    void wire() {
+        interceptor = new WebSocketSubscriptionInterceptor(
+            new ProviderCallerResolver(assignmentAccessor, keycloakResolverProvider()), Clock.systemUTC());
+    }
+
+    private void holds(TenantRoleAssignment... assignments) {
+        when(assignmentAccessor.findAssignmentsForUser(userId)).thenReturn(List.of(assignments));
+    }
+
+    private static TenantRoleAssignment at(UUID hospital, String role) {
+        return new TenantRoleAssignment(hospital, null, role, role, true, FacilityType.HOSPITAL);
+    }
 
     private Principal userWithRoles(String... roles) {
         var details =
@@ -77,8 +86,7 @@ class WebSocketSubscriptionInterceptorTest {
 
     @Test
     void allowsTrackerSubscriptionForActiveAssignment() {
-        when(assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(userId, hospitalId))
-                .thenReturn(true);
+        holds(at(hospitalId, "ROLE_NURSE"));
         Message<byte[]> message =
                 frame(
                         StompCommand.SUBSCRIBE,
@@ -90,8 +98,7 @@ class WebSocketSubscriptionInterceptorTest {
 
     @Test
     void rejectsTrackerSubscriptionForForeignHospital() {
-        when(assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(userId, hospitalId))
-                .thenReturn(false);
+        holds(at(UUID.randomUUID(), "ROLE_NURSE"));
         Message<byte[]> message =
                 frame(
                         StompCommand.SUBSCRIBE,
@@ -103,7 +110,8 @@ class WebSocketSubscriptionInterceptorTest {
     }
 
     @Test
-    void superAdminBypassesTheAssignmentCheck() {
+    void verifiedSuperAdminBypassesTheAssignmentCheck() {
+        holds(at(null, "ROLE_SUPER_ADMIN"));
         Message<byte[]> message =
                 frame(
                         StompCommand.SUBSCRIBE,
@@ -111,12 +119,11 @@ class WebSocketSubscriptionInterceptorTest {
                         userWithRoles("ROLE_SUPER_ADMIN"));
 
         assertThat(interceptor.preSend(message, channel)).isSameAs(message);
-        verify(assignmentRepository, never())
-                .existsByUserIdAndHospitalIdAndActiveTrue(any(), any());
     }
 
     @Test
     void rejectsMalformedHospitalId() {
+        holds(at(hospitalId, "ROLE_NURSE"));
         Message<byte[]> message =
                 frame(
                         StompCommand.SUBSCRIBE,
@@ -129,6 +136,7 @@ class WebSocketSubscriptionInterceptorTest {
 
     @Test
     void allowsUserScopedAndSystemBroadcastDestinations() {
+        holds(at(null, "ROLE_PATIENT"));
         Principal user = userWithRoles("ROLE_PATIENT");
         for (String destination :
                 List.of(
@@ -143,6 +151,7 @@ class WebSocketSubscriptionInterceptorTest {
 
     @Test
     void rejectsDestinationsOutsideTheWhitelist() {
+        holds(at(hospitalId, "ROLE_DOCTOR"));
         Principal user = userWithRoles("ROLE_DOCTOR");
         for (String destination :
                 List.of("/topic/messages", "/queue/anything", "/topic/patient-tracker", "/topic/other")) {

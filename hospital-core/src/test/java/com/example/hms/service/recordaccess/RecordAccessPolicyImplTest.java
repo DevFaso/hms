@@ -125,6 +125,30 @@ class RecordAccessPolicyImplTest {
     }
 
     @Test
+    @DisplayName("with a request context, the readable set reads the caller's provider types: no hospital query")
+    void readableSetReadsTheContext() {
+        try {
+            com.example.hms.security.context.HospitalContextHolder.setContext(
+                com.example.hms.security.context.HospitalContext.builder()
+                    .principalUserId(actor)
+                    .providerFacilityTypes(java.util.Set.of(com.example.hms.enums.FacilityType.LABORATORY))
+                    .build());
+            assertThat(policy.readableHospitalIds(actor, null, hospitalId)).isEmpty();
+
+            com.example.hms.security.context.HospitalContextHolder.setContext(
+                com.example.hms.security.context.HospitalContext.builder()
+                    .principalUserId(actor)
+                    .assignedRoles(java.util.Set.of("ROLE_DOCTOR"))
+                    .build());
+            assertThat(policy.readableHospitalIds(actor, null, hospitalId)).containsExactly(hospitalId);
+
+            verify(hospitalRepository, never()).findById(any());
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
     @DisplayName("a hospital keeps its own id in the readable set, with or without a patient")
     void hospitalReadsItself() {
         assertThat(policy.readableHospitalIds(actor, null, hospitalId)).containsExactly(hospitalId);

@@ -7,6 +7,10 @@ import com.example.hms.enums.TreatmentRelationshipKind;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
+import com.example.hms.config.SecurityConstants;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.provider.ProviderConfinementPolicy;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRecordSharingOptOutRepository;
@@ -112,9 +116,29 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
         return readable;
     }
 
-    /** The acting facility is a pharmacy or a laboratory (one lookup, shared with decide in the transaction). */
+    /**
+     * The acting facility is a pharmacy or a laboratory. Read from the
+     * caller's live context when there is one (no query): a caller confined
+     * as a provider acts at a provider. Only a verified super-admin (who may
+     * name any facility) or a call with no request context looks the row up.
+     */
     private boolean actsAtProvider(UUID actingHospitalId) {
+        Optional<HospitalContext> context = HospitalContextHolder.getContext();
+        if (context.isPresent()) {
+            if (!ProviderConfinementPolicy.providerTypes(context.get()).isEmpty()) {
+                return true;
+            }
+            if (!holdsSuperAdmin(context.get())) {
+                return false;
+            }
+        }
         return hospitalRepository.findById(actingHospitalId).map(Hospital::isProvider).orElse(false);
+    }
+
+    /** The caller holds a live SUPER_ADMIN assignment (the context's own role set, from the live read). */
+    private static boolean holdsSuperAdmin(HospitalContext context) {
+        return context.getAssignedRoles() != null
+            && context.getAssignedRoles().contains(SecurityConstants.ROLE_SUPER_ADMIN);
     }
 
     /**
