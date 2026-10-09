@@ -109,7 +109,26 @@ if [ -n "${OTEL_EXPORTER_OTLP_ENDPOINT:-}" ] && [ -f /app/opentelemetry-javaagen
   echo "[entrypoint] OpenTelemetry agent enabled → ${OTEL_EXPORTER_OTLP_ENDPOINT}"
 fi
 
-exec su -s /bin/sh appuser -c "exec ${JAVA_BIN} ${OTEL_AGENT} -Dserver.port=${PORT} -jar /app/app.jar"
+# --- JVM memory: sized from this container's limit ----------------------------
+# Heap = JVM_HEAP_PERCENT (default 70, clamped to 10-90) of the container's
+# memory limit, which the JVM reads from cgroups. The service's memory limit is
+# the control: every service must have one, or the JVM sizes from the platform's
+# per-service maximum (docs/runbooks/railway-env-matrix.md §3a). -Xlog:gc+init
+# logs the effective heap at startup. An -Xmx in JAVA_TOOL_OPTIONS overrides
+# this; a MaxRAMPercentage there loses to it. HEAP_PCT is reduced to digits
+# before it reaches the `su -c` string below.
+# No ExitOnOutOfMemoryError, by decision: one oversized request should fail
+# that request, not kill the whole process.
+HEAP_PCT="${JVM_HEAP_PERCENT:-70}"
+case "${HEAP_PCT}" in
+  [0-9]|[0-9][0-9]|[0-9][0-9][0-9]) ;;
+  *) echo "[entrypoint] Invalid JVM_HEAP_PERCENT='${HEAP_PCT}'; using 70" >&2; HEAP_PCT=70 ;;
+esac
+if [ "${HEAP_PCT}" -lt 10 ]; then HEAP_PCT=10; fi
+if [ "${HEAP_PCT}" -gt 90 ]; then HEAP_PCT=90; fi
+JVM_MEMORY_OPTS="-XX:MaxRAMPercentage=${HEAP_PCT} -Xlog:gc+init"
+
+exec su -s /bin/sh appuser -c "exec ${JAVA_BIN} ${JVM_MEMORY_OPTS} ${OTEL_AGENT} -Dserver.port=${PORT} -jar /app/app.jar"
 ENTRYPOINT_SH
 
 # Strip CRLF from the heredoc'd script in case the Dockerfile was checked out
