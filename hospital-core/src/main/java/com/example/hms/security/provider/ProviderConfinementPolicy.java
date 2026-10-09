@@ -81,8 +81,9 @@ public class ProviderConfinementPolicy implements SmartInitializingSingleton {
     private final ObjectProvider<RequestMappingHandlerMapping> handlerMappingProvider;
     private final ObjectProvider<HandlerExceptionResolver> exceptionResolverProvider;
 
-    /** Every handler pattern, read once from the handler mapping. */
-    private volatile List<HandlerPattern> handlerPatterns;
+    /** Every handler pattern, read once from the handler mapping (an immutable list, published atomically). */
+    private final java.util.concurrent.atomic.AtomicReference<List<HandlerPattern>> handlerPatterns =
+        new java.util.concurrent.atomic.AtomicReference<>();
 
     /** Per kind of caller (provider types, patient holder): the handler patterns some method of which is allowed. */
     private final Map<String, List<PathPattern>> allowedPatterns = new ConcurrentHashMap<>();
@@ -209,7 +210,7 @@ public class ProviderConfinementPolicy implements SmartInitializingSingleton {
     }
 
     private List<HandlerPattern> handlerPatterns(RequestMappingHandlerMapping mapping) {
-        List<HandlerPattern> known = handlerPatterns;
+        List<HandlerPattern> known = handlerPatterns.get();
         if (known == null) {
             List<HandlerPattern> read = new ArrayList<>();
             for (RequestMappingInfo info : mapping.getHandlerMethods().keySet()) {
@@ -225,8 +226,8 @@ public class ProviderConfinementPolicy implements SmartInitializingSingleton {
                     read.add(new HandlerPattern(pattern, methods));
                 }
             }
-            known = List.copyOf(read);
-            handlerPatterns = known;
+            handlerPatterns.compareAndSet(null, List.copyOf(read));
+            known = handlerPatterns.get();
         }
         return known;
     }
