@@ -13,6 +13,11 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.mail.internet.AddressException;
+import jakarta.mail.internet.InternetAddress;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -66,6 +71,69 @@ public class EmailServiceImpl implements EmailService {
     /** Spring Boot's default when the property is unset is auth ON. */
     @Value("${spring.mail.properties.mail.smtp.auth:true}")
     private String smtpAuthProperty;
+
+    // The From and Reply-To every mail carries, read once at startup by
+    // initSender(). MAIL_FROM may be "addr" or "Name <addr>" (quote a name
+    // that contains a comma). Unset, no From header is set and the server
+    // supplies its own, exactly as before these settings existed. JavaMail
+    // also takes the SMTP envelope sender (bounces, SPF) from the From header
+    // unless spring.mail.properties.mail.smtp.from is set. With Gmail SMTP a
+    // From on another domain must be a verified "Send mail as" address of the
+    // login (otherwise Gmail rewrites it), and that mail is DKIM-signed as
+    // gmail.com: keep e-keneya.com's DMARC at p=none while sending this way.
+    @Value("${app.mail.from:}")
+    private String fromSetting;
+
+    @Value("${app.mail.from-name:e-Keneya}")
+    private String fromNameSetting;
+
+    @Value("${app.mail.reply-to:}")
+    private String replyToSetting;
+
+    private String senderAddress;
+    private String senderName;
+    private String replyToAddress;
+
+    /**
+     * Parses the sender settings once at startup. Mail is optional to the
+     * clinical application, so a bad value never stops the boot: it is logged
+     * as an ERROR naming the variable and ignored.
+     */
+    @PostConstruct
+    void initSender() {
+        InternetAddress from = StringUtils.hasText(fromSetting)
+            ? parseSingleOrNull("app.mail.from (MAIL_FROM)", fromSetting)
+            : null;
+        senderAddress = from != null ? from.getAddress() : null;
+        if (from != null && StringUtils.hasText(from.getPersonal())) {
+            senderName = from.getPersonal().trim();
+        } else {
+            senderName = StringUtils.hasText(fromNameSetting) ? fromNameSetting.trim() : null;
+        }
+        InternetAddress reply = StringUtils.hasText(replyToSetting)
+            ? parseSingleOrNull("app.mail.reply-to (MAIL_REPLY_TO)", replyToSetting)
+            : null;
+        replyToAddress = reply != null ? reply.getAddress() : null;
+        if (senderAddress != null && deliversRealEmail()) {
+            log.info("📧 Mail sender: {}{}", ActivationDeliveryTracker.maskEmail(senderAddress),
+                replyToAddress != null ? " (reply-to set)" : "");
+        }
+    }
+
+    /** One address that the recipients' own rule would accept, else null with an ERROR. */
+    private static InternetAddress parseSingleOrNull(String setting, String value) {
+        try {
+            InternetAddress[] parsed = InternetAddress.parse(value.trim(), true);
+            if (parsed.length == 1 && EmailAddresses.isDeliverable(parsed[0].getAddress())) {
+                return parsed[0];
+            }
+            log.error("📧 {} must be exactly one valid address (quote a display name that contains "
+                + "a comma); ignoring it", setting);
+        } catch (AddressException e) {
+            log.error("📧 {} is not a valid address; ignoring it", setting);
+        }
+        return null;
+    }
 
     private static final DateTimeFormatter CLOCK_TIME = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -320,6 +388,7 @@ public class EmailServiceImpl implements EmailService {
         mailSender.send(mime -> {
             var multipart = attachment != null;
             var helper = new MimeMessageHelper(mime, multipart, "UTF-8");
+            applySender(helper);
             helper.setTo(to.toArray(String[]::new));
             if (cc != null && !cc.isEmpty()) helper.setCc(cc.toArray(String[]::new));
             if (bcc != null && !bcc.isEmpty()) helper.setBcc(bcc.toArray(String[]::new));
@@ -332,6 +401,17 @@ public class EmailServiceImpl implements EmailService {
                 helper.addAttachment(filename, res, contentType != null ? contentType : "application/pdf");
             }
         });
+    }
+
+    /** The configured From and Reply-To; nothing when unset, as before. */
+    private void applySender(MimeMessageHelper helper) throws jakarta.mail.MessagingException,
+            java.io.UnsupportedEncodingException {
+        if (senderAddress != null) {
+            // The helper's UTF-8 encoding RFC 2047-encodes a non-ASCII name.
+            if (senderName != null) helper.setFrom(senderAddress, senderName);
+            else helper.setFrom(senderAddress);
+        }
+        if (replyToAddress != null) helper.setReplyTo(replyToAddress);
     }
 
     // -------------------------------------------------------------------------
