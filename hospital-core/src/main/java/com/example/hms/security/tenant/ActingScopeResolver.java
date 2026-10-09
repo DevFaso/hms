@@ -176,14 +176,11 @@ public class ActingScopeResolver {
 
     /** The hospitals of the active assignments in a role other than PATIENT. */
     private static Set<UUID> staffHospitalIds(List<TenantRoleAssignment> assignments) {
-        Set<UUID> staff = new LinkedHashSet<>();
-        for (TenantRoleAssignment assignment : assignments == null ? List.<TenantRoleAssignment>of() : assignments) {
-            if (assignment.active() && assignment.hospitalId() != null
-                && !ROLE_PATIENT.equals(roleCode(assignment))) {
-                staff.add(assignment.hospitalId());
-            }
-        }
-        return staff;
+        return (assignments == null ? List.<TenantRoleAssignment>of() : assignments).stream()
+            .filter(assignment -> assignment.active() && assignment.hospitalId() != null
+                && !ROLE_PATIENT.equals(roleCode(assignment)))
+            .map(TenantRoleAssignment::hospitalId)
+            .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
     }
 
     /** One active assignment's contribution to the live context. */
