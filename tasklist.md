@@ -4811,6 +4811,46 @@ they stay visible instead of living in a javadoc.
   Turn it off with `HMS_INTEGRATION_RETENTION_ENABLED=false`.
 - Set the repository variable `PLAY_APP_PUBLISHED` to `true` after the first
   Play publish (#791); until then `stage_and_submit` is refused.
+- **Railway cost reduction (2026-10-09).** The 2026-10-08 invoice was $412.16
+  (card declined; user to pay), up from $207 in August. 98% was RAM: every
+  service ran with Railway's 32 GB default limit, so the JVMs grew unchecked
+  (us2bf's prod Keycloak averaged 14 GB in October, peaking at 27 GB). By
+  project: us2bf $138, lestickets $71, e-keneya $59, yafoom $57, gazfaso $47,
+  BitNest $29, MASynegergie $11; Keycloaks alone about $217.
+  - ✅ **Memory caps applied** (owner-approved), one service at a time, each
+    redeploy checked healthy: prod Keycloaks 2 GB, dev Keycloaks 1.5 GB, Spring
+    backends 2 GB plus `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=70` (only where
+    no JAVA_TOOL_OPTIONS existed), lestickets backends 1.5 GB (they already set
+    `-Xmx512m`), ez-ticket-frontend 2 GB. 12 running services capped and
+    redeployed SUCCESS (e-Keneya prod backend included); 10 sleeping services
+    take the cap on next wake.
+  - ⚠ **e-Keneya's Keycloaks failed to boot at 1.5 GB**; the limit was put back
+    to 32 GB and both recovered. Instead, both now **sleep when idle**: prod's
+    is unused (portal `oidc.enabled=false`, no `OIDC_*` on hms-backend-core),
+    dev's is used by hms-backend-dev (`OIDC_ISSUER_URI`) and wakes on the first
+    login (30-60 s cold start). If they are ever capped, try 2 GB.
+  - Open: **re-measure in 24-48 h** (`metrics` MEMORY_USAGE_GB per service) to
+    confirm the drop and that nothing restarts on OOM; expected bill about
+    $150-200/month from about $412.
+  - Open: **set a hard workspace usage limit** in Railway (Workspace → Usage)
+    so a runaway service cannot grow the bill again.
+  - Open, later: **consolidate the dev/uat Keycloaks** into one shared dev
+    Keycloak with one realm per project (about $40/month more saving; a
+    migration per project: realm export/import, issuer URL, secrets,
+    redirect URIs). Prod Keycloaks stay separate for client isolation unless
+    the owner decides otherwise.
+  - Open, owner decision: **projects no longer maintained** (MASynegergie,
+    BitNest uat/dev, gazfaso?) to delete or hand over; **bill clients** for
+    their Railway share (us2bf alone about $138/month before the caps).
+- **App email sender (2026-10-09).** #836 adds optional `MAIL_FROM`,
+  `MAIL_FROM_NAME`, `MAIL_REPLY_TO` (unset = unchanged). Cloudflare Email
+  Routing is live for support@/contact@/noreply@e-keneya.com (SPF includes
+  Google, DMARC `p=none`). Open, owner decision: the owner does not want
+  bitnesttechs@gmail.com (today's `MAIL_USER` on prod) to send for e-Keneya.
+  Recommended: Brevo or Resend with e-keneya.com verified by DNS, then set
+  `SPRING_MAIL_HOST`/`SPRING_MAIL_PORT`/`MAIL_USER`/`MAIL_PASS`/`MAIL_FROM`
+  on prod and drop `MAIL_HEALTH_ENABLED`. Keycloak realms have no SMTP
+  settings (only matters for Keycloak's own mails).
 
 ## Deliberate non-goals — recorded so they stop resurfacing
 
