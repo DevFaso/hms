@@ -1,6 +1,5 @@
 package com.example.hms.repository;
 
-import com.example.hms.enums.FacilityType;
 import com.example.hms.enums.HospitalLifecycleState;
 import com.example.hms.model.Hospital;
 import org.springframework.data.domain.Page;
@@ -167,7 +166,7 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
       LEFT JOIN FETCH d.headOfDepartment hod
       LEFT JOIN FETCH hod.user u
       WHERE (:activeOnly IS NULL OR h.active = :activeOnly)
-    AND h.facilityType = FacilityType.HOSPITAL
+    AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL
     AND (
       :hospitalQuery IS NULL OR :hospitalQuery = '' OR
       LOWER(CAST(h.name AS string)) LIKE LOWER(CONCAT('%', CAST(:hospitalQuery AS string), '%')) OR
@@ -181,7 +180,7 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     @Query("""
       SELECT h FROM Hospital h
       WHERE (:organizationId IS NULL OR h.organization.id = :organizationId)
-        AND h.facilityType = FacilityType.HOSPITAL
+        AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL
         AND (:unassignedOnly IS NULL OR :unassignedOnly = false OR h.organization IS NULL)
         AND (
             :city IS NULL
