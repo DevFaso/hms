@@ -101,7 +101,7 @@ app.auth.oidc.required=${OIDC_REQUIRED:false}
 
 | Variable | Type | dev | prod | Notes |
 | --- | --- | --- | --- | --- |
-| `OIDC_ISSUER_URI` | public | `https://hms-keycloak-dev-dev.up.railway.app/realms/hms` | `https://hms-keycloak-prod-prod.up.railway.app/realms/hms` | **MUST** match the `hms-keycloak-<env>` `KC_HOSTNAME` value above + `/realms/hms`. When unset, the OIDC bean graph stays off and the backend is pre-S-03 behavior. |
+| `OIDC_ISSUER_URI` | public | `https://hms-keycloak-dev-dev.up.railway.app/realms/hms` | `https://hms-keycloak-prod-prod.up.railway.app/realms/hms` | **MUST** match the `hms-keycloak-<env>` `KC_HOSTNAME` value above + `/realms/hms`. When unset, the OIDC bean graph stays off and the backend is pre-S-03 behavior. **Prod is unset today** (the SSO cutover has not happened) and `hms-keycloak-prod` sleeps when idle. The backend fetches the issuer's discovery document at boot (`OidcResourceServerConfig`), so before setting this on prod, turn `hms-keycloak-prod`'s sleep OFF, or the backend fails to start. For the same reason `hms-keycloak-dev` must never sleep while `hms-backend-dev` sets this variable. |
 | `OIDC_AUDIENCE` | public | `hms-backend` | `hms-backend` | **MUST.** Strict `aud` claim validation. The realm export hard-codes this audience on the issued tokens; mismatch → all KC-issued tokens rejected by the resource server. |
 | `OIDC_REQUIRED` | public | per phase plan (see [keycloak-implementation-gaps.md](../keycloak-implementation-gaps.md) §3 Phase 3) | per phase plan | **MUST.** Controls whether legacy `POST /api/auth/login` returns 410. The intended per-env value is documented in the gaps doc; this matrix only owns the *contract*, not the schedule. |
 | `JWT_SECRET` | secret | (env-specific) | (env-specific) | **MUST.** HMAC signing for the legacy issuer (still active until Phase 4 cleanup). 32-byte minimum. |
@@ -119,6 +119,23 @@ app.auth.oidc.required=${OIDC_REQUIRED:false}
 If the first line is absent in any env, `OIDC_ISSUER_URI` is unset.
 
 ---
+
+### Resources (set on the service, not in variables)
+
+Railway's default memory limit is 32 GB, and a JVM sizes its heap from that,
+so an uncapped service grows until the bill does. Since 2026-10-09:
+
+| Service | Memory limit | `JAVA_TOOL_OPTIONS` | Sleep when idle |
+| --- | --- | --- | --- |
+| backend (prod and dev) | 2 GB | `-XX:MaxRAMPercentage=70 -XX:+ExitOnOutOfMemoryError` | off |
+| `hms-keycloak-prod` | default (1.5 GB failed to boot) | none | **on** (unused until the SSO cutover; see `OIDC_ISSUER_URI`) |
+| `hms-keycloak-dev` | see tasklist (2 GB under test) | none | **off** (hms-backend-dev needs it at boot) |
+
+`ExitOnOutOfMemoryError` makes a heap OOM exit the JVM so the platform
+restarts it, instead of leaving a broken process running. `railway.toml`
+allows 3 restarts (`restartPolicyMaxRetries`); repeated kills leave the
+service down until a manual redeploy, so a limit that is too small shows up
+as a FAILED deployment, not an endless restart loop.
 
 ## 3. `hospital-portal-<env>` (Angular) — one per environment
 
