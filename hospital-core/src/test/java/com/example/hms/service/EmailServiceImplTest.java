@@ -157,24 +157,18 @@ class EmailServiceImplTest {
         @Test
         @DisplayName("sendWithAttachment is the synchronous transport: straight to SMTP, never queued")
         void sendWithAttachmentSendsNow() throws Exception {
-            doNothing().when(mailSender).send(any(MimeMessagePreparator.class));
-            emailService.sendWithAttachment(List.of("awa@example.com"), List.of("cc@example.com"), List.of(),
-                "Subject", "<p>Body</p>", null, null, null);
+            MimeMessage message = sentMessage(List.of("cc@example.com"), null);
 
-            ArgumentCaptor<MimeMessagePreparator> captor = ArgumentCaptor.forClass(MimeMessagePreparator.class);
-            verify(mailSender).send(captor.capture());
-            MimeMessage message = new MimeMessage(Session.getInstance(new Properties()));
-            captor.getValue().prepare(message);
             assertThat(message.getSubject()).isEqualTo("Subject");
             assertThat(collectText(message.getContent())).contains("<p>Body</p>");
             assertThat(message.getRecipients(jakarta.mail.Message.RecipientType.CC)).hasSize(1);
             verify(mailOutbox, never()).enqueue(any(), any(), any(), any(), any());
         }
 
-        private MimeMessage sentMessage() throws Exception {
+        private MimeMessage sentMessage(List<String> cc, byte[] attachment) throws Exception {
             doNothing().when(mailSender).send(any(MimeMessagePreparator.class));
-            emailService.sendWithAttachment(List.of("awa@example.com"), List.of(), List.of(),
-                "Subject", "<p>Body</p>", null, null, null);
+            emailService.sendWithAttachment(List.of("awa@example.com"), cc, List.of(),
+                "Subject", "<p>Body</p>", attachment, attachment != null ? "invoice.pdf" : null, null);
             ArgumentCaptor<MimeMessagePreparator> captor = ArgumentCaptor.forClass(MimeMessagePreparator.class);
             verify(mailSender).send(captor.capture());
             MimeMessage message = new MimeMessage(Session.getInstance(new Properties()));
@@ -182,32 +176,69 @@ class EmailServiceImplTest {
             return message;
         }
 
-        @Test
-        @DisplayName("a configured From and Reply-To are set on every mail")
-        void configuredSenderIsUsed() throws Exception {
-            ReflectionTestUtils.setField(emailService, "fromAddress", " noreply@e-keneya.com ");
-            ReflectionTestUtils.setField(emailService, "fromName", "e-Keneya");
-            ReflectionTestUtils.setField(emailService, "replyTo", "support@e-keneya.com");
+        private void sender(String from, String name, String replyTo) {
+            ReflectionTestUtils.setField(emailService, "fromSetting", from);
+            ReflectionTestUtils.setField(emailService, "fromNameSetting", name);
+            ReflectionTestUtils.setField(emailService, "replyToSetting", replyTo);
+            emailService.initSender();
+        }
 
-            MimeMessage message = sentMessage();
-
-            var from = (jakarta.mail.internet.InternetAddress) message.getFrom()[0];
-            assertThat(from.getAddress()).isEqualTo("noreply@e-keneya.com");
-            assertThat(from.getPersonal()).isEqualTo("e-Keneya");
-            assertThat(((jakarta.mail.internet.InternetAddress) message.getReplyTo()[0]).getAddress())
-                .isEqualTo("support@e-keneya.com");
+        private static jakarta.mail.internet.InternetAddress first(jakarta.mail.Address[] addresses) {
+            return (jakarta.mail.internet.InternetAddress) addresses[0];
         }
 
         @Test
-        @DisplayName("with no From configured the mail carries none, so the SMTP account's address applies")
-        void noSenderConfiguredLeavesFromUnset() throws Exception {
-            ReflectionTestUtils.setField(emailService, "fromAddress", "");
-            ReflectionTestUtils.setField(emailService, "replyTo", "");
+        @DisplayName("a configured From and Reply-To are set on every mail, the attachment path included")
+        void configuredSenderIsUsed() throws Exception {
+            sender(" noreply@e-keneya.com ", "e-Keneya", "support@e-keneya.com");
 
-            MimeMessage message = sentMessage();
+            MimeMessage message = sentMessage(List.of(), new byte[] {1, 2, 3});
 
-            assertThat(message.getHeader("From")).isNull();
+            assertThat(first(message.getFrom()).getAddress()).isEqualTo("noreply@e-keneya.com");
+            assertThat(first(message.getFrom()).getPersonal()).isEqualTo("e-Keneya");
+            assertThat(first(message.getReplyTo()).getAddress()).isEqualTo("support@e-keneya.com");
+        }
+
+        @Test
+        @DisplayName("MAIL_FROM in the \"Name <addr>\" form keeps its own name and address")
+        void namedFromForm() throws Exception {
+            sender("e-Keneya Support <support@e-keneya.com>", "e-Keneya", "");
+
+            MimeMessage message = sentMessage(List.of(), null);
+
+            assertThat(first(message.getFrom()).getAddress()).isEqualTo("support@e-keneya.com");
+            assertThat(first(message.getFrom()).getPersonal()).isEqualTo("e-Keneya Support");
             assertThat(message.getHeader("Reply-To")).isNull();
+        }
+
+        @Test
+        @DisplayName("with no MAIL_FROM the SMTP account's address still carries the display name")
+        void displayNameAppliesToTheAccountAddress() throws Exception {
+            sender("", "e-Keneya", "");
+
+            MimeMessage message = sentMessage(List.of(), null);
+
+            assertThat(first(message.getFrom()).getAddress()).isEqualTo("noreply@example.test");
+            assertThat(first(message.getFrom()).getPersonal()).isEqualTo("e-Keneya");
+        }
+
+        @Test
+        @DisplayName("a blank display name sends the bare address, never an empty name")
+        void blankDisplayNameIsDropped() throws Exception {
+            sender("noreply@e-keneya.com", "   ", "");
+
+            MimeMessage message = sentMessage(List.of(), null);
+
+            assertThat(first(message.getFrom()).getPersonal()).isNull();
+        }
+
+        @Test
+        @DisplayName("an invalid or multi-address setting stops the boot instead of failing every mail")
+        void invalidSettingsFailAtStartup() {
+            assertThatThrownBy(() -> sender("", "e-Keneya", "support@e-keneya.com, ops@e-keneya.com"))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("MAIL_REPLY_TO");
+            assertThatThrownBy(() -> sender("not an address", "e-Keneya", ""))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("MAIL_FROM");
         }
     }
 

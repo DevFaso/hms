@@ -14,6 +14,10 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.mail.internet.AddressException;
+import jakarta.mail.internet.InternetAddress;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Year;
@@ -67,18 +71,71 @@ public class EmailServiceImpl implements EmailService {
     @Value("${spring.mail.properties.mail.smtp.auth:true}")
     private String smtpAuthProperty;
 
-    // The From and Reply-To every mail carries. Empty From leaves the SMTP
-    // account's own address in place (Gmail's default). A From on another
-    // domain must be a verified "Send mail as" address of that account, or
-    // Gmail rewrites it back to the account's address.
+    // The From and Reply-To every mail carries, read once at startup by
+    // initSender(). MAIL_FROM may be "addr" or "Name <addr>". Blank MAIL_FROM
+    // keeps the SMTP account's own address but still applies the display name.
+    // With Gmail SMTP a From on another domain must be a verified "Send mail
+    // as" address of the account (otherwise Gmail rewrites it), and its mail
+    // is DKIM-signed as gmail.com: keep e-keneya.com's DMARC at p=none while
+    // sending this way, or that mail fails DMARC.
     @Value("${app.mail.from:}")
-    private String fromAddress;
+    private String fromSetting;
 
     @Value("${app.mail.from-name:e-Keneya}")
-    private String fromName;
+    private String fromNameSetting;
 
     @Value("${app.mail.reply-to:}")
-    private String replyTo;
+    private String replyToSetting;
+
+    private InternetAddress senderAddress;
+    private InternetAddress replyToAddress;
+
+    /**
+     * Parses the sender settings once, so a typo stops the boot with a clear
+     * message instead of failing every queued mail permanently at send time.
+     */
+    @PostConstruct
+    void initSender() {
+        String name = isBlank(fromNameSetting) ? null : fromNameSetting.trim();
+        if (!isBlank(fromSetting)) {
+            senderAddress = parseSingle("app.mail.from (MAIL_FROM)", fromSetting);
+        } else if (!isBlank(configuredMailUsername) && configuredMailUsername.contains("@")) {
+            senderAddress = parseSingle("spring.mail.username (MAIL_USER)", configuredMailUsername);
+        } else {
+            senderAddress = null;
+        }
+        if (senderAddress != null && senderAddress.getPersonal() == null && name != null) {
+            try {
+                senderAddress.setPersonal(name, "UTF-8");
+            } catch (java.io.UnsupportedEncodingException e) {
+                throw new IllegalStateException("app.mail.from-name cannot be encoded", e);
+            }
+        }
+        replyToAddress = isBlank(replyToSetting)
+            ? null
+            : parseSingle("app.mail.reply-to (MAIL_REPLY_TO)", replyToSetting);
+        if (senderAddress != null) {
+            log.info("📧 Mail sender: {}{}", senderAddress.toUnicodeString(),
+                replyToAddress != null ? " (reply-to " + replyToAddress.getAddress() + ")" : "");
+        }
+    }
+
+    private static InternetAddress parseSingle(String setting, String value) {
+        try {
+            InternetAddress[] parsed = InternetAddress.parse(value.trim(), true);
+            if (parsed.length != 1) {
+                throw new IllegalStateException(setting + " must be exactly one address");
+            }
+            parsed[0].validate();
+            return parsed[0];
+        } catch (AddressException e) {
+            throw new IllegalStateException(setting + " is not a valid address", e);
+        }
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
 
     private static final DateTimeFormatter CLOCK_TIME = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -333,12 +390,8 @@ public class EmailServiceImpl implements EmailService {
         mailSender.send(mime -> {
             var multipart = attachment != null;
             var helper = new MimeMessageHelper(mime, multipart, "UTF-8");
-            if (fromAddress != null && !fromAddress.isBlank()) {
-                helper.setFrom(fromAddress.trim(), fromName);
-            }
-            if (replyTo != null && !replyTo.isBlank()) {
-                helper.setReplyTo(replyTo.trim());
-            }
+            if (senderAddress != null) helper.setFrom(senderAddress);
+            if (replyToAddress != null) helper.setReplyTo(replyToAddress);
             helper.setTo(to.toArray(String[]::new));
             if (cc != null && !cc.isEmpty()) helper.setCc(cc.toArray(String[]::new));
             if (bcc != null && !bcc.isEmpty()) helper.setBcc(bcc.toArray(String[]::new));
