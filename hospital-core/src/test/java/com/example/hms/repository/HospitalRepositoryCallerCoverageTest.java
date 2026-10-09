@@ -66,6 +66,8 @@ class HospitalRepositoryCallerCoverageTest {
         "findById", "getReferenceById", "getById", "existsById", "findByIdForUpdate");
 
     private static final String LABEL = "names a facility for display; it grants, writes and lists nothing";
+    private static final String PHARMACY_OWN = "the pharmacy's own workflow, which a PHARMACY provider does in P2-PH;"
+        + " the service's own ownership checks scope it";
     private static final String ANY_TYPE = "must see every facility type: ";
 
     /** Class.method#by-id read of a hospital → why it is not findClinicalById. Frozen: it only shrinks. */
@@ -98,7 +100,11 @@ class HospitalRepositoryCallerCoverageTest {
         entry("WebhookEndpointService.register#getReferenceById", ANY_TYPE + "a partner endpoint of the acting facility; nothing clinical"),
         entry("AnnouncementServiceImpl.createAnnouncement#getReferenceById", ANY_TYPE + "a staff announcement to the acting facility; nothing clinical"),
         entry("TenantProvisioningService.provision#findById", ANY_TYPE + "super-admin schema provisioning of a tenant row"),
-        entry("LegacyAllergyTextBackfillWorker.resolveHospital#findById", "a backfill over rows already written; it creates no destination"));
+        entry("LegacyAllergyTextBackfillWorker.resolveHospital#findById", "a backfill over rows already written; it creates no destination"),
+        entry("PharmacySaleServiceImpl.createSale#findById", PHARMACY_OWN),
+        entry("PharmacyClaimServiceImpl.createClaim#findById", PHARMACY_OWN),
+        entry("PharmacyPaymentServiceImpl.createPayment#findById", PHARMACY_OWN),
+        entry("MtmReviewServiceImpl.startReview#findById", PHARMACY_OWN));
 
     private static final String AT_CALL_SITE = "filters with ClinicalHospitals at the call site: ";
 
@@ -208,10 +214,11 @@ class HospitalRepositoryCallerCoverageTest {
     @Test
     @DisplayName("no main code counts or lists hospitals through the inherited unfiltered findAll / count")
     void inheritedFindAllAndCountAreUnused() throws IOException {
-        Map<String, Set<String>> calls = scan();
-        assertThat(calls).as("the scan found the repository's callers").isNotEmpty();
-        calls.forEach((caller, methods) -> assertThat(methods).as(caller)
-            .doesNotContain("findAll", "count"));
+        Set<String> called = new TreeSet<>();
+        scan().values().forEach(called::addAll);
+        assertThat(called).as("the repository methods main code calls")
+            .isNotEmpty()
+            .doesNotContain("findAll", "count");
     }
 
     // ── bytecode scan ───────────────────────────────────────────────────────

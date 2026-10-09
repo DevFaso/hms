@@ -33,13 +33,24 @@ class LiveContextProviderTypesTest {
     }
 
     @Test
+    @DisplayName("an assignment at a facility cannot be built without its type (no fail-open default)")
+    void facilityRowNeedsItsType() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                new TenantRoleAssignment(pharmacy, null, "ROLE_PHARMACIST", "PHARMACIST", true, null))
+            .isInstanceOf(IllegalArgumentException.class);
+        org.assertj.core.api.Assertions.assertThatCode(() ->
+                new TenantRoleAssignment(null, null, "ROLE_SUPER_ADMIN", "SUPER_ADMIN", true, null))
+            .doesNotThrowAnyException();
+    }
+
+    @Test
     @DisplayName("an inactive provider assignment, a hospital user and a global row confine nobody")
     void nothingElseConfines() {
         HospitalContext inactive = ActingScopeResolver.liveContext(UUID.randomUUID(), "former", List.of(
             new TenantRoleAssignment(pharmacy, null, "ROLE_PHARMACIST", "PHARMACIST", false, FacilityType.PHARMACY)));
         HospitalContext doctor = ActingScopeResolver.liveContext(UUID.randomUUID(), "doc", List.of(
             new TenantRoleAssignment(hospital, null, "ROLE_DOCTOR", "DOCTOR", true, FacilityType.HOSPITAL),
-            new TenantRoleAssignment(null, null, "ROLE_PATIENT", "PATIENT", true)));
+            new TenantRoleAssignment(null, null, "ROLE_PATIENT", "PATIENT", true, null)));
 
         assertThat(inactive.getProviderFacilityTypes()).isEmpty();
         assertThat(doctor.getProviderFacilityTypes()).isEmpty();

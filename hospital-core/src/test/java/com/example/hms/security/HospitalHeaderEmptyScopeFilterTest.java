@@ -285,11 +285,11 @@ class HospitalHeaderEmptyScopeFilterTest {
     }
 
     private static TenantRoleAssignment globalPatient() {
-        return new TenantRoleAssignment(null, null, ROLE_PATIENT, "Patient", true);
+        return new TenantRoleAssignment(null, null, ROLE_PATIENT, "Patient", true, null);
     }
 
     private static TenantRoleAssignment doctorAt(UUID hospitalId, boolean active) {
-        return new TenantRoleAssignment(hospitalId, ORG, ROLE_DOCTOR, "Doctor", active);
+        return new TenantRoleAssignment(hospitalId, ORG, ROLE_DOCTOR, "Doctor", active, com.example.hms.enums.FacilityType.HOSPITAL);
     }
 
     private static final class PrincipalStub implements HospitalUserDetails {

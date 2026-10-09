@@ -4,6 +4,7 @@
 # CommonProviderConfinement; every handler under them is listed here, so a
 # new one fails the test until it is added deliberately. The exact entries
 # (POST /users/admin-register) carry their reason in CommonProviderConfinement.
+# GET /users/{id} is reachable for the caller's OWN id only (an own-id entry).
 GET /auth/bootstrap-status
 GET /auth/credentials/me
 GET /auth/csrf-token
@@ -12,8 +13,12 @@ GET /auth/ping
 GET /auth/session/bootstrap
 GET /auth/token/echo
 GET /auth/verify-email
+GET /feature-flags
+GET /me/assignments
+GET /me/dashboard-config
 GET /notifications
 GET /notifications/preferences
+GET /users/{id}
 PATCH /notifications/read-all
 POST /auth/bootstrap-signup
 POST /auth/credentials/recovery/{contactId}/send-code

@@ -2,6 +2,9 @@ package com.example.hms.security;
 
 import com.example.hms.config.SecurityConstants;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.provider.ProviderCallerResolver;
+import com.example.hms.security.provider.ProviderConfinementPolicy;
 import com.example.hms.service.PatientTrackerEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,7 +22,8 @@ import java.security.Principal;
 import java.util.UUID;
 
 /**
- * Per-destination authorization for STOMP SUBSCRIBE frames.
+ * Per-destination authorization for STOMP SUBSCRIBE frames, and the provider
+ * rule for SEND frames.
  *
  * <p>The handshake authenticates the user (ws-ticket flow in
  * {@link JwtAuthenticationFilter}), but the simple broker itself performs no
@@ -30,8 +34,7 @@ import java.util.UUID;
  * <ul>
  *   <li>{@code /user/**} — allowed; Spring's user-destination resolver scopes
  *       these to the subscribing principal's own session.</li>
- *   <li>A provider user (an active assignment at a pharmacy or laboratory)
- *       may subscribe to nothing else (provider plan §6.4).</li>
+ *   <li>A provider user may subscribe to nothing else (provider plan §6.4).</li>
  *   <li>{@code /topic/emergency-broadcast} — allowed; system-wide by design.</li>
  *   <li>{@code /topic/notifications} — allowed; broadcast fallback used only
  *       when a notification has no recipient username.</li>
@@ -42,16 +45,19 @@ import java.util.UUID;
  *       which only ever carries frames through the user-destination resolver.</li>
  * </ul>
  *
- * <p>SUBSCRIBE frames are inspected as above. SEND frames (the
- * {@code @MessageMapping} handlers, e.g. {@code /app/chat.sendMessage}) are
- * refused to a provider user, as their HTTP twins are by the confinement
- * filter; for everyone else SEND, CONNECT and the rest pass through.
+ * <p>SEND frames (the {@code @MessageMapping} handlers, e.g.
+ * {@code /app/chat.sendMessage}) are refused to a provider user, as their HTTP
+ * twins are by the confinement filter; for everyone else SEND, CONNECT and the
+ * rest pass through.
  *
- * <p>Whether the user is a provider user is read once per STOMP session (one
- * query, cached in the session attributes), for any principal type that
- * identifies a local account: the ws-ticket's {@link HospitalUserDetails}, a
- * Keycloak token's {@code appUserId}, or the principal name. Only a principal
- * that identifies no account is treated as a provider (fail closed).
+ * <p><b>Who is a provider user</b> is decided exactly as on HTTP: the caller's
+ * live context ({@link ProviderCallerResolver}, the same computation as the
+ * context filters) and {@link ProviderConfinementPolicy#providerTypes}, so a
+ * verified super-admin is exempt. It is asked on every SUBSCRIBE and SEND frame
+ * (no session cache), so an assignment granted or revoked mid-session counts
+ * on the next frame. A principal that names no live local account cannot be
+ * told apart from a provider user and is treated as one (fail closed); an
+ * identified hospital user keeps everything they had.
  */
 @Slf4j
 @Component
@@ -62,11 +68,8 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
     private static final String EMERGENCY_BROADCAST_TOPIC = "/topic/emergency-broadcast";
     private static final String NOTIFICATIONS_BROADCAST_TOPIC = "/topic/notifications";
 
-    /** Session attribute caching whether this STOMP session belongs to a provider user. */
-    static final String PROVIDER_SESSION_ATTRIBUTE = WebSocketSubscriptionInterceptor.class.getName() + ".providerUser";
-
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
-    private final com.example.hms.repository.UserRepository userRepository;
+    private final ProviderCallerResolver callerResolver;
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -74,7 +77,7 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
         if (StompCommand.SEND.equals(accessor.getCommand())) {
             // Provider rule for @MessageMapping: closed, as HTTP /chat/send is.
             Principal sender = accessor.getUser();
-            if (sender != null && isProviderUser(accessor, sender)) {
+            if (sender != null && isProviderUser(sender)) {
                 throw denied(sender, accessor.getDestination(), "provider users may not send STOMP messages");
             }
             return message;
@@ -98,7 +101,7 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
         // assignment at a pharmacy or laboratory subscribes to /user/** only.
         // A hospital's emergency alerts, the unaddressed notifications
         // broadcast and every patient tracker are no business of theirs.
-        if (isProviderUser(accessor, user)) {
+        if (isProviderUser(user)) {
             throw denied(user, destination, "provider users may subscribe to /user/** only");
         }
 
@@ -129,7 +132,7 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
             throw denied(user, destination, "malformed hospital id");
         }
 
-        UUID userId = resolveUserId(user);
+        UUID userId = callerResolver.localUserId(user);
         if (userId == null) {
             throw denied(user, destination, "principal carries no user id");
         }
@@ -139,23 +142,21 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
     }
 
     /**
-     * True when the session's user holds an active assignment at a provider
-     * facility. Asked once per STOMP session and cached there. A principal
-     * that identifies no local account cannot be told apart from a provider
-     * user, so it is treated as one (fail closed); an identified hospital
-     * user keeps everything they had.
+     * The HTTP rule: the live context's provider types, empty for a verified
+     * super-admin. Unidentifiable, or not computable: treated as a provider.
      */
-    private boolean isProviderUser(StompHeaderAccessor accessor, Principal user) {
-        java.util.Map<String, Object> session = accessor.getSessionAttributes();
-        if (session != null && session.get(PROVIDER_SESSION_ATTRIBUTE) instanceof Boolean cached) {
-            return cached;
+    private boolean isProviderUser(Principal user) {
+        try {
+            HospitalContext context = callerResolver.liveContext(user);
+            if (context == null || context.getPrincipalUserId() == null) {
+                return true;
+            }
+            return !ProviderConfinementPolicy.providerTypes(context).isEmpty();
+        } catch (RuntimeException unavailable) {
+            log.warn("[STOMP] Live context unavailable ({}); treated as a provider user",
+                unavailable.getClass().getSimpleName());
+            return true;
         }
-        UUID userId = resolveUserId(user);
-        boolean provider = userId == null || assignmentRepository.existsActiveAtProviderFacility(userId);
-        if (session != null) {
-            session.put(PROVIDER_SESSION_ATTRIBUTE, provider);
-        }
-        return provider;
     }
 
     private static boolean hasAuthority(Principal user, String authority) {
@@ -167,39 +168,9 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
                 .anyMatch(authority::equals);
     }
 
-    /**
-     * The local account behind the principal: the ws-ticket's user details, a
-     * Keycloak token's {@code appUserId} claim, or else the principal name
-     * looked up as a username. {@code null} when none identifies an account.
-     */
-    private UUID resolveUserId(Principal user) {
-        if (user instanceof Authentication auth
-                && auth.getPrincipal() instanceof HospitalUserDetails details
-                && details.getUserId() != null) {
-            return details.getUserId();
-        }
-        if (user instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwt) {
-            String appUserId = jwt.getToken().getClaimAsString("appUserId");
-            if (appUserId != null) {
-                try {
-                    return UUID.fromString(appUserId);
-                } catch (IllegalArgumentException malformed) {
-                    return null;
-                }
-            }
-        }
-        String name = user == null ? null : user.getName();
-        if (name == null || name.isBlank() || userRepository == null) {
-            return null;
-        }
-        return userRepository.findByUsernameIgnoreCase(name)
-                .map(com.example.hms.model.User::getId)
-                .orElse(null);
-    }
-
     private static AccessDeniedException denied(Principal user, String destination, String reason) {
         log.warn(
-                "Rejected STOMP SUBSCRIBE by '{}' to '{}': {}",
+                "Rejected STOMP frame by '{}' to '{}': {}",
                 user != null ? user.getName() : "<anonymous>",
                 destination,
                 reason);

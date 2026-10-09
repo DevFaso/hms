@@ -58,10 +58,53 @@ public final class ProviderConfinement {
         return true;
     }
 
-    /** A path served outside Spring MVC (the health probe), by exact path within the application. */
+    /**
+     * {@link #allows}, plus the own-id constraint of an entry that carries one
+     * ({@code GET /users/{id}}: the {@code id} path variable must be the
+     * caller's own user id).
+     *
+     * @param uriVariables the matched handler's path variables
+     * @param callerUserId the caller's local user id; {@code null} never matches an own-id entry
+     */
+    public static boolean allowsRequest(Set<FacilityType> providerTypes, boolean patientHolder, String method,
+                                        String handlerPattern, java.util.Map<String, String> uriVariables,
+                                        java.util.UUID callerUserId) {
+        if (!allows(providerTypes, patientHolder, method, handlerPattern)) {
+            return false;
+        }
+        String ownIdVariable = ownIdVariable(normalise(method), handlerPattern);
+        if (ownIdVariable == null) {
+            return true;
+        }
+        String named = uriVariables == null ? null : uriVariables.get(ownIdVariable);
+        return callerUserId != null && named != null && callerUserId.toString().equalsIgnoreCase(named.trim());
+    }
+
+    /** The own-id path variable of the entry naming this handler, or {@code null}. */
+    private static String ownIdVariable(String method, String handlerPattern) {
+        for (List<ConfinementRule> rules : List.of(CommonProviderConfinement.RULES,
+                CommonProviderConfinement.PATIENT_SELF_SERVICE_RULES, PharmacyConfinement.RULES,
+                LaboratoryConfinement.RULES)) {
+            for (ConfinementRule rule : rules) {
+                if (rule.matches(method, handlerPattern) && rule.ownIdVariable() != null) {
+                    return rule.ownIdVariable();
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * A path served outside Spring MVC: the health probe (exact path), and the
+     * STOMP handshake (prefix, any method; its frames are confined by the
+     * STOMP interceptor).
+     */
     public static boolean allowsNonMvc(String method, String pathWithinApplication) {
-        return method != null && pathWithinApplication != null
-            && anyMatches(CommonProviderConfinement.NON_MVC_RULES, normalise(method), pathWithinApplication);
+        if (method == null || pathWithinApplication == null) {
+            return false;
+        }
+        return anyMatches(CommonProviderConfinement.NON_MVC_RULES, normalise(method), pathWithinApplication)
+            || underAny(pathWithinApplication, CommonProviderConfinement.NON_MVC_PREFIXES);
     }
 
     /** The facility-specific list of one provider type; a hospital has none. */

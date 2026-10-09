@@ -30,7 +30,18 @@ public final class CommonProviderConfinement {
     public static final List<ConfinementRule> RULES = List.of(
         new ConfinementRule("POST", "/users/admin-register",
             "a PROVIDER_ADMIN registers its own staff through the provider registrar list (plan §6.3);"
-                + " the service refuses every other provider role, any other facility and every PATIENT account"));
+                + " the service refuses every other provider role, any other facility and every PATIENT account"),
+        new ConfinementRule("GET", "/me/assignments",
+            "the caller's own assignments: the portal shell reads them to pick the acting facility"
+                + " (ActingScopeResolver.SCOPE_ESTABLISHING_PATHS)"),
+        new ConfinementRule("GET", "/me/dashboard-config",
+            "the portal shell's own dashboard configuration; no patient data"),
+        new ConfinementRule("GET", "/feature-flags",
+            "the platform's feature flags the portal shell reads at start-up; no tenant or patient data"),
+        new ConfinementRule("GET", "/users/{id}",
+            "the plan's own-profile row (there is no /me/profile handler): the caller's OWN account only;"
+                + " the confinement compares the {id} path variable with the caller's user id",
+            "id"));
 
     /**
      * Paths served outside Spring MVC's request mappings, matched on the path
@@ -38,6 +49,13 @@ public final class CommonProviderConfinement {
      */
     public static final List<ConfinementRule> NON_MVC_RULES = List.of(
         new ConfinementRule("GET", "/actuator/health", "liveness and readiness probe"));
+
+    /**
+     * Prefixes served outside Spring MVC: the SockJS/STOMP handshake. It
+     * carries no data; every STOMP frame after it is held to the provider rule
+     * by {@code WebSocketSubscriptionInterceptor}.
+     */
+    public static final List<String> NON_MVC_PREFIXES = List.of("/ws-chat");
 
     /**
      * Patient self-service, for a provider user who ALSO holds a PATIENT

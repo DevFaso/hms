@@ -258,6 +258,7 @@ public class SecurityConfig {
      * and the filter passes every request through.
      */
     private final ObjectProvider<com.example.hms.security.provider.ProviderConfinementPolicy> providerConfinementPolicyProvider;
+    private final ObjectProvider<com.example.hms.security.provider.ProviderCallerResolver> providerCallerResolverProvider;
 
     @Value("${app.cors.allowed-origins:http://localhost:4200}")
     private String allowedOrigins;
@@ -944,7 +945,8 @@ public class SecurityConfig {
         // before AuthorizationFilter, so a confined caller gets the unmapped
         // path's 404 for a hospital endpoint, never a URL matcher's 403.
         http.addFilterBefore(
-            new com.example.hms.security.provider.ProviderFacilityConfinementFilter(providerConfinementPolicyProvider),
+            new com.example.hms.security.provider.ProviderFacilityConfinementFilter(providerConfinementPolicyProvider,
+                providerCallerResolverProvider),
             org.springframework.security.web.access.intercept.AuthorizationFilter.class);
 
         // ── Hardened HTTP response headers ──────────────────────────────────

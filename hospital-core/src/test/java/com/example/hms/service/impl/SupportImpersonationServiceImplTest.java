@@ -363,6 +363,6 @@ class SupportImpersonationServiceImplTest {
     }
 
     private TenantRoleAssignment assignment(String code, String name, boolean active) {
-        return new TenantRoleAssignment(null, null, code, name, active);
+        return new TenantRoleAssignment(null, null, code, name, active, null);
     }
 }

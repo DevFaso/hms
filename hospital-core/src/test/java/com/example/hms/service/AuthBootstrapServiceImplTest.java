@@ -105,7 +105,8 @@ class AuthBootstrapServiceImplTest {
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private TenantRoleAssignment activeAssignment(UUID hospitalId, String roleCode) {
-        return new TenantRoleAssignment(hospitalId, UUID.randomUUID(), roleCode, roleCode, true);
+        return new TenantRoleAssignment(hospitalId, UUID.randomUUID(), roleCode, roleCode, true,
+            hospitalId == null ? null : com.example.hms.enums.FacilityType.HOSPITAL);
     }
 
     // ── tests ─────────────────────────────────────────────────────────────────

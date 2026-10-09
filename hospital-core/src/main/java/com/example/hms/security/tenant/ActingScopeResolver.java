@@ -109,17 +109,12 @@ public class ActingScopeResolver {
         Set<UUID> organizations = new LinkedHashSet<>();
         Set<String> roles = new LinkedHashSet<>();
         Map<UUID, UUID> hospitalOrganizations = new LinkedHashMap<>();
-        Set<com.example.hms.enums.FacilityType> providerTypes =
-            java.util.EnumSet.noneOf(com.example.hms.enums.FacilityType.class);
         for (TenantRoleAssignment assignment : assignments == null ? List.<TenantRoleAssignment>of() : assignments) {
             if (assignment.active()) {
                 collect(assignment, hospitals, organizations, roles, hospitalOrganizations);
-                if (assignment.hospitalId() != null && assignment.facilityType() != null
-                    && assignment.facilityType().isProvider()) {
-                    providerTypes.add(assignment.facilityType());
-                }
             }
         }
+        Set<com.example.hms.enums.FacilityType> providerTypes = providerFacilityTypes(assignments);
         boolean superAdmin = roles.contains(ROLE_SUPER_ADMIN);
 
         HospitalContext.HospitalContextBuilder builder = HospitalContext.builder()
@@ -160,6 +155,22 @@ public class ActingScopeResolver {
         return builder
             .scopeRefusal(hospitals.isEmpty() ? ActingScope.Reason.NO_HOSPITAL : ActingScope.Reason.AMBIGUOUS)
             .build();
+    }
+
+    /**
+     * The provider facility types (PHARMACY, LABORATORY) among the active
+     * assignments at a facility: what confines the caller (provider plan
+     * section 3.3). Never HOSPITAL; empty for a hospital user.
+     */
+    private static Set<com.example.hms.enums.FacilityType> providerFacilityTypes(List<TenantRoleAssignment> assignments) {
+        Set<com.example.hms.enums.FacilityType> types = java.util.EnumSet.noneOf(com.example.hms.enums.FacilityType.class);
+        for (TenantRoleAssignment assignment : assignments == null ? List.<TenantRoleAssignment>of() : assignments) {
+            if (assignment.active() && assignment.hospitalId() != null && assignment.facilityType() != null
+                && assignment.facilityType().isProvider()) {
+                types.add(assignment.facilityType());
+            }
+        }
+        return types;
     }
 
     /** One active assignment's contribution to the live context. */

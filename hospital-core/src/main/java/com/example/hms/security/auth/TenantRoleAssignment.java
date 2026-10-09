@@ -17,9 +17,14 @@ public record TenantRoleAssignment(
     com.example.hms.enums.FacilityType facilityType
 ) {
 
-    /** An assignment whose facility type is not known (a global row, or a hand-built view). */
-    public TenantRoleAssignment(UUID hospitalId, UUID organizationId, String roleCode, String roleName,
-                                boolean active) {
-        this(hospitalId, organizationId, roleCode, roleName, active, null);
+    /**
+     * A row at a facility must say which kind of facility it is: an unknown
+     * type would read as "not a provider" and leave the caller unconfined
+     * (provider plan section 3.3), so it is refused here instead.
+     */
+    public TenantRoleAssignment {
+        if (hospitalId != null && facilityType == null) {
+            throw new IllegalArgumentException("An assignment at a facility needs its facility type");
+        }
     }
 }

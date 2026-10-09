@@ -73,14 +73,6 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
     /* ------------ Existence checks ------------ */
     boolean existsByUserIdAndHospitalIdAndActiveTrue(UUID userId, UUID hospitalId);
 
-    /**
-     * The user holds an active assignment at a provider facility (PHARMACY,
-     * LABORATORY): the STOMP provider rule (provider plan §6.4).
-     */
-    @Query("SELECT COUNT(a) > 0 FROM UserRoleHospitalAssignment a WHERE a.user.id = :userId AND a.active = true"
-        + " AND a.hospital.facilityType <> com.example.hms.enums.FacilityType.HOSPITAL")
-    boolean existsActiveAtProviderFacility(@Param("userId") UUID userId);
-
     /** A hospital the user held once: an inactive assignment there (ActingScopeResolver's NO_LONGER_PERMITTED). */
     boolean existsByUserIdAndHospitalIdAndActiveFalse(UUID userId, UUID hospitalId);
 

@@ -53,7 +53,7 @@ class KeycloakHospitalContextResolverTest {
     void liveAssignmentsNotClaims() {
         localUser("dr.alice", "alice@example.com");
         when(assignments.findAssignmentsForUser(USER_ID)).thenReturn(List.of(
-            new TenantRoleAssignment(HOSPITAL_A, null, "ROLE_DOCTOR", "ROLE_DOCTOR", true)));
+            new TenantRoleAssignment(HOSPITAL_A, null, "ROLE_DOCTOR", "ROLE_DOCTOR", true, com.example.hms.enums.FacilityType.HOSPITAL)));
 
         HospitalContext ctx = resolver.resolve(jwt(claims -> {
             claims.put("appUserId", USER_ID.toString());
@@ -125,8 +125,8 @@ class KeycloakHospitalContextResolverTest {
     void superAdminComesFromTheTable() {
         localUser("root", "root@example.com");
         when(assignments.findAssignmentsForUser(USER_ID)).thenReturn(List.of(
-            new TenantRoleAssignment(null, null, "ROLE_SUPER_ADMIN", "ROLE_SUPER_ADMIN", true),
-            new TenantRoleAssignment(HOSPITAL_A, null, "ROLE_DOCTOR", "ROLE_DOCTOR", true)));
+            new TenantRoleAssignment(null, null, "ROLE_SUPER_ADMIN", "ROLE_SUPER_ADMIN", true, null),
+            new TenantRoleAssignment(HOSPITAL_A, null, "ROLE_DOCTOR", "ROLE_DOCTOR", true, com.example.hms.enums.FacilityType.HOSPITAL)));
 
         HospitalContext ctx = resolver.resolve(jwt(claims -> claims.put("appUserId", USER_ID.toString())), "root");
 

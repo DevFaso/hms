@@ -79,10 +79,12 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
      * Lists, counts and KPIs are CLINICAL by default (provider plan AC-11): a
      * pharmacy or laboratory row is never a "hospital" there. A new list or
      * count that must also return providers says so in its name
-     * (...AnyFacilityType, ...ByFacilityType). The by-id reads and the name
-     * or code lookups are not filtered; a clinical destination filters them
-     * with ClinicalHospitals.isClinical. HospitalRepositoryCallerCoverageTest
-     * holds every caller of an unfiltered list, count or lookup to a
+     * (...AnyFacilityType, ...ByFacilityType). A clinical destination named
+     * by id reads findClinicalById (below); the plain by-id reads see every
+     * type and each caller is recorded with its reason. The name and code
+     * lookups are not filtered; a clinical destination filters them with
+     * ClinicalHospitals.isClinical. HospitalRepositoryCallerCoverageTest holds
+     * every caller of an unfiltered list, count, lookup or by-id read to a
      * recorded reason.
      */
 

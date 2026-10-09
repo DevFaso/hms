@@ -83,7 +83,7 @@ public class MtmReviewServiceImpl implements MtmReviewService {
 
         Patient patient = patientRepository.findById(dto.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", dto.getPatientId()));
-        Hospital hospital = hospitalRepository.findClinicalById(dto.getHospitalId())
+        Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", dto.getHospitalId()));
         User pharmacist = resolveCurrentUser();
 

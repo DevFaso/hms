@@ -264,7 +264,7 @@ class KeycloakHospitalContextFilterTest {
     }
 
     private static TenantRoleAssignment assignment(UUID hospitalId, String role) {
-        return new TenantRoleAssignment(hospitalId, null, role, role, true);
+        return new TenantRoleAssignment(hospitalId, null, role, role, true, com.example.hms.enums.FacilityType.HOSPITAL);
     }
 
     private static void signIn(List<String> realmRoles) {

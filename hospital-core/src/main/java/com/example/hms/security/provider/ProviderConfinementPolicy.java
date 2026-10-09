@@ -8,8 +8,10 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.server.PathContainer;
 import org.springframework.http.server.RequestPath;
 import org.springframework.stereotype.Component;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
@@ -26,14 +28,18 @@ import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.util.ServletRequestPathUtils;
+import org.springframework.web.util.pattern.PathPattern;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The work behind {@link ProviderFacilityConfinementFilter} (provider plan
@@ -43,19 +49,20 @@ import java.util.Set;
  * <ul>
  *   <li><b>Who.</b> Any caller who is not a verified super-admin and whose
  *       live assignments include a provider facility (PHARMACY, LABORATORY),
- *       pinned to it or not. The types come with the live context
- *       ({@link HospitalContext#getProviderFacilityTypes()}), computed from the
- *       same assignment read as the permitted set: no query of their own.</li>
+ *       pinned to it or not: {@link HospitalContext#getProviderFacilityTypes()},
+ *       computed with the permitted set from the same assignment read.</li>
  *   <li><b>What.</b> The handler Spring MVC itself would dispatch to, asked of
- *       the same {@code requestMappingHandlerMapping} before the request gets
- *       there; its method and exact pattern are matched against
- *       {@link ProviderConfinement}. Not a prefix of the raw URI, so a path
- *       that only looks allowed cannot land on another handler.</li>
+ *       the same {@code requestMappingHandlerMapping} once; its method and exact
+ *       pattern are matched against {@link ProviderConfinement}, with the
+ *       own-id constraint where an entry carries one. Not a prefix of the raw
+ *       URI, so a path that only looks allowed cannot land on another handler.</li>
  *   <li><b>Refusal.</b> The answer of an unmapped path, produced by the same
  *       exception resolvers from the same exception, so the two cannot be told
- *       apart (a 403 would confirm the endpoint exists). A request that maps
- *       to an ALLOWED path but not with this method, media type or parameters
- *       is let through, so MVC answers its 405, 415, 406 or 400 as for anyone.</li>
+ *       apart. A request that maps to an ALLOWED path but not with this method,
+ *       media type or parameters goes on, so MVC answers its 405, 415, 406 or
+ *       400 as for anyone. Which handler patterns are allowed for a kind of
+ *       caller is indexed once, from the handler mapping and the static
+ *       allow-lists, so that case checks the allowed patterns only.</li>
  * </ul>
  *
  * <p>A plain component, not a {@code Filter}: {@code @WebMvcTest} slices scan
@@ -63,18 +70,37 @@ import java.util.Set;
  */
 @Slf4j
 @Component
-public class ProviderConfinementPolicy {
+public class ProviderConfinementPolicy implements SmartInitializingSingleton {
 
     private static final List<String> EVERY_METHOD = List.of("GET", "POST", "PUT", "PATCH", "DELETE");
 
+    /** One handler pattern of the application and the methods it answers. */
+    private record HandlerPattern(PathPattern pattern, List<String> methods) {
+    }
+
     private final ObjectProvider<RequestMappingHandlerMapping> handlerMappingProvider;
     private final ObjectProvider<HandlerExceptionResolver> exceptionResolverProvider;
+
+    /** Every handler pattern, read once from the handler mapping. */
+    private volatile List<HandlerPattern> handlerPatterns;
+
+    /** Per kind of caller (provider types, patient holder): the handler patterns some method of which is allowed. */
+    private final Map<String, List<PathPattern>> allowedPatterns = new ConcurrentHashMap<>();
 
     public ProviderConfinementPolicy(
             @Qualifier("requestMappingHandlerMapping") ObjectProvider<RequestMappingHandlerMapping> handlerMappingProvider,
             @Qualifier("handlerExceptionResolver") ObjectProvider<HandlerExceptionResolver> exceptionResolverProvider) {
         this.handlerMappingProvider = handlerMappingProvider;
         this.exceptionResolverProvider = exceptionResolverProvider;
+    }
+
+    /** Index the handler patterns at start-up, once the handler mapping is ready. */
+    @Override
+    public void afterSingletonsInstantiated() {
+        RequestMappingHandlerMapping mapping = handlerMappingProvider.getIfAvailable();
+        if (mapping != null) {
+            handlerPatterns(mapping);
+        }
     }
 
     /**
@@ -94,8 +120,14 @@ public class ProviderConfinementPolicy {
             && context.getAssignedRoles().contains(SecurityConstants.ROLE_PATIENT);
     }
 
-    /** May this confined caller's request go on? Leaves the request as it found it. */
-    public boolean allows(HttpServletRequest request, Set<FacilityType> providerTypes, boolean patientHolder) {
+    /**
+     * May this confined caller's request go on? One handler lookup; the
+     * request is left exactly as it was found (every attribute the lookup
+     * sets is removed, every one it replaced restored).
+     */
+    public boolean allows(HttpServletRequest request, HospitalContext context) {
+        Set<FacilityType> providerTypes = providerTypes(context);
+        boolean patientHolder = isPatientHolder(context);
         RequestMappingHandlerMapping mapping = handlerMappingProvider.getIfAvailable();
         if (mapping == null) {
             return ProviderConfinement.allowsNonMvc(request.getMethod(), pathWithinApplication(request));
@@ -109,14 +141,21 @@ public class ProviderConfinementPolicy {
             }
             Object pattern = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
             return pattern instanceof String matched
-                && ProviderConfinement.allows(providerTypes, patientHolder, request.getMethod(), matched);
+                && ProviderConfinement.allowsRequest(providerTypes, patientHolder, request.getMethod(), matched,
+                    uriVariables(request), context == null ? null : context.getPrincipalUserId());
         } catch (HttpRequestMethodNotSupportedException | HttpMediaTypeNotSupportedException
                  | HttpMediaTypeNotAcceptableException | UnsatisfiedServletRequestParameterException partialMatch) {
             // The path is mapped, but not with this method, media type or
             // parameters. On an allowed path MVC answers that (405, 415, 406,
             // 400) as it does for anyone; on any other path the caller gets
             // the unmapped answer.
-            return pathMatchesAnAllowedHandler(mapping, request, providerTypes, patientHolder);
+            PathContainer path = ServletRequestPathUtils.getParsedRequestPath(request).pathWithinApplication();
+            for (PathPattern allowed : allowedPatterns(mapping, providerTypes, patientHolder)) {
+                if (allowed.matches(path)) {
+                    return true;
+                }
+            }
+            return false;
         } catch (Exception noMatch) {
             return false;
         } finally {
@@ -150,50 +189,52 @@ public class ProviderConfinementPolicy {
         }
     }
 
-    /**
-     * The pattern of the handler Spring MVC would dispatch this request to, or
-     * {@code null} when none matches. Leaves the request as it found it.
-     */
-    String matchedHandlerPattern(HttpServletRequest request) {
-        RequestMappingHandlerMapping mapping = handlerMappingProvider.getIfAvailable();
-        if (mapping == null) {
-            return null;
-        }
-        Map<String, Object> before = attributes(request);
-        try {
-            ServletRequestPathUtils.parseAndCache(request);
-            HandlerExecutionChain chain = mapping.getHandler(request);
-            Object pattern = chain == null ? null : request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
-            return pattern instanceof String matched ? matched : null;
-        } catch (Exception noMatch) {
-            return null;
-        } finally {
-            restore(request, before);
-        }
-    }
-
-    /** Some handler whose pattern matches this path is one the caller may reach, with one of its methods. */
-    private static boolean pathMatchesAnAllowedHandler(RequestMappingHandlerMapping mapping, HttpServletRequest request,
-                                                       Set<FacilityType> providerTypes, boolean patientHolder) {
-        for (RequestMappingInfo info : mapping.getHandlerMethods().keySet()) {
-            PathPatternsRequestCondition patterns = info.getPathPatternsCondition();
-            PathPatternsRequestCondition matching = patterns == null ? null : patterns.getMatchingCondition(request);
-            if (matching == null) {
-                continue;
-            }
-            Set<RequestMethod> declared = info.getMethodsCondition().getMethods();
-            List<String> methods = declared.isEmpty()
-                ? EVERY_METHOD
-                : declared.stream().map(RequestMethod::name).toList();
-            for (String pattern : matching.getPatternValues()) {
-                for (String method : methods) {
-                    if (ProviderConfinement.allows(providerTypes, patientHolder, method, pattern)) {
-                        return true;
+    /** The handler patterns some method of which this kind of caller may reach; computed once per kind. */
+    private List<PathPattern> allowedPatterns(RequestMappingHandlerMapping mapping, Set<FacilityType> providerTypes,
+                                              boolean patientHolder) {
+        String key = new TreeSet<>(providerTypes.stream().map(Enum::name).toList()) + "|" + patientHolder;
+        return allowedPatterns.computeIfAbsent(key, k -> {
+            List<PathPattern> allowed = new ArrayList<>();
+            for (HandlerPattern handler : handlerPatterns(mapping)) {
+                for (String method : handler.methods()) {
+                    if (ProviderConfinement.allows(providerTypes, patientHolder, method,
+                            handler.pattern().getPatternString())) {
+                        allowed.add(handler.pattern());
+                        break;
                     }
                 }
             }
+            return List.copyOf(allowed);
+        });
+    }
+
+    private List<HandlerPattern> handlerPatterns(RequestMappingHandlerMapping mapping) {
+        List<HandlerPattern> known = handlerPatterns;
+        if (known == null) {
+            List<HandlerPattern> read = new ArrayList<>();
+            for (RequestMappingInfo info : mapping.getHandlerMethods().keySet()) {
+                PathPatternsRequestCondition patterns = info.getPathPatternsCondition();
+                if (patterns == null) {
+                    continue;
+                }
+                Set<RequestMethod> declared = info.getMethodsCondition().getMethods();
+                List<String> methods = declared.isEmpty()
+                    ? EVERY_METHOD
+                    : declared.stream().map(RequestMethod::name).toList();
+                for (PathPattern pattern : patterns.getPatterns()) {
+                    read.add(new HandlerPattern(pattern, methods));
+                }
+            }
+            known = List.copyOf(read);
+            handlerPatterns = known;
         }
-        return false;
+        return known;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, String> uriVariables(HttpServletRequest request) {
+        Object variables = request.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
+        return variables instanceof Map<?, ?> map ? (Map<String, String>) map : Map.of();
     }
 
     private static String pathWithinApplication(HttpServletRequest request) {

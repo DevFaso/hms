@@ -3,7 +3,6 @@ package com.example.hms.security;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.messaging.Message;
@@ -31,8 +30,16 @@ import static org.mockito.Mockito.when;
 class WebSocketSubscriptionInterceptorTest {
 
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Mock private com.example.hms.repository.UserRepository userRepository;
+    @Mock private com.example.hms.security.auth.TenantRoleAssignmentAccessor assignmentAccessor;
 
-    @InjectMocks private WebSocketSubscriptionInterceptor interceptor;
+    private WebSocketSubscriptionInterceptor interceptor;
+
+    @org.junit.jupiter.api.BeforeEach
+    void wire() {
+        interceptor = new WebSocketSubscriptionInterceptor(assignmentRepository,
+            new com.example.hms.security.provider.ProviderCallerResolver(userRepository, assignmentAccessor));
+    }
 
     private final MessageChannel channel = mock(MessageChannel.class);
     private final UUID userId = UUID.randomUUID();

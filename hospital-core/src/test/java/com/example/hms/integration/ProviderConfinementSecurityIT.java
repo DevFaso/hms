@@ -119,7 +119,8 @@ class ProviderConfinementSecurityIT extends BaseIT {
             get("/prescriptions"),
             post("/break-glass").contentType(MediaType.APPLICATION_JSON).content("{}"),
             get("/hospitals"),
-            get("/me/assignments"),
+            get("/users/{id}", someId),
+            get("/me/patient-flow"),
             get("/patients/{patientId}/record-access", someId));
     }
 
@@ -173,7 +174,10 @@ class ProviderConfinementSecurityIT extends BaseIT {
 
         for (MockHttpServletRequestBuilder request : List.of(
                 get("/notifications"),
-                get("/notifications/preferences"))) {
+                get("/notifications/preferences"),
+                get("/me/assignments"),
+                get("/me/dashboard-config"),
+                get("/feature-flags"))) {
             MvcResult result = as(pharmacist, request);
             assertThat(result.getResponse().getStatus()).as(label(result)).isEqualTo(200);
         }
@@ -182,6 +186,19 @@ class ProviderConfinementSecurityIT extends BaseIT {
         MvcResult auth = as(pharmacist, get("/auth/mfa/status"));
         assertThat(refusalShape(auth)).as(label(auth)).isNotEqualTo(unmapped);
         assertThat(unmapped).startsWith("404|");
+    }
+
+    @Test
+    @DisplayName("GET /users/{id} reaches the handler for the provider user's OWN id only")
+    void ownProfileOnly() throws Exception {
+        User pharmacistAccount = accounts.userAt("pharm", pharmacyId, "PHARMACIST");
+        String token = tokenFor(pharmacistAccount, "PHARMACIST");
+        String unmapped = refusalShape(as(doctorToken(), get(UNMAPPED)));
+
+        MvcResult own = as(token, get("/users/{id}", pharmacistAccount.getId()));
+        assertThat(refusalShape(own)).as(label(own)).isNotEqualTo(unmapped);
+        MvcResult other = as(token, get("/users/{id}", UUID.randomUUID()));
+        assertThat(refusalShape(other)).as(label(other)).isEqualTo(unmapped);
     }
 
     @Test

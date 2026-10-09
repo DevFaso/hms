@@ -141,14 +141,25 @@ public class PatientHospitalRegistration extends BaseEntity {
         normalize();
     }
 
+    /** The hospital this row was loaded with: an update may not MOVE it to a provider. */
+    @jakarta.persistence.Transient
+    private java.util.UUID loadedHospitalId;
+
+    @jakarta.persistence.PostLoad
+    private void rememberLoadedHospital() {
+        loadedHospitalId = hospital == null ? null : hospital.getId();
+    }
+
     /**
      * An update may deactivate or discharge a registration that a provider
-     * facility should never have held (a legacy or planted row), but it may
-     * not keep one active there, re-activate it, or move it to a provider.
+     * facility should never have held (a legacy or planted row, left where it
+     * was loaded), but it may not keep one active there, re-activate it, or
+     * move any row, active or not, to a provider.
      */
     @PreUpdate
     private void normalizeOnUpdate() {
-        if (active) {
+        boolean moved = hospital != null && !java.util.Objects.equals(hospital.getId(), loadedHospitalId);
+        if (active || moved) {
             requireClinicalHospital();
         }
         normalize();
