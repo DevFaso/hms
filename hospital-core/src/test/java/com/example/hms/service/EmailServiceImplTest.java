@@ -233,12 +233,36 @@ class EmailServiceImplTest {
         }
 
         @Test
-        @DisplayName("an invalid or multi-address setting stops the boot instead of failing every mail")
-        void invalidSettingsFailAtStartup() {
-            assertThatThrownBy(() -> sender("", "e-Keneya", "support@e-keneya.com, ops@e-keneya.com"))
-                .isInstanceOf(IllegalStateException.class).hasMessageContaining("MAIL_REPLY_TO");
-            assertThatThrownBy(() -> sender("not an address", "e-Keneya", ""))
-                .isInstanceOf(IllegalStateException.class).hasMessageContaining("MAIL_FROM");
+        @DisplayName("an invalid or multi-address setting is ignored, never fatal: mail falls back to the account address")
+        void invalidSettingsAreIgnored() throws Exception {
+            sender("not an address", "e-Keneya", "support@e-keneya.com, ops@e-keneya.com");
+
+            MimeMessage message = sentMessage(List.of(), null);
+
+            assertThat(first(message.getFrom()).getAddress()).isEqualTo("noreply@example.test");
+            assertThat(message.getHeader("Reply-To")).isNull();
+        }
+
+        @Test
+        @DisplayName("a non-ASCII display name is RFC 2047 encoded on both forms")
+        void nonAsciiNameIsEncoded() throws Exception {
+            sender("Clinique Médicale <noreply@e-keneya.com>", "e-Keneya", "");
+
+            MimeMessage message = sentMessage(List.of(), null);
+
+            assertThat(message.getHeader("From")[0]).contains("=?UTF-8?").doesNotContain("é");
+            assertThat(first(message.getFrom()).getPersonal()).isEqualTo("Clinique Médicale");
+        }
+
+        @Test
+        @DisplayName("an SMTP login that is not a clean address never breaks startup or sending")
+        void oddLoginIsNotFatal() throws Exception {
+            ReflectionTestUtils.setField(emailService, "configuredMailUsername", "a@b@c");
+            sender("", "e-Keneya", "");
+
+            MimeMessage message = sentMessage(List.of(), null);
+
+            assertThat(message.getHeader("From")).isNull();
         }
     }
 

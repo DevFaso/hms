@@ -13,6 +13,7 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.mail.internet.AddressException;
@@ -72,7 +73,9 @@ public class EmailServiceImpl implements EmailService {
     private String smtpAuthProperty;
 
     // The From and Reply-To every mail carries, read once at startup by
-    // initSender(). MAIL_FROM may be "addr" or "Name <addr>". Blank MAIL_FROM
+    // initSender(). MAIL_FROM may be "addr" or "Name <addr>" (quote a name
+    // that contains a comma). With no From header set JavaMail also takes the
+    // envelope sender (bounces, SPF) from it on relays that keep it. Blank MAIL_FROM
     // keeps the SMTP account's own address but still applies the display name.
     // With Gmail SMTP a From on another domain must be a verified "Send mail
     // as" address of the account (otherwise Gmail rewrites it), and its mail
@@ -91,50 +94,65 @@ public class EmailServiceImpl implements EmailService {
     private InternetAddress replyToAddress;
 
     /**
-     * Parses the sender settings once, so a typo stops the boot with a clear
-     * message instead of failing every queued mail permanently at send time.
+     * Parses the sender settings once at startup. Mail is optional to the
+     * clinical application, so a bad value never stops the boot: it is logged
+     * as an ERROR naming the variable and ignored, and mail goes out with the
+     * SMTP account's own address, exactly as before these settings existed.
      */
     @PostConstruct
     void initSender() {
-        String name = isBlank(fromNameSetting) ? null : fromNameSetting.trim();
-        if (!isBlank(fromSetting)) {
-            senderAddress = parseSingle("app.mail.from (MAIL_FROM)", fromSetting);
-        } else if (!isBlank(configuredMailUsername) && configuredMailUsername.contains("@")) {
-            senderAddress = parseSingle("spring.mail.username (MAIL_USER)", configuredMailUsername);
-        } else {
-            senderAddress = null;
+        String name = StringUtils.hasText(fromNameSetting) ? fromNameSetting.trim() : null;
+        senderAddress = StringUtils.hasText(fromSetting)
+            ? parseSingleOrNull("app.mail.from (MAIL_FROM)", fromSetting)
+            : null;
+        if (senderAddress == null && configuredMailUsername != null && configuredMailUsername.contains("@")) {
+            // The SMTP login is a credential first: if it isn't a clean address
+            // the From is simply left to the server, never an error.
+            senderAddress = parseQuietly(configuredMailUsername);
         }
-        if (senderAddress != null && senderAddress.getPersonal() == null && name != null) {
-            try {
-                senderAddress.setPersonal(name, "UTF-8");
-            } catch (java.io.UnsupportedEncodingException e) {
-                throw new IllegalStateException("app.mail.from-name cannot be encoded", e);
-            }
-        }
-        replyToAddress = isBlank(replyToSetting)
-            ? null
-            : parseSingle("app.mail.reply-to (MAIL_REPLY_TO)", replyToSetting);
         if (senderAddress != null) {
-            log.info("📧 Mail sender: {}{}", senderAddress.toUnicodeString(),
-                replyToAddress != null ? " (reply-to " + replyToAddress.getAddress() + ")" : "");
+            String personal = senderAddress.getPersonal() != null ? senderAddress.getPersonal() : name;
+            try {
+                // Re-set even a parsed name so non-ASCII is RFC 2047 encoded.
+                senderAddress.setPersonal(personal, "UTF-8");
+            } catch (java.io.UnsupportedEncodingException e) {
+                log.error("📧 MAIL_FROM_NAME cannot be encoded; sending without a display name");
+            }
+        } else if (name != null && StringUtils.hasText(fromNameSetting) && deliversRealEmail()) {
+            log.warn("📧 MAIL_FROM_NAME is set but there is no sender address to attach it to "
+                + "(set MAIL_FROM); mail goes out with the server's default From");
+        }
+        replyToAddress = StringUtils.hasText(replyToSetting)
+            ? parseSingleOrNull("app.mail.reply-to (MAIL_REPLY_TO)", replyToSetting)
+            : null;
+        if (senderAddress != null && deliversRealEmail()) {
+            log.info("📧 Mail sender: {}{}", ActivationDeliveryTracker.maskEmail(senderAddress.getAddress()),
+                replyToAddress != null ? " (reply-to set)" : "");
         }
     }
 
-    private static InternetAddress parseSingle(String setting, String value) {
+    private static InternetAddress parseSingleOrNull(String setting, String value) {
         try {
             InternetAddress[] parsed = InternetAddress.parse(value.trim(), true);
-            if (parsed.length != 1) {
-                throw new IllegalStateException(setting + " must be exactly one address");
+            if (parsed.length == 1) {
+                parsed[0].validate();
+                return parsed[0];
             }
-            parsed[0].validate();
-            return parsed[0];
+            log.error("📧 {} must be exactly one address (quote a display name that contains a comma); "
+                + "ignoring it", setting);
         } catch (AddressException e) {
-            throw new IllegalStateException(setting + " is not a valid address", e);
+            log.error("📧 {} is not a valid address; ignoring it", setting);
         }
+        return null;
     }
 
-    private static boolean isBlank(String value) {
-        return value == null || value.isBlank();
+    private static InternetAddress parseQuietly(String value) {
+        try {
+            InternetAddress[] parsed = InternetAddress.parse(value.trim(), true);
+            return parsed.length == 1 ? parsed[0] : null;
+        } catch (AddressException e) {
+            return null;
+        }
     }
 
     private static final DateTimeFormatter CLOCK_TIME = DateTimeFormatter.ofPattern("HH:mm");
