@@ -1,6 +1,5 @@
 package com.example.hms.service;
 
-import com.example.hms.security.provider.ClinicalHospitals;
 import com.example.hms.exception.BusinessRuleException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -676,8 +675,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", dto.getHospitalId()));
         }
 
-        return hospitalRepository.findByNameIgnoreCase(dto.getHospitalName())
-            .filter(ClinicalHospitals::isClinical)
+        return hospitalRepository.findClinicalByNameIgnoreCase(dto.getHospitalName())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", dto.getHospitalName()));
     }
 

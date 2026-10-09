@@ -566,7 +566,7 @@ class DepartmentServiceImplTest {
         DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
         responseDto.setName("ICU");
 
-        when(hospitalRepository.findByNameIgnoreCase("Test Hospital")).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalByNameIgnoreCase("Test Hospital")).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("ICU", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(userId);
         when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
@@ -585,7 +585,7 @@ class DepartmentServiceImplTest {
         dto.setHospitalName("NonexistentHospital");
         dto.setName("Test");
 
-        when(hospitalRepository.findByNameIgnoreCase("NonexistentHospital")).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalByNameIgnoreCase("NonexistentHospital")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
             .isInstanceOf(ResourceNotFoundException.class);

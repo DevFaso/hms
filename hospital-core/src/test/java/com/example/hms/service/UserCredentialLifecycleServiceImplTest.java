@@ -78,6 +78,37 @@ class UserCredentialLifecycleServiceImplTest {
     }
 
     @Test
+    void someoneElsesRecoveryContactAnswersAsAnUnknownOne() {
+        UUID caller = UUID.randomUUID();
+        UserRecoveryContact foreign = pendingContact(UUID.randomUUID());
+        UUID unknownId = UUID.randomUUID();
+        when(recoveryContactRepository.findById(foreign.getId())).thenReturn(Optional.of(foreign));
+        when(recoveryContactRepository.findById(unknownId)).thenReturn(Optional.empty());
+
+        for (boolean verify : new boolean[] {false, true}) {
+            Throwable asForeign = org.assertj.core.api.Assertions.catchThrowable(() -> {
+                if (verify) {
+                    service.verifyRecoveryContact(caller, foreign.getId(), "123456");
+                } else {
+                    service.sendRecoveryContactVerificationCode(caller, foreign.getId());
+                }
+            });
+            Throwable asUnknown = org.assertj.core.api.Assertions.catchThrowable(() -> {
+                if (verify) {
+                    service.verifyRecoveryContact(caller, unknownId, "123456");
+                } else {
+                    service.sendRecoveryContactVerificationCode(caller, unknownId);
+                }
+            });
+            assertThat(asForeign).isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class)
+                .hasSameClassAs(asUnknown);
+            assertThat(asForeign.getMessage().replace(foreign.getId().toString(), "<id>"))
+                .isEqualTo(asUnknown.getMessage().replace(unknownId.toString(), "<id>"));
+        }
+        verify(recoveryContactRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void recoveryCodeExpiryIsStampedFromTheInjectedClock() {
         UUID userId = UUID.randomUUID();
         UserRecoveryContact contact = pendingContact(userId);

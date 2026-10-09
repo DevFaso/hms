@@ -14,10 +14,11 @@ import com.example.hms.model.Hospital;
  *       {@code hospitalRepository.findClinicalById(id)}, whose query keeps
  *       HOSPITAL rows only. A plain {@code findById} of a hospital is a
  *       recorded exception in {@code HospitalRepositoryCallerCoverageTest}.</li>
- *   <li><b>By name or code</b>, and for a collection the repository did not
- *       filter (an organisation's hospitals): this predicate, as
- *       {@code .filter(ClinicalHospitals::isClinical)}. The coverage test
- *       checks each such caller references it.</li>
+ *   <li><b>By name or code</b>: the repository too, with the
+ *       {@code findClinicalBy...} finders.</li>
+ *   <li><b>A collection the repository did not filter</b> (an organisation's
+ *       hospitals, the multi-scope fan-out): this predicate, as
+ *       {@code .filter(ClinicalHospitals::isClinical)}.</li>
  * </ul>
  */
 public final class ClinicalHospitals {

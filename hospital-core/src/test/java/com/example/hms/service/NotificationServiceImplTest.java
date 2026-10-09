@@ -248,7 +248,7 @@ class NotificationServiceImplTest {
 
             when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
 
-            service.markAsRead(notificationId);
+            assertThat(service.markAsRead(notificationId, username)).isTrue();
 
             assertThat(notification.isRead()).isTrue();
             verify(notificationRepository).save(notification);
@@ -259,8 +259,26 @@ class NotificationServiceImplTest {
         void doesNothingWhenNotFound() {
             when(notificationRepository.findById(notificationId)).thenReturn(Optional.empty());
 
-            service.markAsRead(notificationId);
+            assertThat(service.markAsRead(notificationId, username)).isFalse();
 
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("someone else's notification is not marked, and answers as an unknown one")
+        void someoneElsesNotificationIsNotMarked() {
+            Notification notification = Notification.builder()
+                    .id(notificationId)
+                    .message("msg")
+                    .recipientUsername("someone-else")
+                    .createdAt(LocalDateTime.now())
+                    .read(false)
+                    .build();
+            when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
+
+            assertThat(service.markAsRead(notificationId, username)).isFalse();
+
+            assertThat(notification.isRead()).isFalse();
             verify(notificationRepository, never()).save(any());
         }
     }

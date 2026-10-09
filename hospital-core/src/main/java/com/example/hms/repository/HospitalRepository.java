@@ -81,9 +81,9 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
      * count that must also return providers says so in its name
      * (...AnyFacilityType, ...ByFacilityType). A clinical destination named
      * by id reads findClinicalById (below); the plain by-id reads see every
-     * type and each caller is recorded with its reason. The name and code
-     * lookups are not filtered; a clinical destination filters them with
-     * ClinicalHospitals.isClinical. HospitalRepositoryCallerCoverageTest holds
+     * type and each caller is recorded with its reason. A clinical destination
+     * named by name or code reads a findClinicalBy... finder (below); the plain
+     * name and code lookups see every type. HospitalRepositoryCallerCoverageTest holds
      * every caller of an unfiltered list, count, lookup or by-id read to a
      * recorded reason.
      */
@@ -124,6 +124,26 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     @Query("SELECT h FROM Hospital h WHERE h.id = :id"
         + " AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
     Optional<Hospital> findClinicalById(@Param("id") UUID id);
+
+    /** A clinical destination named by its exact name, any case (requireClinicalHospital, AC-11). */
+    @Query("SELECT h FROM Hospital h WHERE LOWER(h.name) = LOWER(:name)"
+        + " AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
+    Optional<Hospital> findClinicalByNameIgnoreCase(@Param("name") String name);
+
+    /** A clinical destination named by its exact name (requireClinicalHospital, AC-11). */
+    @Query("SELECT h FROM Hospital h WHERE h.name = :name"
+        + " AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
+    Optional<Hospital> findClinicalByName(@Param("name") String name);
+
+    /** A clinical destination named by its code, any case (requireClinicalHospital, AC-11). */
+    @Query("SELECT h FROM Hospital h WHERE LOWER(h.code) = LOWER(:code)"
+        + " AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
+    Optional<Hospital> findClinicalByCodeIgnoreCase(@Param("code") String code);
+
+    /** A clinical destination named by its name, code or email, any case (requireClinicalHospital, AC-11). */
+    @Query("SELECT h FROM Hospital h WHERE (LOWER(h.name) = LOWER(:identifier) OR LOWER(h.code) = LOWER(:identifier)"
+        + " OR LOWER(h.email) = LOWER(:identifier)) AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
+    Optional<Hospital> findClinicalByNameOrCodeOrEmail(@Param("identifier") String identifier);
 
     /* Organization-related queries */
     /**

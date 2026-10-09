@@ -53,8 +53,11 @@ import java.util.UUID;
  * <p><b>Who is a provider user</b> is decided exactly as on HTTP: the caller's
  * live context ({@link ProviderCallerResolver}, the same computation as the
  * context filters) and {@link ProviderConfinementPolicy#providerTypes}, so a
- * verified super-admin is exempt. It is asked on every SUBSCRIBE and SEND frame
- * (no session cache), so an assignment granted or revoked mid-session counts
+ * verified super-admin is exempt. The account is linked exactly as on HTTP
+ * (the ws-ticket's user id, or the Keycloak resolver's appUserId rules;
+ * nothing else). It is asked once per SUBSCRIBE (outside {@code /user/**}) and
+ * per SEND frame, and the tracker check reuses that resolved id. There is no
+ * session cache, so an assignment granted or revoked mid-session counts
  * on the next frame. A principal that names no live local account cannot be
  * told apart from a provider user and is treated as one (fail closed); an
  * identified hospital user keeps everything they had.
@@ -76,8 +79,12 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(message);
         if (StompCommand.SEND.equals(accessor.getCommand())) {
             // Provider rule for @MessageMapping: closed, as HTTP /chat/send is.
+            // A SEND with no principal is refused, as a SUBSCRIBE is.
             Principal sender = accessor.getUser();
-            if (sender != null && isProviderUser(sender)) {
+            if (sender == null) {
+                throw denied(null, accessor.getDestination(), "missing principal");
+            }
+            if (isProvider(resolveOnce(sender))) {
                 throw denied(sender, accessor.getDestination(), "provider users may not send STOMP messages");
             }
             return message;
@@ -101,7 +108,9 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
         // assignment at a pharmacy or laboratory subscribes to /user/** only.
         // A hospital's emergency alerts, the unaddressed notifications
         // broadcast and every patient tracker are no business of theirs.
-        if (isProviderUser(user)) {
+        // Resolved once for this frame; /user/** above costs nothing.
+        HospitalContext caller = resolveOnce(user);
+        if (isProvider(caller)) {
             throw denied(user, destination, "provider users may subscribe to /user/** only");
         }
 
@@ -111,14 +120,14 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
         }
 
         if (destination.startsWith(PatientTrackerEventPublisher.TOPIC_PREFIX)) {
-            authorizeTrackerSubscription(user, destination);
+            authorizeTrackerSubscription(user, caller, destination);
             return message;
         }
 
         throw denied(user, destination, "destination not in the subscription whitelist");
     }
 
-    private void authorizeTrackerSubscription(Principal user, String destination) {
+    private void authorizeTrackerSubscription(Principal user, HospitalContext caller, String destination) {
         if (hasAuthority(user, SecurityConstants.ROLE_SUPER_ADMIN)) {
             return;
         }
@@ -132,7 +141,7 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
             throw denied(user, destination, "malformed hospital id");
         }
 
-        UUID userId = callerResolver.localUserId(user);
+        UUID userId = ProviderCallerResolver.linkedUserId(caller);
         if (userId == null) {
             throw denied(user, destination, "principal carries no user id");
         }
@@ -142,21 +151,29 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
     }
 
     /**
-     * The HTTP rule: the live context's provider types, empty for a verified
-     * super-admin. Unidentifiable, or not computable: treated as a provider.
+     * The caller's live context, linked exactly as on HTTP, computed once for
+     * the frame; {@code null} when it cannot be computed.
      */
-    private boolean isProviderUser(Principal user) {
+    private HospitalContext resolveOnce(Principal user) {
         try {
-            HospitalContext context = callerResolver.liveContext(user);
-            if (context == null || context.getPrincipalUserId() == null) {
-                return true;
-            }
-            return !ProviderConfinementPolicy.providerTypes(context).isEmpty();
+            return callerResolver.liveContext(user);
         } catch (RuntimeException unavailable) {
             log.warn("[STOMP] Live context unavailable ({}); treated as a provider user",
                 unavailable.getClass().getSimpleName());
+            return null;
+        }
+    }
+
+    /**
+     * The HTTP rule: the live context's provider types, empty for a verified
+     * super-admin. A caller that links no local account, or whose context
+     * cannot be computed, is treated as a provider (fail closed).
+     */
+    private static boolean isProvider(HospitalContext context) {
+        if (context == null || context.getPrincipalUserId() == null) {
             return true;
         }
+        return !ProviderConfinementPolicy.providerTypes(context).isEmpty();
     }
 
     private static boolean hasAuthority(Principal user, String authority) {

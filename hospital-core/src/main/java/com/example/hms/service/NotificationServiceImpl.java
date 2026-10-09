@@ -101,21 +101,18 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
-    public void markAsRead(UUID notificationId) {
-        notificationRepository.findById(notificationId).ifPresent(n -> {
-            n.setRead(true);
-            notificationRepository.save(n);
-        });
-    }
-
-    @Override
-    public void markAsRead(UUID notificationId, String ownerUsername) {
-        notificationRepository.findById(notificationId).ifPresent(n -> {
-            if (ownerUsername.equals(n.getRecipientUsername())) {
+    public boolean markAsRead(UUID notificationId, String ownerUsername) {
+        if (notificationId == null || ownerUsername == null) {
+            return false;
+        }
+        return notificationRepository.findById(notificationId)
+            .filter(n -> ownerUsername.equals(n.getRecipientUsername()))
+            .map(n -> {
                 n.setRead(true);
                 notificationRepository.save(n);
-            }
-        });
+                return true;
+            })
+            .orElse(false);
     }
 
     @Override

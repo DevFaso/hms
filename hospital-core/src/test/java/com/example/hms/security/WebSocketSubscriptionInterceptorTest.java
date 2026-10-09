@@ -35,10 +35,17 @@ class WebSocketSubscriptionInterceptorTest {
 
     private WebSocketSubscriptionInterceptor interceptor;
 
+    /** The ws-ticket principals of this test link through their own user id; no Keycloak resolver is needed. */
+    @SuppressWarnings("unchecked")
+    private static org.springframework.beans.factory.ObjectProvider<com.example.hms.security.oidc.KeycloakHospitalContextResolver>
+            keycloakResolverProvider() {
+        return mock(org.springframework.beans.factory.ObjectProvider.class);
+    }
+
     @org.junit.jupiter.api.BeforeEach
     void wire() {
         interceptor = new WebSocketSubscriptionInterceptor(assignmentRepository,
-            new com.example.hms.security.provider.ProviderCallerResolver(userRepository, assignmentAccessor));
+            new com.example.hms.security.provider.ProviderCallerResolver(assignmentAccessor, keycloakResolverProvider()));
     }
 
     private final MessageChannel channel = mock(MessageChannel.class);
@@ -161,8 +168,9 @@ class WebSocketSubscriptionInterceptorTest {
 
     @Test
     void nonSubscribeFramesPassThroughUntouched() {
-        for (StompCommand command :
-                List.of(StompCommand.CONNECT, StompCommand.SEND, StompCommand.DISCONNECT)) {
+        // CONNECT and DISCONNECT pass; a SEND is held to the principal and
+        // provider rules (ProviderStompSubscriptionTest).
+        for (StompCommand command : List.of(StompCommand.CONNECT, StompCommand.DISCONNECT)) {
             Message<byte[]> message = frame(command, "/topic/patient-tracker/" + hospitalId, null);
             assertThat(interceptor.preSend(message, channel)).isSameAs(message);
         }

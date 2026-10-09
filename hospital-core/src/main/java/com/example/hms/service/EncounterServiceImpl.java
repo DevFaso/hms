@@ -86,7 +86,6 @@ import com.example.hms.service.recordaccess.SensitivityClassifier;
 import com.example.hms.service.recordaccess.BreakGlassGate;
 import com.example.hms.service.i18n.NotificationLocales;
 import com.example.hms.service.i18n.PatientLocaleResolver;
-import com.example.hms.security.provider.ClinicalHospitals;
 
 
 @Slf4j
@@ -229,8 +228,7 @@ public class EncounterServiceImpl implements EncounterService {
     private UUID resolveHospitalId(EncounterRequestDTO dto, Locale locale) {
         if (dto.getHospitalId() != null) return dto.getHospitalId();
         if (dto.getHospitalIdentifier() != null) {
-            Hospital hospital = hospitalRepository.findByNameOrCodeOrEmail(dto.getHospitalIdentifier())
-                .filter(ClinicalHospitals::isClinical)
+            Hospital hospital = hospitalRepository.findClinicalByNameOrCodeOrEmail(dto.getHospitalIdentifier())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", dto.getHospitalIdentifier()));
             return hospital.getId();
         }

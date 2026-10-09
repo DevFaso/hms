@@ -103,7 +103,7 @@ class PatientHospitalRegistrationServiceImplTest {
             .patientUsername("john.doe").hospitalName("General Hospital").build();
 
         when(patientRepository.findByUsernameOrEmail("john.doe")).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findByName("General Hospital")).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalByName("General Hospital")).thenReturn(Optional.of(hospital));
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
         when(registrationRepository.existsByMrnAndHospitalId(anyString(), eq(hospitalId))).thenReturn(false);
         when(mapper.toEntity(dto, patient, hospital)).thenReturn(registration);

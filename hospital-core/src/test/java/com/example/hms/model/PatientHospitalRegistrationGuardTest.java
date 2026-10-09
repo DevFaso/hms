@@ -14,10 +14,47 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * The entity backstop of provider plan AC-10: a registration is the treatment
  * relationship (E9 #58), so one at a pharmacy or laboratory would open the
  * chart to it. {@code @PrePersist} refuses one; {@code @PreUpdate} refuses
- * keeping or re-activating one there and moving ANY row there, and lets a
- * legacy row be deactivated or discharged where it was loaded.
+ * re-activating one there and moving ANY row there, and lets a legacy row be
+ * deactivated or discharged where it was loaded. An ordinary update never
+ * loads the hospital, and nothing but the entity's own callbacks can set
+ * what it was loaded with.
  */
 class PatientHospitalRegistrationGuardTest {
+
+    @Test
+    @DisplayName("an update that neither moves nor re-activates the row never reads the facility type (no N+1)")
+    void ordinaryUpdateDoesNotLoadTheHospital() {
+        Hospital hospital = org.mockito.Mockito.spy(facility(FacilityType.HOSPITAL));
+        PatientHospitalRegistration registration = new PatientHospitalRegistration(new Patient(), hospital);
+        ReflectionTestUtils.invokeMethod(registration, "rememberLoadedHospital");
+        org.mockito.Mockito.clearInvocations(hospital);
+        registration.setCurrentRoom("12B");
+
+        ReflectionTestUtils.invokeMethod(registration, "normalizeOnUpdate");
+
+        org.mockito.Mockito.verify(hospital, org.mockito.Mockito.never()).isProvider();
+        org.mockito.Mockito.verify(hospital, org.mockito.Mockito.never()).getFacilityType();
+    }
+
+    @Test
+    @DisplayName("what the row was loaded with is not settable: no accessor, no builder property, no constructor argument")
+    void loadedStateIsNotSettable() {
+        for (java.lang.reflect.Method method : PatientHospitalRegistration.class.getMethods()) {
+            org.assertj.core.api.Assertions.assertThat(method.getName().toLowerCase())
+                .as("public method %s", method.getName()).doesNotContain("loaded");
+        }
+        for (java.lang.reflect.Method method : PatientHospitalRegistration.builder().getClass().getMethods()) {
+            org.assertj.core.api.Assertions.assertThat(method.getName().toLowerCase())
+                .as("builder method %s", method.getName()).doesNotContain("loaded");
+        }
+        for (java.lang.reflect.Constructor<?> constructor : PatientHospitalRegistration.class.getConstructors()) {
+            for (Class<?> parameter : constructor.getParameterTypes()) {
+                org.assertj.core.api.Assertions.assertThat(parameter.getSimpleName())
+                    .as("constructor parameter").isNotEqualTo("LoadedState");
+            }
+        }
+        org.assertj.core.api.Assertions.assertThat(at(FacilityType.HOSPITAL).toString()).doesNotContain("loaded");
+    }
 
     private static Hospital facility(FacilityType type) {
         Hospital hospital = Hospital.builder().name("Facility").build();
@@ -49,10 +86,13 @@ class PatientHospitalRegistrationGuardTest {
     }
 
     @Test
-    @DisplayName("an update that keeps a loaded registration active at a provider throws; deactivating or discharging it passes")
+    @DisplayName("re-activating a loaded registration at a provider throws; deactivating or discharging it passes")
     void updateMayOnlyDeactivateAtAProvider() {
-        PatientHospitalRegistration stillActive = loadedAt(FacilityType.PHARMACY);
-        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(stillActive, "normalizeOnUpdate"))
+        PatientHospitalRegistration inactive = at(FacilityType.PHARMACY);
+        inactive.setActive(false);
+        ReflectionTestUtils.invokeMethod(inactive, "rememberLoadedHospital");
+        inactive.setActive(true);
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(inactive, "normalizeOnUpdate"))
             .isInstanceOf(IllegalStateException.class);
 
         PatientHospitalRegistration deactivated = loadedAt(FacilityType.PHARMACY);

@@ -1,6 +1,5 @@
 package com.example.hms.repository;
 
-import com.example.hms.security.provider.ClinicalHospitals;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.asm.ClassReader;
@@ -33,25 +32,27 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <ul>
  *   <li>a CLINICAL finder, whose query filters {@code facilityType = HOSPITAL}
  *       (checked on the annotation here, so the filter cannot be dropped);</li>
- *   <li>a single row by id, or a write: not a list, a count or a name lookup;
- *       the destinations among them go through {@code ClinicalHospitals};</li>
- *   <li>or a caller recorded below with its reason. A new unfiltered caller
- *       fails this test until it is added deliberately. Callers recorded as
- *       filtering at the call site must reference {@link ClinicalHospitals}.</li>
+ *   <li>a write;</li>
+ *   <li>or a caller recorded below with its reason: a plain by-id read
+ *       ({@link #BY_ID_RECORDED}, method by method), or an unfiltered list,
+ *       count or name/code lookup ({@code RECORDED}). A clinical destination
+ *       uses {@code findClinicalById} or a {@code findClinicalBy...} name/code
+ *       finder instead, so a new unfiltered caller fails this test until it
+ *       is added deliberately.</li>
  * </ul>
  * In the style of {@code HospitalIdParameterCoverageTest}: the map only shrinks.
  */
 class HospitalRepositoryCallerCoverageTest {
 
     private static final String REPOSITORY = HospitalRepository.class.getName().replace('.', '/');
-    private static final String CLINICAL_HELPER = ClinicalHospitals.class.getName().replace('.', '/');
     private static final String HOSPITAL_FILTER = "h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL";
 
     /** Finders whose query keeps HOSPITAL rows only. */
     private static final Set<String> CLINICAL_FINDERS = Set.of(
         "findAllHospitals", "countHospitals", "countActiveHospitals", "findAllForFilters",
         "searchHospitals", "findAllWithDepartments", "findByOrganizationIdOrderByNameAsc",
-        "findByOrganizationIsNull", "findClinicalById");
+        "findByOrganizationIsNull", "findClinicalById", "findClinicalByNameIgnoreCase",
+        "findClinicalByName", "findClinicalByCodeIgnoreCase", "findClinicalByNameOrCodeOrEmail");
 
     /** Writes: not a read of a destination. */
     private static final Set<String> WRITES = Set.of(
@@ -66,6 +67,8 @@ class HospitalRepositoryCallerCoverageTest {
         "findById", "getReferenceById", "getById", "existsById", "findByIdForUpdate");
 
     private static final String LABEL = "names a facility for display; it grants, writes and lists nothing";
+    private static final String ACTING_SCOPE = "the caller's own acting scope (requirePinned), not request-supplied;"
+        + " a provider user never reaches the handler (confinement)";
     private static final String PHARMACY_OWN = "the pharmacy's own workflow, which a PHARMACY provider does in P2-PH;"
         + " the service's own ownership checks scope it";
     private static final String ANY_TYPE = "must see every facility type: ";
@@ -104,21 +107,16 @@ class HospitalRepositoryCallerCoverageTest {
         entry("PharmacySaleServiceImpl.createSale#findById", PHARMACY_OWN),
         entry("PharmacyClaimServiceImpl.createClaim#findById", PHARMACY_OWN),
         entry("PharmacyPaymentServiceImpl.createPayment#findById", PHARMACY_OWN),
-        entry("MtmReviewServiceImpl.startReview#findById", PHARMACY_OWN));
+        entry("MtmReviewServiceImpl.startReview#findById", PHARMACY_OWN),
+        entry("PanelService.assign#getReferenceById", ACTING_SCOPE),
+        entry("ProgramEnrollmentService.enroll#getReferenceById", ACTING_SCOPE),
+        entry("RoiRequestService.persistRequest#getReferenceById", ACTING_SCOPE));
 
-    private static final String AT_CALL_SITE = "filters with ClinicalHospitals at the call site: ";
 
     /** Caller#method of an unfiltered finder → why that is right. Frozen: it only shrinks. */
     private static final Map<String, String> RECORDED = Map.ofEntries(
-        entry("AppointmentServiceImpl#findByCodeIgnoreCase", AT_CALL_SITE + "the booking hospital (AC-11)"),
-        entry("AppointmentServiceImpl#findByNameIgnoreCase", AT_CALL_SITE + "the booking hospital (AC-11)"),
         entry("AppointmentServiceImpl#findAllById",
             "names the hospitals of appointments already read under the caller's scope: a label lookup, not a list of tenants"),
-        entry("BillingInvoiceServiceImpl#findByNameIgnoreCase", AT_CALL_SITE + "the invoice hospital (AC-11)"),
-        entry("EncounterServiceImpl#findByNameOrCodeOrEmail", AT_CALL_SITE + "the encounter hospital (AC-11)"),
-        entry("PatientHospitalRegistrationServiceImpl#findByName", AT_CALL_SITE + "the registration hospital (AC-10, AC-11)"),
-        entry("UserController#findByName", AT_CALL_SITE + "admin-register by hospital name (AC-11)"),
-        entry("DepartmentServiceImpl#findByNameIgnoreCase", AT_CALL_SITE + "the department hospital (slice 1)"),
         entry("PatientPortalServiceImpl#findAllById",
             "names the hospitals on the patient's own primary-care entries: a label lookup, not a list of tenants"),
         entry("HospitalLifecycleStatusServiceImpl#findIdsByLifecycleStateIn",
@@ -181,17 +179,6 @@ class HospitalRepositoryCallerCoverageTest {
         assertThat(unrecorded).as("a plain by-id hospital read: a request-supplied clinical destination uses"
             + " findClinicalById; anything else needs a recorded reason").isEmpty();
         assertThat(byId).as("recorded by-id reads that no longer exist: remove them").containsAll(BY_ID_RECORDED.keySet());
-    }
-
-    @Test
-    @DisplayName("the callers recorded as filtering at the call site do reference ClinicalHospitals")
-    void callSiteFiltersAreThere() throws IOException {
-        Set<String> referencing = classesReferencingTheHelper();
-        RECORDED.forEach((key, reason) -> {
-            if (reason.startsWith(AT_CALL_SITE)) {
-                assertThat(referencing).as(key).contains(key.substring(0, key.indexOf('#')));
-            }
-        });
     }
 
     @Test
@@ -315,47 +302,6 @@ class HospitalRepositoryCallerCoverageTest {
             return end < 0 ? name : name.substring("lambda$".length(), end);
         }
         return name;
-    }
-
-    private static Set<String> classesReferencingTheHelper() throws IOException {
-        Set<String> found = new TreeSet<>();
-        for (Resource resource : mainClasses()) {
-            String[] owner = new String[1];
-            try (InputStream in = resource.getInputStream()) {
-                new ClassReader(in).accept(new ClassVisitor(SpringAsmInfo.ASM_VERSION) {
-                    @Override
-                    public void visit(int version, int access, String name, String signature,
-                                      String superName, String[] interfaces) {
-                        owner[0] = outerSimpleName(name);
-                    }
-
-                    @Override
-                    public MethodVisitor visitMethod(int access, String name, String descriptor,
-                                                     String signature, String[] exceptions) {
-                        return new MethodVisitor(SpringAsmInfo.ASM_VERSION) {
-                            @Override
-                            public void visitMethodInsn(int opcode, String target, String method,
-                                                        String desc, boolean isInterface) {
-                                if (CLINICAL_HELPER.equals(target)) {
-                                    found.add(owner[0]);
-                                }
-                            }
-
-                            @Override
-                            public void visitInvokeDynamicInsn(String method, String desc, Handle bootstrap,
-                                                               Object... arguments) {
-                                for (Object argument : arguments) {
-                                    if (argument instanceof Handle handle && CLINICAL_HELPER.equals(handle.getOwner())) {
-                                        found.add(owner[0]);
-                                    }
-                                }
-                            }
-                        };
-                    }
-                }, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
-            }
-        }
-        return found;
     }
 
     private static Resource[] mainClasses() throws IOException {

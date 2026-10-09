@@ -116,7 +116,7 @@ class PanelServiceTest {
     private void stubHappyAssignCollaborators() {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(provider.getId())).thenReturn(Optional.of(provider));
-        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(java.util.Optional.of(hospital));
+        when(hospitalRepository.getReferenceById(hospitalId)).thenReturn(hospital);
         when(panelRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -252,7 +252,7 @@ class PanelServiceTest {
         asClinicianAtHospital();
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(provider.getId())).thenReturn(Optional.of(provider));
-        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(java.util.Optional.of(hospital));
+        when(hospitalRepository.getReferenceById(hospitalId)).thenReturn(hospital);
         when(panelRepository.findByPatient_IdAndHospital_IdAndPanelRoleAndStatus(
                 patientId, hospitalId, PanelRole.PRIMARY_PROVIDER, PanelAssignmentStatus.ACTIVE))
             .thenReturn(Optional.empty());

@@ -23,7 +23,6 @@ import com.example.hms.enums.PaymentMethod;
 import com.example.hms.model.PaymentTransaction;
 import com.example.hms.payload.dto.portal.PatientPaymentRequestDTO;
 import com.example.hms.utility.RoleValidator;
-import com.example.hms.security.provider.ClinicalHospitals;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -78,8 +77,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         Patient patient = patientRepository.findByUsernameOrEmail(dto.getPatientEmail())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundByIdentifier", dto.getPatientEmail()));
 
-        Hospital hospital = hospitalRepository.findByNameIgnoreCase(dto.getHospitalName())
-            .filter(ClinicalHospitals::isClinical)
+        Hospital hospital = hospitalRepository.findClinicalByNameIgnoreCase(dto.getHospitalName())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", dto.getHospitalName()));
 
         Encounter encounter = (dto.getEncounterReference() != null)
@@ -179,8 +177,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         Patient patient = patientRepository.findByUsernameOrEmail(dto.getPatientEmail())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundByIdentifier", dto.getPatientEmail()));
 
-        Hospital hospital = hospitalRepository.findByNameIgnoreCase(dto.getHospitalName())
-            .filter(ClinicalHospitals::isClinical)
+        Hospital hospital = hospitalRepository.findClinicalByNameIgnoreCase(dto.getHospitalName())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", dto.getHospitalName()));
 
         Encounter encounter = (dto.getEncounterReference() != null)

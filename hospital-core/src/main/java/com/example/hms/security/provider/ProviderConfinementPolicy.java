@@ -136,6 +136,11 @@ public class ProviderConfinementPolicy implements SmartInitializingSingleton {
         Map<String, Object> before = attributes(request);
         try {
             ServletRequestPathUtils.parseAndCache(request);
+            if (HttpMethod.OPTIONS.matches(request.getMethod())) {
+                // MVC answers OPTIONS itself (no handler pattern is matched):
+                // allowed on a path some allowed handler serves, as for anyone.
+                return matchesAnAllowedPath(mapping, request, providerTypes, patientHolder);
+            }
             HandlerExecutionChain chain = mapping.getHandler(request);
             if (chain == null) {
                 return ProviderConfinement.allowsNonMvc(request.getMethod(), pathWithinApplication(request));
@@ -150,13 +155,7 @@ public class ProviderConfinementPolicy implements SmartInitializingSingleton {
             // parameters. On an allowed path MVC answers that (405, 415, 406,
             // 400) as it does for anyone; on any other path the caller gets
             // the unmapped answer.
-            PathContainer path = ServletRequestPathUtils.getParsedRequestPath(request).pathWithinApplication();
-            for (PathPattern allowed : allowedPatterns(mapping, providerTypes, patientHolder)) {
-                if (allowed.matches(path)) {
-                    return true;
-                }
-            }
-            return false;
+            return matchesAnAllowedPath(mapping, request, providerTypes, patientHolder);
         } catch (Exception noMatch) {
             return false;
         } finally {
@@ -188,6 +187,18 @@ public class ProviderConfinementPolicy implements SmartInitializingSingleton {
         if (answered == null && !response.isCommitted()) {
             response.sendError(HttpServletResponse.SC_NOT_FOUND);
         }
+    }
+
+    /** Some handler pattern this kind of caller may reach matches the request's path (the path is already parsed). */
+    private boolean matchesAnAllowedPath(RequestMappingHandlerMapping mapping, HttpServletRequest request,
+                                         Set<FacilityType> providerTypes, boolean patientHolder) {
+        PathContainer path = ServletRequestPathUtils.getParsedRequestPath(request).pathWithinApplication();
+        for (PathPattern allowed : allowedPatterns(mapping, providerTypes, patientHolder)) {
+            if (allowed.matches(path)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** The handler patterns some method of which this kind of caller may reach; computed once per kind. */

@@ -147,7 +147,7 @@ class ProgramEnrollmentServiceTest {
         when(enrollmentRepository.findByPatientIdAndHospitalIdAndProgramAndStatus(
             patientId, hospitalId, CareProgram.HIV, ProgramEnrollmentStatus.ACTIVE))
             .thenReturn(Optional.empty());
-        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(java.util.Optional.of(hospital));
+        when(hospitalRepository.getReferenceById(hospitalId)).thenReturn(hospital);
         when(enrollmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         ProgramEnrollmentResponseDTO dto = service.enroll(patientId,
@@ -194,7 +194,7 @@ class ProgramEnrollmentServiceTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(enrollmentRepository.findByPatientIdAndHospitalIdAndProgramAndStatus(
             any(), any(), any(), any())).thenReturn(Optional.empty());
-        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(java.util.Optional.of(hospital));
+        when(hospitalRepository.getReferenceById(hospitalId)).thenReturn(hospital);
         when(enrollmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         LocalDate paperDate = TODAY.minusDays(45);
@@ -218,7 +218,7 @@ class ProgramEnrollmentServiceTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(enrollmentRepository.findByPatientIdAndHospitalIdAndProgramAndStatus(
             any(), any(), any(), any())).thenReturn(Optional.empty());
-        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(java.util.Optional.of(hospital));
+        when(hospitalRepository.getReferenceById(hospitalId)).thenReturn(hospital);
         when(enrollmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         service.enroll(patientId, enrollRequest(CareProgram.HIV, 30));
@@ -238,7 +238,7 @@ class ProgramEnrollmentServiceTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(enrollmentRepository.findByPatientIdAndHospitalIdAndProgramAndStatus(
             any(), any(), any(), any())).thenReturn(Optional.empty());
-        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(java.util.Optional.of(hospital));
+        when(hospitalRepository.getReferenceById(hospitalId)).thenReturn(hospital);
         when(enrollmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(auditService.logEvent(any())).thenThrow(new IllegalStateException("audit down"));
 
@@ -544,7 +544,7 @@ class ProgramEnrollmentServiceTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(enrollmentRepository.findByPatientIdAndHospitalIdAndProgramAndStatus(
             any(), any(), any(), any())).thenReturn(Optional.empty());
-        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(java.util.Optional.of(hospital));
+        when(hospitalRepository.getReferenceById(hospitalId)).thenReturn(hospital);
         when(enrollmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         service.enroll(patientId, ProgramEnrollmentRequestDTO.builder()

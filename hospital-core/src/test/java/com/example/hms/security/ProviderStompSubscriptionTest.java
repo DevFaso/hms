@@ -6,7 +6,9 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.auth.TenantRoleAssignment;
 import com.example.hms.security.auth.TenantRoleAssignmentAccessor;
+import com.example.hms.security.oidc.KeycloakHospitalContextResolver;
 import com.example.hms.security.provider.ProviderCallerResolver;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -36,18 +39,21 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
  * The STOMP provider rule (provider plan §6.4, AC-8, T21), decided exactly as
  * on HTTP: the caller's live context and its provider types, so a verified
  * super-admin is exempt. A provider user subscribes to {@code /user/**} only
- * and sends no STOMP message. The answer is re-evaluated on every frame, and
- * the user is identified for every principal type (ws-ticket details, a
- * Keycloak token's appUserId, a username, an email, a Keycloak subject); an
- * identified hospital user keeps everything they had.
+ * and sends no STOMP message. The account is linked exactly as on HTTP: the
+ * ws-ticket's user id, or the Keycloak resolver's appUserId rules (a live
+ * account whose name matches the principal), nothing else. Resolved once per
+ * frame that needs it, and never for {@code /user/**}.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -65,9 +71,15 @@ class ProviderStompSubscriptionTest {
     private final UUID hospitalId = UUID.randomUUID();
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void wire() {
+        ActingScopeResolver actingScopeResolver = new ActingScopeResolver(assignmentAccessor, assignmentRepository,
+            mock(ObjectProvider.class));
+        KeycloakHospitalContextResolver keycloak = new KeycloakHospitalContextResolver(userRepository, actingScopeResolver);
+        ObjectProvider<KeycloakHospitalContextResolver> keycloakProvider = mock(ObjectProvider.class);
+        when(keycloakProvider.getIfAvailable()).thenReturn(keycloak);
         interceptor = new WebSocketSubscriptionInterceptor(assignmentRepository,
-            new ProviderCallerResolver(userRepository, assignmentAccessor));
+            new ProviderCallerResolver(assignmentAccessor, keycloakProvider));
     }
 
     private void holds(TenantRoleAssignment... assignments) {
@@ -92,27 +104,27 @@ class ProviderStompSubscriptionTest {
         return new UsernamePasswordAuthenticationToken(details, null, details.getAuthorities());
     }
 
-    private Principal keycloakUser(String role) {
+    private Principal keycloakUser(String preferredUsername, String role) {
         Jwt jwt = Jwt.withTokenValue("t").header("alg", "RS256")
-            .claim("appUserId", userId.toString()).claim("preferred_username", "kc-nurse")
+            .claim("appUserId", userId.toString()).claim("preferred_username", preferredUsername)
             .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build();
-        return new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority(role)), "kc-nurse");
+        return new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority(role)), preferredUsername);
     }
 
-    private static Principal named(String name) {
-        return new UsernamePasswordAuthenticationToken(name, null, List.of(new SimpleGrantedAuthority("ROLE_NURSE")));
-    }
-
-    private User account() {
+    private User account(String username) {
         User account = new User();
         account.setId(userId);
+        account.setUsername(username);
+        account.setEmail(username + "@clinic.test");
         return account;
     }
 
     private static Message<byte[]> frame(StompCommand command, String destination, Principal user) {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(command);
         accessor.setDestination(destination);
-        accessor.setUser(user);
+        if (user != null) {
+            accessor.setUser(user);
+        }
         accessor.setSessionId("s1");
         accessor.setSessionAttributes(new HashMap<>());
         return MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
@@ -152,6 +164,14 @@ class ProviderStompSubscriptionTest {
     }
 
     @Test
+    @DisplayName("a SEND with no principal is refused, as a SUBSCRIBE is")
+    void sendWithoutPrincipalIsRefused() {
+        Message<byte[]> send = frame(StompCommand.SEND, "/app/chat.sendMessage", null);
+
+        assertThatThrownBy(() -> interceptor.preSend(send, channel)).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
     @DisplayName("a verified super-admin is exempt, as on HTTP, even holding a provider assignment")
     void verifiedSuperAdminIsExempt() {
         holds(superAdmin(), pharmacist());
@@ -180,6 +200,22 @@ class ProviderStompSubscriptionTest {
     }
 
     @Test
+    @DisplayName("one resolution per frame: none for /user/**, one for a tracker frame (its id is reused)")
+    void resolvedOncePerFrame() {
+        holds(nurse());
+        when(assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(userId, hospitalId)).thenReturn(true);
+        Principal nurse = ticketUser("ROLE_NURSE");
+
+        interceptor.preSend(subscribe("/user/queue/replies", nurse), channel);
+        verifyNoInteractions(assignmentAccessor);
+
+        Message<byte[]> tracker = subscribe("/topic/patient-tracker/" + hospitalId, nurse);
+        assertThat(interceptor.preSend(tracker, channel)).isSameAs(tracker);
+        verify(assignmentAccessor, times(1)).findAssignmentsForUser(userId);
+        verify(assignmentRepository).existsByUserIdAndHospitalIdAndActiveTrue(userId, hospitalId);
+    }
+
+    @Test
     @DisplayName("a hospital user keeps the two broadcasts and still sends")
     void hospitalUserKeepsBroadcastsAndSend() {
         holds(nurse());
@@ -193,39 +229,46 @@ class ProviderStompSubscriptionTest {
     }
 
     @Test
-    @DisplayName("a Keycloak (JWT) principal is identified by appUserId: a hospital user keeps the broadcasts, a provider does not")
-    void jwtPrincipalIsIdentified() {
-        when(userRepository.findById(userId)).thenReturn(Optional.of(account()));
+    @DisplayName("a Keycloak token is linked by the HTTP rules: a hospital user keeps the broadcasts, a provider does not")
+    void jwtPrincipalIsLinkedAsOnHttp() {
+        when(userRepository.findById(userId)).thenReturn(Optional.of(account("kc-nurse")));
         holds(nurse());
-        Message<byte[]> nurseBroadcast = subscribe("/topic/emergency-broadcast", keycloakUser("ROLE_NURSE"));
+        Message<byte[]> nurseBroadcast = subscribe("/topic/emergency-broadcast", keycloakUser("kc-nurse", "ROLE_NURSE"));
         assertThat(interceptor.preSend(nurseBroadcast, channel)).isSameAs(nurseBroadcast);
 
         holds(pharmacist());
-        Message<byte[]> providerBroadcast = subscribe("/topic/notifications", keycloakUser("ROLE_LAB_SCIENTIST"));
+        Message<byte[]> providerBroadcast = subscribe("/topic/notifications", keycloakUser("kc-nurse", "ROLE_PHARMACIST"));
         assertThatThrownBy(() -> interceptor.preSend(providerBroadcast, channel))
             .isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
-    @DisplayName("a principal name resolves as a username, an email or a Keycloak subject; only an unknown one fails closed")
-    void principalNameIsResolvedLikeTheKeycloakPath() {
+    @DisplayName("a token whose appUserId fails the name match is NOT linked (as on HTTP): refused")
+    void jwtFailingNamesMatchIsNotLinked() {
+        when(userRepository.findById(userId)).thenReturn(Optional.of(account("someone-else")));
         holds(nurse());
-        when(userRepository.findByUsernameIgnoreCase(any())).thenReturn(Optional.empty());
-        when(userRepository.findByEmail(any())).thenReturn(Optional.empty());
-        when(userRepository.findByKeycloakSubject(any())).thenReturn(Optional.empty());
-        when(userRepository.findByUsernameIgnoreCase("nurse-by-name")).thenReturn(Optional.of(account()));
-        when(userRepository.findByEmail("nurse@clinic.test")).thenReturn(Optional.of(account()));
-        when(userRepository.findByKeycloakSubject("f81d4fae-subject")).thenReturn(Optional.of(account()));
+        when(assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(userId, hospitalId)).thenReturn(true);
 
-        for (String name : List.of("nurse-by-name", "Nurse@Clinic.test", "f81d4fae-subject")) {
-            Message<byte[]> allowed = subscribe("/topic/emergency-broadcast", named(name));
-            assertThat(interceptor.preSend(allowed, channel)).as(name).isSameAs(allowed);
-        }
+        Message<byte[]> broadcast = subscribe("/topic/emergency-broadcast", keycloakUser("kc-nurse", "ROLE_NURSE"));
+        assertThatThrownBy(() -> interceptor.preSend(broadcast, channel)).isInstanceOf(AccessDeniedException.class);
+        Message<byte[]> send = frame(StompCommand.SEND, "/app/chat.sendMessage", keycloakUser("kc-nurse", "ROLE_NURSE"));
+        assertThatThrownBy(() -> interceptor.preSend(send, channel)).isInstanceOf(AccessDeniedException.class);
+        verify(assignmentAccessor, never()).findAssignmentsForUser(any());
+    }
 
-        Message<byte[]> refused = subscribe("/topic/emergency-broadcast", named("nobody"));
-        assertThatThrownBy(() -> interceptor.preSend(refused, channel)).isInstanceOf(AccessDeniedException.class);
-        Message<byte[]> own = subscribe("/user/queue/replies", named("nobody"));
+    @Test
+    @DisplayName("a bare principal whose name matches a local username is NOT linked (as on HTTP): refused")
+    void usernamePrincipalIsNotLinked() {
+        when(userRepository.findByUsernameIgnoreCase("nurse-by-name")).thenReturn(Optional.of(account("nurse-by-name")));
+        holds(nurse());
+        Principal named = new UsernamePasswordAuthenticationToken("nurse-by-name", null,
+            List.of(new SimpleGrantedAuthority("ROLE_NURSE")));
+
+        Message<byte[]> broadcast = subscribe("/topic/emergency-broadcast", named);
+        assertThatThrownBy(() -> interceptor.preSend(broadcast, channel)).isInstanceOf(AccessDeniedException.class);
+        Message<byte[]> own = subscribe("/user/queue/replies", named);
         assertThat(interceptor.preSend(own, channel)).isSameAs(own);
+        verifyNoInteractions(userRepository);
     }
 
     @Test

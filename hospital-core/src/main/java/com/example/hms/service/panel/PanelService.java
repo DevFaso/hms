@@ -98,8 +98,7 @@ public class PanelService {
             previous.setEndReason("Superseded by reassignment");
         }
 
-        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
-            .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException("hospital.notFound", hospitalId));
+        Hospital hospital = hospitalRepository.getReferenceById(hospitalId);
         PanelAssignment saved;
         // Concurrency story: @Version on the row plus V149's partial unique
         // index are the real guards; two concurrent assigns cannot both win.

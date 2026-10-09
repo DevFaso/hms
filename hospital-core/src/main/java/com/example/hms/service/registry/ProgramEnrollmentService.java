@@ -98,8 +98,7 @@ public class ProgramEnrollmentService {
         LocalDate enrolledOn = request.getEnrolledOn() != null
             ? request.getEnrolledOn() : LocalDate.now(clock);
 
-        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
-            .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException("hospital.notFound", hospitalId));
+        Hospital hospital = hospitalRepository.getReferenceById(hospitalId);
         Staff enrolledBy = resolveCurrentStaff(hospitalId);
 
         ProgramEnrollment saved = enrollmentRepository.save(ProgramEnrollment.builder()

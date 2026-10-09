@@ -381,7 +381,7 @@ class RequireClinicalHospitalTest {
 
         @Test
         void aHospitalNamedByNameResolves() {
-            when(hospitalRepository.findByName("CHU")).thenReturn(Optional.of(hospital()));
+            when(hospitalRepository.findClinicalByName("CHU")).thenReturn(Optional.of(hospital()));
             AdminSignupRequest request = new AdminSignupRequest();
             request.setHospitalName("CHU");
 

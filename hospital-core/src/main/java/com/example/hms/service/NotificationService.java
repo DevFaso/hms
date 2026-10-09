@@ -15,8 +15,12 @@ public interface NotificationService {
     Page<Notification> getNotificationsForUser(String username, Boolean read, String search, Pageable pageable);
     Notification createNotification(String message, String recipientUsername);
     Notification createNotification(String message, String recipientUsername, String type);
-    void markAsRead(UUID notificationId);
-    void markAsRead(UUID notificationId, String ownerUsername);
+    /**
+     * Marks the caller's OWN notification read. {@code false} when the id names
+     * no notification or one addressed to someone else: the caller cannot
+     * tell the two apart. There is deliberately no overload without an owner.
+     */
+    boolean markAsRead(UUID notificationId, String ownerUsername);
     long countUnreadForUser(String username);
     int markAllReadForUser(String username);
 

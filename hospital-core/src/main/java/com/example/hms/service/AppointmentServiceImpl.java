@@ -32,7 +32,6 @@ import com.example.hms.security.tenant.ActingScope;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.service.support.HospitalScopeUtils;
 import com.example.hms.specification.AppointmentSpecification;
-import com.example.hms.security.provider.ClinicalHospitals;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
@@ -507,12 +506,10 @@ public class AppointmentServiceImpl implements AppointmentService {
             return hospitalRepository.findClinicalById(request.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", request.getHospitalId()));
         } else if (request.getHospitalCode() != null) {
-            return hospitalRepository.findByCodeIgnoreCase(request.getHospitalCode())
-                .filter(ClinicalHospitals::isClinical)
+            return hospitalRepository.findClinicalByCodeIgnoreCase(request.getHospitalCode())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", request.getHospitalCode()));
         } else if (request.getHospitalName() != null) {
-            return hospitalRepository.findByNameIgnoreCase(request.getHospitalName())
-                .filter(ClinicalHospitals::isClinical)
+            return hospitalRepository.findClinicalByNameIgnoreCase(request.getHospitalName())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", request.getHospitalName()));
         }
         throw new BusinessException("Hospital identifier required");

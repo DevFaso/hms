@@ -19,7 +19,6 @@ import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.utility.RoleValidator;
-import com.example.hms.security.provider.ClinicalHospitals;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
@@ -72,8 +71,7 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         // A patient registers at a hospital only; a provider facility answers as
         // an unknown one (provider plan AC-10, AC-11; the entity refuses it too).
         final Hospital hospital = !isBlank(dto.getHospitalName())
-            ? hospitalRepository.findByName(dto.getHospitalName())
-            .filter(ClinicalHospitals::isClinical)
+            ? hospitalRepository.findClinicalByName(dto.getHospitalName())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", dto.getHospitalName()))
             : hospitalRepository.findClinicalById(dto.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalId()));

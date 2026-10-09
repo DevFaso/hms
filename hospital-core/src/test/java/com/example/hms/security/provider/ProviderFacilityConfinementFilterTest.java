@@ -240,6 +240,18 @@ class ProviderFacilityConfinementFilterTest {
     }
 
     @Test
+    @DisplayName("OPTIONS on a path an allowed handler serves goes on to MVC; on any other path it is refused")
+    void optionsFollowsTheAllowedPaths() {
+        ProviderConfinementPolicy policy = policy(mapping(), null);
+
+        assertThat(policy.allows(request("OPTIONS", "/notifications"), pharmacist(false))).isTrue();
+        assertThat(policy.allows(request("OPTIONS", "/notifications/7"), pharmacist(false))).isTrue();
+        assertThat(policy.allows(request("OPTIONS", "/patients/search"), pharmacist(true))).isFalse();
+        assertThat(policy.allows(request("OPTIONS", "/me/patient/profile"), pharmacist(false))).isFalse();
+        assertThat(policy.allows(request("OPTIONS", "/me/patient/profile"), pharmacist(true))).isTrue();
+    }
+
+    @Test
     @DisplayName("a wrong method or media type on an ALLOWED path goes on to MVC (405, 415); on any other path it is refused")
     void partialMatchOnAnAllowedPathIsMvcs() {
         ProviderConfinementPolicy policy = policy(mapping(), null);
