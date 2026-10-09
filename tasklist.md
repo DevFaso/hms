@@ -4811,6 +4811,37 @@ they stay visible instead of living in a javadoc.
   Turn it off with `HMS_INTEGRATION_RETENTION_ENABLED=false`.
 - Set the repository variable `PLAY_APP_PUBLISHED` to `true` after the first
   Play publish (#791); until then `stage_and_submit` is refused.
+- **Hosting memory limits (2026-10-09).** The hosting bill had doubled in two
+  months, almost all of it RAM: services ran with the platform's 32 GB default
+  limit, so the JVMs (Keycloak especially) grew unchecked. Owner-approved
+  changes, applied one service at a time with each redeploy checked healthy:
+  - ✅ hms-backend-core and hms-backend-dev: 2 GB limit plus
+    `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=70` (about 1.4 GB heap). Both
+    restarted healthy; the dev log shows "Picked up JAVA_TOOL_OPTIONS".
+  - ⚠ hms-keycloak-prod / -dev failed to boot at 1.5 GB; the limit was put
+    back to the default and both recovered. hms-keycloak-prod (unused: portal
+    `oidc.enabled=false`, no `OIDC_*` on hms-backend-core) is set to sleep when
+    idle. hms-keycloak-dev must stay awake: hms-backend-dev fetches its issuer
+    discovery document at boot (`OidcResourceServerConfig`), so a sleeping
+    Keycloak would fail the backend's startup.
+  - Open: re-measure memory per service in 24-48 h; confirm no OOM restarts.
+    hms-backend-core runs the OpenTelemetry agent when
+    `OTEL_EXPORTER_OTLP_ENDPOINT` is set, which uses non-heap memory: if it
+    restarts without a Java OutOfMemoryError, raise the limit to 2.5 GB.
+  - Open: confirm hms-keycloak-prod actually sleeps (background DB traffic can
+    keep it awake); if not, cap it at 2 GB.
+  - Open: a usage **alert** rather than a hard usage limit; a hard limit takes
+    every service offline when reached, prod included.
+  - Open, later: one shared dev Keycloak with a realm per project.
+- **App email sender (2026-10-09).** #836 adds optional `MAIL_FROM`,
+  `MAIL_FROM_NAME`, `MAIL_REPLY_TO` (unset = unchanged). Inbound routing for
+  support@/contact@/noreply@ is live (SPF includes Google, DMARC `p=none`).
+  Open, owner decision: move outbound mail to a dedicated sender (recommended:
+  a transactional provider such as Brevo or Resend, with e-keneya.com
+  verified). That switch also needs the provider in SPF, its DKIM record, and
+  DMARC revisited once Gmail no longer sends for the domain. Keep
+  `MAIL_HEALTH_ENABLED` false: true makes the platform healthcheck depend on
+  the SMTP provider.
 
 ## Deliberate non-goals — recorded so they stop resurfacing
 
