@@ -53,7 +53,7 @@ public class Dhis2ExportRunPersistence {
                                          String periodIso,
                                          UUID staffId,
                                          DhisAdxAggregator.AggregationResult aggregated) {
-        final var hospital = hospitalRepository.findById(hospitalId)
+        final var hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
 
         final Dhis2ExportRun run = Dhis2ExportRun.builder()

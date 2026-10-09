@@ -524,7 +524,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         if (hospitalId == null) {
             return null;
         }
-        return hospitalRepository.findById(hospitalId)
+        return hospitalRepository.findClinicalById(hospitalId)
             .map(Hospital::getName)
             .orElse(null);
     }

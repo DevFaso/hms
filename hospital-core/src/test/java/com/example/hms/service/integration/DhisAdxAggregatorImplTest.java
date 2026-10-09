@@ -54,7 +54,7 @@ class DhisAdxAggregatorImplTest {
     @Test
     @DisplayName("happy path: counts mapped vaccines and emits aggregated values")
     void happyPath() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(immunizationRepository.countByVaccineCodeForHospitalInRange(
             hospitalId, periodStart, periodEnd))
             .thenReturn(List.<Object[]>of(
@@ -81,7 +81,7 @@ class DhisAdxAggregatorImplTest {
     @Test
     @DisplayName("vaccine with no mapping increments skipped count and does not emit a value")
     void unmappedVaccineSkipped() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(immunizationRepository.countByVaccineCodeForHospitalInRange(
             hospitalId, periodStart, periodEnd))
             .thenReturn(List.<Object[]>of(
@@ -115,7 +115,7 @@ class DhisAdxAggregatorImplTest {
     void hospitalWithoutOrgUnitUid() {
         Hospital noUid = new Hospital();
         noUid.setId(hospitalId);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(noUid));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(noUid));
 
         assertThatThrownBy(() -> aggregator.aggregateImmunizations(
             hospitalId, datasetUid, Dhis2PeriodType.MONTHLY, periodStart, periodEnd))
@@ -126,7 +126,7 @@ class DhisAdxAggregatorImplTest {
     @Test
     @DisplayName("missing hospital throws ResourceNotFoundException")
     void hospitalNotFound() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> aggregator.aggregateImmunizations(
             hospitalId, datasetUid, Dhis2PeriodType.MONTHLY, periodStart, periodEnd))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -135,7 +135,7 @@ class DhisAdxAggregatorImplTest {
     @Test
     @DisplayName("periodType-mismatch regression: WEEKLY mapping skipped when MONTHLY requested")
     void periodTypeMismatchSkipped() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(immunizationRepository.countByVaccineCodeForHospitalInRange(
             hospitalId, periodStart, periodEnd))
             .thenReturn(List.<Object[]>of(new Object[] {"49", 12L}));
@@ -164,7 +164,7 @@ class DhisAdxAggregatorImplTest {
     @Test
     @DisplayName("zero immunizations -> empty result, no mapping lookup")
     void emptyAggregation() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(immunizationRepository.countByVaccineCodeForHospitalInRange(
             hospitalId, periodStart, periodEnd))
             .thenReturn(List.of());

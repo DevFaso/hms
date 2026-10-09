@@ -43,7 +43,7 @@ public class FamilyHistoryServiceImpl implements FamilyHistoryService {
         Patient patient = patientRepository.findById(requestDTO.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", requestDTO.getPatientId()));
 
-        Hospital hospital = hospitalRepository.findById(requestDTO.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(requestDTO.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", requestDTO.getHospitalId()));
 
         Staff recordedBy = null;

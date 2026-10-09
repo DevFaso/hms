@@ -113,11 +113,12 @@ class HospitalRepositoryClinicalFindersTest {
     }
 
     @Test
-    @DisplayName("the confinement lookup names the provider types among a set of ids")
-    void providerTypesOfASet() {
-        assertThat(hospitalRepository.findProviderFacilityTypesByIdIn(
-            List.of(hospital.getId(), pharmacy.getId(), laboratory.getId())))
-            .containsExactlyInAnyOrder(FacilityType.PHARMACY, FacilityType.LABORATORY);
-        assertThat(hospitalRepository.findProviderFacilityTypesByIdIn(List.of(hospital.getId()))).isEmpty();
+    @DisplayName("findClinicalById finds a hospital and answers a pharmacy or laboratory as a miss")
+    void clinicalByIdIsAMissForAProvider() {
+        assertThat(hospitalRepository.findClinicalById(hospital.getId())).isPresent();
+        assertThat(hospitalRepository.findClinicalById(pharmacy.getId())).isEmpty();
+        assertThat(hospitalRepository.findClinicalById(laboratory.getId())).isEmpty();
+        assertThat(hospitalRepository.findClinicalById(UUID.randomUUID())).isEmpty();
+        assertThat(hospitalRepository.findById(pharmacy.getId())).isPresent();
     }
 }

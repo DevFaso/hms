@@ -101,6 +101,15 @@ public class HospitalContext {
     private final Map<UUID, UUID> hospitalOrganizations = Collections.emptyMap();
 
     /**
+     * The provider facility types (PHARMACY, LABORATORY; never HOSPITAL) among
+     * the caller's live active assignments, from the same read as the
+     * permitted set. Non-empty means the caller is confined to the provider
+     * allow-list, unless a verified super-admin (provider plan section 3.3).
+     */
+    @Builder.Default
+    private final Set<com.example.hms.enums.FacilityType> providerFacilityTypes = Collections.emptySet();
+
+    /**
      * This context acting at {@code hospitalId}, named explicitly: the active
      * organisation follows the hospital (null when the caller holds no
      * assignment there, e.g. a super-admin naming another tenant).

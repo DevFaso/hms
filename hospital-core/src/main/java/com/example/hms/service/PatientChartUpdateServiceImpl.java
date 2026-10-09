@@ -109,7 +109,7 @@ public class PatientChartUpdateServiceImpl implements PatientChartUpdateService 
 
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
-        Hospital hospital = hospitalRepository.findById(effectiveHospitalId)
+        Hospital hospital = hospitalRepository.findClinicalById(effectiveHospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", effectiveHospitalId));
 
         Staff staff = staffRepository.findByUserIdAndHospitalId(requesterUserId, effectiveHospitalId)

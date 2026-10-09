@@ -54,7 +54,7 @@ public class PatientRecallServiceImpl implements PatientRecallService {
     @Transactional
     public RecallResponseDTO createRecall(RecallRequestDTO request, UUID hospitalId,
                                           String actorUsername) {
-        Hospital hospital = hospitalRepository.findById(hospitalId)
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));

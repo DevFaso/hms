@@ -148,7 +148,7 @@ class PatientChartUpdateServiceImplTest {
         when(patientRepository.existsById(patientId)).thenReturn(true);
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findByUserIdAndHospitalId(staffUserId, hospitalId)).thenReturn(Optional.of(staff));
         when(patientChartUpdateRepository.findTopByPatient_IdAndHospital_IdOrderByVersionNumberDesc(patientId, hospitalId))
             .thenReturn(Optional.empty());
@@ -199,7 +199,7 @@ class PatientChartUpdateServiceImplTest {
         when(patientRepository.existsById(patientId)).thenReturn(true);
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findByUserIdAndHospitalId(staffUserId, hospitalId)).thenReturn(Optional.of(staff));
 
         assertThatThrownBy(() -> service.createPatientChartUpdate(patientId, hospitalId, staffUserId, assignment, request))
@@ -235,7 +235,7 @@ class PatientChartUpdateServiceImplTest {
         when(patientRepository.existsById(patientId)).thenReturn(true);
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findByUserIdAndHospitalId(staffUserId, hospitalId)).thenReturn(Optional.of(staff));
         lenient().when(patientChartUpdateRepository.findTopByPatient_IdAndHospital_IdOrderByVersionNumberDesc(patientId, hospitalId))
             .thenReturn(Optional.empty());

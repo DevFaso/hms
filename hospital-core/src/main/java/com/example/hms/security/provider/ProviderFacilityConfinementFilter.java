@@ -52,7 +52,7 @@ public class ProviderFacilityConfinementFilter extends OncePerRequestFilter {
             return;
         }
         HospitalContext context = HospitalContextHolder.getContextOrEmpty();
-        Set<FacilityType> providerTypes = policy.providerTypes(context);
+        Set<FacilityType> providerTypes = ProviderConfinementPolicy.providerTypes(context);
         if (providerTypes.isEmpty()
             || policy.allows(request, providerTypes, ProviderConfinementPolicy.isPatientHolder(context))) {
             filterChain.doFilter(request, response);

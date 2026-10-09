@@ -45,7 +45,7 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
         Patient patient = patientRepo.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
 
-        Hospital hospital = hospitalRepo.findById(req.getHospitalId())
+        Hospital hospital = hospitalRepo.findClinicalById(req.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", req.getHospitalId()));
 
         UserRoleHospitalAssignment assignment = assignmentRepo.findById(req.getAssignmentId())
@@ -84,7 +84,7 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
 
         // Optionally support hospital/assignment switch
         if (req.getHospitalId() != null && !req.getHospitalId().equals(entity.getHospital().getId())) {
-            Hospital h = hospitalRepo.findById(req.getHospitalId())
+            Hospital h = hospitalRepo.findClinicalById(req.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", req.getHospitalId()));
             entity.setHospital(h);
         }

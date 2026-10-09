@@ -75,8 +75,7 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
             ? hospitalRepository.findByName(dto.getHospitalName())
             .filter(ClinicalHospitals::isClinical)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", dto.getHospitalName()))
-            : hospitalRepository.findById(dto.getHospitalId())
-            .filter(ClinicalHospitals::isClinical)
+            : hospitalRepository.findClinicalById(dto.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalId()));
 
         log.info("Hospital retrieved: name={}", hospital.getName());

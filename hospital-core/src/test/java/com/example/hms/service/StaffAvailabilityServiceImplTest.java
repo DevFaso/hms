@@ -93,7 +93,7 @@ class StaffAvailabilityServiceImplTest {
             dto.date(), dto.availableFrom(), dto.availableTo(), false, "note"
         );
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
         when(availabilityRepository.existsByStaff_IdAndDate(staffId, dto.date())).thenReturn(false);
@@ -115,7 +115,7 @@ class StaffAvailabilityServiceImplTest {
             dto.date(), null, null, true, "note"
         );
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
         when(availabilityRepository.existsByStaff_IdAndDate(staffId, dto.date())).thenReturn(false);
@@ -130,7 +130,7 @@ class StaffAvailabilityServiceImplTest {
     @Test
     void create_hospitalNotFound_throws() {
         StaffAvailabilityRequestDTO dto = buildDto(false);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(dto, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -139,7 +139,7 @@ class StaffAvailabilityServiceImplTest {
     @Test
     void create_staffNotFound_throws() {
         StaffAvailabilityRequestDTO dto = buildDto(false);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(dto, locale))
@@ -150,7 +150,7 @@ class StaffAvailabilityServiceImplTest {
     void create_staffInactive_throws() {
         staff.setActive(false);
         StaffAvailabilityRequestDTO dto = buildDto(false);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("inactive");
 
@@ -165,7 +165,7 @@ class StaffAvailabilityServiceImplTest {
         other.setName("Other");
         staff.setHospital(other);
         StaffAvailabilityRequestDTO dto = buildDto(false);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("mismatch");
 
@@ -179,7 +179,7 @@ class StaffAvailabilityServiceImplTest {
             staffId, hospitalId, LocalDate.now().plusDays(1),
             LocalTime.of(9, 0), LocalTime.of(17, 0), false, "note", null
         );
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.findById(any())).thenReturn(Optional.empty());
 
@@ -196,7 +196,7 @@ class StaffAvailabilityServiceImplTest {
         otherDept.setHospital(other);
         StaffAvailabilityRequestDTO dto = buildDto(false);
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(otherDept));
         when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("mismatch");
@@ -213,7 +213,7 @@ class StaffAvailabilityServiceImplTest {
         staff.setDepartment(otherDept);
         StaffAvailabilityRequestDTO dto = buildDto(false);
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
         when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("mismatch");
@@ -225,7 +225,7 @@ class StaffAvailabilityServiceImplTest {
     @Test
     void create_alreadyExists_throws() {
         StaffAvailabilityRequestDTO dto = buildDto(false);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
         when(availabilityRepository.existsByStaff_IdAndDate(staffId, dto.date())).thenReturn(true);
@@ -241,7 +241,7 @@ class StaffAvailabilityServiceImplTest {
             staffId, hospitalId, LocalDate.now().plusDays(1),
             null, null, false, "note", departmentId
         );
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
         when(availabilityRepository.existsByStaff_IdAndDate(staffId, dto.date())).thenReturn(false);
@@ -257,7 +257,7 @@ class StaffAvailabilityServiceImplTest {
             staffId, hospitalId, LocalDate.now().plusDays(1),
             LocalTime.of(17, 0), LocalTime.of(9, 0), false, "note", departmentId
         );
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
         when(availabilityRepository.existsByStaff_IdAndDate(staffId, dto.date())).thenReturn(false);
@@ -273,7 +273,7 @@ class StaffAvailabilityServiceImplTest {
             staffId, hospitalId, LocalDate.now().minusDays(1),
             LocalTime.of(9, 0), LocalTime.of(17, 0), false, "note", departmentId
         );
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
         when(availabilityRepository.existsByStaff_IdAndDate(staffId, dto.date())).thenReturn(false);

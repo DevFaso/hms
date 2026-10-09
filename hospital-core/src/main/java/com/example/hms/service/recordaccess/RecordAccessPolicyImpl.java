@@ -84,6 +84,12 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
     @Transactional(readOnly = true)
     public Set<UUID> readableHospitalIds(UUID actorUserId, UUID patientId, UUID actingHospitalId) {
         Set<UUID> readable = new LinkedHashSet<>();
+        // A provider facility reads no chart rows at all, not even its own
+        // id's (provider plan section 3.3, AC-9): the same PROVIDER_FACILITY
+        // gate as decide, so the readable set is empty.
+        if (actingHospitalId != null && actsAtProvider(actingHospitalId)) {
+            return readable;
+        }
         if (actingHospitalId != null) {
             // The acting hospital is always readable — that does not depend
             // on the posture or a treatment relationship. E9 #58 removed the
@@ -104,6 +110,11 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
             }
         }
         return readable;
+    }
+
+    /** The acting facility is a pharmacy or a laboratory (one lookup, shared with decide in the transaction). */
+    private boolean actsAtProvider(UUID actingHospitalId) {
+        return hospitalRepository.findById(actingHospitalId).map(Hospital::isProvider).orElse(false);
     }
 
     /**

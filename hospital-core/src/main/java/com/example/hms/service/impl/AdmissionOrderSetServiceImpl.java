@@ -101,7 +101,7 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
     @Override
     @Transactional
     public AdmissionOrderSetResponseDTO create(AdmissionOrderSetRequestDTO request) {
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
         Department department = request.getDepartmentId() == null ? null
             : departmentRepository.findById(request.getDepartmentId())

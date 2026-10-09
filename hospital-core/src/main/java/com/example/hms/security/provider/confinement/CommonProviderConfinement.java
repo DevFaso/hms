@@ -48,13 +48,15 @@ public final class CommonProviderConfinement {
      */
     public static final List<String> PATIENT_SELF_SERVICE_PREFIXES = List.of("/me/patient");
 
+    private static final String OWN_OPT_OUT = "/patients/{patientId}/record-sharing/opt-out";
+
     public static final List<ConfinementRule> PATIENT_SELF_SERVICE_RULES = List.of(
-        new ConfinementRule("GET", "/patients/{patientId}/record-sharing/opt-out",
+        new ConfinementRule("GET", OWN_OPT_OUT,
             "the patient's own sharing opt-out (portal and apps); no provider role is opt-out staff,"
                 + " so the handler binds the caller to their own patient row"),
-        new ConfinementRule("POST", "/patients/{patientId}/record-sharing/opt-out",
+        new ConfinementRule("POST", OWN_OPT_OUT,
             "the patient records their own opt-out; bound to their own row as above"),
-        new ConfinementRule("DELETE", "/patients/{patientId}/record-sharing/opt-out",
+        new ConfinementRule("DELETE", OWN_OPT_OUT,
             "the patient revokes their own opt-out; bound to their own row as above"));
 
     private CommonProviderConfinement() {

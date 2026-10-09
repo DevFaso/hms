@@ -122,7 +122,7 @@ class DischargeSummaryServiceImplTest {
         when(dischargeSummaryRepository.existsByEncounter_Id(encounterId)).thenReturn(false);
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
         when(dischargeSummaryRepository.save(any())).thenAnswer(inv -> { DischargeSummary s = inv.getArgument(0); s.setId(summaryId); return s; });

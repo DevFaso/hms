@@ -81,7 +81,7 @@ class IntakeOutputServiceImplTest {
         patient.setHospitalRegistrations(Set.of(registration));
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findByUserIdAndHospitalId(any(), any())).thenReturn(Optional.empty());
         when(userRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
         when(entryRepository.save(any(IntakeOutputEntry.class))).thenAnswer(i -> i.getArgument(0));

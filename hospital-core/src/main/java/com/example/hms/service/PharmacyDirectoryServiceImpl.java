@@ -50,7 +50,7 @@ public class PharmacyDirectoryServiceImpl implements PharmacyDirectoryService {
             throw new BusinessException("Patient is not registered in the requested hospital context.");
         }
 
-        Hospital hospital = hospitalRepository.findById(hospitalId)
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseGet(patient::getPrimaryHospital);
 
         Map<UUID, PharmacyLocationResponseDTO> options = new LinkedHashMap<>();

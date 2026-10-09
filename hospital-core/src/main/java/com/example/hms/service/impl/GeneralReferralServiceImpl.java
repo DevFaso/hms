@@ -41,7 +41,6 @@ import java.util.Map;
 import java.util.UUID;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
-import com.example.hms.security.provider.ClinicalHospitals;
 import java.util.Set;
 
 /**
@@ -75,8 +74,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
 
         // Both hospitals of a referral are clinical: a provider facility answers
         // as an unknown one (provider plan AC-11).
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-            .filter(ClinicalHospitals::isClinical)
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         Staff referringProvider = staffRepository.findById(request.getReferringProviderId())
@@ -96,8 +94,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
 
         Hospital receivingHospital = null;
         if (request.getReceivingHospitalId() != null) {
-            receivingHospital = hospitalRepository.findById(request.getReceivingHospitalId())
-                .filter(ClinicalHospitals::isClinical)
+            receivingHospital = hospitalRepository.findClinicalById(request.getReceivingHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("generalReferral.receivingHospital.notFound", request.getReceivingHospitalId()));
         }
 

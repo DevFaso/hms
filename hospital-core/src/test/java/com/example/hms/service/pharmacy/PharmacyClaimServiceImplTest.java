@@ -106,7 +106,7 @@ class PharmacyClaimServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         PharmacyClaim entity = PharmacyClaim.builder()
                 .amount(new BigDecimal("5000"))
                 .currency("XOF")
@@ -359,7 +359,7 @@ class PharmacyClaimServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
         PharmacyClaimRequestDTO dto = request();
 
         assertThatThrownBy(() -> service.createClaim(dto))
@@ -372,7 +372,7 @@ class PharmacyClaimServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         PharmacyClaim entity = PharmacyClaim.builder()
                 .amount(new BigDecimal("5000"))
                 .currency("XOF")

@@ -88,7 +88,7 @@ public class AdmissionServiceImpl implements AdmissionService {
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
         
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
         
         Staff admittingProvider = staffRepository.findById(request.getAdmittingProviderId())
@@ -373,7 +373,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Override
     @Transactional
     public AdmissionOrderSetResponseDTO createOrderSet(AdmissionOrderSetRequestDTO request) {
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         Staff createdBy = staffRepository.findById(request.getCreatedByStaffId())

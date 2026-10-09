@@ -99,7 +99,7 @@ class MedicationCatalogItemServiceImplTest {
         // check — JWT must report this hospital as the active scope.
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(mapper.toEntity(requestDTO)).thenReturn(item);
         when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
         when(mapper.toResponseDTO(item)).thenReturn(responseDTO);
@@ -113,7 +113,7 @@ class MedicationCatalogItemServiceImplTest {
     @Test
     void create_hospitalNotFound_throws() {
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(requestDTO))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -196,7 +196,7 @@ class MedicationCatalogItemServiceImplTest {
 
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId); // NOT foreign
-        when(hospitalRepository.findById(foreignHospitalId)).thenReturn(Optional.of(foreign));
+        when(hospitalRepository.findClinicalById(foreignHospitalId)).thenReturn(Optional.of(foreign));
 
         assertThatThrownBy(() -> service.create(foreignReq))
                 .isInstanceOf(com.example.hms.exception.BusinessException.class)
@@ -212,7 +212,7 @@ class MedicationCatalogItemServiceImplTest {
     @Test
     void create_asSuperAdmin_withExplicitHospitalId_savesAsTenantScoped() {
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(mapper.toEntity(requestDTO)).thenReturn(item);
         when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
         when(mapper.toResponseDTO(item)).thenReturn(responseDTO);

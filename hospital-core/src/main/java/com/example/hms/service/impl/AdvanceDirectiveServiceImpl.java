@@ -134,7 +134,7 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
         if (targetId == null) {
             throw new BusinessException("A hospital is required to record an advance directive.");
         }
-        return hospitalRepository.findById(targetId)
+        return hospitalRepository.findClinicalById(targetId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", targetId));
     }
 

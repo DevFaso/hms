@@ -139,7 +139,7 @@ class PharmacySaleServiceImplTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(pharmacyRepository.findByIdAndHospital_Id(pharmacyId, hospitalId)).thenReturn(Optional.of(pharmacy));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(catalogItemRepository.findById(itemId)).thenReturn(Optional.of(item));
@@ -169,7 +169,7 @@ class PharmacySaleServiceImplTest {
         // patientId left null
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(pharmacyRepository.findByIdAndHospital_Id(pharmacyId, hospitalId)).thenReturn(Optional.of(pharmacy));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(catalogItemRepository.findById(itemId)).thenReturn(Optional.of(item));
@@ -200,7 +200,7 @@ class PharmacySaleServiceImplTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(pharmacyRepository.findByIdAndHospital_Id(pharmacyId, hospitalId)).thenReturn(Optional.of(pharmacy));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(catalogItemRepository.findById(itemId)).thenReturn(Optional.of(item));
@@ -216,7 +216,7 @@ class PharmacySaleServiceImplTest {
     void rejectsNegativeQuantity() {
         PharmacySaleRequestDTO dto = request(List.of(line(BigDecimal.ZERO, BigDecimal.TEN)));
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(pharmacyRepository.findByIdAndHospital_Id(pharmacyId, hospitalId)).thenReturn(Optional.of(pharmacy));
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));

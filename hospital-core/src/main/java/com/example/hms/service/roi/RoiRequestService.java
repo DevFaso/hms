@@ -116,7 +116,8 @@ public class RoiRequestService {
         if (requestedOn.isAfter(today)) {
             throw new BusinessException("The request date cannot be in the future.");
         }
-        Hospital hospital = hospitalRepository.getReferenceById(hospitalId);
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
+            .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException("hospital.notFound", hospitalId));
         RoiRequest saved = roiRepository.save(RoiRequest.builder()
             .patientId(patient.getId())
             // The snapshot that keeps this legal record legible if the

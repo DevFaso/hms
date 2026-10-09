@@ -428,11 +428,11 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             return registration.getHospital();
         }
         if (requestedHospitalId != null) {
-            return hospitalRepository.findById(requestedHospitalId)
+            return hospitalRepository.findClinicalById(requestedHospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", requestedHospitalId));
         }
         if (patient.getHospitalId() != null) {
-            return hospitalRepository.findById(patient.getHospitalId())
+            return hospitalRepository.findClinicalById(patient.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", patient.getHospitalId()));
         }
         throw new BusinessException("Unable to resolve hospital context for newborn assessment.");

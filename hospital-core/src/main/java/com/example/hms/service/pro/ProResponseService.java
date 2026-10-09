@@ -249,7 +249,7 @@ public class ProResponseService {
                                 ProResponseSource source, UUID recordedByUserId) {
         ProInstrument instrument = instrumentService.requireActive(request.getInstrumentCode());
         ProScoring.ProScoreResult score = ProScoring.score(instrument, request.getAnswers());
-        Hospital hospital = hospitalRepository.findById(hospitalId)
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         PostpartumCarePlan plan = activePlan(patient, hospitalId);
 

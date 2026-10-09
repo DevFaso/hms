@@ -672,8 +672,7 @@ public class DepartmentServiceImpl implements DepartmentService {
      */
     private Hospital resolveHospital(DepartmentRequestDTO dto) {
         if (dto.getHospitalId() != null) {
-            return hospitalRepository.findById(dto.getHospitalId())
-                .filter(ClinicalHospitals::isClinical)
+            return hospitalRepository.findClinicalById(dto.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", dto.getHospitalId()));
         }
 

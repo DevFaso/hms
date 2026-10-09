@@ -186,7 +186,7 @@ class ConsultationServiceImplTest {
             request.setPreferredConsultantId(consultantId);
 
             when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
             when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
@@ -211,7 +211,7 @@ class ConsultationServiceImplTest {
             ConsultationRequestDTO request = buildRequest();
 
             when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
             when(consultationRepository.save(any(Consultation.class))).thenAnswer(inv -> {
@@ -233,7 +233,7 @@ class ConsultationServiceImplTest {
             request.setIsCurbside(true);
 
             when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
             when(consultationRepository.save(any(Consultation.class))).thenAnswer(inv -> {
@@ -264,7 +264,7 @@ class ConsultationServiceImplTest {
             ConsultationRequestDTO request = buildRequest();
             when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.createConsultation(request, staffId))
                     .isInstanceOf(ResourceNotFoundException.class);
@@ -277,7 +277,7 @@ class ConsultationServiceImplTest {
             request.setUrgency(ConsultationUrgency.STAT);
 
             when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
             when(consultationRepository.save(any(Consultation.class))).thenAnswer(inv -> {
@@ -299,7 +299,7 @@ class ConsultationServiceImplTest {
             request.setUrgency(ConsultationUrgency.ROUTINE);
 
             when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
             when(consultationRepository.save(any(Consultation.class))).thenAnswer(inv -> {
@@ -320,7 +320,7 @@ class ConsultationServiceImplTest {
             UUID userId = UUID.randomUUID();
 
             when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(staffRepository.findById(userId)).thenReturn(Optional.empty());
             when(staffRepository.findByUserIdAndHospitalId(userId, hospitalId)).thenReturn(Optional.of(staff));
@@ -342,7 +342,7 @@ class ConsultationServiceImplTest {
             UUID userId = UUID.randomUUID();
 
             when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(staffRepository.findById(userId)).thenReturn(Optional.empty());
             when(staffRepository.findByUserIdAndHospitalId(userId, hospitalId)).thenReturn(Optional.empty());
@@ -396,7 +396,7 @@ class ConsultationServiceImplTest {
             request.setEncounterId(encounterId);
             when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
             Hospital elsewhere = new Hospital();
             elsewhere.setId(UUID.randomUUID());

@@ -58,7 +58,6 @@ import com.example.hms.service.recordaccess.SensitivityClassifier;
 import com.example.hms.service.recordaccess.BreakGlassGate;
 import org.springframework.context.MessageSource;
 import com.example.hms.service.i18n.NotificationLocales;
-import com.example.hms.security.provider.ClinicalHospitals;
 import java.util.Locale;
 
 @Slf4j
@@ -118,8 +117,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-            .filter(ClinicalHospitals::isClinical)
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         Staff requestingProvider = resolveRequestingProvider(requestingProviderId, hospital.getId());

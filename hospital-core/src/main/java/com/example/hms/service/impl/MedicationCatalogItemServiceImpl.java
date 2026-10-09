@@ -93,7 +93,7 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
             }
             return null;
         }
-        Hospital hospital = hospitalRepository.findById(requestedHospitalId)
+        Hospital hospital = hospitalRepository.findClinicalById(requestedHospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", requestedHospitalId));
         if (!superAdmin) {
             UUID activeScope = roleValidator.requireActiveHospitalId();

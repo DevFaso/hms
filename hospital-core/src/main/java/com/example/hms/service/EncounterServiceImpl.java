@@ -785,8 +785,7 @@ public class EncounterServiceImpl implements EncounterService {
         UUID hospitalId = resolveHospitalId(request, locale);
         // An encounter happens at a hospital: a provider facility answers as an
         // unknown one (provider plan AC-11).
-        Hospital hospital = hospitalRepository.findById(hospitalId)
-            .filter(ClinicalHospitals::isClinical)
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND, hospitalId));
 
         // SECURITY: Verify the patient is registered at this hospital

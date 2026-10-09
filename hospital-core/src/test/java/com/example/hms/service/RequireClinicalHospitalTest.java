@@ -47,12 +47,19 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 /**
- * Provider plan AC-11, item 4: every user-supplied clinical destination named
- * with a provider facility (a pharmacy here) gets exactly the not-found answer
- * an unknown hospital gets at that site. Each nested class holds one site;
- * each fails when exactly its {@code ClinicalHospitals} filter is reverted.
+ * Provider plan AC-11, item 4: a user-supplied clinical destination named with
+ * a provider facility (a pharmacy here) gets exactly the not-found answer an
+ * unknown hospital gets at that site. The mock repository answers as the
+ * database does: {@code findById} finds the pharmacy, {@code findClinicalById}
+ * does not. So each site here fails when it goes back to a plain
+ * {@code findById} (or drops its name-lookup filter).
+ *
+ * <p>These are the destinations AC-11 names, plus the ones round 1 of the
+ * review found. That EVERY by-id destination uses {@code findClinicalById} is
+ * held by {@code HospitalRepositoryCallerCoverageTest}, which records every
+ * remaining plain by-id read with its reason.
  */
-@DisplayName("requireClinicalHospital at every user-supplied destination")
+@DisplayName("requireClinicalHospital at the user-supplied destinations")
 class RequireClinicalHospitalTest {
 
     static final UUID PROVIDER_ID = UUID.randomUUID();
@@ -122,7 +129,7 @@ class RequireClinicalHospitalTest {
 
         @Test
         void bookingAtAHospitalResolves() {
-            when(hospitalRepository.findById(HOSPITAL_ID)).thenReturn(Optional.of(hospital()));
+            when(hospitalRepository.findClinicalById(HOSPITAL_ID)).thenReturn(Optional.of(hospital()));
             AppointmentRequestDTO byId = new AppointmentRequestDTO();
             byId.setHospitalId(HOSPITAL_ID);
             Hospital resolved = ReflectionTestUtils.invokeMethod(service, "resolveHospital", byId);
@@ -154,6 +161,7 @@ class RequireClinicalHospitalTest {
             when(patientRepository.findByIdUnscoped(any())).thenReturn(Optional.of(patient()));
             when(hospitalRepository.findById(PROVIDER_ID)).thenReturn(Optional.of(pharmacy()));
             when(hospitalRepository.findById(HOSPITAL_ID)).thenReturn(Optional.of(hospital()));
+            when(hospitalRepository.findClinicalById(HOSPITAL_ID)).thenReturn(Optional.of(hospital()));
             when(staffRepository.findById(any())).thenReturn(Optional.of(new Staff()));
         }
 
@@ -323,6 +331,30 @@ class RequireClinicalHospitalTest {
             byName.setHospitalName("Pharmacie du Centre");
             assertAnsweredAsAMiss(() -> service.registerPatient(byName),
                 () -> when(hospitalRepository.findByName("Pharmacie du Centre")).thenReturn(Optional.empty()));
+        }
+    }
+
+    @Nested
+    @ExtendWith(MockitoExtension.class)
+    @MockitoSettings(strictness = Strictness.LENIENT)
+    @DisplayName("patient creation at a provider (createPatient): not found, never the entity backstop 400")
+    class PatientCreation {
+        @Mock private HospitalRepository hospitalRepository;
+        @Mock private com.example.hms.repository.UserRepository userRepository;
+        @InjectMocks private PatientServiceImpl service;
+
+        @Test
+        void creatingAPatientAtAProviderIsAMiss() {
+            com.example.hms.model.User user = new com.example.hms.model.User();
+            user.setId(UUID.randomUUID());
+            when(userRepository.findById(any())).thenReturn(Optional.of(user));
+            when(hospitalRepository.findById(PROVIDER_ID)).thenReturn(Optional.of(pharmacy()));
+            com.example.hms.payload.dto.PatientRequestDTO request = new com.example.hms.payload.dto.PatientRequestDTO();
+            request.setUserId(user.getId());
+            request.setHospitalId(PROVIDER_ID);
+
+            assertAnsweredAsAMiss(() -> service.createPatient(request, Locale.ENGLISH),
+                () -> when(hospitalRepository.findById(PROVIDER_ID)).thenReturn(Optional.empty()));
         }
     }
 

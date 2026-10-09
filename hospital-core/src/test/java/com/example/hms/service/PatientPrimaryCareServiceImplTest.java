@@ -125,7 +125,7 @@ class PatientPrimaryCareServiceImplTest {
         @Test
         void hospitalNotFound() {
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.empty());
+            when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.assignPrimaryCare(patientId, requestDTO))
                     .isInstanceOf(ResourceNotFoundException.class)
@@ -135,7 +135,7 @@ class PatientPrimaryCareServiceImplTest {
         @Test
         void assignmentNotFound() {
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(assignmentRepo.findById(assignmentId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.assignPrimaryCare(patientId, requestDTO))
@@ -150,7 +150,7 @@ class PatientPrimaryCareServiceImplTest {
             assignment.setHospital(otherHospital);
 
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(assignmentRepo.findById(assignmentId)).thenReturn(Optional.of(assignment));
 
             assertThatThrownBy(() -> service.assignPrimaryCare(patientId, requestDTO))
@@ -167,7 +167,7 @@ class PatientPrimaryCareServiceImplTest {
             existing.setId(UUID.randomUUID());
 
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(assignmentRepo.findById(assignmentId)).thenReturn(Optional.of(assignment));
             doNothing().when(roleValidator).validateRoleOrThrow(eq(assignmentId), eq(hospitalId),
                     eq("ROLE_DOCTOR"), any(Locale.class), eq(messageSource));
@@ -191,7 +191,7 @@ class PatientPrimaryCareServiceImplTest {
         @Test
         void noExistingPcpCreatesNew() {
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(assignmentRepo.findById(assignmentId)).thenReturn(Optional.of(assignment));
             doNothing().when(roleValidator).validateRoleOrThrow(eq(assignmentId), eq(hospitalId),
                     eq("ROLE_DOCTOR"), any(Locale.class), eq(messageSource));
@@ -280,7 +280,7 @@ class PatientPrimaryCareServiceImplTest {
                     .build();
 
             when(pcpRepo.findById(pcpId)).thenReturn(Optional.of(pcpEntity));
-            when(hospitalRepo.findById(newHospitalId)).thenReturn(Optional.of(newHospital));
+            when(hospitalRepo.findClinicalById(newHospitalId)).thenReturn(Optional.of(newHospital));
             when(pcpRepo.save(pcpEntity)).thenReturn(pcpEntity);
             when(mapper.toDto(pcpEntity)).thenReturn(responseDTO);
 
@@ -297,7 +297,7 @@ class PatientPrimaryCareServiceImplTest {
                     .build();
 
             when(pcpRepo.findById(pcpId)).thenReturn(Optional.of(pcpEntity));
-            when(hospitalRepo.findById(newHospitalId)).thenReturn(Optional.empty());
+            when(hospitalRepo.findClinicalById(newHospitalId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.updatePrimaryCare(pcpId, req))
                     .isInstanceOf(ResourceNotFoundException.class)

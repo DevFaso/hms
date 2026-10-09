@@ -70,7 +70,7 @@ public class CdsAcknowledgementServiceImpl implements CdsAcknowledgementService 
 
         Hospital hospital = null;
         if (resolvedHospitalId != null) {
-            hospital = hospitalRepository.findById(resolvedHospitalId).orElse(null);
+            hospital = hospitalRepository.findClinicalById(resolvedHospitalId).orElse(null);
         }
 
         Duration ttl = request.getAction() == CdsAcknowledgementAction.OVERRIDDEN

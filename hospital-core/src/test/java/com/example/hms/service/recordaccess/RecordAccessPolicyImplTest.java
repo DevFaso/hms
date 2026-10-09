@@ -113,14 +113,21 @@ class RecordAccessPolicyImplTest {
     }
 
     @Test
-    @DisplayName("a laboratory is refused the same way, and reads no other hospital's rows")
-    void laboratoryReadsOnlyItself() {
+    @DisplayName("a laboratory is refused the same way, and its readable set is empty, its own id included")
+    void laboratoryReadsNothing() {
         hospital.setFacilityType(com.example.hms.enums.FacilityType.LABORATORY);
 
         assertThat(policy.decide(actor, patient, hospitalId).reason())
             .isEqualTo(RecordAccessDenialReason.PROVIDER_FACILITY);
-        assertThat(policy.readableHospitalIds(actor, patient, hospitalId)).containsExactly(hospitalId);
+        assertThat(policy.readableHospitalIds(actor, patient, hospitalId)).isEmpty();
+        assertThat(policy.readableHospitalIds(actor, null, hospitalId)).isEmpty();
         verify(registrationRepository, never()).findByPatientId(any());
+    }
+
+    @Test
+    @DisplayName("a hospital keeps its own id in the readable set, with or without a patient")
+    void hospitalReadsItself() {
+        assertThat(policy.readableHospitalIds(actor, null, hospitalId)).containsExactly(hospitalId);
     }
 
     @Test

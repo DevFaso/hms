@@ -80,7 +80,7 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
 
         Patient patient = patientRepository.findById(dto.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", dto.getPatientId()));
-        Hospital hospital = hospitalRepository.findById(hospitalId)
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", hospitalId));
 
         PharmacyClaim entity = claimMapper.toEntity(dto, dispense, patient, hospital);

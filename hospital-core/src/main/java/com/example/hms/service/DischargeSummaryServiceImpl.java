@@ -109,7 +109,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         Encounter encounter = encounterRepository.findById(request.getEncounterId())
             .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", request.getEncounterId()));
 
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         Staff dischargingProvider = staffRepository.findById(request.getDischargingProviderId())

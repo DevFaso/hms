@@ -116,7 +116,7 @@ class ChartReviewServiceImplTest {
         patient.setId(PATIENT_ID);
 
         when(patientChartAccess.require(eq(PATIENT_ID), any())).thenReturn(patient);
-        when(hospitalRepo.findById(HOSPITAL_ID)).thenReturn(Optional.of(hospital));
+        when(hospitalRepo.findClinicalById(HOSPITAL_ID)).thenReturn(Optional.of(hospital));
 
         // Default empty results so individual tests only have to populate what they need.
         // All loaders now use paged DB queries, so default to empty Page returns.

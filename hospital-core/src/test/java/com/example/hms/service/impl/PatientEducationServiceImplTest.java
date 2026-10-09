@@ -165,7 +165,7 @@ class PatientEducationServiceImplTest {
             .category(EducationCategory.NUTRITION)
             .build();
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(resourceRepository.save(any(EducationResource.class))).thenAnswer(invocation -> {
             EducationResource saved = invocation.getArgument(0);
             saved.setId(UUID.randomUUID());
@@ -189,7 +189,7 @@ class PatientEducationServiceImplTest {
             .title("New Resource")
             .build();
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
         // When & Then
         assertThatThrownBy(() -> service.createResource(requestDTO, hospitalId))
@@ -342,7 +342,7 @@ class PatientEducationServiceImplTest {
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         // No row yet: the service inserts one in this request's transaction,
         // then reads back what the database now holds and updates it.
         PatientEducationProgress inserted = freshlyInsertedRow(EducationComprehensionStatus.IN_PROGRESS);
@@ -378,7 +378,7 @@ class PatientEducationServiceImplTest {
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(progressRepository.findByPatientIdAndResourceId(patientId, resourceId))
             .thenReturn(java.util.List.of(), java.util.List.of(winner));
         when(progressWrites.insertIfAbsent(patientId, resourceId, hospitalId, EducationComprehensionStatus.NOT_STARTED))
@@ -403,7 +403,7 @@ class PatientEducationServiceImplTest {
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(progressRepository.findByPatientIdAndResourceId(patientId, resourceId))
             .thenReturn(java.util.List.of(existing));
         when(progressRepository.save(any(PatientEducationProgress.class))).thenAnswer(i -> i.getArgument(0));
@@ -426,7 +426,7 @@ class PatientEducationServiceImplTest {
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(progressRepository.findByPatientIdAndResourceId(patientId, resourceId)).thenReturn(java.util.List.of());
         when(progressWrites.insertIfAbsent(patientId, resourceId, hospitalId, EducationComprehensionStatus.NOT_STARTED))
             .thenThrow(refusal);
@@ -472,7 +472,7 @@ class PatientEducationServiceImplTest {
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(progressRepository.findByPatientIdAndResourceId(patientId, resourceId))
             .thenReturn(java.util.List.of(existingProgress));
         when(progressRepository.save(any(PatientEducationProgress.class))).thenAnswer(i -> i.getArgument(0));
@@ -498,7 +498,7 @@ class PatientEducationServiceImplTest {
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(progressRepository.findByPatientIdAndResourceId(patientId, resourceId))
             .thenReturn(java.util.List.of(), java.util.List.of(freshlyInsertedRow(EducationComprehensionStatus.NOT_STARTED)));
         when(progressRepository.save(any(PatientEducationProgress.class))).thenAnswer(i -> i.getArgument(0));
@@ -638,7 +638,7 @@ class PatientEducationServiceImplTest {
             .build();
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
         when(questionRepository.save(any(PatientEducationQuestion.class))).thenAnswer(invocation -> {
             PatientEducationQuestion saved = invocation.getArgument(0);
@@ -672,7 +672,7 @@ class PatientEducationServiceImplTest {
             .questionText("Anything")
             .build();
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(nullingMapper.toEntity(requestDTO)).thenReturn(null);
 
         assertThatThrownBy(() ->
@@ -861,7 +861,7 @@ class PatientEducationServiceImplTest {
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(documentationRepository.save(any(VisitEducationDocumentation.class))).thenAnswer(invocation -> {
             VisitEducationDocumentation saved = invocation.getArgument(0);
             saved.setId(UUID.randomUUID());

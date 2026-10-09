@@ -51,14 +51,54 @@ class HospitalRepositoryCallerCoverageTest {
     private static final Set<String> CLINICAL_FINDERS = Set.of(
         "findAllHospitals", "countHospitals", "countActiveHospitals", "findAllForFilters",
         "searchHospitals", "findAllWithDepartments", "findByOrganizationIdOrderByNameAsc",
-        "findByOrganizationIsNull");
+        "findByOrganizationIsNull", "findClinicalById");
 
-    /** One row by id, or a write; never a list, a count or a lookup by a user-typed name. */
-    private static final Set<String> BY_ID_OR_WRITE = Set.of(
-        "findById", "getReferenceById", "getById", "existsById", "findByIdForUpdate",
-        "save", "saveAndFlush", "saveAll", "deleteById", "delete", "flush",
-        // The confinement filter: the provider types among the caller's own facilities.
-        "findProviderFacilityTypesByIdIn");
+    /** Writes: not a read of a destination. */
+    private static final Set<String> WRITES = Set.of(
+        "save", "saveAndFlush", "saveAll", "deleteById", "delete", "flush");
+
+    /**
+     * Plain reads of one hospital by id, which see every facility type. A
+     * request-supplied clinical destination uses findClinicalById instead, so
+     * every caller of these, method by method, is recorded in {@link #BY_ID_RECORDED}.
+     */
+    private static final Set<String> BY_ID_READS = Set.of(
+        "findById", "getReferenceById", "getById", "existsById", "findByIdForUpdate");
+
+    private static final String LABEL = "names a facility for display; it grants, writes and lists nothing";
+    private static final String ANY_TYPE = "must see every facility type: ";
+
+    /** Class.method#by-id read of a hospital → why it is not findClinicalById. Frozen: it only shrinks. */
+    private static final Map<String, String> BY_ID_RECORDED = Map.ofEntries(
+        entry("MeController.myHospital#findById", LABEL + " (the caller's own facility)"),
+        entry("AuthBootstrapServiceImpl.resolveCurrentSession#findById", LABEL + " (the caller's own primary facility)"),
+        entry("MorbidityAnalyticsServiceImpl.hospitalView#findById", LABEL),
+        entry("PatientPortalServiceImpl.toProfileDTO#findById", LABEL + " (a hospital on the patient's own record)"),
+        entry("UserServiceImpl.createUserWithRolesAndHospital#findById", LABEL + " (the activation message)"),
+        entry("FacilityAssignmentGuard.requireCompatible#findById",
+            ANY_TYPE + "the role/facility compatibility check is about providers (slice 1)"),
+        entry("RecordAccessPolicyImpl.evaluate#findById", ANY_TYPE + "loads the acting facility to refuse a provider (AC-9)"),
+        entry("RecordAccessPolicyImpl.actsAtProvider#findById", ANY_TYPE + "an empty readable set at a provider (AC-9)"),
+        entry("HospitalServiceImpl.deleteHospital#findByIdForUpdate", ANY_TYPE + "super-admin delete of a never-verified provider (slice 1)"),
+        entry("HospitalServiceImpl.getHospitalOrThrow#findById", ANY_TYPE + "super-admin read of one facility row"),
+        entry("HospitalLifecycleServiceImpl.loadOrThrow#findById", ANY_TYPE + "the lifecycle of every facility type (AC-16)"),
+        entry("HospitalLifecycleServiceImpl.lockOrThrow#findByIdForUpdate", ANY_TYPE + "the lifecycle of every facility type (AC-16)"),
+        entry("ProviderOnboardingServiceImpl.loadProvider#findById", ANY_TYPE + "provider onboarding"),
+        entry("ProviderOnboardingServiceImpl.lockProvider#findByIdForUpdate", ANY_TYPE + "provider onboarding"),
+        entry("UserRoleHospitalAssignmentServiceImpl.resolveHospitalHumanAware#findById",
+            ANY_TYPE + "an assignment target, held to RoleFacilityCompatibility (slice 1)"),
+        entry("UserServiceImpl.upsertStaff#findById", ANY_TYPE + "a staff row at a provider, registered by its PROVIDER_ADMIN (slice 1)"),
+        entry("UserServiceImpl.resolveHospitalForStaff#findById",
+            ANY_TYPE + "admin-register of staff at a provider, held to RoleFacilityCompatibility (slice 1)"),
+        entry("MllpAllowedSenderServiceImpl.loadHospital#findById", ANY_TYPE + "P2-LAB binds an HL7 sender to a lab provider (AC-43)"),
+        entry("LabOrderServiceImpl.resolvePerformingHospital#findById", ANY_TYPE + "the performing lab, a provider in P2-LAB (AC-40); routability is checked there"),
+        entry("LabInstrumentServiceImpl.create#findById", ANY_TYPE + "lab-side setup a LABORATORY provider owns in P2-LAB"),
+        entry("LabInventoryServiceImpl.create#findById", ANY_TYPE + "lab-side setup a LABORATORY provider owns in P2-LAB"),
+        entry("ApiKeyService.issue#getReferenceById", ANY_TYPE + "a partner credential of the acting facility; nothing clinical"),
+        entry("WebhookEndpointService.register#getReferenceById", ANY_TYPE + "a partner endpoint of the acting facility; nothing clinical"),
+        entry("AnnouncementServiceImpl.createAnnouncement#getReferenceById", ANY_TYPE + "a staff announcement to the acting facility; nothing clinical"),
+        entry("TenantProvisioningService.provision#findById", ANY_TYPE + "super-admin schema provisioning of a tenant row"),
+        entry("LegacyAllergyTextBackfillWorker.resolveHospital#findById", "a backfill over rows already written; it creates no destination"));
 
     private static final String AT_CALL_SITE = "filters with ClinicalHospitals at the call site: ";
 
@@ -106,7 +146,7 @@ class HospitalRepositoryCallerCoverageTest {
         TreeSet<String> seen = new TreeSet<>();
         calls.forEach((caller, methods) -> {
             for (String method : methods) {
-                if (CLINICAL_FINDERS.contains(method) || BY_ID_OR_WRITE.contains(method)) {
+                if (CLINICAL_FINDERS.contains(method) || WRITES.contains(method) || BY_ID_READS.contains(method)) {
                     continue;
                 }
                 String key = caller + "#" + method;
@@ -119,6 +159,22 @@ class HospitalRepositoryCallerCoverageTest {
         assertThat(unrecorded).as("a new unfiltered HospitalRepository caller: use a clinical finder,"
             + " filter with ClinicalHospitals, or record why it needs every facility type").isEmpty();
         assertThat(seen).as("recorded callers that no longer exist: remove them").containsAll(RECORDED.keySet());
+    }
+
+    @Test
+    @DisplayName("every plain by-id hospital read is recorded, method by method; destinations use findClinicalById")
+    void everyByIdReadIsRecorded() throws IOException {
+        TreeSet<String> byId = new TreeSet<>();
+        for (String call : scanByMethod()) {
+            if (BY_ID_READS.contains(call.substring(call.indexOf('#') + 1))) {
+                byId.add(call);
+            }
+        }
+        TreeSet<String> unrecorded = new TreeSet<>(byId);
+        unrecorded.removeAll(BY_ID_RECORDED.keySet());
+        assertThat(unrecorded).as("a plain by-id hospital read: a request-supplied clinical destination uses"
+            + " findClinicalById; anything else needs a recorded reason").isEmpty();
+        assertThat(byId).as("recorded by-id reads that no longer exist: remove them").containsAll(BY_ID_RECORDED.keySet());
     }
 
     @Test
@@ -153,6 +209,7 @@ class HospitalRepositoryCallerCoverageTest {
     @DisplayName("no main code counts or lists hospitals through the inherited unfiltered findAll / count")
     void inheritedFindAllAndCountAreUnused() throws IOException {
         Map<String, Set<String>> calls = scan();
+        assertThat(calls).as("the scan found the repository's callers").isNotEmpty();
         calls.forEach((caller, methods) -> assertThat(methods).as(caller)
             .doesNotContain("findAll", "count"));
     }
@@ -199,6 +256,58 @@ class HospitalRepositoryCallerCoverageTest {
             }
         }
         return calls;
+    }
+
+    /** Every HospitalRepository call as "OuterClass.method#repositoryMethod"; a lambda counts as its enclosing method. */
+    private static Set<String> scanByMethod() throws IOException {
+        Set<String> calls = new TreeSet<>();
+        for (Resource resource : mainClasses()) {
+            String[] owner = new String[1];
+            try (InputStream in = resource.getInputStream()) {
+                new ClassReader(in).accept(new ClassVisitor(SpringAsmInfo.ASM_VERSION) {
+                    @Override
+                    public void visit(int version, int access, String name, String signature,
+                                      String superName, String[] interfaces) {
+                        owner[0] = outerSimpleName(name);
+                    }
+
+                    @Override
+                    public MethodVisitor visitMethod(int access, String name, String descriptor,
+                                                     String signature, String[] exceptions) {
+                        String caller = owner[0] + "." + enclosingMethod(name);
+                        return new MethodVisitor(SpringAsmInfo.ASM_VERSION) {
+                            @Override
+                            public void visitMethodInsn(int opcode, String target, String method,
+                                                        String desc, boolean isInterface) {
+                                if (REPOSITORY.equals(target)) {
+                                    calls.add(caller + "#" + method);
+                                }
+                            }
+
+                            @Override
+                            public void visitInvokeDynamicInsn(String method, String desc, Handle bootstrap,
+                                                               Object... arguments) {
+                                for (Object argument : arguments) {
+                                    if (argument instanceof Handle handle && REPOSITORY.equals(handle.getOwner())) {
+                                        calls.add(caller + "#" + handle.getName());
+                                    }
+                                }
+                            }
+                        };
+                    }
+                }, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+            }
+        }
+        return calls;
+    }
+
+    /** {@code lambda$foo$3} belongs to {@code foo}. */
+    private static String enclosingMethod(String name) {
+        if (name.startsWith("lambda$")) {
+            int end = name.indexOf('$', "lambda$".length());
+            return end < 0 ? name : name.substring("lambda$".length(), end);
+        }
+        return name;
     }
 
     private static Set<String> classesReferencingTheHelper() throws IOException {

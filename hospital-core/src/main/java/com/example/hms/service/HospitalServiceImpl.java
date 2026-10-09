@@ -1,6 +1,5 @@
 package com.example.hms.service;
 
-import com.example.hms.security.provider.ClinicalHospitals;
 import com.example.hms.enums.ProviderVerificationStatus;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.repository.provider.ProviderVerificationRepository;
@@ -268,8 +267,7 @@ public class HospitalServiceImpl implements HospitalService {
      * provider plan AC-4 and AC-11) the generic writes would skip.
      */
     private Hospital getClinicalHospitalOrThrow(UUID id) {
-        return hospitalRepository.findById(id)
-                .filter(ClinicalHospitals::isClinical)
+        return hospitalRepository.findClinicalById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND, id));
     }
 

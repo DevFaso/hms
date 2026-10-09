@@ -35,8 +35,10 @@ public class JpaTenantRoleAssignmentAccessor implements TenantRoleAssignmentAcce
     private TenantRoleAssignment toView(UserRoleHospitalAssignment assignment) {
         UUID hospitalId = null;
         UUID organizationId = null;
+        com.example.hms.enums.FacilityType facilityType = null;
         if (assignment.getHospital() != null) {
             hospitalId = assignment.getHospital().getId();
+            facilityType = com.example.hms.enums.FacilityType.orHospital(assignment.getHospital().getFacilityType());
             Organization org = assignment.getHospital().getOrganization();
             if (org != null) {
                 organizationId = org.getId();
@@ -51,7 +53,8 @@ public class JpaTenantRoleAssignmentAccessor implements TenantRoleAssignmentAcce
             organizationId,
             normalize(roleCode),
             normalize(roleName),
-            Boolean.TRUE.equals(assignment.getActive())
+            Boolean.TRUE.equals(assignment.getActive()),
+            facilityType
         );
     }
 

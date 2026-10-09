@@ -136,9 +136,25 @@ public class PatientHospitalRegistration extends BaseEntity {
     }
 
     @PrePersist
-    @PreUpdate
-    private void normalize() {
+    private void normalizeOnPersist() {
         requireClinicalHospital();
+        normalize();
+    }
+
+    /**
+     * An update may deactivate or discharge a registration that a provider
+     * facility should never have held (a legacy or planted row), but it may
+     * not keep one active there, re-activate it, or move it to a provider.
+     */
+    @PreUpdate
+    private void normalizeOnUpdate() {
+        if (active) {
+            requireClinicalHospital();
+        }
+        normalize();
+    }
+
+    private void normalize() {
         ensureTemporalDefaults();
         ensurePatientFullName();
         normalizeTextualFields();

@@ -109,9 +109,15 @@ public class ActingScopeResolver {
         Set<UUID> organizations = new LinkedHashSet<>();
         Set<String> roles = new LinkedHashSet<>();
         Map<UUID, UUID> hospitalOrganizations = new LinkedHashMap<>();
+        Set<com.example.hms.enums.FacilityType> providerTypes =
+            java.util.EnumSet.noneOf(com.example.hms.enums.FacilityType.class);
         for (TenantRoleAssignment assignment : assignments == null ? List.<TenantRoleAssignment>of() : assignments) {
             if (assignment.active()) {
                 collect(assignment, hospitals, organizations, roles, hospitalOrganizations);
+                if (assignment.hospitalId() != null && assignment.facilityType() != null
+                    && assignment.facilityType().isProvider()) {
+                    providerTypes.add(assignment.facilityType());
+                }
             }
         }
         boolean superAdmin = roles.contains(ROLE_SUPER_ADMIN);
@@ -125,6 +131,7 @@ public class ActingScopeResolver {
             .permittedOrganizationIds(Collections.unmodifiableSet(organizations))
             .assignedRoles(Collections.unmodifiableSet(roles))
             .hospitalOrganizations(Collections.unmodifiableMap(hospitalOrganizations))
+            .providerFacilityTypes(Collections.unmodifiableSet(providerTypes))
             // The organisation policies and plan gating read: the acting
             // hospital's (set again when a hospital is named), else the only
             // organisation held. Not a read scope.

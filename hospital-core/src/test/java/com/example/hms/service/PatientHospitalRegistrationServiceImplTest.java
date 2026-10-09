@@ -85,7 +85,7 @@ class PatientHospitalRegistrationServiceImplTest {
             .patientId(patientId).hospitalId(hospitalId).build();
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
         when(registrationRepository.existsByMrnAndHospitalId(anyString(), eq(hospitalId))).thenReturn(false);
         when(mapper.toEntity(dto, patient, hospital)).thenReturn(registration);
@@ -120,7 +120,7 @@ class PatientHospitalRegistrationServiceImplTest {
             .patientId(patientId).hospitalId(hospitalId).build();
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
 
         assertThatThrownBy(() -> service.registerPatient(dto))
@@ -135,7 +135,7 @@ class PatientHospitalRegistrationServiceImplTest {
             .patientId(patientId).hospitalId(hospitalId).build();
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         // Caller is pinned to a DIFFERENT hospital than the write target
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
 
@@ -150,7 +150,7 @@ class PatientHospitalRegistrationServiceImplTest {
             .patientId(patientId).hospitalId(hospitalId).build();
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
         when(registrationRepository.existsByMrnAndHospitalId(anyString(), eq(hospitalId))).thenReturn(false);
@@ -206,7 +206,7 @@ class PatientHospitalRegistrationServiceImplTest {
             .patientId(patientId).hospitalId(hospitalId).build();
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.registerPatient(dto))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -242,7 +242,7 @@ class PatientHospitalRegistrationServiceImplTest {
             .patientId(patientId).hospitalId(hospitalId).build();
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
 
         assertThatThrownBy(() -> service.registerPatient(dto))

@@ -132,7 +132,7 @@ class UltrasoundServiceImplTest {
             .build();
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(ultrasoundMapper.toOrderEntity(request, patient, hospital)).thenReturn(orderEntity);
         when(orderRepository.save(orderEntity)).thenReturn(orderEntity);
         when(ultrasoundMapper.toOrderResponseDTO(orderEntity)).thenReturn(responseDTO);
@@ -170,7 +170,7 @@ class UltrasoundServiceImplTest {
         orderEntity.setStatus(UltrasoundOrderStatus.SCHEDULED);
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(ultrasoundMapper.toOrderEntity(request, patient, hospital)).thenReturn(orderEntity);
         when(orderRepository.save(orderEntity)).thenReturn(orderEntity);
         when(ultrasoundMapper.toOrderResponseDTO(orderEntity)).thenReturn(UltrasoundOrderResponseDTO.builder().id(orderId).build());
@@ -191,7 +191,7 @@ class UltrasoundServiceImplTest {
             .build();
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
 
         assertThatThrownBy(() -> ultrasoundService.createOrder(request, null))
             .isInstanceOf(BusinessException.class)
@@ -211,7 +211,7 @@ class UltrasoundServiceImplTest {
             .build();
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
 
         assertThatThrownBy(() -> ultrasoundService.createOrder(request, null))
             .isInstanceOf(BusinessException.class)
@@ -604,7 +604,7 @@ class UltrasoundServiceImplTest {
         UltrasoundOrderResponseDTO responseDTO = UltrasoundOrderResponseDTO.builder().id(orderId).build();
 
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
-        when(hospitalRepository.findById(newHospitalId)).thenReturn(Optional.of(newHospital));
+        when(hospitalRepository.findClinicalById(newHospitalId)).thenReturn(Optional.of(newHospital));
         when(orderRepository.save(order)).thenReturn(order);
         when(ultrasoundMapper.toOrderResponseDTO(order)).thenReturn(responseDTO);
 
@@ -827,7 +827,7 @@ class UltrasoundServiceImplTest {
         UltrasoundOrder entity = new UltrasoundOrder();
         UltrasoundOrderResponseDTO dto = UltrasoundOrderResponseDTO.builder().id(orderId).build();
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(ultrasoundMapper.toOrderEntity(request, patient, hospital)).thenReturn(entity);
         when(orderRepository.save(entity)).thenReturn(entity);
         when(ultrasoundMapper.toOrderResponseDTO(entity)).thenReturn(dto);

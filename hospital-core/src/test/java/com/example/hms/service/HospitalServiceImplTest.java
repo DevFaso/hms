@@ -71,6 +71,10 @@ class HospitalServiceImplTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
+        org.mockito.Mockito.lenient().when(hospitalRepository.findClinicalById(org.mockito.ArgumentMatchers.any()))
+            .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
+                .filter(com.example.hms.security.provider.ClinicalHospitals::isClinical));
         hospitalMapper = new HospitalMapper();
         hospitalService = new HospitalServiceImpl(hospitalRepository, organizationRepository, hospitalMapper, messageSource, roleValidator,
             providerVerificationRepository);

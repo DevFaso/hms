@@ -82,7 +82,7 @@ class ImmunizationServiceImplTest {
         ImmunizationResponseDTO response = new ImmunizationResponseDTO();
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(immunizationMapper.toEntity(any(), eq(patient), eq(hospital), isNull(), isNull())).thenReturn(entity);
         when(immunizationRepository.save(entity)).thenReturn(entity);
         when(immunizationMapper.toResponseDTO(entity)).thenReturn(response);
@@ -104,7 +104,7 @@ class ImmunizationServiceImplTest {
         entity.setId(immunizationId);
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(immunizationMapper.toEntity(any(), eq(patient), eq(hospital), eq(staff), eq(encounter))).thenReturn(entity);

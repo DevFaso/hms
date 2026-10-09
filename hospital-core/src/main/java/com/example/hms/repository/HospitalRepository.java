@@ -112,13 +112,16 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     Optional<Hospital> findByIdForUpdate(@Param("id") UUID id);
 
     /**
-     * The provider facility types (never HOSPITAL) among {@code ids}: the
-     * confinement filter's one lookup per request, over the caller's
-     * permitted set (provider plan §3.3). Empty for a hospital user.
+     * The requireClinicalHospital rule (provider plan AC-11, item 4): a
+     * hospital by id, for any request-supplied CLINICAL destination (a
+     * booking, an admission, an order, a referral, a registration...). A
+     * pharmacy or laboratory row is not found, so the caller gets exactly the
+     * answer an unknown id gets at that site. A plain findById of a hospital
+     * is a recorded exception in HospitalRepositoryCallerCoverageTest.
      */
-    @Query("SELECT DISTINCT h.facilityType FROM Hospital h WHERE h.id IN :ids"
-        + " AND h.facilityType <> com.example.hms.enums.FacilityType.HOSPITAL")
-    List<com.example.hms.enums.FacilityType> findProviderFacilityTypesByIdIn(@Param("ids") Collection<UUID> ids);
+    @Query("SELECT h FROM Hospital h WHERE h.id = :id"
+        + " AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
+    Optional<Hospital> findClinicalById(@Param("id") UUID id);
 
     /* Organization-related queries */
     /**

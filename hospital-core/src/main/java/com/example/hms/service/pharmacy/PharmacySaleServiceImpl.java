@@ -70,7 +70,7 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
             throw new BusinessException("Sale must include at least one line item");
         }
 
-        Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(dto.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", dto.getHospitalId()));
 
         Pharmacy pharmacy = pharmacyRepository.findByIdAndHospital_Id(dto.getPharmacyId(), activeHospitalId)

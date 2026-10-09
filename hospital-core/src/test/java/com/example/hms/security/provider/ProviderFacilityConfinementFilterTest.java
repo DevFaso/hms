@@ -1,7 +1,6 @@
 package com.example.hms.security.provider;
 
 import com.example.hms.enums.FacilityType;
-import com.example.hms.repository.HospitalRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import jakarta.servlet.FilterChain;
@@ -9,19 +8,21 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.context.support.StaticWebApplicationContext;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 import org.springframework.web.servlet.HandlerMapping;
 import org.springframework.web.servlet.ModelAndView;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
-import org.springframework.web.context.support.StaticWebApplicationContext;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
-import java.util.List;
+import java.util.Collections;
 import java.util.Set;
 import java.util.UUID;
 
@@ -30,21 +31,24 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
  * The confinement filter and its policy over a real {@link RequestMappingHandlerMapping}
- * (two stand-in controllers): who is confined, the handler-level match, the
- * unmapped-path refusal, and that the handler lookup leaves the request as it
- * found it.
+ * (a stand-in controller): who is confined (from the live context, no query),
+ * the handler-level match, the unmapped-path refusal, the pass-through of a
+ * wrong method or media type on an allowed path, and that the handler lookup
+ * leaves the request as it found it.
  */
 class ProviderFacilityConfinementFilterTest {
 
+    private static final Set<FacilityType> PHARMACY = Set.of(FacilityType.PHARMACY);
+
     private final UUID pharmacyId = UUID.randomUUID();
     private final UUID hospitalId = UUID.randomUUID();
-    private final HospitalRepository hospitalRepository = mock(HospitalRepository.class);
     private final HandlerExceptionResolver resolver = mock(HandlerExceptionResolver.class);
     private final FilterChain chain = mock(FilterChain.class);
 
@@ -58,6 +62,11 @@ class ProviderFacilityConfinementFilterTest {
         @GetMapping("/notifications/{id}")
         String notification(@PathVariable String id) {
             return id;
+        }
+
+        @PostMapping(value = "/notifications/import", consumes = MediaType.APPLICATION_JSON_VALUE)
+        String importNotifications() {
+            return "imported";
         }
 
         @GetMapping("/{section}/{id}/detail")
@@ -81,8 +90,9 @@ class ProviderFacilityConfinementFilterTest {
         HospitalContextHolder.clear();
     }
 
-    private ProviderConfinementPolicy policy(RequestMappingHandlerMapping mapping, HandlerExceptionResolver exceptionResolver) {
-        return new ProviderConfinementPolicy(hospitalRepository, provider(mapping), provider(exceptionResolver));
+    private static ProviderConfinementPolicy policy(RequestMappingHandlerMapping mapping,
+                                                    HandlerExceptionResolver exceptionResolver) {
+        return new ProviderConfinementPolicy(provider(mapping), provider(exceptionResolver));
     }
 
     private static RequestMappingHandlerMapping mapping() {
@@ -116,26 +126,31 @@ class ProviderFacilityConfinementFilterTest {
         return new ProviderFacilityConfinementFilter(p);
     }
 
-    private void actAs(Set<UUID> permitted, Set<String> roles, boolean superAdmin) {
+    private static void actAs(Set<UUID> permitted, Set<FacilityType> providerTypes, Set<String> roles,
+                              boolean superAdmin) {
         HospitalContextHolder.setContext(HospitalContext.builder()
             .principalUserId(UUID.randomUUID())
             .permittedHospitalIds(permitted)
+            .providerFacilityTypes(providerTypes)
             .assignedRoles(roles)
             .superAdmin(superAdmin)
             .build());
     }
 
-    private static MockHttpServletRequest get(String path) {
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api" + path);
+    private static MockHttpServletRequest request(String method, String path) {
+        MockHttpServletRequest request = new MockHttpServletRequest(method, "/api" + path);
         request.setContextPath("/api");
         return request;
+    }
+
+    private static MockHttpServletRequest get(String path) {
+        return request("GET", path);
     }
 
     @Test
     @DisplayName("an unpinned provider (pharmacy + hospital) is refused a hospital handler with the unmapped-path exception")
     void providerIsRefusedAsUnmapped() throws Exception {
-        actAs(Set.of(pharmacyId, hospitalId), Set.of("ROLE_PHARMACIST", "ROLE_PATIENT"), false);
-        when(hospitalRepository.findProviderFacilityTypesByIdIn(any())).thenReturn(List.of(FacilityType.PHARMACY));
+        actAs(Set.of(pharmacyId, hospitalId), PHARMACY, Set.of("ROLE_PHARMACIST", "ROLE_PATIENT"), false);
         when(resolver.resolveException(any(), any(), isNull(), any())).thenReturn(new ModelAndView());
         MockHttpServletRequest request = get("/patients/search");
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -149,8 +164,7 @@ class ProviderFacilityConfinementFilterTest {
     @Test
     @DisplayName("without an exception resolver the refusal is still a bare 404")
     void refusalFallsBackToNotFound() throws Exception {
-        actAs(Set.of(pharmacyId), Set.of("ROLE_PHARMACIST"), false);
-        when(hospitalRepository.findProviderFacilityTypesByIdIn(any())).thenReturn(List.of(FacilityType.PHARMACY));
+        actAs(Set.of(pharmacyId), PHARMACY, Set.of("ROLE_PHARMACIST"), false);
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         filter(policy(mapping(), null)).doFilter(get("/patients/search"), response, chain);
@@ -161,49 +175,59 @@ class ProviderFacilityConfinementFilterTest {
 
     @Test
     @DisplayName("the match is the handler MVC dispatches to, not a prefix of the URI")
-    void matchIsByHandlerNotPrefix() throws Exception {
-        actAs(Set.of(pharmacyId), Set.of("ROLE_PHARMACIST"), false);
-        when(hospitalRepository.findProviderFacilityTypesByIdIn(any())).thenReturn(List.of(FacilityType.PHARMACY));
+    void matchIsByHandlerNotPrefix() {
         ProviderConfinementPolicy policy = policy(mapping(), null);
 
         // /notifications/{id} is under the wholesale prefix: allowed.
-        assertThat(policy.allows(get("/notifications/7"), Set.of(FacilityType.PHARMACY), false)).isTrue();
+        assertThat(policy.allows(get("/notifications/7"), PHARMACY, false)).isTrue();
         assertThat(policy.matchedHandlerPattern(get("/notifications/7"))).isEqualTo("/notifications/{id}");
         // /me/patient/profile is self-service, for a patient holder only.
-        assertThat(policy.allows(get("/me/patient/profile"), Set.of(FacilityType.PHARMACY), false)).isFalse();
-        assertThat(policy.allows(get("/me/patient/profile"), Set.of(FacilityType.PHARMACY), true)).isTrue();
+        assertThat(policy.allows(get("/me/patient/profile"), PHARMACY, false)).isFalse();
+        assertThat(policy.allows(get("/me/patient/profile"), PHARMACY, true)).isTrue();
         // A path MVC routes to a catch-all is that handler's, whatever it looks like.
         assertThat(policy.matchedHandlerPattern(get("/notifications/7/detail"))).isEqualTo("/{section}/{id}/detail");
-        assertThat(policy.allows(get("/notifications/7/detail"), Set.of(FacilityType.PHARMACY), true)).isFalse();
+        assertThat(policy.allows(get("/notifications/7/detail"), PHARMACY, true)).isFalse();
         // No handler at all: refused, the health probe aside.
-        assertThat(policy.allows(get("/nothing/here/at/all"), Set.of(FacilityType.PHARMACY), true)).isFalse();
-        assertThat(policy.allows(get("/actuator/health"), Set.of(FacilityType.PHARMACY), false)).isTrue();
-        // A wrong method on an allowed path is no handler either.
-        MockHttpServletRequest delete = get("/notifications");
-        delete.setMethod("DELETE");
-        assertThat(policy.allows(delete, Set.of(FacilityType.PHARMACY), false)).isFalse();
+        assertThat(policy.allows(get("/nothing/here/at/all"), PHARMACY, true)).isFalse();
+        assertThat(policy.allows(get("/actuator/health"), PHARMACY, false)).isTrue();
+    }
+
+    @Test
+    @DisplayName("a wrong method or media type on an ALLOWED path goes on to MVC (405, 415); on any other path it is refused")
+    void partialMatchOnAnAllowedPathIsMvcs() {
+        ProviderConfinementPolicy policy = policy(mapping(), null);
+
+        // DELETE /notifications: mapped for GET only, and GET /notifications is allowed → MVC answers 405.
+        assertThat(policy.allows(request("DELETE", "/notifications"), PHARMACY, false)).isTrue();
+        // POST /notifications/import as text: the handler consumes JSON → MVC answers 415.
+        MockHttpServletRequest textImport = request("POST", "/notifications/import");
+        textImport.setContentType(MediaType.TEXT_PLAIN_VALUE);
+        assertThat(policy.allows(textImport, PHARMACY, false)).isTrue();
+        // DELETE /patients/search: mapped for GET only, and not allowed → the unmapped answer.
+        assertThat(policy.allows(request("DELETE", "/patients/search"), PHARMACY, true)).isFalse();
     }
 
     @Test
     @DisplayName("the handler lookup leaves no request attribute behind and restores the ones it replaced")
     void lookupLeavesTheRequestClean() {
         ProviderConfinementPolicy policy = policy(mapping(), null);
-        MockHttpServletRequest request = get("/notifications/7");
-        request.setAttribute("pre-existing", "kept");
-        request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "earlier");
+        for (MockHttpServletRequest request : new MockHttpServletRequest[] {
+                get("/notifications/7"), request("DELETE", "/notifications")}) {
+            request.setAttribute("pre-existing", "kept");
+            request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "earlier");
 
-        assertThat(policy.matchedHandlerPattern(request)).isEqualTo("/notifications/{id}");
+            policy.allows(request, PHARMACY, false);
 
-        assertThat(java.util.Collections.list(request.getAttributeNames()))
-            .containsExactlyInAnyOrder("pre-existing", HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
-        assertThat(request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE)).isEqualTo("earlier");
+            assertThat(Collections.list(request.getAttributeNames()))
+                .containsExactlyInAnyOrder("pre-existing", HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+            assertThat(request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE)).isEqualTo("earlier");
+        }
     }
 
     @Test
     @DisplayName("an allowed handler goes through")
     void allowedHandlerPasses() throws Exception {
-        actAs(Set.of(pharmacyId), Set.of("ROLE_PHARMACIST"), false);
-        when(hospitalRepository.findProviderFacilityTypesByIdIn(any())).thenReturn(List.of(FacilityType.PHARMACY));
+        actAs(Set.of(pharmacyId), PHARMACY, Set.of("ROLE_PHARMACIST"), false);
         MockHttpServletRequest request = get("/notifications");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -218,34 +242,35 @@ class ProviderFacilityConfinementFilterTest {
     void nonProvidersPass() throws Exception {
         ProviderFacilityConfinementFilter filter = filter(policy(mapping(), resolver));
 
-        actAs(Set.of(hospitalId), Set.of("ROLE_DOCTOR"), false);
-        when(hospitalRepository.findProviderFacilityTypesByIdIn(any())).thenReturn(List.of());
+        actAs(Set.of(hospitalId), Set.of(), Set.of("ROLE_DOCTOR"), false);
         filter.doFilter(get("/patients/search"), new MockHttpServletResponse(), chain);
 
-        actAs(Set.of(pharmacyId), Set.of("ROLE_SUPER_ADMIN"), true);
+        actAs(Set.of(pharmacyId), PHARMACY, Set.of("ROLE_SUPER_ADMIN"), true);
         filter.doFilter(get("/patients/search"), new MockHttpServletResponse(), chain);
 
         HospitalContextHolder.clear();
         filter.doFilter(get("/patients/search"), new MockHttpServletResponse(), chain);
 
-        verify(chain, org.mockito.Mockito.times(3)).doFilter(any(), any());
+        verify(chain, times(3)).doFilter(any(), any());
         verifyNoInteractions(resolver);
-        // Only the hospital user's permitted set was looked up: a super-admin
-        // and an anonymous caller cost no query.
-        verify(hospitalRepository, org.mockito.Mockito.times(1)).findProviderFacilityTypesByIdIn(any());
     }
 
     @Test
     @DisplayName("without a policy bean (a @WebMvcTest slice) the filter passes everything through")
     void noPolicyPassesThrough() throws Exception {
-        actAs(Set.of(pharmacyId), Set.of("ROLE_PHARMACIST"), false);
+        actAs(Set.of(pharmacyId), PHARMACY, Set.of("ROLE_PHARMACIST"), false);
         filter(null).doFilter(get("/patients/search"), new MockHttpServletResponse(), chain);
         verify(chain).doFilter(any(), any());
     }
 
     @Test
-    @DisplayName("a PATIENT assignment makes a patient holder, wherever it is bound")
-    void patientHolder() {
+    @DisplayName("the confining types come from the live context; a PATIENT assignment makes a patient holder")
+    void typesAndPatientHolderComeFromTheContext() {
+        assertThat(ProviderConfinementPolicy.providerTypes(HospitalContext.builder()
+            .providerFacilityTypes(PHARMACY).build())).containsExactly(FacilityType.PHARMACY);
+        assertThat(ProviderConfinementPolicy.providerTypes(HospitalContext.builder()
+            .providerFacilityTypes(PHARMACY).superAdmin(true).build())).isEmpty();
+        assertThat(ProviderConfinementPolicy.providerTypes(null)).isEmpty();
         assertThat(ProviderConfinementPolicy.isPatientHolder(HospitalContext.builder()
             .assignedRoles(Set.of("ROLE_PHARMACIST", "ROLE_PATIENT")).build())).isTrue();
         assertThat(ProviderConfinementPolicy.isPatientHolder(HospitalContext.builder()

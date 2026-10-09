@@ -86,7 +86,7 @@ class IsolationServiceImplTest {
         patient.setLastName("Diallo");
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(patientChartAccess.require(any(), any())).thenReturn(patient);
         when(precautionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(precautionRepository.findActiveOfType(any(), any())).thenReturn(Optional.empty());

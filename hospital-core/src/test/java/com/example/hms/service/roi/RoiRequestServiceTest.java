@@ -163,7 +163,7 @@ class RoiRequestServiceTest {
     void createLogsPendingRow() {
         asClinicianAtHospital();
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.getReferenceById(hospitalId)).thenReturn(hospital);
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(java.util.Optional.of(hospital));
         when(roiRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var dto = service.create(patientId, createDto());
@@ -229,7 +229,7 @@ class RoiRequestServiceTest {
     @Test
     @DisplayName("createForSelf files as PATIENT with the patient's own name — the self DTO has no identity to spoof")
     void createForSelfForcesPatientIdentity() {
-        when(hospitalRepository.getReferenceById(hospitalId)).thenReturn(hospital);
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(java.util.Optional.of(hospital));
         when(roiRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var saved = service.createForSelf(patient, hospitalId, selfDto());
@@ -466,7 +466,7 @@ class RoiRequestServiceTest {
     void auditFailureIsSwallowed() {
         asClinicianAtHospital();
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.getReferenceById(hospitalId)).thenReturn(hospital);
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(java.util.Optional.of(hospital));
         when(roiRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         doThrow(new RuntimeException("audit sink down")).when(auditService).logEvent(any());
 

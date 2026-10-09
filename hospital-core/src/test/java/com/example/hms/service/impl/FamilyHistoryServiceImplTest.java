@@ -70,7 +70,7 @@ class FamilyHistoryServiceImplTest {
         FamilyHistoryResponseDTO response = new FamilyHistoryResponseDTO();
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(familyHistoryMapper.toEntity(any(), eq(patient), eq(hospital), eq(staff))).thenReturn(entity);
         when(familyHistoryRepository.save(entity)).thenReturn(entity);

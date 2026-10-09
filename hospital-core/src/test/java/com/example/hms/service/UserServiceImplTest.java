@@ -88,6 +88,10 @@ class UserServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
+        org.mockito.Mockito.lenient().when(hospitalRepository.findClinicalById(org.mockito.ArgumentMatchers.any()))
+            .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
+                .filter(com.example.hms.security.provider.ClinicalHospitals::isClinical));
         userId = UUID.randomUUID();
         user = new User();
         user.setId(userId);

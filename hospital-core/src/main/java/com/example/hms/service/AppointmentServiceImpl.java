@@ -504,8 +504,7 @@ public class AppointmentServiceImpl implements AppointmentService {
      */
     private Hospital resolveHospital(AppointmentRequestDTO request) {
         if (request.getHospitalId() != null) {
-            return hospitalRepository.findById(request.getHospitalId())
-                .filter(ClinicalHospitals::isClinical)
+            return hospitalRepository.findClinicalById(request.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", request.getHospitalId()));
         } else if (request.getHospitalCode() != null) {
             return hospitalRepository.findByCodeIgnoreCase(request.getHospitalCode())
@@ -609,7 +608,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         Staff staff = staffRepository.findById(request.getStaffId())
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getStaffId()));
 
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         if (!staff.getHospital().getId().equals(hospital.getId())) {

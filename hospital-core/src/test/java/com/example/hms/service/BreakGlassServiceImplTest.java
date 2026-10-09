@@ -81,6 +81,10 @@ class BreakGlassServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
+        org.mockito.Mockito.lenient().when(hospitalRepository.findClinicalById(org.mockito.ArgumentMatchers.any()))
+            .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
+                .filter(com.example.hms.security.provider.ClinicalHospitals::isClinical));
         userId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
         patientId = UUID.randomUUID();
@@ -227,7 +231,7 @@ class BreakGlassServiceImplTest {
         @DisplayName("rejects callers without a privileged role at the hospital")
         void declareRejectsUnprivileged() {
             when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
                 .thenReturn(Optional.empty());
@@ -544,7 +548,7 @@ class BreakGlassServiceImplTest {
         @DisplayName("SUPER_ADMIN can declare even without a hospital-scoped role")
         void superAdminBypassesHospitalRoleCheck() {
             when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
                 .thenReturn(Optional.of(new com.example.hms.model.UserRoleHospitalAssignment()));
@@ -641,7 +645,7 @@ class BreakGlassServiceImplTest {
 
     private void stubAuthenticatedDoctor() {
         when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
             .thenReturn(Optional.empty());

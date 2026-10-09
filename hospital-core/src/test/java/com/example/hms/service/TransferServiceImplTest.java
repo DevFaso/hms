@@ -122,7 +122,7 @@ class TransferServiceImplTest {
         admission.setStatus(AdmissionStatus.ACTIVE);
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(admissionRepository.findById(admission.getId())).thenReturn(Optional.of(admission));
         when(bedRepository.findByIdAndWard_Hospital_Id(any(), any()))
             .thenAnswer(i -> Optional.of(destinationBed));
