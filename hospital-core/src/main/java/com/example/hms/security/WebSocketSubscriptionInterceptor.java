@@ -129,37 +129,48 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(message);
-        if (StompCommand.CONNECT.equals(accessor.getCommand())
-            || StompCommand.STOMP.equals(accessor.getCommand())) {
-            Map<String, Object> session = accessor.getSessionAttributes();
-            if (session != null) {
-                session.put(CONNECTED_AT_ATTRIBUTE, clock.instant());
-            }
-            return message;
+        StompCommand command = accessor.getCommand();
+        if (StompCommand.CONNECT.equals(command) || StompCommand.STOMP.equals(command)) {
+            recordConnect(accessor);
+        } else if (StompCommand.SEND.equals(command)) {
+            authorizeSend(accessor);
+        } else if (StompCommand.SUBSCRIBE.equals(command)) {
+            authorizeSubscribe(accessor);
         }
-        if (StompCommand.SEND.equals(accessor.getCommand())) {
-            // Provider rule for @MessageMapping: closed, as HTTP /chat/send is.
-            // A SEND with no principal is refused, as a SUBSCRIBE is.
-            Principal sender = accessor.getUser();
-            if (sender == null) {
-                throw denied(null, accessor.getDestination(), "missing principal");
-            }
-            String target = accessor.getDestination();
-            if (target == null || !target.startsWith(APPLICATION_DESTINATION_PREFIX)) {
-                // A broker destination: a forged broadcast, tracker event or
-                // message in someone else's queue. Refused for everyone.
-                throw denied(sender, target, "clients send to the application (/app/**) only");
-            }
-            Caller caller = resolve(accessor, sender);
-            if (caller.unavailable() || isProvider(caller.context())) {
-                throw denied(sender, accessor.getDestination(), "provider users may not send STOMP messages");
-            }
-            return message;
-        }
-        if (!StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
-            return message;
-        }
+        return message;
+    }
 
+    /** The session's CONNECT, now: the ws-ticket's roles vouch for {@link #RESOLUTION_TTL} after it. */
+    private void recordConnect(StompHeaderAccessor accessor) {
+        Map<String, Object> session = accessor.getSessionAttributes();
+        if (session != null) {
+            session.put(CONNECTED_AT_ATTRIBUTE, clock.instant());
+        }
+    }
+
+    /**
+     * Provider rule for @MessageMapping: closed, as HTTP /chat/send is. A SEND
+     * with no principal is refused, as a SUBSCRIBE is, and a SEND anywhere but
+     * the application is refused for everyone.
+     */
+    private void authorizeSend(StompHeaderAccessor accessor) {
+        Principal sender = accessor.getUser();
+        if (sender == null) {
+            throw denied(null, accessor.getDestination(), "missing principal");
+        }
+        String target = accessor.getDestination();
+        if (target == null || !target.startsWith(APPLICATION_DESTINATION_PREFIX)) {
+            // A broker destination: a forged broadcast, tracker event or
+            // message in someone else's queue. Refused for everyone.
+            throw denied(sender, target, "clients send to the application (/app/**) only");
+        }
+        Caller caller = resolve(accessor, sender);
+        if (caller.unavailable() || isProvider(caller.context())) {
+            throw denied(sender, target, "provider users may not send STOMP messages");
+        }
+    }
+
+    private void authorizeSubscribe(StompHeaderAccessor accessor) {
         String destination = accessor.getDestination();
         Principal user = accessor.getUser();
 
@@ -168,7 +179,7 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
         }
 
         if (destination.startsWith(USER_DESTINATION_PREFIX)) {
-            return message;
+            return;
         }
 
         boolean broadcast = EMERGENCY_BROADCAST_TOPIC.equals(destination)
@@ -177,14 +188,14 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
             // No role a pharmacy or laboratory accepts, at the handshake just
             // now: cannot be a provider user. No lookup (a reconnect storm
             // costs no database read).
-            return message;
+            return;
         }
 
         Caller caller = resolve(accessor, user);
 
         if (broadcast) {
             authorizeBroadcast(user, caller, destination);
-            return message;
+            return;
         }
 
         // Provider rule (provider plan §6.4, T21): a user with a live
@@ -195,7 +206,7 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
 
         if (destination.startsWith(PatientTrackerEventPublisher.TOPIC_PREFIX)) {
             authorizeTrackerSubscription(user, caller.context(), destination);
-            return message;
+            return;
         }
 
         throw denied(user, destination, "destination not in the subscription whitelist");

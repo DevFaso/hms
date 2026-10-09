@@ -25,10 +25,8 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.TestingAuthenticationToken;
@@ -46,6 +44,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -86,7 +86,7 @@ class BreakGlassServiceImplTest {
     @BeforeEach
     void setUp() {
         // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
-        Mockito.lenient().when(hospitalRepository.findClinicalById(ArgumentMatchers.any()))
+        lenient().when(hospitalRepository.findClinicalById(any()))
             .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
                 .filter(ClinicalHospitals::isClinical));
         userId = UUID.randomUUID();
@@ -584,7 +584,7 @@ class BreakGlassServiceImplTest {
         void auditFailureSwallowed() {
             stubAuthenticatedDoctor();
             when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            Mockito.doThrow(new RuntimeException("audit DB down"))
+            doThrow(new RuntimeException("audit DB down"))
                 .when(auditService).logEvent(any());
 
             BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()

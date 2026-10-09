@@ -26,7 +26,6 @@ import com.example.hms.service.PatientDocumentService;
 import com.example.hms.service.PatientPortalService;
 import com.example.hms.service.pharmacy.PharmacyClaimService;
 import com.example.hms.service.pharmacy.PharmacyPaymentService;
-import org.assertj.core.api.Assertions;
 import org.springframework.beans.factory.ObjectProvider;
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,6 +58,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -419,7 +419,7 @@ class PatientPortalControllerPhase2Test {
                             .principal(auth))
                     .andExpect(status().isNotFound())
                     .andReturn().getResponse().getContentAsString();
-            Assertions.assertThat(normalise(asForeign, foreign))
+            assertThat(normalise(asForeign, foreign))
                 .isEqualTo(normalise(asUnknown, unknown));
         }
 
@@ -440,7 +440,7 @@ class PatientPortalControllerPhase2Test {
 
             mockMvc.perform(put("/me/patient/notifications/{notificationId}/read", id).principal(auth))
                     .andExpect(status().isOk());
-            Assertions.assertThat(broadcast.isRead()).isFalse();
+            assertThat(broadcast.isRead()).isFalse();
         }
 
         private String normalise(String body, UUID id) {

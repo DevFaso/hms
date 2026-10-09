@@ -25,9 +25,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.springframework.context.MessageSource;
 import org.springframework.data.domain.Page;
@@ -75,7 +73,7 @@ class HospitalServiceImplTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
-        Mockito.lenient().when(hospitalRepository.findClinicalById(ArgumentMatchers.any()))
+        lenient().when(hospitalRepository.findClinicalById(any()))
             .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
                 .filter(ClinicalHospitals::isClinical));
         hospitalMapper = new HospitalMapper();

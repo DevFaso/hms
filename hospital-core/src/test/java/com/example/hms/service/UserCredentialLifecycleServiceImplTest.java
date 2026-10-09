@@ -11,10 +11,8 @@ import com.example.hms.payload.dto.credential.UserRecoveryContactRequestDTO;
 import com.example.hms.repository.UserMfaEnrollmentRepository;
 import com.example.hms.repository.UserRecoveryContactRepository;
 import com.example.hms.repository.UserRepository;
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -31,6 +29,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
@@ -88,14 +88,14 @@ class UserCredentialLifecycleServiceImplTest {
         when(recoveryContactRepository.findById(unknownId)).thenReturn(Optional.empty());
 
         for (boolean verify : new boolean[] {false, true}) {
-            Throwable asForeign = Assertions.catchThrowable(() -> {
+            Throwable asForeign = catchThrowable(() -> {
                 if (verify) {
                     service.verifyRecoveryContact(caller, foreign.getId(), "123456");
                 } else {
                     service.sendRecoveryContactVerificationCode(caller, foreign.getId());
                 }
             });
-            Throwable asUnknown = Assertions.catchThrowable(() -> {
+            Throwable asUnknown = catchThrowable(() -> {
                 if (verify) {
                     service.verifyRecoveryContact(caller, unknownId, "123456");
                 } else {
@@ -107,7 +107,7 @@ class UserCredentialLifecycleServiceImplTest {
             assertThat(asForeign.getMessage().replace(foreign.getId().toString(), "<id>"))
                 .isEqualTo(asUnknown.getMessage().replace(unknownId.toString(), "<id>"));
         }
-        verify(recoveryContactRepository, never()).save(ArgumentMatchers.any());
+        verify(recoveryContactRepository, never()).save(any());
     }
 
     @Test

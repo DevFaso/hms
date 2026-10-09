@@ -31,10 +31,8 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -50,7 +48,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -92,7 +93,7 @@ class UserServiceImplTest {
     @BeforeEach
     void setUp() {
         // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
-        Mockito.lenient().when(hospitalRepository.findClinicalById(ArgumentMatchers.any()))
+        lenient().when(hospitalRepository.findClinicalById(any()))
             .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
                 .filter(ClinicalHospitals::isClinical));
         userId = UUID.randomUUID();
@@ -120,7 +121,7 @@ class UserServiceImplTest {
         lenient().when(accountAccess.canView(any())).thenReturn(true);
         lenient().when(accountAccess.canDelete(any())).thenReturn(true);
         // Registration runs as a super-admin: the grant check resolves the hospital and allows.
-        UserAccountAccess.Grant anywhere = Mockito.mock(UserAccountAccess.Grant.class);
+        UserAccountAccess.Grant anywhere = mock(UserAccountAccess.Grant.class);
         lenient().when(anywhere.requireAt(any())).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(accountAccess.requireMayGrant(any())).thenReturn(anywhere);
     }
@@ -341,7 +342,7 @@ class UserServiceImplTest {
             createdAssignment.setRole(superAdminRole);
             createdAssignment.setActive(false);
             when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(
-                    any(), ArgumentMatchers.isNull(), any()))
+                    any(), isNull(), any()))
                 .thenReturn(Optional.of(createdAssignment));
             when(userRepository.findByIdWithRolesAndProfiles(any(UUID.class)))
                 .thenAnswer(inv -> {
@@ -377,7 +378,7 @@ class UserServiceImplTest {
             // The old pre-approval override force-activated the reloaded
             // assignment and saved it; that save must never come back.
             assertThat(createdAssignment.getActive()).isFalse();
-            verify(assignmentRepository, Mockito.never()).save(any());
+            verify(assignmentRepository, never()).save(any());
         }
 
         @Test
@@ -1276,7 +1277,7 @@ class UserServiceImplTest {
             created.setRole(superAdminRole);
             created.setActive(false);
             when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(
-                    any(), ArgumentMatchers.isNull(), any()))
+                    any(), isNull(), any()))
                 .thenReturn(Optional.of(created));
             when(userRepository.findByIdWithRolesAndProfiles(any(UUID.class)))
                 .thenAnswer(inv -> {
@@ -1577,7 +1578,7 @@ class UserServiceImplTest {
             assertThatThrownBy(() -> userService.deleteUser(userId))
                     .isInstanceOf(ResourceNotFoundException.class);
             assertThat(user.isDeleted()).isFalse();
-            verify(auditEventLogService).logEvent(ArgumentMatchers.argThat(r ->
+            verify(auditEventLogService).logEvent(argThat(r ->
                     r.getStatus() == com.example.hms.enums.AuditStatus.FAILURE
                             && r.getEventType() == com.example.hms.enums.AuditEventType.USER_DELETE));
             verify(userRepository, never()).save(any());
@@ -1595,7 +1596,7 @@ class UserServiceImplTest {
                     .isInstanceOf(ResourceNotFoundException.class);
             assertThat(user.isDeleted()).isTrue();
             verify(userRepository, never()).save(any());
-            verify(auditEventLogService).logEvent(ArgumentMatchers.argThat(r ->
+            verify(auditEventLogService).logEvent(argThat(r ->
                     r.getStatus() == com.example.hms.enums.AuditStatus.FAILURE));
         }
 

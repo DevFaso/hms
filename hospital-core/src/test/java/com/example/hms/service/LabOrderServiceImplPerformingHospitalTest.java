@@ -37,10 +37,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageRequest;
 
@@ -102,7 +100,7 @@ class LabOrderServiceImplPerformingHospitalTest {
     @BeforeEach
     void setUp() {
         // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
-        Mockito.lenient().when(hospitalRepository.findClinicalById(ArgumentMatchers.any()))
+        lenient().when(hospitalRepository.findClinicalById(any()))
             .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
                 .filter(ClinicalHospitals::isClinical));
         ordering = hospital("Ordering Hospital", "ORD");

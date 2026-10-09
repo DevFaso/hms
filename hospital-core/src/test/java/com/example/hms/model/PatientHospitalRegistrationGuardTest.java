@@ -3,16 +3,19 @@ package com.example.hms.model;
 import com.example.hms.enums.FacilityType;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
 /**
  * The entity backstop of provider plan AC-10: a registration is the treatment
@@ -28,36 +31,36 @@ class PatientHospitalRegistrationGuardTest {
     @Test
     @DisplayName("an update that neither moves nor re-activates the row never reads the facility type (no N+1)")
     void ordinaryUpdateDoesNotLoadTheHospital() {
-        Hospital hospital = Mockito.spy(facility(FacilityType.HOSPITAL));
+        Hospital hospital = spy(facility(FacilityType.HOSPITAL));
         PatientHospitalRegistration registration = new PatientHospitalRegistration(new Patient(), hospital);
         ReflectionTestUtils.invokeMethod(registration, "rememberLoadedHospital");
-        Mockito.clearInvocations(hospital);
+        clearInvocations(hospital);
         registration.setCurrentRoom("12B");
 
         ReflectionTestUtils.invokeMethod(registration, "normalizeOnUpdate");
 
-        Mockito.verify(hospital, Mockito.never()).isProvider();
-        Mockito.verify(hospital, Mockito.never()).getFacilityType();
+        verify(hospital, never()).isProvider();
+        verify(hospital, never()).getFacilityType();
     }
 
     @Test
     @DisplayName("what the row was loaded with is not settable: no accessor, no builder property, no constructor argument")
     void loadedStateIsNotSettable() {
         for (Method method : PatientHospitalRegistration.class.getMethods()) {
-            Assertions.assertThat(method.getName().toLowerCase())
+            assertThat(method.getName().toLowerCase())
                 .as("public method %s", method.getName()).doesNotContain("loaded");
         }
         for (Method method : PatientHospitalRegistration.builder().getClass().getMethods()) {
-            Assertions.assertThat(method.getName().toLowerCase())
+            assertThat(method.getName().toLowerCase())
                 .as("builder method %s", method.getName()).doesNotContain("loaded");
         }
         for (Constructor<?> constructor : PatientHospitalRegistration.class.getConstructors()) {
             for (Class<?> parameter : constructor.getParameterTypes()) {
-                Assertions.assertThat(parameter.getSimpleName())
+                assertThat(parameter.getSimpleName())
                     .as("constructor parameter").isNotEqualTo("LoadedState");
             }
         }
-        Assertions.assertThat(at(FacilityType.HOSPITAL).toString()).doesNotContain("loaded");
+        assertThat(at(FacilityType.HOSPITAL).toString()).doesNotContain("loaded");
     }
 
     private static Hospital facility(FacilityType type) {

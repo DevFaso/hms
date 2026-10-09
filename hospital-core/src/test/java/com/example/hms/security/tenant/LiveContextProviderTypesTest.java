@@ -4,7 +4,6 @@ import com.example.hms.enums.FacilityType;
 import com.example.hms.security.auth.TenantRoleAssignment;
 import com.example.hms.security.context.HospitalContext;
 import java.util.Map;
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -12,6 +11,8 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * The provider facility types ride on the live context, from the same
@@ -56,10 +57,10 @@ class LiveContextProviderTypesTest {
     @Test
     @DisplayName("an assignment at a facility cannot be built without its type (no fail-open default)")
     void facilityRowNeedsItsType() {
-        Assertions.assertThatThrownBy(() ->
+        assertThatThrownBy(() ->
                 new TenantRoleAssignment(pharmacy, null, "ROLE_PHARMACIST", "PHARMACIST", true, null))
             .isInstanceOf(IllegalArgumentException.class);
-        Assertions.assertThatCode(() ->
+        assertThatCode(() ->
                 new TenantRoleAssignment(null, null, "ROLE_SUPER_ADMIN", "SUPER_ADMIN", true, null))
             .doesNotThrowAnyException();
     }
