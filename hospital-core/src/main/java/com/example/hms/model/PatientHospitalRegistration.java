@@ -151,7 +151,7 @@ public class PatientHospitalRegistration extends BaseEntity {
     @jakarta.persistence.Transient
     @Getter(AccessLevel.NONE)
     @Setter(AccessLevel.NONE)
-    private final transient LoadedState loaded = new LoadedState();
+    private final LoadedState loaded = new LoadedState();
 
     /** What the row held when it was last loaded or written. */
     private static final class LoadedState {

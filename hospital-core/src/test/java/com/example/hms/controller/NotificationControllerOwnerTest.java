@@ -14,7 +14,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -39,7 +38,7 @@ class NotificationControllerOwnerTest {
         when(service.markAsRead(id, "nurse1")).thenReturn(true);
 
         assertThat(controller.markAsRead(id, nurse).getStatusCode().value()).isEqualTo(200);
-        verify(service).markAsRead(eq(id), eq("nurse1"));
+        verify(service).markAsRead(id, "nurse1");
     }
 
     @Test
