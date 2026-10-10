@@ -6,6 +6,7 @@ import com.example.hms.payload.dto.provider.ProviderCreateRequestDTO;
 import com.example.hms.payload.dto.provider.ProviderDecisionRequestDTO;
 import com.example.hms.payload.dto.provider.ProviderResponseDTO;
 import com.example.hms.payload.dto.provider.ProviderResubmitRequestDTO;
+import com.example.hms.payload.dto.provider.ProviderVerificationHistoryEntryDTO;
 import com.example.hms.payload.dto.provider.ProviderVerifyRequestDTO;
 import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.service.provider.ProviderOnboardingService;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -44,7 +46,7 @@ import java.util.UUID;
 @RequestMapping("/super-admin/providers")
 @RequiredArgsConstructor
 @Tag(name = "Super Admin — Provider facilities",
-    description = "Onboard, verify, reject, re-submit and revoke private pharmacies and laboratories.")
+    description = "Onboard, verify, reject, re-submit and revoke private pharmacies and laboratories, and read their verification history.")
 public class SuperAdminProviderController {
 
     private static final String SUPER_ADMIN_ONLY = "hasAuthority('ROLE_SUPER_ADMIN')";
@@ -76,6 +78,14 @@ public class SuperAdminProviderController {
     @Operation(summary = "Get one provider facility", security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<ProviderResponseDTO> get(@PathVariable UUID providerId) {
         return ResponseEntity.ok(onboardingService.get(providerId));
+    }
+
+    @GetMapping("/{providerId}/verifications")
+    @PreAuthorize(SUPER_ADMIN_ONLY)
+    @Operation(summary = "One provider facility's verification history, newest first",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<List<ProviderVerificationHistoryEntryDTO>> history(@PathVariable UUID providerId) {
+        return ResponseEntity.ok(onboardingService.history(providerId));
     }
 
     @PostMapping("/{providerId}/verify")

@@ -17,6 +17,7 @@ import com.example.hms.payload.dto.provider.ProviderDecisionRequestDTO;
 import com.example.hms.payload.dto.provider.ProviderProfessionalDTO;
 import com.example.hms.payload.dto.provider.ProviderResponseDTO;
 import com.example.hms.payload.dto.provider.ProviderResubmitRequestDTO;
+import com.example.hms.payload.dto.provider.ProviderVerificationHistoryEntryDTO;
 import com.example.hms.payload.dto.provider.ProviderVerifyRequestDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.provider.ProviderVerificationRepository;
@@ -45,6 +46,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -596,6 +598,63 @@ class ProviderOnboardingServiceImplTest {
             ProviderDecisionRequestDTO request = new ProviderDecisionRequestDTO("x");
             assertThatThrownBy(() -> service.revoke(id, request))
                 .isInstanceOf(ConflictException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("verification history")
+    class History {
+
+        @Test
+        @DisplayName("every verification of the provider, in the repository's newest-first order, with its decision")
+        void listsEveryVerification() {
+            Hospital facility = provider();
+            ProviderVerification rejected = submitted(facility);
+            rejected.setStatus(ProviderVerificationStatus.REJECTED);
+            rejected.setDecisionReason("RCCM extract unreadable");
+            ProviderVerification current = submitted(facility);
+            current.setEvidenceNote("Checked");
+            when(verificationRepository.findByHospital_IdOrderByCreatedAtDescIdDesc(facility.getId()))
+                .thenReturn(List.of(current, rejected));
+
+            List<ProviderVerificationHistoryEntryDTO> history = service.history(facility.getId());
+
+            assertThat(history).extracting(ProviderVerificationHistoryEntryDTO::getVerificationId)
+                .containsExactly(current.getId(), rejected.getId());
+            assertThat(history.get(0).getStatus()).isEqualTo(ProviderVerificationStatus.SUBMITTED);
+            assertThat(history.get(0).getEvidenceNote()).isEqualTo("Checked");
+            assertThat(history.get(1).getStatus()).isEqualTo(ProviderVerificationStatus.REJECTED);
+            assertThat(history.get(1).getDecisionReason()).isEqualTo("RCCM extract unreadable");
+            assertThat(history.get(1).getLicenceNumber()).isEqualTo("LIC-77");
+        }
+
+        @Test
+        @DisplayName("a hospital id answers exactly as an unknown id, and nothing is read")
+        void hospitalIdIsNotAProvider() {
+            Hospital hospital = new Hospital();
+            hospital.setId(UUID.randomUUID());
+            when(hospitalRepository.findById(hospital.getId())).thenReturn(Optional.of(hospital));
+            UUID hospitalId = hospital.getId();
+            UUID unknown = UUID.randomUUID();
+
+            Throwable notProvider = org.assertj.core.api.Assertions.catchThrowable(() -> service.history(hospitalId));
+            Throwable missing = org.assertj.core.api.Assertions.catchThrowable(() -> service.history(unknown));
+
+            assertThat(notProvider).isInstanceOf(ResourceNotFoundException.class);
+            assertThat(missing).isInstanceOf(ResourceNotFoundException.class);
+            assertThat(notProvider.getMessage()).isEqualTo(missing.getMessage());
+            verify(verificationRepository, never()).findByHospital_IdOrderByCreatedAtDescIdDesc(any());
+        }
+
+        @Test
+        @DisplayName("an unverified super-admin is refused before anything is read")
+        void unverifiedSuperAdmin() {
+            Hospital facility = provider();
+            when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+            UUID id = facility.getId();
+
+            assertThatThrownBy(() -> service.history(id)).isInstanceOf(AccessDeniedException.class);
+            verify(verificationRepository, never()).findByHospital_IdOrderByCreatedAtDescIdDesc(any());
         }
     }
 

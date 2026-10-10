@@ -18,6 +18,7 @@ import com.example.hms.payload.dto.provider.ProviderDecisionRequestDTO;
 import com.example.hms.payload.dto.provider.ProviderProfessionalDTO;
 import com.example.hms.payload.dto.provider.ProviderResponseDTO;
 import com.example.hms.payload.dto.provider.ProviderResubmitRequestDTO;
+import com.example.hms.payload.dto.provider.ProviderVerificationHistoryEntryDTO;
 import com.example.hms.payload.dto.provider.ProviderVerifyRequestDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.provider.ProviderVerificationRepository;
@@ -41,6 +42,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -152,6 +154,27 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
         requireVerifiedSuperAdmin();
         Hospital facility = loadProvider(providerId);
         return toResponse(facility, currentVerification(facility));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProviderVerificationHistoryEntryDTO> history(UUID providerId) {
+        requireVerifiedSuperAdmin();
+        Hospital facility = loadProvider(providerId);
+        return verificationRepository.findByHospital_IdOrderByCreatedAtDescIdDesc(facility.getId()).stream()
+            .map(v -> ProviderVerificationHistoryEntryDTO.builder()
+                .verificationId(v.getId())
+                .status(v.getStatus())
+                .submittedAt(v.getCreatedAt())
+                .decidedAt(v.getDecidedAt())
+                .decidedByUserId(v.getDecidedByUserId())
+                .decisionReason(v.getDecisionReason())
+                .evidenceNote(v.getEvidenceNote())
+                .legalName(v.getLegalName())
+                .licenceNumber(v.getLicenceNumber())
+                .licenceAuthority(v.getLicenceAuthority())
+                .build())
+            .toList();
     }
 
     @Override
