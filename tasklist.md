@@ -4753,6 +4753,34 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 
 - **External providers: the session bootstrap builds a whole live context for one boolean** (`providerUser`); compute the provider types from the assignments it already holds (found in #835's round-11 review). Open.
 
+- **External providers: before verifying the first provider on prod** (from #835's
+  round-13 review; none can occur while no provider is verified). Open:
+  - The portal's emergency-broadcast client ignores the server's
+    `access-denied` / `unavailable` verdict and resets its reconnect counter on
+    every connect, so a provider user it connects anyway (bootstrap failed, so
+    `providerUser` defaulted to false) reconnects every 5 s.
+  - The shell's broadcast gate runs once: a later bootstrap that reports
+    `providerUser=true` (impersonating a lab or pharmacy user, a re-bootstrap)
+    does not close an open socket.
+  - During a DB outage the STOMP broadcast fallback lets the ws-ticket's roles
+    vouch with no CONNECT-time window, so a user who became a provider after
+    the handshake keeps the broadcast topics until the DB is back.
+- **External providers: one place for "resolve the caller, DB failure = retryable"**:
+  the classification is hand-written in `NotificationServiceImpl`,
+  `ProviderFacilityConfinementFilter.fallbackContext` and
+  `WebSocketSubscriptionInterceptor.resolve`; move it into `ProviderCallerResolver`
+  (from #835's round-13 review). Open.
+- **External providers: clinical list queries load whole entities** where ids or an
+  active filter would do (`findAllHospitals` in the appointment super-admin view and
+  platform analytics); add an id projection and an active clinical finder (from
+  #835's round-13 review). Open.
+- **External providers: `RecordAccessDenialReason.PROVIDER_FACILITY` says it is evaluated
+  first**, but an inactive pharmacy/lab answers `HOSPITAL_UNKNOWN`; fix the doc or the
+  order (from #835's round-13 review). Open.
+- **CDS acknowledgement with an unknown hospital id now answers 404** (was: saved as a
+  global acknowledgement). Intended since #835; confirm no client relies on the old
+  behaviour. Open.
+
 ## Open clinical questions — kept open on purpose, not forgotten
 
 These are questions only a clinician can settle. None of them blocks anything:
