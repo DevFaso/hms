@@ -37,6 +37,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -103,9 +104,11 @@ public class MfaController {
         // AC-13: enrolling again resets the authenticator. A provider user may
         // do that only with the factor it guards; otherwise the password alone
         // (the challenge token login hands out) would swap it for an
-        // attacker's and pass the challenge.
+        // attacker's and pass the challenge. Keyed on the enrolment ROW, not on
+        // "MFA enabled": an abandoned re-enrolment (unverified, disabled) must
+        // not reopen a password-only enrolment.
         ProviderMfaGate gate = providerMfaGate.getIfAvailable();
-        if (gate != null && mfaService.isMfaEnabled(user.getId())
+        if (gate != null && mfaService.hasTotpEnrollment(user.getId())
                 && gate.isProviderUser(user.getId(), user.getUsername())
                 && !gate.secondFactorPresented(SecurityContextHolder.getContext().getAuthentication())) {
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
@@ -247,8 +250,9 @@ public class MfaController {
         // A verified TOTP or backup code: both tokens carry amr [pwd, otp], the
         // second-factor proof the provider MFA gate reads (AC-13), and the
         // refresh token passes it on to the access tokens it later mints.
-        String accessToken = jwtTokenProvider.generateAccessToken(descriptor, true);
-        String refreshToken = jwtTokenProvider.generateRefreshToken(descriptor, true);
+        Instant verifiedAt = Instant.now();
+        String accessToken = jwtTokenProvider.generateAccessToken(descriptor, verifiedAt);
+        String refreshToken = jwtTokenProvider.generateRefreshToken(descriptor, verifiedAt);
 
         userCredentialLifecycleService.recordSuccessfulLogin(user.getId());
 

@@ -770,12 +770,12 @@ class AuthControllerTest {
         when(jwtTokenProvider.generateAccessToken(
                 org.mockito.ArgumentMatchers.any(
                         com.example.hms.security.TokenUserDescriptor.class),
-                org.mockito.ArgumentMatchers.eq(false)))
+                org.mockito.ArgumentMatchers.isNull()))
                 .thenReturn("new.access.token");
         when(jwtTokenProvider.generateRefreshToken(
                 org.mockito.ArgumentMatchers.any(
                         org.springframework.security.authentication.UsernamePasswordAuthenticationToken.class),
-                org.mockito.ArgumentMatchers.eq(false)))
+                org.mockito.ArgumentMatchers.isNull()))
                 .thenReturn("new.refresh.token");
         when(jwtTokenProvider.getExpiration("new.access.token"))
                 .thenReturn(new java.util.Date(accessExp));
@@ -835,12 +835,12 @@ class AuthControllerTest {
         when(jwtTokenProvider.generateAccessToken(
                 org.mockito.ArgumentMatchers.any(
                         com.example.hms.security.TokenUserDescriptor.class),
-                org.mockito.ArgumentMatchers.eq(false)))
+                org.mockito.ArgumentMatchers.isNull()))
                 .thenReturn("new.access.token");
         when(jwtTokenProvider.generateRefreshToken(
                 org.mockito.ArgumentMatchers.any(
                         org.springframework.security.authentication.UsernamePasswordAuthenticationToken.class),
-                org.mockito.ArgumentMatchers.eq(false)))
+                org.mockito.ArgumentMatchers.isNull()))
                 .thenReturn("new.refresh.token");
         when(jwtTokenProvider.getExpiration("new.access.token"))
                 .thenReturn(new java.util.Date(nowMs + 86_400_000L));

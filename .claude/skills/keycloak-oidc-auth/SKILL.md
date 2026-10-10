@@ -65,7 +65,10 @@ proof is `otp` in the token's `amr` claim on BOTH paths. Keycloak emits it
 through the `amr` mapper on `hms-profile` and the Authenticator References of
 the `hms browser` flow; the legacy issuer stamps `amr: ["pwd","otp"]` only on
 the tokens `POST /auth/mfa/verify` mints (and on an impersonation token after
-a TOTP step-up), and a refresh carries it. Without it, the session bootstrap
+a TOTP step-up), with `otp_at`, the time of the code; a refresh carries both
+unchanged, and the proof lapses 48 h after `otp_at`
+(`app.mfa.second-factor-max-age-seconds`, = the realm's Authenticator
+Reference max age), so both paths re-challenge on the same clock. Without it, the session bootstrap
 reports `mfaEnrollmentRequired` and the confinement filter answers 403
 `mfa.enrollment.required` outside the sign-in and MFA enrolment handlers
 (`CommonProviderConfinement.SECOND_FACTOR_EXEMPT_RULES`; the rest of `/auth`,

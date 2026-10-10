@@ -302,8 +302,18 @@ Import for this: the export's `hms-backend` secret is a placeholder.
 
 - The login on which OTP is **first configured** yields `"amr":["pwd"]`, so
   the backend answers `mfaEnrollmentRequired` until the user signs in again.
-  The provider shell (P1-T13) sends them back through login; until then they
-  sign out and in.
+- **A silent SSO re-login does not help.** The browser flow starts with the
+  SSO cookie (`auth-cookie`, ALTERNATIVE): while the Keycloak session lives, a
+  new authorization request is answered from the cookie, without the forms,
+  and `amr` repeats the session's references, so a session that never ran the
+  OTP form keeps getting `["pwd"]` and the portal would loop. When the portal
+  handles `mfaEnrollmentRequired` on Keycloak (P1-T13) it must send the user
+  back with **`prompt=login`** (or `max_age=0`), which makes Keycloak run the
+  forms, OTP included; for a user with no OTP yet, first
+  `kc_action=CONFIGURE_TOTP`, then `prompt=login`. Until then: sign out of
+  Keycloak, then in. No realm-side fix is taken: making the cookie step skip
+  for these users would need a custom authenticator, and changing the cookie
+  step would weaken SSO for hospital users too.
 - Provider **staff** (a pharmacist or lab role at a provider) are not forced
   into OTP by the realm, because hospitals share those roles; the backend gate
   is their control. Set the *Configure OTP* required action on the account

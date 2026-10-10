@@ -415,9 +415,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MfaEnrollmentRequiredException.class)
     public ResponseEntity<Object> handleMfaEnrollmentRequired(MfaEnrollmentRequiredException ex,
                                                               WebRequest request) {
-        if (log.isInfoEnabled()) {
-            log.info("Provider request without a second factor refused at path {}", request.getDescription(false));
-        }
+        // Neither the caller nor the path (it can carry a patient id): the code only.
+        log.info("Provider request without a second factor refused ({})", MfaEnrollmentRequiredException.CODE);
         Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN, ex.getMessage(), request);
         body.put("code", MfaEnrollmentRequiredException.CODE);
         return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);

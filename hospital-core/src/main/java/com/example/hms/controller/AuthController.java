@@ -787,8 +787,9 @@ public class AuthController {
 
         var descriptor = new com.example.hms.security.TokenUserDescriptor(user.getId(), username, roles);
         // A refresh token minted after a verified TOTP code passes its second
-        // factor on (AC-13); a password-only one never gains it.
-        boolean secondFactor = jwtTokenProvider.hasSecondFactor(refreshToken);
+        // factor on, with the time it was verified, until that is older than
+        // the max age (AC-13); a password-only one never gains it.
+        java.time.Instant secondFactor = jwtTokenProvider.secondFactorAt(refreshToken);
         String newAccessToken  = jwtTokenProvider.generateAccessToken(descriptor, secondFactor);
 
         // Rotate the refresh token so each use yields a fresh one

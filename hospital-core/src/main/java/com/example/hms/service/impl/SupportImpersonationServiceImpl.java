@@ -145,7 +145,7 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
         // carries it, so impersonating a provider user passes the provider MFA
         // gate (AC-13); the non-strict bypass of an unenrolled actor does not.
         String accessToken = tokenProvider.generateImpersonationAccessToken(
-            descriptor, actor.getId(), actor.getUsername(), impersonationTtlMs, steppedUp);
+            descriptor, actor.getId(), actor.getUsername(), impersonationTtlMs, steppedUp ? Instant.now() : null);
         Instant expiresAt = Instant.now().plusMillis(impersonationTtlMs);
 
         // Closes Copilot review #2 (PR #224): the original super-admin access

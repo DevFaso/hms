@@ -31,9 +31,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -188,7 +190,7 @@ class ProviderMfaGateIT extends BaseIT {
         TokenUserDescriptor descriptor = new TokenUserDescriptor(pharmacist.getId(), pharmacist.getUsername(),
             List.of("ROLE_PHARMACIST"));
         String passwordOnly = jwtTokenProvider.generateAccessToken(descriptor);
-        String afterTotp = jwtTokenProvider.generateAccessToken(descriptor, true);
+        String afterTotp = jwtTokenProvider.generateAccessToken(descriptor, Instant.now());
 
         assertThat(json(as(passwordOnly, get("/auth/session/bootstrap"))).get("mfaEnrollmentRequired").asBoolean())
             .isTrue();
@@ -258,6 +260,11 @@ class ProviderMfaGateIT extends BaseIT {
             .andReturn()).get("accessToken").asString();
         // With the factor, replacing it (a new phone) is allowed.
         assertThat(as(withFactor, csrf(post("/auth/mfa/enroll"))).getResponse().getStatus()).isEqualTo(200);
+
+        // That re-enrolment is abandoned (never verified): the row is now
+        // unverified and disabled. The password alone still cannot enrol.
+        String afterAbandon = json(login(labScientist)).get("mfaToken").asString();
+        assertMfaRefusal(as(afterAbandon, csrf(post("/auth/mfa/enroll"))));
     }
 
     @Test
@@ -307,9 +314,12 @@ class ProviderMfaGateIT extends BaseIT {
         TokenUserDescriptor descriptor = new TokenUserDescriptor(pharmacist.getId(), pharmacist.getUsername(),
             List.of("ROLE_PHARMACIST"));
 
+        // Verified ten minutes ago: the rotated pair keeps THAT time, so the
+        // chain ages out on the original clock instead of being renewed.
+        Instant verified = Instant.now().minusSeconds(600).truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
         for (boolean secondFactor : new boolean[] {true, false}) {
             idleSessionTracker.touch(pharmacist.getId());
-            String refresh = jwtTokenProvider.generateRefreshToken(descriptor, secondFactor);
+            String refresh = jwtTokenProvider.generateRefreshToken(descriptor, secondFactor ? verified : null);
             JsonNode rotated = json(mockMvc.perform(post("/auth/token/refresh")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{\"refreshToken\":\"" + refresh + "\"}"))
@@ -319,6 +329,36 @@ class ProviderMfaGateIT extends BaseIT {
                 .as("access token, secondFactor=" + secondFactor).isEqualTo(secondFactor);
             assertThat(jwtTokenProvider.hasSecondFactor(rotated.get("refreshToken").asString()))
                 .as("refresh token, secondFactor=" + secondFactor).isEqualTo(secondFactor);
+            if (secondFactor) {
+                assertThat(jwtTokenProvider.secondFactorAt(rotated.get("accessToken").asString())).isEqualTo(verified);
+                assertThat(jwtTokenProvider.secondFactorAt(rotated.get("refreshToken").asString())).isEqualTo(verified);
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("legacy refresh: past the max age the chain loses the factor, so the gate challenges again")
+    void legacyRefreshDropsAStaleFactor() throws Exception {
+        User pharmacist = accounts.userAt("pharm", pharmacyId, "PHARMACIST");
+        TokenUserDescriptor descriptor = new TokenUserDescriptor(pharmacist.getId(), pharmacist.getUsername(),
+            List.of("ROLE_PHARMACIST"));
+        idleSessionTracker.touch(pharmacist.getId());
+        // Verified an hour ago, while the max age is 48 h: still carried.
+        String refresh = jwtTokenProvider.generateRefreshToken(descriptor, Instant.now().minusSeconds(3_600));
+        Object maxAge = ReflectionTestUtils.getField(jwtTokenProvider, "secondFactorMaxAgeSeconds");
+        try {
+            // As if the max age had passed since: the refresh mints no factor.
+            ReflectionTestUtils.setField(jwtTokenProvider, "secondFactorMaxAgeSeconds", 1_800L);
+            JsonNode rotated = json(mockMvc.perform(post("/auth/token/refresh")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"refreshToken\":\"" + refresh + "\"}"))
+                .andReturn());
+            String access = rotated.get("accessToken").asString();
+            assertThat(jwtTokenProvider.hasSecondFactor(access)).isFalse();
+            assertThat(jwtTokenProvider.hasSecondFactor(rotated.get("refreshToken").asString())).isFalse();
+            assertMfaRefusal(as(access, get("/notifications")));
+        } finally {
+            ReflectionTestUtils.setField(jwtTokenProvider, "secondFactorMaxAgeSeconds", maxAge);
         }
     }
 

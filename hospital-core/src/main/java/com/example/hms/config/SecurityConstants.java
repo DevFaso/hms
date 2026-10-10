@@ -151,6 +151,8 @@ public class SecurityConstants {
     public static final String CLAIM_AMR = "amr";
     public static final String AMR_PASSWORD = "pwd";
     public static final String AMR_OTP = "otp";
+    /** When the legacy second factor was verified (epoch seconds), so its age can be checked. */
+    public static final String CLAIM_OTP_AT = "otp_at";
 
     // Prevent instantiation
     private SecurityConstants() {

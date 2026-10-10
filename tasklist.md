@@ -4824,9 +4824,20 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 - **External providers: the portal does not act on `mfaEnrollmentRequired` yet**
   (D5 slice 4 added it to `/auth/session/bootstrap` and the 403
   `mfa.enrollment.required`). P1-T13's shell must send a legacy user to MFA
-  enrolment or the challenge and a Keycloak user back through login (where OTP
-  is first configured, Keycloak's `amr` holds `pwd` only until the next login).
-  Before the first provider is verified on prod. Open.
+  enrolment or the challenge and a Keycloak user back through login with
+  `prompt=login` (or `max_age=0`): a silent SSO re-login answers from the
+  Keycloak cookie with the same `amr` and loops (and where OTP is first
+  configured, `amr` holds `pwd` only until the next login; a user with no OTP
+  goes through `kc_action=CONFIGURE_TOTP` first). Before the first provider is
+  verified on prod. Open.
+- **External providers: `ProviderMfaGate` re-parses the legacy bearer on every
+  confined request** (`JwtTokenProvider.secondFactorAt`, a signature check)
+  although `JwtAuthenticationFilter` already parsed it; carry the proof from
+  the filter's parse (found in #851's round-1 review). Open.
+- **External providers: `/auth/login` reads the caller's assignments once more
+  for the provider challenge** (`ProviderMfaGate.isProviderUser`) after the
+  authentication already loaded them; reuse that read (found in #851's round-1
+  review). Open.
 - **Auth: the MFA challenge token authenticates as its user, and a password
   alone can replace a hospital user's authenticator.** `JwtAuthenticationFilter`
   does not read the `purpose` claim, so the 5-minute `mfaToken` `/auth/login`

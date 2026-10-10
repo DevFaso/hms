@@ -196,7 +196,14 @@ prod image's version): a provider admin gets `"amr":["pwd","otp"]`, kept
 across a refresh and an SSO re-login; a doctor without OTP gets
 `"amr":["pwd"]`. **On the login where OTP is first configured, `amr` holds
 `pwd` only**, so the backend answers `mfaEnrollmentRequired` until the user
-signs in again.
+signs in again, and a silent SSO re-login repeats the session's `amr`: the
+client must re-authenticate with `prompt=login` (or `max_age=0`).
+
+The export declares the full set of Keycloak 26.0.7's built-in flows
+(browser, direct grant, clients, reset credentials, registration, first
+broker login, docker auth, saml ecp) beside `hms browser`, so a fresh import
+keeps them all. Checked on a fresh import: `client_credentials` for a
+confidential client, the "forgot password" flow, and the four OTP cases.
 
 If `ssoSessionMaxLifespan` changes, change the three max ages with it:
 an older reference drops out of `amr` and the backend refuses the session.
