@@ -213,7 +213,8 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
             .orElseThrow(() -> new ResourceNotFoundException("recoveryContact.notFound", contactId));
 
         if (!contact.getUser().getId().equals(userId)) {
-            throw new IllegalArgumentException("Recovery contact does not belong to user");
+            // Someone else's contact answers exactly as an unknown one.
+            throw new ResourceNotFoundException("recoveryContact.notFound", contactId);
         }
 
         if (contact.isVerified()) {
@@ -245,7 +246,8 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
             .orElseThrow(() -> new ResourceNotFoundException("recoveryContact.notFound", contactId));
 
         if (!contact.getUser().getId().equals(userId)) {
-            throw new IllegalArgumentException("Recovery contact does not belong to user");
+            // Someone else's contact answers exactly as an unknown one.
+            throw new ResourceNotFoundException("recoveryContact.notFound", contactId);
         }
 
         if (contact.isVerified()) {

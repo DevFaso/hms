@@ -67,7 +67,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getSignedByStaffId()));
 
         // Validate hospital exists
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         // Compute signature hash

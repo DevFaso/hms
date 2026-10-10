@@ -105,7 +105,7 @@ class StaffSchedulingServiceImplTest {
         UUID hospitalId = UUID.randomUUID();
         Staff staff = buildStaff(staffId, hospitalId);
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(staff.getHospital()));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(staff.getHospital()));
         when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
         when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
 
@@ -144,7 +144,7 @@ class StaffSchedulingServiceImplTest {
         );
 
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(shiftRepository.existsOverlappingShift(staffId, shiftDate, startTime, endTime, null)).thenReturn(false);
         when(staffAvailabilityRepository.findByStaff_IdAndDate(staffId, shiftDate)).thenReturn(Optional.empty());
         when(staffAvailabilityRepository.save(any(StaffAvailability.class))).thenAnswer(invocation -> {
@@ -210,7 +210,7 @@ class StaffSchedulingServiceImplTest {
         );
 
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(shiftRepository.existsOverlappingShift(staffId, shiftDate, startTime, endTime, null)).thenReturn(false);
         when(staffAvailabilityRepository.findByStaff_IdAndDate(staffId, shiftDate)).thenReturn(Optional.of(availability));
         when(leaveRepository.findLeavesOverlappingDate(eq(staffId), eq(shiftDate), any()))

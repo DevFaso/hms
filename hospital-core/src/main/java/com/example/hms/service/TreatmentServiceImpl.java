@@ -52,7 +52,7 @@ public class TreatmentServiceImpl implements TreatmentService {
         Department department = departmentRepository.findById(dto.getDepartmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("department.notFound", dto.getDepartmentId()));
 
-        Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(dto.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalId()));
 
         UUID currentUserId = authService.getCurrentUserId();
@@ -96,7 +96,7 @@ public class TreatmentServiceImpl implements TreatmentService {
         Department department = departmentRepository.findById(dto.getDepartmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("department.notFound", dto.getDepartmentId()));
 
-        Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(dto.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalId()));
 
         treatmentMapper.updateTreatmentFromDto(dto, treatment, department, hospital);

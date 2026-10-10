@@ -133,7 +133,7 @@ class EligibilityServiceImplTest {
 
     private void stubLookups() {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
         when(checkRepository.save(any(EligibilityCheck.class)))
             .thenAnswer(inv -> {
@@ -229,7 +229,7 @@ class EligibilityServiceImplTest {
         @Test
         @DisplayName("missing patient throws ResourceNotFoundException; no save / audit")
         void missingPatient() {
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.submit(
@@ -368,7 +368,7 @@ class EligibilityServiceImplTest {
         @DisplayName("missing hospital throws ResourceNotFoundException")
         void missingHospital() {
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.submit(
                 baseRequest(EligibilityScheme.NHIS_GH, EligibilityCheckType.COVERAGE, "NHIS-001")))
@@ -411,7 +411,7 @@ class EligibilityServiceImplTest {
                 List.of(noneMatch), fixedClock, healthRecorder
             );
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
 
             assertThatThrownBy(() -> service.submit(
                 baseRequest(EligibilityScheme.NHIS_GH, EligibilityCheckType.COVERAGE, "NHIS-001")))

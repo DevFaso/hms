@@ -77,7 +77,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         Patient patient = patientRepository.findByUsernameOrEmail(dto.getPatientEmail())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundByIdentifier", dto.getPatientEmail()));
 
-        Hospital hospital = hospitalRepository.findByNameIgnoreCase(dto.getHospitalName())
+        Hospital hospital = hospitalRepository.findClinicalByNameIgnoreCase(dto.getHospitalName())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", dto.getHospitalName()));
 
         Encounter encounter = (dto.getEncounterReference() != null)
@@ -177,7 +177,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         Patient patient = patientRepository.findByUsernameOrEmail(dto.getPatientEmail())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundByIdentifier", dto.getPatientEmail()));
 
-        Hospital hospital = hospitalRepository.findByNameIgnoreCase(dto.getHospitalName())
+        Hospital hospital = hospitalRepository.findClinicalByNameIgnoreCase(dto.getHospitalName())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", dto.getHospitalName()));
 
         Encounter encounter = (dto.getEncounterReference() != null)

@@ -263,7 +263,7 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
         if (request.getHospitalId() == null) {
             return null;
         }
-        return hospitalRepository.findById(request.getHospitalId())
+        return hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
     }
 

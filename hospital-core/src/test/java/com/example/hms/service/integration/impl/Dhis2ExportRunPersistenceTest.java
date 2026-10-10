@@ -67,7 +67,7 @@ class Dhis2ExportRunPersistenceTest {
     @Test
     @DisplayName("persistPending saves run + N outbox rows in order")
     void persistPendingHappyPath() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(runRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var result = persistence.persistPending(hospitalId, "DS00000DEFK", "202604", null,
@@ -89,7 +89,7 @@ class Dhis2ExportRunPersistenceTest {
     @Test
     @DisplayName("persistPending throws on missing hospital")
     void persistPendingMissingHospital() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
         var aggregated = new DhisAdxAggregator.AggregationResult(List.of(), 0, "OU000000001");
         assertThatThrownBy(() ->
             persistence.persistPending(hospitalId, "DS00000DEFK", "202604", null, aggregated))

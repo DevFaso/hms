@@ -761,7 +761,7 @@ public class TransfusionServiceImpl implements TransfusionService {
     }
 
     private Hospital hospitalRef(UUID hospitalId) {
-        return hospitalRepository.findById(hospitalId)
+        return hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
     }
 

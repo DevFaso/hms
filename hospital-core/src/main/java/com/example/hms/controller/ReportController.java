@@ -66,7 +66,7 @@ public class ReportController {
             @Valid @RequestBody ReportDefinitionRequestDTO request,
             @AuthenticationPrincipal UserDetails principal) {
         UUID hospitalId = requireHospital();
-        Hospital hospital = hospitalRepository.findById(hospitalId)
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         validateRecipients(request.getRecipients());
         ReportDefinition definition = definitionRepository.save(ReportDefinition.builder()

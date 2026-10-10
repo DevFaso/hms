@@ -324,7 +324,7 @@ public class PatientServiceImpl implements PatientService {
         User user = userRepository.findById(dto.getUserId())
             .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, dto.getUserId()));
 
-        Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(dto.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, dto.getHospitalId()));
 
         Optional<Patient> existing = patientRepository.findByUserId(user.getId());
@@ -588,7 +588,7 @@ public class PatientServiceImpl implements PatientService {
         if (hospitalId == null) {
             throw new BusinessException("Hospital must be resolved from context for staff-created patients.");
         }
-        Hospital hospital = hospitalRepository.findById(hospitalId)
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
         User user = userRepository.findById(dto.getUserId())
@@ -1517,7 +1517,7 @@ public class PatientServiceImpl implements PatientService {
         if (hospitalId == null) {
             throw new BusinessException("Hospital identifier is required.");
         }
-        return hospitalRepository.findById(hospitalId)
+        return hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
     }
 

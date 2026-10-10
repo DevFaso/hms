@@ -68,10 +68,12 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", dto.getPatientId()));
         }
 
+        // A patient registers at a hospital only; a provider facility answers as
+        // an unknown one (provider plan AC-10, AC-11; the entity refuses it too).
         final Hospital hospital = !isBlank(dto.getHospitalName())
-            ? hospitalRepository.findByName(dto.getHospitalName())
+            ? hospitalRepository.findClinicalByName(dto.getHospitalName())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", dto.getHospitalName()))
-            : hospitalRepository.findById(dto.getHospitalId())
+            : hospitalRepository.findClinicalById(dto.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalId()));
 
         log.info("Hospital retrieved: name={}", hospital.getName());
@@ -272,7 +274,9 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         PatientHospitalRegistration registration = registrationRepository.findByMrnAndHospitalName(mrn, dto.getHospitalName())
             .orElseThrow(() -> new ResourceNotFoundException("registration.notFoundByMrn", mrn));
 
+        boolean wasActive = registration.isActive();
         applyEditableFields(registration, dto, true);
+        requireClinicalOnReactivation(registration, wasActive);
         PatientHospitalRegistration updated = registrationRepository.save(registration);
         log.info("✅ Patched registration mrn: {}", mrn);
         return mapper.toResponseDTO(updated);
@@ -295,11 +299,30 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         log.debug("Update by registration UUID={}", id);
         PatientHospitalRegistration registration = registrationRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(REGISTRATION_NOT_FOUND_KEY, id));
+        boolean wasActive = registration.isActive();
         applyEditableFields(registration, dto, false);
+        requireClinicalOnReactivation(registration, wasActive);
         return mapper.toResponseDTO(registrationRepository.save(registration));
     }
 
     // -------------------- helpers --------------------
+
+    /**
+     * A registration re-activated at a pharmacy or laboratory (legacy, or
+     * planted) is refused here with registerPatient's own answer, the
+     * hospital not found, before the entity's guard fails the commit with a
+     * 500. The update paths cannot move a registration to another facility;
+     * the entity guard stays the backstop for any that could.
+     */
+    private void requireClinicalOnReactivation(PatientHospitalRegistration registration, boolean wasActive) {
+        Hospital hospital = registration.getHospital();
+        if (wasActive || !registration.isActive() || hospital == null || hospital.getId() == null) {
+            return;
+        }
+        if (hospitalRepository.findClinicalById(hospital.getId()).isEmpty()) {
+            throw new ResourceNotFoundException("hospital.notFound", hospital.getId());
+        }
+    }
     private void validateRequest(PatientHospitalRegistrationRequestDTO dto) {
         boolean hasUserRef = !isBlank(dto.getPatientUsername()) || dto.getPatientId() != null;
         boolean hasHospitalRef = !isBlank(dto.getHospitalName()) || dto.getHospitalId() != null;

@@ -1,5 +1,6 @@
 package com.example.hms.security;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.model.User;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -285,11 +286,11 @@ class HospitalHeaderEmptyScopeFilterTest {
     }
 
     private static TenantRoleAssignment globalPatient() {
-        return new TenantRoleAssignment(null, null, ROLE_PATIENT, "Patient", true);
+        return new TenantRoleAssignment(null, null, ROLE_PATIENT, "Patient", true, null);
     }
 
     private static TenantRoleAssignment doctorAt(UUID hospitalId, boolean active) {
-        return new TenantRoleAssignment(hospitalId, ORG, ROLE_DOCTOR, "Doctor", active);
+        return new TenantRoleAssignment(hospitalId, ORG, ROLE_DOCTOR, "Doctor", active, FacilityType.HOSPITAL);
     }
 
     private static final class PrincipalStub implements HospitalUserDetails {

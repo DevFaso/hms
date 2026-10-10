@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.enums.JobTitle;
 import com.example.hms.enums.OrganizationType;
 import com.example.hms.enums.SecurityPolicyType;
@@ -31,6 +32,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -513,6 +515,45 @@ class SuperAdminOrganizationOverviewServiceImplTest {
 
         verify(patientService).getPatientPageByHospital(northCampus.getId(), Boolean.TRUE, patientRequest);
         verify(patientService).getPatientPageByHospital(satelliteClinic.getId(), Boolean.TRUE, patientRequest);
+    }
+
+    @Test
+    void providerFacilitiesAreNeitherListedNorCountedAsOrganisationHospitals() {
+        Organization organization = Organization.builder().name("Sigma").code("SIGMA").active(true).build();
+        organization.setId(UUID.randomUUID());
+        Hospital clinic = Hospital.builder().name("Sigma Clinic").code("SC-1").active(true).build();
+        clinic.setId(UUID.randomUUID());
+        Hospital pharmacy = Hospital.builder().name("Sigma Pharmacy").code("SP-1").active(true).build();
+        pharmacy.setId(UUID.randomUUID());
+        pharmacy.setFacilityType(FacilityType.PHARMACY);
+        organization.addHospital(clinic);
+        organization.addHospital(pharmacy);
+        when(organizationRepository.findAll()).thenReturn(List.of(organization));
+
+        SuperAdminOrganizationHierarchyResponseDTO response = service.getOrganizationHierarchy(
+            false, false, null, null, 5, 5, Locale.CANADA);
+
+        assertThat(response.getTotalHospitals()).isEqualTo(1);
+        assertThat(response.getOrganizations().get(0).getHospitals())
+            .extracting(SuperAdminOrganizationHierarchyResponseDTO.HospitalHierarchyDTO::getHospitalName)
+            .containsExactly("Sigma Clinic");
+    }
+
+    @Test
+    void theLocalisationReferenceHospitalIsNeverAProvider() {
+        Organization organization = Organization.builder().name("Tau").code("TAU").active(true).build();
+        organization.setId(UUID.randomUUID());
+        Hospital pharmacy = Hospital.builder().name("Tau Pharmacy").code("TP-1").country("FR").active(true).build();
+        pharmacy.setId(UUID.randomUUID());
+        pharmacy.setFacilityType(FacilityType.PHARMACY);
+        organization.addHospital(pharmacy);
+
+        Object defaults = ReflectionTestUtils.invokeMethod(
+            service, "mapLocalizationDefaults", organization);
+
+        // No clinical hospital: the platform default, not the pharmacy country.
+        assertThat(ReflectionTestUtils.getField(defaults, "fallbackLocale"))
+            .isEqualTo("en_US");
     }
 
     @Test

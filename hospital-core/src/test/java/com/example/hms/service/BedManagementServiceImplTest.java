@@ -97,7 +97,7 @@ class BedManagementServiceImplTest {
     @Test
     void createWardRejectsDuplicateCode() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(wardRepository.existsByHospital_IdAndCodeIgnoreCase(hospitalId, "MAT01")).thenReturn(true);
 
         WardRequestDTO request = WardRequestDTO.builder()
@@ -122,7 +122,7 @@ class BedManagementServiceImplTest {
     @Test
     void createWardPersistsTrimmedFields() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(wardRepository.existsByHospital_IdAndCodeIgnoreCase(hospitalId, "MAT02")).thenReturn(false);
         when(wardRepository.save(any(Ward.class))).thenAnswer(inv -> inv.getArgument(0));
 

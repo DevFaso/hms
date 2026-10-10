@@ -72,7 +72,9 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
+        // Both hospitals of a referral are clinical: a provider facility answers
+        // as an unknown one (provider plan AC-11).
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         Staff referringProvider = staffRepository.findById(request.getReferringProviderId())
@@ -92,7 +94,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
 
         Hospital receivingHospital = null;
         if (request.getReceivingHospitalId() != null) {
-            receivingHospital = hospitalRepository.findById(request.getReceivingHospitalId())
+            receivingHospital = hospitalRepository.findClinicalById(request.getReceivingHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("generalReferral.receivingHospital.notFound", request.getReceivingHospitalId()));
         }
 

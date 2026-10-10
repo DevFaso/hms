@@ -4,6 +4,7 @@ import {
   effect,
   inject,
   signal,
+  untracked,
   OnInit,
   OnDestroy,
   ElementRef,
@@ -1423,11 +1424,32 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   navItems = signal<NavItem[]>([]);
 
+  /** The emergency-broadcast socket was opened by this shell (once). */
+  private broadcastOpened = false;
+
   constructor() {
     effect(() => {
       const base = this.baseNavItems();
       const saved = this.navOrder.load();
       this.navItems.set(saved ? this.navOrder.applyOrder(base, saved) : base);
+    });
+
+    // MVP-7b: subscribe to /topic/emergency-broadcast so a super-admin
+    // broadcast surfaces in the banner across every authenticated route. A
+    // provider user may not subscribe to it (the server refuses), so the
+    // socket is not opened for one, and not before the session bootstrap
+    // has said which one the user is (after a hard refresh the flag is only
+    // its initial false until then).
+    effect(() => {
+      if (
+        this.broadcastOpened ||
+        !this.roleContext.sessionResolved() ||
+        this.roleContext.providerUser()
+      ) {
+        return;
+      }
+      this.broadcastOpened = true;
+      untracked(() => this.emergencyBroadcast.connect());
     });
   }
 
@@ -1537,10 +1559,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // page refresh while impersonating re-paints the banner instead of
     // silently dropping it.
     this.impersonation.refreshActive().subscribe({ error: () => undefined });
-
-    // MVP-7b: subscribe to /topic/emergency-broadcast so a super-admin
-    // broadcast surfaces in the banner across every authenticated route.
-    this.emergencyBroadcast.connect();
 
     // P3 #23a: poll the persisted downtime state — unlike the broadcast,
     // this survives login/refresh, so late arrivals still see the banner.

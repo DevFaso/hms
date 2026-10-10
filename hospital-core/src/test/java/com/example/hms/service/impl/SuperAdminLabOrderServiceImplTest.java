@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Hospital;
@@ -38,6 +39,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -158,7 +161,7 @@ class SuperAdminLabOrderServiceImplTest {
         when(organizationRepository.findByCode("CAREPLUS"))
             .thenReturn(Optional.of(organization));
 
-        when(hospitalRepository.findByCodeIgnoreCase("RIVERSIDE"))
+        when(hospitalRepository.findClinicalByCodeIgnoreCase("RIVERSIDE"))
             .thenReturn(Optional.of(hospital));
 
         when(registrationRepository.findActiveByHospitalIdAndIdentifier(hospital.getId(), "mrn-001"))
@@ -202,7 +205,7 @@ class SuperAdminLabOrderServiceImplTest {
         when(organizationRepository.findByCode("CAREPLUS"))
             .thenReturn(Optional.of(organization));
 
-        when(hospitalRepository.findByCodeIgnoreCase("RIVERSIDE"))
+        when(hospitalRepository.findClinicalByCodeIgnoreCase("RIVERSIDE"))
             .thenReturn(Optional.of(hospital));
 
         when(registrationRepository.findActiveByHospitalIdAndIdentifier(hospital.getId(), "mrn-001"))
@@ -247,7 +250,7 @@ class SuperAdminLabOrderServiceImplTest {
         when(organizationRepository.findByCode("CAREPLUS"))
             .thenReturn(Optional.of(organization));
 
-        when(hospitalRepository.findByCodeIgnoreCase("RIVERSIDE"))
+        when(hospitalRepository.findClinicalByCodeIgnoreCase("RIVERSIDE"))
             .thenReturn(Optional.of(hospital));
 
         when(registrationRepository.findActiveByHospitalIdAndIdentifier(hospital.getId(), "mrn-001"))
@@ -302,6 +305,32 @@ class SuperAdminLabOrderServiceImplTest {
     }
 
     @Test
+    void createLabOrder_providerIsNotResolvedAsTheOrderingHospital() {
+        Hospital lab = Hospital.builder()
+            .code("LABX")
+            .name("Labo Central")
+            .organization(organization)
+            .active(true)
+            .build();
+        lab.setId(UUID.randomUUID());
+        lab.setFacilityType(FacilityType.LABORATORY);
+        when(organizationRepository.findByCode("CAREPLUS")).thenReturn(Optional.of(organization));
+        // The unfiltered finders would find the lab; the clinical ones answer
+        // empty for a provider, as the real repository does.
+        lenient().when(hospitalRepository.findByCodeIgnoreCase(any())).thenReturn(Optional.of(lab));
+        lenient().when(hospitalRepository.findByNameIgnoreCase(any())).thenReturn(Optional.of(lab));
+
+        for (String identifier : List.of("LABX", "Labo Central")) {
+            SuperAdminLabOrderCreateRequestDTO payload = basePayloadBuilder().hospitalIdentifier(identifier).build();
+            assertThatThrownBy(() -> service.createLabOrder(payload, Locale.ENGLISH))
+                .as(identifier)
+                .isInstanceOf(ResourceNotFoundException.class);
+        }
+        verify(registrationRepository, never()).findActiveByHospitalIdAndIdentifier(any(), any());
+        verify(labOrderService, never()).createLabOrder(any(), any());
+    }
+
+    @Test
     void createLabOrder_missingOrganizationIdentifierThrowsBusinessException() {
         SuperAdminLabOrderCreateRequestDTO payload = basePayloadBuilder()
             .organizationIdentifier(null)
@@ -323,7 +352,7 @@ class SuperAdminLabOrderServiceImplTest {
         when(organizationRepository.findByNameIgnoreCase("Care Plus Network"))
             .thenReturn(Optional.of(organization));
 
-        when(hospitalRepository.findByCodeIgnoreCase("RIVERSIDE"))
+        when(hospitalRepository.findClinicalByCodeIgnoreCase("RIVERSIDE"))
             .thenReturn(Optional.of(hospital));
         when(registrationRepository.findActiveByHospitalIdAndIdentifier(hospital.getId(), "mrn-001"))
             .thenReturn(List.of(registration));
@@ -366,7 +395,7 @@ class SuperAdminLabOrderServiceImplTest {
 
         when(organizationRepository.findByCode("CAREPLUS"))
             .thenReturn(Optional.of(organization));
-        when(hospitalRepository.findByCodeIgnoreCase("RIVERSIDE"))
+        when(hospitalRepository.findClinicalByCodeIgnoreCase("RIVERSIDE"))
             .thenReturn(Optional.of(mismatchedHospital));
 
         assertThatThrownBy(() -> service.createLabOrder(payload, Locale.ENGLISH))
@@ -382,7 +411,7 @@ class SuperAdminLabOrderServiceImplTest {
 
         when(organizationRepository.findByCode("CAREPLUS"))
             .thenReturn(Optional.of(organization));
-        when(hospitalRepository.findByCodeIgnoreCase("RIVERSIDE"))
+        when(hospitalRepository.findClinicalByCodeIgnoreCase("RIVERSIDE"))
             .thenReturn(Optional.of(hospital));
         when(registrationRepository.findActiveByHospitalIdAndIdentifier(hospital.getId(), "unknown"))
             .thenReturn(List.of());
@@ -406,7 +435,7 @@ class SuperAdminLabOrderServiceImplTest {
 
         when(organizationRepository.findByCode("CAREPLUS"))
             .thenReturn(Optional.of(organization));
-        when(hospitalRepository.findByCodeIgnoreCase("RIVERSIDE"))
+        when(hospitalRepository.findClinicalByCodeIgnoreCase("RIVERSIDE"))
             .thenReturn(Optional.of(hospital));
         when(registrationRepository.findActiveByHospitalIdAndIdentifier(hospital.getId(), "mrn-001"))
             .thenReturn(List.of(registration, secondRegistration));
@@ -427,7 +456,7 @@ class SuperAdminLabOrderServiceImplTest {
 
         when(organizationRepository.findByCode("CAREPLUS"))
             .thenReturn(Optional.of(organization));
-        when(hospitalRepository.findByCodeIgnoreCase("RIVERSIDE"))
+        when(hospitalRepository.findClinicalByCodeIgnoreCase("RIVERSIDE"))
             .thenReturn(Optional.of(hospital));
         when(registrationRepository.findActiveByHospitalIdAndIdentifier(hospital.getId(), "mrn-001"))
             .thenReturn(List.of(registration));
@@ -463,7 +492,7 @@ class SuperAdminLabOrderServiceImplTest {
 
         when(organizationRepository.findByCode("CAREPLUS"))
             .thenReturn(Optional.of(organization));
-        when(hospitalRepository.findByCodeIgnoreCase("RIVERSIDE"))
+        when(hospitalRepository.findClinicalByCodeIgnoreCase("RIVERSIDE"))
             .thenReturn(Optional.of(hospital));
         when(registrationRepository.findActiveByHospitalIdAndIdentifier(hospital.getId(), "mrn-001"))
             .thenReturn(List.of(registration));
@@ -492,7 +521,7 @@ class SuperAdminLabOrderServiceImplTest {
 
         when(organizationRepository.findByCode("CAREPLUS"))
             .thenReturn(Optional.of(organization));
-        when(hospitalRepository.findByCodeIgnoreCase("RIVERSIDE"))
+        when(hospitalRepository.findClinicalByCodeIgnoreCase("RIVERSIDE"))
             .thenReturn(Optional.of(hospital));
         when(registrationRepository.findActiveByHospitalIdAndIdentifier(hospital.getId(), "mrn-001"))
             .thenReturn(List.of(registration));
@@ -514,7 +543,7 @@ class SuperAdminLabOrderServiceImplTest {
 
         when(organizationRepository.findByCode("CAREPLUS"))
             .thenReturn(Optional.of(organization));
-        when(hospitalRepository.findByCodeIgnoreCase("RIVERSIDE"))
+        when(hospitalRepository.findClinicalByCodeIgnoreCase("RIVERSIDE"))
             .thenReturn(Optional.of(hospital));
         when(registrationRepository.findActiveByHospitalIdAndIdentifier(hospital.getId(), "mrn-001"))
             .thenReturn(List.of(registration));
@@ -539,7 +568,7 @@ class SuperAdminLabOrderServiceImplTest {
 
         when(organizationRepository.findByCode("CAREPLUS"))
             .thenReturn(Optional.of(organization));
-        when(hospitalRepository.findByCodeIgnoreCase("RIVERSIDE"))
+        when(hospitalRepository.findClinicalByCodeIgnoreCase("RIVERSIDE"))
             .thenReturn(Optional.of(hospital));
         when(registrationRepository.findActiveByHospitalIdAndIdentifier(hospital.getId(), "mrn-001"))
             .thenReturn(List.of(registration));
@@ -578,7 +607,7 @@ class SuperAdminLabOrderServiceImplTest {
 
         when(organizationRepository.findByCode("CAREPLUS"))
             .thenReturn(Optional.of(organization));
-        when(hospitalRepository.findByCodeIgnoreCase("RIVERSIDE"))
+        when(hospitalRepository.findClinicalByCodeIgnoreCase("RIVERSIDE"))
             .thenReturn(Optional.of(hospital));
         when(registrationRepository.findActiveByHospitalIdAndIdentifier(hospital.getId(), "mrn-001"))
             .thenReturn(List.of(registration));
@@ -609,7 +638,7 @@ class SuperAdminLabOrderServiceImplTest {
 
         when(organizationRepository.findByCode("CAREPLUS"))
             .thenReturn(Optional.of(organization));
-        when(hospitalRepository.findByCodeIgnoreCase("RIVERSIDE"))
+        when(hospitalRepository.findClinicalByCodeIgnoreCase("RIVERSIDE"))
             .thenReturn(Optional.of(hospital));
         when(registrationRepository.findActiveByHospitalIdAndIdentifier(hospital.getId(), "mrn-001"))
             .thenReturn(List.of(registration));
@@ -642,7 +671,7 @@ class SuperAdminLabOrderServiceImplTest {
 
         when(organizationRepository.findByCode("CAREPLUS"))
             .thenReturn(Optional.of(organization));
-        when(hospitalRepository.findByCodeIgnoreCase("RIVERSIDE"))
+        when(hospitalRepository.findClinicalByCodeIgnoreCase("RIVERSIDE"))
             .thenReturn(Optional.of(hospital));
         when(registrationRepository.findActiveByHospitalIdAndIdentifier(hospital.getId(), "mrn-001"))
             .thenReturn(List.of(registration));
@@ -684,7 +713,7 @@ class SuperAdminLabOrderServiceImplTest {
 
         when(organizationRepository.findByCode("CAREPLUS"))
             .thenReturn(Optional.of(organization));
-        when(hospitalRepository.findByCodeIgnoreCase("RIVERSIDE"))
+        when(hospitalRepository.findClinicalByCodeIgnoreCase("RIVERSIDE"))
             .thenReturn(Optional.of(hospital));
         when(registrationRepository.findActiveByHospitalIdAndIdentifier(hospital.getId(), "mrn-001"))
             .thenReturn(List.of(registration));

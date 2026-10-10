@@ -228,7 +228,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     }
 
     private Hospital fetchHospital(UUID id) {
-        return hospitalRepository.findById(id)
+        return hospitalRepository.findClinicalById(id)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", id));
     }
 

@@ -1,5 +1,6 @@
 package com.example.hms.security.oidc;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.model.User;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -264,7 +265,7 @@ class KeycloakHospitalContextFilterTest {
     }
 
     private static TenantRoleAssignment assignment(UUID hospitalId, String role) {
-        return new TenantRoleAssignment(hospitalId, null, role, role, true);
+        return new TenantRoleAssignment(hospitalId, null, role, role, true, FacilityType.HOSPITAL);
     }
 
     private static void signIn(List<String> realmRoles) {

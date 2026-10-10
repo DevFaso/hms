@@ -1,5 +1,6 @@
 package com.example.hms.service.recordaccess;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.enums.RecordAccessDenialReason;
 import com.example.hms.enums.RecordAccessPosture;
 import com.example.hms.enums.TenantIsolationMode;
@@ -7,6 +8,7 @@ import com.example.hms.enums.TreatmentRelationshipKind;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
+import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRecordSharingOptOutRepository;
@@ -84,6 +86,12 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
     @Transactional(readOnly = true)
     public Set<UUID> readableHospitalIds(UUID actorUserId, UUID patientId, UUID actingHospitalId) {
         Set<UUID> readable = new LinkedHashSet<>();
+        // A provider facility reads no chart rows at all, not even its own
+        // id's (provider plan section 3.3, AC-9): the same PROVIDER_FACILITY
+        // gate as decide, so the readable set is empty.
+        if (actingHospitalId != null && actsAtProvider(actorUserId, actingHospitalId)) {
+            return readable;
+        }
         if (actingHospitalId != null) {
             // The acting hospital is always readable — that does not depend
             // on the posture or a treatment relationship. E9 #58 removed the
@@ -107,14 +115,36 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
     }
 
     /**
+     * The acting facility passed in is a pharmacy or a laboratory. The
+     * facility decides, never the ambient confinement: a provider user who is
+     * also a patient, reading at a clinical acting hospital, is not acting at
+     * a provider. The type is read from the actor's own live context when it
+     * carries that facility (no query); any other facility (a context built by
+     * hand, another actor's context, a super-admin or an unconfined caller
+     * naming another facility, no request context) is looked up.
+     */
+    private boolean actsAtProvider(UUID actorUserId, UUID actingHospitalId) {
+        FacilityType known = HospitalContextHolder.getContext()
+            .filter(context -> actorUserId != null && actorUserId.equals(context.getPrincipalUserId()))
+            .map(context -> context.getHospitalFacilityTypes().get(actingHospitalId))
+            .orElse(null);
+        if (known != null) {
+            return known.isProvider();
+        }
+        return hospitalRepository.findById(actingHospitalId).map(Hospital::isProvider).orElse(false);
+    }
+
+    /**
      * Whether this hospital lets its own records be read on the treatment
      * presumption. A {@code SCHEMA}-isolated tenant never does, by
      * construction; {@code EXPLICIT_CONSENT} keeps its records behind consent
      * even when the reader's hospital presumes treatment.
      */
     private static boolean disclosesOnTreatmentPresumption(Hospital source) {
-        if (source == null || source.getId() == null
+        if (source == null || source.getId() == null || source.isProvider()
             || source.getIsolationMode() == TenantIsolationMode.SCHEMA) {
+            // A provider facility keeps no chart (AC-9): a registration there
+            // (legacy, or planted) adds nothing to the readable set.
             return false;
         }
         RecordAccessPosture posture = source.getRecordAccessPosture();
@@ -132,6 +162,15 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
                 RecordAccessDenialReason.HOSPITAL_UNKNOWN, null);
         }
         Hospital h = hospital.get();
+        // A provider facility (pharmacy, laboratory) never reads a chart here:
+        // first, before the posture, the opt-out, the staff row, a
+        // registration (even one planted by SQL), the carriers and
+        // break-the-glass (provider plan §3.3, AC-9). Its work reaches
+        // patient data only through the order-bound grant (P2).
+        if (h.isProvider()) {
+            return RecordAccessDecision.refused(patientId, hospitalId, actorUserId,
+                RecordAccessDenialReason.PROVIDER_FACILITY, null);
+        }
         RecordAccessPosture posture = h.getRecordAccessPosture() != null
             ? h.getRecordAccessPosture() : RecordAccessPosture.TREATMENT_PRESUMED;
 

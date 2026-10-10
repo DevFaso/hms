@@ -137,7 +137,7 @@ class PostpartumCareServiceImplTest {
         recorder.setId(recorderId);
 
         lenient().when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        lenient().when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        lenient().when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         lenient().when(userRepository.findById(recorderId)).thenReturn(Optional.of(recorder));
         lenient().when(staffRepository.findByUserIdAndHospitalId(recorderId, hospitalId)).thenReturn(Optional.empty());
         lenient().when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId)).thenReturn(Optional.empty());

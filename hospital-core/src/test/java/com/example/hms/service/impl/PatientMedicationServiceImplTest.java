@@ -77,7 +77,7 @@ class PatientMedicationServiceImplTest {
     @Test
     void getMedications_hospitalNotFound_throws() {
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.getMedicationsForPatient(patientId, hospitalId, 10))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
@@ -97,7 +97,7 @@ class PatientMedicationServiceImplTest {
         p2.setDuration("14 days");
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId)))
                 .thenReturn(List.of(p1, p2));
 
@@ -110,7 +110,7 @@ class PatientMedicationServiceImplTest {
     @Test
     void getMedications_defaultLimit_appliesWhenZero() {
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId)))
                 .thenReturn(List.of());
 
@@ -128,7 +128,7 @@ class PatientMedicationServiceImplTest {
         p.setMedicationDisplayName("Brand Name");
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId)))
                 .thenReturn(List.of(p));
 
@@ -146,7 +146,7 @@ class PatientMedicationServiceImplTest {
         p.setDuration("2 weeks");
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId)))
                 .thenReturn(List.of(p));
 
@@ -164,7 +164,7 @@ class PatientMedicationServiceImplTest {
         p.setStatus(PrescriptionStatus.DISCONTINUED);
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId)))
                 .thenReturn(List.of(p));
 
@@ -183,7 +183,7 @@ class PatientMedicationServiceImplTest {
         p.setStatus(null);
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId)))
                 .thenReturn(List.of(p));
 
@@ -211,7 +211,7 @@ class PatientMedicationServiceImplTest {
 
     private void stubMedicationsFor(Prescription p) {
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId)))
                 .thenReturn(List.of(p));
     }
@@ -310,7 +310,7 @@ class PatientMedicationServiceImplTest {
         Prescription foreign = new Prescription(); foreign.setId(UUID.randomUUID()); foreign.setHospital(other);
         foreign.setCreatedAt(LocalDateTime.now().minusDays(1)); foreign.setMedicationName("Metformin");
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
             .thenReturn(Set.of(hospitalId, otherHospitalId));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId, otherHospitalId)))
@@ -372,7 +372,7 @@ class PatientMedicationServiceImplTest {
         Prescription waiting = new Prescription(); waiting.setId(UUID.randomUUID());
         waiting.setCreatedAt(LocalDateTime.now()); waiting.setMedicationName("Amlodipine");
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId)))
             .thenReturn(List.of(waiting));
         when(readyForCollection.openPreparations(List.of(waiting))).thenReturn(java.util.Map.of(
@@ -426,7 +426,7 @@ class PatientMedicationServiceImplTest {
     @Test
     void staffRead_neverTakesTheOwnRecordResolver() {
         when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of());
 
         service.getMedicationsForPatient(patientId, hospitalId, 10);

@@ -40,7 +40,7 @@ public class PharmacyServiceImpl implements PharmacyService {
 
     @Override
     public PharmacyResponseDTO create(PharmacyRequestDTO dto) {
-        Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(dto.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", dto.getHospitalId()));
 
         Pharmacy entity = mapper.toEntity(dto, hospital);

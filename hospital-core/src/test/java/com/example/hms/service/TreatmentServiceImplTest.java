@@ -76,7 +76,7 @@ class TreatmentServiceImplTest {
         TreatmentResponseDTO responseDTO = TreatmentResponseDTO.builder().id(treatment.getId()).build();
 
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
-        when(hospitalRepository.findById(hospId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospId)).thenReturn(Optional.of(hospital));
         when(authService.getCurrentUserId()).thenReturn(userId);
         when(authService.getCurrentUserToken()).thenReturn("token");
         when(jwtTokenProvider.getRolesFromToken("token")).thenReturn(List.of("DOCTOR"));
@@ -127,7 +127,7 @@ class TreatmentServiceImplTest {
         TreatmentResponseDTO responseDTO = TreatmentResponseDTO.builder().id(treatment.getId()).build();
 
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
-        when(hospitalRepository.findById(hospId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospId)).thenReturn(Optional.of(hospital));
         when(authService.getCurrentUserId()).thenReturn(userId);
         when(authService.getCurrentUserToken()).thenReturn("token");
         when(jwtTokenProvider.getRolesFromToken("token")).thenReturn(List.of("ADMIN", "DOCTOR"));
@@ -160,7 +160,7 @@ class TreatmentServiceImplTest {
 
         when(treatmentRepository.findWithAssignmentById(id)).thenReturn(Optional.of(treatment));
         when(departmentRepository.findById(dto.getDepartmentId())).thenReturn(Optional.of(dept));
-        when(hospitalRepository.findById(dto.getHospitalId())).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(dto.getHospitalId())).thenReturn(Optional.of(hospital));
         when(treatmentRepository.save(treatment)).thenReturn(treatment);
         when(treatmentMapper.toTreatmentResponseDTO(treatment, "en")).thenReturn(responseDTO);
 

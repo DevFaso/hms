@@ -82,7 +82,7 @@ class PharmacyServiceImplTest {
 
     @Test
     void create_success() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(mapper.toEntity(requestDTO, hospital)).thenReturn(pharmacy);
         when(pharmacyRepository.save(any(Pharmacy.class))).thenReturn(pharmacy);
         when(mapper.toResponseDTO(pharmacy)).thenReturn(responseDTO);
@@ -95,7 +95,7 @@ class PharmacyServiceImplTest {
 
     @Test
     void create_hospitalNotFound_throws() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(requestDTO))
                 .isInstanceOf(ResourceNotFoundException.class);

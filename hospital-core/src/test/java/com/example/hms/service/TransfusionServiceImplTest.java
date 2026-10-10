@@ -136,7 +136,7 @@ class TransfusionServiceImplTest {
         when(roleValidator.getCurrentUserId()).thenReturn(callerUserId);
         when(staffRepository.findByUserIdAndHospitalId(callerUserId, hospitalId)).thenReturn(Optional.of(caller));
         when(staffRepository.findById(second.getId())).thenReturn(Optional.of(second));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(patientChartAccess.require(any(), any())).thenReturn(patient);
         when(bloodGroupRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(requestRepository.save(any())).thenAnswer(i -> i.getArgument(0));

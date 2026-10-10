@@ -601,7 +601,7 @@ public class ReceptionServiceImpl implements ReceptionService {
     @Transactional
     public WaitlistEntryResponseDTO addToWaitlist(WaitlistEntryRequestDTO req, UUID hospitalId,
                                                    String actorUsername) {
-        Hospital hospital = hospitalRepo.findById(hospitalId)
+        Hospital hospital = hospitalRepo.findClinicalById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         Department department = departmentRepo.findById(req.getDepartmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("department.notFound", req.getDepartmentId()));

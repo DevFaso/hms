@@ -1,5 +1,6 @@
 package com.example.hms.config;
 
+import com.example.hms.security.StompRefusalErrorHandler;
 import com.example.hms.security.WebSocketSubscriptionInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -50,6 +51,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.addEndpoint("/ws-chat")
                 .setAllowedOriginPatterns(origins)
                 .withSockJS();
+        // An authorization refusal says so in the ERROR frame, so a client
+        // stops reconnecting to what it may not subscribe to.
+        registry.setErrorHandler(new StompRefusalErrorHandler());
     }
 
 }

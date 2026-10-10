@@ -158,7 +158,7 @@ class TreatmentPlanServiceImplTest {
     @Test
     void create_success() {
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
         when(staffRepository.findById(authorId)).thenReturn(Optional.of(author));
@@ -187,7 +187,7 @@ class TreatmentPlanServiceImplTest {
     @Test
     void create_usesUnscopedPatientLookup() {
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
         when(staffRepository.findById(authorId)).thenReturn(Optional.of(author));
@@ -204,7 +204,7 @@ class TreatmentPlanServiceImplTest {
     @Test
     void create_hospitalNotFound_throws() {
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(requestDTO))
                 .isInstanceOf(ResourceNotFoundException.class)
@@ -214,7 +214,7 @@ class TreatmentPlanServiceImplTest {
     @Test
     void create_encounterNotFound_throws() {
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(requestDTO))
@@ -225,7 +225,7 @@ class TreatmentPlanServiceImplTest {
     @Test
     void create_assignmentNotFound_throws() {
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(staffRepository.findById(authorId)).thenReturn(Optional.of(author));
         when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.empty());
@@ -238,7 +238,7 @@ class TreatmentPlanServiceImplTest {
     @Test
     void create_authorNotFound_throws() {
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(staffRepository.findById(authorId)).thenReturn(Optional.empty());
 
@@ -251,7 +251,7 @@ class TreatmentPlanServiceImplTest {
     void create_noEncounter_success() {
         requestDTO.setEncounterId(null);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
         when(staffRepository.findById(authorId)).thenReturn(Optional.of(author));
         when(staffRepository.findById(supervisingId)).thenReturn(Optional.of(supervising));
@@ -269,7 +269,7 @@ class TreatmentPlanServiceImplTest {
         requestDTO.setSupervisingStaffId(null);
         requestDTO.setSignOffStaffId(null);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
         when(staffRepository.findById(authorId)).thenReturn(Optional.of(author));
@@ -288,7 +288,7 @@ class TreatmentPlanServiceImplTest {
         assignment.setHospital(otherHospital);
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
         when(staffRepository.findById(authorId)).thenReturn(Optional.of(author));
@@ -307,7 +307,7 @@ class TreatmentPlanServiceImplTest {
         author.setHospital(other);
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
         when(staffRepository.findById(authorId)).thenReturn(Optional.of(author));
@@ -326,7 +326,7 @@ class TreatmentPlanServiceImplTest {
         encounter.setHospital(other);
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
         when(staffRepository.findById(authorId)).thenReturn(Optional.of(author));
@@ -345,7 +345,7 @@ class TreatmentPlanServiceImplTest {
         encounter.setPatient(other);
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
         when(staffRepository.findById(authorId)).thenReturn(Optional.of(author));
@@ -367,7 +367,7 @@ class TreatmentPlanServiceImplTest {
         requestDTO.setFollowUps(List.of(fuReq));
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
         when(staffRepository.findById(authorId)).thenReturn(Optional.of(author));
@@ -387,7 +387,7 @@ class TreatmentPlanServiceImplTest {
     void update_success() {
         when(treatmentPlanRepository.findById(planId)).thenReturn(Optional.of(plan));
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
         when(staffRepository.findById(authorId)).thenReturn(Optional.of(author));
@@ -651,7 +651,7 @@ class TreatmentPlanServiceImplTest {
         requestDTO.setFollowUps(List.of(fuReq));
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
         when(staffRepository.findById(authorId)).thenReturn(Optional.of(author));
@@ -677,7 +677,7 @@ class TreatmentPlanServiceImplTest {
         requestDTO.setFollowUps(List.of(fuReq));
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
         when(staffRepository.findById(authorId)).thenReturn(Optional.of(author));
@@ -700,7 +700,7 @@ class TreatmentPlanServiceImplTest {
         supervising.setHospital(other);
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
         when(staffRepository.findById(authorId)).thenReturn(Optional.of(author));
@@ -748,7 +748,7 @@ class TreatmentPlanServiceImplTest {
         signOff.setHospital(other);
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
         when(staffRepository.findById(authorId)).thenReturn(Optional.of(author));

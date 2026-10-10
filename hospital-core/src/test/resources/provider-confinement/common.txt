@@ -1,0 +1,53 @@
+# Handlers ANY provider user reaches (provider plan section 6.4), frozen by
+# ProviderConfinementCoverageTest. One "METHOD pattern" per line, sorted.
+# /auth/** and /notifications/** are wholesale prefixes in
+# CommonProviderConfinement; every handler under them is listed here, so a
+# new one fails the test until it is added deliberately. The exact entries
+# (POST /users/admin-register) carry their reason in CommonProviderConfinement.
+# POST /notifications (create for any recipient) is excluded from the /notifications prefix.
+# GET /users/{id} is reachable for the caller's OWN id only (an own-id entry).
+GET /auth/bootstrap-status
+GET /auth/credentials/me
+GET /auth/csrf-token
+GET /auth/mfa/status
+GET /auth/ping
+GET /auth/session/bootstrap
+GET /auth/token/echo
+GET /auth/verify-email
+GET /feature-flags
+GET /me/assignments
+GET /me/dashboard-config
+GET /notifications
+GET /notifications/preferences
+GET /users/{id}
+PATCH /notifications/read-all
+POST /auth/bootstrap-signup
+POST /auth/credentials/recovery/{contactId}/send-code
+POST /auth/credentials/recovery/{contactId}/verify
+POST /auth/login
+POST /auth/logout
+POST /auth/me/change-email
+POST /auth/me/change-email/confirm
+POST /auth/me/change-password
+POST /auth/me/change-username
+POST /auth/mfa/enroll
+POST /auth/mfa/verify
+POST /auth/mfa/verify-enrollment
+POST /auth/password/confirm
+POST /auth/password/request
+POST /auth/password/request-reset
+POST /auth/password/reset-password
+POST /auth/register
+POST /auth/request-reset
+POST /auth/resend-verification
+POST /auth/reset-password
+POST /auth/token/refresh
+POST /auth/username/reminder
+POST /auth/verify-email
+POST /auth/verify-password
+POST /auth/ws-ticket
+POST /users/admin-register
+PUT /auth/credentials/mfa
+PUT /auth/credentials/recovery
+PUT /notifications/preferences
+PUT /notifications/{id}/read

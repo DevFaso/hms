@@ -1,5 +1,11 @@
 package com.example.hms.service;
 
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.provider.ProviderCallerResolver;
+import com.example.hms.security.provider.ProviderConfinementPolicy;
+import java.security.Principal;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -14,6 +20,7 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.controller.NotificationWebSocketController;
 import com.example.hms.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +38,9 @@ public class NotificationServiceImpl implements NotificationService {
     private final NotificationWebSocketController notificationWebSocketController;
     private final NotificationPreferenceRepository notificationPreferenceRepository;
     private final UserRepository userRepository;
+    // Who may flip a broadcast's shared read flag is decided on the caller's
+    // live context; an ObjectProvider, so no bean cycle forms through it.
+    private final ObjectProvider<ProviderCallerResolver> callerResolverProvider;
 
     @Override
         public List<Notification> getNotificationsForUser(String username) {
@@ -101,21 +112,53 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
-    public void markAsRead(UUID notificationId) {
-        notificationRepository.findById(notificationId).ifPresent(n -> {
-            n.setRead(true);
-            notificationRepository.save(n);
-        });
+    public ReadOutcome markAsRead(UUID notificationId, Principal caller, boolean broadcastsMayBeMarked) {
+        if (notificationId == null || caller == null || caller.getName() == null) {
+            return ReadOutcome.NOT_FOUND;
+        }
+        Notification notification = notificationRepository.findById(notificationId).orElse(null);
+        if (notification == null) {
+            return ReadOutcome.NOT_FOUND;
+        }
+        if (isBroadcast(notification)) {
+            if (!broadcastsMayBeMarked || !isUnconfinedStaff(caller)) {
+                return ReadOutcome.BROADCAST_LEFT_UNREAD;
+            }
+        } else if (!caller.getName().equals(notification.getRecipientUsername())) {
+            return ReadOutcome.NOT_FOUND;
+        }
+        notification.setRead(true);
+        notificationRepository.save(notification);
+        return ReadOutcome.MARKED;
     }
 
-    @Override
-    public void markAsRead(UUID notificationId, String ownerUsername) {
-        notificationRepository.findById(notificationId).ifPresent(n -> {
-            if (ownerUsername.equals(n.getRecipientUsername())) {
-                n.setRead(true);
-                notificationRepository.save(n);
-            }
-        });
+    /**
+     * The caller's LIVE context, resolved from the principal as the context
+     * filters resolve it, judged by the one rule
+     * ({@link ProviderConfinementPolicy#isUnconfinedStaff}). A database outage
+     * propagates (a 5xx, retryable), never "not staff"; any other failure to
+     * resolve the caller means not staff.
+     */
+    private boolean isUnconfinedStaff(Principal caller) {
+        ProviderCallerResolver resolver = callerResolverProvider.getIfAvailable();
+        if (resolver == null) {
+            return false;
+        }
+        HospitalContext context;
+        try {
+            context = resolver.liveContext(caller);
+        } catch (DataAccessException | CannotCreateTransactionException databaseDown) {
+            throw databaseDown;
+        } catch (RuntimeException unresolvable) {
+            log.warn("Caller unresolvable ({}); broadcast left unread", unresolvable.getClass().getSimpleName());
+            return false;
+        }
+        return ProviderConfinementPolicy.isUnconfinedStaff(context);
+    }
+
+    /** No recipient: sent to everyone on the broadcast topic (as {@code NotificationWebSocketController} sends it). */
+    private static boolean isBroadcast(Notification notification) {
+        return notification.getRecipientUsername() == null || notification.getRecipientUsername().isBlank();
     }
 
     @Override

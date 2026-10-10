@@ -278,12 +278,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // hospital. The refusal is audited (hourly per actor, hospital and
         // reason) and the 403 carries the reason, so the portal re-reads its
         // scope on a stale chip (NO_LONGER_PERMITTED).
-        if (ActingScopeResolver.isRefusedHeader(context)) {
-            actingScopeResolver.auditRefusedHeader(context);
-            SecurityContextHolder.clearContext();
-            HospitalContextHolder.clear();
+        if (actingScopeResolver.answerRefusedHeader(context, response)) {
             ImpersonationContextHolder.clear();
-            HospitalScopeResponses.writeRefusal(response, context.getScopeRefusal(), context.getRefusedHospitalId());
             return false;
         }
 

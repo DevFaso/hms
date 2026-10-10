@@ -1,0 +1,3 @@
+# Handlers a LABORATORY provider reaches on top of common.txt (provider plan
+# section 6.4, decided per handler there). Empty in P1; P2-LAB fills
+# LaboratoryConfinement and this file.

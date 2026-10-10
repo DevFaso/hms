@@ -253,7 +253,7 @@ class PlatformRegistryServiceImplTest {
             .build();
         service.setId(serviceId);
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(organizationPlatformServiceRepository.findById(serviceId)).thenReturn(Optional.of(service));
 
         assertThatThrownBy(() -> platformRegistryService
@@ -267,7 +267,7 @@ class PlatformRegistryServiceImplTest {
         UUID hospitalId = UUID.randomUUID();
         UUID serviceId = UUID.randomUUID();
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
         assertThatExceptionOfType(ResourceNotFoundException.class)
 
@@ -290,7 +290,7 @@ class PlatformRegistryServiceImplTest {
         Hospital hospital = Hospital.builder().organization(organization).name("Metro").build();
         hospital.setId(hospitalId);
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(organizationPlatformServiceRepository.findById(serviceId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> platformRegistryService
@@ -316,7 +316,7 @@ class PlatformRegistryServiceImplTest {
             .build();
         service.setId(serviceId);
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(organizationPlatformServiceRepository.findById(serviceId)).thenReturn(Optional.of(service));
 
         assertThatThrownBy(() -> platformRegistryService
@@ -349,7 +349,7 @@ class PlatformRegistryServiceImplTest {
             .credentialsReference("secret")
             .build();
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(organizationPlatformServiceRepository.findById(serviceId)).thenReturn(Optional.of(service));
         when(hospitalPlatformServiceLinkRepository.existsByHospitalIdAndOrganizationServiceId(hospitalId, serviceId))
             .thenReturn(false);
@@ -667,7 +667,7 @@ class PlatformRegistryServiceImplTest {
             .build();
         service.setId(serviceId);
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(organizationPlatformServiceRepository.findById(serviceId)).thenReturn(Optional.of(service));
         when(hospitalPlatformServiceLinkRepository.existsByHospitalIdAndOrganizationServiceId(hospitalId, serviceId))
             .thenReturn(true);

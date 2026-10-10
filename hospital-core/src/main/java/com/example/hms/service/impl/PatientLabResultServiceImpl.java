@@ -181,7 +181,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             return labResultRepository.findAllPatientResults(patient.getId(), pageable);
         }
         if (hospitalId != null) {
-            Hospital hospital = hospitalRepository.findById(hospitalId)
+            Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
             // E9 #59b — results follow the patient across the readable
             // hospitals (lab rows carry no sensitivity tag, V158); every

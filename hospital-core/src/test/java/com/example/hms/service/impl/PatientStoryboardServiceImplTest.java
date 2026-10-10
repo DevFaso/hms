@@ -88,7 +88,7 @@ class PatientStoryboardServiceImplTest {
         patient = buildPatient("MRN-1001", "FULL_CODE");
 
         when(patientChartAccess.require(eq(PATIENT_ID), any())).thenReturn(patient);
-        when(hospitalRepo.findById(HOSPITAL_ID)).thenReturn(Optional.of(hospital));
+        when(hospitalRepo.findClinicalById(HOSPITAL_ID)).thenReturn(Optional.of(hospital));
     }
 
     @Test

@@ -309,7 +309,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
 
         if (hospital == null && requestedHospitalId != null) {
-            hospital = hospitalRepository.findById(requestedHospitalId)
+            hospital = hospitalRepository.findClinicalById(requestedHospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", requestedHospitalId));
         }
 

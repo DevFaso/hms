@@ -93,7 +93,7 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             // disclosed to anyone but the owner.
             prescriptions = prescriptionRepository.findByPatient_Id(patient.getId(), Pageable.unpaged()).getContent();
         } else if (hospitalId != null) {
-            Hospital hospital = hospitalRepository.findById(hospitalId)
+            Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
             // E9 #59c — medications follow the patient across the readable
             // hospitals; every foreign row surfaced is accounted.

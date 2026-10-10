@@ -77,7 +77,7 @@ class MedicationHistoryServiceImplTest {
 
     @Test void getMedicationTimeline_success_emptyLists() {
         when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of());
         when(pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, Set.of(hospitalId))).thenReturn(List.of());
         when(drugInteractionRepository.findInteractionsAmongDrugs(any())).thenReturn(List.of());
@@ -99,7 +99,7 @@ class MedicationHistoryServiceImplTest {
         rx.setDuration("10 days");
 
         when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(rx));
         when(pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, Set.of(hospitalId))).thenReturn(List.of());
         when(drugInteractionRepository.findInteractionsAmongDrugs(any())).thenReturn(List.of());
@@ -122,7 +122,7 @@ class MedicationHistoryServiceImplTest {
         LocalDate start = LocalDate.now().minusDays(30);
         LocalDate end = LocalDate.now();
         when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of());
         when(pharmacyFillRepository.findByPatient_IdAndHospital_IdInAndFillDateBetweenOrderByFillDateDesc(patientId, Set.of(hospitalId), start, end)).thenReturn(List.of());
         when(drugInteractionRepository.findInteractionsAmongDrugs(any())).thenReturn(List.of());
@@ -139,7 +139,7 @@ class MedicationHistoryServiceImplTest {
         PharmacyFillResponseDTO expected = PharmacyFillResponseDTO.builder().id(fill.getId()).build();
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(pharmacyFillMapper.toEntity(eq(req), eq(patient), eq(hospital), any())).thenReturn(fill);
         when(pharmacyFillRepository.save(fill)).thenReturn(fill);
         when(pharmacyFillMapper.toResponseDTO(fill)).thenReturn(expected);
@@ -201,7 +201,7 @@ class MedicationHistoryServiceImplTest {
 
     @Test void getMedicationTimeline_hospitalNotFound() {
         when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.getMedicationTimeline(patientId, hospitalId, null, null, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
     }
@@ -223,7 +223,7 @@ class MedicationHistoryServiceImplTest {
         fill.setCreatedAt(LocalDateTime.now());
 
         when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of());
         when(pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, Set.of(hospitalId))).thenReturn(List.of(fill));
         when(drugInteractionRepository.findInteractionsAmongDrugs(any())).thenReturn(List.of());
@@ -250,7 +250,7 @@ class MedicationHistoryServiceImplTest {
         fill.setCreatedAt(LocalDateTime.now());
 
         when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of());
         when(pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, Set.of(hospitalId))).thenReturn(List.of(fill));
         when(drugInteractionRepository.findInteractionsAmongDrugs(any())).thenReturn(List.of());
@@ -276,7 +276,7 @@ class MedicationHistoryServiceImplTest {
         rx2.setDuration("30 days");
 
         when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(rx1, rx2));
         when(pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, Set.of(hospitalId))).thenReturn(List.of());
         when(drugInteractionRepository.findInteractionsAmongDrugs(any())).thenReturn(List.of());
@@ -320,7 +320,7 @@ class MedicationHistoryServiceImplTest {
         interaction.setId(UUID.randomUUID());
 
         when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(rx1, rx2));
         when(pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, Set.of(hospitalId))).thenReturn(List.of());
         when(drugInteractionRepository.findInteractionsAmongDrugs(any())).thenReturn(List.of(interaction));
@@ -346,7 +346,7 @@ class MedicationHistoryServiceImplTest {
         }
 
         when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(rxList);
         when(pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, Set.of(hospitalId))).thenReturn(List.of());
         when(drugInteractionRepository.findInteractionsAmongDrugs(any())).thenReturn(List.of());
@@ -381,7 +381,7 @@ class MedicationHistoryServiceImplTest {
         rx.setStaff(staff);
 
         when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(rx));
         when(pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, Set.of(hospitalId))).thenReturn(List.of());
         when(drugInteractionRepository.findInteractionsAmongDrugs(any())).thenReturn(List.of());
@@ -403,7 +403,7 @@ class MedicationHistoryServiceImplTest {
         rx.setDuration("3 months");
 
         when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(rx));
         when(pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, Set.of(hospitalId))).thenReturn(List.of());
         when(drugInteractionRepository.findInteractionsAmongDrugs(any())).thenReturn(List.of());
@@ -422,7 +422,7 @@ class MedicationHistoryServiceImplTest {
         rx.setDuration("2 weeks");
 
         when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(rx));
         when(pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, Set.of(hospitalId))).thenReturn(List.of());
         when(drugInteractionRepository.findInteractionsAmongDrugs(any())).thenReturn(List.of());
@@ -441,7 +441,7 @@ class MedicationHistoryServiceImplTest {
         rx.setDuration("as needed");
 
         when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(rx));
         when(pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, Set.of(hospitalId))).thenReturn(List.of());
         when(drugInteractionRepository.findInteractionsAmongDrugs(any())).thenReturn(List.of());
@@ -466,7 +466,7 @@ class MedicationHistoryServiceImplTest {
         rx2.setDuration("30 days");
 
         when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(rx1, rx2));
         when(pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, Set.of(hospitalId))).thenReturn(List.of());
         when(drugInteractionRepository.findInteractionsAmongDrugs(any())).thenReturn(List.of());
@@ -479,7 +479,7 @@ class MedicationHistoryServiceImplTest {
     @Test void getMedicationTimeline_withStartDateOnly() {
         LocalDate start = LocalDate.now().minusDays(30);
         when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of());
         when(pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, Set.of(hospitalId))).thenReturn(List.of());
         when(drugInteractionRepository.findInteractionsAmongDrugs(any())).thenReturn(List.of());
@@ -500,7 +500,7 @@ class MedicationHistoryServiceImplTest {
         rx2.setCreatedAt(LocalDateTime.now());
 
         when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(rx1, rx2));
         when(pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, Set.of(hospitalId))).thenReturn(List.of());
         when(drugInteractionRepository.findInteractionsAmongDrugs(any())).thenReturn(List.of());
@@ -524,7 +524,7 @@ class MedicationHistoryServiceImplTest {
         PharmacyFillResponseDTO expected = PharmacyFillResponseDTO.builder().id(fill.getId()).build();
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(rx));
         when(pharmacyFillMapper.toEntity(req, patient, hospital, rx)).thenReturn(fill);
         when(pharmacyFillRepository.save(fill)).thenReturn(fill);
@@ -539,7 +539,7 @@ class MedicationHistoryServiceImplTest {
         req.setPatientId(patientId);
         req.setHospitalId(hospitalId);
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.createPharmacyFill(req, Locale.ENGLISH)).isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -567,7 +567,7 @@ class MedicationHistoryServiceImplTest {
         rx2.setDuration("30 days");
 
         when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(rx1, rx2));
         when(pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, Set.of(hospitalId))).thenReturn(List.of());
         when(drugInteractionRepository.findInteractionsAmongDrugs(any())).thenReturn(List.of());
@@ -591,7 +591,7 @@ class MedicationHistoryServiceImplTest {
         fill.setCreatedAt(LocalDateTime.now());
 
         when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of());
         when(pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, Set.of(hospitalId))).thenReturn(List.of(fill));
         when(drugInteractionRepository.findInteractionsAmongDrugs(any())).thenReturn(List.of());
@@ -614,7 +614,7 @@ class MedicationHistoryServiceImplTest {
             .medicationName("Metformin").fillDate(LocalDate.now().minusDays(2)).daysSupply(30).build();
         fill.setId(UUID.randomUUID());
         when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
             .thenReturn(Set.of(hospitalId, otherHospitalId));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId, otherHospitalId))).thenReturn(List.of(rx));

@@ -164,7 +164,7 @@ class MaternalHistoryServiceImplTest {
     @Test
     void createMaternalHistory_shouldCreateSuccessfully() {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findByUsername(username)).thenReturn(Optional.of(user));
         when(staffRepository.findByUserIdAndHospitalId(userId, hospitalId)).thenReturn(Optional.of(staff));
         when(maternalHistoryRepository.existsByPatient_Id(patientId)).thenReturn(false);
@@ -198,7 +198,7 @@ class MaternalHistoryServiceImplTest {
     @Test
     void createMaternalHistory_shouldThrowExceptionWhenHospitalNotFound() {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> maternalHistoryService.createMaternalHistory(requestDTO, username))
                 .isInstanceOf(ResourceNotFoundException.class)
@@ -210,7 +210,7 @@ class MaternalHistoryServiceImplTest {
     @Test
     void createMaternalHistory_shouldThrowExceptionWhenMaternalHistoryAlreadyExists() {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(maternalHistoryRepository.existsByPatient_Id(patientId)).thenReturn(true);
 
         assertThatThrownBy(() -> maternalHistoryService.createMaternalHistory(requestDTO, username))
@@ -239,7 +239,7 @@ class MaternalHistoryServiceImplTest {
 
         when(maternalHistoryRepository.findById(existingId)).thenReturn(Optional.of(existingHistory));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findByUsername(username)).thenReturn(Optional.of(user));
         when(staffRepository.findByUserIdAndHospitalId(userId, hospitalId)).thenReturn(Optional.of(staff));
         when(maternalHistoryRepository.findMaxVersionByPatientId(patientId)).thenReturn(1);
@@ -280,7 +280,7 @@ class MaternalHistoryServiceImplTest {
 
         when(maternalHistoryRepository.findById(existingId)).thenReturn(Optional.of(existingHistory));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
 
         assertThatThrownBy(() -> maternalHistoryService.updateMaternalHistory(existingId, requestDTO, username))
                 .isInstanceOf(BusinessException.class)

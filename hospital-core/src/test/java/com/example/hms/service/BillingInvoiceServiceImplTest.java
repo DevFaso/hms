@@ -113,7 +113,7 @@ class BillingInvoiceServiceImplTest {
 
         when(patientRepository.findByUsernameOrEmail("patient@example.com"))
             .thenReturn(Optional.of(patient));
-        when(hospitalRepository.findByNameIgnoreCase("General Hospital"))
+        when(hospitalRepository.findClinicalByNameIgnoreCase("General Hospital"))
             .thenReturn(Optional.of(hospital));
         when(invoiceRepository.saveAndFlush(any(BillingInvoice.class)))
             .thenAnswer(invocation -> {

@@ -170,7 +170,7 @@ class NursingNoteServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
             .thenReturn(Optional.of(registration));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findByUserIdAndHospitalId(actorUserId, hospitalId)).thenReturn(Optional.of(staff));
 
         when(nursingNoteRepository.save(any(NursingNote.class))).thenAnswer(invocation -> {
@@ -245,7 +245,7 @@ class NursingNoteServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
             .thenReturn(Optional.of(new PatientHospitalRegistration()));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findByUserIdAndHospitalId(actorUserId, hospitalId)).thenReturn(Optional.of(staff));
         when(nursingNoteRepository.save(any(NursingNote.class))).thenAnswer(invocation -> {
             NursingNote note = invocation.getArgument(0);
@@ -303,7 +303,7 @@ class NursingNoteServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
             .thenReturn(Optional.of(new PatientHospitalRegistration()));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findByUserIdAndHospitalId(actorUserId, hospitalId)).thenReturn(Optional.empty());
         when(nursingNoteRepository.save(any(NursingNote.class))).thenAnswer(invocation -> {
             NursingNote note = invocation.getArgument(0);
@@ -370,7 +370,7 @@ class NursingNoteServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
             .thenReturn(Optional.of(new PatientHospitalRegistration()));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findByUserIdAndHospitalId(actorUserId, hospitalId)).thenReturn(Optional.empty());
         when(nursingNoteRepository.save(any(NursingNote.class))).thenAnswer(invocation -> {
             NursingNote note = invocation.getArgument(0);
@@ -506,7 +506,7 @@ class NursingNoteServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
             .thenReturn(Optional.of(new PatientHospitalRegistration()));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> nursingNoteService.createNote(request, Locale.US));
         verifyNoInteractions(nursingNoteRepository);
@@ -722,7 +722,7 @@ class NursingNoteServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
             .thenReturn(Optional.of(new PatientHospitalRegistration()));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findByUserIdAndHospitalId(actorUserId, hospitalId)).thenReturn(Optional.empty());
         when(nursingNoteRepository.save(any(NursingNote.class))).thenAnswer(invocation -> {
             NursingNote note = invocation.getArgument(0);
@@ -796,7 +796,7 @@ class NursingNoteServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
             .thenReturn(Optional.of(new PatientHospitalRegistration()));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findByUserIdAndHospitalId(actorUserId, hospitalId)).thenReturn(Optional.empty());
         when(nursingNoteRepository.save(any(NursingNote.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(nursingNoteMapper.toResponse(any(NursingNote.class))).thenReturn(new NursingNoteResponseDTO());

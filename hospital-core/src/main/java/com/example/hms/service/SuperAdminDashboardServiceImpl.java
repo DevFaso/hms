@@ -136,8 +136,9 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         long activeUsers = userRepository.countByIsActiveTrueAndIsDeletedFalse();
         long inactiveUsers = Math.max(totalUsers - activeUsers, 0);
 
-        long totalHospitals = hospitalRepository.count();
-        long activeHospitals = hospitalRepository.countByActiveTrue();
+        // Clinical hospitals: a pharmacy or laboratory is not counted as one (AC-11).
+        long totalHospitals = hospitalRepository.countHospitals();
+        long activeHospitals = hospitalRepository.countActiveHospitals();
         long inactiveHospitals = Math.max(totalHospitals - activeHospitals, 0);
 
         long totalOrganizations = organizationRepository.count();

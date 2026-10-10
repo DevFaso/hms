@@ -95,7 +95,10 @@ public class BreakGlassServiceImpl implements BreakGlassService {
     @Transactional
     public BreakGlassSessionResponseDTO declare(BreakGlassDeclareRequestDTO request) {
         User caller = currentUserOrThrow();
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
+        // A provider facility (pharmacy, laboratory) is no place to break the
+        // glass: it reads no chart (provider plan §3.3, AC-10), and it answers
+        // exactly as an unknown hospital.
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));

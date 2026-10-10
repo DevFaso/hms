@@ -2,6 +2,7 @@ package com.example.hms.controller;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Notification;
 import com.example.hms.payload.dto.portal.NotificationPreferenceDTO;
 import com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO;
@@ -59,10 +60,23 @@ public class NotificationController {
         return ResponseEntity.ok(notification);
     }
 
+    /**
+     * Marks the caller's OWN notification read. Someone else's notification
+     * answers exactly as an unknown id (404): the handler used to mark any
+     * notification read by id, with no owner check. A broadcast (no
+     * recipient) has ONE read flag, shared by everyone: unconfined staff may
+     * set it, as before; anyone else gets the foreign-id answer (the service
+     * decides, on the caller's live context).
+     */
     @PutMapping("/{id}/read")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<Void> markAsRead(@PathVariable UUID id) {
-        notificationService.markAsRead(id);
+    public ResponseEntity<Void> markAsRead(@PathVariable UUID id, Principal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(401).build();
+        }
+        if (notificationService.markAsRead(id, principal, true) != NotificationService.ReadOutcome.MARKED) {
+            throw new ResourceNotFoundException("notification.notFound", id);
+        }
         return ResponseEntity.ok().build();
     }
 

@@ -78,7 +78,7 @@ class Dhis2ConfigServiceImplTest {
     @Test
     @DisplayName("upsertFacilityConfig CREATE: persists a new config when none exists")
     void upsertFacilityCreatePath() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(facilityConfigRepository.findByHospital_Id(hospitalId)).thenReturn(Optional.empty());
         when(facilityConfigRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -93,7 +93,7 @@ class Dhis2ConfigServiceImplTest {
     void upsertFacilityUpdatePath() {
         Dhis2FacilityConfig existing = facility();
         existing.setBaseUrl("https://dhis2.old.org");
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(facilityConfigRepository.findByHospital_Id(hospitalId)).thenReturn(Optional.of(existing));
         when(facilityConfigRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -106,7 +106,7 @@ class Dhis2ConfigServiceImplTest {
     @Test
     @DisplayName("upsertFacilityConfig throws ResourceNotFoundException on missing hospital")
     void upsertFacilityMissingHospital() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.upsertFacilityConfig(hospitalId, request()))
             .isInstanceOf(ResourceNotFoundException.class);
         verify(facilityConfigRepository, never()).save(any());
@@ -115,7 +115,7 @@ class Dhis2ConfigServiceImplTest {
     @Test
     @DisplayName("createMapping persists a new mapping")
     void createMappingHappyPath() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(mappingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var dto = service.createMapping(hospitalId, mappingRequest());
@@ -130,7 +130,7 @@ class Dhis2ConfigServiceImplTest {
         Dhis2DataElementMapping existing = mappingRow(UUID.randomUUID()); // different hospital
         UUID mappingId = UUID.randomUUID();
         existing.setId(mappingId);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(mappingRepository.findById(mappingId)).thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() ->

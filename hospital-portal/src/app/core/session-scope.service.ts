@@ -44,6 +44,11 @@ export class SessionScopeService {
       }),
       catchError(() => {
         this.applyStoredProfile();
+        // The server could not say: no provider confinement is assumed (the
+        // server still refuses a provider user the topic, so nothing opens
+        // for one), and never the previous user's flag.
+        this.roleContext.setProviderUser(false);
+        this.roleContext.markSessionResolved();
         return of(null);
       }),
     );
@@ -58,6 +63,8 @@ export class SessionScopeService {
   applyBootstrap(bootstrap: SessionBootstrapResponse, extras: ProfileExtras = {}): void {
     const roles = bootstrap.roles?.length ? bootstrap.roles : this.auth.getRoles();
     this.roleContext.setRoles(roles);
+    this.roleContext.setProviderUser(bootstrap.providerUser === true);
+    this.roleContext.markSessionResolved();
     const permitted = (bootstrap.permittedHospitalIds ?? []).filter((id) => !!id);
     this.applyScope(permitted, bootstrap.primaryHospitalId ?? null);
     this.roleContext.markSuperAdminGlobalDefaults();

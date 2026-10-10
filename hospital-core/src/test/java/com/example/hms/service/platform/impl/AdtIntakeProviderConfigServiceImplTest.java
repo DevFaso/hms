@@ -72,7 +72,7 @@ class AdtIntakeProviderConfigServiceImplTest {
     @Test
     @DisplayName("upsert creates a new config when none exists for the hospital")
     void upsertCreatesWhenAbsent() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(repository.findByHospital_Id(hospitalId)).thenReturn(Optional.empty());
         when(repository.save(any(AdtIntakeProviderConfig.class)))
             .thenAnswer(invocation -> {
@@ -111,7 +111,7 @@ class AdtIntakeProviderConfigServiceImplTest {
         existing.setHospital(hospital);
         existing.setEnabled(false);
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(repository.findByHospital_Id(hospitalId)).thenReturn(Optional.of(existing));
         when(repository.save(any(AdtIntakeProviderConfig.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
@@ -131,7 +131,7 @@ class AdtIntakeProviderConfigServiceImplTest {
     @Test
     @DisplayName("upsert defaults enabled=false when the request omits it (admin must opt in explicitly)")
     void upsertDefaultsEnabledFalseWhenAbsent() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(repository.findByHospital_Id(hospitalId)).thenReturn(Optional.empty());
         when(repository.save(any(AdtIntakeProviderConfig.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
@@ -149,7 +149,7 @@ class AdtIntakeProviderConfigServiceImplTest {
     @Test
     @DisplayName("upsert falls back to the canonical default chief complaint when the request is blank")
     void upsertFallsBackToDefaultChiefComplaintWhenBlank() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(repository.findByHospital_Id(hospitalId)).thenReturn(Optional.empty());
         when(repository.save(any(AdtIntakeProviderConfig.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
@@ -166,7 +166,7 @@ class AdtIntakeProviderConfigServiceImplTest {
     @Test
     @DisplayName("upsert throws ResourceNotFoundException when the hospital UUID does not resolve")
     void upsertThrowsWhenHospitalMissing() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.upsert(sampleRequest(true, "x"), Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);

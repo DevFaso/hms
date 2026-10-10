@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.exception.UnauthorizedAccessException;
@@ -16,6 +17,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.provider.ClinicalHospitals;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -42,6 +44,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -81,6 +85,10 @@ class BreakGlassServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
+        lenient().when(hospitalRepository.findClinicalById(any()))
+            .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
+                .filter(ClinicalHospitals::isClinical));
         userId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
         patientId = UUID.randomUUID();
@@ -227,7 +235,7 @@ class BreakGlassServiceImplTest {
         @DisplayName("rejects callers without a privileged role at the hospital")
         void declareRejectsUnprivileged() {
             when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
                 .thenReturn(Optional.empty());
@@ -244,6 +252,25 @@ class BreakGlassServiceImplTest {
                 .isInstanceOf(UnauthorizedAccessException.class);
 
             verify(sessionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a provider facility answers exactly as an unknown hospital, and no session is saved")
+        void declareAtAProviderIsRefusedAsUnknown() {
+            when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
+            hospital.setFacilityType(FacilityType.PHARMACY);
+            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+
+            BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
+                .patientId(patientId)
+                .hospitalId(hospitalId)
+                .reason("Override needed for trauma chart.")
+                .build();
+
+            assertThatThrownBy(() -> service.declare(req))
+                .isInstanceOf(ResourceNotFoundException.class);
+            verify(sessionRepository, never()).save(any());
+            verify(patientRepository, never()).findById(any());
         }
 
         @Test
@@ -525,7 +552,7 @@ class BreakGlassServiceImplTest {
         @DisplayName("SUPER_ADMIN can declare even without a hospital-scoped role")
         void superAdminBypassesHospitalRoleCheck() {
             when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
                 .thenReturn(Optional.of(new com.example.hms.model.UserRoleHospitalAssignment()));
@@ -557,7 +584,7 @@ class BreakGlassServiceImplTest {
         void auditFailureSwallowed() {
             stubAuthenticatedDoctor();
             when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            org.mockito.Mockito.doThrow(new RuntimeException("audit DB down"))
+            doThrow(new RuntimeException("audit DB down"))
                 .when(auditService).logEvent(any());
 
             BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
@@ -622,7 +649,7 @@ class BreakGlassServiceImplTest {
 
     private void stubAuthenticatedDoctor() {
         when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
             .thenReturn(Optional.empty());

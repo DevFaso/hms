@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.security.tenant.HospitalScopeExempt;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
@@ -719,7 +720,13 @@ public class PatientPortalController {
     @PreAuthorize("hasAuthority('ROLE_PATIENT')")
     public ResponseEntity<ApiResponseWrapper<Void>> markNotificationRead(
             Authentication auth, @PathVariable UUID notificationId) {
-        notificationService.markAsRead(notificationId, auth.getName());
+        // The caller's OWN notification only; someone else's answers exactly as
+        // an unknown id, the same 404 as PUT /notifications/{id}/read. A
+        // broadcast is never marked here (its one read flag is everyone's): it
+        // answers 200 and is left as it is, as this endpoint always did.
+        if (notificationService.markAsRead(notificationId, auth, false) == NotificationService.ReadOutcome.NOT_FOUND) {
+            throw new ResourceNotFoundException("notification.notFound", notificationId);
+        }
         return ResponseEntity.ok(ApiResponseWrapper.success(null));
     }
 

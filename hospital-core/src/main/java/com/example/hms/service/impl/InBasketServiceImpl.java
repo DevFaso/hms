@@ -121,7 +121,7 @@ public class InBasketServiceImpl implements InBasketService {
         User recipient = userRepository.findById(request.getRecipientUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("error.user.notFound", request.getRecipientUserId()));
 
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("error.hospital.notFound", request.getHospitalId()));
 
         InBasketItem item = InBasketItem.builder()

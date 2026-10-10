@@ -67,7 +67,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         // Validate gestational age for scan type
@@ -113,7 +113,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             // exactly as a missing hospital. A verified super-admin in global
             // view keeps the old behaviour.
             requireActingHospital(request.getHospitalId());
-            Hospital newHospital = hospitalRepository.findById(request.getHospitalId())
+            Hospital newHospital = hospitalRepository.findClinicalById(request.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
             order.setHospital(newHospital);
         }

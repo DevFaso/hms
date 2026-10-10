@@ -475,7 +475,7 @@ public class LaborServiceImpl implements LaborService {
 
     private Hospital resolveHospital(PatientHospitalRegistration registration, UUID requestedHospitalId) {
         if (requestedHospitalId != null) {
-            return hospitalRepository.findById(requestedHospitalId)
+            return hospitalRepository.findClinicalById(requestedHospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", requestedHospitalId));
         }
         if (registration != null && registration.getHospital() != null) {

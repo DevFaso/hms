@@ -19,6 +19,15 @@ import java.util.UUID;
 
 @Repository
 public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
+
+    /**
+     * The clinical predicate (provider plan AC-11): a hospital, never a
+     * pharmacy or laboratory. Concatenated into every clinical query, with the
+     * fully-qualified enum literal JPQL needs; padded with a space on each
+     * side, so it splices between two text blocks as safely as into a string.
+     */
+    String CLINICAL_ONLY = " h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL ";
+
     @Query("SELECT h FROM Hospital h WHERE LOWER(h.name) = LOWER(:identifier) OR LOWER(h.code) = LOWER(:identifier) OR LOWER(h.email) = LOWER(:identifier)")
     java.util.Optional<Hospital> findByNameOrCodeOrEmail(@Param("identifier") String identifier);
 
@@ -52,12 +61,16 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
      * 500 that hit {@code LabTestDefinitionRepository.search}. H2 is more
      * lenient. Same pattern as {@code UserRepository#searchByCriteria} and
      * {@code findAllWithDepartments} below.</p>
+     *
+     * <p>Clinical hospitals only (provider plan AC-11): a pharmacy or
+     * laboratory is not a scope a hospital page picks.</p>
      */
     @Query("SELECT h FROM Hospital h LEFT JOIN FETCH h.organization WHERE " +
             "(:name IS NULL OR LOWER(h.name) LIKE LOWER(CONCAT(CAST(:name AS string), '%'))) AND " +
             "(:city IS NULL OR LOWER(h.city) LIKE LOWER(CONCAT('%', CAST(:city AS string), '%'))) AND " +
             "(:state IS NULL OR LOWER(h.state) LIKE LOWER(CONCAT('%', CAST(:state AS string), '%'))) AND " +
-            "(:active IS NULL OR h.active = :active) " +
+            "(:active IS NULL OR h.active = :active) AND" +
+            CLINICAL_ONLY +
             "ORDER BY LOWER(h.name)")
     Slice<Hospital> searchHospitals(@Param("name") String name,
                                    @Param("city") String city,
@@ -71,8 +84,30 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
 
     Optional<Hospital> findByName(String name);
 
-    /* Dashboard count */
-    long countByActiveTrue();
+    /*
+     * Lists, counts and KPIs are CLINICAL by default (provider plan AC-11): a
+     * pharmacy or laboratory row is never a "hospital" there. A new list or
+     * count that must also return providers says so in its name
+     * (...AnyFacilityType, ...ByFacilityType). A clinical destination named
+     * by id reads findClinicalById (below); the plain by-id reads see every
+     * type and each caller is recorded with its reason. A clinical destination
+     * named by name or code reads a findClinicalBy... finder (below); the plain
+     * name and code lookups see every type. HospitalRepositoryCallerCoverageTest holds
+     * every caller of an unfiltered list, count, lookup or by-id read to a
+     * recorded reason.
+     */
+
+    /** Every clinical hospital: the super-admin's global scope, platform KPIs. */
+    @Query("SELECT h FROM Hospital h WHERE " + CLINICAL_ONLY)
+    List<Hospital> findAllHospitals();
+
+    /** Dashboard count: clinical hospitals. */
+    @Query("SELECT COUNT(h) FROM Hospital h WHERE " + CLINICAL_ONLY)
+    long countHospitals();
+
+    /** Dashboard count: active clinical hospitals. */
+    @Query("SELECT COUNT(h) FROM Hospital h WHERE h.active = true AND " + CLINICAL_ONLY)
+    long countActiveHospitals();
 
     /** B1: the laboratories a clinician may route an order to — every active hospital, by name. */
     List<Hospital> findByActiveTrueAndLifecycleStateOrderByNameAsc(com.example.hms.enums.HospitalLifecycleState lifecycleState);
@@ -87,6 +122,38 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     @Query("SELECT h FROM Hospital h WHERE h.id = :id")
     Optional<Hospital> findByIdForUpdate(@Param("id") UUID id);
 
+    /**
+     * The requireClinicalHospital rule (provider plan AC-11, item 4): a
+     * hospital by id, for any request-supplied CLINICAL destination (a
+     * booking, an admission, an order, a referral, a registration...). A
+     * pharmacy or laboratory row is not found, so the caller gets exactly the
+     * answer an unknown id gets at that site. A plain findById of a hospital
+     * is a recorded exception in HospitalRepositoryCallerCoverageTest.
+     */
+    @Query("SELECT h FROM Hospital h WHERE h.id = :id"
+        + " AND " + CLINICAL_ONLY)
+    Optional<Hospital> findClinicalById(@Param("id") UUID id);
+
+    /** A clinical destination named by its exact name, any case (requireClinicalHospital, AC-11). */
+    @Query("SELECT h FROM Hospital h WHERE LOWER(h.name) = LOWER(:name)"
+        + " AND " + CLINICAL_ONLY)
+    Optional<Hospital> findClinicalByNameIgnoreCase(@Param("name") String name);
+
+    /** A clinical destination named by its exact name (requireClinicalHospital, AC-11). */
+    @Query("SELECT h FROM Hospital h WHERE h.name = :name"
+        + " AND " + CLINICAL_ONLY)
+    Optional<Hospital> findClinicalByName(@Param("name") String name);
+
+    /** A clinical destination named by its code, any case (requireClinicalHospital, AC-11). */
+    @Query("SELECT h FROM Hospital h WHERE LOWER(h.code) = LOWER(:code)"
+        + " AND " + CLINICAL_ONLY)
+    Optional<Hospital> findClinicalByCodeIgnoreCase(@Param("code") String code);
+
+    /** A clinical destination named by its name, code or email, any case (requireClinicalHospital, AC-11). */
+    @Query("SELECT h FROM Hospital h WHERE (LOWER(h.name) = LOWER(:identifier) OR LOWER(h.code) = LOWER(:identifier)"
+        + " OR LOWER(h.email) = LOWER(:identifier)) AND " + CLINICAL_ONLY)
+    Optional<Hospital> findClinicalByNameOrCodeOrEmail(@Param("identifier") String identifier);
+
     /* Organization-related queries */
     /**
      * Clinical hospitals with no organisation: the input of the two boot jobs
@@ -95,10 +162,12 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
      * never attached to a hospital organisation (provider plan AC-11).
      */
     @Query("SELECT h FROM Hospital h WHERE h.organization IS NULL"
-        + " AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
+        + " AND " + CLINICAL_ONLY)
     List<Hospital> findByOrganizationIsNull();
 
-    List<Hospital> findByOrganizationIdOrderByNameAsc(UUID organizationId);
+    /** An organisation's clinical hospitals, by name. */
+    @Query("SELECT h FROM Hospital h WHERE h.organization.id = :organizationId AND " + CLINICAL_ONLY + " ORDER BY h.name ASC")
+    List<Hospital> findByOrganizationIdOrderByNameAsc(@Param("organizationId") UUID organizationId);
 
     @Query("""
       SELECT DISTINCT h FROM Hospital h
@@ -106,6 +175,7 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
       LEFT JOIN FETCH d.headOfDepartment hod
       LEFT JOIN FETCH hod.user u
       WHERE (:activeOnly IS NULL OR h.active = :activeOnly)
+    AND""" + CLINICAL_ONLY + """
     AND (
       :hospitalQuery IS NULL OR :hospitalQuery = '' OR
       LOWER(CAST(h.name AS string)) LIKE LOWER(CONCAT('%', CAST(:hospitalQuery AS string), '%')) OR
@@ -119,6 +189,7 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     @Query("""
       SELECT h FROM Hospital h
       WHERE (:organizationId IS NULL OR h.organization.id = :organizationId)
+        AND""" + CLINICAL_ONLY + """
         AND (:unassignedOnly IS NULL OR :unassignedOnly = false OR h.organization IS NULL)
         AND (
             :city IS NULL

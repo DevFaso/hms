@@ -26,6 +26,8 @@ export interface SessionBootstrapResponse {
   roles: string[];
   superAdmin: boolean;
   hospitalAdmin: boolean;
+  /** Confined to a provider facility (pharmacy or laboratory). */
+  providerUser?: boolean;
   primaryHospitalId?: string;
   primaryHospitalName?: string;
   permittedHospitalIds?: string[];
@@ -439,6 +441,9 @@ export class AuthService {
     this.clearToken();
     this.clearRefreshToken();
     this.clearUserProfile();
+    // The next user must not inherit this one's provider flag or a resolved
+    // session (the shell's emergency-broadcast gate reads both).
+    this.roleContext.clearSession();
     // Clear idle lock state so the lock screen doesn't appear on next login
     if (this.isBrowser) {
       try {

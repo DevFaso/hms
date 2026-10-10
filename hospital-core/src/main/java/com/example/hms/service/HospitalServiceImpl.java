@@ -267,8 +267,7 @@ public class HospitalServiceImpl implements HospitalService {
      * provider plan AC-4 and AC-11) the generic writes would skip.
      */
     private Hospital getClinicalHospitalOrThrow(UUID id) {
-        return hospitalRepository.findById(id)
-                .filter(hospital -> !hospital.isProvider())
+        return hospitalRepository.findClinicalById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND, id));
     }
 

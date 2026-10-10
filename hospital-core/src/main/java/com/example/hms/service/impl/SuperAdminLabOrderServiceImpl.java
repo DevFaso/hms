@@ -196,8 +196,10 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
 
     private Hospital resolveHospital(String identifier, Organization organization) {
         String normalized = identifier.trim();
-        Hospital hospital = hospitalRepository.findByCodeIgnoreCase(normalized)
-            .or(() -> hospitalRepository.findByNameIgnoreCase(normalized))
+        // The ORDERING hospital: clinical only. A pharmacy or laboratory named
+        // here is not found, as at every other destination.
+        Hospital hospital = hospitalRepository.findClinicalByCodeIgnoreCase(normalized)
+            .or(() -> hospitalRepository.findClinicalByNameIgnoreCase(normalized))
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", normalized));
 
         log.debug("resolveHospital matched hospital {} with organization {} (expected {})",

@@ -380,7 +380,7 @@ class NurseTaskServiceImplTest {
         UUID patientId = UUID.randomUUID();
 
         Hospital hospital = mock(Hospital.class);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         Patient patientEntity = mock(Patient.class);
         when(patientEntity.isRegisteredInHospital(hospitalId)).thenReturn(true);
         when(patientEntity.getId()).thenReturn(patientId);
@@ -415,7 +415,7 @@ class NurseTaskServiceImplTest {
         UUID hospitalId = UUID.randomUUID();
         UUID patientId = UUID.randomUUID();
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(mock(Hospital.class)));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(mock(Hospital.class)));
         Patient patientEntity = mock(Patient.class);
         when(patientEntity.isRegisteredInHospital(hospitalId)).thenReturn(false);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patientEntity));
@@ -1678,7 +1678,7 @@ class NurseTaskServiceImplTest {
         hosp.setId(hospitalId);
         registerPatientAtHospital(pat, hosp);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hosp));
         when(staffRepository.findByUserIdAndHospitalId(nurseId, hospitalId)).thenReturn(Optional.empty());
 
         NurseVitalCaptureRequestDTO req = NurseVitalCaptureRequestDTO.builder()
@@ -1709,7 +1709,7 @@ class NurseTaskServiceImplTest {
         hosp6.setId(hospitalId);
         registerPatientAtHospital(pat6, hosp6);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat6));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp6));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hosp6));
 
         NurseVitalCaptureRequestDTO req = NurseVitalCaptureRequestDTO.builder()
             .heartRateBpm(160) // > 150
@@ -1733,7 +1733,7 @@ class NurseTaskServiceImplTest {
         hosp7.setId(hospitalId);
         registerPatientAtHospital(pat7, hosp7);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat7));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp7));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hosp7));
 
         NurseVitalCaptureRequestDTO req = NurseVitalCaptureRequestDTO.builder()
             .spo2Percent(85) // < 90
@@ -1889,7 +1889,7 @@ class NurseTaskServiceImplTest {
         User nurse = User.builder().firstName("Jane").lastName("Nurse").build();
         nurse.setId(nurseId);
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hosp));
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat));
         when(userRepository.findById(nurseId)).thenReturn(Optional.of(nurse));
 
@@ -1917,7 +1917,7 @@ class NurseTaskServiceImplTest {
     @Test
     void createNursingTaskThrowsWhenHospitalNotFound() {
         UUID hospitalId = UUID.randomUUID();
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
         NurseTaskCreateRequestDTO req = new NurseTaskCreateRequestDTO();
         req.setPatientId(UUID.randomUUID());
@@ -2056,7 +2056,7 @@ class NurseTaskServiceImplTest {
         author.setId(nurseId);
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hosp));
         when(userRepository.findById(nurseId)).thenReturn(Optional.of(author));
         when(nursingNoteRepository.save(any(NursingNote.class))).thenAnswer(inv -> {
             NursingNote n = inv.getArgument(0);
@@ -2094,7 +2094,7 @@ class NurseTaskServiceImplTest {
         author.setId(nurseId);
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hosp));
         when(userRepository.findById(nurseId)).thenReturn(Optional.of(author));
         when(nursingNoteRepository.save(any(NursingNote.class))).thenAnswer(inv -> {
             NursingNote n = inv.getArgument(0);
@@ -2158,7 +2158,7 @@ class NurseTaskServiceImplTest {
         registerPatientAtHospital(pat, patientHosp); // registered at a DIFFERENT hospital
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat));
-        when(hospitalRepository.findById(nurseHospitalId)).thenReturn(Optional.of(nurseHosp));
+        when(hospitalRepository.findClinicalById(nurseHospitalId)).thenReturn(Optional.of(nurseHosp));
 
         NurseVitalCaptureRequestDTO req = NurseVitalCaptureRequestDTO.builder()
             .heartRateBpm(72).build();
@@ -2185,7 +2185,7 @@ class NurseTaskServiceImplTest {
         hosp.setId(hospitalId);
         registerPatientAtHospital(pat, hosp);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hosp));
         when(staffRepository.findByUserIdAndHospitalId(nurseId, hospitalId)).thenReturn(Optional.empty());
 
         Encounter encounter = Encounter.builder().status(EncounterStatus.ARRIVED).build();
@@ -2226,7 +2226,7 @@ class NurseTaskServiceImplTest {
         hosp.setId(hospitalId);
         registerPatientAtHospital(pat, hosp);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hosp));
         when(staffRepository.findByUserIdAndHospitalId(nurseId, hospitalId)).thenReturn(Optional.empty());
 
         // No ARRIVED encounter
@@ -2265,7 +2265,7 @@ class NurseTaskServiceImplTest {
         hosp.setId(hospitalId);
         registerPatientAtHospital(pat, hosp);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hosp));
         when(staffRepository.findByUserIdAndHospitalId(nurseId, hospitalId)).thenReturn(Optional.empty());
 
         // No ARRIVED encounter

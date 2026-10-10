@@ -329,7 +329,7 @@ class SmartPhraseServiceImplTest {
             when(repository.findFirstByTriggerIgnoreCaseAndScopeAndHospital_IdAndOwnerIsNull(
                 ".new", SmartPhraseScope.HOSPITAL, hospitalId))
                 .thenReturn(Optional.empty());
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(repository.save(any(SmartPhrase.class))).thenAnswer(inv -> inv.getArgument(0));
 
             SmartPhraseRequestDTO req = SmartPhraseRequestDTO.builder()
@@ -470,7 +470,7 @@ class SmartPhraseServiceImplTest {
         @Test
         @DisplayName("HOSPITAL scope: hospital not found yields ResourceNotFoundException")
         void hospitalNotFound() {
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
             when(repository.findFirstByTriggerIgnoreCaseAndScopeAndHospital_IdAndOwnerIsNull(
                 ".x", SmartPhraseScope.HOSPITAL, hospitalId))
                 .thenReturn(Optional.empty());

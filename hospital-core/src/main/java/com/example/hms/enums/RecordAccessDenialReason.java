@@ -14,6 +14,14 @@ public enum RecordAccessDenialReason {
     HOSPITAL_UNKNOWN,
 
     /**
+     * The acting facility is a provider (a PHARMACY or LABORATORY), not a
+     * hospital: no chart is read there, whatever staff row, registration or
+     * break-the-glass session exists (provider plan §3.3, AC-9). Evaluated
+     * before every other gate.
+     */
+    PROVIDER_FACILITY,
+
+    /**
      * The acting hospital is {@code SCHEMA}-isolated (V97). Its tables cannot
      * be read across by construction, and must not be; sharing stays an
      * explicit export via referral or ROI.

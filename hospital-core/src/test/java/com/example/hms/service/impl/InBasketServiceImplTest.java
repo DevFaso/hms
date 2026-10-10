@@ -248,7 +248,7 @@ class InBasketServiceImplTest {
             when(inBasketItemRepository.existsByReferenceIdAndReferenceTypeAndRecipientUser_Id(
                     any(), any(), any())).thenReturn(false);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(inBasketItemRepository.save(any(InBasketItem.class))).thenAnswer(inv -> {
                 InBasketItem saved = inv.getArgument(0);
                 saved.setId(UUID.randomUUID());

@@ -496,15 +496,20 @@ public class AppointmentServiceImpl implements AppointmentService {
         return resolvePatient(request, currentUser.getUsername());
     }
 
+    /**
+     * The booking hospital, by id, code or name. A provider facility answers
+     * exactly as an unknown one: nobody books an appointment at a pharmacy or
+     * laboratory (provider plan AC-11).
+     */
     private Hospital resolveHospital(AppointmentRequestDTO request) {
         if (request.getHospitalId() != null) {
-            return hospitalRepository.findById(request.getHospitalId())
+            return hospitalRepository.findClinicalById(request.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", request.getHospitalId()));
         } else if (request.getHospitalCode() != null) {
-            return hospitalRepository.findByCodeIgnoreCase(request.getHospitalCode())
+            return hospitalRepository.findClinicalByCodeIgnoreCase(request.getHospitalCode())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", request.getHospitalCode()));
         } else if (request.getHospitalName() != null) {
-            return hospitalRepository.findByNameIgnoreCase(request.getHospitalName())
+            return hospitalRepository.findClinicalByNameIgnoreCase(request.getHospitalName())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", request.getHospitalName()));
         }
         throw new BusinessException("Hospital identifier required");
@@ -600,7 +605,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         Staff staff = staffRepository.findById(request.getStaffId())
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getStaffId()));
 
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         if (!staff.getHospital().getId().equals(hospital.getId())) {
@@ -1068,7 +1073,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             return Set.of(pinnedHospitalId);
         }
         if (context.isGlobalView()) {
-            LinkedHashSet<UUID> superAdminScope = hospitalRepository.findAll().stream()
+            LinkedHashSet<UUID> superAdminScope = hospitalRepository.findAllHospitals().stream()
                 .map(Hospital::getId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 

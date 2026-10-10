@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.model.Notification;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
 import com.example.hms.payload.dto.PatientVitalSignResponseDTO;
 import com.example.hms.payload.dto.discharge.DischargeSummaryResponseDTO;
@@ -14,11 +15,18 @@ import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.payload.dto.pro.ProInstrumentViewDTO;
 import com.example.hms.payload.dto.pro.ProResponseCreateDTO;
 import com.example.hms.payload.dto.pro.ProSelfReportDTO;
+import com.example.hms.repository.NotificationPreferenceRepository;
+import com.example.hms.repository.NotificationRepository;
+import com.example.hms.repository.UserRepository;
+import com.example.hms.security.provider.ProviderCallerResolver;
+import com.example.hms.service.NotificationService.ReadOutcome;
 import com.example.hms.service.NotificationService;
+import com.example.hms.service.NotificationServiceImpl;
 import com.example.hms.service.PatientDocumentService;
 import com.example.hms.service.PatientPortalService;
 import com.example.hms.service.pharmacy.PharmacyClaimService;
 import com.example.hms.service.pharmacy.PharmacyPaymentService;
+import org.springframework.beans.factory.ObjectProvider;
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -47,8 +55,10 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -376,6 +386,67 @@ class PatientPortalControllerPhase2Test {
     // ══════════════════════════════════════════════════════════════════════
     // After-Visit Summaries
     // ══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("PUT /me/patient/notifications/{notificationId}/read")
+    class MarkNotificationRead {
+
+        @Autowired private NotificationService notificationService;
+
+        @Test
+        @DisplayName("the caller's own notification: 200")
+        void ownNotificationIsMarked() throws Exception {
+            UUID id = UUID.randomUUID();
+            when(notificationService.markAsRead(eq(id), any(), eq(false))).thenReturn(ReadOutcome.MARKED);
+
+            mockMvc.perform(put("/me/patient/notifications/{notificationId}/read", id).principal(auth))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("someone else's or an unknown notification: the same 404")
+        void foreignOrUnknownNotificationIsNotFound() throws Exception {
+            UUID foreign = UUID.randomUUID();
+            UUID unknown = UUID.randomUUID();
+            when(notificationService.markAsRead(eq(foreign), any(), eq(false))).thenReturn(ReadOutcome.NOT_FOUND);
+            when(notificationService.markAsRead(eq(unknown), any(), eq(false))).thenReturn(ReadOutcome.NOT_FOUND);
+
+            String asForeign = mockMvc.perform(put("/me/patient/notifications/{notificationId}/read", foreign)
+                            .principal(auth))
+                    .andExpect(status().isNotFound())
+                    .andReturn().getResponse().getContentAsString();
+            String asUnknown = mockMvc.perform(put("/me/patient/notifications/{notificationId}/read", unknown)
+                            .principal(auth))
+                    .andExpect(status().isNotFound())
+                    .andReturn().getResponse().getContentAsString();
+            assertThat(normalise(asForeign, foreign))
+                .isEqualTo(normalise(asUnknown, unknown));
+        }
+
+        @Test
+        @DisplayName("a broadcast (no recipient): 200 as always, and left unread (its one flag is everyone's)")
+        void broadcastIsNotMarked() throws Exception {
+            UUID id = UUID.randomUUID();
+            NotificationRepository repository = mock(NotificationRepository.class);
+            Notification broadcast = Notification.builder().id(id).message("announcement").read(false).build();
+            when(repository.findById(id)).thenReturn(Optional.of(broadcast));
+            @SuppressWarnings("unchecked")
+            ObjectProvider<ProviderCallerResolver> noResolver = mock(ObjectProvider.class);
+            NotificationService real = new NotificationServiceImpl(repository,
+                mock(NotificationWebSocketController.class), mock(NotificationPreferenceRepository.class),
+                mock(UserRepository.class), noResolver);
+            when(notificationService.markAsRead(eq(id), any(), eq(false)))
+                .thenAnswer(invocation -> real.markAsRead(id, invocation.getArgument(1), invocation.getArgument(2)));
+
+            mockMvc.perform(put("/me/patient/notifications/{notificationId}/read", id).principal(auth))
+                    .andExpect(status().isOk());
+            assertThat(broadcast.isRead()).isFalse();
+        }
+
+        private String normalise(String body, UUID id) {
+            return body.replace(id.toString(), "<id>").replaceAll("\"timestamp\":\"[^\"]*\"", "");
+        }
+    }
 
     @Nested
     @DisplayName("GET /me/patient/after-visit-summaries")

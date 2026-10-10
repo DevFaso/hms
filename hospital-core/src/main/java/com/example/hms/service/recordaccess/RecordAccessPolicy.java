@@ -10,6 +10,9 @@ import java.util.UUID;
  * <p>Order of the gates, each named by {@code RecordAccessDenialReason}:
  * <ol>
  *   <li>the acting hospital exists;</li>
+ *   <li>it is a HOSPITAL, not a provider facility (a pharmacy or a laboratory
+ *       never reads a chart through this policy, whatever else holds:
+ *       provider plan §3.3, AC-9);</li>
  *   <li>it is not {@code SCHEMA}-isolated (V97) — cannot be read across, ever;</li>
  *   <li>its posture is {@code TREATMENT_PRESUMED} (E8 #52);</li>
  *   <li>the patient has not opted out (E8 #52);</li>

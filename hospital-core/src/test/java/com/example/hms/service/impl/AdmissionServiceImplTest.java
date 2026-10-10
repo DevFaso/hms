@@ -94,7 +94,7 @@ class AdmissionServiceImplTest {
         AdmissionResponseDTO response = new AdmissionResponseDTO();
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(admissionRepository.save(any(Admission.class))).thenReturn(admission);
         when(admissionMapper.toResponseDTO(admission)).thenReturn(response);
@@ -122,7 +122,7 @@ class AdmissionServiceImplTest {
         AdmissionResponseDTO response = new AdmissionResponseDTO();
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(admissionRepository.save(any(Admission.class))).thenReturn(admission);
         when(admissionMapper.toResponseDTO(admission)).thenReturn(response);

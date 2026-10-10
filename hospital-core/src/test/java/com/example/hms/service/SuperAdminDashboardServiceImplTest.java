@@ -128,8 +128,8 @@ class SuperAdminDashboardServiceImplTest {
     void getSummary_success() {
         when(userRepository.countByIsDeletedFalse()).thenReturn(100L);
         when(userRepository.countByIsActiveTrueAndIsDeletedFalse()).thenReturn(80L);
-        when(hospitalRepository.count()).thenReturn(10L);
-        when(hospitalRepository.countByActiveTrue()).thenReturn(8L);
+        when(hospitalRepository.countHospitals()).thenReturn(10L);
+        when(hospitalRepository.countActiveHospitals()).thenReturn(8L);
         when(patientRepository.count()).thenReturn(500L);
         when(roleRepository.count()).thenReturn(5L);
         when(assignmentRepository.count()).thenReturn(200L);

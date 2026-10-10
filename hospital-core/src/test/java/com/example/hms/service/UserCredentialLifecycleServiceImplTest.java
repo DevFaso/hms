@@ -29,6 +29,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
@@ -75,6 +77,37 @@ class UserCredentialLifecycleServiceImplTest {
             .build();
         contact.setId(UUID.randomUUID());
         return contact;
+    }
+
+    @Test
+    void someoneElsesRecoveryContactAnswersAsAnUnknownOne() {
+        UUID caller = UUID.randomUUID();
+        UserRecoveryContact foreign = pendingContact(UUID.randomUUID());
+        UUID unknownId = UUID.randomUUID();
+        when(recoveryContactRepository.findById(foreign.getId())).thenReturn(Optional.of(foreign));
+        when(recoveryContactRepository.findById(unknownId)).thenReturn(Optional.empty());
+
+        for (boolean verify : new boolean[] {false, true}) {
+            Throwable asForeign = catchThrowable(() -> {
+                if (verify) {
+                    service.verifyRecoveryContact(caller, foreign.getId(), "123456");
+                } else {
+                    service.sendRecoveryContactVerificationCode(caller, foreign.getId());
+                }
+            });
+            Throwable asUnknown = catchThrowable(() -> {
+                if (verify) {
+                    service.verifyRecoveryContact(caller, unknownId, "123456");
+                } else {
+                    service.sendRecoveryContactVerificationCode(caller, unknownId);
+                }
+            });
+            assertThat(asForeign).isInstanceOf(ResourceNotFoundException.class)
+                .hasSameClassAs(asUnknown);
+            assertThat(asForeign.getMessage().replace(foreign.getId().toString(), "<id>"))
+                .isEqualTo(asUnknown.getMessage().replace(unknownId.toString(), "<id>"));
+        }
+        verify(recoveryContactRepository, never()).save(any());
     }
 
     @Test

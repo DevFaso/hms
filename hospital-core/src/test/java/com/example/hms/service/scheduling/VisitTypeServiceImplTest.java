@@ -57,7 +57,7 @@ class VisitTypeServiceImplTest {
         hospital.setId(hospitalId);
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(visitTypeRepository.save(any(VisitType.class))).thenAnswer(i -> i.getArgument(0));
         when(visitTypeRepository.findByHospital_IdAndCodeIgnoreCase(any(), any()))
             .thenReturn(Optional.empty());

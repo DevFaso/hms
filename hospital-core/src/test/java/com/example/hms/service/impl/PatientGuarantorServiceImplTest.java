@@ -69,7 +69,7 @@ class PatientGuarantorServiceImplTest {
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(guarantorRepository.save(any(PatientGuarantor.class))).thenAnswer(i -> i.getArgument(0));
         when(guarantorRepository.findByPatient_IdAndHospital_IdAndActiveTrue(any(), any()))
             .thenReturn(List.of());
@@ -118,7 +118,7 @@ class PatientGuarantorServiceImplTest {
         UUID foreignHospitalId = UUID.randomUUID();
         Hospital foreign = new Hospital();
         foreign.setId(foreignHospitalId);
-        when(hospitalRepository.findById(foreignHospitalId)).thenReturn(Optional.of(foreign));
+        when(hospitalRepository.findClinicalById(foreignHospitalId)).thenReturn(Optional.of(foreign));
         GuarantorRequestDTO dto = request("X", false);
 
         assertThatThrownBy(() -> service.add(patientId, foreignHospitalId, dto))

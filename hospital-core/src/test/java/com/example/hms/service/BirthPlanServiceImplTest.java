@@ -181,7 +181,7 @@ class BirthPlanServiceImplTest {
             .thenReturn(Optional.of(patientUser));
         when(patientRepository.findByUserId(patientUser.getId()))
             .thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospital.getId()))
+        when(hospitalRepository.findClinicalById(hospital.getId()))
             .thenReturn(Optional.of(hospital));
         when(birthPlanRepository.save(any(BirthPlan.class)))
             .thenReturn(birthPlan);
@@ -211,7 +211,7 @@ class BirthPlanServiceImplTest {
             .thenReturn(Optional.of(doctorUser));
         when(patientRepository.findById(patient.getId()))
             .thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospital.getId()))
+        when(hospitalRepository.findClinicalById(hospital.getId()))
             .thenReturn(Optional.of(hospital));
         when(birthPlanRepository.save(any(BirthPlan.class)))
             .thenReturn(birthPlan);
@@ -224,7 +224,7 @@ class BirthPlanServiceImplTest {
         // Then
         assertNotNull(result);
         verify(patientRepository).findById(patient.getId());
-        verify(hospitalRepository).findById(hospital.getId());
+        verify(hospitalRepository).findClinicalById(hospital.getId());
     }
 
     @Test
