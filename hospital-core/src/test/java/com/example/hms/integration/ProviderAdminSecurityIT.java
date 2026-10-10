@@ -445,6 +445,9 @@ class ProviderAdminSecurityIT extends BaseIT {
             .isEqualTo(403);
         assertThat(as(superToken, get("/hospitals").param("facilityType", "clinic")).getResponse().getStatus())
             .isEqualTo(400);
+        // Who first, then what: a doctor gets the same 403 whatever the value.
+        assertThat(as(doctorToken(), get("/hospitals").param("facilityType", "clinic")).getResponse().getStatus())
+            .isEqualTo(403);
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────

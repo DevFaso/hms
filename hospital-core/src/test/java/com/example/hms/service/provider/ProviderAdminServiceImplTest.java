@@ -275,7 +275,7 @@ class ProviderAdminServiceImplTest {
 
         Optional<ProviderStaffMemberDTO> answer = service.deactivateStaff(pharmacist.getId().toString());
 
-        verify(assignmentService).deactivateAssignments(List.of(here.getId()));
+        verify(assignmentService).deactivateProviderStaffAssignments(List.of(here.getId()));
         assertThat(answer).map(ProviderStaffMemberDTO::getUserId).contains(pharmacist.getId());
         // The answer is built from the rows just changed: no second read that could come back empty.
         verify(assignmentRepository, never()).findStaffRowsByHospitalId(any());
@@ -328,8 +328,8 @@ class ProviderAdminServiceImplTest {
 
         assertThat(service.activateStaff(member.getId().toString())).isPresent();
 
-        verify(assignmentService).regenerateAssignmentCodes(List.of(inactive.getId()), true);
-        verify(assignmentService, never()).deactivateAssignments(any());
+        verify(assignmentService).regenerateProviderStaffAssignmentCodes(List.of(inactive.getId()), true);
+        verify(assignmentService, never()).deactivateProviderStaffAssignments(any());
     }
 
     @Test

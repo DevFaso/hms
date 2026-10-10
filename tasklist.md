@@ -4795,12 +4795,21 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   caller, and its per-day dedupe keyed on the offer or the order (a key without
   it under-reports, see `CrossHospitalReachRecorder.recordBatchedReach`). Open.
 - **External providers: the provider admin pages read the caller's assignments
-  more than once per request** (`ProviderSeatResolver` reads them, then
-  `UserAccountAccess` reads them again for the admin rule and the assignment
-  service's scope; the profile GET reads the verification table twice, latest
-  and latest VERIFIED). Small facilities, so cheap today; carry one caller read
-  through the request, as the confinement debt above asks for the live context
-  (found in #840's round-2 review). Open.
+  several times per request, by their own rule** (`ProviderSeatResolver`, then
+  `UserAccountAccess.providerAdministeredFacilities` and `providerStaffScope`,
+  then the member's rows twice), instead of reusing the request's
+  `HospitalContext` (`staffHospitalIds`, `hospitalFacilityTypes`), so the seat
+  can also drift from the confinement's view of the same caller. Derive the seat
+  from the context and carry one caller read through the request (found in
+  #840's rounds 2 and 3). Open.
+- **External providers: the provider profile runs two verification queries**
+  (latest, then latest VERIFIED) where one does: a VERIFIED row, when there is
+  one, is the latest (V180's partial unique index) (found in #840's round-3
+  review). Open.
+- **External providers: `PROVIDER_DIRECTORY_AUTHORITIES` holds no laboratory
+  role**, so lab staff who send work to an external laboratory cannot read the
+  provider directory. Decide with P2-LAB's lab routing (found in #840's round-3
+  review). Open.
 - **External providers: the provider admin pages need ROLE_PROVIDER_ADMIN in the
   token** as well as the live assignment (the assignment service's scope reads
   both), so on Keycloak they answer as unmapped until P1-T11 adds the realm role.

@@ -92,7 +92,7 @@ class ProviderSeatResolverTest {
     }
 
     @Test
-    @DisplayName("the admin bit is UserAccountAccess's rule: it agrees with the rows the assignment service lets them change")
+    @DisplayName("the admin bit is UserAccountAccess's rule: it agrees with the provider staff scope the batch changes use")
     void adminRuleAgreesWithTheAssignmentScope() {
         UserRoleHospitalAssignment staffRowHere = row("ROLE_PHARMACIST", pharmacy, true);
         // Each case: whether the PROVIDER_ADMIN row is live, then whether the token presents the role.
@@ -108,7 +108,7 @@ class ProviderSeatResolverTest {
             boolean seatAdmin = resolver.current().map(ProviderSeat::admin).orElse(false);
 
             assertThat(seatAdmin).as("live=%s presented=%s", liveRow, presented)
-                .isEqualTo(accountAccess.assignmentScope().mayChange(staffRowHere))
+                .isEqualTo(accountAccess.providerStaffScope().mayChange(staffRowHere))
                 .isEqualTo(liveRow && presented);
         }
     }

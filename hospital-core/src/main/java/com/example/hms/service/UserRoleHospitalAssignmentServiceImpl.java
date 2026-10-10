@@ -587,13 +587,12 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     }
 
     /**
-     * {@link #findChangeable} for several rows, with the caller's scope read
-     * once and each holder's shield decided once. Every row is checked before
-     * the caller changes any: one out of scope (or missing) answers exactly as
-     * a missing id.
+     * {@link #findChangeable} for several rows under the given scope, each
+     * holder's shield decided once. Every row is checked before the caller
+     * changes any: one out of scope (or missing) answers exactly as a missing id.
      */
-    private List<UserRoleHospitalAssignment> findAllChangeable(Collection<UUID> ids) {
-        UserAccountAccess.AssignmentScope scope = accountAccess.assignmentScope();
+    private List<UserRoleHospitalAssignment> findAllChangeable(Collection<UUID> ids,
+                                                               UserAccountAccess.AssignmentScope scope) {
         Map<UUID, Boolean> shieldedByHolder = new HashMap<>();
         // toList() is terminal: every row is checked (or the first refusal
         // thrown) before the caller changes anything.
@@ -783,8 +782,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     }
 
     @Override
-    public void regenerateAssignmentCodes(Collection<UUID> ids, boolean resendNotifications) {
-        for (UserRoleHospitalAssignment assignment : findAllChangeable(ids)) {
+    public void regenerateProviderStaffAssignmentCodes(Collection<UUID> ids, boolean resendNotifications) {
+        for (UserRoleHospitalAssignment assignment : findAllChangeable(ids, accountAccess.providerStaffScope())) {
             reissueCode(assignment, resendNotifications);
         }
     }
@@ -1114,8 +1113,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     }
 
     @Override
-    public void deactivateAssignments(Collection<UUID> ids) {
-        List<UserRoleHospitalAssignment> retired = findAllChangeable(ids).stream()
+    public void deactivateProviderStaffAssignments(Collection<UUID> ids) {
+        List<UserRoleHospitalAssignment> retired = findAllChangeable(ids, accountAccess.providerStaffScope()).stream()
             .filter(UserRoleHospitalAssignmentServiceImpl::retire)
             .toList();
         if (!retired.isEmpty()) {

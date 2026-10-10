@@ -42,7 +42,8 @@ import java.util.UUID;
  * The provider admin pages (provider plan US-2, AC-6, §6.5).
  *
  * <p>The staff changes go through the assignment service's own
- * {@code deactivateAssignments} and {@code regenerateAssignmentCodes}, so they
+ * {@code deactivateProviderStaffAssignments} and
+ * {@code regenerateProviderStaffAssignmentCodes}, so they
  * carry exactly the rules a hospital admin's changes carry (the row must be
  * one the caller may change: at a facility they administer, never an admin
  * role's row, never a super-admin's account; the invitation revoked with the
@@ -127,7 +128,7 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
             return Optional.empty();
         }
         // One scope read for the member's rows, all checked before any changes.
-        assignmentService.deactivateAssignments(idsOf(rows.get()));
+        assignmentService.deactivateProviderStaffAssignments(idsOf(rows.get()));
         log.info("[PROVIDER-ADMIN] Staff {} deactivated at facility {} by user {}",
             memberId, seat.facility().getId(), seat.userId());
         // The rows just changed (the same managed instances), never a second read.
@@ -154,7 +155,7 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
             .map(UserRoleHospitalAssignment::getId)
             .toList();
         if (!inactive.isEmpty()) {
-            assignmentService.regenerateAssignmentCodes(inactive, true);
+            assignmentService.regenerateProviderStaffAssignmentCodes(inactive, true);
         }
         log.info("[PROVIDER-ADMIN] Staff {} re-invited at facility {} ({} assignment(s)) by user {}",
             memberId, seat.facility().getId(), inactive.size(), seat.userId());

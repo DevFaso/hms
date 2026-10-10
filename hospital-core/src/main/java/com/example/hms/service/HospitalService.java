@@ -1,6 +1,5 @@
 package com.example.hms.service;
 
-import com.example.hms.enums.FacilityType;
 import com.example.hms.payload.dto.HospitalRequestDTO;
 import com.example.hms.payload.dto.HospitalResponseDTO;
 import com.example.hms.payload.dto.HospitalWithDepartmentsDTO;
@@ -10,18 +9,22 @@ import java.util.UUID;
 
 public interface HospitalService {
     /**
-     * The hospital list. {@code null} or HOSPITAL is the clinical list everyone
-     * the endpoint admits reads; PHARMACY or LABORATORY is the super-admin's
-     * explicit filter (provider plan AC-11), refused to anyone else.
+     * The hospital list. A blank {@code facilityType} or HOSPITAL is the
+     * clinical list everyone the endpoint admits reads; PHARMACY or
+     * LABORATORY (any case) is the super-admin's explicit filter (provider
+     * plan AC-11). Access is decided before the value is parsed.
      *
-     * @throws org.springframework.security.access.AccessDeniedException for a
-     *         provider type asked by anyone but a verified super-admin
+     * @param facilityType the raw request parameter
+     * @throws org.springframework.security.access.AccessDeniedException for
+     *         any other value from anyone but a verified super-admin
+     * @throws com.example.hms.exception.BusinessException for a super-admin's
+     *         unknown type ({@code provider.type.invalid})
      */
     List<HospitalResponseDTO> getAllHospitals(UUID organizationId,
                                               Boolean unassignedOnly,
                                               String city,
                                               String state,
-                                              FacilityType facilityType,
+                                              String facilityType,
                                               Locale locale);
     HospitalResponseDTO getHospitalById(UUID id, Locale locale);
 

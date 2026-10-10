@@ -1,6 +1,5 @@
 package com.example.hms.controller;
 
-import com.example.hms.enums.FacilityType;
 import com.example.hms.payload.dto.HospitalOrganizationAssignmentRequest;
 import com.example.hms.payload.dto.HospitalRequestDTO;
 import com.example.hms.payload.dto.HospitalResponseDTO;
@@ -57,9 +56,9 @@ public class HospitalController {
             Locale locale) {
         // facilityType: HOSPITAL (the default) for everyone; PHARMACY or
         // LABORATORY is the super-admin's explicit filter (provider plan AC-11).
-        // Case-insensitive, with the directory's parser; an unknown type is a 400.
+        // Passed raw: the service decides access before it parses the value.
         return ResponseEntity.ok(hospitalService.getAllHospitals(organizationId, unassignedOnly, city, state,
-                FacilityType.fromParameter(facilityType), locale));
+                facilityType, locale));
     }
 
     @GetMapping("/organization/{organizationId}")

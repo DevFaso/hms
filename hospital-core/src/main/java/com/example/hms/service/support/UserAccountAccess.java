@@ -22,7 +22,6 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -313,31 +312,32 @@ public class UserAccountAccess {
      *       HOSPITAL_ADMIN assignment; to change one, its role must not be an
      *       admin role, because admin roles are granted (and so administered)
      *       by the super-admin only;</li>
-     *   <li>a provider admin: the same, at the provider facilities where they
-     *       hold an ACTIVE PROVIDER_ADMIN assignment (provider plan AC-6), the
-     *       facilities {@link #requireMayGrant} already lets them grant at.
-     *       PROVIDER_ADMIN is an admin role, so a peer's row is never theirs
-     *       to change. The {@code /assignments} endpoints stay unreachable to
-     *       them (the confinement allow-list, and annotations naming no
-     *       provider role); {@code /provider/staff} is their only way in;</li>
-     *   <li>anyone else: nothing.</li>
+     *   <li>anyone else, a provider admin included: nothing. A provider
+     *       admin's own path is {@link #providerStaffScope()}, used by the
+     *       provider staff page only.</li>
      * </ul>
      * Callers answer a row outside the scope exactly as they answer a missing
      * id, so the refusal is not an existence oracle.
      */
     public AssignmentScope assignmentScope() {
         Caller caller = caller();
-        if (caller.superAdmin()) {
-            return AssignmentScope.SUPER_ADMIN_SCOPE;
-        }
-        Set<UUID> administered = administeredHospitals(caller);
-        Set<UUID> providerAdministered = providerAdministeredHospitals(caller);
-        if (providerAdministered.isEmpty()) {
-            return new AssignmentScope(false, administered);
-        }
-        Set<UUID> both = new HashSet<>(administered);
-        both.addAll(providerAdministered);
-        return new AssignmentScope(false, both);
+        return caller.superAdmin()
+            ? AssignmentScope.SUPER_ADMIN_SCOPE
+            : new AssignmentScope(false, administeredHospitals(caller));
+    }
+
+    /**
+     * The rows a provider admin may change from the provider staff page
+     * ({@code /provider/staff}, provider plan AC-6), and nothing else uses
+     * it: the rows at the provider facilities where they administer
+     * ({@link #providerAdministeredFacilities()}), never an admin role's row.
+     * Kept apart from {@link #assignmentScope()} on purpose, so no other
+     * assignment mutator (update, delete, the code paths, the user retire)
+     * accepts a provider admin even if a handler were reachable. A
+     * super-admin gets nothing here: they use {@link #assignmentScope()}.
+     */
+    public AssignmentScope providerStaffScope() {
+        return new AssignmentScope(false, providerAdministeredHospitals(caller()));
     }
 
     /**
@@ -381,7 +381,7 @@ public class UserAccountAccess {
     /**
      * The provider facilities the caller administers: an ACTIVE PROVIDER_ADMIN
      * assignment there, and the role presented. The one rule for "is the
-     * provider admin here": {@link #requireMayGrant} and {@link #assignmentScope}
+     * provider admin here": {@link #requireMayGrant} and {@link #providerStaffScope}
      * grant and change staff at exactly these facilities, and the provider
      * admin pages ({@code ProviderSeatResolver}) open for exactly these.
      */

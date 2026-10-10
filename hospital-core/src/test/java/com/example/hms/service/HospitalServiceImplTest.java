@@ -15,6 +15,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.security.provider.ClinicalHospitals;
 import com.example.hms.utility.RoleValidator;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.enums.FacilityType;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.security.context.HospitalContext;
@@ -176,7 +177,7 @@ class HospitalServiceImplTest {
                 .thenReturn(List.of(pharmacy));
 
         List<HospitalResponseDTO> results = hospitalService.getAllHospitals(
-                null, null, null, null, FacilityType.PHARMACY, Locale.ENGLISH);
+                null, null, null, null, "PHARMACY", Locale.ENGLISH);
 
         assertEquals(1, results.size());
         verify(hospitalRepository, never()).findAllForFilters(any(), any(), any(), any());
@@ -189,11 +190,28 @@ class HospitalServiceImplTest {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any())).thenReturn(List.of());
 
         assertThrows(AccessDeniedException.class, () -> hospitalService.getAllHospitals(
-                null, null, null, null, FacilityType.LABORATORY, Locale.ENGLISH));
-        hospitalService.getAllHospitals(null, null, null, null, FacilityType.HOSPITAL, Locale.ENGLISH);
+                null, null, null, null, "LABORATORY", Locale.ENGLISH));
+        hospitalService.getAllHospitals(null, null, null, null, "HOSPITAL", Locale.ENGLISH);
 
         verify(hospitalRepository, never()).findAllForFiltersByFacilityType(any(), any(), any(), any(), any());
         verify(hospitalRepository).findAllForFilters(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("AC-11: who first, then what: anyone else gets the same 403 for any non-HOSPITAL value, a super-admin a 400 for an unknown one")
+    void getAllHospitals_accessBeforeParsing() {
+        when(hospitalRepository.findAllForFilters(any(), any(), any(), any())).thenReturn(List.of());
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+        for (String value : List.of("PHARMACY", "laboratory", "not-a-type")) {
+            assertThrows(AccessDeniedException.class, () -> hospitalService.getAllHospitals(
+                    null, null, null, null, value, Locale.ENGLISH), value);
+        }
+        hospitalService.getAllHospitals(null, null, null, null, " hospital ", Locale.ENGLISH);
+
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        assertThrows(BusinessException.class, () -> hospitalService.getAllHospitals(
+                null, null, null, null, "not-a-type", Locale.ENGLISH));
+        verify(hospitalRepository, never()).findAllForFiltersByFacilityType(any(), any(), any(), any(), any());
     }
 
     @Test

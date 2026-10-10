@@ -77,19 +77,21 @@ public interface UserRoleHospitalAssignmentService {
     void deactivateAssignment(UUID id);
 
     /**
-     * {@link #deactivateAssignment} for several rows, with the caller's scope
-     * read once: every row must be one the caller may change (the same
-     * guards, a super-admin's account shielded), checked for all of them
-     * before any is changed. A row out of scope answers as a missing id and
-     * nothing is changed.
+     * The provider staff page's deactivation ({@code /provider/staff}): the
+     * rows are retired as {@link #deactivateAssignment} retires one, under the
+     * caller's PROVIDER STAFF scope ({@code UserAccountAccess.providerStaffScope},
+     * never the general one), read once; every row is checked, a super-admin's
+     * account shielded, before any is changed. A row out of scope answers as a
+     * missing id and nothing is changed.
      */
-    void deactivateAssignments(Collection<UUID> ids);
+    void deactivateProviderStaffAssignments(Collection<UUID> ids);
 
     /**
-     * {@link #regenerateAssignmentCode} for several rows, under the same
-     * all-checked-first scope rule as {@link #deactivateAssignments}.
+     * The provider staff page's re-invitation: {@link #regenerateAssignmentCode}
+     * for several rows, under the same provider staff scope and
+     * all-checked-first rule as {@link #deactivateProviderStaffAssignments}.
      */
-    void regenerateAssignmentCodes(Collection<UUID> ids, boolean resendNotifications);
+    void regenerateProviderStaffAssignmentCodes(Collection<UUID> ids, boolean resendNotifications);
 
     /**
      * Retire all assignments of a specific user by DEACTIVATING them. The rows
