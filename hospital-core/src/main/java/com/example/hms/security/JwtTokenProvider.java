@@ -363,6 +363,7 @@ public class JwtTokenProvider {
         Date expiryDate = new Date(now.getTime() + refreshTokenExpirationMs);
 
         return Jwts.builder()
+            .claim(TokenUse.CLAIM, TokenUse.REFRESH)
             .id(UUID.randomUUID().toString())
             .subject(userDetails.getUsername())
             .claim(ROLES_CLAIM, roles)
@@ -388,6 +389,7 @@ public class JwtTokenProvider {
         Date expiryDate = new Date(now.getTime() + refreshTokenExpirationMs);
 
         return Jwts.builder()
+            .claim(TokenUse.CLAIM, TokenUse.REFRESH)
             .id(UUID.randomUUID().toString())
             .subject(descriptor.username())
             .claim(ROLES_CLAIM, roles)
@@ -408,7 +410,7 @@ public class JwtTokenProvider {
         return Jwts.builder()
                 .id(UUID.randomUUID().toString())
                 .subject(username)
-                .claim("purpose", "mfa_challenge")
+                .claim(MfaChallengeScope.PURPOSE_CLAIM, MfaChallengeScope.PURPOSE)
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(signingKey)
@@ -423,7 +425,7 @@ public class JwtTokenProvider {
             Claims claims = jwtParser()
                     .parseSignedClaims(token)
                     .getPayload();
-            return "mfa_challenge".equals(claims.get("purpose", String.class));
+            return MfaChallengeScope.PURPOSE.equals(claims.get(MfaChallengeScope.PURPOSE_CLAIM, String.class));
         } catch (Exception e) {
             return false;
         }
@@ -581,6 +583,12 @@ public class JwtTokenProvider {
         List<SimpleGrantedAuthority> authorities = RoleExpansion.expand(normalizedRoles).stream()
             .map(SimpleGrantedAuthority::new)
             .toList();
+        // The MFA challenge token proves the password only. It holds one
+        // marker authority and no role, whatever else it claims, so the
+        // filter can confine it to the MFA step (MfaChallengeScope).
+        if (MfaChallengeScope.PURPOSE.equals(claims.get(MfaChallengeScope.PURPOSE_CLAIM))) {
+            authorities = List.of(new SimpleGrantedAuthority(MfaChallengeScope.AUTHORITY));
+        }
 
         HospitalUserDetails userDetails = userDetailsService.loadUserByUsername(username);
 
@@ -619,6 +627,24 @@ public class JwtTokenProvider {
             return true;
         } catch (JwtException | IllegalArgumentException ex) {
             log.error("❌ JWT validation error: {}", ex.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * The token is a refresh token this issuer minted: signed, unexpired and
+     * marked {@code token_use=refresh}. An access, impersonation or MFA
+     * challenge token is not, though the same key signs it, and neither is a
+     * refresh token minted before the mark existed.
+     */
+    public boolean isRefreshToken(String token) {
+        if (!StringUtils.hasText(token)) {
+            return false;
+        }
+        try {
+            return TokenUse.REFRESH.equals(jwtParser().parseSignedClaims(token).getPayload()
+                .get(TokenUse.CLAIM, String.class));
+        } catch (JwtException | IllegalArgumentException ex) {
             return false;
         }
     }

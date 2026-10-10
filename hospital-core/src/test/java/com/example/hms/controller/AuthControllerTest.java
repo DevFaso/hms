@@ -684,8 +684,8 @@ class AuthControllerTest {
 
     @Test
     void refreshToken_invalidToken_returns401() throws Exception {
-        // validateToken() returns false → token invalid/expired → 401
-        when(jwtTokenProvider.validateToken("bad.token.here")).thenReturn(false);
+        // isRefreshToken() returns false → token invalid/expired → 401
+        when(jwtTokenProvider.isRefreshToken("bad.token.here")).thenReturn(false);
 
         mockMvc.perform(post("/auth/token/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -698,7 +698,7 @@ class AuthControllerTest {
     @Test
     void refreshToken_userNotFound_returns401() throws Exception {
         // Valid token but no matching user → 401
-        when(jwtTokenProvider.validateToken("valid.refresh.token")).thenReturn(true);
+        when(jwtTokenProvider.isRefreshToken("valid.refresh.token")).thenReturn(true);
         when(jwtTokenProvider.getUsernameFromJWT("valid.refresh.token"))
                 .thenReturn("ghost@example.com");
         when(userRepository.findByUsername("ghost@example.com"))
@@ -720,7 +720,7 @@ class AuthControllerTest {
         // Override @Builder.Default isActive=true → use toBuilder
         inactiveUser = inactiveUser.toBuilder().isActive(false).build();
 
-        when(jwtTokenProvider.validateToken("valid.refresh.token")).thenReturn(true);
+        when(jwtTokenProvider.isRefreshToken("valid.refresh.token")).thenReturn(true);
         when(jwtTokenProvider.getUsernameFromJWT("valid.refresh.token"))
                 .thenReturn("inactive@example.com");
         when(userRepository.findByUsername("inactive@example.com"))
@@ -758,7 +758,7 @@ class AuthControllerTest {
         long accessExp  = nowMs + 86_400_000L;   // +24 h
         long refreshExp = nowMs + 7 * 86_400_000L; // +7 d
 
-        when(jwtTokenProvider.validateToken("old.refresh.token")).thenReturn(true);
+        when(jwtTokenProvider.isRefreshToken("old.refresh.token")).thenReturn(true);
         when(jwtTokenProvider.getUsernameFromJWT("old.refresh.token"))
                 .thenReturn("doctor@example.com");
         when(userRepository.findByUsername("doctor@example.com"))
@@ -821,7 +821,7 @@ class AuthControllerTest {
         long nowMs = System.currentTimeMillis();
         when(refreshTokenCookieService.read(org.mockito.ArgumentMatchers.any()))
                 .thenReturn("cookie.refresh.token");
-        when(jwtTokenProvider.validateToken("cookie.refresh.token")).thenReturn(true);
+        when(jwtTokenProvider.isRefreshToken("cookie.refresh.token")).thenReturn(true);
         when(jwtTokenProvider.getUsernameFromJWT("cookie.refresh.token"))
                 .thenReturn("doctor@example.com");
         when(userRepository.findByUsername("doctor@example.com"))
@@ -851,7 +851,7 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.accessToken").value("new.access.token"));
 
         // The cookie value, not the body value, must have been validated
-        org.mockito.Mockito.verify(jwtTokenProvider).validateToken("cookie.refresh.token");
+        org.mockito.Mockito.verify(jwtTokenProvider).isRefreshToken("cookie.refresh.token");
         // Rotation must have written a fresh cookie back to the response
         org.mockito.Mockito.verify(refreshTokenCookieService)
                 .write(org.mockito.ArgumentMatchers.any(),

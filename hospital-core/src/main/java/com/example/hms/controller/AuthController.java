@@ -666,7 +666,8 @@ public class AuthController {
      *
      * <p>Security rationale: the refresh token is signed with the same HMAC-SHA secret and
      * carries its own {@code exp} claim, so a tampered or expired refresh token is rejected
-     * by {@link JwtTokenProvider#validateToken}.
+     * by {@link JwtTokenProvider#isRefreshToken}, which also refuses every other token the
+     * same key signs (access, impersonation, MFA challenge).
      */
     @WriteAudited(skip = true, reason = "emits LOGOUT / TOKEN_REFRESH itself, or is a check that mutates nothing")
     @PostMapping("/token/refresh")
@@ -702,7 +703,11 @@ public class AuthController {
                     .body(new MessageResponse("Refresh token is required."));
         }
 
-        if (!jwtTokenProvider.validateToken(refreshToken)) {
+        // A refresh token, and nothing else the same key signs: the MFA
+        // challenge token would mint a session past MFA, an impersonation
+        // token an ordinary session that outlives the impersonation, and an
+        // access token a session that never ends.
+        if (!jwtTokenProvider.isRefreshToken(refreshToken)) {
             log.warn("🔄 [REFRESH] Invalid or expired refresh token");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse("Refresh token is invalid or has expired. Please log in again."));
@@ -1103,13 +1108,21 @@ public class AuthController {
         return ResponseEntity.ok(dto);
     }
 
+    /**
+     * Rewrites the caller's MFA records, which can disable or delete a verified
+     * authenticator: once one is verified, that takes a current code from it in
+     * {@code X-Mfa-Token} (the step-up {@link MfaService#requireStepUpToReplaceAuthenticator} owns).
+     */
     @PutMapping("/credentials/mfa")
     public ResponseEntity<List<UserMfaEnrollmentDTO>> updateMfaEnrollments(
-            @Valid @RequestBody List<UserMfaEnrollmentRequestDTO> payload) {
+            @Valid @RequestBody List<UserMfaEnrollmentRequestDTO> payload,
+            @RequestHeader(value = "X-Mfa-Token", required = false) String stepUpCode) {
         UUID userId = resolveCurrentUserId();
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
+        mfaService.requireStepUpToReplaceAuthenticator(
+                userId, SecurityContextHolder.getContext().getAuthentication(), stepUpCode);
         List<UserMfaEnrollmentDTO> response = userCredentialLifecycleService.upsertMfaEnrollments(userId, payload);
         return ResponseEntity.ok(response);
     }

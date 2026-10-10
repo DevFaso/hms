@@ -1,16 +1,24 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.MfaMethodType;
+import com.example.hms.exception.UnauthorizedException;
 import com.example.hms.model.MfaBackupCode;
 import com.example.hms.model.User;
 import com.example.hms.model.UserMfaEnrollment;
 import com.example.hms.repository.MfaBackupCodeRepository;
 import com.example.hms.repository.UserMfaEnrollmentRepository;
+import com.example.hms.security.MfaChallengeScope;
+import dev.samstevens.totp.code.DefaultCodeGenerator;
+import dev.samstevens.totp.code.HashingAlgorithm;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -20,6 +28,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -28,6 +37,7 @@ class MfaServiceTest {
 
     @Mock private UserMfaEnrollmentRepository enrollmentRepository;
     @Mock private MfaBackupCodeRepository backupCodeRepository;
+    @Mock private AuditEventLogService auditEventLogService;
 
     private PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private MfaService mfaService;
@@ -37,7 +47,7 @@ class MfaServiceTest {
 
     @BeforeEach
     void setUp() {
-        mfaService = new MfaService(enrollmentRepository, backupCodeRepository, passwordEncoder);
+        mfaService = new MfaService(enrollmentRepository, backupCodeRepository, passwordEncoder, auditEventLogService);
         userId = UUID.randomUUID();
         testUser = User.builder().username("test@example.com").build();
         ReflectionTestUtils.setField(testUser, "id", userId);
@@ -261,5 +271,121 @@ class MfaServiceTest {
         assertThat(codes).hasSize(10);
         verify(backupCodeRepository).deleteAllByUserId(userId);
         verify(backupCodeRepository, times(10)).save(any(MfaBackupCode.class));
+    }
+
+    // ── Replacing a verified authenticator (the step-up) ──
+
+    private static final String SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
+
+    private void verifiedAuthenticator() {
+        when(enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP))
+                .thenReturn(Optional.of(UserMfaEnrollment.builder()
+                        .user(testUser).method(MfaMethodType.TOTP).totpSecret(SECRET)
+                        .verified(true).enabled(true).build()));
+    }
+
+    private static String currentCode() throws Exception {
+        return new DefaultCodeGenerator(HashingAlgorithm.SHA1, 6)
+                .generate(SECRET, System.currentTimeMillis() / 1000 / 30);
+    }
+
+    private static Authentication fullSession() {
+        return new UsernamePasswordAuthenticationToken(
+                "test@example.com", null,
+                AuthorityUtils.createAuthorityList("ROLE_HOSPITAL_ADMIN"));
+    }
+
+    private static Authentication challengeSession() {
+        return new UsernamePasswordAuthenticationToken(
+                "test@example.com", null,
+                AuthorityUtils.createAuthorityList(
+                        MfaChallengeScope.AUTHORITY));
+    }
+
+    @Test
+    void stepUp_nothingVerifiedYet_firstEnrolmentPassesEvenFromTheChallenge() {
+        when(enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP))
+                .thenReturn(Optional.empty());
+
+        mfaService.requireStepUpToReplaceAuthenticator(userId, challengeSession(), null);
+
+        verifyNoInteractions(auditEventLogService);
+    }
+
+    @Test
+    void stepUp_firstEnrolmentLeftHalfDone_canStillBeRestartedFromTheChallenge() {
+        when(enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP))
+                .thenReturn(Optional.of(UserMfaEnrollment.builder()
+                        .user(testUser).method(MfaMethodType.TOTP).totpSecret(SECRET)
+                        .verified(false).enabled(false).build()));
+
+        mfaService.requireStepUpToReplaceAuthenticator(userId, challengeSession(), null);
+
+        verifyNoInteractions(auditEventLogService);
+    }
+
+    @Test
+    void stepUp_reEnrolmentLeftHalfDone_staysProtected() throws Exception {
+        // enrollTotp unverified the confirmed row and kept lastVerifiedAt.
+        when(enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP))
+                .thenReturn(Optional.of(UserMfaEnrollment.builder()
+                        .user(testUser).method(MfaMethodType.TOTP).totpSecret(SECRET)
+                        .verified(false).enabled(false)
+                        .lastVerifiedAt(java.time.LocalDateTime.now().minusDays(3)).build()));
+        String code = currentCode();
+
+        assertThatThrownBy(() ->
+                mfaService.requireStepUpToReplaceAuthenticator(userId, challengeSession(), null))
+                .isInstanceOf(UnauthorizedException.class);
+        assertThatThrownBy(() ->
+                mfaService.requireStepUpToReplaceAuthenticator(userId, fullSession(), code))
+                .isInstanceOf(UnauthorizedException.class);
+        assertThat(mfaService.hasConfirmedAuthenticator(userId)).isTrue();
+        assertThat(mfaService.isMfaEnabled(userId)).isFalse();
+    }
+
+    @Test
+    void stepUp_challengeSession_isRefusedEvenWithAValidCode() throws Exception {
+        verifiedAuthenticator();
+        String code = currentCode();
+
+        assertThatThrownBy(() ->
+                mfaService.requireStepUpToReplaceAuthenticator(userId, challengeSession(), code))
+                .isInstanceOf(UnauthorizedException.class);
+
+        verify(enrollmentRepository, never()).save(any());
+        verify(auditEventLogService).logEvent(argThat(e ->
+                e.getEventType() == AuditEventType.MFA_FAILURE
+                        && e.getEventDescription().contains("challenge")
+                        && !e.getEventDescription().contains(code)));
+    }
+
+    @Test
+    void stepUp_fullSessionWithoutACode_isRefused() {
+        verifiedAuthenticator();
+
+        assertThatThrownBy(() ->
+                mfaService.requireStepUpToReplaceAuthenticator(userId, fullSession(), " "))
+                .isInstanceOf(UnauthorizedException.class);
+        verify(auditEventLogService).logEvent(any());
+    }
+
+    @Test
+    void stepUp_fullSessionWithAWrongCode_isRefused() {
+        verifiedAuthenticator();
+
+        assertThatThrownBy(() ->
+                mfaService.requireStepUpToReplaceAuthenticator(userId, fullSession(), "ABCDEF"))
+                .isInstanceOf(UnauthorizedException.class);
+        verify(auditEventLogService).logEvent(any());
+    }
+
+    @Test
+    void stepUp_fullSessionWithACurrentCode_passes() throws Exception {
+        verifiedAuthenticator();
+
+        mfaService.requireStepUpToReplaceAuthenticator(userId, fullSession(), currentCode());
+
+        verifyNoInteractions(auditEventLogService);
     }
 }

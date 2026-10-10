@@ -1,10 +1,15 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.MfaMethodType;
+import com.example.hms.exception.UnauthorizedException;
 import com.example.hms.model.MfaBackupCode;
 import com.example.hms.model.UserMfaEnrollment;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.MfaBackupCodeRepository;
 import com.example.hms.repository.UserMfaEnrollmentRepository;
+import com.example.hms.security.MfaChallengeScope;
 import dev.samstevens.totp.code.CodeGenerator;
 import dev.samstevens.totp.code.CodeVerifier;
 import dev.samstevens.totp.code.DefaultCodeGenerator;
@@ -16,9 +21,11 @@ import dev.samstevens.totp.secret.SecretGenerator;
 import dev.samstevens.totp.time.SystemTimeProvider;
 import dev.samstevens.totp.time.TimeProvider;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
@@ -44,15 +51,18 @@ public class MfaService {
     private final UserMfaEnrollmentRepository enrollmentRepository;
     private final MfaBackupCodeRepository backupCodeRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuditEventLogService auditEventLogService;
     private final SecretGenerator secretGenerator = new DefaultSecretGenerator(32);
     private final CodeVerifier codeVerifier;
 
     public MfaService(UserMfaEnrollmentRepository enrollmentRepository,
                       MfaBackupCodeRepository backupCodeRepository,
-                      PasswordEncoder passwordEncoder) {
+                      PasswordEncoder passwordEncoder,
+                      AuditEventLogService auditEventLogService) {
         this.enrollmentRepository = enrollmentRepository;
         this.backupCodeRepository = backupCodeRepository;
         this.passwordEncoder = passwordEncoder;
+        this.auditEventLogService = auditEventLogService;
 
         TimeProvider timeProvider = new SystemTimeProvider();
         CodeGenerator codeGenerator = new DefaultCodeGenerator(HashingAlgorithm.SHA1, 6);
@@ -160,6 +170,55 @@ public class MfaService {
         return valid;
     }
 
+    // ───── Replacing a verified authenticator ─────
+
+    /**
+     * Guards everything that replaces or removes the user's VERIFIED
+     * authenticator: re-enrolment ({@code POST /auth/mfa/enroll} resets it)
+     * and {@code PUT /auth/credentials/mfa}.
+     *
+     * <p>Until an authenticator has been confirmed there is nothing to guard:
+     * that is the first enrolment, which the login's MFA challenge token may
+     * start, and start again if the user leaves it half done. Once one has
+     * been confirmed ({@link #hasConfirmedAuthenticator}) the password alone
+     * must not swap it for another device, so the caller needs a full session
+     * (never the challenge token, see {@link MfaChallengeScope}) AND a current
+     * code from that authenticator in {@code X-Mfa-Token}: the step-up the
+     * tenant lifecycle, emergency controls and impersonation start already
+     * ask for. A session alone is not enough, because a user who holds a role
+     * that skips MFA signs in with the password only.
+     *
+     * @throws UnauthorizedException (401) when either is missing; the refusal is audited
+     */
+    public void requireStepUpToReplaceAuthenticator(UUID userId, Authentication caller, String stepUpCode) {
+        if (!hasConfirmedAuthenticator(userId)) {
+            return;
+        }
+        String refusal;
+        if (MfaChallengeScope.isChallengeSession(caller)) {
+            refusal = "MFA challenge token, not a full session";
+        } else if (!StringUtils.hasText(stepUpCode)) {
+            refusal = "no X-Mfa-Token supplied";
+        } else if (!verifyCode(userId, stepUpCode.trim())) {
+            refusal = "X-Mfa-Token did not verify";
+        } else {
+            return;
+        }
+        try {
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .userId(userId)
+                    .userName(caller == null ? null : caller.getName())
+                    .eventType(AuditEventType.MFA_FAILURE)
+                    .status(AuditStatus.FAILURE)
+                    .eventDescription("Replacing the verified authenticator refused: " + refusal)
+                    .build());
+        } catch (RuntimeException ex) {
+            log.error("[MFA] Failed to audit a refused authenticator replacement for user={}", userId, ex);
+        }
+        throw new UnauthorizedException(
+                "mfa_required: replacing a verified authenticator needs a current code in X-Mfa-Token");
+    }
+
     // ───── Verification (login flow) ─────
 
     /**
@@ -212,6 +271,21 @@ public class MfaService {
         Optional<UserMfaEnrollment> opt =
                 enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP);
         return opt.isPresent() && opt.get().isVerified() && opt.get().isEnabled();
+    }
+
+    /**
+     * A TOTP authenticator has been confirmed for this user, even if a
+     * re-enrolment since has left it pending ({@link #enrollTotp} unverifies
+     * the row but keeps {@code lastVerifiedAt}). That is the state to protect:
+     * keyed on "verified" alone, a re-enrolment left half done would hand the
+     * account back to the first-enrolment path, open to the password alone.
+     * An enrolment that was never confirmed protects nothing yet. An admin
+     * reset deletes the rows, which reopens the first enrolment.
+     */
+    public boolean hasConfirmedAuthenticator(UUID userId) {
+        return enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP)
+                .map(enrollment -> enrollment.isVerified() || enrollment.getLastVerifiedAt() != null)
+                .orElse(false);
     }
 
     /**

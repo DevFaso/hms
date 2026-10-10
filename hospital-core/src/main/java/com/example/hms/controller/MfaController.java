@@ -29,6 +29,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -85,11 +86,27 @@ public class MfaController {
     }
 
     /**
+     * {@link #resolveFullyAuthenticatedUser}, for a caller about to enrol. A
+     * first enrolment needs nothing more (the login's MFA challenge token may
+     * start it); replacing a verified authenticator needs the step-up, which
+     * {@link MfaService#requireStepUpToReplaceAuthenticator} owns.
+     */
+    private Optional<User> resolveEnrollingUser(UserDetails principal, String stepUpCode) {
+        Optional<User> user = resolveFullyAuthenticatedUser(principal);
+        var caller = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        user.ifPresent(u -> mfaService.requireStepUpToReplaceAuthenticator(u.getId(), caller, stepUpCode));
+        return user;
+    }
+
+    /**
      * Start TOTP enrollment — returns secret, otpauth URI, and backup codes.
+     * Enrolling again resets the authenticator, so once one is verified this
+     * takes a current code from it in {@code X-Mfa-Token}.
      */
     @PostMapping("/enroll")
-    public ResponseEntity<Object> enroll(@AuthenticationPrincipal UserDetails principal) {
-        Optional<User> authenticated = resolveFullyAuthenticatedUser(principal);
+    public ResponseEntity<Object> enroll(@AuthenticationPrincipal UserDetails principal,
+                                         @RequestHeader(value = "X-Mfa-Token", required = false) String stepUpCode) {
+        Optional<User> authenticated = resolveEnrollingUser(principal, stepUpCode);
         if (authenticated.isEmpty()) return notFullyAuthenticated();
         User user = authenticated.get();
 
