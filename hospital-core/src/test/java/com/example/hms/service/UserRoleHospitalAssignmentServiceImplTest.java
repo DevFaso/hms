@@ -546,7 +546,8 @@ class UserRoleHospitalAssignmentServiceImplTest {
         when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
         when(assignmentRepository.findById(outOfScope)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.deactivateProviderStaffAssignments(List.of(id, outOfScope)))
+        List<UUID> oneOutOfScope = List.of(id, outOfScope);
+        assertThatThrownBy(() -> service.deactivateProviderStaffAssignments(oneOutOfScope))
             .isInstanceOf(ResourceNotFoundException.class);
         assertThat(assignment.getActive()).isTrue();
         verify(assignmentRepository, never()).saveAll(any());
@@ -584,7 +585,8 @@ class UserRoleHospitalAssignmentServiceImplTest {
         when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
 
         assertThatThrownBy(() -> service.getAssignmentById(id)).isInstanceOf(ResourceNotFoundException.class);
-        assertThatThrownBy(() -> service.updateAssignment(id, new UserRoleHospitalAssignmentRequestDTO()))
+        UserRoleHospitalAssignmentRequestDTO change = new UserRoleHospitalAssignmentRequestDTO();
+        assertThatThrownBy(() -> service.updateAssignment(id, change))
             .isInstanceOf(ResourceNotFoundException.class);
         assertThatThrownBy(() -> service.deleteAssignment(id)).isInstanceOf(ResourceNotFoundException.class);
         assertThatThrownBy(() -> service.deactivateAssignment(id)).isInstanceOf(ResourceNotFoundException.class);
