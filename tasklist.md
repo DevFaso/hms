@@ -4531,6 +4531,14 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   `angular.json` or the tsconfigs; `platform-browser`'s peer on animations
   is optional), so the replacement turned out to be a removal.
 
+- **No check that the pinned Angular framework packages agree (2026-10-10).**
+  Twice (#801, #846) a Dependabot group PR left one framework `@angular/*`
+  a patch behind `@angular/core`, and it only surfaced as an ERESOLVE in
+  `npm ci`. A small script in the portal gate that fails when the
+  exact-pinned framework entries in `package.json` differ would flag it on
+  the Dependabot PR itself (the CLI line - build, cli, ssr - is a caret
+  range on its own version, see `.github/dependabot.yml`).
+
 - **Push notifications have app code and no backend (2026-10-04).** #791
   shipped dormant push registration on both apps (FCM initialised only when
   four BuildConfig values exist; APNs registration on iOS), but V176, the

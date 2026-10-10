@@ -27,6 +27,11 @@ updates:
     open-pull-requests-limit: 5
     groups:
       # The framework proper: lockstep peer deps, exact pins. Never split.
+      # Two release lines share this group: the framework (core, common,
+      # compiler, compiler-cli, forms, router, platform-*) is pinned exactly
+      # at one version; the CLI line (build, cli, ssr) is a caret range one
+      # patch ahead, because @angular/build peers on @angular/ssr at its own
+      # version - pinning ssr alone breaks the next build bump (#854).
       # zone.js rides with it: each Angular major peer-requires a zone.js
       # minor (20 -> 0.15, 21+ -> 0.16), so a zone.js bump in the minor group
       # failed npm ci against the pinned core on PR #638 (2026-09-13).
