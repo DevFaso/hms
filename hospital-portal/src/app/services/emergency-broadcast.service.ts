@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, effect, inject, signal, untracked } from '@angular/core';
 import { Client, IFrame, IMessage, StompConfig, StompSubscription } from '@stomp/stompjs';
 
 import { AuthService } from '../auth/auth.service';
@@ -26,6 +26,11 @@ const SUBSCRIPTION_GRACE_MS = 2_000;
  * (`StompRefusalErrorHandler.ACCESS_DENIED` on the server).
  */
 export const STOMP_ACCESS_DENIED = 'access-denied';
+/**
+ * The ERROR frame's `message` header when the server could not resolve the
+ * caller just now (`StompRefusalErrorHandler.UNAVAILABLE`): retried with backoff.
+ */
+export const STOMP_UNAVAILABLE = 'unavailable';
 
 /**
  * MVP-7b — STOMP consumer for the emergency-broadcast topic the
@@ -40,7 +45,10 @@ export const STOMP_ACCESS_DENIED = 'access-denied';
  *
  * <p>Refusal: a user the server refuses the topic (a provider user) gets an
  * ERROR frame saying {@link STOMP_ACCESS_DENIED}; the service then stops for
- * that token instead of reconnecting. The backoff counter is reset once a
+ * that token instead of reconnecting, and a NEW token (a refresh, another
+ * sign-in) re-arms it. {@link STOMP_UNAVAILABLE} (the server could not
+ * resolve the caller just now) is retried with backoff, as is any other
+ * failure; once the backoff gives up, a new token re-arms it too. The backoff counter is reset once a
  * subscription has stood {@link SUBSCRIPTION_GRACE_MS} without a refusal, so a
  * flaky link keeps reconnecting, but never by a connect whose subscription was
  * then refused.
@@ -61,28 +69,59 @@ export class EmergencyBroadcastService {
   private stableTimer: ReturnType<typeof setTimeout> | null = null;
   /** The token the server refused the topic to: no further attempt with it. */
   private refusedToken: string | null = null;
+  /** The shell asked for the socket (connect) and has not released it (disconnect). */
+  private wanted = false;
+  /** Nothing is running: no client, no pending ticket, no reconnect timer. */
+  private idle = true;
+
+  constructor() {
+    // A new token re-arms a socket the shell still wants but that stopped (a
+    // refusal for the previous token, or a backoff that gave up).
+    effect(() => {
+      this.auth.tokenVersion();
+      untracked(() => {
+        if (this.wanted && this.idle) this.start();
+      });
+    });
+  }
 
   connect(): void {
+    this.wanted = true;
+    this.start();
+  }
+
+  disconnect(): void {
+    this.wanted = false;
+    this.teardown();
+  }
+
+  private start(): void {
     if (typeof globalThis === 'undefined' || !globalThis.WebSocket) return;
     const token = this.auth.getToken();
     if (!token || this.auth.isExpired(token)) return;
     if (token === this.refusedToken) return;
     if (this.stompClient?.active) return;
 
+    this.idle = false;
     const generation = ++this.connectGeneration;
     this.http.post<{ ticket: string }>('/auth/ws-ticket', {}).subscribe({
       next: (res) => {
         if (generation !== this.connectGeneration) return;
         const ticket = res?.ticket;
-        if (!ticket) return;
+        if (!ticket) {
+          this.scheduleReconnect(generation);
+          return;
+        }
         this.activate(ticket, generation);
       },
       error: () => this.scheduleReconnect(generation),
     });
   }
 
-  disconnect(): void {
+  /** Stop everything; whether the shell still wants the socket is untouched. */
+  private teardown(): void {
     this.connectGeneration++;
+    this.idle = true;
     if (this.reconnectTimer !== null) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -114,7 +153,7 @@ export class EmergencyBroadcastService {
 
           beforeConnect: () => {
             if (this.auth.isExpired()) {
-              this.disconnect();
+              this.teardown();
               throw new Error('Token expired');
             }
           },
@@ -132,6 +171,8 @@ export class EmergencyBroadcastService {
           },
 
           onDisconnect: () => this.scheduleReconnect(generation),
+          // access-denied: refused for good for this token. unavailable (and
+          // any other failure): retried with backoff.
           onStompError: (frame: IFrame) =>
             frame.headers?.['message'] === STOMP_ACCESS_DENIED
               ? this.stopRefused(generation)
@@ -141,7 +182,8 @@ export class EmergencyBroadcastService {
         this.stompClient.activate();
       })
       .catch(() => {
-        /* sockjs-client failed to load — banner stays empty until next connect attempt */
+        // sockjs-client failed to load: retried with backoff like any failure.
+        this.scheduleReconnect(generation);
       });
   }
 
@@ -159,7 +201,7 @@ export class EmergencyBroadcastService {
   private stopRefused(generation: number): void {
     if (generation !== this.connectGeneration) return;
     this.refusedToken = this.auth.getToken();
-    this.disconnect();
+    this.teardown();
   }
 
   /** Forget earlier failures once this subscription has stood the grace without a refusal. */
@@ -182,7 +224,7 @@ export class EmergencyBroadcastService {
     if (generation !== this.connectGeneration) return;
     this.clearStableTimer();
     if (this.auth.isExpired() || this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-      this.disconnect();
+      this.teardown();
       return;
     }
     this.reconnectAttempts++;
@@ -197,7 +239,7 @@ export class EmergencyBroadcastService {
       this.reconnectTimer = null;
       this.stompClient?.deactivate().catch(() => undefined);
       this.stompClient = null;
-      this.connect();
+      this.start();
     }, delay);
   }
 }

@@ -4,8 +4,8 @@ import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.provider.ProviderCallerResolver;
 import com.example.hms.security.provider.ProviderConfinementPolicy;
 import java.security.Principal;
-import java.util.Set;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -20,6 +20,7 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.controller.NotificationWebSocketController;
 import com.example.hms.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +29,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-import static com.example.hms.config.SecurityConstants.ROLE_PATIENT;
 
 @Service
 @RequiredArgsConstructor
@@ -134,9 +134,10 @@ public class NotificationServiceImpl implements NotificationService {
 
     /**
      * The caller's LIVE context, resolved from the principal as the context
-     * filters resolve it: a role other than PATIENT (a verified super-admin
-     * included), and not confined to a provider facility. A caller that
-     * cannot be resolved, or links no local account, is not.
+     * filters resolve it, judged by the one rule
+     * ({@link ProviderConfinementPolicy#isUnconfinedStaff}). A database outage
+     * propagates (a 5xx, retryable), never "not staff"; any other failure to
+     * resolve the caller means not staff.
      */
     private boolean isUnconfinedStaff(Principal caller) {
         ProviderCallerResolver resolver = callerResolverProvider.getIfAvailable();
@@ -146,16 +147,13 @@ public class NotificationServiceImpl implements NotificationService {
         HospitalContext context;
         try {
             context = resolver.liveContext(caller);
-        } catch (RuntimeException unavailable) {
-            log.warn("Live context unavailable ({}); broadcast left unread", unavailable.getClass().getSimpleName());
+        } catch (DataAccessException | CannotCreateTransactionException databaseDown) {
+            throw databaseDown;
+        } catch (RuntimeException unresolvable) {
+            log.warn("Caller unresolvable ({}); broadcast left unread", unresolvable.getClass().getSimpleName());
             return false;
         }
-        if (context == null || context.getPrincipalUserId() == null
-            || !ProviderConfinementPolicy.providerTypes(context).isEmpty()) {
-            return false;
-        }
-        Set<String> roles = context.getAssignedRoles();
-        return roles != null && roles.stream().anyMatch(role -> !ROLE_PATIENT.equals(role));
+        return ProviderConfinementPolicy.isUnconfinedStaff(context);
     }
 
     /** No recipient: sent to everyone on the broadcast topic (as {@code NotificationWebSocketController} sends it). */

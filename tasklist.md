@@ -4749,6 +4749,10 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 
 - **External providers: open STOMP subscriptions (the tracker, the broadcasts) are not re-evaluated after a revocation or a move to a provider facility** until the client reconnects; needs an outbound-channel check or a forced disconnect on assignment change. Acceptable before any provider is verified; fix before P2 (found in #835's round-10 review). Open.
 
+- **External providers: the clinical-only rule lives at ~70 `findClinicalById` call sites**; a repository-level filter (a Hibernate `@Filter`, or a clinical `findById` default with an explicit any-type finder) would hold it in one place (found in #835's round-11 review). Open.
+
+- **External providers: the session bootstrap builds a whole live context for one boolean** (`providerUser`); compute the provider types from the assignments it already holds (found in #835's round-11 review). Open.
+
 ## Open clinical questions — kept open on purpose, not forgotten
 
 These are questions only a clinician can settle. None of them blocks anything:

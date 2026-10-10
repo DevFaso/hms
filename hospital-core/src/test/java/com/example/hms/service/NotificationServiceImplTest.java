@@ -28,6 +28,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -307,6 +308,18 @@ class NotificationServiceImplTest {
                 assertThat(service.markAsRead(notificationId, caller, true)).isEqualTo(ReadOutcome.MARKED);
                 assertThat(broadcast.isRead()).isTrue();
             }
+        }
+
+        @Test
+        @DisplayName("a database outage while deciding a broadcast propagates (a 5xx), never 'not staff'")
+        void databaseOutagePropagates() {
+            when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(broadcast(null)));
+            when(callerResolverProvider.getIfAvailable()).thenReturn(callerResolver);
+            when(callerResolver.liveContext(caller)).thenThrow(new DataAccessResourceFailureException("db down"));
+
+            assertThatThrownBy(() -> service.markAsRead(notificationId, caller, true))
+                    .isInstanceOf(DataAccessResourceFailureException.class);
+            verify(notificationRepository, never()).save(any());
         }
 
         @Test

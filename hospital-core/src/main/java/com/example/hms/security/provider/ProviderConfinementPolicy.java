@@ -118,6 +118,40 @@ public class ProviderConfinementPolicy implements SmartInitializingSingleton {
         return context.getProviderFacilityTypes();
     }
 
+    /**
+     * THE confinement rule, for every caller of it (the confinement filter,
+     * the STOMP interceptor, the session bootstrap, the notification service):
+     * the caller's live context holds a provider facility type and is not a
+     * verified super-admin. A context that links no local account holds no
+     * assignment, so it is not confined; where linkage matters, use
+     * {@link #isLinkedAndUnconfined} or {@link #isUnconfinedStaff}.
+     */
+    public static boolean isConfined(HospitalContext context) {
+        return !providerTypes(context).isEmpty();
+    }
+
+    /**
+     * A caller linked to a local account and not confined: who may use a
+     * channel a provider user may not (the STOMP broadcasts and SEND). A
+     * caller that links no local account is refused there (fail closed).
+     */
+    public static boolean isLinkedAndUnconfined(HospitalContext context) {
+        return context != null && context.getPrincipalUserId() != null && !isConfined(context);
+    }
+
+    /**
+     * {@link #isLinkedAndUnconfined}, holding a live role other than PATIENT
+     * (a verified super-admin included): staff, e.g. who may flip a
+     * broadcast notification's shared read flag.
+     */
+    public static boolean isUnconfinedStaff(HospitalContext context) {
+        if (!isLinkedAndUnconfined(context)) {
+            return false;
+        }
+        Set<String> roles = context.getAssignedRoles();
+        return roles != null && roles.stream().anyMatch(role -> !SecurityConstants.ROLE_PATIENT.equals(role));
+    }
+
     /** The caller holds a live PATIENT assignment, global or bound to a hospital. */
     public static boolean isPatientHolder(HospitalContext context) {
         return context != null && context.getAssignedRoles() != null

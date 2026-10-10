@@ -1,6 +1,5 @@
 package com.example.hms.security.provider;
 
-import com.example.hms.enums.FacilityType;
 import com.example.hms.security.ApiKeyAuthenticationFilter;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
@@ -24,7 +23,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * Provider confinement (provider plan §3.3, §6.4, AC-8). A caller who is not a
@@ -117,7 +115,7 @@ public class ProviderFacilityConfinementFilter extends OncePerRequestFilter {
         if (scopeResolver.answerRefusedHeader(live, response)) {
             return;
         }
-        if (live.getPrincipalUserId() == null || ProviderConfinementPolicy.providerTypes(live).isEmpty()) {
+        if (!ProviderConfinementPolicy.isConfined(live)) {
             // Not confined: links no local account, or holds no provider type.
             // Nothing is kept, so the request goes on exactly as it would have
             // (code that reads the holder directly treats "no context" as it
@@ -140,8 +138,7 @@ public class ProviderFacilityConfinementFilter extends OncePerRequestFilter {
     private static void decide(ProviderConfinementPolicy policy, HospitalContext context, HttpServletRequest request,
                                HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        Set<FacilityType> providerTypes = ProviderConfinementPolicy.providerTypes(context);
-        if (providerTypes.isEmpty() || policy.allows(request, context)) {
+        if (!ProviderConfinementPolicy.isConfined(context) || policy.allows(request, context)) {
             filterChain.doFilter(request, response);
             return;
         }

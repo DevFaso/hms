@@ -137,8 +137,8 @@ public class AuthBootstrapServiceImpl implements AuthBootstrapService {
                 .superAdmin(isSuperAdmin)
                 .hospitalAdmin(isHospitalAdmin)
                 // The confinement rule itself, over the assignments already read.
-                .providerUser(!ProviderConfinementPolicy.providerTypes(
-                        ActingScopeResolver.liveContext(user.getId(), user.getUsername(), assignments)).isEmpty())
+                .providerUser(ProviderConfinementPolicy.isConfined(
+                        ActingScopeResolver.liveContext(user.getId(), user.getUsername(), assignments)))
                 .primaryHospitalId(primaryHospitalId)
                 .primaryHospitalName(primaryHospitalName)
                 .permittedHospitalIds(permittedHospitalIds)

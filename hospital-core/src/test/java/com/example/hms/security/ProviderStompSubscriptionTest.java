@@ -359,7 +359,8 @@ class ProviderStompSubscriptionTest {
             .thenThrow(new IllegalArgumentException("An assignment at a facility needs its facility type"));
 
         Message<byte[]> broadcast = freshSessionSubscribe("/topic/emergency-broadcast", ticketUser("ROLE_PHARMACIST"));
-        assertThatThrownBy(() -> interceptor.preSend(broadcast, channel)).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> interceptor.preSend(broadcast, channel))
+            .isInstanceOf(StompCallerUnavailableException.class);
     }
 
     @Test
@@ -432,32 +433,72 @@ class ProviderStompSubscriptionTest {
     }
 
     @Test
-    @DisplayName("past the CONNECT window the ws-ticket's roles no longer vouch while the database is down; no CONNECT seen, no vouching")
-    void ticketRolesDoNotVouchPastTheWindowWhenTheDatabaseIsDown() {
+    @DisplayName("database down past the CONNECT window: a ticket with no provider role keeps the broadcasts; a possible provider, SEND and the tracker are refused as UNAVAILABLE (retryable)")
+    void databaseDownPastTheWindow() {
         when(assignmentAccessor.findAssignmentsForUser(userId)).thenThrow(dbDown());
         Principal nurse = ticketUser("ROLE_NURSE");
 
         freshSessionConnect(nurse);
         afterTheTtl();
-        Message<byte[]> late = subscribe("/topic/emergency-broadcast", nurse);
-        assertThatThrownBy(() -> interceptor.preSend(late, channel)).isInstanceOf(AccessDeniedException.class);
+        for (String broadcast : List.of("/topic/emergency-broadcast", "/topic/notifications")) {
+            Message<byte[]> late = subscribe(broadcast, nurse);
+            assertThat(interceptor.preSend(late, channel)).as(broadcast).isSameAs(late);
+        }
+        Message<byte[]> send = frame(StompCommand.SEND, "/app/chat.sendMessage", nurse);
+        assertThatThrownBy(() -> interceptor.preSend(send, channel))
+            .isInstanceOf(StompCallerUnavailableException.class);
+        Message<byte[]> tracker = subscribe("/topic/patient-tracker/" + hospitalId, nurse);
+        assertThatThrownBy(() -> interceptor.preSend(tracker, channel))
+            .isInstanceOf(StompCallerUnavailableException.class);
 
-        Message<byte[]> noConnect = freshSessionSubscribe("/topic/notifications", nurse);
-        assertThatThrownBy(() -> interceptor.preSend(noConnect, channel)).isInstanceOf(AccessDeniedException.class);
+        Message<byte[]> possibleProvider = freshSessionSubscribe("/topic/notifications", ticketUser("ROLE_PHARMACIST"));
+        assertThatThrownBy(() -> interceptor.preSend(possibleProvider, channel))
+            .isInstanceOf(StompCallerUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("a RESOLVED provider user is refused as access-denied (permanent), never as unavailable")
+    void resolvedProviderIsAccessDenied() {
+        holds(pharmacist());
+
+        Message<byte[]> broadcast = freshSessionSubscribe("/topic/emergency-broadcast", ticketUser("ROLE_PHARMACIST"));
+        assertThatThrownBy(() -> interceptor.preSend(broadcast, channel))
+            .isInstanceOf(AccessDeniedException.class)
+            .isNotInstanceOf(StompCallerUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("a non-database failure: a ticket with no provider role keeps the broadcasts through the cached failure; SEND is refused as unavailable")
+    void nonDatabaseFailureKeepsBroadcastsForANonProvider() {
+        when(assignmentAccessor.findAssignmentsForUser(userId))
+            .thenThrow(new IllegalArgumentException("An assignment at a facility needs its facility type"));
+        Principal nurse = ticketUser("ROLE_NURSE");
+
+        for (String broadcast : List.of("/topic/emergency-broadcast", "/topic/notifications")) {
+            Message<byte[]> message = subscribe(broadcast, nurse);
+            assertThat(interceptor.preSend(message, channel)).as(broadcast).isSameAs(message);
+        }
+        Message<byte[]> send = frame(StompCommand.SEND, "/app/chat.sendMessage", nurse);
+        assertThatThrownBy(() -> interceptor.preSend(send, channel))
+            .isInstanceOf(StompCallerUnavailableException.class);
+        verify(assignmentAccessor, times(1)).findAssignmentsForUser(userId);
     }
 
     @Test
     @DisplayName("a later CONNECT on the session does not reopen the ws-ticket window")
     void aSecondConnectDoesNotReopenTheWindow() {
-        when(assignmentAccessor.findAssignmentsForUser(userId)).thenThrow(dbDown());
+        holds(nurse(), pharmacist());
         Principal nurse = ticketUser("ROLE_NURSE");
         freshSessionConnect(nurse);
         afterTheTtl();
 
+        // A pharmacist row activated since the handshake: the second CONNECT
+        // must not let the NURSE ticket vouch again without a lookup.
         Message<byte[]> again = frame(StompCommand.CONNECT, null, nurse);
         assertThat(interceptor.preSend(again, channel)).isSameAs(again);
         Message<byte[]> broadcast = subscribe("/topic/emergency-broadcast", nurse);
         assertThatThrownBy(() -> interceptor.preSend(broadcast, channel)).isInstanceOf(AccessDeniedException.class);
+        verify(assignmentAccessor, times(1)).findAssignmentsForUser(userId);
     }
 
     @Test

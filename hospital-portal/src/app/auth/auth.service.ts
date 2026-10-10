@@ -104,6 +104,9 @@ export class AuthService {
   /** Reactive signal that updates whenever setUserProfile() is called. */
   readonly currentProfile = signal<LoginUserProfile | null>(null);
 
+  /** Bumped whenever the access token is set or cleared (login, refresh, impersonation, logout). */
+  readonly tokenVersion = signal(0);
+
   // ---------- Storage ----------
   getToken(): string | null {
     if (!this.isBrowser) return null;
@@ -136,6 +139,7 @@ export class AuthService {
       // login does not land on the lock screen instead of the dashboard.
       sessionStorage.removeItem('hms_idle_locked');
       sessionStorage.removeItem('hms_lock_ts');
+      this.tokenVersion.update((v) => v + 1);
     } catch {
       // Storage not available
     }
@@ -162,6 +166,7 @@ export class AuthService {
     try {
       localStorage.removeItem(ACCESS_TOKEN_KEY);
       sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+      this.tokenVersion.update((v) => v + 1);
     } catch {
       // Storage not available
     }
@@ -441,6 +446,9 @@ export class AuthService {
     this.clearToken();
     this.clearRefreshToken();
     this.clearUserProfile();
+    // The next user must not inherit this one's provider flag or a resolved
+    // session (the shell's emergency-broadcast gate reads both).
+    this.roleContext.clearSession();
     // Clear idle lock state so the lock screen doesn't appear on next login
     if (this.isBrowser) {
       try {

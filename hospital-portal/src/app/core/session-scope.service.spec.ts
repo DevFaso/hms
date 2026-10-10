@@ -112,6 +112,26 @@ describe('SessionScopeService', () => {
     expect(roleContext.providerUser()).toBeFalse();
   });
 
+  it('a clinician signs in after a pharmacy user, with a failed bootstrap: the broadcast gate opens for them', () => {
+    // The pharmacy user's session.
+    service.applyBootstrap(bootstrap({ roles: ['ROLE_PHARMACIST'], providerUser: true }));
+    expect(roleContext.providerUser()).toBeTrue();
+
+    // Sign-out (AuthService.logout clears the session flags).
+    roleContext.clearSession();
+    expect(roleContext.providerUser()).toBeFalse();
+    expect(roleContext.sessionResolved()).toBeFalse();
+
+    // The clinician's bootstrap fails: resolved from the stored profile, never the old flag.
+    roleContext.setProviderUser(true); // even if something left it set
+    auth.sessionBootstrap.and.returnValue(throwError(() => new Error('down')));
+    service.hydrate().subscribe();
+
+    // The shell's gate: resolved and not a provider user.
+    expect(roleContext.sessionResolved()).toBeTrue();
+    expect(roleContext.providerUser()).toBeFalse();
+  });
+
   it('falls back to the stored profile when the server cannot be asked, and emits null', () => {
     stored = {
       id: 'u-1',

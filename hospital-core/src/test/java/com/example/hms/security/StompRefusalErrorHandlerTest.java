@@ -43,6 +43,17 @@ class StompRefusalErrorHandlerTest {
     }
 
     @Test
+    @DisplayName("a caller that could not be resolved reads unavailable (retryable), not access-denied")
+    void unresolvedCallerIsUnavailable() {
+        MessageDeliveryException wrapped = new MessageDeliveryException(subscribe(),
+            "Failed to send message to ExecutorSubscribableChannel[clientInboundChannel]",
+            new StompCallerUnavailableException("This destination cannot be authorized right now"));
+
+        assertThat(message(handler.handleClientMessageProcessingError(subscribe(), wrapped)))
+            .isEqualTo(StompRefusalErrorHandler.UNAVAILABLE);
+    }
+
+    @Test
     @DisplayName("any other failure keeps its own message")
     void otherFailuresKeepTheirMessage() {
         MessageDeliveryException other = new MessageDeliveryException(subscribe(), "broker unavailable",

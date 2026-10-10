@@ -1,11 +1,15 @@
-import { Injectable } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { TestBed, fakeAsync, flush, flushMicrotasks, tick } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Client, IFrame, StompConfig } from '@stomp/stompjs';
 
 import { AuthService } from '../auth/auth.service';
-import { EmergencyBroadcastService, STOMP_ACCESS_DENIED } from './emergency-broadcast.service';
+import {
+  EmergencyBroadcastService,
+  STOMP_ACCESS_DENIED,
+  STOMP_UNAVAILABLE,
+} from './emergency-broadcast.service';
 
 /** The service with its STOMP client and SockJS load replaced: the specs drive the callbacks. */
 @Injectable()
@@ -48,12 +52,21 @@ describe('EmergencyBroadcastService — reconnects', () => {
   let service: DrivenBroadcastService;
   let http: HttpTestingController;
   let token: string;
+  const tokenVersion = signal(0);
+
+  /** A new access token, as AuthService.setToken announces it. */
+  function newToken(value: string): void {
+    token = value;
+    tokenVersion.update((v) => v + 1);
+    TestBed.tick();
+  }
 
   beforeEach(() => {
     token = 'token-1';
     const auth = jasmine.createSpyObj<AuthService>('AuthService', ['getToken', 'isExpired']);
     auth.getToken.and.callFake(() => token);
     auth.isExpired.and.returnValue(false);
+    Object.defineProperty(auth, 'tokenVersion', { value: tokenVersion });
 
     TestBed.configureTestingModule({
       providers: [
@@ -86,10 +99,40 @@ describe('EmergencyBroadcastService — reconnects', () => {
     service.connect();
     http.expectNone(TICKET);
 
-    // Another session (a new token) may try again.
-    token = 'token-2';
-    service.connect();
+    // A new token (a refresh, another sign-in) re-arms it, with no call from the shell.
+    newToken('token-2');
     http.expectOne(TICKET);
+    flush();
+  }));
+
+  it('unavailable (the server could not resolve the caller just now) is retried with backoff', fakeAsync(() => {
+    service.connect();
+    open().onStompError!(errorFrame(STOMP_UNAVAILABLE));
+
+    tick(5_000);
+    open();
+    service.disconnect();
+    flush();
+  }));
+
+  it('a backoff that gave up re-arms on a new token; a released socket does not', fakeAsync(() => {
+    service.connect();
+    let config = open();
+    for (const wait of [5_000, 10_000, 20_000, 40_000, 60_000]) {
+      config.onStompError!(errorFrame(STOMP_UNAVAILABLE));
+      tick(wait);
+      config = open();
+    }
+    config.onStompError!(errorFrame(STOMP_UNAVAILABLE)); // the sixth: it gives up
+    tick(5 * 60_000);
+    http.expectNone(TICKET);
+
+    newToken('token-2');
+    open();
+
+    service.disconnect(); // the shell released it: a new token changes nothing
+    newToken('token-3');
+    http.expectNone(TICKET);
     flush();
   }));
 

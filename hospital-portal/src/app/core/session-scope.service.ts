@@ -44,6 +44,10 @@ export class SessionScopeService {
       }),
       catchError(() => {
         this.applyStoredProfile();
+        // The server could not say: no provider confinement is assumed (the
+        // server still refuses a provider user the topic, so nothing opens
+        // for one), and never the previous user's flag.
+        this.roleContext.setProviderUser(false);
         this.roleContext.markSessionResolved();
         return of(null);
       }),

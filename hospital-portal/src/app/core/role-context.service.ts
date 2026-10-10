@@ -74,6 +74,12 @@ export class RoleContextService {
     this._sessionResolved.set(true);
   }
 
+  /** Sign-out: the next user starts unresolved and unconfined, never with the last user's flags. */
+  clearSession(): void {
+    this._providerUser.set(false);
+    this._sessionResolved.set(false);
+  }
+
   /** True when the current user holds ROLE_SUPER_ADMIN. */
   readonly isSuperAdmin = computed(() => this._activeRoles().includes('ROLE_SUPER_ADMIN'));
 

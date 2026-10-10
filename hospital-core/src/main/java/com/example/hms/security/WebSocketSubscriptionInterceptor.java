@@ -62,8 +62,8 @@ import java.util.UUID;
  *
  * <p><b>Who the caller is</b> is decided exactly as on HTTP: the live context
  * ({@link ProviderCallerResolver}, linked as the context filters link it) and
- * {@link ProviderConfinementPolicy#providerTypes}, so a verified super-admin is
- * exempt. One resolution serves a frame (none for {@code /user/**}, and none
+ * {@link ProviderConfinementPolicy#isLinkedAndUnconfined}, the one rule, so a
+ * verified super-admin is exempt. One resolution serves a frame (none for {@code /user/**}, and none
  * for the broadcasts within {@link #RESOLUTION_TTL} of the session's CONNECT
  * when the ws-ticket's roles include no role a pharmacy or laboratory
  * accepts: such a caller cannot be a provider user YET; the roles are the
@@ -73,16 +73,23 @@ import java.util.UUID;
  * revocation or a demotion counts within that window without an assignment
  * query on every frame.
  *
- * <p><b>Failure.</b> A caller that links no local account is a provider for
- * these rules (fail closed). Only a DATABASE failure (a
- * {@link DataAccessException}, or a transaction that could not start) makes a
- * resolution "unavailable": SEND and the tracker are refused, but the two
- * broadcast topics stay open to a caller known not to be a provider user (the
- * session's last resolution said so, no older than {@link #LAST_KNOWN_MAX_AGE},
- * or, within the CONNECT window, the ws-ticket's roles include no role a
- * pharmacy or laboratory accepts),
- * so a database hiccup never silently cuts a clinician off the emergency
- * alerts. That case is logged. Any other failure fails closed everywhere.
+ * <p><b>Refusals.</b> A resolved caller that is a provider user, or that
+ * links no local account (fail closed), is refused with an
+ * {@link AccessDeniedException}: the client is told {@code access-denied}
+ * (permanent, {@link StompRefusalErrorHandler}).
+ *
+ * <p><b>Failure.</b> A caller that could not be resolved just now (a
+ * {@link DataAccessException}, a transaction that could not start, or any
+ * other resolution failure, the last remembered for {@link #RESOLUTION_TTL}
+ * so it is not re-queried on every frame) is not an answer. SEND and the
+ * tracker are refused (fail closed), but the two broadcast topics stay open to
+ * a caller known not to be a provider user: the session's last resolution
+ * said so (no older than {@link #LAST_KNOWN_MAX_AGE}, database failures only),
+ * or the ws-ticket's roles include no role a pharmacy or laboratory accepts.
+ * A database hiccup never silently cuts a clinician off the emergency alerts;
+ * that case is logged. Every refusal of an unresolved caller is a
+ * {@link StompCallerUnavailableException}: the client is told
+ * {@code unavailable} and retries with backoff, never stops for good.
  */
 @Slf4j
 @Component
@@ -107,13 +114,17 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
     private static final String EMERGENCY_BROADCAST_TOPIC = "/topic/emergency-broadcast";
     private static final String NOTIFICATIONS_BROADCAST_TOPIC = "/topic/notifications";
 
-    /** A successful resolution of the caller and when it was made. */
-    private record Resolution(HospitalContext context, Instant resolvedAt) {
+    /**
+     * A resolution of the caller and when it was made: the live context, or
+     * {@code failed} (a non-database failure, remembered for the TTL).
+     */
+    private record Resolution(HospitalContext context, Instant resolvedAt, boolean failed) {
     }
 
     /**
      * The caller for one frame: the live context, or {@code unavailable} when
-     * it could not be computed (with the session's last known one, if any).
+     * it could not be resolved (with the session's last known one, if a
+     * recent resolution succeeded).
      */
     private record Caller(HospitalContext context, boolean unavailable, HospitalContext lastKnown) {
     }
@@ -169,7 +180,10 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
             throw denied(sender, target, "clients send to the application (/app/**) only");
         }
         Caller caller = resolve(accessor, sender);
-        if (caller.unavailable() || isProvider(caller.context())) {
+        if (caller.unavailable()) {
+            throw unavailable(sender, target, "caller could not be resolved");
+        }
+        if (!ProviderConfinementPolicy.isLinkedAndUnconfined(caller.context())) {
             throw denied(sender, target, "provider users may not send STOMP messages");
         }
     }
@@ -204,7 +218,10 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
 
         // Provider rule (provider plan §6.4, T21): a user with a live
         // assignment at a pharmacy or laboratory subscribes to /user/** only.
-        if (caller.unavailable() || isProvider(caller.context())) {
+        if (caller.unavailable()) {
+            throw unavailable(user, destination, "caller could not be resolved");
+        }
+        if (!ProviderConfinementPolicy.isLinkedAndUnconfined(caller.context())) {
             throw denied(user, destination, "provider users may subscribe to /user/** only");
         }
 
@@ -222,16 +239,17 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
      */
     private void authorizeBroadcast(Principal user, Caller caller, String destination) {
         if (!caller.unavailable()) {
-            if (isProvider(caller.context())) {
+            if (!ProviderConfinementPolicy.isLinkedAndUnconfined(caller.context())) {
                 throw denied(user, destination, "provider users may subscribe to /user/** only");
             }
             return;
         }
-        // The ws-ticket's roles already had their say (the CONNECT window,
-        // before any resolution); past it only a recent resolution vouches.
-        boolean knownNonProvider = caller.lastKnown() != null && !isProvider(caller.lastKnown());
+        // Not resolved just now: a caller known not to be a provider keeps
+        // the emergency alerts; a possible provider is refused, retryably.
+        boolean knownNonProvider = ProviderConfinementPolicy.isLinkedAndUnconfined(caller.lastKnown())
+            || cannotHoldAProviderRole(user);
         if (!knownNonProvider) {
-            throw denied(user, destination, "caller could not be resolved");
+            throw unavailable(user, destination, "caller could not be resolved");
         }
         log.warn("[STOMP] Live context unavailable; broadcast {} kept for a caller known not to be a provider user",
             destination);
@@ -268,41 +286,31 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
         Resolution cached = session != null && session.get(RESOLUTION_ATTRIBUTE) instanceof Resolution r ? r : null;
         Instant now = clock.instant();
         if (cached != null && now.isBefore(cached.resolvedAt().plus(RESOLUTION_TTL))) {
-            return new Caller(cached.context(), false, cached.context());
+            return cached.failed()
+                ? new Caller(null, true, null)
+                : new Caller(cached.context(), false, cached.context());
         }
         try {
             HospitalContext context = callerResolver.liveContext(user);
             if (session != null) {
-                session.put(RESOLUTION_ATTRIBUTE, new Resolution(context, now));
+                session.put(RESOLUTION_ATTRIBUTE, new Resolution(context, now, false));
             }
             return new Caller(context, false, context);
-        } catch (DataAccessException | CannotCreateTransactionException unavailable) {
-            log.warn("[STOMP] Live context unavailable ({})", unavailable.getClass().getSimpleName());
-            boolean recent = cached != null && !now.isAfter(cached.resolvedAt().plus(LAST_KNOWN_MAX_AGE));
+        } catch (DataAccessException | CannotCreateTransactionException databaseDown) {
+            log.warn("[STOMP] Live context unavailable ({})", databaseDown.getClass().getSimpleName());
+            boolean recent = cached != null && !cached.failed()
+                && !now.isAfter(cached.resolvedAt().plus(LAST_KNOWN_MAX_AGE));
             return new Caller(null, true, recent ? cached.context() : null);
         } catch (RuntimeException failure) {
-            // Not a database outage: no answer at all, so fail closed (as an
-            // unlinked caller), never "unavailable". Remembered for the TTL
-            // (refused throughout), so a broken resolution is not re-queried
-            // on every frame of the session.
-            log.warn("[STOMP] Caller resolution failed ({}); refused", failure.getClass().getSimpleName());
+            // Not a database outage, and no answer either: unresolved, with no
+            // last known context. Remembered for the TTL so a broken
+            // resolution is not re-queried on every frame of the session.
+            log.warn("[STOMP] Caller resolution failed ({})", failure.getClass().getSimpleName());
             if (session != null) {
-                session.put(RESOLUTION_ATTRIBUTE, new Resolution(null, now));
+                session.put(RESOLUTION_ATTRIBUTE, new Resolution(null, now, true));
             }
-            return new Caller(null, false, null);
+            return new Caller(null, true, null);
         }
-    }
-
-    /**
-     * The HTTP rule: the live context's provider types, empty for a verified
-     * super-admin. A caller that links no local account is treated as a
-     * provider (fail closed).
-     */
-    private static boolean isProvider(HospitalContext context) {
-        if (context == null || context.getPrincipalUserId() == null) {
-            return true;
-        }
-        return !ProviderConfinementPolicy.providerTypes(context).isEmpty();
     }
 
     /**
@@ -335,6 +343,16 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
             }
         }
         return true;
+    }
+
+    /** A refusal of a caller that could not be resolved just now: the client retries. */
+    private static StompCallerUnavailableException unavailable(Principal user, String destination, String reason) {
+        log.warn(
+                "Refused STOMP frame by '{}' to '{}' for now: {}",
+                user != null ? user.getName() : "<anonymous>",
+                destination,
+                reason);
+        return new StompCallerUnavailableException("This destination cannot be authorized right now");
     }
 
     private static AccessDeniedException denied(Principal user, String destination, String reason) {
