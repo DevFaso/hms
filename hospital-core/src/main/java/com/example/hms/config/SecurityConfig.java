@@ -9,6 +9,7 @@ import com.example.hms.security.oidc.KeycloakJwtAuthenticationConverter;
 import com.example.hms.security.provider.ProviderCallerResolver;
 import com.example.hms.security.provider.ProviderConfinementPolicy;
 import com.example.hms.security.provider.ProviderFacilityConfinementFilter;
+import com.example.hms.security.provider.ProviderMfaGate;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -265,6 +266,8 @@ public class SecurityConfig {
     private final ObjectProvider<ProviderConfinementPolicy> providerConfinementPolicyProvider;
     private final ObjectProvider<ProviderCallerResolver> providerCallerResolverProvider;
     private final ObjectProvider<ActingScopeResolver> actingScopeResolverProvider;
+    /** The provider MFA gate (AC-13), carried by the confinement filter; same slice reason. */
+    private final ObjectProvider<ProviderMfaGate> providerMfaGateProvider;
 
     @Value("${app.cors.allowed-origins:http://localhost:4200}")
     private String allowedOrigins;
@@ -965,7 +968,7 @@ public class SecurityConfig {
         // path's 404 for a hospital endpoint, never a URL matcher's 403.
         http.addFilterBefore(
             new ProviderFacilityConfinementFilter(providerConfinementPolicyProvider,
-                providerCallerResolverProvider, actingScopeResolverProvider),
+                providerCallerResolverProvider, actingScopeResolverProvider, providerMfaGateProvider),
             AuthorizationFilter.class);
 
         // ── Hardened HTTP response headers ──────────────────────────────────

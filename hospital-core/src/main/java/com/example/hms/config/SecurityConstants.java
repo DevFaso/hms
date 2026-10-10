@@ -143,6 +143,15 @@ public class SecurityConstants {
     public static final String CLAIM_IMPERSONATOR_USER_ID = "impersonatorUserId";
     public static final String CLAIM_IMPERSONATOR_USERNAME = "impersonatorUsername";
 
+    // Authentication Method Reference (RFC 8176), the second-factor proof the
+    // provider MFA gate reads (provider plan AC-13). Keycloak puts it in its
+    // tokens through the realm's AMR mapper; the legacy issuer stamps it on the
+    // tokens minted after a TOTP challenge (and carries it through a refresh),
+    // never on a password-only token.
+    public static final String CLAIM_AMR = "amr";
+    public static final String AMR_PASSWORD = "pwd";
+    public static final String AMR_OTP = "otp";
+
     // Prevent instantiation
     private SecurityConstants() {
         throw new UnsupportedOperationException("Utility class");

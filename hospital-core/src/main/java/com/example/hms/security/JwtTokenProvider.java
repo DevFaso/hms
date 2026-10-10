@@ -46,6 +46,9 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static com.example.hms.config.SecurityConstants.AMR_OTP;
+import static com.example.hms.config.SecurityConstants.AMR_PASSWORD;
+import static com.example.hms.config.SecurityConstants.CLAIM_AMR;
 import static com.example.hms.config.SecurityConstants.CLAIM_IMPERSONATOR_USERNAME;
 import static com.example.hms.config.SecurityConstants.CLAIM_IMPERSONATOR_USER_ID;
 import static com.example.hms.config.SecurityConstants.CLAIM_IS_HOSPITAL_ADMIN;
@@ -67,6 +70,8 @@ public class JwtTokenProvider {
 
     private static final String ROLES_CLAIM = "roles";
     private static final String ROLE_PREFIX = "ROLE_";
+    /** What a token minted after a verified TOTP code asserts (RFC 8176): a password, then a one-time password. */
+    private static final List<String> SECOND_FACTOR_AMR = List.of(AMR_PASSWORD, AMR_OTP);
 
     private final HospitalUserDetailsService userDetailsService;
     private final TenantRoleAssignmentAccessor tenantRoleAssignmentAccessor;
@@ -267,6 +272,16 @@ public class JwtTokenProvider {
     }
 
     public String generateAccessToken(TokenUserDescriptor descriptor) {
+        return generateAccessToken(descriptor, false);
+    }
+
+    /**
+     * An access token for the descriptor; {@code secondFactor} stamps
+     * {@code amr: ["pwd", "otp"]} (provider plan AC-13). Only a caller that
+     * has just verified a TOTP code, or that carries the proof of a refresh
+     * token minted that way, may pass {@code true}.
+     */
+    public String generateAccessToken(TokenUserDescriptor descriptor, boolean secondFactor) {
         Objects.requireNonNull(descriptor, "descriptor is required");
         UUID userId = descriptor.userId();
 
@@ -286,6 +301,9 @@ public class JwtTokenProvider {
         claims.put(ROLES_CLAIM, roles);
         if (userId != null) {
             claims.put("uid", userId.toString());
+        }
+        if (secondFactor) {
+            claims.put(CLAIM_AMR, SECOND_FACTOR_AMR);
         }
         return Jwts.builder()
             .id(UUID.randomUUID().toString())
@@ -312,11 +330,17 @@ public class JwtTokenProvider {
      * <p>No refresh token is issued; when the {@code ttlMillis} expire the
      * super admin must call {@code start} again. This caps the blast radius
      * of a leaked impersonation token at the chosen TTL (30 min default).
+     *
+     * <p>{@code secondFactor}: the super admin's start was stepped up with a
+     * verified TOTP code, so the token carries {@code amr: ["pwd", "otp"]} and
+     * the provider MFA gate admits it when the target is a provider user
+     * (AC-13). An unenrolled actor's non-strict bypass passes {@code false}.
      */
     public String generateImpersonationAccessToken(TokenUserDescriptor target,
                                                     UUID impersonatorUserId,
                                                     String impersonatorUsername,
-                                                    long ttlMillis) {
+                                                    long ttlMillis,
+                                                    boolean secondFactor) {
         Objects.requireNonNull(target, "target descriptor is required");
         Objects.requireNonNull(target.username(), "target username is required");
         Objects.requireNonNull(impersonatorUserId, "impersonatorUserId is required");
@@ -341,6 +365,9 @@ public class JwtTokenProvider {
         }
         claims.put(CLAIM_IMPERSONATOR_USER_ID, impersonatorUserId.toString());
         claims.put(CLAIM_IMPERSONATOR_USERNAME, impersonatorUsername);
+        if (secondFactor) {
+            claims.put(CLAIM_AMR, SECOND_FACTOR_AMR);
+        }
 
         return Jwts.builder()
             .id(UUID.randomUUID().toString())
@@ -353,6 +380,15 @@ public class JwtTokenProvider {
     }
 
     public String generateRefreshToken(Authentication authentication) {
+        return generateRefreshToken(authentication, false);
+    }
+
+    /**
+     * A refresh token for the authenticated user; {@code secondFactor} carries
+     * the {@code amr} proof (see {@link #generateAccessToken(TokenUserDescriptor, boolean)})
+     * so the access tokens it later mints keep it.
+     */
+    public String generateRefreshToken(Authentication authentication, boolean secondFactor) {
         HospitalUserDetails userDetails = (HospitalUserDetails) authentication.getPrincipal();
 
         List<String> roles = userDetails.getAuthorities().stream()
@@ -366,6 +402,7 @@ public class JwtTokenProvider {
             .id(UUID.randomUUID().toString())
             .subject(userDetails.getUsername())
             .claim(ROLES_CLAIM, roles)
+            .claims(secondFactor ? Map.of(CLAIM_AMR, SECOND_FACTOR_AMR) : Map.of())
             .issuedAt(now)
             .expiration(expiryDate)
             .signWith(signingKey)
@@ -378,6 +415,11 @@ public class JwtTokenProvider {
      * contains only the chosen role.
      */
     public String generateRefreshToken(TokenUserDescriptor descriptor) {
+        return generateRefreshToken(descriptor, false);
+    }
+
+    /** {@link #generateRefreshToken(TokenUserDescriptor)}, carrying the {@code amr} proof when {@code secondFactor}. */
+    public String generateRefreshToken(TokenUserDescriptor descriptor, boolean secondFactor) {
         Objects.requireNonNull(descriptor, "descriptor is required");
 
         List<String> roles = descriptor.roles() != null
@@ -391,6 +433,7 @@ public class JwtTokenProvider {
             .id(UUID.randomUUID().toString())
             .subject(descriptor.username())
             .claim(ROLES_CLAIM, roles)
+            .claims(secondFactor ? Map.of(CLAIM_AMR, SECOND_FACTOR_AMR) : Map.of())
             .issuedAt(now)
             .expiration(expiryDate)
             .signWith(signingKey)
@@ -427,6 +470,38 @@ public class JwtTokenProvider {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /**
+     * The token is one this issuer minted after a verified second factor: its
+     * {@code amr} claim holds {@code otp} (provider plan AC-13). Only the
+     * tokens minted with {@code secondFactor} carry the claim, so a token
+     * that fails to parse, the MFA challenge token and a password-only token
+     * answer {@code false}.
+     */
+    public boolean hasSecondFactor(String token) {
+        if (!StringUtils.hasText(token)) {
+            return false;
+        }
+        try {
+            return amrHoldsOtp(parseClaimsWithRotation(token).get(CLAIM_AMR));
+        } catch (RuntimeException unparsable) {
+            return false;
+        }
+    }
+
+    /**
+     * An {@code amr} claim value (a JSON array, or a lone string) holds
+     * {@code otp}. The Keycloak path reads its claim with the same rule.
+     */
+    public static boolean amrHoldsOtp(Object amr) {
+        if (amr instanceof String single) {
+            return AMR_OTP.equals(single);
+        }
+        if (amr instanceof Collection<?> values) {
+            return values.contains(AMR_OTP);
+        }
+        return false;
     }
 
     /**

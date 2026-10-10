@@ -126,7 +126,7 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
             throw new BusinessException("Cannot impersonate another super admin");
         }
 
-        verifyMfaStepUp(actor.getId(), mfaToken);
+        boolean steppedUp = verifyMfaStepUp(actor.getId(), mfaToken);
 
         List<String> targetRoles = targetAssignments.stream()
             .filter(TenantRoleAssignment::active)
@@ -141,8 +141,11 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
 
         TokenUserDescriptor descriptor = new TokenUserDescriptor(
             target.getId(), target.getUsername(), targetRoles);
+        // A verified TOTP step-up is the super admin's second factor: the token
+        // carries it, so impersonating a provider user passes the provider MFA
+        // gate (AC-13); the non-strict bypass of an unenrolled actor does not.
         String accessToken = tokenProvider.generateImpersonationAccessToken(
-            descriptor, actor.getId(), actor.getUsername(), impersonationTtlMs);
+            descriptor, actor.getId(), actor.getUsername(), impersonationTtlMs, steppedUp);
         Instant expiresAt = Instant.now().plusMillis(impersonationTtlMs);
 
         // Closes Copilot review #2 (PR #224): the original super-admin access
@@ -289,7 +292,13 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
                 "Super-admin actor user record not found for " + username));
     }
 
-    private void verifyMfaStepUp(UUID actorId, String mfaToken) {
+    /**
+     * The actor's MFA step-up: {@code true} when a TOTP code was verified,
+     * {@code false} for the audited non-strict bypass of an unenrolled actor;
+     * throws when an enrolled actor's code is missing or wrong, or strict mode
+     * refuses an unenrolled one.
+     */
+    private boolean verifyMfaStepUp(UUID actorId, String mfaToken) {
         boolean enrolled;
         try {
             enrolled = mfaService.isMfaEnabled(actorId);
@@ -303,7 +312,7 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
                 throw new UnauthorizedException(
                     "mfa_required: invalid or missing X-Mfa-Token for impersonation");
             }
-            return;
+            return true;
         }
         if (requireMfaStrict) {
             throw new UnauthorizedException(
@@ -322,6 +331,7 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
         } catch (RuntimeException ex) {
             log.error("[IMPERSONATION] Failed to audit MFA-bypass event", ex);
         }
+        return false;
     }
 
     private void emitBoundaryAudit(User actor, User target, AuditEventType type, String description) {

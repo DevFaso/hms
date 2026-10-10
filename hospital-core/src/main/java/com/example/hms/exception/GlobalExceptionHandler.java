@@ -408,6 +408,22 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * A provider user without a second factor (provider plan AC-13). 403 with
+     * the code the portal turns into MFA enrolment or the challenge. The
+     * message is already localised; the log carries the path only.
+     */
+    @ExceptionHandler(MfaEnrollmentRequiredException.class)
+    public ResponseEntity<Object> handleMfaEnrollmentRequired(MfaEnrollmentRequiredException ex,
+                                                              WebRequest request) {
+        if (log.isInfoEnabled()) {
+            log.info("Provider request without a second factor refused at path {}", request.getDescription(false));
+        }
+        Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+        body.put("code", MfaEnrollmentRequiredException.CODE);
+        return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
+    }
+
+    /**
      * A hospital scope the request cannot have (design §3.6). 403 with a code
      * and the reason, so the portal re-reads its scope on a stale chip
      * ({@code NO_LONGER_PERMITTED}) instead of showing the forbidden page.

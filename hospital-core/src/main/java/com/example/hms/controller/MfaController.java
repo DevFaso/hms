@@ -1,6 +1,11 @@
 package com.example.hms.controller;
 
 import com.example.hms.security.audit.WriteAudited;
+import com.example.hms.exception.MfaEnrollmentRequiredException;
+import com.example.hms.security.provider.ProviderMfaGate;
+import com.example.hms.utility.MessageUtil;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.security.core.context.SecurityContextHolder;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.model.User;
@@ -58,6 +63,8 @@ public class MfaController {
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final RefreshTokenCookieService refreshTokenCookieService;
     private final IdleSessionGate idleSessionGate;
+    /** The provider MFA gate (AC-13); absent in a {@code @WebMvcTest} slice. */
+    private final ObjectProvider<ProviderMfaGate> providerMfaGate;
 
     /** 401 for a caller holding only a partial mfaToken, not a full access token. */
     private ResponseEntity<Object> notFullyAuthenticated() {
@@ -92,6 +99,24 @@ public class MfaController {
         Optional<User> authenticated = resolveFullyAuthenticatedUser(principal);
         if (authenticated.isEmpty()) return notFullyAuthenticated();
         User user = authenticated.get();
+
+        // AC-13: enrolling again resets the authenticator. A provider user may
+        // do that only with the factor it guards; otherwise the password alone
+        // (the challenge token login hands out) would swap it for an
+        // attacker's and pass the challenge.
+        ProviderMfaGate gate = providerMfaGate.getIfAvailable();
+        if (gate != null && mfaService.isMfaEnabled(user.getId())
+                && gate.isProviderUser(user.getId(), user.getUsername())
+                && !gate.secondFactorPresented(SecurityContextHolder.getContext().getAuthentication())) {
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .userId(user.getId())
+                    .userName(user.getUsername())
+                    .eventType(AuditEventType.MFA_FAILURE)
+                    .status(AuditStatus.FAILURE)
+                    .eventDescription("TOTP re-enrollment refused without the second factor")
+                    .build());
+            throw new MfaEnrollmentRequiredException(MessageUtil.resolve(MfaEnrollmentRequiredException.CODE));
+        }
 
         MfaService.MfaEnrollmentResult result = mfaService.enrollTotp(user);
 
@@ -219,8 +244,11 @@ public class MfaController {
                 .toList();
 
         var descriptor = new TokenUserDescriptor(user.getId(), username, roles);
-        String accessToken = jwtTokenProvider.generateAccessToken(descriptor);
-        String refreshToken = jwtTokenProvider.generateRefreshToken(descriptor);
+        // A verified TOTP or backup code: both tokens carry amr [pwd, otp], the
+        // second-factor proof the provider MFA gate reads (AC-13), and the
+        // refresh token passes it on to the access tokens it later mints.
+        String accessToken = jwtTokenProvider.generateAccessToken(descriptor, true);
+        String refreshToken = jwtTokenProvider.generateRefreshToken(descriptor, true);
 
         userCredentialLifecycleService.recordSuccessfulLogin(user.getId());
 
