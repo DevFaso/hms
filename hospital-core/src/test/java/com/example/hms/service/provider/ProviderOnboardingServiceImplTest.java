@@ -695,7 +695,7 @@ class ProviderOnboardingServiceImplTest {
         v.setLicenceAuthority("DGPML");
         v.setResponsibleProfessionalName("Dr Issa Ouédraogo");
         v.setResponsibleProfessionalRegistration("ONP-123");
-        when(verificationRepository.findFirstByHospital_IdOrderByCreatedAtDesc(facility.getId()))
+        when(verificationRepository.findFirstByHospital_IdOrderByCreatedAtDescIdDesc(facility.getId()))
             .thenReturn(Optional.of(v));
         return v;
     }

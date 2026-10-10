@@ -216,16 +216,6 @@ export const PROVIDER_STAFF_ROLES: Record<ProviderFacilityType, string[]> = {
   LABORATORY: ['LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'LAB_DIRECTOR'],
 };
 
-/** Every role a provider user may hold, as token roles: the shell loads the provider settings only for them. */
-export const PROVIDER_CAPABLE_ROLES: string[] = [
-  'ROLE_PROVIDER_ADMIN',
-  'ROLE_PHARMACIST',
-  'ROLE_LAB_TECHNICIAN',
-  'ROLE_LAB_SCIENTIST',
-  'ROLE_LAB_MANAGER',
-  'ROLE_LAB_DIRECTOR',
-];
-
 export function isProviderFacilityType(
   type: FacilityType | null | undefined,
 ): type is ProviderFacilityType {

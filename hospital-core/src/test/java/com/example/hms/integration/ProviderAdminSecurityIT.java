@@ -367,7 +367,7 @@ class ProviderAdminSecurityIT extends BaseIT {
     // ── the facility's own audit trail (plan section 3.1) ──────────────────
 
     @Test
-    @DisplayName("the admin reads its own facility's trail: its staff's rows, never another facility's, never a patient's")
+    @DisplayName("the admin reads its own facility's trail: its staff's administration rows, never another facility's, never a patient's or a clinical one")
     void adminReadsOwnAuditTrailOnly() throws Exception {
         // A real write at the pharmacy, audited by the write interceptor.
         MvcResult write = as(adminToken, put("/provider/profile").contentType(MediaType.APPLICATION_JSON)
@@ -381,9 +381,14 @@ class ProviderAdminSecurityIT extends BaseIT {
             .orElseThrow();
         User elsewhere = accounts.userAt("elsewhere", otherPharmacyId, PHARMACIST);
         UUID otherFacilityRow = auditRow(elsewhere, otherPharmacyId, "PROVIDER_STAFF", null);
-        UUID patientIdRow = auditRow(pharmacist, pharmacyId, "PRESCRIPTION", UUID.randomUUID());
+        // An allowed kind of record that names a patient: still excluded.
+        UUID patientIdRow = auditRow(pharmacist, pharmacyId, "PROVIDER_STAFF", UUID.randomUUID());
         UUID patientEntityRow = auditRow(pharmacist, pharmacyId, "PATIENT", null);
         UUID staffRow = auditRow(pharmacist, pharmacyId, "PROVIDER_STAFF", null);
+        // Clinical rows written at the facility with no patient id: the allowlist keeps them out.
+        UUID prescriptionRow = auditRow(pharmacist, pharmacyId, "PRESCRIPTION", null);
+        UUID labOrderRow = auditRow(pharmacist, pharmacyId, "LAB_ORDER", null);
+        UUID documentRow = auditRow(pharmacist, pharmacyId, "PATIENT_DOCUMENT", null);
         // Platform support acting as the pharmacist: the row says so.
         UUID supportId = UUID.randomUUID();
         AuditEventLog impersonated = auditEventLogRepository.findById(
@@ -397,7 +402,8 @@ class ProviderAdminSecurityIT extends BaseIT {
         List<String> ids = new ArrayList<>();
         page.get("entries").forEach(entry -> ids.add(entry.get("id").asText()));
         assertThat(ids).contains(ownRow.toString(), staffRow.toString(), impersonated.getId().toString())
-            .doesNotContain(otherFacilityRow.toString(), patientIdRow.toString(), patientEntityRow.toString());
+            .doesNotContain(otherFacilityRow.toString(), patientIdRow.toString(), patientEntityRow.toString(),
+                prescriptionRow.toString(), labOrderRow.toString(), documentRow.toString());
         page.get("entries").forEach(entry -> assertThat(entry.has("eventDescription") || entry.has("ipAddress")
             || entry.has("details") || entry.has("patientId")).as(entry.toString()).isFalse());
         assertThat(page.get("totalElements").asLong()).isEqualTo(ids.size());

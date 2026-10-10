@@ -73,6 +73,7 @@ describe('provider shell pages', () => {
   let settings: ProviderSettings | null;
   /** What the context holds while a page is open: a signal, so a scope switch is seen. */
   let settingsSignal: WritableSignal<ProviderSettings | null>;
+  let invalidate: jasmine.Spy;
 
   function configure(): void {
     TestBed.configureTestingModule({
@@ -87,7 +88,8 @@ describe('provider shell pages', () => {
           provide: ProviderContextService,
           useFactory: () => {
             settingsSignal = signal(settings);
-            return { settings: settingsSignal, load: () => of(settingsSignal()) };
+            invalidate = jasmine.createSpy('invalidate');
+            return { settings: settingsSignal, load: () => of(settingsSignal()), invalidate };
           },
         },
       ],
@@ -208,11 +210,36 @@ describe('provider shell pages', () => {
     portal.profile.and.returnValue(throwError(() => NOT_AVAILABLE));
     const notAvailable = render(ProviderHomeComponent);
     expect(notAvailable.host().querySelector('[data-test="not-available"]')).not.toBeNull();
+    // The seat went away: the context is told, so the nav and the guards ask again.
+    expect(invalidate).toHaveBeenCalledTimes(1);
     TestBed.resetTestingModule();
 
     portal.profile.and.returnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
     const failed = render(ProviderHomeComponent);
     expect(failed.host().querySelector('[data-test="load-failed"]')).not.toBeNull();
+  });
+
+  it('home: follows the facility; a re-ask of the same facility does not reload; stale answers drop', () => {
+    const lateA = new Subject<ProviderProfile>();
+    portal.profile.and.returnValue(lateA);
+    const { cmp, host } = render(ProviderHomeComponent);
+    portal.profile.and.returnValue(of(profile({ id: 'f-2', name: 'Branch B' })));
+
+    // Between answers (null), then the same facility again: no reload.
+    settingsSignal.set(null);
+    host();
+    settingsSignal.set(settingsFixture());
+    host();
+    expect(portal.profile).toHaveBeenCalledTimes(1);
+
+    settingsSignal.set(settingsFixture({ facilityId: 'f-2' }));
+    host();
+    lateA.next(profile({ name: 'Branch A' }));
+    lateA.error(NOT_AVAILABLE);
+
+    expect(cmp.profile()?.name).toBe('Branch B');
+    expect(cmp.notAvailable()).toBeFalse();
+    expect(invalidate).not.toHaveBeenCalled();
   });
 
   // ── profile ───────────────────────────────────────────────────────────
@@ -261,10 +288,86 @@ describe('provider shell pages', () => {
     expect(cmp.notAvailable()).toBeTrue();
   });
 
+  it('profile: a branch switch discards the edit; no PUT ever carries the old branch contact', () => {
+    const branchB = new Subject<ProviderProfile>();
+    const { cmp, host } = render(ProviderProfileComponent);
+    cmp.phoneNumber.set('+22670999999');
+    portal.profile.and.returnValue(branchB);
+
+    settingsSignal.set(settingsFixture({ facilityId: 'f-2' }));
+    host();
+
+    // B is loading: the A edit is gone and nothing can be saved.
+    expect(cmp.canSave()).toBeFalse();
+    cmp.save();
+    expect(portal.updateProfile).not.toHaveBeenCalled();
+
+    branchB.next(profile({ id: 'f-2', phoneNumber: '+22670222222' }));
+    branchB.complete();
+    expect(cmp.phoneNumber()).toBe('+22670222222');
+    cmp.save();
+    expect(portal.updateProfile).toHaveBeenCalledOnceWith({
+      phoneNumber: '+22670222222',
+      email: null,
+      website: null,
+    });
+  });
+
+  it('profile: an answer for the branch the page has left is never shown', () => {
+    const branchA = new Subject<ProviderProfile>();
+    portal.profile.and.returnValue(branchA);
+    const { cmp, host } = render(ProviderProfileComponent);
+    portal.profile.and.returnValue(of(profile({ id: 'f-2', phoneNumber: '+22670222222' })));
+
+    settingsSignal.set(settingsFixture({ facilityId: 'f-2' }));
+    host();
+    branchA.next(profile({ phoneNumber: '+22670111111' }));
+
+    expect(cmp.profile()?.id).toBe('f-2');
+    expect(cmp.phoneNumber()).toBe('+22670222222');
+  });
+
+  it('profile: a save answer arriving after a branch switch is dropped, error or not', () => {
+    const put = new Subject<ProviderProfile>();
+    portal.updateProfile.and.returnValue(put);
+    const { cmp, host } = render(ProviderProfileComponent);
+    cmp.save();
+    portal.profile.and.returnValue(of(profile({ id: 'f-2', phoneNumber: '+22670222222' })));
+
+    settingsSignal.set(settingsFixture({ facilityId: 'f-2' }));
+    host();
+    put.next(profile({ phoneNumber: '+22670111111' }));
+
+    expect(cmp.phoneNumber()).toBe('+22670222222');
+    expect(toast.success).not.toHaveBeenCalled();
+
+    const failing = new Subject<ProviderProfile>();
+    portal.updateProfile.and.returnValue(failing);
+    cmp.save();
+    settingsSignal.set(settingsFixture({ facilityId: 'f-3' }));
+    host();
+    failing.error(new HttpErrorResponse({ status: 400, error: { message: 'Bad phone' } }));
+    expect(cmp.saveError()).toBeNull();
+    expect(cmp.saving()).toBeFalse();
+  });
+
+  it('profile: a load failure for a branch the page has left is dropped', () => {
+    const lateA = new Subject<ProviderProfile>();
+    portal.profile.and.returnValue(lateA);
+    const { cmp, host } = render(ProviderProfileComponent);
+    portal.profile.and.returnValue(of(profile({ id: 'f-2' })));
+    settingsSignal.set(settingsFixture({ facilityId: 'f-2' }));
+    host();
+    lateA.error(NOT_AVAILABLE);
+    expect(cmp.notAvailable()).toBeFalse();
+    expect(cmp.loadFailed()).toBeFalse();
+  });
+
   it('profile: a 404 on load is the calm not-available state', () => {
     portal.profile.and.returnValue(throwError(() => NOT_AVAILABLE));
     const { cmp } = render(ProviderProfileComponent);
     expect(cmp.notAvailable()).toBeTrue();
+    expect(invalidate).toHaveBeenCalled();
   });
 
   // ── staff ─────────────────────────────────────────────────────────────
@@ -379,6 +482,45 @@ describe('provider shell pages', () => {
     expect(cmp.confirmDeactivate()).toBeNull();
   });
 
+  it('staff: an action answer arriving after a branch switch is dropped, never applied or toasted', () => {
+    const late = new Subject<ProviderStaffMember>();
+    portal.activate.and.returnValue(late);
+    const { cmp, host } = render(ProviderStaffComponent);
+    cmp.reinvite(member({ active: false, canReinvite: true }));
+    portal.staff.and.returnValue(of([member({ userId: 'u-9', username: 'branch-b' })]));
+
+    settingsSignal.set(settingsFixture({ facilityId: 'f-2' }));
+    host();
+    late.next(member({ active: false, invitationPending: true }));
+    late.complete();
+
+    expect(cmp.staff().map((m) => m.userId)).toEqual(['u-9']);
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.info).not.toHaveBeenCalled();
+  });
+
+  it('staff: a list or action failure about the branch the page has left is dropped', () => {
+    const lateList = new Subject<ProviderStaffMember[]>();
+    const lateAction = new Subject<ProviderStaffMember>();
+    const { cmp, host } = render(ProviderStaffComponent);
+    portal.deactivate.and.returnValue(lateAction);
+    cmp.askDeactivate(member());
+    cmp.deactivate();
+    portal.staff.and.returnValue(lateList);
+    cmp.load();
+    portal.staff.and.returnValue(of([member({ userId: 'u-9' })]));
+
+    settingsSignal.set(settingsFixture({ facilityId: 'f-2' }));
+    host();
+    lateList.error(NOT_AVAILABLE);
+    lateAction.error(NOT_AVAILABLE);
+
+    expect(cmp.notAvailable()).toBeFalse();
+    expect(invalidate).not.toHaveBeenCalled();
+    expect(toast.info).not.toHaveBeenCalled();
+    expect(cmp.staff().map((m) => m.userId)).toEqual(['u-9']);
+  });
+
   it('staff: registering reloads the list; a 404 on load is not-available', () => {
     const { cmp, host } = render(ProviderStaffComponent);
     cmp.openRegister();
@@ -394,6 +536,7 @@ describe('provider shell pages', () => {
     portal.staff.and.returnValue(throwError(() => NOT_AVAILABLE));
     const unavailable = render(ProviderStaffComponent);
     expect(unavailable.host().querySelector('[data-test="not-available"]')).not.toBeNull();
+    expect(invalidate).toHaveBeenCalled();
   });
 
   // ── audit ─────────────────────────────────────────────────────────────
@@ -407,7 +550,7 @@ describe('provider shell pages', () => {
     expect(cmp.recordKey('PROVIDER_FACILITY')).toBe('PROVIDER.AUDIT.RECORD_FACILITY');
     expect(cmp.recordKey('PROVIDER_STAFF')).toBe('PROVIDER.AUDIT.RECORD_STAFF');
     expect(cmp.recordKey('USER')).toBe('PROVIDER.AUDIT.RECORD_ACCOUNT');
-    expect(cmp.recordKey('ASSIGNMENT')).toBe('PROVIDER.AUDIT.RECORD_ASSIGNMENT');
+    expect(cmp.recordKey('USER_ROLE_ASSIGNMENT')).toBe('PROVIDER.AUDIT.RECORD_ASSIGNMENT');
     expect(cmp.recordKey(null)).toBe('PROVIDER.AUDIT.RECORD_OTHER');
 
     cmp.previousPage();
@@ -416,6 +559,39 @@ describe('provider shell pages', () => {
     expect(portal.audit).toHaveBeenCalledWith(1, 20);
     cmp.previousPage();
     expect(portal.audit).toHaveBeenCalledWith(0, 20);
+  });
+
+  it('audit: a branch switch starts the trail again at its first page; the old answer is dropped', () => {
+    const { cmp, host } = render(ProviderAuditComponent);
+    const lateA = new Subject<ProviderAuditPage>();
+    portal.audit.and.returnValue(lateA);
+    cmp.nextPage();
+    expect(cmp.pageIndex()).toBe(1);
+    portal.audit.and.returnValue(
+      of({ entries: [], page: 0, size: 20, totalElements: 0, hasMore: false }),
+    );
+
+    settingsSignal.set(settingsFixture({ facilityId: 'f-2' }));
+    host();
+    lateA.next({ entries: [], page: 1, size: 20, totalElements: 99, hasMore: true });
+
+    expect(cmp.pageIndex()).toBe(0);
+    expect(portal.audit).toHaveBeenCalledWith(0, 20);
+    expect(cmp.page()?.totalElements).toBe(0);
+  });
+
+  it('audit: a failure for the branch the page has left is dropped', () => {
+    const lateA = new Subject<ProviderAuditPage>();
+    portal.audit.and.returnValue(lateA);
+    const { cmp, host } = render(ProviderAuditComponent);
+    portal.audit.and.returnValue(
+      of({ entries: [], page: 0, size: 20, totalElements: 0, hasMore: false }),
+    );
+    settingsSignal.set(settingsFixture({ facilityId: 'f-2' }));
+    host();
+    lateA.error(NOT_AVAILABLE);
+    expect(cmp.notAvailable()).toBeFalse();
+    expect(invalidate).not.toHaveBeenCalled();
   });
 
   it('audit: empty, not-available and failed states', () => {
@@ -431,6 +607,7 @@ describe('provider shell pages', () => {
 
     portal.audit.and.returnValue(throwError(() => NOT_AVAILABLE));
     expect(render(ProviderAuditComponent).cmp.notAvailable()).toBeTrue();
+    expect(invalidate).toHaveBeenCalled();
     TestBed.resetTestingModule();
 
     portal.audit.and.returnValue(throwError(() => new HttpErrorResponse({ status: 500 })));

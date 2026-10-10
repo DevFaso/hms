@@ -1,13 +1,7 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  OnInit,
-  computed,
-  inject,
-  signal,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
+import { Subscription } from 'rxjs';
 
 import { ProviderContextService } from '../../core/provider-context.service';
 import { ProviderProfile, isNotAvailable } from '../../services/provider.model';
@@ -15,6 +9,7 @@ import { ProviderPortalService } from '../../services/provider-portal.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { providerNavEntries } from '../../shell/nav-groups';
 import { verificationBadgeClass } from '../../super-admin/providers/provider-status';
+import { followFacility } from '../follow-facility';
 
 /**
  * The provider home (provider plan AC-12): where a user acting at a private
@@ -29,7 +24,7 @@ import { verificationBadgeClass } from '../../super-admin/providers/provider-sta
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: '../provider-pages.scss',
 })
-export class ProviderHomeComponent implements OnInit {
+export class ProviderHomeComponent {
   private readonly context = inject(ProviderContextService);
   private readonly portal = inject(ProviderPortalService);
 
@@ -48,15 +43,28 @@ export class ProviderHomeComponent implements OnInit {
     );
   });
 
-  ngOnInit(): void {
-    this.portal.profile().subscribe({
+  /** The facility the page shows; a branch switch re-reads it. */
+  private readonly shownFacility = followFacility(() => this.load());
+  private loadSub?: Subscription;
+
+  load(): void {
+    this.loadSub?.unsubscribe();
+    const facility = this.shownFacility();
+    this.loading.set(true);
+    this.notAvailable.set(false);
+    this.loadFailed.set(false);
+    this.loadSub = this.portal.profile().subscribe({
       next: (profile) => {
+        if (facility !== this.shownFacility()) return;
         this.profile.set(profile);
         this.loading.set(false);
       },
       error: (err: unknown) => {
+        if (facility !== this.shownFacility()) return;
         if (isNotAvailable(err)) {
           this.notAvailable.set(true);
+          // The seat went away: the shell and the guards ask the server again.
+          this.context.invalidate();
         } else {
           this.loadFailed.set(true);
         }

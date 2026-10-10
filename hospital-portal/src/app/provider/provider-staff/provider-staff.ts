@@ -1,12 +1,4 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  effect,
-  inject,
-  signal,
-  untracked,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
 
@@ -24,6 +16,7 @@ import { UserDetail } from '../../services/user.service';
 import { deliveryWarningKeys, hasActivationSent } from '../../shared/delivery-warnings';
 import { RoleLabelPipe } from '../../shared/pipes/role-label.pipe';
 import { ProviderStaffRegisterComponent } from '../provider-staff-register/provider-staff-register';
+import { followFacility } from '../follow-facility';
 
 /**
  * The facility's staff (provider plan P1-T13, AC-6), for its PROVIDER_ADMIN:
@@ -39,6 +32,8 @@ import { ProviderStaffRegisterComponent } from '../provider-staff-register/provi
  * The page follows the facility the session acts at: when the scope moves to
  * another branch, the list is read again and any open dialog closes, so
  * nothing is registered or changed at a facility the page no longer shows.
+ * An action answer that arrives after such a switch is dropped, never applied
+ * to the new branch's list or toasted.
  */
 @Component({
   selector: 'app-provider-staff',
@@ -74,32 +69,32 @@ export class ProviderStaffComponent {
 
   private loadSub?: Subscription;
 
-  constructor() {
-    effect(() => {
-      // Read on open, and again whenever the facility changes under the page.
-      this.facilityId();
-      untracked(() => {
-        this.confirmDeactivate.set(null);
-        this.registerOpen.set(false);
-        this.busyUserIds.set(new Set<string>());
-        this.load();
-      });
-    });
-  }
+  /** The facility the list shows: read on open, and again on every branch switch. */
+  private readonly shownFacility = followFacility(() => {
+    this.confirmDeactivate.set(null);
+    this.registerOpen.set(false);
+    this.busyUserIds.set(new Set<string>());
+    this.load();
+  });
 
   load(): void {
     this.loadSub?.unsubscribe();
+    const facility = this.shownFacility();
     this.loading.set(true);
     this.notAvailable.set(false);
     this.loadFailed.set(false);
     this.loadSub = this.portal.staff().subscribe({
       next: (staff) => {
+        if (facility !== this.shownFacility()) return;
         this.staff.set(staff);
         this.loading.set(false);
       },
       error: (err: unknown) => {
+        if (facility !== this.shownFacility()) return;
         if (isNotAvailable(err)) {
           this.notAvailable.set(true);
+          // The seat went away: the shell and the guards ask the server again.
+          this.context.invalidate();
         } else {
           this.loadFailed.set(true);
         }
@@ -129,21 +124,25 @@ export class ProviderStaffComponent {
   deactivate(): void {
     const member = this.confirmDeactivate();
     if (!member || !this.begin(member)) return;
+    const facility = this.shownFacility();
     this.confirmDeactivate.set(null);
     this.portal.deactivate(member.userId).subscribe({
       next: (updated) => {
+        if (facility !== this.shownFacility()) return;
         this.end(member);
         this.replace(updated);
         this.toast.success(this.translate.instant('PROVIDER.STAFF.DEACTIVATED'));
       },
-      error: (err: unknown) => this.failed(member, err),
+      error: (err: unknown) => this.failed(member, facility, err),
     });
   }
 
   reinvite(member: ProviderStaffMember): void {
     if (!member.canReinvite || !this.begin(member)) return;
+    const facility = this.shownFacility();
     this.portal.activate(member.userId).subscribe({
       next: (updated) => {
+        if (facility !== this.shownFacility()) return;
         this.end(member);
         this.replace(updated);
         const report = updated.activationDelivery;
@@ -156,7 +155,7 @@ export class ProviderStaffComponent {
           this.toast.warning(this.translate.instant(key));
         }
       },
-      error: (err: unknown) => this.failed(member, err),
+      error: (err: unknown) => this.failed(member, facility, err),
     });
   }
 
@@ -201,7 +200,9 @@ export class ProviderStaffComponent {
    * the admin): re-read the list rather than show the server's internals.
    * Only this member's row stops waiting.
    */
-  private failed(member: ProviderStaffMember, err: unknown): void {
+  private failed(member: ProviderStaffMember, facility: string | null, err: unknown): void {
+    // An answer about the branch the page has left is dropped.
+    if (facility !== this.shownFacility()) return;
     this.end(member);
     if (isNotAvailable(err)) {
       this.toast.info(this.translate.instant('PROVIDER.STAFF.MEMBER_UNAVAILABLE'));

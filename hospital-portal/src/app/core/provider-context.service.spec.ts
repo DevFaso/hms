@@ -16,6 +16,7 @@ describe('ProviderContextService', () => {
   let calls: number;
   let scope: string | null;
   let resolved: boolean;
+  let providerUser: boolean;
 
   function setup(): ProviderContextService {
     const auth = {
@@ -38,6 +39,7 @@ describe('ProviderContextService', () => {
           useValue: {
             effectiveHospitalIdForRequest: () => scope,
             sessionResolved: () => resolved,
+            providerUser: () => providerUser,
           },
         },
       ],
@@ -58,6 +60,7 @@ describe('ProviderContextService', () => {
     calls = 0;
     scope = 'f-1';
     resolved = true;
+    providerUser = true;
   });
 
   afterEach(() => TestBed.resetTestingModule());
@@ -71,8 +74,10 @@ describe('ProviderContextService', () => {
     expect(context.isProvider()).toBeTrue();
   });
 
-  it('never asks for a user who holds no role a provider may hold', () => {
-    roles = ['ROLE_DOCTOR'];
+  it('never asks for a user the session bootstrap did not mark as a provider user', () => {
+    // A hospital pharmacist: a provider-capable role, but no provider facility.
+    roles = ['ROLE_PHARMACIST'];
+    providerUser = false;
     const context = setup();
 
     expect(value(context)).toBeNull();
@@ -112,7 +117,7 @@ describe('ProviderContextService', () => {
     expect(value(context)).not.toBeNull();
 
     userId = 'u-2';
-    roles = ['ROLE_DOCTOR'];
+    providerUser = false;
     expect(value(context)).toBeNull();
     expect(context.settings()).toBeNull();
 
@@ -137,17 +142,27 @@ describe('ProviderContextService', () => {
     expect(calls).toBe(3);
   });
 
-  it('a 404 before the session scope is resolved is not final: asked again once it is', () => {
-    roles = ['ROLE_PHARMACIST'];
+  it('nothing is asked or cached before the session bootstrap has resolved', () => {
     resolved = false;
-    answer = () => throwError(() => new HttpErrorResponse({ status: 404 }));
     const context = setup();
 
     expect(value(context)).toBeNull();
+    expect(calls).toBe(0);
     resolved = true;
-    answer = () => of(settingsFixture());
     expect(value(context)?.facilityType).toBe('PHARMACY');
+    expect(calls).toBe(1);
+  });
+
+  it('invalidate() drops the answer and asks again: a lost seat reaches the nav', () => {
+    const context = setup();
+    expect(value(context)).not.toBeNull();
+
+    answer = () => throwError(() => new HttpErrorResponse({ status: 404 }));
+    context.invalidate();
+
     expect(calls).toBe(2);
+    expect(context.settings()).toBeNull();
+    expect(context.isProvider()).toBeFalse();
   });
 
   it('a late answer for a scope the session has left is dropped', () => {

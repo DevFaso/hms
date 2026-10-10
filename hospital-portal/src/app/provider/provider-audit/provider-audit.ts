@@ -1,25 +1,25 @@
 import { DatePipe } from '@angular/common';
-import {
-  ChangeDetectionStrategy,
-  Component,
-  OnInit,
-  computed,
-  inject,
-  signal,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
+import { Subscription } from 'rxjs';
+
+import { ProviderContextService } from '../../core/provider-context.service';
 
 import { ProviderAuditPage, isNotAvailable } from '../../services/provider.model';
 import { ProviderPortalService } from '../../services/provider-portal.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { RoleLabelPipe } from '../../shared/pipes/role-label.pipe';
+import { followFacility } from '../follow-facility';
 
 const PAGE_SIZE = 20;
 
 /**
  * The facility's own audit trail (provider plan §3.1), for its
  * PROVIDER_ADMIN: what its staff did here, newest first. The server returns
- * ids and codes only and never a row about a patient.
+ * ids and codes only, of facility administration only, never a row about a
+ * patient. The page follows the facility the session acts at: a branch switch
+ * starts again at its first page, and an answer about the facility the page
+ * has left is dropped, so one branch's rows are never paged under another's.
  */
 @Component({
   selector: 'app-provider-audit',
@@ -29,8 +29,9 @@ const PAGE_SIZE = 20;
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: '../provider-pages.scss',
 })
-export class ProviderAuditComponent implements OnInit {
+export class ProviderAuditComponent {
   private readonly portal = inject(ProviderPortalService);
+  private readonly context = inject(ProviderContextService);
 
   readonly page = signal<ProviderAuditPage | null>(null);
   readonly pageIndex = signal(0);
@@ -42,9 +43,13 @@ export class ProviderAuditComponent implements OnInit {
   readonly hasPrevious = computed(() => this.pageIndex() > 0);
   readonly hasNext = computed(() => this.page()?.hasMore ?? false);
 
-  ngOnInit(): void {
+  /** The facility the trail shows; a branch switch starts it again. */
+  private readonly shownFacility = followFacility(() => {
+    this.pageIndex.set(0);
+    this.page.set(null);
     this.load();
-  }
+  });
+  private loadSub?: Subscription;
 
   /** What kind of record a row acted on, in words: the entity type is a code, never shown raw. */
   recordKey(entityType: string | null): string {
@@ -55,8 +60,7 @@ export class ProviderAuditComponent implements OnInit {
         return 'PROVIDER.AUDIT.RECORD_STAFF';
       case 'USER':
         return 'PROVIDER.AUDIT.RECORD_ACCOUNT';
-      case 'USER_ROLE_HOSPITAL_ASSIGNMENT':
-      case 'ASSIGNMENT':
+      case 'USER_ROLE_ASSIGNMENT':
         return 'PROVIDER.AUDIT.RECORD_ASSIGNMENT';
       default:
         return 'PROVIDER.AUDIT.RECORD_OTHER';
@@ -64,17 +68,24 @@ export class ProviderAuditComponent implements OnInit {
   }
 
   load(): void {
+    this.loadSub?.unsubscribe();
+    const facility = this.shownFacility();
+    const pageIndex = this.pageIndex();
+    const current = () => facility === this.shownFacility() && pageIndex === this.pageIndex();
     this.loading.set(true);
     this.notAvailable.set(false);
     this.loadFailed.set(false);
-    this.portal.audit(this.pageIndex(), PAGE_SIZE).subscribe({
+    this.loadSub = this.portal.audit(pageIndex, PAGE_SIZE).subscribe({
       next: (page) => {
+        if (!current()) return;
         this.page.set(page);
         this.loading.set(false);
       },
       error: (err: unknown) => {
+        if (!current()) return;
         if (isNotAvailable(err)) {
           this.notAvailable.set(true);
+          this.context.invalidate();
         } else {
           this.loadFailed.set(true);
         }

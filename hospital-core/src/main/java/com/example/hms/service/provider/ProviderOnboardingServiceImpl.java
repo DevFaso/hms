@@ -331,7 +331,7 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
     }
 
     private ProviderVerification currentVerification(Hospital facility) {
-        return verificationRepository.findFirstByHospital_IdOrderByCreatedAtDesc(facility.getId())
+        return verificationRepository.findFirstByHospital_IdOrderByCreatedAtDescIdDesc(facility.getId())
             .orElseThrow(() -> new ResourceNotFoundException(MSG_NOT_FOUND));
     }
 

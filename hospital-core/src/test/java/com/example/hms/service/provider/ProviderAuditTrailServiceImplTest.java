@@ -69,7 +69,7 @@ class ProviderAuditTrailServiceImplTest {
         ProviderAuditEntryDTO row = new ProviderAuditEntryDTO(UUID.randomUUID(), LocalDateTime.now(),
             AuditEventType.DATA_UPDATE, AuditStatus.SUCCESS, UUID.randomUUID(), "padmin", "PROVIDER_ADMIN",
             "PROVIDER_FACILITY", pharmacy.getId().toString(), null, null);
-        when(auditEventLogRepository.findProviderFacilityTrail(eq(pharmacy.getId()), any()))
+        when(auditEventLogRepository.findProviderFacilityTrail(eq(pharmacy.getId()), eq(ProviderAuditTrailService.FACILITY_ENTITY_TYPES), any()))
             .thenReturn(new PageImpl<>(List.of(row), PageRequest.of(0, 20), 41));
 
         Optional<ProviderAuditPageDTO> page = service.trail(null, " ");
@@ -86,13 +86,14 @@ class ProviderAuditTrailServiceImplTest {
     @DisplayName("a size above the cap is capped at 100")
     void sizeIsCapped() {
         admin();
-        when(auditEventLogRepository.findProviderFacilityTrail(eq(pharmacy.getId()), any()))
+        when(auditEventLogRepository.findProviderFacilityTrail(eq(pharmacy.getId()), eq(ProviderAuditTrailService.FACILITY_ENTITY_TYPES), any()))
             .thenReturn(new PageImpl<>(List.of()));
 
         ProviderAuditPageDTO page = service.trail("2", "5000").orElseThrow();
 
         ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
-        verify(auditEventLogRepository).findProviderFacilityTrail(eq(pharmacy.getId()), pageable.capture());
+        verify(auditEventLogRepository).findProviderFacilityTrail(eq(pharmacy.getId()),
+            eq(ProviderAuditTrailService.FACILITY_ENTITY_TYPES), pageable.capture());
         assertThat(pageable.getValue().getPageNumber()).isEqualTo(2);
         assertThat(pageable.getValue().getPageSize()).isEqualTo(ProviderAuditTrailService.MAX_PAGE_SIZE);
         assertThat(page.getSize()).isEqualTo(ProviderAuditTrailService.MAX_PAGE_SIZE);

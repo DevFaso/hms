@@ -14,8 +14,9 @@ import java.util.Optional;
 /**
  * The provider facility audit trail (plan §3.1). The rows are those of
  * {@link AuditEventLogRepository#findProviderFacilityTrail}: written by the
- * facility's staff while acting there, never a row about a patient, and
- * projected to ids and codes in the query itself.
+ * facility's staff while acting there, of the facility-administration entity
+ * types only (an allowlist), never a row about a patient, and projected to
+ * ids and codes in the query itself.
  */
 @Service
 @RequiredArgsConstructor
@@ -38,7 +39,7 @@ public class ProviderAuditTrailServiceImpl implements ProviderAuditTrailService 
             throw new IllegalArgumentException("The page size must be at least 1.");
         }
         Page<ProviderAuditEntryDTO> rows = auditEventLogRepository.findProviderFacilityTrail(
-            found.get().facility().getId(), PageRequest.of(pageNumber, pageSize));
+            found.get().facility().getId(), FACILITY_ENTITY_TYPES, PageRequest.of(pageNumber, pageSize));
         return Optional.of(ProviderAuditPageDTO.builder()
             .entries(rows.getContent())
             .page(pageNumber)

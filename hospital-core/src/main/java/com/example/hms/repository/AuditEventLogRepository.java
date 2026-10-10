@@ -197,28 +197,37 @@ public interface AuditEventLogRepository
     /**
      * A provider facility's OWN audit trail (provider plan §3.1,
      * {@code GET /provider/audit}): the rows written by its staff while acting
-     * there, i.e. whose assignment is at the facility, newest first. Rows that
-     * concern a patient (a {@code patient_id}, or the {@code PATIENT} entity
-     * convention) are never returned, and the projection carries ids and codes
+     * there, i.e. whose assignment is at the facility, newest first.
+     *
+     * <p>An ALLOWLIST, never a denylist: only rows about administering the
+     * facility (the {@code entityTypes} the caller passes: its profile, its
+     * staff, accounts and role assignments) are returned, so a clinical row
+     * written at the facility later (a prescription, a lab order, a document)
+     * can never appear, whatever its entity type is called. A row naming a
+     * patient is excluded on top of that. The projection carries ids and codes
      * only: no description, no details, no IP address (plan §6.9). Under
      * impersonation the row's actor is the impersonated member; the
      * impersonator columns say who really acted (platform support). A row whose
      * assignment was hard-deleted has no facility left and drops out, as it
      * does from every other hospital-scoped view.
+     *
+     * @param entityTypes the allowed entity types, upper-case
      */
     @Query(value = "SELECT new com.example.hms.payload.dto.provider.ProviderAuditEntryDTO("
            + "a.id, a.eventTimestamp, a.eventType, a.status, u.id, a.userName, a.roleName, "
            + "a.entityType, a.resourceId, a.impersonatorUserId, a.impersonatorUsername) "
            + "FROM AuditEventLog a JOIN a.assignment asg LEFT JOIN a.user u "
            + "WHERE asg.hospital.id = :facilityId "
+           + "AND UPPER(a.entityType) IN :entityTypes "
            + "AND a.patientId IS NULL "
-           + "AND (a.entityType IS NULL OR UPPER(a.entityType) <> 'PATIENT') "
            + "ORDER BY a.eventTimestamp DESC, a.id DESC",
         countQuery = "SELECT COUNT(a) FROM AuditEventLog a JOIN a.assignment asg "
            + "WHERE asg.hospital.id = :facilityId "
-           + "AND a.patientId IS NULL "
-           + "AND (a.entityType IS NULL OR UPPER(a.entityType) <> 'PATIENT')")
-    Page<ProviderAuditEntryDTO> findProviderFacilityTrail(@Param("facilityId") UUID facilityId, Pageable pageable);
+           + "AND UPPER(a.entityType) IN :entityTypes "
+           + "AND a.patientId IS NULL")
+    Page<ProviderAuditEntryDTO> findProviderFacilityTrail(@Param("facilityId") UUID facilityId,
+                                                          @Param("entityTypes") Collection<String> entityTypes,
+                                                          Pageable pageable);
 
     /** Counterpart of {@link #findByDateRangeAndEventTypeIn} — everything not in the set. */
     @Query("SELECT DISTINCT a FROM AuditEventLog a WHERE " +

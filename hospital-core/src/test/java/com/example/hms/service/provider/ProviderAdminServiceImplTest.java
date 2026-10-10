@@ -86,8 +86,15 @@ class ProviderAdminServiceImplTest {
         validatorFactory.close();
     }
 
+    /** Every row of each member, as findByUserId and the batched findByUserIdIn return them. */
+    private final Map<UUID, List<UserRoleHospitalAssignment>> everyRows = new java.util.HashMap<>();
+
     @BeforeEach
     void setUp() {
+        when(assignmentRepository.findByUserIdIn(any())).thenAnswer(inv -> {
+            Set<UUID> ids = inv.getArgument(0);
+            return ids.stream().flatMap(id -> everyRows.getOrDefault(id, List.of()).stream()).toList();
+        });
         service = new ProviderAdminServiceImpl(seatResolver, organisationsFlag, hospitalRepository,
             verificationRepository, assignmentRepository, assignmentService, validator, JsonMapper.builder().build());
     }
@@ -308,6 +315,10 @@ class ProviderAdminServiceImplTest {
             assertThat(byName.get(shielded).isCanDeactivate()).as(shielded).isFalse();
             assertThat(byName.get(shielded).isCanReinvite()).as(shielded).isFalse();
         }
+        // One batched read of every member's rows, never one per member.
+        verify(assignmentRepository).findByUserIdIn(Set.of(active.getId(), invited.getId(), disabled.getId(),
+            peer.getId(), formerAdmin.getId(), globalAdmin.getId(), adminUser.getId()));
+        verify(assignmentRepository, never()).findByUserId(any());
         // The flags agree with what the endpoints actually do.
         assertThat(service.activateStaff(disabled.getId().toString())).isEmpty();
         assertThat(service.deactivateStaff(formerAdmin.getId().toString())).isEmpty();
@@ -403,6 +414,7 @@ class ProviderAdminServiceImplTest {
     }
 
     private void member(User user, UserRoleHospitalAssignment... rows) {
+        everyRows.put(user.getId(), List.of(rows));
         when(assignmentRepository.findByUserId(user.getId())).thenReturn(List.of(rows));
     }
 
@@ -414,7 +426,7 @@ class ProviderAdminServiceImplTest {
     }
 
     private void latestIs(ProviderVerification verification) {
-        when(verificationRepository.findFirstByHospital_IdOrderByCreatedAtDesc(pharmacy.getId()))
+        when(verificationRepository.findFirstByHospital_IdOrderByCreatedAtDescIdDesc(pharmacy.getId()))
             .thenReturn(Optional.ofNullable(verification));
     }
 

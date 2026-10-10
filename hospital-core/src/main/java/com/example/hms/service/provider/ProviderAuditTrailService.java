@@ -2,6 +2,7 @@ package com.example.hms.service.provider;
 
 import com.example.hms.payload.dto.provider.ProviderAuditPageDTO;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -24,8 +25,16 @@ public interface ProviderAuditTrailService {
     int MAX_PAGE_SIZE = 100;
 
     /**
-     * One page of the facility's audit rows, newest first: ids and codes, no
-     * patient row (plan §6.9).
+     * The only kinds of record the facility trail shows: administering the
+     * facility (its profile, its staff, accounts and role assignments). An
+     * allowlist, so nothing clinical written at the facility can ever reach
+     * it. Upper-case, as the query compares them.
+     */
+    List<String> FACILITY_ENTITY_TYPES = List.of("PROVIDER_FACILITY", "PROVIDER_STAFF", "USER", "USER_ROLE_ASSIGNMENT");
+
+    /**
+     * One page of the facility's audit rows, newest first: only the
+     * {@link #FACILITY_ENTITY_TYPES}, ids and codes, no patient row (plan §6.9).
      *
      * @param page zero-based page number as sent, or {@code null} for the first page
      * @param size page size as sent, or {@code null} for {@link #DEFAULT_PAGE_SIZE}
