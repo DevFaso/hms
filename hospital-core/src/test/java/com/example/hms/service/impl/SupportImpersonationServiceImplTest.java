@@ -36,6 +36,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.notNull;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -91,7 +93,7 @@ class SupportImpersonationServiceImplTest {
         when(tenantRoleAssignmentAccessor.findAssignmentsForUser(targetId))
             .thenReturn(List.of(assignment("NURSE", "Nurse", true)));
         when(tokenProvider.generateImpersonationAccessToken(any(TokenUserDescriptor.class),
-            eq(actorId), eq("super.admin"), anyLong())).thenReturn("impersonation.jwt");
+            eq(actorId), eq("super.admin"), anyLong(), any())).thenReturn("impersonation.jwt");
         when(tokenProvider.getJtiFromToken("impersonation.jwt")).thenReturn("imp-jti");
         when(tokenProvider.getJtiFromToken("original.super-admin.jwt")).thenReturn("orig-jti");
         when(tokenProvider.getExpiration("original.super-admin.jwt"))
@@ -135,6 +137,9 @@ class SupportImpersonationServiceImplTest {
         verify(tokenBlacklistService, times(1)).blacklist(eq("orig-jti"), anyLong());
         // Closes Copilot review #4: tracker registered so refresh is now blocked.
         assertThat(sessionTracker.hasActive(actorId)).isTrue();
+        // The verified TOTP step-up is the second factor the token carries (AC-13).
+        verify(tokenProvider).generateImpersonationAccessToken(any(TokenUserDescriptor.class),
+            eq(actorId), eq("super.admin"), anyLong(), notNull());
     }
 
     @Test
@@ -153,7 +158,7 @@ class SupportImpersonationServiceImplTest {
             "original.super-admin.jwt"))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("Cannot impersonate yourself");
-        verify(tokenProvider, never()).generateImpersonationAccessToken(any(), any(), any(), anyLong());
+        verify(tokenProvider, never()).generateImpersonationAccessToken(any(), any(), any(), anyLong(), any());
     }
 
     @Test
@@ -171,7 +176,7 @@ class SupportImpersonationServiceImplTest {
             "original.super-admin.jwt"))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("Cannot impersonate another super admin");
-        verify(tokenProvider, never()).generateImpersonationAccessToken(any(), any(), any(), anyLong());
+        verify(tokenProvider, never()).generateImpersonationAccessToken(any(), any(), any(), anyLong(), any());
     }
 
     @Test
@@ -205,7 +210,7 @@ class SupportImpersonationServiceImplTest {
             "original.super-admin.jwt"))
             .isInstanceOf(UnauthorizedException.class)
             .hasMessageContaining("mfa_required");
-        verify(tokenProvider, never()).generateImpersonationAccessToken(any(), any(), any(), anyLong());
+        verify(tokenProvider, never()).generateImpersonationAccessToken(any(), any(), any(), anyLong(), any());
     }
 
     @Test
@@ -229,6 +234,9 @@ class SupportImpersonationServiceImplTest {
             .containsExactlyInAnyOrder(
                 AuditEventType.SECURITY_ALERT_TRIGGERED,
                 AuditEventType.IMPERSONATION_STARTED);
+        // No step-up, so no second factor on the token (AC-13).
+        verify(tokenProvider).generateImpersonationAccessToken(any(TokenUserDescriptor.class),
+            eq(actorId), eq("super.admin"), anyLong(), isNull());
     }
 
     @Test

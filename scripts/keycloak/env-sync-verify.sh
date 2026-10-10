@@ -23,7 +23,7 @@
 #
 #   --full — additionally prompts for an admin password per env and runs:
 #     A1. Live realm's hms-portal redirect URIs match realm-export.json
-#     A2. Live realm role count matches realm-export.json (currently 26)
+#     A2. Live realm role count matches realm-export.json (currently 27)
 #     A3. dev.* user policy per keycloak/README.md § Policy:
 #           hosted dev  — dev.admin FORBIDDEN, dev.doctor/dev.patient OK
 #           hosted prod — all three FORBIDDEN

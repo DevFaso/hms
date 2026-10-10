@@ -319,7 +319,7 @@ but on the uat env specifically:
    yellow overwritten / red errors).
 
 Expected result: zero red. Yellow counts on Clients + Realm Roles
-match the number of objects in the export (4 clients, 26 roles).
+match the number of objects in the export (4 clients, 27 roles).
 
 ### 2d. Verify
 

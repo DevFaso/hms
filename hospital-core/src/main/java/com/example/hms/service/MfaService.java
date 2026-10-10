@@ -215,6 +215,17 @@ public class MfaService {
     }
 
     /**
+     * The user has a TOTP enrolment row, verified or not. An abandoned
+     * re-enrolment leaves the row unverified and disabled, which
+     * {@link #isMfaEnabled} reads as "no MFA"; whoever guards replacing an
+     * authenticator must key on the row itself, or that state reopens a
+     * password-only enrolment.
+     */
+    public boolean hasTotpEnrollment(UUID userId) {
+        return enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP).isPresent();
+    }
+
+    /**
      * Checks if MFA is required for a given role based on config.
      */
     public boolean isMfaRequiredForRole(String roleName, List<String> requiredRoles) {

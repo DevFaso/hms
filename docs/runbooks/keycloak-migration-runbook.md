@@ -24,7 +24,7 @@ verify their email on first login.
 - [ ] `hms-portal`, `hms-patient-android`, `hms-patient-ios`, `hms-backend`
       clients exist with correct redirect URIs (see
       `keycloak/redirect-uris.md`).
-- [ ] All 26 realm roles exist (realm export seeds them; verify via
+- [ ] All 27 realm roles exist (realm export seeds them; verify via
       Keycloak admin UI or `GET /admin/realms/hms/roles`).
 - [ ] Keycloak SMTP is configured and a test email to an ops inbox
       is received within 5 min. The migration fails closed without it.

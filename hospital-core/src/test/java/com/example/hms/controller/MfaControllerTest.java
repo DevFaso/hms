@@ -29,6 +29,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.notNull;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -169,8 +170,9 @@ class MfaControllerTest {
         when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
         when(mfaService.verifyCode(USER_ID, "654321")).thenReturn(true);
         when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID)).thenReturn(List.of());
-        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class))).thenReturn("access-jwt");
-        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class))).thenReturn("refresh-jwt");
+        // The tokens minted after a verified code carry the second factor (AC-13).
+        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class), notNull())).thenReturn("access-jwt");
+        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class), notNull())).thenReturn("refresh-jwt");
         when(jwtTokenProvider.resolvePreferredRole(any())).thenReturn("ROLE_DOCTOR");
 
         mockMvc.perform(post("/auth/mfa/verify")
@@ -213,8 +215,9 @@ class MfaControllerTest {
         when(mfaService.verifyCode(USER_ID, "BACKUP01")).thenReturn(false);
         when(mfaService.verifyBackupCode(USER_ID, "BACKUP01")).thenReturn(true);
         when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID)).thenReturn(List.of());
-        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class))).thenReturn("access-jwt");
-        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class))).thenReturn("refresh-jwt");
+        // The tokens minted after a verified code carry the second factor (AC-13).
+        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class), notNull())).thenReturn("access-jwt");
+        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class), notNull())).thenReturn("refresh-jwt");
         when(jwtTokenProvider.resolvePreferredRole(any())).thenReturn("ROLE_DOCTOR");
 
         mockMvc.perform(post("/auth/mfa/verify")
