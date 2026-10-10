@@ -1,7 +1,6 @@
 package com.example.hms.security;
 
 import org.jspecify.annotations.Nullable;
-import org.springframework.core.NestedExceptionUtils;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.security.access.AccessDeniedException;
@@ -30,12 +29,28 @@ public class StompRefusalErrorHandler extends StompSubProtocolErrorHandler {
     protected Message<byte[]> handleInternal(StompHeaderAccessor errorHeaderAccessor, byte[] errorPayload,
                                              @Nullable Throwable cause,
                                              @Nullable StompHeaderAccessor clientHeaderAccessor) {
-        Throwable root = cause == null ? null : NestedExceptionUtils.getMostSpecificCause(cause);
-        if (root instanceof StompCallerUnavailableException) {
-            errorHeaderAccessor.setMessage(UNAVAILABLE);
-        } else if (root instanceof AccessDeniedException) {
-            errorHeaderAccessor.setMessage(ACCESS_DENIED);
+        String verdict = classify(cause);
+        if (verdict != null) {
+            errorHeaderAccessor.setMessage(verdict);
         }
         return super.handleInternal(errorHeaderAccessor, errorPayload, cause, clientHeaderAccessor);
+    }
+
+    /**
+     * The first refusal in the cause chain decides, however it was wrapped
+     * (the channel's MessageDeliveryException, or anything that wraps the
+     * interceptor's exception in turn): {@link #UNAVAILABLE} or
+     * {@link #ACCESS_DENIED}; {@code null} when the chain holds no refusal.
+     */
+    static String classify(Throwable cause) {
+        for (Throwable t = cause; t != null; t = t.getCause() == t ? null : t.getCause()) {
+            if (t instanceof StompCallerUnavailableException) {
+                return UNAVAILABLE;
+            }
+            if (t instanceof AccessDeniedException) {
+                return ACCESS_DENIED;
+            }
+        }
+        return null;
     }
 }

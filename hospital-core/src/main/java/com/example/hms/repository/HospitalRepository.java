@@ -19,6 +19,15 @@ import java.util.UUID;
 
 @Repository
 public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
+
+    /**
+     * The clinical predicate (provider plan AC-11): a hospital, never a
+     * pharmacy or laboratory. Concatenated into every clinical query, with the
+     * fully-qualified enum literal JPQL needs; padded with a space on each
+     * side, so it splices between two text blocks as safely as into a string.
+     */
+    String CLINICAL_ONLY = " h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL ";
+
     @Query("SELECT h FROM Hospital h WHERE LOWER(h.name) = LOWER(:identifier) OR LOWER(h.code) = LOWER(:identifier) OR LOWER(h.email) = LOWER(:identifier)")
     java.util.Optional<Hospital> findByNameOrCodeOrEmail(@Param("identifier") String identifier);
 
@@ -61,7 +70,7 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
             "(:city IS NULL OR LOWER(h.city) LIKE LOWER(CONCAT('%', CAST(:city AS string), '%'))) AND " +
             "(:state IS NULL OR LOWER(h.state) LIKE LOWER(CONCAT('%', CAST(:state AS string), '%'))) AND " +
             "(:active IS NULL OR h.active = :active) AND" +
-            " h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL " +
+            CLINICAL_ONLY +
             "ORDER BY LOWER(h.name)")
     Slice<Hospital> searchHospitals(@Param("name") String name,
                                    @Param("city") String city,
@@ -89,15 +98,15 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
      */
 
     /** Every clinical hospital: the super-admin's global scope, platform KPIs. */
-    @Query("SELECT h FROM Hospital h WHERE h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
+    @Query("SELECT h FROM Hospital h WHERE " + CLINICAL_ONLY)
     List<Hospital> findAllHospitals();
 
     /** Dashboard count: clinical hospitals. */
-    @Query("SELECT COUNT(h) FROM Hospital h WHERE h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
+    @Query("SELECT COUNT(h) FROM Hospital h WHERE " + CLINICAL_ONLY)
     long countHospitals();
 
     /** Dashboard count: active clinical hospitals. */
-    @Query("SELECT COUNT(h) FROM Hospital h WHERE h.active = true AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
+    @Query("SELECT COUNT(h) FROM Hospital h WHERE h.active = true AND " + CLINICAL_ONLY)
     long countActiveHospitals();
 
     /** B1: the laboratories a clinician may route an order to — every active hospital, by name. */
@@ -122,27 +131,27 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
      * is a recorded exception in HospitalRepositoryCallerCoverageTest.
      */
     @Query("SELECT h FROM Hospital h WHERE h.id = :id"
-        + " AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
+        + " AND " + CLINICAL_ONLY)
     Optional<Hospital> findClinicalById(@Param("id") UUID id);
 
     /** A clinical destination named by its exact name, any case (requireClinicalHospital, AC-11). */
     @Query("SELECT h FROM Hospital h WHERE LOWER(h.name) = LOWER(:name)"
-        + " AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
+        + " AND " + CLINICAL_ONLY)
     Optional<Hospital> findClinicalByNameIgnoreCase(@Param("name") String name);
 
     /** A clinical destination named by its exact name (requireClinicalHospital, AC-11). */
     @Query("SELECT h FROM Hospital h WHERE h.name = :name"
-        + " AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
+        + " AND " + CLINICAL_ONLY)
     Optional<Hospital> findClinicalByName(@Param("name") String name);
 
     /** A clinical destination named by its code, any case (requireClinicalHospital, AC-11). */
     @Query("SELECT h FROM Hospital h WHERE LOWER(h.code) = LOWER(:code)"
-        + " AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
+        + " AND " + CLINICAL_ONLY)
     Optional<Hospital> findClinicalByCodeIgnoreCase(@Param("code") String code);
 
     /** A clinical destination named by its name, code or email, any case (requireClinicalHospital, AC-11). */
     @Query("SELECT h FROM Hospital h WHERE (LOWER(h.name) = LOWER(:identifier) OR LOWER(h.code) = LOWER(:identifier)"
-        + " OR LOWER(h.email) = LOWER(:identifier)) AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
+        + " OR LOWER(h.email) = LOWER(:identifier)) AND " + CLINICAL_ONLY)
     Optional<Hospital> findClinicalByNameOrCodeOrEmail(@Param("identifier") String identifier);
 
     /* Organization-related queries */
@@ -153,11 +162,11 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
      * never attached to a hospital organisation (provider plan AC-11).
      */
     @Query("SELECT h FROM Hospital h WHERE h.organization IS NULL"
-        + " AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL")
+        + " AND " + CLINICAL_ONLY)
     List<Hospital> findByOrganizationIsNull();
 
     /** An organisation's clinical hospitals, by name. */
-    @Query("SELECT h FROM Hospital h WHERE h.organization.id = :organizationId AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL ORDER BY h.name ASC")
+    @Query("SELECT h FROM Hospital h WHERE h.organization.id = :organizationId AND " + CLINICAL_ONLY + " ORDER BY h.name ASC")
     List<Hospital> findByOrganizationIdOrderByNameAsc(@Param("organizationId") UUID organizationId);
 
     @Query("""
@@ -166,7 +175,7 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
       LEFT JOIN FETCH d.headOfDepartment hod
       LEFT JOIN FETCH hod.user u
       WHERE (:activeOnly IS NULL OR h.active = :activeOnly)
-    AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL
+    AND""" + CLINICAL_ONLY + """
     AND (
       :hospitalQuery IS NULL OR :hospitalQuery = '' OR
       LOWER(CAST(h.name AS string)) LIKE LOWER(CONCAT('%', CAST(:hospitalQuery AS string), '%')) OR
@@ -180,7 +189,7 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     @Query("""
       SELECT h FROM Hospital h
       WHERE (:organizationId IS NULL OR h.organization.id = :organizationId)
-        AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL
+        AND""" + CLINICAL_ONLY + """
         AND (:unassignedOnly IS NULL OR :unassignedOnly = false OR h.organization IS NULL)
         AND (
             :city IS NULL

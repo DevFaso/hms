@@ -91,13 +91,13 @@ public class ProviderFacilityConfinementFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
             return;
         }
-        ActingScopeResolver scopeResolver = scopeResolverProvider.getIfAvailable();
-        HospitalContext context;
+        HospitalContext live;
         try {
-            context = scopeResolver == null ? null : fallbackContext(authentication);
+            live = fallbackLive(policy, authentication, request, response);
         } catch (DataAccessException | CannotCreateTransactionException unavailable) {
-            // The database, not the caller: a retryable 503, never the
-            // "not found" a refusal answers.
+            // The database, not the caller, anywhere on this path (the
+            // context, the header's classification, the refusal's audit row):
+            // a retryable 503, never the "not found" a refusal answers.
             log.warn("[CONFINEMENT] Live context unavailable ({}); answered 503",
                 unavailable.getClass().getSimpleName());
             if (!response.isCommitted()) {
@@ -105,14 +105,7 @@ public class ProviderFacilityConfinementFilter extends OncePerRequestFilter {
             }
             return;
         }
-        if (context == null) {
-            policy.refuse(request, response);
-            return;
-        }
-        // X-Hospital-Id exactly as both context filters apply it, and a refused
-        // one answered by the same code: audited, holders cleared, 403.
-        HospitalContext live = scopeResolver.withHeader(context, request);
-        if (scopeResolver.answerRefusedHeader(live, response)) {
+        if (live == null) {
             return;
         }
         if (!ProviderConfinementPolicy.isConfined(live)) {
@@ -149,6 +142,27 @@ public class ProviderFacilityConfinementFilter extends OncePerRequestFilter {
     private static boolean isStompHandshake(HttpServletRequest request) {
         return ProviderConfinement.underAny(ProviderConfinementPolicy.pathWithinApplication(request),
             CommonProviderConfinement.NON_MVC_PREFIXES);
+    }
+
+    /**
+     * The fallback's live context with {@code X-Hospital-Id} applied, or
+     * {@code null} once the request has been answered: refused (the context
+     * cannot be computed) or a refused header (audited, 403, by the same code
+     * as both context filters). A database failure propagates to the caller.
+     */
+    private HospitalContext fallbackLive(ProviderConfinementPolicy policy, Authentication authentication,
+                                         HttpServletRequest request, HttpServletResponse response) throws IOException {
+        ActingScopeResolver scopeResolver = scopeResolverProvider.getIfAvailable();
+        HospitalContext context = scopeResolver == null ? null : fallbackContext(authentication);
+        if (context == null) {
+            policy.refuse(request, response);
+            return null;
+        }
+        HospitalContext live = scopeResolver.withHeader(context, request);
+        if (scopeResolver.answerRefusedHeader(live, response)) {
+            return null;
+        }
+        return live;
     }
 
     /** The live context of a principal that arrived without one, or {@code null} when it cannot be computed. */

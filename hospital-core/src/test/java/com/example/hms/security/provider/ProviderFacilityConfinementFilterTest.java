@@ -47,6 +47,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -74,7 +75,9 @@ class ProviderFacilityConfinementFilterTest {
     private final ProviderCallerResolver callerResolver = mock(ProviderCallerResolver.class);
     private final FilterChain chain = mock(FilterChain.class);
     private final CrossTenantReadAudit audit = mock(CrossTenantReadAudit.class);
-    private final ActingScopeResolver scopeResolver = scopeResolver(audit);
+    private final UserRoleHospitalAssignmentRepository assignmentRepository =
+        mock(UserRoleHospitalAssignmentRepository.class);
+    private final ActingScopeResolver scopeResolver = scopeResolver(audit, assignmentRepository);
 
     @RestController
     static class StandInController {
@@ -157,11 +160,12 @@ class ProviderFacilityConfinementFilterTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static ActingScopeResolver scopeResolver(CrossTenantReadAudit audit) {
+    private static ActingScopeResolver scopeResolver(CrossTenantReadAudit audit,
+                                                     UserRoleHospitalAssignmentRepository assignmentRepository) {
         ObjectProvider<CrossTenantReadAudit> auditProvider = mock(ObjectProvider.class);
         when(auditProvider.getIfAvailable()).thenReturn(audit);
         return new ActingScopeResolver(mock(TenantRoleAssignmentAccessor.class),
-            mock(UserRoleHospitalAssignmentRepository.class), auditProvider);
+            assignmentRepository, auditProvider);
     }
 
     @SuppressWarnings("unchecked")
@@ -454,6 +458,36 @@ class ProviderFacilityConfinementFilterTest {
         doThrow(new CannotCreateTransactionException("no connection")).when(callerResolver).liveContext(someone);
         filter(policy(mapping(), null)).doFilter(get("/notifications"), noTransaction, chain);
         assertThat(noTransaction.getStatus()).isEqualTo(503);
+
+        verify(chain, never()).doFilter(any(), any());
+    }
+
+    @Test
+    @DisplayName("FALLBACK: a database failure classifying or auditing a refused header is a 503 too")
+    void databaseFailureOnTheHeaderPathIsRetryable() throws Exception {
+        Authentication someone = user("nurse");
+        authenticated(someone);
+        when(callerResolver.liveContext(someone)).thenReturn(pharmacist(false));
+
+        // Classifying the refused header (has the caller an inactive row there?).
+        doThrow(new DataAccessResourceFailureException("db down"))
+            .when(assignmentRepository).existsByUserIdAndHospitalIdAndActiveFalse(any(), any());
+        MockHttpServletRequest classified = get("/notifications");
+        classified.addHeader("X-Hospital-Id", UUID.randomUUID().toString());
+        MockHttpServletResponse classifying = new MockHttpServletResponse();
+        filter(policy(mapping(), null)).doFilter(classified, classifying, chain);
+        assertThat(classifying.getStatus()).isEqualTo(503);
+
+        // Writing the refusal's audit row.
+        doReturn(false).when(assignmentRepository).existsByUserIdAndHospitalIdAndActiveFalse(any(), any());
+        doThrow(new CannotCreateTransactionException("no connection"))
+            .when(audit).recordRefusal(any(), any(), any(), any(), any());
+        authenticated(someone);
+        MockHttpServletRequest audited = get("/notifications");
+        audited.addHeader("X-Hospital-Id", UUID.randomUUID().toString());
+        MockHttpServletResponse auditing = new MockHttpServletResponse();
+        filter(policy(mapping(), null)).doFilter(audited, auditing, chain);
+        assertThat(auditing.getStatus()).isEqualTo(503);
 
         verify(chain, never()).doFilter(any(), any());
     }

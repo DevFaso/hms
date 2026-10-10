@@ -502,6 +502,32 @@ class ProviderStompSubscriptionTest {
     }
 
     @Test
+    @DisplayName("a database outage is remembered for 5 s: frames in that window answer unavailable without a query")
+    void databaseOutageIsRememberedBriefly() {
+        when(assignmentAccessor.findAssignmentsForUser(userId)).thenThrow(dbDown());
+        Principal pharmacist = ticketUser("ROLE_PHARMACIST");
+
+        Message<byte[]> first = freshSessionSubscribe("/topic/notifications", pharmacist);
+        assertThatThrownBy(() -> interceptor.preSend(first, channel))
+            .isInstanceOf(StompCallerUnavailableException.class);
+        for (int i = 0; i < 3; i++) {
+            Message<byte[]> again = subscribe("/topic/emergency-broadcast", pharmacist);
+            assertThatThrownBy(() -> interceptor.preSend(again, channel))
+                .isInstanceOf(StompCallerUnavailableException.class);
+            Message<byte[]> send = frame(StompCommand.SEND, "/app/chat.sendMessage", pharmacist);
+            assertThatThrownBy(() -> interceptor.preSend(send, channel))
+                .isInstanceOf(StompCallerUnavailableException.class);
+        }
+        verify(assignmentAccessor, times(1)).findAssignmentsForUser(userId);
+
+        clock.advance(Duration.ofSeconds(6));
+        Message<byte[]> later = subscribe("/topic/notifications", pharmacist);
+        assertThatThrownBy(() -> interceptor.preSend(later, channel))
+            .isInstanceOf(StompCallerUnavailableException.class);
+        verify(assignmentAccessor, times(2)).findAssignmentsForUser(userId);
+    }
+
+    @Test
     @DisplayName("a non-database failure is remembered for the TTL: refused without re-querying, then asked again")
     void nonDatabaseFailureIsNegativeCachedForTheTtl() {
         Principal pharmacist = ticketUser("ROLE_PHARMACIST");

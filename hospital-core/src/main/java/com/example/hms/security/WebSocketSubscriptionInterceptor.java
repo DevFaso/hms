@@ -101,6 +101,17 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
     /** How old the session's last resolution may be to vouch for a caller while the database is down. */
     static final Duration LAST_KNOWN_MAX_AGE = RESOLUTION_TTL.multipliedBy(5);
 
+    /**
+     * How long a DATABASE failure to resolve the caller is remembered: frames in
+     * that window answer "unavailable" at once instead of each waiting out the
+     * connection pool's timeout on an inbound thread.
+     */
+    static final Duration UNAVAILABLE_TTL = Duration.ofSeconds(5);
+
+    /** Session attribute: until when the database is taken as unavailable for this session. */
+    static final String UNAVAILABLE_UNTIL_ATTRIBUTE =
+        WebSocketSubscriptionInterceptor.class.getName() + ".unavailableUntil";
+
     /** Session attribute holding the last successful resolution of the caller. */
     static final String RESOLUTION_ATTRIBUTE = WebSocketSubscriptionInterceptor.class.getName() + ".resolution";
 
@@ -291,17 +302,24 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
                 ? new Caller(null, true, null)
                 : new Caller(cached.context(), false, cached.context());
         }
+        if (session != null && session.get(UNAVAILABLE_UNTIL_ATTRIBUTE) instanceof Instant until
+            && now.isBefore(until)) {
+            // The database failed a moment ago: not asked again yet.
+            return new Caller(null, true, lastKnown(cached, now));
+        }
         try {
             HospitalContext context = callerResolver.liveContext(user);
             if (session != null) {
                 session.put(RESOLUTION_ATTRIBUTE, new Resolution(context, now, false));
+                session.remove(UNAVAILABLE_UNTIL_ATTRIBUTE);
             }
             return new Caller(context, false, context);
         } catch (DataAccessException | CannotCreateTransactionException databaseDown) {
             log.warn("[STOMP] Live context unavailable ({})", databaseDown.getClass().getSimpleName());
-            boolean recent = cached != null && !cached.failed()
-                && !now.isAfter(cached.resolvedAt().plus(LAST_KNOWN_MAX_AGE));
-            return new Caller(null, true, recent ? cached.context() : null);
+            if (session != null) {
+                session.put(UNAVAILABLE_UNTIL_ATTRIBUTE, now.plus(UNAVAILABLE_TTL));
+            }
+            return new Caller(null, true, lastKnown(cached, now));
         } catch (RuntimeException failure) {
             // Not a database outage, and no answer either: unresolved, with no
             // last known context. Remembered for the TTL so a broken
@@ -312,6 +330,13 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
             }
             return new Caller(null, true, null);
         }
+    }
+
+    /** The session's last successful resolution, while it may still vouch during an outage. */
+    private static HospitalContext lastKnown(Resolution cached, Instant now) {
+        boolean recent = cached != null && !cached.failed()
+            && !now.isAfter(cached.resolvedAt().plus(LAST_KNOWN_MAX_AGE));
+        return recent ? cached.context() : null;
     }
 
     /**

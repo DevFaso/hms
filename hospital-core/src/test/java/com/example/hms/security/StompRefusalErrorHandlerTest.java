@@ -54,6 +54,17 @@ class StompRefusalErrorHandlerTest {
     }
 
     @Test
+    @DisplayName("an AccessDeniedException that itself wraps a cause is still read as access-denied (the chain decides, not its root)")
+    void wrappedAccessDeniedIsRecognisable() {
+        MessageDeliveryException wrapped = new MessageDeliveryException(subscribe(), "delivery failed",
+            new IllegalStateException("interceptor failed",
+                new AccessDeniedException("not permitted", new IllegalArgumentException("inner detail"))));
+
+        assertThat(message(handler.handleClientMessageProcessingError(subscribe(), wrapped)))
+            .isEqualTo(StompRefusalErrorHandler.ACCESS_DENIED);
+    }
+
+    @Test
     @DisplayName("any other failure keeps its own message")
     void otherFailuresKeepTheirMessage() {
         MessageDeliveryException other = new MessageDeliveryException(subscribe(), "broker unavailable",
