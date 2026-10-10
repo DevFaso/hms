@@ -144,6 +144,13 @@
   "relationship": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/ProxyRelationship.java"
   },
+  "facilityType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/FacilityType.java" },
+  "hospitalLifecycleState": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/HospitalLifecycleState.java"
+  },
+  "providerVerificationStatus": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/ProviderVerificationStatus.java"
+  },
   "role": {
     "roles": [
       "hospital-core/src/main/resources/db/migration",

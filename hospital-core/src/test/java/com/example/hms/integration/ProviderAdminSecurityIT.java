@@ -1,6 +1,8 @@
 package com.example.hms.integration;
 
 import com.example.hms.BaseIT;
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.FacilityType;
 import com.example.hms.enums.ProviderVerificationStatus;
 import com.example.hms.model.AuditEventLog;
@@ -146,6 +148,7 @@ class ProviderAdminSecurityIT extends BaseIT {
 
         for (MockHttpServletRequestBuilder request : List.of(
                 get("/provider/staff"),
+                get("/provider/audit"),
                 put("/provider/profile").contentType(MediaType.APPLICATION_JSON).content("{\"phoneNumber\":\"+22670000000\"}"),
                 post("/provider/staff/{userId}/deactivate", admin.getId()),
                 post("/provider/staff/{userId}/activate", admin.getId()))) {
@@ -355,6 +358,53 @@ class ProviderAdminSecurityIT extends BaseIT {
         assertThat(result.getResponse().getStatus()).isEqualTo(400);
     }
 
+    // ── the facility's own audit trail (plan section 3.1) ──────────────────
+
+    @Test
+    @DisplayName("the admin reads its own facility's trail: its staff's rows, never another facility's, never a patient's")
+    void adminReadsOwnAuditTrailOnly() throws Exception {
+        // A real write at the pharmacy, audited by the write interceptor.
+        MvcResult write = as(adminToken, put("/provider/profile").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"phoneNumber\":\"+22670778899\"}"));
+        assertThat(write.getResponse().getStatus()).isEqualTo(200);
+        UUID ownRow = auditEventLogRepository.findAll().stream()
+            .filter(row -> row.getUser() != null && admin.getId().equals(row.getUser().getId()))
+            .filter(row -> "PROVIDER_FACILITY".equals(row.getEntityType()))
+            .map(AuditEventLog::getId)
+            .findFirst()
+            .orElseThrow();
+        User elsewhere = accounts.userAt("elsewhere", otherPharmacyId, PHARMACIST);
+        UUID otherFacilityRow = auditRow(elsewhere, otherPharmacyId, "PROVIDER_STAFF", null);
+        UUID patientIdRow = auditRow(pharmacist, pharmacyId, "PRESCRIPTION", UUID.randomUUID());
+        UUID patientEntityRow = auditRow(pharmacist, pharmacyId, "PATIENT", null);
+        UUID staffRow = auditRow(pharmacist, pharmacyId, "PROVIDER_STAFF", null);
+
+        JsonNode page = json(as(adminToken, get("/provider/audit")));
+
+        List<String> ids = new ArrayList<>();
+        page.get("entries").forEach(entry -> ids.add(entry.get("id").asText()));
+        assertThat(ids).contains(ownRow.toString(), staffRow.toString())
+            .doesNotContain(otherFacilityRow.toString(), patientIdRow.toString(), patientEntityRow.toString());
+        page.get("entries").forEach(entry -> assertThat(entry.has("eventDescription") || entry.has("ipAddress")
+            || entry.has("details") || entry.has("patientId")).as(entry.toString()).isFalse());
+        assertThat(page.get("totalElements").asLong()).isEqualTo(ids.size());
+    }
+
+    @Test
+    @DisplayName("malformed paging from a hospital doctor or a pharmacist: the unmapped answer; from the admin: a 400")
+    void auditTrailParametersAreReadAfterTheSeat() throws Exception {
+        String unmapped = ProviderConfinementSecurityIT.refusalShape(as(doctorToken(), get(UNMAPPED)));
+        MockHttpServletRequestBuilder malformed = get("/provider/audit").param("page", "abc").param("size", "-1");
+
+        MvcResult fromDoctor = as(doctorToken(), malformed);
+        assertThat(ProviderConfinementSecurityIT.refusalShape(fromDoctor)).isEqualTo(unmapped);
+        MvcResult fromPharmacist = as(tokenFor(pharmacist, PHARMACIST),
+            get("/provider/audit").param("page", "abc").param("size", "-1"));
+        assertThat(ProviderConfinementSecurityIT.refusalShape(fromPharmacist)).isEqualTo(unmapped);
+        MvcResult fromAdmin = as(adminToken, get("/provider/audit").param("page", "abc").param("size", "-1"));
+        assertThat(fromAdmin.getResponse().getStatus()).isEqualTo(400);
+    }
+
     // ── directory and the flag ──────────────────────────────────────────────
 
     @Test
@@ -457,6 +507,7 @@ class ProviderAdminSecurityIT extends BaseIT {
             get("/provider/profile"),
             get("/provider/settings"),
             get("/provider/staff"),
+            get("/provider/audit"),
             put("/provider/profile").contentType(MediaType.APPLICATION_JSON).content("{\"phoneNumber\":\"+22670000000\"}"),
             post("/provider/staff/{userId}/deactivate", memberId),
             post("/provider/staff/{userId}/activate", memberId));
@@ -488,6 +539,23 @@ class ProviderAdminSecurityIT extends BaseIT {
         verification.setDecidedAt(LocalDateTime.now());
         verificationIds.add(verificationRepository.save(verification).getId());
         return licence;
+    }
+
+    /** One audit row written by the user acting at the facility, as a provider service would write it. */
+    private UUID auditRow(User user, UUID facilityId, String entityType, UUID patientId) {
+        return auditEventLogRepository.save(AuditEventLog.builder()
+            .user(user)
+            .assignment(rowOf(user, facilityId))
+            // Set here so the entity's snapshot does not read the lazy hospital outside a session.
+            .hospitalName("Test facility")
+            .eventType(AuditEventType.DATA_UPDATE)
+            .eventDescription("POST /test")
+            .eventTimestamp(LocalDateTime.now())
+            .status(AuditStatus.SUCCESS)
+            .entityType(entityType)
+            .resourceId(UUID.randomUUID().toString())
+            .patientId(patientId)
+            .build()).getId();
     }
 
     private void grantGlobal(User user, String roleCode) {

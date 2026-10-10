@@ -1,0 +1,323 @@
+<fieldset class="evidence-section">
+  <legend>{{ 'PROVIDER.EVIDENCE.BUSINESS_TITLE' | translate }}</legend>
+  <p class="section-help">{{ 'PROVIDER.EVIDENCE.BUSINESS_HELP' | translate }}</p>
+  <div class="form-row">
+    <div class="field">
+      <label [for]="id('b-legalName')"
+        >{{ 'PROVIDER.EVIDENCE.LEGAL_NAME' | translate }}
+        <span class="required-mark" aria-hidden="true">*</span></label
+      >
+      <input
+        [id]="id('b-legalName')"
+        type="text"
+        required
+        maxlength="255"
+        [ngModel]="evidence().business.legalName"
+        (ngModelChange)="setBusiness('legalName', $event)"
+      />
+    </div>
+    <div class="field">
+      <label [for]="id('b-tradeName')">{{ 'PROVIDER.EVIDENCE.TRADE_NAME' | translate }}</label>
+      <input
+        [id]="id('b-tradeName')"
+        type="text"
+        maxlength="255"
+        [ngModel]="evidence().business.tradeName"
+        (ngModelChange)="setBusiness('tradeName', $event)"
+      />
+    </div>
+  </div>
+  <div class="form-row form-row-3">
+    <div class="field">
+      <label [for]="id('b-legalStructure')"
+        >{{ 'PROVIDER.EVIDENCE.LEGAL_STRUCTURE' | translate }}
+        <span class="required-mark" aria-hidden="true">*</span></label
+      >
+      <input
+        [id]="id('b-legalStructure')"
+        type="text"
+        required
+        maxlength="50"
+        [ngModel]="evidence().business.legalStructure"
+        (ngModelChange)="setBusiness('legalStructure', $event)"
+      />
+      <small class="field-help">{{ 'PROVIDER.EVIDENCE.LEGAL_STRUCTURE_HELP' | translate }}</small>
+    </div>
+    <div class="field">
+      <label [for]="id('b-startedOn')"
+        >{{ 'PROVIDER.EVIDENCE.STARTED_ON' | translate }}
+        <span class="required-mark" aria-hidden="true">*</span></label
+      >
+      <input
+        [id]="id('b-startedOn')"
+        type="date"
+        required
+        [ngModel]="evidence().business.startedOn"
+        (ngModelChange)="setBusiness('startedOn', $event)"
+      />
+    </div>
+    <div class="field">
+      <label [for]="id('b-companyPhone')"
+        >{{ 'PROVIDER.EVIDENCE.COMPANY_PHONE' | translate }}
+        <span class="required-mark" aria-hidden="true">*</span></label
+      >
+      <input
+        [id]="id('b-companyPhone')"
+        type="tel"
+        required
+        maxlength="30"
+        [ngModel]="evidence().business.companyPhone"
+        (ngModelChange)="setBusiness('companyPhone', $event)"
+      />
+    </div>
+  </div>
+  <div class="form-row form-row-3">
+    <div class="field">
+      <label [for]="id('b-rccmNumber')"
+        >{{ 'PROVIDER.EVIDENCE.RCCM' | translate }}
+        <span class="required-mark" aria-hidden="true">*</span></label
+      >
+      <input
+        [id]="id('b-rccmNumber')"
+        type="text"
+        required
+        maxlength="50"
+        [ngModel]="evidence().business.rccmNumber"
+        (ngModelChange)="setBusiness('rccmNumber', $event)"
+      />
+    </div>
+    <div class="field">
+      <label [for]="id('b-ifuNumber')"
+        >{{ 'PROVIDER.EVIDENCE.IFU' | translate }}
+        <span class="required-mark" aria-hidden="true">*</span></label
+      >
+      <input
+        [id]="id('b-ifuNumber')"
+        type="text"
+        required
+        maxlength="30"
+        [ngModel]="evidence().business.ifuNumber"
+        (ngModelChange)="setBusiness('ifuNumber', $event)"
+      />
+    </div>
+    <div class="field">
+      <label [for]="id('b-cnssNumber')"
+        >{{ 'PROVIDER.EVIDENCE.CNSS' | translate }}
+        <span class="required-mark" aria-hidden="true">*</span></label
+      >
+      <input
+        [id]="id('b-cnssNumber')"
+        type="text"
+        required
+        maxlength="30"
+        [ngModel]="evidence().business.cnssNumber"
+        (ngModelChange)="setBusiness('cnssNumber', $event)"
+      />
+    </div>
+  </div>
+  <h3 class="subsection-title">{{ 'PROVIDER.EVIDENCE.ADDRESS_TITLE' | translate }}</h3>
+  <div class="form-row form-row-3">
+    <div class="field">
+      <label [for]="id('a-secteur')">{{ 'PROVIDER.EVIDENCE.SECTEUR' | translate }}</label>
+      <input
+        [id]="id('a-secteur')"
+        type="text"
+        maxlength="50"
+        [ngModel]="evidence().business.address.secteur"
+        (ngModelChange)="setAddress('secteur', $event)"
+      />
+    </div>
+    <div class="field">
+      <label [for]="id('a-section')">{{ 'PROVIDER.EVIDENCE.SECTION' | translate }}</label>
+      <input
+        [id]="id('a-section')"
+        type="text"
+        maxlength="50"
+        [ngModel]="evidence().business.address.section"
+        (ngModelChange)="setAddress('section', $event)"
+      />
+    </div>
+    <div class="field">
+      <label [for]="id('a-lot')">{{ 'PROVIDER.EVIDENCE.LOT' | translate }}</label>
+      <input
+        [id]="id('a-lot')"
+        type="text"
+        maxlength="50"
+        [ngModel]="evidence().business.address.lot"
+        (ngModelChange)="setAddress('lot', $event)"
+      />
+    </div>
+  </div>
+  <div class="form-row form-row-3">
+    <div class="field">
+      <label [for]="id('a-parcelle')">{{ 'PROVIDER.EVIDENCE.PARCELLE' | translate }}</label>
+      <input
+        [id]="id('a-parcelle')"
+        type="text"
+        maxlength="50"
+        [ngModel]="evidence().business.address.parcelle"
+        (ngModelChange)="setAddress('parcelle', $event)"
+      />
+    </div>
+    <div class="field">
+      <label [for]="id('a-city')"
+        >{{ 'PROVIDER.EVIDENCE.CITY' | translate }}
+        <span class="required-mark" aria-hidden="true">*</span></label
+      >
+      <input
+        [id]="id('a-city')"
+        type="text"
+        required
+        maxlength="100"
+        [ngModel]="evidence().business.address.city"
+        (ngModelChange)="setAddress('city', $event)"
+      />
+    </div>
+    <div class="field">
+      <label [for]="id('a-region')"
+        >{{ 'PROVIDER.EVIDENCE.REGION' | translate }}
+        <span class="required-mark" aria-hidden="true">*</span></label
+      >
+      <input
+        [id]="id('a-region')"
+        type="text"
+        required
+        maxlength="100"
+        [ngModel]="evidence().business.address.region"
+        (ngModelChange)="setAddress('region', $event)"
+      />
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="field">
+      <label [for]="id('b-managerName')"
+        >{{ 'PROVIDER.EVIDENCE.MANAGER_NAME' | translate }}
+        <span class="required-mark" aria-hidden="true">*</span></label
+      >
+      <input
+        [id]="id('b-managerName')"
+        type="text"
+        required
+        maxlength="200"
+        [ngModel]="evidence().business.managerName"
+        (ngModelChange)="setBusiness('managerName', $event)"
+      />
+    </div>
+    <div class="field">
+      <label [for]="id('b-managerTitle')"
+        >{{ 'PROVIDER.EVIDENCE.MANAGER_TITLE' | translate }}
+        <span class="required-mark" aria-hidden="true">*</span></label
+      >
+      <input
+        [id]="id('b-managerTitle')"
+        type="text"
+        required
+        maxlength="100"
+        [ngModel]="evidence().business.managerTitle"
+        (ngModelChange)="setBusiness('managerTitle', $event)"
+      />
+    </div>
+  </div>
+</fieldset>
+
+<fieldset class="evidence-section">
+  <legend>
+    @if (isLaboratory()) {
+      {{ 'PROVIDER.EVIDENCE.PROFESSIONAL_TITLE_LAB' | translate }}
+    } @else {
+      {{ 'PROVIDER.EVIDENCE.PROFESSIONAL_TITLE_PHARMACY' | translate }}
+    }
+  </legend>
+  <p class="section-help">{{ 'PROVIDER.EVIDENCE.PROFESSIONAL_HELP' | translate }}</p>
+  <div class="form-row">
+    <div class="field">
+      <label [for]="id('p-licenceNumber')">
+        @if (isLaboratory()) {
+          {{ 'PROVIDER.EVIDENCE.AUTHORISATION_NUMBER' | translate }}
+        } @else {
+          {{ 'PROVIDER.EVIDENCE.LICENCE_NUMBER' | translate }}
+        }
+        <span class="required-mark" aria-hidden="true">*</span>
+      </label>
+      <input
+        [id]="id('p-licenceNumber')"
+        type="text"
+        required
+        maxlength="100"
+        [ngModel]="evidence().professional.licenceNumber"
+        (ngModelChange)="setProfessional('licenceNumber', $event)"
+      />
+    </div>
+    <div class="field">
+      <label [for]="id('p-licenceAuthority')"
+        >{{ 'PROVIDER.EVIDENCE.LICENCE_AUTHORITY' | translate }}
+        <span class="required-mark" aria-hidden="true">*</span></label
+      >
+      <input
+        [id]="id('p-licenceAuthority')"
+        type="text"
+        required
+        maxlength="200"
+        [ngModel]="evidence().professional.licenceAuthority"
+        (ngModelChange)="setProfessional('licenceAuthority', $event)"
+      />
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="field">
+      <label [for]="id('p-responsibleName')">
+        @if (isLaboratory()) {
+          {{ 'PROVIDER.EVIDENCE.RESPONSIBLE_BIOLOGIST' | translate }}
+        } @else {
+          {{ 'PROVIDER.EVIDENCE.RESPONSIBLE_PHARMACIST' | translate }}
+        }
+        <span class="required-mark" aria-hidden="true">*</span>
+      </label>
+      <input
+        [id]="id('p-responsibleName')"
+        type="text"
+        required
+        maxlength="200"
+        [ngModel]="evidence().professional.responsibleName"
+        (ngModelChange)="setProfessional('responsibleName', $event)"
+      />
+    </div>
+    <div class="field">
+      <label [for]="id('p-responsibleOrdreNumber')"
+        >{{ 'PROVIDER.EVIDENCE.ORDRE_NUMBER' | translate }}
+        <span class="required-mark" aria-hidden="true">*</span></label
+      >
+      <input
+        [id]="id('p-responsibleOrdreNumber')"
+        type="text"
+        required
+        maxlength="100"
+        [ngModel]="evidence().professional.responsibleOrdreNumber"
+        (ngModelChange)="setProfessional('responsibleOrdreNumber', $event)"
+      />
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="field">
+      <label [for]="id('p-licenceIssuedOn')">{{ 'PROVIDER.EVIDENCE.ISSUED_ON' | translate }}</label>
+      <input
+        [id]="id('p-licenceIssuedOn')"
+        type="date"
+        [ngModel]="evidence().professional.licenceIssuedOn"
+        (ngModelChange)="setProfessional('licenceIssuedOn', $event)"
+      />
+    </div>
+    <div class="field">
+      <label [for]="id('p-licenceExpiresOn')">{{
+        'PROVIDER.EVIDENCE.EXPIRES_ON' | translate
+      }}</label>
+      <input
+        [id]="id('p-licenceExpiresOn')"
+        type="date"
+        [ngModel]="evidence().professional.licenceExpiresOn"
+        (ngModelChange)="setProfessional('licenceExpiresOn', $event)"
+      />
+      <small class="field-help">{{ 'PROVIDER.EVIDENCE.EXPIRES_ON_HELP' | translate }}</small>
+    </div>
+  </div>
+</fieldset>

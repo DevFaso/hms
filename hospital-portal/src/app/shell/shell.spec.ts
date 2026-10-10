@@ -15,7 +15,10 @@ import { IdleService } from '../core/idle.service';
 import { EmergencyBroadcastService } from '../services/emergency-broadcast.service';
 import { DowntimeService } from '../services/downtime.service';
 import { NavOrderService } from './nav-order.service';
-import { navGroupForRoute } from './nav-groups';
+import { navGroupForRoute, providerNavEntries } from './nav-groups';
+import { ProviderContextService } from '../core/provider-context.service';
+import { FacilityTypeGuard } from '../auth/facility-type.guard';
+import { settingsFixture } from '../testing/provider-fixtures';
 import { routes } from '../app.routes';
 import { roleSatisfies } from '../core/role-equivalence';
 
@@ -569,6 +572,57 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
         ].join(', ')}`,
       )
       .toEqual([]);
+  });
+
+  it('switches to the provider shell when the server says the session acts at a provider facility', () => {
+    // A pharmacy's PROVIDER_ADMIN: the hospital pages would all answer 404.
+    const { component } = createComponent({
+      activeRole: 'ROLE_PROVIDER_ADMIN',
+      roles: ['ROLE_PROVIDER_ADMIN'],
+      wildcardPermission: false,
+    });
+    const context = TestBed.inject(ProviderContextService);
+    const read = () =>
+      (component as unknown as { baseNavItems: () => NavItem[] })
+        .baseNavItems()
+        .map((i) => i.route);
+
+    context.settings.set(settingsFixture());
+    expect(read()).toEqual([
+      '/provider',
+      '/provider/profile',
+      '/provider/staff',
+      '/provider/audit',
+    ]);
+    for (const route of read()) {
+      expect(navGroupForRoute(route)).withContext(route).toBe('FACILITY');
+    }
+
+    // A pharmacist there: no admin pages.
+    context.settings.set(settingsFixture({ providerAdmin: false }));
+    expect(read()).toEqual(['/provider', '/provider/profile']);
+
+    // Every provider nav entry is a real route, guarded by the facility guard.
+    const children = routes.find((r) => r.children)?.children ?? [];
+    for (const route of read()) {
+      const match = children.find((r) => '/' + r.path === route);
+      expect(match).withContext(route).toBeDefined();
+      expect(match?.canActivate).withContext(route).toContain(FacilityTypeGuard);
+    }
+
+    // No provider settings: the hospital nav as before.
+    context.settings.set(null);
+    expect(read()).toContain('/dashboard');
+  });
+
+  it('providerNavEntries filters by facility type and admin seat', () => {
+    expect(providerNavEntries('HOSPITAL', true)).toEqual([]);
+    expect(providerNavEntries(null, true)).toEqual([]);
+    expect(providerNavEntries('LABORATORY', true).map((e) => e.route)).toContain('/provider/audit');
+    expect(providerNavEntries('LABORATORY', false).map((e) => e.route)).toEqual([
+      '/provider',
+      '/provider/profile',
+    ]);
   });
 
   it('groups the nav and drops groups the role holds nothing in', () => {

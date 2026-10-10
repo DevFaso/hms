@@ -1,0 +1,137 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'PROVIDER.LIST.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'PROVIDER.LIST.SUBTITLE' | translate }}</p>
+    </div>
+    <a class="btn-primary" routerLink="/super-admin/providers/new" data-test="new-provider">
+      <span class="material-symbols-outlined" aria-hidden="true">add</span>
+      {{ 'PROVIDER.LIST.NEW' | translate }}
+    </a>
+  </div>
+
+  <div class="filter-row">
+    <div class="filter-group">
+      <label class="filter-label" for="provider-type-filter">
+        {{ 'PROVIDER.LIST.FILTER_TYPE' | translate }}
+      </label>
+      <select
+        id="provider-type-filter"
+        class="filter-select"
+        [ngModel]="typeFilter()"
+        (ngModelChange)="setType($event)"
+      >
+        <option value="">{{ 'PROVIDER.LIST.ALL_TYPES' | translate }}</option>
+        @for (type of facilityTypes; track type) {
+          <option [value]="type">{{ type | enumLabel: 'facilityType' }}</option>
+        }
+      </select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label" for="provider-status-filter">
+        {{ 'PROVIDER.LIST.FILTER_STATUS' | translate }}
+      </label>
+      <select
+        id="provider-status-filter"
+        class="filter-select"
+        [ngModel]="statusFilter()"
+        (ngModelChange)="setStatus($event)"
+      >
+        <option value="">{{ 'PROVIDER.LIST.ALL_STATUSES' | translate }}</option>
+        @for (status of statuses; track status) {
+          <option [value]="status">{{ status | enumLabel: 'providerVerificationStatus' }}</option>
+        }
+      </select>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state" role="status">
+      <div class="spinner" aria-hidden="true"></div>
+      <p>{{ 'PROVIDER.COMMON.LOADING' | translate }}</p>
+    </div>
+  } @else if (errored()) {
+    <div class="empty-state" data-test="error">
+      <span class="material-symbols-outlined empty-icon" aria-hidden="true">error</span>
+      <p>{{ 'PROVIDER.COMMON.LOAD_FAILED' | translate }}</p>
+      <button type="button" class="btn-secondary retry" (click)="refresh()">
+        {{ 'PROVIDER.COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (providers().length === 0) {
+    <div class="empty-state" data-test="empty">
+      <span class="material-symbols-outlined empty-icon" aria-hidden="true">storefront</span>
+      <h2 class="state-title">{{ 'PROVIDER.LIST.EMPTY_TITLE' | translate }}</h2>
+      <p>{{ 'PROVIDER.LIST.EMPTY_TEXT' | translate }}</p>
+    </div>
+  } @else {
+    <div class="table-wrapper">
+      <table class="data-table">
+        <caption class="sr-only">
+          {{
+            'PROVIDER.LIST.TITLE' | translate
+          }}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'PROVIDER.LIST.COL_NAME' | translate }}</th>
+            <th scope="col">{{ 'PROVIDER.LIST.COL_CODE' | translate }}</th>
+            <th scope="col">{{ 'PROVIDER.LIST.COL_TYPE' | translate }}</th>
+            <th scope="col">{{ 'PROVIDER.LIST.COL_VERIFICATION' | translate }}</th>
+            <th scope="col">{{ 'PROVIDER.LIST.COL_LIFECYCLE' | translate }}</th>
+            <th scope="col">{{ 'PROVIDER.LIST.COL_SUBMITTED' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (provider of providers(); track provider.id) {
+            <tr data-test="provider-row">
+              <td>
+                <a class="row-link" [routerLink]="['/super-admin/providers', provider.id]">
+                  {{ provider.name || provider.code }}
+                </a>
+              </td>
+              <td>{{ provider.code }}</td>
+              <td>{{ provider.facilityType | enumLabel: 'facilityType' }}</td>
+              <td>
+                @if (provider.verificationStatus) {
+                  <span [class]="'status-badge ' + badgeClass(provider.verificationStatus)">
+                    {{ provider.verificationStatus | enumLabel: 'providerVerificationStatus' }}
+                  </span>
+                }
+              </td>
+              <td>
+                @if (provider.lifecycleState) {
+                  {{ provider.lifecycleState | enumLabel: 'hospitalLifecycleState' }}
+                }
+              </td>
+              <td>{{ provider.submittedAt | date: 'mediumDate' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (totalPages() > 1) {
+      <nav class="pagination-row" [attr.aria-label]="'PROVIDER.COMMON.PAGINATION' | translate">
+        <span class="pagination-info">
+          {{
+            'PROVIDER.COMMON.PAGE_OF' | translate: { page: pageIndex() + 1, total: totalPages() }
+          }}
+        </span>
+        <div class="pagination-controls">
+          <button
+            type="button"
+            class="btn-secondary"
+            [disabled]="!hasPrevious()"
+            (click)="previousPage()"
+          >
+            {{ 'PROVIDER.COMMON.PREVIOUS' | translate }}
+          </button>
+          <button type="button" class="btn-secondary" [disabled]="!hasNext()" (click)="nextPage()">
+            {{ 'PROVIDER.COMMON.NEXT' | translate }}
+          </button>
+        </div>
+      </nav>
+    }
+  }
+</div>

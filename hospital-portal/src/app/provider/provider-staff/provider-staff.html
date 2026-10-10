@@ -1,0 +1,168 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'PROVIDER.STAFF.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'PROVIDER.STAFF.SUBTITLE' | translate }}</p>
+    </div>
+    @if (!notAvailable() && facilityId() && staffRoles().length > 0) {
+      <button type="button" class="btn-primary" data-test="register" (click)="openRegister()">
+        <span class="material-symbols-outlined" aria-hidden="true">person_add</span>
+        {{ 'PROVIDER.STAFF.REGISTER' | translate }}
+      </button>
+    }
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state" role="status">
+      <div class="spinner" aria-hidden="true"></div>
+      <p>{{ 'PROVIDER.COMMON.LOADING' | translate }}</p>
+    </div>
+  } @else if (notAvailable()) {
+    <div class="empty-state" data-test="not-available">
+      <span class="material-symbols-outlined empty-icon" aria-hidden="true">info</span>
+      <h2 class="state-title">{{ 'PROVIDER.COMMON.NOT_AVAILABLE_TITLE' | translate }}</h2>
+      <p>{{ 'PROVIDER.COMMON.NOT_AVAILABLE_TEXT' | translate }}</p>
+    </div>
+  } @else if (loadFailed()) {
+    <div class="empty-state" data-test="load-failed">
+      <span class="material-symbols-outlined empty-icon" aria-hidden="true">error</span>
+      <p>{{ 'PROVIDER.COMMON.LOAD_FAILED' | translate }}</p>
+    </div>
+  } @else if (staff().length === 0) {
+    <div class="empty-state" data-test="empty">
+      <span class="material-symbols-outlined empty-icon" aria-hidden="true">group</span>
+      <p>{{ 'PROVIDER.STAFF.EMPTY' | translate }}</p>
+    </div>
+  } @else {
+    <div class="table-wrapper">
+      <table class="data-table">
+        <caption class="sr-only">
+          {{
+            'PROVIDER.STAFF.TITLE' | translate
+          }}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'PROVIDER.STAFF.COL_NAME' | translate }}</th>
+            <th scope="col">{{ 'PROVIDER.STAFF.COL_USERNAME' | translate }}</th>
+            <th scope="col">{{ 'PROVIDER.STAFF.COL_ROLES' | translate }}</th>
+            <th scope="col">{{ 'PROVIDER.STAFF.COL_STATUS' | translate }}</th>
+            <th scope="col">{{ 'PROVIDER.STAFF.COL_ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (member of staff(); track member.userId) {
+            <tr data-test="staff-row">
+              <td>
+                {{ displayName(member) }}
+                @if (member.self) {
+                  <span class="status-badge scheduled">{{ 'PROVIDER.STAFF.YOU' | translate }}</span>
+                }
+              </td>
+              <td>{{ member.username }}</td>
+              <td>
+                @for (role of member.roles; track role; let last = $last) {
+                  {{ role | roleLabel }}{{ last ? '' : ', ' }}
+                }
+              </td>
+              <td>
+                @if (member.active) {
+                  <span class="status-badge active">{{ 'PROVIDER.STAFF.ACTIVE' | translate }}</span>
+                } @else if (member.invitationPending) {
+                  <span class="status-badge in-progress">{{
+                    'PROVIDER.STAFF.INVITED' | translate
+                  }}</span>
+                } @else {
+                  <span class="status-badge inactive">{{
+                    'PROVIDER.STAFF.INACTIVE' | translate
+                  }}</span>
+                }
+              </td>
+              <td>
+                @if (manageable(member)) {
+                  <div class="row-actions">
+                    @if (member.active) {
+                      <button
+                        type="button"
+                        class="btn-secondary small-btn"
+                        data-test="deactivate"
+                        [disabled]="busyUserId() === member.userId"
+                        (click)="askDeactivate(member)"
+                      >
+                        {{ 'PROVIDER.STAFF.DEACTIVATE' | translate }}
+                      </button>
+                    } @else {
+                      <button
+                        type="button"
+                        class="btn-secondary small-btn"
+                        data-test="reinvite"
+                        [disabled]="busyUserId() === member.userId"
+                        (click)="reinvite(member)"
+                      >
+                        {{ 'PROVIDER.STAFF.REINVITE' | translate }}
+                      </button>
+                    }
+                  </div>
+                } @else {
+                  <span class="card-help">—</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <p class="card-help">{{ 'PROVIDER.STAFF.HELP' | translate }}</p>
+  }
+
+  @if (confirmDeactivate(); as member) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="cancelDeactivate()"
+      (keydown.escape)="cancelDeactivate()"
+    >
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="deactivate-title"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="cancelDeactivate()"
+      >
+        <div class="modal-header">
+          <h2 id="deactivate-title">{{ 'PROVIDER.STAFF.DEACTIVATE_TITLE' | translate }}</h2>
+        </div>
+        <div class="modal-body">
+          <p>
+            {{ 'PROVIDER.STAFF.DEACTIVATE_CONFIRM' | translate: { name: displayName(member) } }}
+          </p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="cancelDeactivate()">
+            {{ 'PROVIDER.COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="button"
+            class="btn-primary"
+            data-test="deactivate-confirm"
+            [disabled]="busyUserId() === member.userId"
+            (click)="deactivate()"
+          >
+            {{ 'PROVIDER.STAFF.DEACTIVATE' | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (registerOpen() && facilityId(); as facility) {
+    <app-provider-staff-register
+      [facilityId]="facility"
+      [roles]="staffRoles()"
+      (registered)="onRegistered($event)"
+      (closed)="closeRegister()"
+    />
+  }
+</div>

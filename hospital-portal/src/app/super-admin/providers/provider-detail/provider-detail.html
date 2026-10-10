@@ -1,0 +1,685 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">
+        @if (provider(); as p) {
+          {{ p.name || p.code }}
+        } @else {
+          {{ 'PROVIDER.DETAIL.TITLE' | translate }}
+        }
+      </h1>
+      @if (provider(); as p) {
+        <p class="page-subtitle">
+          {{ p.code }} · {{ p.facilityType | enumLabel: 'facilityType' }}
+          @if (p.email) {
+            · {{ p.email }}
+          }
+        </p>
+      }
+    </div>
+    <a class="btn-secondary" routerLink="/super-admin/providers">
+      <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+      {{ 'PROVIDER.DETAIL.BACK_TO_LIST' | translate }}
+    </a>
+  </div>
+
+  @if (loading() && !provider()) {
+    <div class="loading-state" role="status">
+      <div class="spinner" aria-hidden="true"></div>
+      <p>{{ 'PROVIDER.COMMON.LOADING' | translate }}</p>
+    </div>
+  } @else if (notFound()) {
+    <div class="empty-state" data-test="not-found">
+      <span class="material-symbols-outlined empty-icon" aria-hidden="true">search_off</span>
+      <h2 class="state-title">{{ 'PROVIDER.COMMON.NOT_FOUND_TITLE' | translate }}</h2>
+      <p>{{ 'PROVIDER.COMMON.NOT_FOUND_TEXT' | translate }}</p>
+    </div>
+  } @else if (loadFailed()) {
+    <div class="empty-state" data-test="load-failed">
+      <span class="material-symbols-outlined empty-icon" aria-hidden="true">error</span>
+      <p>{{ 'PROVIDER.COMMON.LOAD_FAILED' | translate }}</p>
+      <button type="button" class="btn-secondary retry" (click)="refresh()">
+        {{ 'PROVIDER.COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (provider(); as p) {
+    <section class="detail-card status-card" aria-labelledby="provider-status-title">
+      <h2 id="provider-status-title" class="card-title">
+        {{ 'PROVIDER.DETAIL.STATUS_TITLE' | translate }}
+      </h2>
+      <div class="status-row">
+        <div class="status-item">
+          <span class="status-label">{{ 'PROVIDER.DETAIL.VERIFICATION' | translate }}</span>
+          @if (p.verificationStatus) {
+            <span
+              [class]="'status-badge ' + verificationBadge(p.verificationStatus)"
+              data-test="verification-status"
+            >
+              {{ p.verificationStatus | enumLabel: 'providerVerificationStatus' }}
+            </span>
+          }
+        </div>
+        <div class="status-item">
+          <span class="status-label">{{ 'PROVIDER.DETAIL.LIFECYCLE' | translate }}</span>
+          @if (p.lifecycleState) {
+            <span
+              [class]="'status-badge ' + lifecycleBadge(p.lifecycleState)"
+              data-test="lifecycle-state"
+            >
+              {{ p.lifecycleState | enumLabel: 'hospitalLifecycleState' }}
+            </span>
+          }
+        </div>
+      </div>
+
+      <div class="action-row">
+        @if (canVerify()) {
+          <button
+            type="button"
+            class="btn-primary"
+            data-test="action-verify"
+            (click)="openVerify()"
+          >
+            {{ 'PROVIDER.DETAIL.ACTION_VERIFY' | translate }}
+          </button>
+        }
+        @if (canReject()) {
+          <button
+            type="button"
+            class="btn-secondary"
+            data-test="action-reject"
+            (click)="openDecision('reject')"
+          >
+            {{ 'PROVIDER.DETAIL.ACTION_REJECT' | translate }}
+          </button>
+        }
+        @if (canResubmit()) {
+          <a
+            class="btn-primary"
+            data-test="action-resubmit"
+            [routerLink]="['/super-admin/providers', p.id, 'resubmit']"
+          >
+            {{ 'PROVIDER.DETAIL.ACTION_RESUBMIT' | translate }}
+          </a>
+        }
+        @if (canRevoke()) {
+          <button
+            type="button"
+            class="btn-secondary"
+            data-test="action-revoke"
+            (click)="openDecision('revoke')"
+          >
+            {{ 'PROVIDER.DETAIL.ACTION_REVOKE' | translate }}
+          </button>
+        }
+        @if (canSuspend()) {
+          <button
+            type="button"
+            class="btn-secondary"
+            data-test="action-suspend"
+            (click)="openLifecycle('suspend')"
+          >
+            {{ 'PROVIDER.DETAIL.ACTION_SUSPEND' | translate }}
+          </button>
+        }
+        @if (canRestore()) {
+          <button
+            type="button"
+            class="btn-secondary"
+            data-test="action-restore"
+            (click)="openLifecycle('restore')"
+          >
+            {{ 'PROVIDER.DETAIL.ACTION_RESTORE' | translate }}
+          </button>
+        }
+        @if (canArchive()) {
+          <button
+            type="button"
+            class="btn-secondary"
+            data-test="action-archive"
+            (click)="openLifecycle('archive')"
+          >
+            {{ 'PROVIDER.DETAIL.ACTION_ARCHIVE' | translate }}
+          </button>
+        }
+        <button
+          type="button"
+          class="btn-secondary"
+          data-test="action-register"
+          (click)="openRegister()"
+        >
+          {{ 'PROVIDER.DETAIL.ACTION_REGISTER' | translate }}
+        </button>
+      </div>
+      <p class="card-help">
+        {{ 'PROVIDER.DETAIL.LIFECYCLE_HELP' | translate }}
+        <a [routerLink]="['/hospitals', p.id]">{{
+          'PROVIDER.DETAIL.LIFECYCLE_LINK' | translate
+        }}</a>
+      </p>
+    </section>
+
+    @if (p.business; as b) {
+      <section class="detail-card" aria-labelledby="provider-business-title">
+        <h2 id="provider-business-title" class="card-title">
+          {{ 'PROVIDER.EVIDENCE.BUSINESS_TITLE' | translate }}
+        </h2>
+        <dl class="detail-grid">
+          <div>
+            <dt>{{ 'PROVIDER.EVIDENCE.LEGAL_NAME' | translate }}</dt>
+            <dd>{{ b.legalName }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'PROVIDER.EVIDENCE.TRADE_NAME' | translate }}</dt>
+            <dd>{{ b.tradeName || '—' }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'PROVIDER.EVIDENCE.LEGAL_STRUCTURE' | translate }}</dt>
+            <dd>{{ b.legalStructure }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'PROVIDER.EVIDENCE.STARTED_ON' | translate }}</dt>
+            <dd>{{ b.startedOn | date: 'mediumDate' }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'PROVIDER.EVIDENCE.RCCM' | translate }}</dt>
+            <dd>{{ b.rccmNumber }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'PROVIDER.EVIDENCE.IFU' | translate }}</dt>
+            <dd>{{ b.ifuNumber }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'PROVIDER.EVIDENCE.CNSS' | translate }}</dt>
+            <dd>{{ b.cnssNumber }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'PROVIDER.EVIDENCE.COMPANY_PHONE' | translate }}</dt>
+            <dd>{{ b.companyPhone }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'PROVIDER.EVIDENCE.ADDRESS_TITLE' | translate }}</dt>
+            <dd>
+              @if (b.address.secteur) {
+                {{ 'PROVIDER.EVIDENCE.SECTEUR' | translate }} {{ b.address.secteur }} ·
+              }
+              @if (b.address.section) {
+                {{ 'PROVIDER.EVIDENCE.SECTION' | translate }} {{ b.address.section }} ·
+              }
+              @if (b.address.lot) {
+                {{ 'PROVIDER.EVIDENCE.LOT' | translate }} {{ b.address.lot }} ·
+              }
+              @if (b.address.parcelle) {
+                {{ 'PROVIDER.EVIDENCE.PARCELLE' | translate }} {{ b.address.parcelle }} ·
+              }
+              {{ b.address.city }}, {{ b.address.region }}
+            </dd>
+          </div>
+          <div>
+            <dt>{{ 'PROVIDER.EVIDENCE.MANAGER_NAME' | translate }}</dt>
+            <dd>{{ b.managerName }} ({{ b.managerTitle }})</dd>
+          </div>
+        </dl>
+      </section>
+    }
+
+    @if (p.professional; as pro) {
+      <section class="detail-card" aria-labelledby="provider-professional-title">
+        <h2 id="provider-professional-title" class="card-title">
+          @if (p.facilityType === 'LABORATORY') {
+            {{ 'PROVIDER.EVIDENCE.PROFESSIONAL_TITLE_LAB' | translate }}
+          } @else {
+            {{ 'PROVIDER.EVIDENCE.PROFESSIONAL_TITLE_PHARMACY' | translate }}
+          }
+        </h2>
+        <dl class="detail-grid">
+          <div>
+            <dt>
+              @if (p.facilityType === 'LABORATORY') {
+                {{ 'PROVIDER.EVIDENCE.AUTHORISATION_NUMBER' | translate }}
+              } @else {
+                {{ 'PROVIDER.EVIDENCE.LICENCE_NUMBER' | translate }}
+              }
+            </dt>
+            <dd>{{ pro.licenceNumber }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'PROVIDER.EVIDENCE.LICENCE_AUTHORITY' | translate }}</dt>
+            <dd>{{ pro.licenceAuthority }}</dd>
+          </div>
+          <div>
+            <dt>
+              @if (p.facilityType === 'LABORATORY') {
+                {{ 'PROVIDER.EVIDENCE.RESPONSIBLE_BIOLOGIST' | translate }}
+              } @else {
+                {{ 'PROVIDER.EVIDENCE.RESPONSIBLE_PHARMACIST' | translate }}
+              }
+            </dt>
+            <dd>{{ pro.responsibleName }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'PROVIDER.EVIDENCE.ORDRE_NUMBER' | translate }}</dt>
+            <dd>{{ pro.responsibleOrdreNumber }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'PROVIDER.EVIDENCE.ISSUED_ON' | translate }}</dt>
+            <dd>{{ pro.licenceIssuedOn ? (pro.licenceIssuedOn | date: 'mediumDate') : '—' }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'PROVIDER.EVIDENCE.EXPIRES_ON' | translate }}</dt>
+            <dd>{{ pro.licenceExpiresOn ? (pro.licenceExpiresOn | date: 'mediumDate') : '—' }}</dd>
+          </div>
+        </dl>
+      </section>
+    }
+
+    <section class="detail-card" aria-labelledby="provider-decision-title">
+      <h2 id="provider-decision-title" class="card-title">
+        {{ 'PROVIDER.DETAIL.CURRENT_TITLE' | translate }}
+      </h2>
+      <dl class="detail-grid">
+        <div>
+          <dt>{{ 'PROVIDER.DETAIL.SUBMITTED_AT' | translate }}</dt>
+          <dd>{{ p.submittedAt ? (p.submittedAt | date: 'medium') : '—' }}</dd>
+        </div>
+        <div>
+          <dt>{{ 'PROVIDER.DETAIL.DECIDED_AT' | translate }}</dt>
+          <dd>{{ p.decidedAt ? (p.decidedAt | date: 'medium') : '—' }}</dd>
+        </div>
+        <div>
+          <dt>{{ 'PROVIDER.DETAIL.IFU_CONFIRMED' | translate }}</dt>
+          <dd>
+            {{ (p.ifuMatchesRccm ? 'PROVIDER.COMMON.YES' : 'PROVIDER.COMMON.NO') | translate }}
+          </dd>
+        </div>
+        <div>
+          <dt>{{ 'PROVIDER.DETAIL.CNSS_CONFIRMED' | translate }}</dt>
+          <dd>
+            {{ (p.cnssMatchesRccm ? 'PROVIDER.COMMON.YES' : 'PROVIDER.COMMON.NO') | translate }}
+          </dd>
+        </div>
+        @if (p.evidenceNote) {
+          <div class="wide">
+            <dt>{{ 'PROVIDER.DETAIL.EVIDENCE_NOTE' | translate }}</dt>
+            <dd>{{ p.evidenceNote }}</dd>
+          </div>
+        }
+        @if (p.decisionReason) {
+          <div class="wide">
+            <dt>{{ 'PROVIDER.DETAIL.DECISION_REASON' | translate }}</dt>
+            <dd>{{ p.decisionReason }}</dd>
+          </div>
+        }
+      </dl>
+    </section>
+
+    <section class="detail-card" aria-labelledby="provider-history-title">
+      <h2 id="provider-history-title" class="card-title">
+        {{ 'PROVIDER.DETAIL.HISTORY_TITLE' | translate }}
+      </h2>
+      @if (historyFailed()) {
+        <p class="card-help" data-test="history-failed">
+          {{ 'PROVIDER.DETAIL.HISTORY_FAILED' | translate }}
+        </p>
+      } @else if (history().length === 0) {
+        <p class="card-help">{{ 'PROVIDER.DETAIL.HISTORY_EMPTY' | translate }}</p>
+      } @else {
+        <div class="table-wrapper">
+          <table class="data-table">
+            <caption class="sr-only">
+              {{
+                'PROVIDER.DETAIL.HISTORY_TITLE' | translate
+              }}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">{{ 'PROVIDER.DETAIL.SUBMITTED_AT' | translate }}</th>
+                <th scope="col">{{ 'PROVIDER.DETAIL.VERIFICATION' | translate }}</th>
+                <th scope="col">{{ 'PROVIDER.EVIDENCE.LEGAL_NAME' | translate }}</th>
+                <th scope="col">{{ 'PROVIDER.EVIDENCE.LICENCE_NUMBER' | translate }}</th>
+                <th scope="col">{{ 'PROVIDER.DETAIL.DECIDED_AT' | translate }}</th>
+                <th scope="col">{{ 'PROVIDER.DETAIL.DECISION_REASON' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of history(); track row.verificationId) {
+                <tr data-test="history-row">
+                  <td>{{ row.submittedAt ? (row.submittedAt | date: 'medium') : '—' }}</td>
+                  <td>
+                    <span [class]="'status-badge ' + verificationBadge(row.status)">
+                      {{ row.status | enumLabel: 'providerVerificationStatus' }}
+                    </span>
+                  </td>
+                  <td>{{ row.legalName || '—' }}</td>
+                  <td>{{ row.licenceNumber || '—' }}</td>
+                  <td>{{ row.decidedAt ? (row.decidedAt | date: 'medium') : '—' }}</td>
+                  <td>{{ row.decisionReason || row.evidenceNote || '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+
+    <!-- ═══ VERIFY (AC-2, AC-3) ═══ -->
+    @if (verifyDialog(); as dialog) {
+      <div
+        class="modal-backdrop"
+        tabindex="-1"
+        (click)="closeDialogs()"
+        (keydown.escape)="closeDialogs()"
+      >
+        <div
+          class="modal modal-xl"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="verify-title"
+          tabindex="-1"
+          (click)="$event.stopPropagation()"
+          (keydown.escape)="closeDialogs()"
+        >
+          <div class="modal-header">
+            <h2 id="verify-title">{{ 'PROVIDER.VERIFY.TITLE' | translate }}</h2>
+            <button
+              type="button"
+              class="modal-close"
+              [attr.aria-label]="'PROVIDER.COMMON.CLOSE' | translate"
+              (click)="closeDialogs()"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <p class="card-help">{{ 'PROVIDER.VERIFY.HELP' | translate }}</p>
+            @if (p.business; as b) {
+              <dl class="detail-grid captured">
+                <div>
+                  <dt>{{ 'PROVIDER.EVIDENCE.LEGAL_NAME' | translate }}</dt>
+                  <dd>{{ b.legalName }}</dd>
+                </div>
+                <div>
+                  <dt>{{ 'PROVIDER.EVIDENCE.RCCM' | translate }}</dt>
+                  <dd>{{ b.rccmNumber }}</dd>
+                </div>
+                <div>
+                  <dt>{{ 'PROVIDER.EVIDENCE.IFU' | translate }}</dt>
+                  <dd>{{ b.ifuNumber }}</dd>
+                </div>
+                <div>
+                  <dt>{{ 'PROVIDER.EVIDENCE.CNSS' | translate }}</dt>
+                  <dd>{{ b.cnssNumber }}</dd>
+                </div>
+                @if (p.professional; as pro) {
+                  <div>
+                    <dt>{{ 'PROVIDER.EVIDENCE.LICENCE_NUMBER' | translate }}</dt>
+                    <dd>{{ pro.licenceNumber }} · {{ pro.licenceAuthority }}</dd>
+                  </div>
+                }
+              </dl>
+            }
+
+            <div class="check-row">
+              <input
+                id="verify-ifu"
+                type="checkbox"
+                [ngModel]="dialog.ifuMatchesRccm"
+                (ngModelChange)="patchVerify({ ifuMatchesRccm: $event })"
+              />
+              <label for="verify-ifu">{{ 'PROVIDER.VERIFY.IFU_MATCHES' | translate }}</label>
+            </div>
+            <div class="check-row">
+              <input
+                id="verify-cnss"
+                type="checkbox"
+                [ngModel]="dialog.cnssMatchesRccm"
+                (ngModelChange)="patchVerify({ cnssMatchesRccm: $event })"
+              />
+              <label for="verify-cnss">{{ 'PROVIDER.VERIFY.CNSS_MATCHES' | translate }}</label>
+            </div>
+
+            <div class="field">
+              <label for="verify-note">{{ 'PROVIDER.VERIFY.NOTE' | translate }}</label>
+              <textarea
+                id="verify-note"
+                rows="3"
+                maxlength="4000"
+                [ngModel]="dialog.evidenceNote"
+                (ngModelChange)="patchVerify({ evidenceNote: $event })"
+              ></textarea>
+            </div>
+
+            <div class="check-row">
+              <input
+                id="verify-correct"
+                type="checkbox"
+                [ngModel]="dialog.correcting"
+                (ngModelChange)="patchVerify({ correcting: $event })"
+              />
+              <label for="verify-correct">{{ 'PROVIDER.VERIFY.CORRECT' | translate }}</label>
+            </div>
+            @if (dialog.correcting) {
+              <app-provider-evidence-form
+                idPrefix="verify-corrections"
+                [facilityType]="p.facilityType"
+                [evidence]="dialog.corrections"
+                (evidenceChange)="patchVerify({ corrections: $event })"
+              />
+            }
+
+            @if (dialogError(); as error) {
+              <div class="form-error" role="alert" data-test="dialog-error">{{ error }}</div>
+            }
+          </div>
+          <div class="modal-actions">
+            <button
+              type="button"
+              class="btn-secondary"
+              [disabled]="busy()"
+              (click)="closeDialogs()"
+            >
+              {{ 'PROVIDER.COMMON.CANCEL' | translate }}
+            </button>
+            <button
+              type="button"
+              class="btn-primary"
+              data-test="verify-confirm"
+              [disabled]="busy() || !verifyReady()"
+              (click)="submitVerify()"
+            >
+              {{ 'PROVIDER.VERIFY.SUBMIT' | translate }}
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- ═══ REJECT / REVOKE ═══ -->
+    @if (decisionDialog(); as dialog) {
+      <div
+        class="modal-backdrop"
+        tabindex="-1"
+        (click)="closeDialogs()"
+        (keydown.escape)="closeDialogs()"
+      >
+        <div
+          class="modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="decision-title"
+          tabindex="-1"
+          (click)="$event.stopPropagation()"
+          (keydown.escape)="closeDialogs()"
+        >
+          <div class="modal-header">
+            <h2 id="decision-title">
+              @if (dialog.kind === 'reject') {
+                {{ 'PROVIDER.DECISION.REJECT_TITLE' | translate }}
+              } @else {
+                {{ 'PROVIDER.DECISION.REVOKE_TITLE' | translate }}
+              }
+            </h2>
+            <button
+              type="button"
+              class="modal-close"
+              [attr.aria-label]="'PROVIDER.COMMON.CLOSE' | translate"
+              (click)="closeDialogs()"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <p class="card-help">
+              @if (dialog.kind === 'reject') {
+                {{ 'PROVIDER.DECISION.REJECT_HELP' | translate }}
+              } @else {
+                {{ 'PROVIDER.DECISION.REVOKE_HELP' | translate }}
+              }
+            </p>
+            <div class="field">
+              <label for="decision-reason">{{ 'PROVIDER.DECISION.REASON' | translate }}</label>
+              <textarea
+                id="decision-reason"
+                rows="3"
+                required
+                maxlength="1000"
+                [ngModel]="dialog.reason"
+                (ngModelChange)="setDecisionReason($event)"
+              ></textarea>
+            </div>
+            @if (dialogError(); as error) {
+              <div class="form-error" role="alert" data-test="dialog-error">{{ error }}</div>
+            }
+          </div>
+          <div class="modal-actions">
+            <button
+              type="button"
+              class="btn-secondary"
+              [disabled]="busy()"
+              (click)="closeDialogs()"
+            >
+              {{ 'PROVIDER.COMMON.CANCEL' | translate }}
+            </button>
+            <button
+              type="button"
+              class="btn-primary"
+              data-test="decision-confirm"
+              [disabled]="busy() || dialog.reason.trim() === ''"
+              (click)="submitDecision()"
+            >
+              @if (dialog.kind === 'reject') {
+                {{ 'PROVIDER.DETAIL.ACTION_REJECT' | translate }}
+              } @else {
+                {{ 'PROVIDER.DETAIL.ACTION_REVOKE' | translate }}
+              }
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- ═══ SUSPEND / RESTORE / ARCHIVE (hospital lifecycle) ═══ -->
+    @if (lifecycleDialog(); as dialog) {
+      <div
+        class="modal-backdrop"
+        tabindex="-1"
+        (click)="closeDialogs()"
+        (keydown.escape)="closeDialogs()"
+      >
+        <div
+          class="modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="lifecycle-title"
+          tabindex="-1"
+          (click)="$event.stopPropagation()"
+          (keydown.escape)="closeDialogs()"
+        >
+          <div class="modal-header">
+            <h2 id="lifecycle-title">
+              @switch (dialog.kind) {
+                @case ('suspend') {
+                  {{ 'PROVIDER.LIFECYCLE.SUSPEND_TITLE' | translate }}
+                }
+                @case ('archive') {
+                  {{ 'PROVIDER.LIFECYCLE.ARCHIVE_TITLE' | translate }}
+                }
+                @default {
+                  {{ 'PROVIDER.LIFECYCLE.RESTORE_TITLE' | translate }}
+                }
+              }
+            </h2>
+            <button
+              type="button"
+              class="modal-close"
+              [attr.aria-label]="'PROVIDER.COMMON.CLOSE' | translate"
+              (click)="closeDialogs()"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <p class="card-help">
+              @switch (dialog.kind) {
+                @case ('suspend') {
+                  {{ 'PROVIDER.LIFECYCLE.SUSPEND_HELP' | translate }}
+                }
+                @case ('archive') {
+                  {{ 'PROVIDER.LIFECYCLE.ARCHIVE_HELP' | translate }}
+                }
+                @default {
+                  {{ 'PROVIDER.LIFECYCLE.RESTORE_HELP' | translate }}
+                }
+              }
+            </p>
+            @if (lifecycleNeedsReason(dialog.kind)) {
+              <div class="field">
+                <label for="lifecycle-reason">{{ 'PROVIDER.LIFECYCLE.REASON' | translate }}</label>
+                <textarea
+                  id="lifecycle-reason"
+                  rows="3"
+                  required
+                  [ngModel]="dialog.reason"
+                  (ngModelChange)="setLifecycleReason($event)"
+                ></textarea>
+              </div>
+            }
+            @if (dialogError(); as error) {
+              <div class="form-error" role="alert" data-test="dialog-error">{{ error }}</div>
+            }
+          </div>
+          <div class="modal-actions">
+            <button
+              type="button"
+              class="btn-secondary"
+              [disabled]="busy()"
+              (click)="closeDialogs()"
+            >
+              {{ 'PROVIDER.COMMON.CANCEL' | translate }}
+            </button>
+            <button
+              type="button"
+              class="btn-primary"
+              data-test="lifecycle-confirm"
+              [disabled]="busy() || !lifecycleReady()"
+              (click)="submitLifecycle()"
+            >
+              {{ 'PROVIDER.COMMON.CONFIRM' | translate }}
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    @if (registerOpen()) {
+      <app-provider-staff-register
+        titleKey="PROVIDER.REGISTER.TITLE_PLATFORM"
+        [facilityId]="p.id"
+        [facilityName]="p.name || p.code"
+        [roles]="registerRoles()"
+        (registered)="onRegistered($event)"
+        (closed)="closeRegister()"
+      />
+    }
+  }
+</div>

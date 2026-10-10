@@ -33,6 +33,9 @@ public interface ProviderVerificationRepository extends JpaRepository<ProviderVe
     /** The facility's latest verification, whatever its status. */
     Optional<ProviderVerification> findFirstByHospital_IdOrderByCreatedAtDesc(UUID hospitalId);
 
+    /** Every verification of the facility, newest first: the super-admin's verification history. */
+    List<ProviderVerification> findByHospital_IdOrderByCreatedAtDescIdDesc(UUID hospitalId);
+
     /** Does the facility hold a verification in this status? The lifecycle restore guard (AC-4). */
     boolean existsByHospital_IdAndStatus(UUID hospitalId, ProviderVerificationStatus status);
 
