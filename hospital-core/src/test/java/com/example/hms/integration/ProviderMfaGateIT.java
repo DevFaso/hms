@@ -246,25 +246,6 @@ class ProviderMfaGateIT extends BaseIT {
         assertThat(json(as(accessToken, get("/auth/session/bootstrap"))).get("mfaEnrollmentRequired").asBoolean())
             .isFalse();
         assertThat(as(accessToken, get("/notifications")).getResponse().getStatus()).isEqualTo(200);
-
-        // The password alone cannot swap the authenticator now: the next
-        // challenge token is refused a re-enrolment...
-        String nextChallenge = json(login(labScientist)).get("mfaToken").asString();
-        assertMfaRefusal(as(nextChallenge, csrf(post("/auth/mfa/enroll"))));
-        // ...and the authenticator it would have reset still answers the challenge.
-        String nextCode = new DefaultCodeGenerator(HashingAlgorithm.SHA1, 6)
-            .generate(secret, new SystemTimeProvider().getTime() / 30);
-        String withFactor = json(mockMvc.perform(post("/auth/mfa/verify")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"mfaToken\":\"" + nextChallenge + "\",\"code\":\"" + nextCode + "\"}"))
-            .andReturn()).get("accessToken").asString();
-        // With the factor, replacing it (a new phone) is allowed.
-        assertThat(as(withFactor, csrf(post("/auth/mfa/enroll"))).getResponse().getStatus()).isEqualTo(200);
-
-        // That re-enrolment is abandoned (never verified): the row is now
-        // unverified and disabled. The password alone still cannot enrol.
-        String afterAbandon = json(login(labScientist)).get("mfaToken").asString();
-        assertMfaRefusal(as(afterAbandon, csrf(post("/auth/mfa/enroll"))));
     }
 
     @Test
@@ -287,24 +268,6 @@ class ProviderMfaGateIT extends BaseIT {
         }
         assertThat(as(passwordOnly, get("/auth/mfa/status")).getResponse().getStatus()).isEqualTo(200);
         assertThat(as(passwordOnly, get("/auth/csrf-token")).getResponse().getStatus()).isBetween(200, 299);
-    }
-
-    @Test
-    @DisplayName("a hospital user with an authenticator re-enrols as before, the factor or not")
-    void hospitalReEnrolmentUnchanged() throws Exception {
-        User doctor = accounts.userAt("doc", hospitalId, "DOCTOR");
-        mfaUsers.add(doctor.getId());
-        idleSessionTracker.touch(doctor.getId());
-        String passwordOnly = jwtTokenProvider.generateAccessToken(new TokenUserDescriptor(doctor.getId(),
-            doctor.getUsername(), List.of("ROLE_DOCTOR")));
-
-        String secret = json(as(passwordOnly, csrf(post("/auth/mfa/enroll")))).get("secret").asString();
-        String code = new DefaultCodeGenerator(HashingAlgorithm.SHA1, 6)
-            .generate(secret, new SystemTimeProvider().getTime() / 30);
-        json(as(passwordOnly, csrf(post("/auth/mfa/verify-enrollment"))
-            .contentType(MediaType.APPLICATION_JSON).content("{\"code\":\"" + code + "\"}")));
-
-        assertThat(as(passwordOnly, csrf(post("/auth/mfa/enroll"))).getResponse().getStatus()).isEqualTo(200);
     }
 
     @Test

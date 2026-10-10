@@ -72,9 +72,8 @@ Reference max age), so both paths re-challenge on the same clock. Without it, th
 reports `mfaEnrollmentRequired` and the confinement filter answers 403
 `mfa.enrollment.required` outside the sign-in and MFA enrolment handlers
 (`CommonProviderConfinement.SECOND_FACTOR_EXEMPT_RULES`; the rest of `/auth`,
-the ws ticket included, needs the factor), and `POST /auth/mfa/enroll` refuses
-to replace a provider user's authenticator without it. Never mint a token with
-`secondFactor=true` on any other path. Enrollment lives on
+the ws ticket included, needs the factor). Never mint a token with a
+second-factor time on any other path. Enrollment lives on
 `UserMfaEnrollment` (TOTP secret encrypted via `TotpSecretEncryptor` —
 different converter from `EncryptedStringConverter`). Backup-code use
 emits `AuditEventType.MFA_BACKUP_USED`.

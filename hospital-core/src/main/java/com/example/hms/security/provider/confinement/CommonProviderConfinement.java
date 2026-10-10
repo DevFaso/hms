@@ -87,7 +87,7 @@ public final class CommonProviderConfinement {
         new ConfinementRule("GET", "/auth/csrf-token", "the portal's CSRF bootstrap for the MFA forms"),
         new ConfinementRule("GET", "/auth/mfa/status", "whether the account has an authenticator yet"),
         new ConfinementRule("POST", "/auth/mfa/enroll",
-            "first enrolment; replacing an existing authenticator needs the second factor (MfaController)"),
+            "MFA enrolment; replacing a verified authenticator is ruled for every user by the enrolment itself (#853)"),
         new ConfinementRule("POST", "/auth/mfa/verify-enrollment", "confirms the new authenticator"),
         new ConfinementRule("POST", "/auth/mfa/verify", "the TOTP challenge, which mints the tokens carrying the factor"));
 

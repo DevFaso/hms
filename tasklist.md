@@ -4846,11 +4846,11 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   it). With it, `POST /auth/mfa/enroll` resets a verified authenticator and
   `PUT /auth/credentials/mfa` rewrites or deletes the MFA records, so whoever
   holds the password can enrol their own device and pass the challenge. D5
-  slice 4 closes both for provider users only (the provider MFA gate holds
-  them to sign-in and enrolment, and re-enrolment needs the factor), as the
-  hospital side was out of its scope. Restrict the challenge token to the
-  `/auth/mfa` handlers and require the factor to replace or remove an
-  authenticator for everyone (found while building D5 slice 4). Open.
+  slice 4 (#851) holds provider users to sign-in and enrolment without the
+  factor; the hotfix #853 (`fix/mfa-challenge-token-scope`) closes the root
+  for every user: the challenge token limited to the MFA step, and replacing
+  a verified authenticator needing a full session and a step-up code (found
+  while building D5 slice 4). Open until #853 merges.
 - **CDS acknowledgement with an unknown hospital id now answers 404** (was: saved as a
   global acknowledgement). Intended since #835; confirm no client relies on the old
   behaviour. Open.

@@ -46,9 +46,9 @@ import static com.example.hms.config.SecurityConstants.CLAIM_AMR;
  *   <li><b>Where.</b> The session bootstrap reports {@code mfaEnrollmentRequired};
  *       the confinement filter answers every request outside sign-in and MFA
  *       enrolment ({@code CommonProviderConfinement.SECOND_FACTOR_EXEMPT_RULES})
- *       403 {@code mfa.enrollment.required} ({@link #refuse}); and an existing
- *       authenticator is replaced only with the factor it guards
- *       ({@code MfaController}), so a password alone cannot swap it.</li>
+ *       403 {@code mfa.enrollment.required} ({@link #refuse}). Replacing an
+ *       authenticator is ruled for every user by the MFA enrolment itself
+ *       (#853), not here.</li>
  * </ul>
  *
  * <p>A plain component reached through {@link ObjectProvider}s, like
@@ -102,8 +102,7 @@ public class ProviderMfaGate {
     /**
      * The account holds a live assignment at a provider facility (the
      * confinement rule on its live assignments, a verified super-admin
-     * excepted): {@code /auth/login} challenges it for its second factor, and
-     * replacing its authenticator needs that factor ({@code MfaController}).
+     * excepted): {@code /auth/login} challenges it for its second factor.
      */
     public boolean isProviderUser(UUID userId, String username) {
         if (userId == null) {

@@ -7,10 +7,9 @@ import org.springframework.security.access.AccessDeniedException;
  * Answered 403 with {@link #CODE}, so the portal sends the user to MFA
  * enrolment or the challenge instead of the forbidden page. Raised by the
  * provider confinement filter for every request outside the sign-in and MFA
- * enrolment handlers, whatever the handler (the answer is the same for a
+ * enrolment handlers, whatever the handler: the answer is the same for a
  * reachable, a refused and an unmapped path, so it reveals nothing about which
- * exist), and by {@code POST /auth/mfa/enroll} when a provider user without
- * the factor would replace an existing authenticator.
+ * exist.
  *
  * <p>An {@link AccessDeniedException}, so any code that treats a refusal as a
  * 403 keeps doing so. The message is localised by the thrower and carries no
