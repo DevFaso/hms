@@ -554,4 +554,22 @@ class MfaServiceTest {
 
         verifyNoInteractions(auditEventLogService);
     }
+
+    @Test
+    void changingTheMfaRecords_ofADisabledButVerifiedAuthenticator_stillNeedsTheStepUp() {
+        UserMfaEnrollment enrollment = activeAuthenticator();
+        enrollment.setEnabled(false);
+
+        refusedWith(MfaStepUpRefusedException.Reason.REQUIRED,
+                () -> mfaService.requireStepUpToChangeAuthenticator(userId, fullSession(), null));
+    }
+
+    @Test
+    void stepUp_ofAnActorWhoseAuthenticatorIsDisabled_isNoBypass() {
+        UserMfaEnrollment enrollment = activeAuthenticator();
+        enrollment.setEnabled(false);
+
+        refusedWith(MfaStepUpRefusedException.Reason.REQUIRED,
+                () -> mfaService.requireStepUp(userId, null, "test action", false));
+    }
 }
