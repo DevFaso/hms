@@ -4777,6 +4777,26 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 - **External providers: `RecordAccessDenialReason.PROVIDER_FACILITY` says it is evaluated
   first**, but an inactive pharmacy/lab answers `HOSPITAL_UNKNOWN`; fix the doc or the
   order (from #835's round-13 review). Open.
+- **External providers: the provider admin profile has no opening hours and no
+  accepting-orders switch** (plan §3.1 lists both). They need columns on
+  `hospital.hospitals`, so a migration; slice 3 (P1-T5) changes the operational
+  phone, email and website only. Decide the number with the user (V181 is
+  reserved for P2-PH). Open.
+- **External providers: `/provider/**` still tells an authenticated hospital user
+  that the path exists through MVC's own answers** (a wrong method 405 with its
+  `Allow` header, a wrong media type 415, a malformed JSON body 400), which come
+  before any handler. The handlers answer everything else exactly as an unmapped
+  path (slice 3). Closing it needs the confinement filter's treatment for every
+  caller on that prefix. Low value: the paths are public in the portal. Open.
+- **External providers: AC-15's per-day deduplication of provider disclosures**
+  is not in `CrossHospitalReachRecorder.recordProviderShare` (slice 3): the
+  recorder records every read, and a dedupe key without the order under-reports
+  (see `recordBatchedReach`). P2-PH and P2-LAB, the first callers, key it on the
+  offer or the order. Open.
+- **External providers: the provider admin pages need ROLE_PROVIDER_ADMIN in the
+  token** as well as the live assignment (the assignment service's scope reads
+  both), so on Keycloak they answer as unmapped until P1-T11 adds the realm role.
+  Same as `POST /users/admin-register` today. Open until P1-T11.
 - **CDS acknowledgement with an unknown hospital id now answers 404** (was: saved as a
   global acknowledgement). Intended since #835; confirm no client relies on the old
   behaviour. Open.
