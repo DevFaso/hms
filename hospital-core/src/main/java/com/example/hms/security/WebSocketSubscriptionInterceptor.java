@@ -111,6 +111,7 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
     static final String APPLICATION_DESTINATION_PREFIX = "/app/";
 
     private static final String USER_DESTINATION_PREFIX = "/user/";
+    private static final String CALLER_UNRESOLVED = "caller could not be resolved";
     private static final String EMERGENCY_BROADCAST_TOPIC = "/topic/emergency-broadcast";
     private static final String NOTIFICATIONS_BROADCAST_TOPIC = "/topic/notifications";
 
@@ -181,7 +182,7 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
         }
         Caller caller = resolve(accessor, sender);
         if (caller.unavailable()) {
-            throw unavailable(sender, target, "caller could not be resolved");
+            throw unavailable(sender, target, CALLER_UNRESOLVED);
         }
         if (!ProviderConfinementPolicy.isLinkedAndUnconfined(caller.context())) {
             throw denied(sender, target, "provider users may not send STOMP messages");
@@ -219,7 +220,7 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
         // Provider rule (provider plan §6.4, T21): a user with a live
         // assignment at a pharmacy or laboratory subscribes to /user/** only.
         if (caller.unavailable()) {
-            throw unavailable(user, destination, "caller could not be resolved");
+            throw unavailable(user, destination, CALLER_UNRESOLVED);
         }
         if (!ProviderConfinementPolicy.isLinkedAndUnconfined(caller.context())) {
             throw denied(user, destination, "provider users may subscribe to /user/** only");
@@ -249,7 +250,7 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
         boolean knownNonProvider = ProviderConfinementPolicy.isLinkedAndUnconfined(caller.lastKnown())
             || cannotHoldAProviderRole(user);
         if (!knownNonProvider) {
-            throw unavailable(user, destination, "caller could not be resolved");
+            throw unavailable(user, destination, CALLER_UNRESOLVED);
         }
         log.warn("[STOMP] Live context unavailable; broadcast {} kept for a caller known not to be a provider user",
             destination);
