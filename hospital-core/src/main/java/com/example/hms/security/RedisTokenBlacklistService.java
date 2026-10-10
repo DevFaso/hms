@@ -46,6 +46,20 @@ public class RedisTokenBlacklistService implements TokenBlacklistService {
         log.debug("[BLACKLIST-REDIS] Token jti={} blacklisted ttlMs={}", jti, ttlMs);
     }
 
+    /** SET NX with the token's remaining lifetime: one winner across every instance. */
+    @Override
+    public boolean claim(String jti, long expirationMs) {
+        if (jti == null || jti.isBlank()) {
+            return false;
+        }
+        long ttlMs = expirationMs - System.currentTimeMillis();
+        if (ttlMs <= 0) {
+            return false;
+        }
+        return Boolean.TRUE.equals(redisTemplate.opsForValue()
+            .setIfAbsent(KEY_PREFIX + jti, Long.toString(expirationMs), Duration.ofMillis(ttlMs)));
+    }
+
     @Override
     public boolean isBlacklisted(String jti) {
         if (jti == null || jti.isBlank()) {

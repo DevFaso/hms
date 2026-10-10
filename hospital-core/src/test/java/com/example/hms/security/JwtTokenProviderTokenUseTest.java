@@ -17,7 +17,6 @@ import io.jsonwebtoken.security.Keys;
 import org.springframework.security.authentication.BadCredentialsException;
 
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
@@ -137,48 +136,35 @@ class JwtTokenProviderTokenUseTest {
     // ── Refresh tokens minted before the mark, and refresh tokens as bearers ──
 
     /** A refresh token exactly as this issuer minted it before token_use existed. */
-    private static String legacyRefreshToken() {
+    private static String legacyRefreshToken(long expiresInMs) {
         return Jwts.builder()
             .id(UUID.randomUUID().toString())
             .subject(USERNAME)
             .claim("roles", List.of("ROLE_HOSPITAL_ADMIN"))
-            .issuedAt(new Date())
-            .expiration(new Date(System.currentTimeMillis() + 3_600_000L))
+            .issuedAt(new Date(System.currentTimeMillis() - 7_200_000L))
+            .expiration(new Date(System.currentTimeMillis() + expiresInMs))
             .signWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)))
             .compact();
     }
 
-    @Test
-    @DisplayName("a legacy refresh token is accepted before the cutoff, and refused after it")
-    void legacyRefreshTokenOnlyUntilTheCutoff() {
-        String legacy = legacyRefreshToken();
-        assertThat(provider.isRefreshToken(legacy)).isTrue();
-
-        ReflectionTestUtils.setField(provider, "legacyRefreshAcceptedUntil", Instant.now().minusSeconds(1));
-
-        assertThat(provider.isRefreshToken(legacy)).isFalse();
-        assertThat(provider.isRefreshToken(provider.generateRefreshToken(descriptor()))).isTrue();
+    private static String legacyRefreshToken() {
+        return legacyRefreshToken(3_600_000L);
     }
 
     @Test
-    @DisplayName("the cutoff is configurable, and an access token is never mistaken for the legacy shape")
-    void accessTokenIsNeverTheLegacyShape() {
-        JwtTokenProvider configured = new JwtTokenProvider(userDetailsService, tenantRoleAssignmentAccessor);
-        ReflectionTestUtils.setField(configured, "jwtSecret", SECRET);
-        ReflectionTestUtils.setField(configured, "accessTokenExpirationMs", 900_000L);
-        ReflectionTestUtils.setField(configured, "refreshTokenExpirationMs", 172_800_000L);
-        ReflectionTestUtils.setField(configured, "rsaPrivateKeyPem", "");
-        ReflectionTestUtils.setField(configured, "rsaPublicKeyPem", "");
-        ReflectionTestUtils.setField(configured, "previousPublicKeyPem", "");
-        ReflectionTestUtils.setField(configured, "legacyRefreshAcceptedUntilSetting", "2999-01-01T00:00:00Z");
-        configured.init();
+    @DisplayName("a legacy refresh token is accepted up to its own expiry, and not after")
+    void legacyRefreshTokenUpToItsOwnExpiry() {
+        assertThat(provider.isRefreshToken(legacyRefreshToken())).isTrue();
+        assertThat(provider.isRefreshToken(legacyRefreshToken(-1_000L))).isFalse();
+    }
 
-        assertThat(ReflectionTestUtils.getField(configured, "legacyRefreshAcceptedUntil"))
-            .isEqualTo(Instant.parse("2999-01-01T00:00:00Z"));
-        assertThat(configured.isRefreshToken(configured.generateAccessToken(descriptor()))).isFalse();
-        assertThat(configured.isRefreshToken(configured.generateImpersonationAccessToken(
+    @Test
+    @DisplayName("an access, impersonation or challenge token is never mistaken for the legacy shape")
+    void accessTokenIsNeverTheLegacyShape() {
+        assertThat(provider.isRefreshToken(provider.generateAccessToken(descriptor()))).isFalse();
+        assertThat(provider.isRefreshToken(provider.generateImpersonationAccessToken(
             descriptor(), UUID.randomUUID(), "super.admin", 1_800_000L))).isFalse();
-        assertThat(configured.isRefreshToken(configured.generateMfaToken(USERNAME))).isFalse();
+        assertThat(provider.isRefreshToken(provider.generateMfaToken(USERNAME))).isFalse();
     }
 
     @Test

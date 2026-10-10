@@ -6032,7 +6032,8 @@
     "MFA_STEPUP_PLACEHOLDER": "Code or backup code",
     "MFA_STEPUP_REQUIRED": "Enter a current code from your authenticator app, or an unused backup code.",
     "MFA_STEPUP_INVALID": "That code was not accepted. Enter a current code from your authenticator app, or an unused backup code.",
-    "MFA_STEPUP_CHALLENGE": "Sign in completely, including the verification code, before replacing your authenticator."
+    "MFA_STEPUP_CHALLENGE": "Sign in completely, including the verification code, before replacing your authenticator.",
+    "MFA_STEPUP_LOCKED": "Too many wrong codes. Wait a few minutes, then try again with a current code or an unused backup code."
   },
   "RECEPTION": {
     "ACCEPT_OFFER": "Accept",

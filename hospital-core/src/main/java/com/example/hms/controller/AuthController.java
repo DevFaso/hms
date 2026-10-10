@@ -104,6 +104,8 @@ public class AuthController {
     private final UserService userService;
     private final UserCredentialLifecycleService userCredentialLifecycleService;
     private final TokenBlacklistService tokenBlacklistService;
+    /** Force-logout-all: a refresh token issued before it mints nothing (the filter's own rule). */
+    private final com.example.hms.security.GlobalSessionRevocationService globalSessionRevocationService;
     private final com.example.hms.security.IdleSessionGate idleSessionGate;
     private final com.example.hms.security.ImpersonationSessionTracker impersonationSessionTracker;
     private final LoginAttemptService loginAttemptService;
@@ -139,6 +141,7 @@ public class AuthController {
             AuthNotificationFacade authNotification,
             UserCredentialLifecycleService userCredentialLifecycleService,
             TokenBlacklistService tokenBlacklistService,
+            com.example.hms.security.GlobalSessionRevocationService globalSessionRevocationService,
             com.example.hms.security.IdleSessionGate idleSessionGate,
             com.example.hms.security.ImpersonationSessionTracker impersonationSessionTracker,
             LoginAttemptService loginAttemptService,
@@ -157,6 +160,7 @@ public class AuthController {
         this.authNotification = authNotification;
         this.userCredentialLifecycleService = userCredentialLifecycleService;
         this.tokenBlacklistService = tokenBlacklistService;
+        this.globalSessionRevocationService = globalSessionRevocationService;
         this.idleSessionGate = idleSessionGate;
         this.impersonationSessionTracker = impersonationSessionTracker;
         this.loginAttemptService = loginAttemptService;
@@ -709,6 +713,15 @@ public class AuthController {
         // access token a session that never ends.
         if (!jwtTokenProvider.isRefreshToken(refreshToken)) {
             log.warn("🔄 [REFRESH] Invalid or expired refresh token");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse("Refresh token is invalid or has expired. Please log in again."));
+        }
+
+        // Force-logout-all revokes refresh tokens too: one issued before it
+        // must not mint a new session (GlobalSessionRevocationService#revokes,
+        // the rule the filter applies to access tokens).
+        if (globalSessionRevocationService.revokes(jwtTokenProvider.getIssuedAt(refreshToken))) {
+            log.warn("🔄 [REFRESH] Refused — refresh token predates the last force-logout-all");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse("Refresh token is invalid or has expired. Please log in again."));
         }

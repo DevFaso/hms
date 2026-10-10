@@ -82,4 +82,14 @@ class RateLimitFilterTest {
 
         assertThat(filter.shouldNotFilter(request)).isTrue();
     }
+
+    @Test
+    void rateLimitsTheMfaStepUpEndpoints() {
+        for (String path : new String[] {"/api/auth/mfa/enroll", "/api/auth/mfa/verify-enrollment",
+                "/api/auth/credentials/mfa"}) {
+            MockHttpServletRequest request = new MockHttpServletRequest("POST", path);
+            request.setRequestURI(path);
+            assertThat(filter.shouldNotFilter(request)).as(path).isFalse();
+        }
+    }
 }

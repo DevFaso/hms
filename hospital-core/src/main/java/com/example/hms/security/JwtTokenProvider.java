@@ -32,7 +32,6 @@ import java.security.PublicKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;
@@ -91,18 +90,6 @@ public class JwtTokenProvider {
     @Value("${app.jwt.previous-public-key:}")
     private String previousPublicKeyPem;
 
-    /**
-     * Until when {@code /auth/token/refresh} still accepts a refresh token
-     * minted before the {@code token_use} mark (an ISO-8601 instant). Unset, it
-     * is boot time plus the refresh-token lifetime, which every such token has
-     * outlived by then; rotation always issues the marked shape, so set it to
-     * the deploy time plus 48 h to make the window exact.
-     */
-    @Value("${app.auth.legacy-refresh-accepted-until:}")
-    private String legacyRefreshAcceptedUntilSetting;
-
-    private Instant legacyRefreshAcceptedUntil;
-
     /** Signing key — either HMAC SecretKey or RSA PrivateKey. */
     private Key signingKey;
 
@@ -135,9 +122,6 @@ public class JwtTokenProvider {
         } else {
             initHmac();
         }
-        legacyRefreshAcceptedUntil = StringUtils.hasText(legacyRefreshAcceptedUntilSetting)
-            ? Instant.parse(legacyRefreshAcceptedUntilSetting.trim())
-            : Instant.now().plusMillis(refreshTokenExpirationMs);
     }
 
     private void initAsymmetric() {
@@ -655,11 +639,13 @@ public class JwtTokenProvider {
 
     /**
      * The token is a refresh token this issuer minted: signed, unexpired and
-     * marked {@code token_use=refresh}, or, until
-     * {@code app.auth.legacy-refresh-accepted-until}, of the exact shape a
-     * refresh token had before the mark (so the deploy signs nobody out). An
-     * access, impersonation or MFA challenge token is never one, though the
-     * same key signs it.
+     * marked {@code token_use=refresh}, or of the exact shape a refresh token
+     * had before the mark ({@link TokenUse#isLegacyRefreshShape}), up to its
+     * own expiry, so the deploy signs nobody out. Only tokens minted before the
+     * mark have that shape (rotation always issues the marked one), they all
+     * expire within the refresh lifetime, and forging one needs the signing
+     * key. An access, impersonation or MFA challenge token is never one,
+     * though the same key signs it.
      */
     public boolean isRefreshToken(String token) {
         if (!StringUtils.hasText(token)) {
@@ -667,8 +653,7 @@ public class JwtTokenProvider {
         }
         try {
             Claims claims = jwtParser().parseSignedClaims(token).getPayload();
-            return TokenUse.isMarkedRefresh(claims)
-                || (TokenUse.isLegacyRefreshShape(claims) && Instant.now().isBefore(legacyRefreshAcceptedUntil));
+            return TokenUse.isMarkedRefresh(claims) || TokenUse.isLegacyRefreshShape(claims);
         } catch (JwtException | IllegalArgumentException ex) {
             return false;
         }

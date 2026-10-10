@@ -40,6 +40,15 @@ public class InMemoryTokenBlacklistService implements TokenBlacklistService {
         log.debug("[BLACKLIST] Token jti={} blacklisted until {}", jti, expirationMs);
     }
 
+    /** Atomic within this JVM only: a multi-instance deployment needs the Redis store. */
+    @Override
+    public boolean claim(String jti, long expirationMs) {
+        if (jti == null || jti.isBlank() || expirationMs <= System.currentTimeMillis()) {
+            return false;
+        }
+        return blacklistedTokens.putIfAbsent(jti, expirationMs) == null;
+    }
+
     @Override
     public boolean isBlacklisted(String jti) {
         if (jti == null || jti.isBlank()) {

@@ -24,7 +24,11 @@ public class MfaStepUpRefusedException extends RuntimeException {
         /** The actor has no authenticator and strict mode requires one. */
         NOT_ENROLLED("mfa.stepup.notEnrolled"),
         /** The actor's authenticator could not be read; refused rather than skipped. */
-        UNAVAILABLE("mfa.stepup.unavailable");
+        UNAVAILABLE("mfa.stepup.unavailable"),
+        /** No actor could be identified for the action, so there is no authenticator to ask. */
+        UNIDENTIFIED("mfa.stepup.unidentified"),
+        /** Too many wrong codes: the step-up is locked for a while. */
+        LOCKED("mfa.stepup.locked");
 
         private final String code;
 

@@ -60,6 +60,11 @@ export interface MfaEnrollment {
   primaryFactor: boolean;
   enrolledAt?: string;
   lastVerifiedAt?: string;
+  /**
+   * The server's rule: verified at least once, so replacing it needs the
+   * step-up. The portal offers "Replace" from this flag only.
+   */
+  confirmed?: boolean;
 }
 
 export interface RecoveryContact {

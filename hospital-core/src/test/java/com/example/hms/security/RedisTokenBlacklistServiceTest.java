@@ -96,4 +96,23 @@ class RedisTokenBlacklistServiceTest {
 
         verify(redisTemplate, never()).hasKey(anyString());
     }
+
+    @Test
+    void claimIsASetIfAbsent_soOnlyOneCallerWinsAcrossInstances() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        long expiration = System.currentTimeMillis() + 60_000;
+        when(valueOps.setIfAbsent(org.mockito.ArgumentMatchers.eq("hms:blacklist:jti:jti-1"),
+                org.mockito.ArgumentMatchers.eq(Long.toString(expiration)), any(Duration.class)))
+                .thenReturn(true, false);
+
+        assertThat(service.claim("jti-1", expiration)).isTrue();
+        assertThat(service.claim("jti-1", expiration)).isFalse();
+    }
+
+    @Test
+    void claimNeverStoresAnExpiredToken() {
+        assertThat(service.claim("jti-expired", System.currentTimeMillis() - 1000)).isFalse();
+
+        verify(redisTemplate, never()).opsForValue();
+    }
 }

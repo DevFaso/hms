@@ -6032,7 +6032,8 @@
     "MFA_STEPUP_PLACEHOLDER": "Code ou code de secours",
     "MFA_STEPUP_REQUIRED": "Saisissez un code actuel de votre application d'authentification, ou un code de secours inutilisé.",
     "MFA_STEPUP_INVALID": "Ce code n'a pas été accepté. Saisissez un code actuel de votre application d'authentification, ou un code de secours inutilisé.",
-    "MFA_STEPUP_CHALLENGE": "Terminez la connexion, y compris le code de vérification, avant de remplacer votre authentificateur."
+    "MFA_STEPUP_CHALLENGE": "Terminez la connexion, y compris le code de vérification, avant de remplacer votre authentificateur.",
+    "MFA_STEPUP_LOCKED": "Trop de codes erronés. Patientez quelques minutes, puis réessayez avec un code actuel ou un code de secours inutilisé."
   },
   "RECEPTION": {
     "ACCEPT_OFFER": "Accepter",

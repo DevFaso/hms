@@ -214,8 +214,13 @@ public class MfaController {
                     .body(new MessageResponse("Invalid MFA code."));
         }
 
-        // MFA passed. The challenge is spent: it cannot mint a second session.
-        spend(request.mfaToken());
+        // MFA passed. Spend the challenge atomically BEFORE issuing anything:
+        // of two concurrent verifies of one challenge, only the one that
+        // claims it gets a session.
+        if (!claim(request.mfaToken())) {
+            return ResponseEntity.status(401)
+                    .body(new MessageResponse("Invalid or expired MFA token."));
+        }
 
         // Issue the full JWT pair
         var activeAssignments = assignmentRepository.findByUser_IdAndActiveTrue(user.getId());
@@ -300,11 +305,11 @@ public class MfaController {
                 || globalSessionRevocationService.revokes(jwtTokenProvider.getIssuedAt(challengeToken));
     }
 
-    private void spend(String challengeToken) {
+    /** The one caller that spends the challenge (TokenBlacklistService#claim). */
+    private boolean claim(String challengeToken) {
         String jti = jwtTokenProvider.getJtiFromToken(challengeToken);
-        if (jti != null) {
-            tokenBlacklistService.blacklist(jti, jwtTokenProvider.getExpiration(challengeToken).getTime());
-        }
+        return jti != null
+                && tokenBlacklistService.claim(jti, jwtTokenProvider.getExpiration(challengeToken).getTime());
     }
 
     // DTO for MFA login verification (unauthenticated)

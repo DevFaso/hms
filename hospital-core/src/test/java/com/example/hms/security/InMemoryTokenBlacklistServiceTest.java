@@ -46,4 +46,41 @@ class InMemoryTokenBlacklistServiceTest {
         assertThat(service.isBlacklisted("expired-jti")).isFalse();
         assertThat(service.isBlacklisted("valid-jti")).isTrue();
     }
+
+    @Test
+    void claimHasExactlyOneWinner_evenUnderContention() throws Exception {
+        long future = System.currentTimeMillis() + 60_000;
+        int threads = 16;
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(threads);
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicInteger winners = new java.util.concurrent.atomic.AtomicInteger();
+        try {
+            java.util.List<java.util.concurrent.Future<?>> all = new java.util.ArrayList<>();
+            for (int i = 0; i < threads; i++) {
+                all.add(pool.submit(() -> {
+                    start.await();
+                    if (service.claim("challenge-jti", future)) {
+                        winners.incrementAndGet();
+                    }
+                    return null;
+                }));
+            }
+            start.countDown();
+            for (java.util.concurrent.Future<?> f : all) {
+                f.get();
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(winners.get()).isEqualTo(1);
+        assertThat(service.isBlacklisted("challenge-jti")).isTrue();
+    }
+
+    @Test
+    void anExpiredOrBlankTokenIsNeverClaimed() {
+        assertThat(service.claim("old-jti", System.currentTimeMillis() - 1)).isFalse();
+        assertThat(service.claim(" ", System.currentTimeMillis() + 60_000)).isFalse();
+        assertThat(service.claim(null, System.currentTimeMillis() + 60_000)).isFalse();
+    }
 }

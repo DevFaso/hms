@@ -177,6 +177,7 @@ class MfaControllerTest {
     @Test
     void verifyMfa_validCode_returnsFullJwt() throws Exception {
         when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
+        claimable("mfa-tok-123");
         when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
         when(mfaService.verifyCode(USER_ID, "654321")).thenReturn(true);
         when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID)).thenReturn(List.of());
@@ -220,6 +221,7 @@ class MfaControllerTest {
     @Test
     void verifyMfa_backupCode_succeeds() throws Exception {
         when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
+        claimable("mfa-tok-123");
         when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
         when(mfaService.verifyCode(USER_ID, "BACKUP01")).thenReturn(false);
         when(mfaService.verifyBackupCode(USER_ID, "BACKUP01")).thenReturn(true);
@@ -265,12 +267,19 @@ class MfaControllerTest {
         verifyNoInteractions(mfaService);
     }
 
+    /** The challenge has a jti, and this verify is the one that claims it. */
+    private java.util.Date claimable(String challenge) {
+        java.util.Date exp = new java.util.Date(System.currentTimeMillis() + 300_000);
+        when(jwtTokenProvider.getJtiFromToken(challenge)).thenReturn("jti-1");
+        when(jwtTokenProvider.getExpiration(challenge)).thenReturn(exp);
+        when(tokenBlacklistService.claim("jti-1", exp.getTime())).thenReturn(true);
+        return exp;
+    }
+
     @Test
     void verifyMfa_success_spendsTheChallenge() throws Exception {
-        java.util.Date exp = new java.util.Date(System.currentTimeMillis() + 300_000);
         when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
-        when(jwtTokenProvider.getJtiFromToken("mfa-tok-123")).thenReturn("jti-1");
-        when(jwtTokenProvider.getExpiration("mfa-tok-123")).thenReturn(exp);
+        java.util.Date exp = claimable("mfa-tok-123");
         when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
         when(mfaService.verifyCode(USER_ID, "654321")).thenReturn(true);
         when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID)).thenReturn(List.of());
@@ -280,7 +289,7 @@ class MfaControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"654321\"}"))
                 .andExpect(status().isOk());
-        verify(tokenBlacklistService).blacklist("jti-1", exp.getTime());
+        verify(tokenBlacklistService).claim("jti-1", exp.getTime());
     }
 
     @Test
@@ -294,6 +303,23 @@ class MfaControllerTest {
                         .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"999999\"}"))
                 .andExpect(status().isUnauthorized());
         verify(tokenBlacklistService, never())
-                .blacklist(any(), org.mockito.ArgumentMatchers.anyLong());
+                .claim(any(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void verifyMfa_aChallengeAnotherVerifyClaimedFirst_mintsNothing() throws Exception {
+        java.util.Date exp = new java.util.Date(System.currentTimeMillis() + 300_000);
+        when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
+        when(jwtTokenProvider.getJtiFromToken("mfa-tok-123")).thenReturn("jti-1");
+        when(jwtTokenProvider.getExpiration("mfa-tok-123")).thenReturn(exp);
+        when(tokenBlacklistService.claim("jti-1", exp.getTime())).thenReturn(false);
+        when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
+        when(mfaService.verifyCode(USER_ID, "654321")).thenReturn(true);
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"654321\"}"))
+                .andExpect(status().isUnauthorized());
+        verify(jwtTokenProvider, never()).generateAccessToken(any(TokenUserDescriptor.class));
     }
 }

@@ -341,6 +341,42 @@ class UserCredentialLifecycleServiceImplTest {
     }
 
     @Test
+    void upsertMfaEnrollments_neverTakesLastVerifiedAtFromTheClient_andReportsTheServerRule() {
+        UUID userId = UUID.randomUUID();
+        User user = User.builder().username("mfa-user").email("mfa@example.com").build();
+        user.setId(userId);
+        java.time.LocalDateTime verifiedAt = java.time.LocalDateTime.of(2026, 9, 1, 10, 0);
+        UserMfaEnrollment confirmedTotp = UserMfaEnrollment.builder()
+            .user(user).method(MfaMethodType.TOTP).enabled(true).verified(true)
+            .lastVerifiedAt(verifiedAt).build();
+        confirmedTotp.setId(UUID.randomUUID());
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(mfaEnrollmentRepository.findByUserId(userId)).thenReturn(List.of(confirmedTotp));
+        when(mfaEnrollmentRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UserMfaEnrollmentRequestDTO keep = new UserMfaEnrollmentRequestDTO();
+        keep.setMethod(MfaMethodType.TOTP);
+        keep.setEnabled(true);
+        keep.setLastVerifiedAt(null);
+        UserMfaEnrollmentRequestDTO forged = new UserMfaEnrollmentRequestDTO();
+        forged.setMethod(MfaMethodType.EMAIL);
+        forged.setEnabled(true);
+        forged.setLastVerifiedAt(java.time.LocalDateTime.of(2026, 1, 1, 0, 0));
+
+        var response = service.upsertMfaEnrollments(userId, List.of(keep, forged));
+
+        assertThat(confirmedTotp.getLastVerifiedAt()).isEqualTo(verifiedAt);
+        assertThat(response).filteredOn(d -> d.getMethod() == MfaMethodType.TOTP)
+            .singleElement().satisfies(d -> assertThat(d.isConfirmed()).isTrue());
+        assertThat(response).filteredOn(d -> d.getMethod() == MfaMethodType.EMAIL)
+            .singleElement().satisfies(d -> {
+                assertThat(d.getLastVerifiedAt()).isNull();
+                assertThat(d.isConfirmed()).isFalse();
+            });
+    }
+
+    @Test
     void upsertMfaEnrollmentsEnforcesSinglePrimaryFactor() {
         UUID userId = UUID.randomUUID();
         User user = User.builder().username("primary-user").email("primary@example.com").build();

@@ -42,6 +42,7 @@ const health = (verifiedTotp: boolean): CredentialHealth => ({
           enabled: true,
           primaryFactor: true,
           lastVerifiedAt: '2026-10-01T10:00:00',
+          confirmed: true,
         },
       ]
     : [],
@@ -117,6 +118,17 @@ describe('ProfileComponent — replacing the authenticator', () => {
     expect(el('.mfa-setup-btn')).toBeNull();
   });
 
+  it('offers Replace from the server rule only, not from the other fields', async () => {
+    await setUp(true);
+    const looksActive = health(true);
+    looksActive.mfaEnrollments[0].confirmed = false;
+    component.credentials.set(looksActive);
+    fixture.detectChanges();
+
+    expect(component.hasActiveTotp()).toBeFalse();
+    expect(el('[data-testid="mfa-replace"]')).toBeNull();
+  });
+
   it('without an authenticator there is nothing to replace: setting one up sends no step-up', async () => {
     await setUp(false);
     mfa.enroll.and.returnValue(of(enrollment));
@@ -166,6 +178,17 @@ describe('ProfileComponent — replacing the authenticator', () => {
 
     expect(component.mfaError()).toBe('PROFILE.MFA_STEPUP_INVALID');
     expect(component.mfaStep()).toBe('stepup');
+  });
+
+  it('a locked step-up says so in the user language', async () => {
+    await setUp(true);
+    mfa.enroll.and.returnValue(throwError(() => refused('mfa.stepup.locked')));
+    component.startMfaReplacement();
+    component.mfaStepUpCode = '123456';
+
+    component.submitMfaStepUp();
+
+    expect(component.mfaError()).toBe('PROFILE.MFA_STEPUP_LOCKED');
   });
 
   it('cancelling the replacement forgets the code and goes back', async () => {

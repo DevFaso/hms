@@ -48,7 +48,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
             "/api/auth/register",
             "/api/auth/token/refresh",
             "/api/auth/mfa/verify",
-            "/api/auth/password"
+            "/api/auth/password",
+            // The MFA step-up endpoints (a code in X-Mfa-Token): enrolment or
+            // replacement, and rewriting the MFA records. MfaService also locks
+            // the step-up per user after repeated wrong codes.
+            "/api/auth/mfa/enroll",
+            "/api/auth/credentials/mfa"
     );
 
     private final int requestsPerMinute;

@@ -253,10 +253,14 @@ export class ProfileComponent implements OnInit {
   /** The flow in progress replaces an active authenticator, which works until it is confirmed. */
   mfaReplacing = signal(false);
 
-  /** An authenticator app is set up and confirmed: it can be replaced, not set up again. */
+  /**
+   * An authenticator app the server counts as confirmed: it can be replaced
+   * (with the step-up), not set up again. The server decides; the portal does
+   * not re-derive the rule from the other fields.
+   */
   hasActiveTotp(): boolean {
     return (this.credentials()?.mfaEnrollments ?? []).some(
-      (m) => m.method === 'TOTP' && m.enabled && !!m.lastVerifiedAt,
+      (m) => m.method === 'TOTP' && m.confirmed === true,
     );
   }
 

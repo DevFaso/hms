@@ -9,6 +9,7 @@ import com.example.hms.model.UserMfaEnrollment;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.MfaBackupCodeRepository;
 import com.example.hms.repository.UserMfaEnrollmentRepository;
+import com.example.hms.security.LoginAttemptStore;
 import com.example.hms.security.MfaChallengeScope;
 import dev.samstevens.totp.code.CodeGenerator;
 import dev.samstevens.totp.code.CodeVerifier;
@@ -25,6 +26,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -35,6 +37,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import com.example.hms.model.User;
 
@@ -51,21 +54,36 @@ public class MfaService {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final String ACTION_REPLACE = "authenticator replacement";
 
+    /**
+     * Failed step-ups per user before a short lockout, kept in the login
+     * throttle's store (Redis when wired, so a lock holds on every instance).
+     */
+    static final int STEP_UP_MAX_FAILURES = 5;
+    static final long STEP_UP_WINDOW_MS = 15 * 60 * 1000L;
+    static final long STEP_UP_LOCK_MS = 15 * 60 * 1000L;
+    static final String STEP_UP_KEY_PREFIX = "stepup:";
+    /** A TOTP code is six digits, a backup code eight: BCrypt only ever runs on the latter. */
+    private static final Pattern TOTP_SHAPE = Pattern.compile("\\d{6}");
+    private static final Pattern BACKUP_CODE_SHAPE = Pattern.compile("\\d{" + BACKUP_CODE_LENGTH + "}");
+
     private final UserMfaEnrollmentRepository enrollmentRepository;
     private final MfaBackupCodeRepository backupCodeRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditEventLogService auditEventLogService;
+    private final LoginAttemptStore attemptStore;
     private final SecretGenerator secretGenerator = new DefaultSecretGenerator(32);
     private final CodeVerifier codeVerifier;
 
     public MfaService(UserMfaEnrollmentRepository enrollmentRepository,
                       MfaBackupCodeRepository backupCodeRepository,
                       PasswordEncoder passwordEncoder,
-                      AuditEventLogService auditEventLogService) {
+                      AuditEventLogService auditEventLogService,
+                      LoginAttemptStore attemptStore) {
         this.enrollmentRepository = enrollmentRepository;
         this.backupCodeRepository = backupCodeRepository;
         this.passwordEncoder = passwordEncoder;
         this.auditEventLogService = auditEventLogService;
+        this.attemptStore = attemptStore;
 
         TimeProvider timeProvider = new SystemTimeProvider();
         CodeGenerator codeGenerator = new DefaultCodeGenerator(HashingAlgorithm.SHA1, 6);
@@ -82,11 +100,12 @@ public class MfaService {
      * nothing can change the row between the check and the write.
      *
      * <ul>
-     *   <li>No active verified authenticator (a first enrolment, or one never
-     *       confirmed): enrolment is open, from the login's MFA challenge token
-     *       too, and simply restarts with a fresh secret and backup codes.</li>
-     *   <li>An active verified authenticator: replacing it needs a full session,
-     *       never the challenge token, and the step-up ({@link #requireStepUp}).
+     *   <li>No authenticator was ever confirmed ({@link #isConfirmed}): a first
+     *       enrolment, open from the login's MFA challenge token too, which
+     *       simply restarts with a fresh secret and backup codes.</li>
+     *   <li>One was confirmed, even if it is disabled now: replacing it needs a
+     *       full session, never the challenge token, and the step-up against
+     *       that authenticator ({@link #requireStepUp}), or an admin MFA reset.
      *       The new secret and backup codes stay PENDING: the current
      *       authenticator and its backup codes keep working until
      *       {@link #verifyEnrollment} confirms a code from the new one and swaps
@@ -100,7 +119,7 @@ public class MfaService {
         UUID userId = user.getId();
         Optional<UserMfaEnrollment> existing =
                 enrollmentRepository.lockByUserIdAndMethod(userId, MfaMethodType.TOTP);
-        boolean replacing = existing.filter(MfaService::isActive).isPresent();
+        boolean replacing = existing.filter(MfaService::isConfirmed).isPresent();
 
         String secret = secretGenerator.generate();
         UserMfaEnrollment enrollment;
@@ -168,7 +187,7 @@ public class MfaService {
         }
 
         UserMfaEnrollment enrollment = opt.get();
-        if (isActive(enrollment) && enrollment.getPendingTotpSecret() != null) {
+        if (isConfirmed(enrollment) && enrollment.getPendingTotpSecret() != null) {
             if (MfaChallengeScope.isChallengeSession(caller)) {
                 throw refused(userId, caller, ACTION_REPLACE, MfaStepUpRefusedException.Reason.CHALLENGE);
             }
@@ -179,6 +198,8 @@ public class MfaService {
             LocalDateTime confirmedAt = now();
             enrollment.setTotpSecret(enrollment.getPendingTotpSecret());
             enrollment.setPendingTotpSecret(null);
+            enrollment.setVerified(true);
+            enrollment.setEnabled(true);
             enrollment.setPrimaryFactor(true);
             enrollment.setEnrolledAt(confirmedAt);
             enrollment.setLastVerifiedAt(confirmedAt);
@@ -221,21 +242,27 @@ public class MfaService {
      *               in which case the caller audits the bypass
      * @return {@code true} when a code verified; {@code false} only for an actor
      *         with no active authenticator when {@code strict} is off
+     * <p>Its own short transaction, and no row lock: a caller's long
+     * transaction (a lifecycle change, an emergency control) never holds the
+     * actor's MFA row, so the actor can still sign in meanwhile. The one write,
+     * spending a backup code, is a conditional update that cannot spend a
+     * code twice.
+     *
      * @throws MfaStepUpRefusedException (403) on refusal, audited as {@code MFA_FAILURE}
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean requireStepUp(UUID userId, String code, String action, boolean strict) {
         if (userId == null) {
-            throw refused(null, null, action, MfaStepUpRefusedException.Reason.REQUIRED);
+            throw refused(null, null, action, MfaStepUpRefusedException.Reason.UNIDENTIFIED);
         }
         Optional<UserMfaEnrollment> enrollment;
         try {
-            enrollment = enrollmentRepository.lockByUserIdAndMethod(userId, MfaMethodType.TOTP);
+            enrollment = enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP);
         } catch (RuntimeException ex) {
             log.warn("[MFA] Step-up lookup failed for user={}: {}", userId, ex.getMessage());
             throw refused(userId, null, action, MfaStepUpRefusedException.Reason.UNAVAILABLE);
         }
-        if (enrollment.filter(MfaService::isActive).isEmpty()) {
+        if (enrollment.filter(MfaService::isConfirmed).isEmpty()) {
             if (strict) {
                 throw refused(userId, null, action, MfaStepUpRefusedException.Reason.NOT_ENROLLED);
             }
@@ -257,7 +284,7 @@ public class MfaService {
     public void requireStepUpToChangeAuthenticator(UUID userId, Authentication caller, String stepUpCode) {
         Optional<UserMfaEnrollment> enrollment =
                 enrollmentRepository.lockByUserIdAndMethod(userId, MfaMethodType.TOTP);
-        if (enrollment.filter(MfaService::isActive).isPresent()) {
+        if (enrollment.filter(MfaService::isConfirmed).isPresent()) {
             requireStepUpToReplace(enrollment.get(), userId, caller, stepUpCode);
         }
     }
@@ -271,20 +298,28 @@ public class MfaService {
         checkStepUpCode(enrollment, userId, caller, stepUpCode, ACTION_REPLACE);
     }
 
+    /**
+     * A current TOTP code from the authenticator (even a disabled one), or an
+     * unused backup code. {@value #STEP_UP_MAX_FAILURES} wrong codes within
+     * the window lock the step-up for the user for a while, so neither the
+     * six digits nor the backup codes can be guessed through it.
+     */
     private void checkStepUpCode(UserMfaEnrollment enrollment, UUID userId, Authentication caller,
                                  String code, String action) {
         if (!StringUtils.hasText(code)) {
             throw refused(userId, caller, action, MfaStepUpRefusedException.Reason.REQUIRED);
         }
+        String throttleKey = STEP_UP_KEY_PREFIX + userId;
+        if (attemptStore.remainingLockMs(throttleKey) > 0) {
+            throw refused(userId, caller, action, MfaStepUpRefusedException.Reason.LOCKED);
+        }
         String candidate = code.trim();
-        if (isValidTotp(enrollment.getTotpSecret(), candidate)) {
-            enrollment.setLastVerifiedAt(now());
-            enrollmentRepository.save(enrollment);
+        if ((TOTP_SHAPE.matcher(candidate).matches() && isValidTotp(enrollment.getTotpSecret(), candidate))
+                || consumeBackupCode(userId, candidate)) {
+            attemptStore.clear(throttleKey);
             return;
         }
-        if (consumeBackupCode(userId, candidate)) {
-            return;
-        }
+        attemptStore.recordFailure(throttleKey, STEP_UP_MAX_FAILURES, STEP_UP_WINDOW_MS, STEP_UP_LOCK_MS);
         throw refused(userId, caller, action, MfaStepUpRefusedException.Reason.INVALID);
     }
 
@@ -337,18 +372,23 @@ public class MfaService {
         return consumeBackupCode(userId, rawCode);
     }
 
-    /** An unused backup code of the current set (never a pending one) matches: mark it used. */
+    /**
+     * An unused backup code of the current set (never a pending one) matches:
+     * spend it. Only a backup-code-shaped input reaches BCrypt, and the spend
+     * is a conditional update, so two requests cannot both use one code.
+     */
     private boolean consumeBackupCode(UUID userId, String rawCode) {
-        if (!StringUtils.hasText(rawCode)) {
+        if (rawCode == null || !BACKUP_CODE_SHAPE.matcher(rawCode.trim()).matches()) {
             return false;
         }
+        String candidate = rawCode.trim();
         List<MfaBackupCode> unusedCodes = backupCodeRepository.findByUserIdAndUsedFalseAndPendingFalse(userId);
 
         for (MfaBackupCode bc : unusedCodes) {
-            if (passwordEncoder.matches(rawCode, bc.getCodeHash())) {
-                bc.setUsed(true);
-                bc.setUsedAt(now());
-                backupCodeRepository.save(bc);
+            if (passwordEncoder.matches(candidate, bc.getCodeHash())) {
+                if (backupCodeRepository.markUsed(bc.getId(), now()) != 1) {
+                    return false;
+                }
                 log.info("[MFA] Backup code consumed for user={}, remaining={}",
                         userId, unusedCodes.size() - 1);
                 return true;
@@ -369,6 +409,17 @@ public class MfaService {
     /** The authenticator that signs in: confirmed and enabled. */
     private static boolean isActive(UserMfaEnrollment enrollment) {
         return enrollment.isVerified() && enrollment.isEnabled();
+    }
+
+    /**
+     * An authenticator that was verified at least once, whether or not it is
+     * enabled now (or unverified by an earlier half-done replacement): never a
+     * first enrolment, so the password-only challenge may not restart it.
+     * The portal reads the same rule from the credential DTO.
+     */
+    public static boolean isConfirmed(UserMfaEnrollment enrollment) {
+        return enrollment.getMethod() == MfaMethodType.TOTP
+                && (enrollment.isVerified() || enrollment.getLastVerifiedAt() != null);
     }
 
     // ───── Queries ─────

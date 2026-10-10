@@ -83,6 +83,8 @@ class MfaChallengeTokenScopeIT extends BaseIT {
     @Autowired private MfaBackupCodeRepository backupCodeRepository;
     @Autowired private AuditEventLogRepository auditEventLogRepository;
     @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private com.example.hms.security.LoginAttemptStore attemptStore;
+    @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private final List<UUID> createdUsers = new ArrayList<>();
     private final List<UUID> createdRoles = new ArrayList<>();
@@ -122,6 +124,7 @@ class MfaChallengeTokenScopeIT extends BaseIT {
 
     @AfterEach
     void tearDown() {
+        createdUsers.forEach(id -> attemptStore.clear("stepup:" + id));
         auditEventLogRepository.deleteAllInBatch();
         backupCodeRepository.deleteAll(backupCodeRepository.findAll().stream()
             .filter(c -> createdUsers.contains(c.getUserId())).toList());
@@ -270,7 +273,95 @@ class MfaChallengeTokenScopeIT extends BaseIT {
         assertThat(secretOf(fresh)).isEqualTo(body(again).get("secret").asString());
     }
 
+    @Test
+    @DisplayName("two concurrent verifies of one challenge yield exactly one session")
+    void concurrentVerifiesOfOneChallengeYieldOneSession() throws Exception {
+        String challenge = challengeFor(enrolled, true);
+        String code = code(enrolledSecret);
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
+        try {
+            java.util.concurrent.Callable<Integer> attempt = () -> {
+                go.await();
+                return verify(challenge, code).getResponse().getStatus();
+            };
+            var first = pool.submit(attempt);
+            var second = pool.submit(attempt);
+            go.countDown();
+            List<Integer> statuses = List.of(first.get(30, java.util.concurrent.TimeUnit.SECONDS),
+                second.get(30, java.util.concurrent.TimeUnit.SECONDS));
+
+            assertThat(statuses).containsExactlyInAnyOrder(200, 401);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
     // ── Replacing an active authenticator ──
+
+    @Test
+    @DisplayName("a verified authenticator that is disabled now is no first enrolment: the challenge cannot restart it")
+    void disabledVerifiedAuthenticatorIsNotRestartedFromTheChallenge() throws Exception {
+        UserMfaEnrollment row = enrollmentRepository.findByUserIdAndMethod(enrolled.getId(), MfaMethodType.TOTP)
+            .orElseThrow();
+        row.setEnabled(false);
+        enrollmentRepository.save(row);
+
+        // MFA no longer signs in, so login offers enrolment; the challenge still cannot take it.
+        String challenge = challengeFor(enrolled, false);
+        assertThat(refusal(perform(post("/auth/mfa/enroll"), challenge, null))).isEqualTo("mfa.stepup.challenge");
+
+        assertThat(secretOf(enrolled)).isEqualTo(enrolledSecret);
+        assertThat(pendingOf(enrolled)).isNull();
+    }
+
+    @Test
+    @DisplayName("wrong step-up codes lock the step-up for the user: even a correct code is refused for a while")
+    void wrongStepUpCodesLockTheStepUp() throws Exception {
+        String access = fullSession(enrolled, enrolledSecret);
+        for (int i = 0; i < 5; i++) {
+            assertThat(refusal(perform(post("/auth/mfa/enroll").header(STEP_UP, "ABCDEF"), access, null)))
+                .isEqualTo("mfa.stepup.invalid");
+        }
+
+        assertThat(refusal(perform(post("/auth/mfa/enroll").header(STEP_UP, code(enrolledSecret)), access, null)))
+            .isEqualTo("mfa.stepup.locked");
+        assertThat(pendingOf(enrolled)).isNull();
+    }
+
+    @Test
+    @DisplayName("a step-up inside a long caller transaction does not hold the actor's MFA row: sign-in still works")
+    void stepUpDoesNotHoldTheMfaRowForTheCallersTransaction() throws Exception {
+        java.util.concurrent.CountDownLatch steppedUp = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        String code = code(enrolledSecret);
+        try {
+            var caller = pool.submit(() -> new org.springframework.transaction.support.TransactionTemplate(
+                transactionManager).execute(status -> {
+                    boolean verified = mfaService.requireStepUp(enrolled.getId(), code, "test action", true);
+                    steppedUp.countDown();
+                    try {
+                        release.await(60, java.util.concurrent.TimeUnit.SECONDS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    return verified;
+                }));
+            assertThat(steppedUp.await(30, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+
+            // The caller's transaction is still open: signing in writes the same row.
+            String challenge = challengeFor(enrolled, true);
+            var signIn = pool.submit(() -> verify(challenge, code(enrolledSecret)).getResponse().getStatus());
+            assertThat(signIn.get(15, java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(200);
+
+            release.countDown();
+            assertThat(caller.get(30, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+        }
+    }
 
     @Test
     @DisplayName("a full session replaces it only with the step-up: none or a wrong code answers 403 with a reason")

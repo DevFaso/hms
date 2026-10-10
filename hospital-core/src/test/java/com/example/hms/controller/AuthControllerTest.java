@@ -76,6 +76,7 @@ class AuthControllerTest {
     @MockitoBean private UserService userService;
     @MockitoBean private UserCredentialLifecycleService userCredentialLifecycleService;
     @MockitoBean private TokenBlacklistService tokenBlacklistService;
+    @MockitoBean private com.example.hms.security.GlobalSessionRevocationService globalSessionRevocationService;
     @MockitoBean private com.example.hms.security.IdleSessionGate idleSessionGate;
     @MockitoBean private com.example.hms.security.ImpersonationSessionTracker impersonationSessionTracker;
     @MockitoBean private LoginAttemptService loginAttemptService;
@@ -788,6 +789,25 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.refreshToken").value("new.refresh.token"))
                 .andExpect(jsonPath("$.accessTokenExpiresAt").value(accessExp))
                 .andExpect(jsonPath("$.refreshTokenExpiresAt").value(refreshExp));
+    }
+
+    @Test
+    void refreshToken_issuedBeforeAForceLogoutAll_returns401() throws Exception {
+        java.util.Date issuedAt = new java.util.Date(System.currentTimeMillis() - 60_000L);
+        when(jwtTokenProvider.isRefreshToken("old.refresh.token")).thenReturn(true);
+        when(jwtTokenProvider.getIssuedAt("old.refresh.token")).thenReturn(issuedAt);
+        when(globalSessionRevocationService.revokes(issuedAt)).thenReturn(true);
+
+        mockMvc.perform(post("/auth/token/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"old.refresh.token\"}"))
+                .andExpect(status().isUnauthorized());
+
+        org.mockito.Mockito.verify(jwtTokenProvider, org.mockito.Mockito.never())
+                .generateAccessToken(org.mockito.ArgumentMatchers.any(
+                        com.example.hms.security.TokenUserDescriptor.class));
+        org.mockito.Mockito.verify(userRepository, org.mockito.Mockito.never())
+                .findByUsername(org.mockito.ArgumentMatchers.anyString());
     }
 
     // ───────────────────────────── S-01: refresh-token cookie ─────────────────────────────
