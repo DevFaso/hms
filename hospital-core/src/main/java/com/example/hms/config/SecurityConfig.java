@@ -652,6 +652,19 @@ public class SecurityConfig {
                 .requestMatchers("/super-admin/providers", "/super-admin/providers/**")
                 .hasAuthority(ROLE_SUPER_ADMIN)
 
+                // The provider directory (D5, plan section 6.5): the same list as
+                // ProviderDirectoryController's annotation; the service then
+                // requires a hospital acting scope and the role held there, live.
+                .requestMatchers(HttpMethod.GET, "/provider-directory")
+                .hasAnyAuthority(SecurityConstants.authorities(SecurityConstants.PROVIDER_DIRECTORY_AUTHORITIES))
+
+                // A provider facility's own pages (D5, plan section 6.5): any
+                // authenticated caller reaches the handler, which decides from
+                // the caller's LIVE assignments at the facility and answers
+                // everyone else exactly as an unmapped path. A role matcher
+                // here would answer a hospital user 403, telling them it exists.
+                .requestMatchers("/provider/**").authenticated()
+
                 // Organizations and security management
                 .requestMatchers("/organizations/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)

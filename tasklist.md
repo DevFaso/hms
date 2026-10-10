@@ -4777,6 +4777,43 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 - **External providers: `RecordAccessDenialReason.PROVIDER_FACILITY` says it is evaluated
   first**, but an inactive pharmacy/lab answers `HOSPITAL_UNKNOWN`; fix the doc or the
   order (from #835's round-13 review). Open.
+- **External providers: the provider admin profile has no opening hours and no
+  accepting-orders switch** (plan §3.1 lists both). They need columns on
+  `hospital.hospitals`, so a migration, and P1 takes none: slice 3 (P1-T5)
+  changes the operational phone, email and website only. Deferred to P2-PH,
+  in its V181 (user decision on #840). Open.
+- **External providers: `/provider/**` still tells an authenticated hospital user
+  that the path exists through MVC's own answers** (a wrong method 405 with its
+  `Allow` header, a wrong media type 415, a malformed JSON body 400), which come
+  before any handler. The handlers answer everything else exactly as an unmapped
+  path (slice 3). Closing it needs the confinement filter's treatment for every
+  caller on that prefix. Low value: the paths are public in the portal. Open.
+- **External providers: AC-15's disclosure accounting is not built yet.** No
+  provider read surfaces patient data in P1, so slice 3 adds no helper: P2-PH
+  and P2-LAB add the `RECORD_SHARE` accounting (acting = the provider, source =
+  the ordering hospital, a description of its own) with their first real
+  caller, and its per-day dedupe keyed on the offer or the order (a key without
+  it under-reports, see `CrossHospitalReachRecorder.recordBatchedReach`). Open.
+- **External providers: the provider admin pages read the caller's assignments
+  several times per request, by their own rule** (`ProviderSeatResolver`, then
+  `UserAccountAccess.providerAdministeredFacilities` and `providerStaffScope`,
+  then the member's rows twice), instead of reusing the request's
+  `HospitalContext` (`staffHospitalIds`, `hospitalFacilityTypes`), so the seat
+  can also drift from the confinement's view of the same caller. Derive the seat
+  from the context and carry one caller read through the request (found in
+  #840's rounds 2 and 3). Open.
+- **External providers: the provider profile runs two verification queries**
+  (latest, then latest VERIFIED) where one does: a VERIFIED row, when there is
+  one, is the latest (V180's partial unique index) (found in #840's round-3
+  review). Open.
+- **External providers: `PROVIDER_DIRECTORY_AUTHORITIES` holds no laboratory
+  role**, so lab staff who send work to an external laboratory cannot read the
+  provider directory. Decide with P2-LAB's lab routing (found in #840's round-3
+  review). Open.
+- **External providers: the provider admin pages need ROLE_PROVIDER_ADMIN in the
+  token** as well as the live assignment (the assignment service's scope reads
+  both), so on Keycloak they answer as unmapped until P1-T11 adds the realm role.
+  Same as `POST /users/admin-register` today. Open until P1-T11.
 - **CDS acknowledgement with an unknown hospital id now answers 404** (was: saved as a
   global acknowledgement). Intended since #835; confirm no client relies on the old
   behaviour. Open.

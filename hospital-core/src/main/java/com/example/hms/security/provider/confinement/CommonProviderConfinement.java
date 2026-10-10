@@ -50,7 +50,19 @@ public final class CommonProviderConfinement {
         new ConfinementRule("GET", "/users/{id}",
             "the plan's own-profile row (there is no /me/profile handler): the caller's OWN account only;"
                 + " the confinement compares the {id} path variable with the caller's user id",
-            "id"));
+            "id"),
+        new ConfinementRule("GET", "/provider/profile",
+            "the caller's own facility profile (P1-T5); any staff member there, decided from live assignments"),
+        new ConfinementRule("PUT", "/provider/profile",
+            "the facility's operational contact (P1-T5); its PROVIDER_ADMIN only, live, never the verified identity"),
+        new ConfinementRule("GET", "/provider/staff",
+            "the facility's own staff (P1-T5); its PROVIDER_ADMIN only, live"),
+        new ConfinementRule("POST", "/provider/staff/{userId}/deactivate",
+            "retires a staff member's rows at the caller's OWN facility (P1-T5); never a peer admin or another facility"),
+        new ConfinementRule("POST", "/provider/staff/{userId}/activate",
+            "re-invites a staff member at the caller's OWN facility through a new code (P1-T5); never switches a row on"),
+        new ConfinementRule("GET", "/provider/settings",
+            "the shell's facility type and provider flags (P1-T9); no tenant or patient data"));
 
     /**
      * Paths served outside Spring MVC's request mappings, matched on the path

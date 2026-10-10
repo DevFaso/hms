@@ -102,8 +102,8 @@ public class UserAccountAccess {
     /** The administrator of an external provider facility (provider plan §6.3). */
     private static final String PROVIDER_ADMIN = "PROVIDER_ADMIN";
 
-    /** Roles only a super-admin grants, and whose holders only a super-admin administers. */
-    static final Set<String> ADMIN_ROLES = Set.of(SUPER_ADMIN, HOSPITAL_ADMIN, "ADMIN", PROVIDER_ADMIN);
+    /** Roles only a super-admin grants, and whose holders only a super-admin administers. Bare codes. */
+    public static final Set<String> ADMIN_ROLES = Set.of(SUPER_ADMIN, HOSPITAL_ADMIN, "ADMIN", PROVIDER_ADMIN);
 
     /** The admin-register roles, bare; the same constant feeds the annotations and SecurityConfig. */
     static final Set<String> REGISTRAR_ROLES = Arrays.stream(
@@ -312,7 +312,9 @@ public class UserAccountAccess {
      *       HOSPITAL_ADMIN assignment; to change one, its role must not be an
      *       admin role, because admin roles are granted (and so administered)
      *       by the super-admin only;</li>
-     *   <li>anyone else: nothing.</li>
+     *   <li>anyone else, a provider admin included: nothing. A provider
+     *       admin's own path is {@link #providerStaffScope()}, used by the
+     *       provider staff page only.</li>
      * </ul>
      * Callers answer a row outside the scope exactly as they answer a missing
      * id, so the refusal is not an existence oracle.
@@ -322,6 +324,20 @@ public class UserAccountAccess {
         return caller.superAdmin()
             ? AssignmentScope.SUPER_ADMIN_SCOPE
             : new AssignmentScope(false, administeredHospitals(caller));
+    }
+
+    /**
+     * The rows a provider admin may change from the provider staff page
+     * ({@code /provider/staff}, provider plan AC-6), and nothing else uses
+     * it: the rows at the provider facilities where they administer
+     * ({@link #providerAdministeredFacilities()}), never an admin role's row.
+     * Kept apart from {@link #assignmentScope()} on purpose, so no other
+     * assignment mutator (update, delete, the code paths, the user retire)
+     * accepts a provider admin even if a handler were reachable. A
+     * super-admin gets nothing here: they use {@link #assignmentScope()}.
+     */
+    public AssignmentScope providerStaffScope() {
+        return new AssignmentScope(false, providerAdministeredHospitals(caller()));
     }
 
     /**
@@ -360,6 +376,17 @@ public class UserAccountAccess {
         public boolean shields(User target, List<UserRoleHospitalAssignment> assignments) {
             return !everywhere && target != null && holdsAny(target, assignments, Set.of(SUPER_ADMIN));
         }
+    }
+
+    /**
+     * The provider facilities the caller administers: an ACTIVE PROVIDER_ADMIN
+     * assignment there, and the role presented. The one rule for "is the
+     * provider admin here": {@link #requireMayGrant} and {@link #providerStaffScope}
+     * grant and change staff at exactly these facilities, and the provider
+     * admin pages ({@code ProviderSeatResolver}) open for exactly these.
+     */
+    public Set<UUID> providerAdministeredFacilities() {
+        return providerAdministeredHospitals(caller());
     }
 
     /**
@@ -503,11 +530,23 @@ public class UserAccountAccess {
             && !staffRepository.existsByUserId(target.getId());
     }
 
+    /**
+     * Does the target hold an admin role ({@link #ADMIN_ROLES}: SUPER_ADMIN,
+     * HOSPITAL_ADMIN, ADMIN, PROVIDER_ADMIN) anywhere, active or not, by
+     * assignment or by global role? Such an account is administered by the
+     * super-admin only: a hospital or provider admin never changes it.
+     *
+     * @param assignments every assignment the target holds, active or not
+     */
+    public static boolean holdsAdminRole(User target, List<UserRoleHospitalAssignment> assignments) {
+        return target != null && holdsAny(target, assignments, ADMIN_ROLES);
+    }
+
     /** Any trace of these roles on the target, active or not, global role or assignment. */
     private static boolean holdsAny(User target, List<UserRoleHospitalAssignment> assignments, Set<String> bareRoles) {
         boolean viaAssignment = assignments.stream()
             .anyMatch(a -> bareRoles.contains(roleCode(a.getRole())));
-        boolean viaGlobalRole = target.getUserRoles().stream()
+        boolean viaGlobalRole = target.getUserRoles() != null && target.getUserRoles().stream()
             .anyMatch(ur -> bareRoles.contains(roleCode(ur.getRole())));
         return viaAssignment || viaGlobalRole;
     }
@@ -523,8 +562,12 @@ public class UserAccountAccess {
         return assignment.getHospital() == null ? null : assignment.getHospital().getId();
     }
 
-    /** An assignment's role and what RoleExpansion implies by it, bare. */
-    private static Set<String> expandedCodes(Role role) {
+    /**
+     * A role and what {@link RoleExpansion} implies by it, bare (a surgeon is
+     * also a DOCTOR): for decisions about what the role may do. The one
+     * normalisation every role decision here and in the provider services uses.
+     */
+    public static Set<String> expandedCodes(Role role) {
         String code = roleCode(role);
         if (code.isEmpty()) {
             return Set.of();
@@ -534,8 +577,13 @@ public class UserAccountAccess {
             .collect(Collectors.toSet());
     }
 
-    /** The role's code without its {@code ROLE_} prefix, upper-case; "" when unknown. */
-    private static String roleCode(Role role) {
+    /**
+     * The role's code (else its name) without its {@code ROLE_} prefix,
+     * upper-case; "" when unknown. For decisions about WHICH role a row holds
+     * (PATIENT, PROVIDER_ADMIN, an admin role); {@link #expandedCodes} for
+     * what it may do.
+     */
+    public static String roleCode(Role role) {
         if (role == null) {
             return "";
         }

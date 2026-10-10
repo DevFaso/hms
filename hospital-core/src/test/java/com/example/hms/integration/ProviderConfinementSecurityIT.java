@@ -266,9 +266,9 @@ class ProviderConfinementSecurityIT extends BaseIT {
     /**
      * Everything a client sees of a 404, with the request path taken out: the
      * status, the body, the error message the container would render and the
-     * content type.
+     * content type. Shared with {@code ProviderAdminSecurityIT}.
      */
-    private static String refusalShape(MvcResult result) throws Exception {
+    static String refusalShape(MvcResult result) throws Exception {
         String path = result.getRequest().getRequestURI();
         String bare = path.startsWith("/api") ? path.substring(4) : path;
         String message = result.getResponse().getErrorMessage();
@@ -287,7 +287,7 @@ class ProviderConfinementSecurityIT extends BaseIT {
         return token(user.getUsername(), user.getId(), realmRoles);
     }
 
-    private static String token(String username, UUID appUserId, String... realmRoles) {
+    static String token(String username, UUID appUserId, String... realmRoles) {
         Instant now = Instant.now();
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
             .jwtID(UUID.randomUUID().toString())

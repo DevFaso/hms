@@ -75,6 +75,18 @@ public class SecurityConstants {
      */
     public static final String PROVIDER_REGISTRAR_AUTHORITIES = "'ROLE_PROVIDER_ADMIN'";
 
+    /**
+     * Who may read the provider directory ({@code GET /provider-directory},
+     * provider plan §6.5): the hospital staff who add a provider to their
+     * registry, route a prescription or pick a performing lab. Written once:
+     * the controller annotation and the {@code SecurityConfig} matcher read
+     * it. The caller must also act at a HOSPITAL and hold one of these roles
+     * there, live (the service checks).
+     */
+    public static final String PROVIDER_DIRECTORY_AUTHORITIES =
+        "'ROLE_HOSPITAL_ADMIN','ROLE_PHARMACIST','ROLE_PHARMACY_VERIFIER','ROLE_DOCTOR','ROLE_MIDWIFE',"
+            + "'ROLE_NURSE','ROLE_SUPER_ADMIN'";
+
     /** Every authority admitted to {@code POST /users/admin-register}: both registrar lists. */
     public static final String ADMIN_REGISTER_AUTHORITIES =
         USER_REGISTRAR_AUTHORITIES + "," + PROVIDER_REGISTRAR_AUTHORITIES;

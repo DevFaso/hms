@@ -19,6 +19,9 @@ GET /me/assignments
 GET /me/dashboard-config
 GET /notifications
 GET /notifications/preferences
+GET /provider/profile
+GET /provider/settings
+GET /provider/staff
 GET /users/{id}
 PATCH /notifications/read-all
 POST /auth/bootstrap-signup
@@ -46,8 +49,11 @@ POST /auth/username/reminder
 POST /auth/verify-email
 POST /auth/verify-password
 POST /auth/ws-ticket
+POST /provider/staff/{userId}/activate
+POST /provider/staff/{userId}/deactivate
 POST /users/admin-register
 PUT /auth/credentials/mfa
 PUT /auth/credentials/recovery
 PUT /notifications/preferences
 PUT /notifications/{id}/read
+PUT /provider/profile
