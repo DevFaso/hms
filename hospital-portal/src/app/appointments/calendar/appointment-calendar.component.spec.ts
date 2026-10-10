@@ -63,6 +63,34 @@ describe('AppointmentCalendarComponent', () => {
     expect(staffSvc.list).toHaveBeenCalledWith('h1');
   });
 
+  it('renders FullCalendar 7 with the classic theme mapped onto the portal tokens', async () => {
+    // FullCalendar 7 ships no CSS of its own: without the skeleton + theme
+    // stylesheets and the theme plugin, the grid renders as unstyled markup.
+    // This pins all three, and that the theme colours come from the design
+    // tokens rather than FullCalendar's stock blue palette.
+    await configure('h1');
+    fixture = TestBed.createComponent(AppointmentCalendarComponent);
+    fixture.detectChanges();
+
+    const grid: HTMLElement = fixture.nativeElement.querySelector(
+      '[data-testid="appointment-calendar-grid"]',
+    );
+    const buttons = Array.from(grid.querySelectorAll('button'));
+    expect(buttons.length).toBeGreaterThan(0);
+
+    // The colour the portal's --primary token resolves to, measured the same
+    // way as the calendar's buttons so the comparison is like for like.
+    const probe = document.createElement('span');
+    probe.style.backgroundColor = 'var(--primary)';
+    document.body.appendChild(probe);
+    const primary = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    expect(primary).not.toBe('rgba(0, 0, 0, 0)');
+
+    const backgrounds = buttons.map((b) => getComputedStyle(b).backgroundColor);
+    expect(backgrounds).toContain(primary);
+  });
+
   it('shows the error state when no hospital is active', async () => {
     await configure(null);
     fixture = TestBed.createComponent(AppointmentCalendarComponent);

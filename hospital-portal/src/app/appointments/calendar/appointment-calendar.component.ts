@@ -3,6 +3,7 @@ import {
   Component,
   OnDestroy,
   OnInit,
+  ViewEncapsulation,
   inject,
   signal,
 } from '@angular/core';
@@ -12,11 +13,22 @@ import { Router, RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject, Subscription } from 'rxjs';
 
-import { CalendarOptions, EventClickArg, EventInput } from '@fullcalendar/core';
-import { FullCalendarModule } from '@fullcalendar/angular';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import timeGridPlugin from '@fullcalendar/timegrid';
-import interactionPlugin, { DateClickArg } from '@fullcalendar/interaction';
+// FullCalendar 7: the plugins are entrypoints of the Angular wrapper (the
+// separate @fullcalendar/daygrid|timegrid|interaction packages ended at 6.x),
+// the types come from the wrapper (core was renamed `fullcalendar`), the
+// callback arg types were renamed *Arg -> *Info, and the look is a theme
+// plugin plus its stylesheet (see appointment-calendar.component.scss).
+import {
+  CalendarOptions,
+  DateClickInfo,
+  EventClickInfo,
+  EventInput,
+  FullCalendarModule,
+} from '@fullcalendar/angular';
+import dayGridPlugin from '@fullcalendar/angular/daygrid';
+import timeGridPlugin from '@fullcalendar/angular/timegrid';
+import interactionPlugin from '@fullcalendar/angular/interaction';
+import classicThemePlugin from '@fullcalendar/angular/themes/classic';
 
 import {
   AppointmentCalendarEvent,
@@ -92,39 +104,11 @@ type State = 'idle' | 'loading' | 'ready' | 'error';
       }
     </section>
   `,
-  styles: [
-    `
-      .cal-page {
-        padding: 1.5rem;
-      }
-      .cal-page__header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 1rem;
-        gap: 1rem;
-      }
-      .cal-page__filter {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        margin-bottom: 1rem;
-
-        label {
-          font-size: 0.8125rem;
-          color: #475569;
-        }
-        select {
-          padding: 0.4rem 0.6rem;
-          border: 1px solid #d1d5db;
-          border-radius: 6px;
-        }
-      }
-      .cal-page__error {
-        color: var(--danger, #b00020);
-      }
-    `,
-  ],
+  // FullCalendar renders its DOM outside Angular's renderer, so emulated
+  // encapsulation could never reach it; every rule in the stylesheet is
+  // scoped under the page's .cal-page root instead.
+  encapsulation: ViewEncapsulation.None,
+  styleUrl: './appointment-calendar.component.scss',
 })
 export class AppointmentCalendarComponent implements OnInit, OnDestroy {
   protected readonly state = signal<State>('idle');
@@ -141,7 +125,7 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
   private inFlight?: Subscription;
 
   protected calendarOptions: CalendarOptions = {
-    plugins: [dayGridPlugin, timeGridPlugin, interactionPlugin],
+    plugins: [classicThemePlugin, dayGridPlugin, timeGridPlugin, interactionPlugin],
     initialView: 'timeGridWeek',
     headerToolbar: {
       left: 'prev,next today',
@@ -154,8 +138,8 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
     allDaySlot: false,
     slotMinTime: '06:00:00',
     slotMaxTime: '21:00:00',
-    eventClick: (arg: EventClickArg) => this.openAppointment(arg.event.id),
-    dateClick: (arg: DateClickArg) => this.openCreateForSlot(arg.date),
+    eventClick: (arg: EventClickInfo) => this.openAppointment(arg.event.id),
+    dateClick: (arg: DateClickInfo) => this.openCreateForSlot(arg.date),
     datesSet: (arg) => this.loadRange(toIsoDate(arg.start), toIsoDate(addDays(arg.end, -1))),
     events: [],
   };

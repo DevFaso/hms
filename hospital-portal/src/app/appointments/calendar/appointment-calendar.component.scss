@@ -1,0 +1,95 @@
+/*
+ * FullCalendar 7 no longer injects its own CSS: the structural skeleton and
+ * the look (a theme) are stylesheets the app loads. They live here, in the
+ * lazy calendar chunk, rather than in angular.json's global styles, so
+ * FullCalendar's CSS still ships only when /appointments/calendar is visited
+ * (as the injected v6 CSS did).
+ *
+ * The classic theme is the v6 look. Its stock palette.css is deliberately NOT
+ * loaded: it hard-codes FullCalendar's blue (#3788d8) and slate buttons. The
+ * --fc-classic-* variables are mapped onto the portal design tokens below
+ * instead. The theme's class names are hashed (.fc-classic-xxx), so these
+ * variables are the only supported way to restyle it.
+ *
+ * The component uses ViewEncapsulation.None (FullCalendar's DOM is created by
+ * Preact, outside Angular's renderer, so emulated attributes never reach it),
+ * which is why every rule of our own is scoped under the page's root
+ * element (.cal-page, not the component tag: TestBed hosts the component in
+ * a plain <div>, so a tag selector would leave the specs unthemed).
+ */
+@use 'fullcalendar/skeleton';
+@use 'fullcalendar/themes/classic/theme';
+
+.cal-page {
+  padding: 1.5rem;
+
+  /* buttons (toolbar: prev/next/today and the view switcher) */
+  --fc-classic-button: var(--primary);
+  --fc-classic-button-border: var(--primary);
+  --fc-classic-button-strong: var(--primary-dark);
+  --fc-classic-button-strong-border: var(--primary-dark);
+  --fc-classic-button-outline: var(--primary-light);
+  --fc-classic-button-foreground: var(--surface, #fff);
+
+  /* primary (focus outlines, selection) */
+  --fc-classic-primary: var(--primary);
+  --fc-classic-primary-foreground: var(--surface, #fff);
+
+  /* calendar content */
+  --fc-classic-event: var(--primary);
+  --fc-classic-event-contrast: var(--surface, #fff);
+  --fc-classic-background-event: var(--primary-light);
+  --fc-classic-background-event-opacity: 15%;
+  --fc-classic-background-event-foreground-opacity: 50%;
+  --fc-classic-highlight: var(--primary-tint);
+  --fc-classic-today: var(--primary-soft);
+  --fc-classic-now: var(--danger, #b00020);
+  --fc-classic-small-dot-width: 8px;
+  --fc-classic-large-dot-width: 10px;
+
+  /* neutral backgrounds: tints of the body text colour */
+  --fc-classic-background: var(--surface, #fff);
+  --fc-classic-faint: color-mix(in srgb, var(--text-primary) 4%, transparent);
+  --fc-classic-muted: color-mix(in srgb, var(--text-primary) 8%, transparent);
+  --fc-classic-strong: color-mix(in srgb, var(--text-primary) 14%, transparent);
+
+  /* neutral foregrounds (--text-secondary is 4.76:1 on white: AA) */
+  --fc-classic-foreground: var(--text-primary);
+  --fc-classic-faint-foreground: var(--text-secondary);
+  --fc-classic-muted-foreground: var(--text-secondary);
+
+  /* neutral borders */
+  --fc-classic-border: var(--border);
+  --fc-classic-strong-border: color-mix(in srgb, var(--border), var(--text-secondary));
+
+  &__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+    gap: 1rem;
+  }
+
+  &__filter {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+
+    label {
+      font-size: 0.8125rem;
+      /* --text-secondary is only 4.34:1 on the page background (axe) */
+      color: var(--text-primary);
+    }
+
+    select {
+      padding: 0.4rem 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+  }
+
+  &__error {
+    color: var(--danger, #b00020);
+  }
+}
