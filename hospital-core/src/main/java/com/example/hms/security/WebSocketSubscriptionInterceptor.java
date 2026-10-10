@@ -140,11 +140,15 @@ public class WebSocketSubscriptionInterceptor implements ChannelInterceptor {
         return message;
     }
 
-    /** The session's CONNECT, now: the ws-ticket's roles vouch for {@link #RESOLUTION_TTL} after it. */
+    /**
+     * The session's FIRST CONNECT: the ws-ticket's roles vouch for
+     * {@link #RESOLUTION_TTL} after it. Recorded once; a later CONNECT on the
+     * same session does not reopen the window.
+     */
     private void recordConnect(StompHeaderAccessor accessor) {
         Map<String, Object> session = accessor.getSessionAttributes();
         if (session != null) {
-            session.put(CONNECTED_AT_ATTRIBUTE, clock.instant());
+            session.putIfAbsent(CONNECTED_AT_ATTRIBUTE, clock.instant());
         }
     }
 

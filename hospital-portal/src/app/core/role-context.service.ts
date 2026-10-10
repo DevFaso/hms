@@ -61,6 +61,19 @@ export class RoleContextService {
     this._providerUser.set(providerUser);
   }
 
+  private readonly _sessionResolved = signal<boolean>(false);
+
+  /**
+   * The session bootstrap has been applied on this page (or, when the server
+   * could not be asked, the stored profile stands in): until then
+   * {@link providerUser} is only its initial false, not an answer.
+   */
+  readonly sessionResolved = computed(() => this._sessionResolved());
+
+  markSessionResolved(): void {
+    this._sessionResolved.set(true);
+  }
+
   /** True when the current user holds ROLE_SUPER_ADMIN. */
   readonly isSuperAdmin = computed(() => this._activeRoles().includes('ROLE_SUPER_ADMIN'));
 

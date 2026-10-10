@@ -44,6 +44,7 @@ export class SessionScopeService {
       }),
       catchError(() => {
         this.applyStoredProfile();
+        this.roleContext.markSessionResolved();
         return of(null);
       }),
     );
@@ -59,6 +60,7 @@ export class SessionScopeService {
     const roles = bootstrap.roles?.length ? bootstrap.roles : this.auth.getRoles();
     this.roleContext.setRoles(roles);
     this.roleContext.setProviderUser(bootstrap.providerUser === true);
+    this.roleContext.markSessionResolved();
     const permitted = (bootstrap.permittedHospitalIds ?? []).filter((id) => !!id);
     this.applyScope(permitted, bootstrap.primaryHospitalId ?? null);
     this.roleContext.markSuperAdminGlobalDefaults();

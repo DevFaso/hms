@@ -13,11 +13,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessException;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -92,7 +94,19 @@ public class ProviderFacilityConfinementFilter extends OncePerRequestFilter {
             return;
         }
         ActingScopeResolver scopeResolver = scopeResolverProvider.getIfAvailable();
-        HospitalContext context = scopeResolver == null ? null : fallbackContext(authentication);
+        HospitalContext context;
+        try {
+            context = scopeResolver == null ? null : fallbackContext(authentication);
+        } catch (DataAccessException | CannotCreateTransactionException unavailable) {
+            // The database, not the caller: a retryable 503, never the
+            // "not found" a refusal answers.
+            log.warn("[CONFINEMENT] Live context unavailable ({}); answered 503",
+                unavailable.getClass().getSimpleName());
+            if (!response.isCommitted()) {
+                response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+            }
+            return;
+        }
         if (context == null) {
             policy.refuse(request, response);
             return;
@@ -148,6 +162,8 @@ public class ProviderFacilityConfinementFilter extends OncePerRequestFilter {
         }
         try {
             return resolver.liveContext(authentication);
+        } catch (DataAccessException | CannotCreateTransactionException databaseDown) {
+            throw databaseDown;
         } catch (RuntimeException unavailable) {
             log.warn("[CONFINEMENT] Live context unavailable for an authenticated request ({}); refused",
                 unavailable.getClass().getSimpleName());

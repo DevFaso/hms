@@ -4745,6 +4745,10 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 
 - **External providers: the confinement filter's fallback discards a non-confined context it computed**, and `ActingScopeResolver.ensureContext` computes it again later in the request; keep it for the request (found in #835's round-9 review). Open.
 
+- **External providers: `Pharmacy.create` and the catalog's `resolveCreateHospital` are clinical-only**, but P2-PH's provider sale path needs a dispensary and a catalog at the PHARMACY facility; revisit them in P2-PH (found in #835's round-10 review). Open.
+
+- **External providers: open STOMP subscriptions (the tracker, the broadcasts) are not re-evaluated after a revocation or a move to a provider facility** until the client reconnects; needs an outbound-channel check or a forced disconnect on assignment change. Acceptable before any provider is verified; fix before P2 (found in #835's round-10 review). Open.
+
 ## Open clinical questions — kept open on purpose, not forgotten
 
 These are questions only a clinician can settle. None of them blocks anything:

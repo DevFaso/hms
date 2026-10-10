@@ -16,8 +16,11 @@ const TOPIC = '/topic/emergency-broadcast';
 const RECONNECT_BASE_MS = 5_000;
 const RECONNECT_MAX_MS = 60_000;
 const MAX_RECONNECT_ATTEMPTS = 5;
-/** A connection must stay up this long before the backoff forgets earlier failures. */
-const STABLE_CONNECTION_MS = 30_000;
+/**
+ * A subscription the server lets stand this long was accepted (a refusal is an
+ * immediate ERROR): the backoff then forgets earlier failures.
+ */
+const SUBSCRIPTION_GRACE_MS = 2_000;
 /**
  * The ERROR frame's `message` header for an authorization refusal
  * (`StompRefusalErrorHandler.ACCESS_DENIED` on the server).
@@ -37,9 +40,10 @@ export const STOMP_ACCESS_DENIED = 'access-denied';
  *
  * <p>Refusal: a user the server refuses the topic (a provider user) gets an
  * ERROR frame saying {@link STOMP_ACCESS_DENIED}; the service then stops for
- * that token instead of reconnecting. The backoff counter is reset only by a
- * connection that stayed up {@link STABLE_CONNECTION_MS}, never by a connect
- * whose subscription was then refused.
+ * that token instead of reconnecting. The backoff counter is reset once a
+ * subscription has stood {@link SUBSCRIPTION_GRACE_MS} without a refusal, so a
+ * flaky link keeps reconnecting, but never by a connect whose subscription was
+ * then refused.
  */
 @Injectable({ providedIn: 'root' })
 export class EmergencyBroadcastService {
@@ -158,13 +162,13 @@ export class EmergencyBroadcastService {
     this.disconnect();
   }
 
-  /** Forget earlier failures only once this connection has stayed up. */
+  /** Forget earlier failures once this subscription has stood the grace without a refusal. */
   private markStableLater(generation: number): void {
     this.clearStableTimer();
     this.stableTimer = setTimeout(() => {
       this.stableTimer = null;
       if (generation === this.connectGeneration) this.reconnectAttempts = 0;
-    }, STABLE_CONNECTION_MS);
+    }, SUBSCRIPTION_GRACE_MS);
   }
 
   private clearStableTimer(): void {

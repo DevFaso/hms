@@ -447,6 +447,20 @@ class ProviderStompSubscriptionTest {
     }
 
     @Test
+    @DisplayName("a later CONNECT on the session does not reopen the ws-ticket window")
+    void aSecondConnectDoesNotReopenTheWindow() {
+        when(assignmentAccessor.findAssignmentsForUser(userId)).thenThrow(dbDown());
+        Principal nurse = ticketUser("ROLE_NURSE");
+        freshSessionConnect(nurse);
+        afterTheTtl();
+
+        Message<byte[]> again = frame(StompCommand.CONNECT, null, nurse);
+        assertThat(interceptor.preSend(again, channel)).isSameAs(again);
+        Message<byte[]> broadcast = subscribe("/topic/emergency-broadcast", nurse);
+        assertThatThrownBy(() -> interceptor.preSend(broadcast, channel)).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
     @DisplayName("a non-database failure is remembered for the TTL: refused without re-querying, then asked again")
     void nonDatabaseFailureIsNegativeCachedForTheTtl() {
         Principal pharmacist = ticketUser("ROLE_PHARMACIST");

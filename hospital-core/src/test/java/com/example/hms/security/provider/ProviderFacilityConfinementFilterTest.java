@@ -17,6 +17,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -25,6 +26,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -45,6 +47,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -434,6 +437,25 @@ class ProviderFacilityConfinementFilterTest {
 
         verify(chain, never()).doFilter(any(), any());
         assertThat(response.getStatus()).isEqualTo(404);
+    }
+
+    @Test
+    @DisplayName("FALLBACK: a database failure computing the context is a retryable 503, not the refusal's 404")
+    void databaseFailureIsRetryable() throws Exception {
+        Authentication someone = user("nurse");
+        authenticated(someone);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        doThrow(new DataAccessResourceFailureException("db down")).when(callerResolver).liveContext(someone);
+        filter(policy(mapping(), null)).doFilter(get("/notifications"), response, chain);
+        assertThat(response.getStatus()).isEqualTo(503);
+
+        MockHttpServletResponse noTransaction = new MockHttpServletResponse();
+        doThrow(new CannotCreateTransactionException("no connection")).when(callerResolver).liveContext(someone);
+        filter(policy(mapping(), null)).doFilter(get("/notifications"), noTransaction, chain);
+        assertThat(noTransaction.getStatus()).isEqualTo(503);
+
+        verify(chain, never()).doFilter(any(), any());
     }
 
     @Test

@@ -40,8 +40,9 @@ function errorFrame(message: string): IFrame {
 /**
  * Reconnect behaviour of the emergency-broadcast socket: an authorization
  * refusal (the server's "access-denied" ERROR, what a provider user gets)
- * stops it for that token, and the backoff is only forgotten by a connection
- * that stayed up, never by a connect whose subscription was then refused.
+ * stops it for that token, and the backoff is forgotten once a subscription
+ * has stood a short grace without a refusal (a flaky link keeps reconnecting),
+ * never by a connect whose subscription was then refused.
  */
 describe('EmergencyBroadcastService — reconnects', () => {
   let service: DrivenBroadcastService;
@@ -118,6 +119,20 @@ describe('EmergencyBroadcastService — reconnects', () => {
     http.expectNone(TICKET);
     tick(5_000);
     open();
+    service.disconnect();
+    flush();
+  }));
+
+  it('a flaky link (each subscription accepted, each drop under 30 s) keeps reconnecting', fakeAsync(() => {
+    service.connect();
+    let config = open();
+    for (let drop = 0; drop < 8; drop++) {
+      config.onConnect!(errorFrame(''));
+      tick(3_000); // accepted: no refusal within the grace
+      config.onWebSocketError!(new Event('error'));
+      tick(5_000); // the backoff starts over at 5 s every time
+      config = open();
+    }
     service.disconnect();
     flush();
   }));
