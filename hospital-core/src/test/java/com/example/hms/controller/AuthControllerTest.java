@@ -801,13 +801,15 @@ class AuthControllerTest {
         mockMvc.perform(post("/auth/token/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"old.refresh.token\"}"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message")
+                        .value("Refresh token is invalid or has expired. Please log in again."));
 
+        // Refused on the revocation itself, before the token's user is even looked up.
         org.mockito.Mockito.verify(jwtTokenProvider, org.mockito.Mockito.never())
-                .generateAccessToken(org.mockito.ArgumentMatchers.any(
-                        com.example.hms.security.TokenUserDescriptor.class));
+                .getUsernameFromJWT(org.mockito.ArgumentMatchers.any());
         org.mockito.Mockito.verify(userRepository, org.mockito.Mockito.never())
-                .findByUsername(org.mockito.ArgumentMatchers.anyString());
+                .findByUsername(org.mockito.ArgumentMatchers.any());
     }
 
     // ───────────────────────────── S-01: refresh-token cookie ─────────────────────────────
