@@ -60,7 +60,7 @@ dependencies {
     implementation 'com.google.zxing:javase:3.5.4'
 
     // Twilio SMS
-    implementation 'com.twilio.sdk:twilio:13.0.1'
+    implementation 'com.twilio.sdk:twilio:13.0.2'
 
     // HAPI FHIR (R4) — interoperability layer (mounted at /fhir/*)
     implementation 'ca.uhn.hapi.fhir:hapi-fhir-base:8.12.1'
