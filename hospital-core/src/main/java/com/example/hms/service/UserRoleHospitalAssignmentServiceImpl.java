@@ -76,6 +76,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.springframework.context.i18n.LocaleContextHolder;
+import com.example.hms.security.provider.ClinicalHospitals;
 import com.example.hms.security.provider.FacilityAssignmentGuard;
 
 @Service
@@ -1313,10 +1314,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 Organization organization = organizationRepository.findByIdWithHospitals(organizationId)
                     .orElseThrow(() -> new ResourceNotFoundException(MSG_ORGANIZATION_NOT_FOUND, organizationId));
                 organization.getHospitals().stream()
-                    .filter(Objects::nonNull)
                     // A role assigned "to an organisation" lands at its
                     // hospitals only, never at a provider facility (AC-11).
-                    .filter(hospital -> !hospital.isProvider())
+                    .filter(ClinicalHospitals::isClinical)
                     .map(Hospital::getId)
                     .filter(Objects::nonNull)
                     .forEach(hospitalIds::add);

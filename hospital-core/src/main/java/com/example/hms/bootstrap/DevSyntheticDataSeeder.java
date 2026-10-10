@@ -414,7 +414,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
         UUID organizationId = fromHospital.getOrganization() != null ? fromHospital.getOrganization().getId() : null;
         List<Hospital> candidates = (organizationId != null)
             ? hospitalRepository.findByOrganizationIdOrderByNameAsc(organizationId)
-            : hospitalRepository.findAll();
+            : hospitalRepository.findAllHospitals();
 
         return candidates.stream()
             .filter(h -> h.getId() != null && !h.getId().equals(fromHospital.getId()))

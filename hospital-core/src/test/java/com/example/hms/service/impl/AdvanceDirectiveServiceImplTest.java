@@ -88,7 +88,7 @@ class AdvanceDirectiveServiceImplTest {
         foreign.setId(UUID.randomUUID());
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(patientRepository.findById(foreign.getId())).thenReturn(Optional.of(foreign));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
 
         UUID foreignId = foreign.getId();
         AdvanceDirectiveRequestDTO req = request();
@@ -112,7 +112,7 @@ class AdvanceDirectiveServiceImplTest {
         // wrong way round for a DNR.
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(directiveRepository.save(any(AdvanceDirective.class))).thenAnswer(i -> i.getArgument(0));
 
         assertThat(service.create(patientId, request()).getStatus())
@@ -129,7 +129,7 @@ class AdvanceDirectiveServiceImplTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
 
         assertThatThrownBy(() -> service.create(patientId, req))
             .isInstanceOf(BusinessException.class)
@@ -146,7 +146,7 @@ class AdvanceDirectiveServiceImplTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(directiveRepository.save(any(AdvanceDirective.class))).thenAnswer(i -> i.getArgument(0));
 
         assertThat(service.create(patientId, req).getHospitalId()).isEqualTo(hospitalId);

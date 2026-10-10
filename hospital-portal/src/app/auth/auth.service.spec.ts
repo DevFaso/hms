@@ -299,6 +299,19 @@ describe('AuthService — logout revokes the server session', () => {
     req.flush(null, { status: 204, statusText: 'No Content' });
   });
 
+  it('clears the session flags the broadcast gate reads', () => {
+    localStorage.setItem('auth_token', 'current.jwt.token');
+    const roleContext = TestBed.inject(RoleContextService);
+    roleContext.setProviderUser(true);
+    roleContext.markSessionResolved();
+
+    service.logout();
+    httpMock.expectOne((r) => r.url.endsWith('/api/auth/logout')).flush(null);
+
+    expect(roleContext.providerUser()).toBeFalse();
+    expect(roleContext.sessionResolved()).toBeFalse();
+  });
+
   it('still signs out locally when the server call fails', () => {
     localStorage.setItem('auth_token', 'current.jwt.token');
     let thrown: unknown = null;

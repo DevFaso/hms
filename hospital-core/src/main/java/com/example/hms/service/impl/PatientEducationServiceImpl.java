@@ -76,7 +76,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     public EducationResourceResponseDTO createResource(EducationResourceRequestDTO requestDTO, UUID hospitalId) {
         log.info("Creating education resource for hospital: {}", hospitalId);
 
-        Hospital hospital = hospitalRepository.findById(hospitalId)
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
         EducationResource resource = resourceMapper.toEntity(requestDTO);
@@ -218,7 +218,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
         EducationResource resource = resourceRepository.findById(requestDTO.getResourceId())
             .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_RESOURCE_NOT_FOUND_KEY, requestDTO.getResourceId()));
 
-        Hospital hospital = hospitalRepository.findById(hospitalId)
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
         PatientEducationProgress progress = progressRowFor(patientId, resource.getId(), hospital.getId(),
@@ -372,7 +372,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
         encounterRepository.findById(requestDTO.getEncounterId())
             .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", requestDTO.getEncounterId()));
 
-        hospitalRepository.findById(hospitalId)
+        hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
         VisitEducationDocumentation documentation = documentationMapper.toEntity(requestDTO);
@@ -442,7 +442,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
         patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, patientId));
 
-        hospitalRepository.findById(hospitalId)
+        hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
         PatientEducationQuestion question = questionMapper.toEntity(requestDTO);

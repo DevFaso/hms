@@ -50,8 +50,11 @@ public class PharmacyDirectoryServiceImpl implements PharmacyDirectoryService {
             throw new BusinessException("Patient is not registered in the requested hospital context.");
         }
 
-        Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseGet(patient::getPrimaryHospital);
+        // A clinical destination only: a provider's id (or an unknown one) is
+        // not found, exactly as at every other destination, never quietly
+        // replaced by the patient's primary hospital.
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
 
         Map<UUID, PharmacyLocationResponseDTO> options = new LinkedHashMap<>();
         addPreferredPharmacy(options, patient);

@@ -176,7 +176,7 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
         Objects.requireNonNull(hospitalId, HOSPITAL_ID_REQUIRED);
         Objects.requireNonNull(organizationServiceId, ORGANIZATION_SERVICE_ID_REQUIRED);
 
-        Hospital hospital = hospitalRepository.findById(hospitalId)
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         OrganizationPlatformService service = organizationPlatformServiceRepository.findById(organizationServiceId)
             .orElseThrow(() -> new ResourceNotFoundException(PLATFORM_SERVICE_NOT_FOUND_KEY, organizationServiceId));

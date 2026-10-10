@@ -70,7 +70,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
         requireActingHospital(request.getHospitalId());
         requirePatientRegisteredAtActingHospital(request.getPatientId());
@@ -110,7 +110,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             // at: the portal only echoes the order's own hospital back, so a
             // different one is refused exactly as a missing hospital. A
             // verified super-admin in global view keeps the old behaviour.
-            Hospital hospital = hospitalRepository.findById(request.getHospitalId())
+            Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
             requireActingHospital(request.getHospitalId());
             order.setHospital(hospital);

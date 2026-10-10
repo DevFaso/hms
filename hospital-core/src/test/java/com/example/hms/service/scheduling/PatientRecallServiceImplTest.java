@@ -67,7 +67,7 @@ class PatientRecallServiceImplTest {
         hospital = new Hospital();
         hospital.setId(hospitalId);
         hospital.setName("CHU Yalgado");
-        lenient().when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        lenient().when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
 
         patientId = UUID.randomUUID();
         patient = mock(Patient.class);

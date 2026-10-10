@@ -112,7 +112,7 @@ class AdmissionOrderSetServiceImplTest {
 
     @Test
     void createPersistsV1Template() {
-        when(hospitalRepo.findById(HOSPITAL_ID)).thenReturn(Optional.of(hospital()));
+        when(hospitalRepo.findClinicalById(HOSPITAL_ID)).thenReturn(Optional.of(hospital()));
         when(staffRepo.findById(STAFF_ID)).thenReturn(Optional.of(staff()));
         when(orderSetRepo.save(any())).thenAnswer(inv -> {
             AdmissionOrderSet o = inv.getArgument(0);

@@ -413,7 +413,7 @@ public class MortalityServiceImpl implements MortalityService {
     }
 
     private Hospital hospitalRef(UUID hospitalId) {
-        return hospitalRepository.findById(hospitalId)
+        return hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
     }
 

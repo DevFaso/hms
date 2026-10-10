@@ -41,7 +41,7 @@ public class StaffAvailabilityServiceImpl implements StaffAvailabilityService {
     @Transactional
     public StaffAvailabilityResponseDTO create(StaffAvailabilityRequestDTO dto, Locale locale) {
 
-        Hospital hospital = hospitalRepository.findById(dto.hospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(dto.hospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.not.found", dto.hospitalId()));
 
         Staff staff = staffRepository.findById(dto.staffId())

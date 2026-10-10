@@ -805,7 +805,7 @@ class ReceptionServiceImplTest {
             req.setRequestedDateTo(today.plusDays(7));
             req.setReason("Follow-up needed");
 
-            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(departmentRepo.findById(departmentId)).thenReturn(Optional.of(department));
             when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(registrationRepo.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
@@ -838,7 +838,7 @@ class ReceptionServiceImplTest {
             WaitlistEntryRequestDTO req = new WaitlistEntryRequestDTO();
             req.setDepartmentId(departmentId);
             req.setPatientId(patientId);
-            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.empty());
+            when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.addToWaitlist(req, hospitalId, "user"))
                     .isInstanceOf(ResourceNotFoundException.class);
@@ -853,7 +853,7 @@ class ReceptionServiceImplTest {
             WaitlistEntryRequestDTO req = new WaitlistEntryRequestDTO();
             req.setDepartmentId(departmentId);
             req.setPatientId(patientId);
-            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(departmentRepo.findById(departmentId)).thenReturn(Optional.of(department));
             when(patientRepo.findById(patientId)).thenReturn(Optional.empty());
             when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
@@ -875,7 +875,7 @@ class ReceptionServiceImplTest {
             WaitlistEntryRequestDTO req = new WaitlistEntryRequestDTO();
             req.setDepartmentId(departmentId);
             req.setPatientId(patientId);
-            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(departmentRepo.findById(departmentId)).thenReturn(Optional.of(department));
             when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(registrationRepo.existsByPatientIdAndHospitalId(patientId, hospitalId))

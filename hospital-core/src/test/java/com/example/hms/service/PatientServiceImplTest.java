@@ -318,7 +318,7 @@ class PatientServiceImplTest {
         PatientResponseDTO responseDTO = PatientResponseDTO.builder().id(patientId).build();
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(patientRepository.findByUserId(userId)).thenReturn(Optional.empty());
         when(patientMapper.toPatient(request, user)).thenReturn(savedPatient);
         when(patientRepository.save(savedPatient)).thenReturn(savedPatient);
@@ -352,7 +352,7 @@ class PatientServiceImplTest {
 
         patient.setPhoneNumberPrimary("+22670707070");
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(patientRepository.findByUserId(userId)).thenReturn(Optional.of(patient));
         when(phoneVerificationService.consumeVerifiedChallenge(challengeId, "+22670707070")).thenReturn(true);
@@ -381,7 +381,7 @@ class PatientServiceImplTest {
         user.setId(userId);
         user.setActive(true);
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(patientRepository.findByUserId(userId)).thenReturn(Optional.of(patient));
         when(phoneVerificationService.consumeVerifiedChallenge(any(), any())).thenReturn(false);
@@ -535,7 +535,7 @@ class PatientServiceImplTest {
         staff.setName("Dr. Carter");
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
         when(staffRepository.findByUserIdAndHospitalId(requesterUserId, hospitalId)).thenReturn(Optional.of(staff));
         when(patientProblemRepository.save(any(PatientProblem.class))).thenAnswer(invocation -> {
@@ -569,7 +569,7 @@ class PatientServiceImplTest {
         staff.setId(UUID.randomUUID());
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
         when(staffRepository.findByUserIdAndHospitalId(requesterUserId, hospitalId)).thenReturn(Optional.of(staff));
 
@@ -602,7 +602,7 @@ class PatientServiceImplTest {
         staff.setId(UUID.randomUUID());
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
         when(staffRepository.findByUserIdAndHospitalId(requesterUserId, hospitalId)).thenReturn(Optional.of(staff));
 
@@ -1458,7 +1458,7 @@ class PatientServiceImplTest {
         registration.setHospital(hospital);
         registration.setMrn("HSP0002");
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(patientRepository.findByUserId(userId)).thenReturn(Optional.empty());
         when(patientMapper.toPatient(request, user)).thenReturn(savedPatient);
         when(patientRepository.save(savedPatient)).thenReturn(savedPatient);
@@ -1501,7 +1501,7 @@ class PatientServiceImplTest {
 
         when(roleValidator.getCurrentUserId()).thenReturn(requester);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
         when(recordAccessPolicy.readableHospitalIds(requester, patientId, hospitalId)).thenReturn(Set.of(hospitalId, otherId));
         when(patientProblemRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId, otherId)))

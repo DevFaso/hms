@@ -70,7 +70,10 @@ public class CdsAcknowledgementServiceImpl implements CdsAcknowledgementService 
 
         Hospital hospital = null;
         if (resolvedHospitalId != null) {
-            hospital = hospitalRepository.findById(resolvedHospitalId).orElse(null);
+            // A clinical hospital only: a provider scope is refused (not
+            // found), never saved as a hospital-less, global acknowledgement.
+            hospital = hospitalRepository.findClinicalById(resolvedHospitalId)
+                    .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", resolvedHospitalId));
         }
 
         Duration ttl = request.getAction() == CdsAcknowledgementAction.OVERRIDDEN

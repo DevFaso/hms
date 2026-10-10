@@ -1,0 +1,2 @@
+# Handlers a PHARMACY provider reaches on top of common.txt (provider plan
+# section 6.4). Empty in P1; P2-PH fills PharmacyConfinement and this file.

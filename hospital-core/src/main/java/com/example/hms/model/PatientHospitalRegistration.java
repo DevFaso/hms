@@ -10,12 +10,18 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PostPersist;
+import jakarta.persistence.PostUpdate;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.util.Objects;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -46,7 +52,7 @@ import java.util.UUID;
 @NoArgsConstructor @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
-@ToString(exclude = {"patient", "hospital"})
+@ToString(exclude = {"patient", "hospital", "loaded"})
 public class PatientHospitalRegistration extends BaseEntity {
 
     @NotBlank @Size(max = 50)
@@ -136,11 +142,71 @@ public class PatientHospitalRegistration extends BaseEntity {
     }
 
     @PrePersist
+    private void normalizeOnPersist() {
+        requireClinicalHospital();
+        normalize();
+    }
+
+    /**
+     * The hospital and the active flag this row was last loaded or written
+     * with. Only the entity's own lifecycle callbacks set it: a final field
+     * with an initializer is outside the builder and the all-args
+     * constructor, and it has no getter, no setter and no toString.
+     */
+    @Transient
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private final LoadedState loaded = new LoadedState();
+
+    /** What the row held when it was last loaded or written. */
+    private static final class LoadedState {
+        private UUID hospitalId;
+        private boolean active;
+    }
+
+    @PostLoad
+    @PostPersist
+    @PostUpdate
+    private void rememberLoadedHospital() {
+        loaded.hospitalId = hospital == null ? null : hospital.getId();
+        loaded.active = active;
+    }
+
+    /**
+     * An update may deactivate or discharge a registration that a provider
+     * facility should never have held (a legacy or planted row, left where it
+     * was loaded), but it may not move any row, active or not, to a provider,
+     * nor re-activate one there. The facility type is read only when the
+     * hospital id changed or the row is re-activated: an ordinary update
+     * compares ids (a proxy's id needs no load) and never loads the hospital.
+     */
     @PreUpdate
+    private void normalizeOnUpdate() {
+        UUID hospitalId = hospital == null ? null : hospital.getId();
+        boolean moved = !Objects.equals(hospitalId, loaded.hospitalId);
+        boolean reactivated = active && !loaded.active;
+        if (moved || reactivated) {
+            requireClinicalHospital();
+        }
+        normalize();
+    }
+
     private void normalize() {
         ensureTemporalDefaults();
         ensurePatientFullName();
         normalizeTextualFields();
+    }
+
+    /**
+     * A patient registers at a hospital only. A registration is the treatment
+     * relationship (E9 #58), so one at a pharmacy or laboratory would open the
+     * chart to it (provider plan §3.3, AC-10). The backstop; the registration
+     * service refuses a provider first, with the not-found answer.
+     */
+    private void requireClinicalHospital() {
+        if (hospital != null && hospital.isProvider()) {
+            throw new IllegalStateException("registration.hospital.notClinical");
+        }
     }
 
     private void ensureTemporalDefaults() {

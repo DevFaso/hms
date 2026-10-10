@@ -159,7 +159,7 @@ class PrenatalSchedulingServiceImplTest {
         existing.setId(UUID.randomUUID());
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(appointmentRepository.findByHospital_IdAndPatient_Id(hospitalId, patientId))
             .thenReturn(List.of(existing));
 

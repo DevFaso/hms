@@ -140,7 +140,7 @@ class ImagingOrderServiceImplTest {
             .build();
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(imagingOrderMapper.toEntity(request, patient, hospital)).thenReturn(order);
         when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(ImagingModality.CT), eq(BODY_REGION_CHEST), any(LocalDateTime.class)))
             .thenReturn(duplicates);
@@ -432,7 +432,7 @@ class ImagingOrderServiceImplTest {
         ImagingOrderResponseDTO responseDTO = ImagingOrderResponseDTO.builder().id(UUID.randomUUID()).build();
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(imagingOrderMapper.toEntity(request, patient, hospital)).thenReturn(order);
         when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(ImagingModality.CT), isNull(), any(LocalDateTime.class)))
             .thenReturn(Collections.emptyList());
@@ -651,7 +651,7 @@ class ImagingOrderServiceImplTest {
         elsewhere.setId(elsewhereId);
         ImagingOrder order = orderAt(hospital);
         when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
-        when(hospitalRepository.findById(elsewhereId)).thenReturn(Optional.of(elsewhere));
+        when(hospitalRepository.findClinicalById(elsewhereId)).thenReturn(Optional.of(elsewhere));
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
 
         ImagingOrderRequestDTO request = new ImagingOrderRequestDTO();
@@ -669,7 +669,7 @@ class ImagingOrderServiceImplTest {
         Hospital elsewhere = new Hospital();
         elsewhere.setId(elsewhereId);
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(elsewhereId)).thenReturn(Optional.of(elsewhere));
+        when(hospitalRepository.findClinicalById(elsewhereId)).thenReturn(Optional.of(elsewhere));
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
 
         ImagingOrderRequestDTO request = new ImagingOrderRequestDTO();
@@ -688,7 +688,7 @@ class ImagingOrderServiceImplTest {
         elsewhere.setId(elsewhereId);
         ImagingOrder order = orderAt(hospital);
         when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
-        when(hospitalRepository.findById(elsewhereId)).thenReturn(Optional.of(elsewhere));
+        when(hospitalRepository.findClinicalById(elsewhereId)).thenReturn(Optional.of(elsewhere));
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
         when(imagingOrderRepository.save(order)).thenReturn(order);
 
@@ -714,7 +714,7 @@ class ImagingOrderServiceImplTest {
         Patient foreign = new Patient();
         foreign.setId(foreignPatientId);
         when(patientRepository.findById(foreignPatientId)).thenReturn(Optional.of(foreign));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(registrationRepository.existsByPatientIdAndHospitalId(foreignPatientId, hospitalId)).thenReturn(false);
 

@@ -141,7 +141,7 @@ class LaborServiceImplTest {
     @Test
     void startEpisodeRejectsSecondActiveEpisode() {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId, LaborStatus.ACTIVE))
             .thenReturn(true);
 
@@ -155,7 +155,7 @@ class LaborServiceImplTest {
     @Test
     void startEpisodeSnapshotsGravidaParaAndEddDerivedGestationalAge() {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId, LaborStatus.ACTIVE))
             .thenReturn(false);
 

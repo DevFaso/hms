@@ -671,13 +671,11 @@ public class DepartmentServiceImpl implements DepartmentService {
      */
     private Hospital resolveHospital(DepartmentRequestDTO dto) {
         if (dto.getHospitalId() != null) {
-            return hospitalRepository.findById(dto.getHospitalId())
-                .filter(hospital -> !hospital.isProvider())
+            return hospitalRepository.findClinicalById(dto.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", dto.getHospitalId()));
         }
 
-        return hospitalRepository.findByNameIgnoreCase(dto.getHospitalName())
-            .filter(hospital -> !hospital.isProvider())
+        return hospitalRepository.findClinicalByNameIgnoreCase(dto.getHospitalName())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", dto.getHospitalName()));
     }
 

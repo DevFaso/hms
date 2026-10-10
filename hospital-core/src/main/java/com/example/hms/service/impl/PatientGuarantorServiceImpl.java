@@ -44,7 +44,7 @@ public class PatientGuarantorServiceImpl implements PatientGuarantorService {
         }
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
-        Hospital hospital = hospitalRepository.findById(hospitalId)
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new BusinessException("Patient is not registered at this hospital.");

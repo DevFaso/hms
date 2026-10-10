@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.controller.NotificationWebSocketController;
+import com.example.hms.enums.FacilityType;
 import com.example.hms.enums.NotificationChannel;
 import com.example.hms.enums.NotificationType;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -12,6 +13,11 @@ import com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO;
 import com.example.hms.repository.NotificationPreferenceRepository;
 import com.example.hms.repository.NotificationRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.provider.ProviderCallerResolver;
+import com.example.hms.service.NotificationService.ReadOutcome;
+import java.security.Principal;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -21,6 +27,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -30,13 +38,16 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -53,6 +64,12 @@ class NotificationServiceImplTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private ObjectProvider<ProviderCallerResolver> callerResolverProvider;
+
+    @Mock
+    private ProviderCallerResolver callerResolver;
 
     @InjectMocks
     private NotificationServiceImpl service;
@@ -235,32 +252,97 @@ class NotificationServiceImplTest {
     @DisplayName("markAsRead")
     class MarkAsRead {
 
-        @Test
-        @DisplayName("marks notification as read when found")
-        void marksAsReadWhenFound() {
-            Notification notification = Notification.builder()
+        private final Principal caller = new UsernamePasswordAuthenticationToken(username, null, List.of());
+
+        private Notification broadcast(String recipient) {
+            return Notification.builder()
                     .id(notificationId)
-                    .message("msg")
-                    .recipientUsername(username)
+                    .message("system-wide announcement")
+                    .recipientUsername(recipient)
                     .createdAt(LocalDateTime.now())
                     .read(false)
                     .build();
+        }
 
-            when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
-
-            service.markAsRead(notificationId);
-
-            assertThat(notification.isRead()).isTrue();
-            verify(notificationRepository).save(notification);
+        private void liveContext(String... roles) {
+            when(callerResolverProvider.getIfAvailable()).thenReturn(callerResolver);
+            when(callerResolver.liveContext(caller)).thenReturn(HospitalContext.builder()
+                    .principalUserId(UUID.randomUUID()).assignedRoles(Set.of(roles)).build());
         }
 
         @Test
-        @DisplayName("does nothing when notification not found")
-        void doesNothingWhenNotFound() {
+        @DisplayName("the caller's own notification is marked, with one read of the row")
+        void marksOwnNotification() {
+            when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(sampleNotification));
+
+            assertThat(service.markAsRead(notificationId, caller, true)).isEqualTo(ReadOutcome.MARKED);
+
+            assertThat(sampleNotification.isRead()).isTrue();
+            verify(notificationRepository).save(sampleNotification);
+            verify(notificationRepository, times(1)).findById(notificationId);
+            verifyNoInteractions(callerResolverProvider);
+        }
+
+        @Test
+        @DisplayName("an unknown id and someone else's notification are the same NOT_FOUND")
+        void unknownAndForeignAreNotFound() {
             when(notificationRepository.findById(notificationId)).thenReturn(Optional.empty());
+            assertThat(service.markAsRead(notificationId, caller, true)).isEqualTo(ReadOutcome.NOT_FOUND);
 
-            service.markAsRead(notificationId);
+            Notification foreign = broadcast("someone-else");
+            when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(foreign));
+            assertThat(service.markAsRead(notificationId, caller, true)).isEqualTo(ReadOutcome.NOT_FOUND);
 
+            assertThat(foreign.isRead()).isFalse();
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a broadcast (null or blank recipient): unconfined staff mark its one flag, decided on the live context")
+        void broadcastIsMarkedByUnconfinedStaff() {
+            liveContext("ROLE_DOCTOR");
+            for (String recipient : new String[] {null, " "}) {
+                Notification broadcast = broadcast(recipient);
+                when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(broadcast));
+
+                assertThat(service.markAsRead(notificationId, caller, true)).isEqualTo(ReadOutcome.MARKED);
+                assertThat(broadcast.isRead()).isTrue();
+            }
+        }
+
+        @Test
+        @DisplayName("a database outage while deciding a broadcast propagates (a 5xx), never 'not staff'")
+        void databaseOutagePropagates() {
+            when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(broadcast(null)));
+            when(callerResolverProvider.getIfAvailable()).thenReturn(callerResolver);
+            when(callerResolver.liveContext(caller)).thenThrow(new DataAccessResourceFailureException("db down"));
+
+            assertThatThrownBy(() -> service.markAsRead(notificationId, caller, true))
+                    .isInstanceOf(DataAccessResourceFailureException.class);
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a broadcast is left unread for a confined provider user, a patient, an unresolvable caller, and on the patient endpoint")
+        void broadcastIsLeftUnreadForAnyoneElse() {
+            Notification broadcast = broadcast(null);
+            when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(broadcast));
+
+            when(callerResolverProvider.getIfAvailable()).thenReturn(callerResolver);
+            when(callerResolver.liveContext(caller)).thenReturn(HospitalContext.builder()
+                    .principalUserId(UUID.randomUUID()).assignedRoles(Set.of("ROLE_PHARMACIST"))
+                    .providerFacilityTypes(Set.of(FacilityType.PHARMACY)).build());
+            assertThat(service.markAsRead(notificationId, caller, true)).isEqualTo(ReadOutcome.BROADCAST_LEFT_UNREAD);
+
+            liveContext("ROLE_PATIENT");
+            assertThat(service.markAsRead(notificationId, caller, true)).isEqualTo(ReadOutcome.BROADCAST_LEFT_UNREAD);
+
+            when(callerResolver.liveContext(caller)).thenThrow(new IllegalStateException("unavailable"));
+            assertThat(service.markAsRead(notificationId, caller, true)).isEqualTo(ReadOutcome.BROADCAST_LEFT_UNREAD);
+
+            assertThat(service.markAsRead(notificationId, caller, false)).isEqualTo(ReadOutcome.BROADCAST_LEFT_UNREAD);
+
+            assertThat(broadcast.isRead()).isFalse();
             verify(notificationRepository, never()).save(any());
         }
     }

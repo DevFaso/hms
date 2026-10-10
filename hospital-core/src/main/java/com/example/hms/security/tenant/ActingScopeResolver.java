@@ -1,7 +1,9 @@
 package com.example.hms.security.tenant;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.exception.HospitalScopeRefusedException;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.HospitalScopeResponses;
 import com.example.hms.security.HospitalUserDetails;
 import com.example.hms.security.audit.CrossTenantReadAudit;
 import com.example.hms.security.auth.TenantRoleAssignment;
@@ -10,6 +12,9 @@ import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.security.context.HospitalContextRequestOverrides;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.util.EnumSet;
+import java.util.stream.Collectors;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -109,11 +114,17 @@ public class ActingScopeResolver {
         Set<UUID> organizations = new LinkedHashSet<>();
         Set<String> roles = new LinkedHashSet<>();
         Map<UUID, UUID> hospitalOrganizations = new LinkedHashMap<>();
+        Map<UUID, FacilityType> hospitalFacilityTypes = new LinkedHashMap<>();
         for (TenantRoleAssignment assignment : assignments == null ? List.<TenantRoleAssignment>of() : assignments) {
             if (assignment.active()) {
                 collect(assignment, hospitals, organizations, roles, hospitalOrganizations);
+                if (assignment.hospitalId() != null) {
+                    // Never null at a facility (TenantRoleAssignment refuses it).
+                    hospitalFacilityTypes.putIfAbsent(assignment.hospitalId(), assignment.facilityType());
+                }
             }
         }
+        Set<FacilityType> providerTypes = providerFacilityTypes(assignments);
         boolean superAdmin = roles.contains(ROLE_SUPER_ADMIN);
 
         HospitalContext.HospitalContextBuilder builder = HospitalContext.builder()
@@ -125,6 +136,9 @@ public class ActingScopeResolver {
             .permittedOrganizationIds(Collections.unmodifiableSet(organizations))
             .assignedRoles(Collections.unmodifiableSet(roles))
             .hospitalOrganizations(Collections.unmodifiableMap(hospitalOrganizations))
+            .providerFacilityTypes(Collections.unmodifiableSet(providerTypes))
+            .hospitalFacilityTypes(Collections.unmodifiableMap(hospitalFacilityTypes))
+            .staffHospitalIds(Collections.unmodifiableSet(staffHospitalIds(assignments)))
             // The organisation policies and plan gating read: the acting
             // hospital's (set again when a hospital is named), else the only
             // organisation held. Not a read scope.
@@ -153,6 +167,33 @@ public class ActingScopeResolver {
         return builder
             .scopeRefusal(hospitals.isEmpty() ? ActingScope.Reason.NO_HOSPITAL : ActingScope.Reason.AMBIGUOUS)
             .build();
+    }
+
+    /**
+     * The provider facility types (PHARMACY, LABORATORY) among the active
+     * assignments at a facility in a role other than PATIENT: what confines
+     * the caller (provider plan section 3.3). Where they work, as
+     * {@link #staffHospitalIds}: a PATIENT row is outside the one-kind rule
+     * (#832) and confines nobody. Never HOSPITAL; empty for a hospital user.
+     */
+    private static Set<FacilityType> providerFacilityTypes(List<TenantRoleAssignment> assignments) {
+        Set<FacilityType> types = EnumSet.noneOf(FacilityType.class);
+        for (TenantRoleAssignment assignment : assignments == null ? List.<TenantRoleAssignment>of() : assignments) {
+            if (assignment.active() && assignment.hospitalId() != null && assignment.facilityType() != null
+                && assignment.facilityType().isProvider() && !ROLE_PATIENT.equals(roleCode(assignment))) {
+                types.add(assignment.facilityType());
+            }
+        }
+        return types;
+    }
+
+    /** The hospitals of the active assignments in a role other than PATIENT. */
+    private static Set<UUID> staffHospitalIds(List<TenantRoleAssignment> assignments) {
+        return (assignments == null ? List.<TenantRoleAssignment>of() : assignments).stream()
+            .filter(assignment -> assignment.active() && assignment.hospitalId() != null
+                && !ROLE_PATIENT.equals(roleCode(assignment)))
+            .map(TenantRoleAssignment::hospitalId)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     /** One active assignment's contribution to the live context. */
@@ -250,6 +291,28 @@ public class ActingScopeResolver {
     /** Write the refusal row for a refused header (deduplicated hourly by the audit writer). */
     public void auditRefusedHeader(HospitalContext context) {
         recordRefusal(context, context.getRefusedHospitalId(), context.getScopeRefusal(), ActingScope.Source.HEADER);
+    }
+
+    /**
+     * THE answer to a refused {@code X-Hospital-Id} (design Q3, option A), for
+     * every filter that builds a context: both context filters and the
+     * confinement filter's fallback. When {@code context} carries a refused
+     * header it is audited (hourly per actor, hospital and reason), the
+     * security and hospital holders are cleared and the 403 is written with
+     * its reason, so the portal re-reads its scope on a stale chip; the caller
+     * then stops the chain (after clearing any holder of its own).
+     *
+     * @return {@code true} when the request was refused and answered
+     */
+    public boolean answerRefusedHeader(HospitalContext context, HttpServletResponse response) {
+        if (!isRefusedHeader(context)) {
+            return false;
+        }
+        auditRefusedHeader(context);
+        SecurityContextHolder.clearContext();
+        HospitalContextHolder.clear();
+        HospitalScopeResponses.writeRefusal(response, context.getScopeRefusal(), context.getRefusedHospitalId());
+        return true;
     }
 
     /* =====================================================================

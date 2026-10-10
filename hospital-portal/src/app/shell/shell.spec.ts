@@ -927,7 +927,7 @@ describe('ShellComponent — onNavKeydown (row 11 keyboard reorder)', () => {
  * with a live badge AND a redundant nav row that carried no count.
  */
 describe('ShellComponent — inbox surfaces live in the topbar', () => {
-  function build(roles: string[], activeRole: string) {
+  function build(roles: string[], activeRole: string, providerUser = false) {
     // Same shape as the harness above: ngOnInit calls getUserProfile, so a
     // partial stub blows up on the first detectChanges.
     const authStub = jasmine.createSpyObj<AuthService>('AuthService', [
@@ -1014,8 +1014,51 @@ describe('ShellComponent — inbox surfaces live in the topbar', () => {
     const roleContext = TestBed.inject(RoleContextService);
     roleContext.setRoles(roles);
     roleContext.activeRole = activeRole;
+    roleContext.setProviderUser(providerUser);
     return TestBed.createComponent(ShellComponent);
   }
+
+  function broadcastSpy(): jasmine.SpyObj<EmergencyBroadcastService> {
+    return TestBed.inject(EmergencyBroadcastService) as jasmine.SpyObj<EmergencyBroadcastService>;
+  }
+
+  it('opens the emergency-broadcast socket for staff once the session is resolved', () => {
+    const fixture = build(['ROLE_DOCTOR'], 'ROLE_DOCTOR');
+    TestBed.inject(RoleContextService).markSessionResolved();
+    fixture.detectChanges();
+    expect(broadcastSpy().connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('never opens it for a provider user (the server refuses them the topic)', () => {
+    const fixture = build(['ROLE_PHARMACIST'], 'ROLE_PHARMACIST', true);
+    TestBed.inject(RoleContextService).markSessionResolved();
+    fixture.detectChanges();
+    expect(broadcastSpy().connect).not.toHaveBeenCalled();
+  });
+
+  it('after a hard refresh: no socket before the bootstrap answers, then one for staff, none for a provider', () => {
+    // Staff: the flag is only its initial false until the bootstrap lands.
+    const staff = build(['ROLE_DOCTOR'], 'ROLE_DOCTOR');
+    staff.detectChanges();
+    expect(broadcastSpy().connect).not.toHaveBeenCalled();
+    const roleContext = TestBed.inject(RoleContextService);
+    roleContext.setProviderUser(false);
+    roleContext.markSessionResolved();
+    staff.detectChanges();
+    roleContext.markSessionResolved();
+    staff.detectChanges();
+    expect(broadcastSpy().connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('after a hard refresh, a provider user never gets the socket, before or after the bootstrap', () => {
+    const provider = build(['ROLE_PHARMACIST'], 'ROLE_PHARMACIST');
+    provider.detectChanges();
+    const roleContext = TestBed.inject(RoleContextService);
+    roleContext.setProviderUser(true);
+    roleContext.markSessionResolved();
+    provider.detectChanges();
+    expect(broadcastSpy().connect).not.toHaveBeenCalled();
+  });
 
   it('drops all three from the side-nav for staff', () => {
     const fixture = build(['ROLE_DOCTOR'], 'ROLE_DOCTOR');

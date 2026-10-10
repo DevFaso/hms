@@ -36,6 +36,7 @@ import com.example.hms.model.Role;
 import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.provider.ClinicalHospitals;
 import com.example.hms.service.StaffAvailabilityService;
 import com.example.hms.repository.AppointmentRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
@@ -83,6 +84,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -152,6 +154,10 @@ class PatientPortalServiceImplPhase2Test {
 
     @BeforeEach
     void setUp() {
+        // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
+        lenient().when(hospitalRepository.findClinicalById(any()))
+            .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
+                .filter(ClinicalHospitals::isClinical));
         userId = UUID.randomUUID();
         patientId = UUID.randomUUID();
 

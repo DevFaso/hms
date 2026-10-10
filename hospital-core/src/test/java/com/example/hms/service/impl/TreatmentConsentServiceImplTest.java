@@ -82,7 +82,7 @@ class TreatmentConsentServiceImplTest {
         patient.setHospitalRegistrations(Set.of(registration));
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(consentRepository.save(any(PatientTreatmentConsent.class))).thenAnswer(i -> i.getArgument(0));
         when(staffRepository.findByUserIdAndHospitalId(any(), any())).thenReturn(Optional.empty());
         when(userRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
@@ -134,7 +134,7 @@ class TreatmentConsentServiceImplTest {
         UUID foreignHospitalId = UUID.randomUUID();
         Hospital foreign = new Hospital();
         foreign.setId(foreignHospitalId);
-        when(hospitalRepository.findById(foreignHospitalId)).thenReturn(Optional.of(foreign));
+        when(hospitalRepository.findClinicalById(foreignHospitalId)).thenReturn(Optional.of(foreign));
         TreatmentConsentRequestDTO request = electronic();
 
         assertThatThrownBy(() -> service.record(patientId, foreignHospitalId, null,

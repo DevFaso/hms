@@ -95,7 +95,7 @@ public class NursingNoteServiceImpl implements NursingNoteService {
 
         ensurePatientRegistration(patient.getId(), hospitalId, effectiveLocale);
 
-        Hospital hospital = hospitalRepository.findById(hospitalId)
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
 
         Staff staff = staffRepository.findByUserIdAndHospitalId(actorUserId, hospitalId).orElse(null);

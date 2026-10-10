@@ -97,7 +97,7 @@ class ProcedureOrderServiceImplTest {
         r.setPatientId(patientId); r.setHospitalId(hospitalId);
         r.setProcedureName("Appendectomy"); r.setProcedureCode("44970");
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(procedureOrderRepository.save(any())).thenAnswer(i -> { ProcedureOrder o = i.getArgument(0); o.setId(orderId); return o; });
         ProcedureOrderResponseDTO result = service.createProcedureOrder(r, staffId);
@@ -147,7 +147,7 @@ class ProcedureOrderServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(procedureOrderRepository.save(any())).thenAnswer(i -> { ProcedureOrder o = i.getArgument(0); o.setId(orderId); return o; });
         assertThat(service.createProcedureOrder(r, staffId).getHospitalId()).isEqualTo(hospitalId);
@@ -159,7 +159,7 @@ class ProcedureOrderServiceImplTest {
         UUID encounterId = UUID.randomUUID();
         r.setEncounterId(encounterId);
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         com.example.hms.model.Hospital elsewhere = new com.example.hms.model.Hospital();
         elsewhere.setId(UUID.randomUUID());
@@ -185,7 +185,7 @@ class ProcedureOrderServiceImplTest {
         com.example.hms.model.Encounter own = new com.example.hms.model.Encounter();
         own.setId(encounterId); own.setHospital(hospital); own.setPatient(patient);
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(own));
         when(procedureOrderRepository.save(any())).thenAnswer(i -> { ProcedureOrder o = i.getArgument(0); o.setId(orderId); return o; });
@@ -201,7 +201,7 @@ class ProcedureOrderServiceImplTest {
         r.setPatientId(patientId); r.setHospitalId(hospitalId); r.setProcedureName("Appendectomy");
         UUID callerUserId = UUID.randomUUID();
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(callerUserId)).thenReturn(Optional.empty());
         when(staffRepository.findByUserIdAndHospitalId(callerUserId, hospitalId)).thenReturn(Optional.of(staff));
         when(procedureOrderRepository.save(any())).thenAnswer(i -> { ProcedureOrder o = i.getArgument(0); o.setId(orderId); return o; });

@@ -82,7 +82,7 @@ class SocialHistoryServiceImplTest {
         SocialHistoryResponseDTO responseDTO = new SocialHistoryResponseDTO();
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(socialHistoryRepository.findByPatient_IdAndActiveTrue(patientId)).thenReturn(List.of());
         when(socialHistoryRepository.countByPatient_Id(patientId)).thenReturn(0L);
@@ -234,7 +234,7 @@ class SocialHistoryServiceImplTest {
         newEntity.setId(historyId);
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(socialHistoryRepository.findByPatient_IdAndActiveTrue(patientId)).thenReturn(List.of(previousHistory));
         when(socialHistoryRepository.countByPatient_Id(patientId)).thenReturn(1L);
         when(socialHistoryMapper.toEntity(any(), eq(patient), eq(hospital), isNull())).thenReturn(newEntity);

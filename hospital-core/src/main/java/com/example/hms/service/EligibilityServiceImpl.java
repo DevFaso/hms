@@ -89,7 +89,7 @@ public class EligibilityServiceImpl implements EligibilityService {
         }
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
         PatientInsurance insurance = null;
         if (request.getPatientInsuranceId() != null) {

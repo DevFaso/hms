@@ -1,5 +1,6 @@
 package com.example.hms.security;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.security.auth.TenantRoleAssignment;
 import com.example.hms.security.auth.TenantRoleAssignmentAccessor;
 import com.example.hms.security.context.HospitalContext;
@@ -110,7 +111,7 @@ class JwtTokenProviderHospitalContextTest {
         when(accessor.findAssignmentsForUser(USER_ID)).thenReturn(List.of(nurseAt(HOSPITAL_A, ORG_A)));
         String token = provider.generateAccessToken(new TokenUserDescriptor(USER_ID, USERNAME, List.of("ROLE_NURSE")));
 
-        TenantRoleAssignment revoked = new TenantRoleAssignment(HOSPITAL_A, ORG_A, "ROLE_NURSE", "Nurse", false);
+        TenantRoleAssignment revoked = new TenantRoleAssignment(HOSPITAL_A, ORG_A, "ROLE_NURSE", "Nurse", false, FacilityType.HOSPITAL);
         when(accessor.findAssignmentsForUser(USER_ID)).thenReturn(List.of(revoked));
 
         HospitalContext ctx = provider.extractHospitalContext(token, nurseAuthentication());
@@ -122,7 +123,7 @@ class JwtTokenProviderHospitalContextTest {
     @Test
     @DisplayName("a super-admin demoted after login is not one on the next request, whatever the token asserts (Q4 B)")
     void demotedSuperAdminIsNotASuperAdmin() {
-        TenantRoleAssignment superAdmin = new TenantRoleAssignment(null, null, "ROLE_SUPER_ADMIN", "Super", true);
+        TenantRoleAssignment superAdmin = new TenantRoleAssignment(null, null, "ROLE_SUPER_ADMIN", "Super", true, null);
         when(accessor.findAssignmentsForUser(USER_ID)).thenReturn(List.of(superAdmin, nurseAt(HOSPITAL_A, ORG_A)));
         String token = provider.generateAccessToken(
             new TokenUserDescriptor(USER_ID, USERNAME, List.of("ROLE_SUPER_ADMIN", "ROLE_NURSE")));
@@ -142,7 +143,7 @@ class JwtTokenProviderHospitalContextTest {
     }
 
     private static TenantRoleAssignment nurseAt(UUID hospitalId, UUID organizationId) {
-        return new TenantRoleAssignment(hospitalId, organizationId, "ROLE_NURSE", "Nurse", true);
+        return new TenantRoleAssignment(hospitalId, organizationId, "ROLE_NURSE", "Nurse", true, FacilityType.HOSPITAL);
     }
 
     /** The shape the username/password login produces: a HospitalUserDetails principal, no Jwt token. */

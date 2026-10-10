@@ -124,7 +124,7 @@ class ProResponseServiceTest {
         plan.setId(UUID.randomUUID());
 
         lenient().when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        lenient().when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        lenient().when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         lenient().when(instrumentService.requireActive("EPDS")).thenReturn(instrument);
         lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
         lenient().when(responseRepository.saveAndFlush(any(ProResponse.class))).thenAnswer(inv -> {

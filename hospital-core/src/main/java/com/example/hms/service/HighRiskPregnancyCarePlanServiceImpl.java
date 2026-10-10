@@ -88,7 +88,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
 
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, request.getPatientId()));
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         ensurePatientBelongsToHospital(patient, hospital.getId());

@@ -749,7 +749,7 @@ public class UserServiceImpl implements UserService {
         // we validate it exists; otherwise the patient gets a global (null-hospital) assignment.
         if (hospitalId != null) {
             final UUID resolvedHospitalId = hospitalId;
-            hospitalRepository.findById(resolvedHospitalId)
+            hospitalRepository.findClinicalById(resolvedHospitalId)
                     .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, resolvedHospitalId));
         }
         return hospitalId;

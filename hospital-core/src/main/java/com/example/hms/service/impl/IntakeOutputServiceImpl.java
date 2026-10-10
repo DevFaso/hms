@@ -62,7 +62,7 @@ public class IntakeOutputServiceImpl implements IntakeOutputService {
         // Unscoped resolve + registration check (see PatientChartAccess); the
         // active-registration rule below still governs whether we may WRITE.
         Patient patient = patientChartAccess.require(patientId, hospitalId);
-        Hospital hospital = hospitalRepository.findById(hospitalId)
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new BusinessException("Patient is not registered at this hospital.");

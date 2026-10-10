@@ -5,6 +5,7 @@ import com.example.hms.enums.CdsAcknowledgementAction;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.CdsAcknowledgement;
+import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.cds.CdsAcknowledgementRequestDTO;
@@ -33,6 +34,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -87,6 +89,9 @@ class CdsAcknowledgementServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(authUtils.resolveHospitalScope(auth, hospitalId, false)).thenReturn(hospitalId);
         when(authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")).thenReturn(false);
+        Hospital hospital = new Hospital();
+        hospital.setId(hospitalId);
+        lenient().when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
     }
 
     @Test
@@ -129,6 +134,20 @@ class CdsAcknowledgementServiceImplTest {
         org.mockito.InOrder order = org.mockito.Mockito.inOrder(authUtils, patientRepository);
         order.verify(authUtils).resolveHospitalScope(auth, hospitalId, false);
         order.verify(patientRepository).findById(patientId);
+    }
+
+    @Test
+    @DisplayName("a provider scope is refused (not found), never saved as a hospital-less, global acknowledgement")
+    void providerScopeIsRefused() {
+        stubInScopeUser();
+        // What findClinicalById answers for a pharmacy or laboratory id.
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
+
+        CdsAcknowledgementRequestDTO request = buildRequest(CdsAcknowledgementAction.ACKNOWLEDGED, null);
+
+        assertThatThrownBy(() -> service.acknowledge(auth, request))
+                .isInstanceOf(ResourceNotFoundException.class);
+        verify(repository, never()).save(any());
     }
 
     @Test

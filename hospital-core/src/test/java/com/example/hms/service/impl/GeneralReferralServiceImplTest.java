@@ -114,8 +114,8 @@ class GeneralReferralServiceImplTest {
         Department sourceDept = buildDepartment(sourceDepartmentId, "Emergency");
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(hospitalRepository.findById(receivingHospitalId)).thenReturn(Optional.of(receivingHospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(receivingHospitalId)).thenReturn(Optional.of(receivingHospital));
         when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(referringProvider));
         when(staffRepository.findById(receivingProviderId)).thenReturn(Optional.of(receivingProvider));
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
@@ -173,7 +173,7 @@ class GeneralReferralServiceImplTest {
         request.setReferralReason("Cross-hospital referral");
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(buildPatient(patientId, "Cross", "Hospital")));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(buildHospital(hospitalId, "Hospital A")));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(buildHospital(hospitalId, "Hospital A")));
         when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(buildStaff(referringProviderId, "Dr. Cross")));
         when(referralRepository.save(any(GeneralReferral.class))).thenAnswer(invocation -> {
             GeneralReferral ref = invocation.getArgument(0);
@@ -207,7 +207,7 @@ class GeneralReferralServiceImplTest {
         // receivingHospitalId and sourceDepartmentId deliberately omitted
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(buildPatient(patientId, "Bob", "Jones")));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(buildHospital(hospitalId, "Main Hospital")));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(buildHospital(hospitalId, "Main Hospital")));
         when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(buildStaff(referringProviderId, "Dr. Provider")));
         when(referralRepository.save(any(GeneralReferral.class))).thenAnswer(invocation -> {
             GeneralReferral ref = invocation.getArgument(0);

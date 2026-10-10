@@ -78,7 +78,7 @@ public class AdtIntakeProviderConfigServiceImpl
     }
 
     private Hospital loadHospital(UUID hospitalId) {
-        return hospitalRepository.findById(hospitalId)
+        return hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND, hospitalId));
     }
 

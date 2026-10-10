@@ -1,5 +1,6 @@
 package com.example.hms.security.context;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.security.tenant.ActingScope;
 import lombok.Builder;
 import lombok.Getter;
@@ -99,6 +100,34 @@ public class HospitalContext {
      */
     @Builder.Default
     private final Map<UUID, UUID> hospitalOrganizations = Collections.emptyMap();
+
+    /**
+     * The provider facility types (PHARMACY, LABORATORY; never HOSPITAL) among
+     * the caller's live active assignments, from the same read as the
+     * permitted set. Non-empty means the caller is confined to the provider
+     * allow-list, unless a verified super-admin (provider plan section 3.3).
+     */
+    @Builder.Default
+    private final Set<FacilityType> providerFacilityTypes = Collections.emptySet();
+
+    /**
+     * The facility type of each hospital in {@link #permittedHospitalIds},
+     * from the same assignment read: a decision about the acting hospital's
+     * kind (a provider facility reads no chart, AC-9) costs no lookup for
+     * one of the caller's own. A facility missing from it (a context built
+     * by hand, a super-admin or anyone naming another facility) is looked up.
+     */
+    @Builder.Default
+    private final Map<UUID, FacilityType> hospitalFacilityTypes = Collections.emptyMap();
+
+    /**
+     * The hospitals where the caller holds a live active assignment in a role
+     * other than PATIENT: where they work, not where they are treated. A
+     * hospital-bound PATIENT row puts its hospital in {@link #permittedHospitalIds}
+     * but not here.
+     */
+    @Builder.Default
+    private final Set<UUID> staffHospitalIds = Collections.emptySet();
 
     /**
      * This context acting at {@code hospitalId}, named explicitly: the active

@@ -1,5 +1,6 @@
 package com.example.hms.security.auth;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.model.Organization;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -35,8 +36,12 @@ public class JpaTenantRoleAssignmentAccessor implements TenantRoleAssignmentAcce
     private TenantRoleAssignment toView(UserRoleHospitalAssignment assignment) {
         UUID hospitalId = null;
         UUID organizationId = null;
+        FacilityType facilityType = null;
         if (assignment.getHospital() != null) {
             hospitalId = assignment.getHospital().getId();
+            // The raw type (V180: NOT NULL, default HOSPITAL): a row without one is
+            // refused by TenantRoleAssignment instead of read as "not a provider".
+            facilityType = assignment.getHospital().getFacilityType();
             Organization org = assignment.getHospital().getOrganization();
             if (org != null) {
                 organizationId = org.getId();
@@ -51,7 +56,8 @@ public class JpaTenantRoleAssignmentAccessor implements TenantRoleAssignmentAcce
             organizationId,
             normalize(roleCode),
             normalize(roleName),
-            Boolean.TRUE.equals(assignment.getActive())
+            Boolean.TRUE.equals(assignment.getActive()),
+            facilityType
         );
     }
 

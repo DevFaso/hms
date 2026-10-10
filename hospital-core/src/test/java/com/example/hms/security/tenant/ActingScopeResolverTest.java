@@ -1,6 +1,7 @@
 package com.example.hms.security.tenant;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.enums.FacilityType;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.HospitalScopeRefusedException;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -95,15 +96,15 @@ class ActingScopeResolverTest {
     }
 
     private static TenantRoleAssignment at(UUID hospital, String role) {
-        return new TenantRoleAssignment(hospital, ORG, role, role, true);
+        return new TenantRoleAssignment(hospital, ORG, role, role, true, FacilityType.HOSPITAL);
     }
 
     private static TenantRoleAssignment revokedAt(UUID hospital, String role) {
-        return new TenantRoleAssignment(hospital, ORG, role, role, false);
+        return new TenantRoleAssignment(hospital, ORG, role, role, false, FacilityType.HOSPITAL);
     }
 
     private static TenantRoleAssignment superAdmin() {
-        return new TenantRoleAssignment(null, null, "ROLE_SUPER_ADMIN", "ROLE_SUPER_ADMIN", true);
+        return new TenantRoleAssignment(null, null, "ROLE_SUPER_ADMIN", "ROLE_SUPER_ADMIN", true, null);
     }
 
     @Nested
@@ -111,7 +112,7 @@ class ActingScopeResolverTest {
     class PatientOwnership {
 
         private TenantRoleAssignment patientAt(UUID hospital) {
-            return new TenantRoleAssignment(hospital, ORG, "ROLE_PATIENT", "ROLE_PATIENT", true);
+            return new TenantRoleAssignment(hospital, ORG, "ROLE_PATIENT", "ROLE_PATIENT", true, FacilityType.HOSPITAL);
         }
 
         @Test
@@ -201,7 +202,7 @@ class ActingScopeResolverTest {
         private final UUID orgB = UUID.randomUUID();
 
         private TenantRoleAssignment in(UUID organization, UUID hospital) {
-            return new TenantRoleAssignment(hospital, organization, "ROLE_DOCTOR", "ROLE_DOCTOR", true);
+            return new TenantRoleAssignment(hospital, organization, "ROLE_DOCTOR", "ROLE_DOCTOR", true, FacilityType.HOSPITAL);
         }
 
         @Test
@@ -280,7 +281,7 @@ class ActingScopeResolverTest {
         @Test
         @DisplayName("(e) patient: bounded by ownership, not by a hospital (Q1); naming one they do not hold is refused NOT_PERMITTED")
         void e() {
-            TenantRoleAssignment patient = new TenantRoleAssignment(null, null, "ROLE_PATIENT", "ROLE_PATIENT", true);
+            TenantRoleAssignment patient = new TenantRoleAssignment(null, null, "ROLE_PATIENT", "ROLE_PATIENT", true, null);
             assertThat(produce(null, patient)).isEqualTo(new ActingScope.PatientOwned(USER));
             assertThat(produce(A.toString(), patient))
                 .isEqualTo(new ActingScope.Refused(ActingScope.Reason.NOT_PERMITTED));
@@ -314,7 +315,7 @@ class ActingScopeResolverTest {
         @Test
         @DisplayName("a demoted super-admin (the assignment deactivated) loses global view on the next request")
         void demotedSuperAdmin() {
-            TenantRoleAssignment demoted = new TenantRoleAssignment(null, null, "ROLE_SUPER_ADMIN", "ROLE_SUPER_ADMIN", false);
+            TenantRoleAssignment demoted = new TenantRoleAssignment(null, null, "ROLE_SUPER_ADMIN", "ROLE_SUPER_ADMIN", false, null);
             assertThat(produce(null, demoted, at(C, "ROLE_DOCTOR")))
                 .isEqualTo(new ActingScope.Pinned(C, ActingScope.Source.SOLE_ASSIGNMENT));
             assertThat(HospitalContextHolder.getContextOrEmpty().isSuperAdmin()).isFalse();

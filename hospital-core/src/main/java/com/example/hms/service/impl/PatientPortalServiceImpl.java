@@ -480,7 +480,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // Verify patient is registered at this hospital
         requireHospitalRegistration(patientId, dto.getHospitalId());
 
-        Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(dto.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalId()));
 
         Department department = departmentRepository.findById(dto.getDepartmentId())

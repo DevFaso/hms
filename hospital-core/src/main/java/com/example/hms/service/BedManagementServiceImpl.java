@@ -68,7 +68,7 @@ public class BedManagementServiceImpl implements BedManagementService {
     @Transactional
     public WardResponseDTO createWard(WardRequestDTO request) {
         UUID hospitalId = requireWriteScope();
-        Hospital hospital = hospitalRepository.findById(hospitalId)
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
 
         String code = request.getCode().trim();

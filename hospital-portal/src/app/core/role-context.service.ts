@@ -48,6 +48,38 @@ export class RoleContextService {
 
   readonly activeHospitalIdSignal = computed(() => this._activeHospitalId());
 
+  private readonly _providerUser = signal<boolean>(false);
+
+  /**
+   * The caller is confined to a provider facility (pharmacy or laboratory),
+   * as the session bootstrap states it: what such a user may not reach (the
+   * emergency-broadcast socket) is not attempted.
+   */
+  readonly providerUser = computed(() => this._providerUser());
+
+  setProviderUser(providerUser: boolean): void {
+    this._providerUser.set(providerUser);
+  }
+
+  private readonly _sessionResolved = signal<boolean>(false);
+
+  /**
+   * The session bootstrap has been applied on this page (or, when the server
+   * could not be asked, the stored profile stands in): until then
+   * {@link providerUser} is only its initial false, not an answer.
+   */
+  readonly sessionResolved = computed(() => this._sessionResolved());
+
+  markSessionResolved(): void {
+    this._sessionResolved.set(true);
+  }
+
+  /** Sign-out: the next user starts unresolved and unconfined, never with the last user's flags. */
+  clearSession(): void {
+    this._providerUser.set(false);
+    this._sessionResolved.set(false);
+  }
+
   /** True when the current user holds ROLE_SUPER_ADMIN. */
   readonly isSuperAdmin = computed(() => this._activeRoles().includes('ROLE_SUPER_ADMIN'));
 

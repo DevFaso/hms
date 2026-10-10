@@ -106,7 +106,7 @@ class ObgynReferralServiceImplTest {
         req.setReferralReason("Routine checkup");
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findByUsername("midwife1")).thenReturn(Optional.of(user));
         when(referralRepository.save(any())).thenAnswer(inv -> { ObgynReferral r = inv.getArgument(0); r.setId(referralId); return r; });
         when(referralMapper.toResponseDTO(any())).thenReturn(ObgynReferralResponseDTO.builder().id(referralId).build());
@@ -131,7 +131,7 @@ class ObgynReferralServiceImplTest {
         req.setAttachments(null);
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findByUsername("midwife1")).thenReturn(Optional.of(user));
 
         assertThatThrownBy(() -> service.createReferral(req, "midwife1"))
@@ -332,7 +332,7 @@ class ObgynReferralServiceImplTest {
         req.setReferralReason("Routine checkup");
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findByUsername("midwife1")).thenReturn(Optional.of(user));
         lenient().when(referralRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         // Jackson 3 throws its unchecked JacksonException; the snapshot must not be persisted half-built.

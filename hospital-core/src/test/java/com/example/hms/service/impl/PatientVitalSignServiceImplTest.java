@@ -213,7 +213,7 @@ class PatientVitalSignServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
             .thenReturn(Optional.empty());
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
         UUID randomId = UUID.randomUUID();
         assertThatExceptionOfType(ResourceNotFoundException.class)
@@ -230,7 +230,7 @@ class PatientVitalSignServiceImplTest {
 
         Patient patient = minimalPatient(patientId);
         patient.setHospitalId(UUID.randomUUID());
-        when(hospitalRepository.findById(patient.getHospitalId())).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(patient.getHospitalId())).thenReturn(Optional.empty());
 
         UserRoleHospitalAssignment assignment = minimalAssignment(minimalHospital(UUID.randomUUID()), true);
         Staff staff = minimalStaff(recorderUserId, assignment.getHospital(), assignment);

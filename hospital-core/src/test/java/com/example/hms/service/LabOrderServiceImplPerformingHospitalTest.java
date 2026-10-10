@@ -28,6 +28,7 @@ import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.provider.ClinicalHospitals;
 import com.example.hms.service.lab.LabOrderRoutingNotifier;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
@@ -98,6 +99,10 @@ class LabOrderServiceImplPerformingHospitalTest {
 
     @BeforeEach
     void setUp() {
+        // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
+        lenient().when(hospitalRepository.findClinicalById(any()))
+            .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
+                .filter(ClinicalHospitals::isClinical));
         ordering = hospital("Ordering Hospital", "ORD");
         performing = hospital("Central Laboratory", "LAB");
         third = hospital("Unrelated Clinic", "THR");

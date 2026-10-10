@@ -45,7 +45,7 @@ public class VisitTypeServiceImpl implements VisitTypeService {
         UUID hospitalId = requireHospital();
         rejectDuplicateCode(hospitalId, request.getCode(), null);
 
-        Hospital hospital = hospitalRepository.findById(hospitalId)
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
 
         VisitType entity = VisitType.builder()

@@ -78,7 +78,7 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_WITH_ID, request.getPatientId()));
 
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_WITH_ID, request.getHospitalId()));
 
         User midwife = resolveUserByUsername(username);

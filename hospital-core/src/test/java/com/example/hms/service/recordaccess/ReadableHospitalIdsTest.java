@@ -1,5 +1,6 @@
 package com.example.hms.service.recordaccess;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.enums.RecordAccessPosture;
 import com.example.hms.enums.TenantIsolationMode;
 import com.example.hms.enums.TreatmentRelationshipKind;
@@ -151,6 +152,15 @@ class ReadableHospitalIdsTest {
     @DisplayName("a SCHEMA-isolated source is never readable, whatever its posture says")
     void schemaIsolatedSourceExcluded() {
         other.setIsolationMode(TenantIsolationMode.SCHEMA);
+
+        assertThat(policy.readableHospitalIds(actor, patientId, actingId))
+            .containsExactly(actingId);
+    }
+
+    @Test
+    @DisplayName("a registration at a provider facility (legacy or planted) adds nothing, whatever its posture says")
+    void providerFacilityRegistrationExcluded() {
+        other.setFacilityType(FacilityType.LABORATORY);
 
         assertThat(policy.readableHospitalIds(actor, patientId, actingId))
             .containsExactly(actingId);

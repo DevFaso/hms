@@ -57,7 +57,7 @@ public class Dhis2ConfigServiceImpl implements Dhis2ConfigService {
     @Override
     public Dhis2FacilityConfigResponseDTO upsertFacilityConfig(UUID hospitalId,
                                                                Dhis2FacilityConfigRequestDTO request) {
-        final Hospital hospital = hospitalRepository.findById(hospitalId)
+        final Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
         final Dhis2FacilityConfig saved = facilityConfigRepository.findByHospital_Id(hospitalId)
@@ -83,7 +83,7 @@ public class Dhis2ConfigServiceImpl implements Dhis2ConfigService {
     @Override
     public Dhis2DataElementMappingResponseDTO createMapping(UUID hospitalId,
                                                             Dhis2DataElementMappingRequestDTO request) {
-        final Hospital hospital = hospitalRepository.findById(hospitalId)
+        final Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
         final Dhis2DataElementMapping saved = mappingRepository.save(
             mappingMapper.toEntity(request, hospital));
@@ -94,7 +94,7 @@ public class Dhis2ConfigServiceImpl implements Dhis2ConfigService {
     public Dhis2DataElementMappingResponseDTO updateMapping(UUID mappingId,
                                                             UUID hospitalId,
                                                             Dhis2DataElementMappingRequestDTO request) {
-        final Hospital hospital = hospitalRepository.findById(hospitalId)
+        final Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
         final Dhis2DataElementMapping existing = mappingRepository.findById(mappingId)
             .orElseThrow(() -> new ResourceNotFoundException("dhis2.mapping.notFound", mappingId));

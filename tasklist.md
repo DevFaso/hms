@@ -4733,6 +4733,54 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   plan before work starts
   (`docs/plan/external-provider-organisations-plan.md`, §10.1). Open.
 
+- **External providers: `ProviderCallerResolver` derives the live context a second time** (the STOMP interceptor and the confinement filter's fallback), beside `ActingScopeResolver.liveContext` and `KeycloakHospitalContextResolver`; fold it into the one resolver (found in #835's round-7 review). Open.
+
+- **External providers: a confined request looks its handler up twice** (`ProviderConfinementPolicy.allows`, then the DispatcherServlet); carry the first lookup's result instead (found in #835's round-7 review). Open.
+
+- **External providers: `RecordAccessPolicyImpl.readableHospitalIds` re-reads the acting hospital** (`findById` in `actsAtProvider`, `evaluate` and the per-registration loop) within one request; read it once (found in #835's round-7 review). Open.
+
+- **External providers: `ActingScopeResolver.liveContext` walks the assignments three times** (the collect loop, `providerFacilityTypes`, `staffHospitalIds`); fold them into the one loop (found in #835's round-8 review). Open.
+
+- **External providers: `NotificationServiceImpl.isUnconfinedStaff` recomputes the live context** for a broadcast mark even when the request's holder already carries the caller's own; reuse a matching holder context (found in #835's round-9 review). Open.
+
+- **External providers: the confinement filter's fallback discards a non-confined context it computed**, and `ActingScopeResolver.ensureContext` computes it again later in the request; keep it for the request (found in #835's round-9 review). Open.
+
+- **External providers: `Pharmacy.create` and the catalog's `resolveCreateHospital` are clinical-only**, but P2-PH's provider sale path needs a dispensary and a catalog at the PHARMACY facility; revisit them in P2-PH (found in #835's round-10 review). Open.
+
+- **External providers: open STOMP subscriptions (the tracker, the broadcasts) are not re-evaluated after a revocation or a move to a provider facility** until the client reconnects; needs an outbound-channel check or a forced disconnect on assignment change. Acceptable before any provider is verified; fix before P2 (found in #835's round-10 review). Open.
+
+- **External providers: the clinical-only rule lives at ~70 `findClinicalById` call sites**; a repository-level filter (a Hibernate `@Filter`, or a clinical `findById` default with an explicit any-type finder) would hold it in one place (found in #835's round-11 review). Open.
+
+- **External providers: the session bootstrap builds a whole live context for one boolean** (`providerUser`); compute the provider types from the assignments it already holds (found in #835's round-11 review). Open.
+
+- **External providers: before verifying the first provider on prod** (from #835's
+  round-13 review; none can occur while no provider is verified). Open:
+  - The portal's emergency-broadcast client ignores the server's
+    `access-denied` / `unavailable` verdict and resets its reconnect counter on
+    every connect, so a provider user it connects anyway (bootstrap failed, so
+    `providerUser` defaulted to false) reconnects every 5 s.
+  - The shell's broadcast gate runs once: a later bootstrap that reports
+    `providerUser=true` (impersonating a lab or pharmacy user, a re-bootstrap)
+    does not close an open socket.
+  - During a DB outage the STOMP broadcast fallback lets the ws-ticket's roles
+    vouch with no CONNECT-time window, so a user who became a provider after
+    the handshake keeps the broadcast topics until the DB is back.
+- **External providers: one place for "resolve the caller, DB failure = retryable"**:
+  the classification is hand-written in `NotificationServiceImpl`,
+  `ProviderFacilityConfinementFilter.fallbackContext` and
+  `WebSocketSubscriptionInterceptor.resolve`; move it into `ProviderCallerResolver`
+  (from #835's round-13 review). Open.
+- **External providers: clinical list queries load whole entities** where ids or an
+  active filter would do (`findAllHospitals` in the appointment super-admin view and
+  platform analytics); add an id projection and an active clinical finder (from
+  #835's round-13 review). Open.
+- **External providers: `RecordAccessDenialReason.PROVIDER_FACILITY` says it is evaluated
+  first**, but an inactive pharmacy/lab answers `HOSPITAL_UNKNOWN`; fix the doc or the
+  order (from #835's round-13 review). Open.
+- **CDS acknowledgement with an unknown hospital id now answers 404** (was: saved as a
+  global acknowledgement). Intended since #835; confirm no client relies on the old
+  behaviour. Open.
+
 ## Open clinical questions — kept open on purpose, not forgotten
 
 These are questions only a clinician can settle. None of them blocks anything:

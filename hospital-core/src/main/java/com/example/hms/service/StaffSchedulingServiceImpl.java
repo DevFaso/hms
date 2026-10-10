@@ -644,7 +644,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
     }
 
     private Hospital findHospital(UUID hospitalId, Locale locale) {
-        return hospitalRepository.findById(hospitalId)
+        return hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> ResourceNotFoundException.inLocale(locale, "schedule.hospital.notFound"));
     }
 

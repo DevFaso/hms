@@ -123,7 +123,7 @@ class NewbornAssessmentServiceImplTest {
         recorder.setId(recorderId);
 
         lenient().when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        lenient().when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        lenient().when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         lenient().when(userRepository.findById(recorderId)).thenReturn(Optional.of(recorder));
         lenient().when(notificationService.createNotification(anyString(), anyString())).thenReturn(null);
         lenient().when(assessmentRepository.save(any(NewbornAssessment.class))).thenAnswer(invocation -> {

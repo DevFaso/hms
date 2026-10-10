@@ -212,11 +212,11 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
             return registration.getHospital();
         }
         if (requestedHospitalId != null) {
-            return hospitalRepository.findById(requestedHospitalId)
+            return hospitalRepository.findClinicalById(requestedHospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", requestedHospitalId));
         }
         if (patient.getHospitalId() != null) {
-            return hospitalRepository.findById(patient.getHospitalId()).orElse(null);
+            return hospitalRepository.findClinicalById(patient.getHospitalId()).orElse(null);
         }
         throw new BusinessException("Unable to resolve hospital context for vital sign capture.");
     }
