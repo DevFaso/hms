@@ -4522,11 +4522,21 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   organizations only (the existing page size). (c) Department platform links
   have no UI and no enable/disable endpoint, only create and delete.
 
-- **Angular 22.2 deprecates `@angular/animations` and
-  `@angular/platform-browser-dynamic` (2026-10-04).** Dependabot's group bump
-  (#801) skipped both, so they were brought to 22.2.0 by hand to keep `npm ci`
-  working; replacing them (`animate.enter` / `animate.leave`, and
-  `@angular/platform-browser`) is separate work.
+- **~~Angular 22.2 deprecates `@angular/animations` and
+  `@angular/platform-browser-dynamic` (2026-10-04).~~ Done (#854,
+  2026-10-10): both removed.** Dependabot's group bump skipped both, twice:
+  on #801 they were brought to 22.2.0 by hand, and on #846 they stayed at
+  22.2.0 while `@angular/core` went to 22.2.1, so `npm ci` failed with
+  ERESOLVE. Nothing referenced either one (no import in `src/`, nothing in
+  `angular.json` or the tsconfigs; `platform-browser`'s peer on animations
+  is optional), so the replacement turned out to be a removal.
+
+- **`@angular/ssr` floats on a caret range (2026-10-10).** It ships at
+  runtime (server rendering) but is `^22.2.x`, next to exact-pinned
+  framework packages, and `@angular/build` peers on it with a caret too.
+  The pair can move ahead of the pinned `@angular/core` /
+  `platform-server` in a later `npm install`. Pin it exactly with the rest,
+  or record why it floats.
 
 - **Push notifications have app code and no backend (2026-10-04).** #791
   shipped dormant push registration on both apps (FCM initialised only when
