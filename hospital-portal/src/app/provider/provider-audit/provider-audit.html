@@ -1,0 +1,87 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'PROVIDER.AUDIT.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'PROVIDER.AUDIT.SUBTITLE' | translate }}</p>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state" role="status">
+      <div class="spinner" aria-hidden="true"></div>
+      <p>{{ 'PROVIDER.COMMON.LOADING' | translate }}</p>
+    </div>
+  } @else if (notAvailable()) {
+    <div class="empty-state" data-test="not-available">
+      <span class="material-symbols-outlined empty-icon" aria-hidden="true">info</span>
+      <h2 class="state-title">{{ 'PROVIDER.COMMON.NOT_AVAILABLE_TITLE' | translate }}</h2>
+      <p>{{ 'PROVIDER.COMMON.NOT_AVAILABLE_TEXT' | translate }}</p>
+    </div>
+  } @else if (loadFailed()) {
+    <div class="empty-state" data-test="load-failed">
+      <span class="material-symbols-outlined empty-icon" aria-hidden="true">error</span>
+      <p>{{ 'PROVIDER.COMMON.LOAD_FAILED' | translate }}</p>
+      <button type="button" class="btn-secondary" (click)="load()">
+        {{ 'PROVIDER.COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (entries().length === 0) {
+    <div class="empty-state" data-test="empty">
+      <span class="material-symbols-outlined empty-icon" aria-hidden="true">history</span>
+      <p>{{ 'PROVIDER.AUDIT.EMPTY' | translate }}</p>
+    </div>
+  } @else {
+    <div class="table-wrapper">
+      <table class="data-table">
+        <caption class="sr-only">
+          {{
+            'PROVIDER.AUDIT.TITLE' | translate
+          }}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'PROVIDER.AUDIT.COL_WHEN' | translate }}</th>
+            <th scope="col">{{ 'PROVIDER.AUDIT.COL_WHO' | translate }}</th>
+            <th scope="col">{{ 'PROVIDER.AUDIT.COL_ROLE' | translate }}</th>
+            <th scope="col">{{ 'PROVIDER.AUDIT.COL_EVENT' | translate }}</th>
+            <th scope="col">{{ 'PROVIDER.AUDIT.COL_RECORD' | translate }}</th>
+            <th scope="col">{{ 'PROVIDER.AUDIT.COL_STATUS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (entry of entries(); track entry.id) {
+            <tr data-test="audit-row">
+              <td>{{ entry.eventTimestamp | date: 'medium' }}</td>
+              <td>{{ entry.actorName || '—' }}</td>
+              <td>{{ entry.roleName ? (entry.roleName | roleLabel) : '—' }}</td>
+              <td>{{ entry.eventType | enumLabel: 'auditEventType' }}</td>
+              <td>{{ recordKey(entry.entityType) | translate }}</td>
+              <td>{{ entry.status ? (entry.status | enumLabel: 'auditStatus') : '—' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (hasPrevious() || hasNext()) {
+      <nav class="pagination-row" [attr.aria-label]="'PROVIDER.COMMON.PAGINATION' | translate">
+        <span class="pagination-info">
+          {{ 'PROVIDER.AUDIT.PAGE' | translate: { page: pageIndex() + 1 } }}
+        </span>
+        <div class="pagination-controls">
+          <button
+            type="button"
+            class="btn-secondary"
+            [disabled]="!hasPrevious()"
+            (click)="previousPage()"
+          >
+            {{ 'PROVIDER.COMMON.PREVIOUS' | translate }}
+          </button>
+          <button type="button" class="btn-secondary" [disabled]="!hasNext()" (click)="nextPage()">
+            {{ 'PROVIDER.COMMON.NEXT' | translate }}
+          </button>
+        </div>
+      </nav>
+    }
+  }
+</div>

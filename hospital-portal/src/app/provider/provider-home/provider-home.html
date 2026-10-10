@@ -1,0 +1,52 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'PROVIDER.HOME.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'PROVIDER.HOME.SUBTITLE' | translate }}</p>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state" role="status">
+      <div class="spinner" aria-hidden="true"></div>
+      <p>{{ 'PROVIDER.COMMON.LOADING' | translate }}</p>
+    </div>
+  } @else if (notAvailable()) {
+    <div class="empty-state" data-test="not-available">
+      <span class="material-symbols-outlined empty-icon" aria-hidden="true">info</span>
+      <h2 class="state-title">{{ 'PROVIDER.COMMON.NOT_AVAILABLE_TITLE' | translate }}</h2>
+      <p>{{ 'PROVIDER.COMMON.NOT_AVAILABLE_TEXT' | translate }}</p>
+    </div>
+  } @else if (loadFailed()) {
+    <div class="empty-state" data-test="load-failed">
+      <span class="material-symbols-outlined empty-icon" aria-hidden="true">error</span>
+      <p>{{ 'PROVIDER.COMMON.LOAD_FAILED' | translate }}</p>
+    </div>
+  } @else if (profile(); as p) {
+    <section class="detail-card" aria-labelledby="provider-home-facility">
+      <h2 id="provider-home-facility" class="card-title">{{ p.name || p.code }}</h2>
+      <p class="facility-line">
+        {{ p.facilityType | enumLabel: 'facilityType' }}
+        @if (p.verificationStatus) {
+          <span [class]="'status-badge ' + badgeClass(p.verificationStatus)">
+            {{ p.verificationStatus | enumLabel: 'providerVerificationStatus' }}
+          </span>
+        }
+      </p>
+      @if (p.verificationStatus !== 'VERIFIED') {
+        <p class="card-help" data-test="unverified-note">
+          {{ 'PROVIDER.HOME.UNVERIFIED' | translate }}
+        </p>
+      }
+    </section>
+
+    <div class="link-grid">
+      @for (link of links(); track link.route) {
+        <a class="link-card" [routerLink]="link.route" data-test="home-link">
+          <span class="material-symbols-outlined" aria-hidden="true">{{ link.icon }}</span>
+          <span>{{ link.translationKey | translate }}</span>
+        </a>
+      }
+    </div>
+  }
+</div>

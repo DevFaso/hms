@@ -1,0 +1,163 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'PROVIDER.PROFILE.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'PROVIDER.PROFILE.SUBTITLE' | translate }}</p>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state" role="status">
+      <div class="spinner" aria-hidden="true"></div>
+      <p>{{ 'PROVIDER.COMMON.LOADING' | translate }}</p>
+    </div>
+  } @else if (notAvailable()) {
+    <div class="empty-state" data-test="not-available">
+      <span class="material-symbols-outlined empty-icon" aria-hidden="true">info</span>
+      <h2 class="state-title">{{ 'PROVIDER.COMMON.NOT_AVAILABLE_TITLE' | translate }}</h2>
+      <p>{{ 'PROVIDER.COMMON.NOT_AVAILABLE_TEXT' | translate }}</p>
+    </div>
+  } @else if (loadFailed()) {
+    <div class="empty-state" data-test="load-failed">
+      <span class="material-symbols-outlined empty-icon" aria-hidden="true">error</span>
+      <p>{{ 'PROVIDER.COMMON.LOAD_FAILED' | translate }}</p>
+    </div>
+  } @else if (profile(); as p) {
+    <section class="detail-card" aria-labelledby="profile-contact-title">
+      <h2 id="profile-contact-title" class="card-title">
+        {{ 'PROVIDER.PROFILE.CONTACT_TITLE' | translate }}
+      </h2>
+      @if (p.editable) {
+        <div class="form-row form-row-3">
+          <div class="field">
+            <label for="profile-phone">{{ 'PROVIDER.PROFILE.PHONE' | translate }}</label>
+            <input
+              id="profile-phone"
+              type="tel"
+              required
+              maxlength="15"
+              autocomplete="off"
+              [ngModel]="phoneNumber()"
+              (ngModelChange)="phoneNumber.set($event)"
+            />
+          </div>
+          <div class="field">
+            <label for="profile-email">{{ 'PROVIDER.PROFILE.EMAIL' | translate }}</label>
+            <input
+              id="profile-email"
+              type="email"
+              maxlength="255"
+              autocomplete="off"
+              [ngModel]="email()"
+              (ngModelChange)="email.set($event)"
+            />
+          </div>
+          <div class="field">
+            <label for="profile-website">{{ 'PROVIDER.PROFILE.WEBSITE' | translate }}</label>
+            <input
+              id="profile-website"
+              type="url"
+              maxlength="255"
+              autocomplete="off"
+              placeholder="https://"
+              [ngModel]="website()"
+              (ngModelChange)="website.set($event)"
+            />
+          </div>
+        </div>
+        @if (saveError(); as error) {
+          <div class="form-error" role="alert" data-test="save-error">{{ error }}</div>
+        }
+        <div class="form-actions">
+          <button
+            type="button"
+            class="btn-primary"
+            data-test="save"
+            [disabled]="!canSave()"
+            (click)="save()"
+          >
+            @if (saving()) {
+              {{ 'PROVIDER.COMMON.SAVING' | translate }}
+            } @else {
+              {{ 'PROVIDER.PROFILE.SAVE' | translate }}
+            }
+          </button>
+        </div>
+      } @else {
+        <dl class="detail-grid" data-test="contact-readonly">
+          <div>
+            <dt>{{ 'PROVIDER.PROFILE.PHONE' | translate }}</dt>
+            <dd>{{ p.phoneNumber || '—' }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'PROVIDER.PROFILE.EMAIL' | translate }}</dt>
+            <dd>{{ p.email || '—' }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'PROVIDER.PROFILE.WEBSITE' | translate }}</dt>
+            <dd>{{ p.website || '—' }}</dd>
+          </div>
+        </dl>
+        <p class="card-help">{{ 'PROVIDER.PROFILE.READ_ONLY_HELP' | translate }}</p>
+      }
+    </section>
+
+    <section class="detail-card" aria-labelledby="profile-identity-title">
+      <h2 id="profile-identity-title" class="card-title">
+        {{ 'PROVIDER.PROFILE.IDENTITY_TITLE' | translate }}
+      </h2>
+      <p class="facility-line">
+        {{ p.code }} · {{ p.facilityType | enumLabel: 'facilityType' }}
+        @if (p.verificationStatus) {
+          <span [class]="'status-badge ' + badgeClass(p.verificationStatus)">
+            {{ p.verificationStatus | enumLabel: 'providerVerificationStatus' }}
+          </span>
+        }
+      </p>
+      @if (verified()) {
+        <dl class="detail-grid identity" data-test="identity">
+          <div>
+            <dt>{{ 'PROVIDER.EVIDENCE.LEGAL_NAME' | translate }}</dt>
+            <dd>{{ p.legalName }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'PROVIDER.EVIDENCE.TRADE_NAME' | translate }}</dt>
+            <dd>{{ p.tradeName || '—' }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'PROVIDER.EVIDENCE.ADDRESS_TITLE' | translate }}</dt>
+            <dd>
+              @if (p.address) {
+                {{ p.address }},
+              }
+              {{ p.city }}, {{ p.region }}
+            </dd>
+          </div>
+          <div>
+            <dt>{{ 'PROVIDER.EVIDENCE.COMPANY_PHONE' | translate }}</dt>
+            <dd>{{ p.companyPhone }}</dd>
+          </div>
+          <div>
+            <dt>
+              @if (p.facilityType === 'LABORATORY') {
+                {{ 'PROVIDER.EVIDENCE.AUTHORISATION_NUMBER' | translate }}
+              } @else {
+                {{ 'PROVIDER.EVIDENCE.LICENCE_NUMBER' | translate }}
+              }
+            </dt>
+            <dd>{{ p.licenceNumber }} · {{ p.licenceAuthority }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'PROVIDER.PROFILE.VERIFIED_AT' | translate }}</dt>
+            <dd>{{ p.verifiedAt | date: 'mediumDate' }}</dd>
+          </div>
+        </dl>
+        <p class="card-help">{{ 'PROVIDER.PROFILE.IDENTITY_HELP' | translate }}</p>
+      } @else {
+        <p class="card-help" data-test="identity-pending">
+          {{ 'PROVIDER.PROFILE.IDENTITY_PENDING' | translate }}
+        </p>
+      }
+    </section>
+  }
+</div>

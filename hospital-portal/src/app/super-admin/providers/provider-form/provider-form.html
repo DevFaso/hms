@@ -1,0 +1,138 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">
+        @if (resubmitting()) {
+          {{ 'PROVIDER.FORM.RESUBMIT_TITLE' | translate }}
+        } @else {
+          {{ 'PROVIDER.FORM.CREATE_TITLE' | translate }}
+        }
+      </h1>
+      <p class="page-subtitle">
+        @if (resubmitting()) {
+          {{ 'PROVIDER.FORM.RESUBMIT_SUBTITLE' | translate }}
+        } @else {
+          {{ 'PROVIDER.FORM.CREATE_SUBTITLE' | translate }}
+        }
+      </p>
+    </div>
+    <a
+      class="btn-secondary"
+      [routerLink]="
+        providerId() ? ['/super-admin/providers', providerId()] : ['/super-admin/providers']
+      "
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+      {{ 'PROVIDER.COMMON.BACK' | translate }}
+    </a>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state" role="status">
+      <div class="spinner" aria-hidden="true"></div>
+      <p>{{ 'PROVIDER.COMMON.LOADING' | translate }}</p>
+    </div>
+  } @else if (notFound()) {
+    <div class="empty-state" data-test="not-found">
+      <span class="material-symbols-outlined empty-icon" aria-hidden="true">search_off</span>
+      <h2 class="state-title">{{ 'PROVIDER.COMMON.NOT_FOUND_TITLE' | translate }}</h2>
+      <p>{{ 'PROVIDER.COMMON.NOT_FOUND_TEXT' | translate }}</p>
+    </div>
+  } @else if (loadFailed()) {
+    <div class="empty-state" data-test="load-failed">
+      <span class="material-symbols-outlined empty-icon" aria-hidden="true">error</span>
+      <p>{{ 'PROVIDER.COMMON.LOAD_FAILED' | translate }}</p>
+    </div>
+  } @else {
+    <div class="form-card provider-form-card">
+      @if (resubmitting()) {
+        @if (provider(); as p) {
+          <p class="resubmit-for">
+            <strong>{{ p.name }}</strong> · {{ p.code }} ·
+            {{ p.facilityType | enumLabel: 'facilityType' }}
+          </p>
+        }
+      } @else {
+        <fieldset class="identity-section">
+          <legend>{{ 'PROVIDER.FORM.FACILITY_TITLE' | translate }}</legend>
+          <div class="form-row form-row-3">
+            <div class="field">
+              <label for="provider-type">
+                {{ 'PROVIDER.FORM.FACILITY_TYPE' | translate }}
+                <span class="required-mark" aria-hidden="true">*</span>
+              </label>
+              <select
+                id="provider-type"
+                required
+                [ngModel]="facilityType()"
+                (ngModelChange)="facilityType.set($event)"
+              >
+                @for (type of facilityTypes; track type) {
+                  <option [value]="type">{{ type | enumLabel: 'facilityType' }}</option>
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label for="provider-code">
+                {{ 'PROVIDER.FORM.CODE' | translate }}
+                <span class="required-mark" aria-hidden="true">*</span>
+              </label>
+              <input
+                id="provider-code"
+                type="text"
+                required
+                maxlength="100"
+                [ngModel]="code()"
+                (ngModelChange)="code.set($event)"
+              />
+            </div>
+            <div class="field">
+              <label for="provider-email">{{ 'PROVIDER.FORM.EMAIL' | translate }}</label>
+              <input
+                id="provider-email"
+                type="email"
+                maxlength="255"
+                autocomplete="off"
+                [ngModel]="email()"
+                (ngModelChange)="email.set($event)"
+              />
+            </div>
+          </div>
+        </fieldset>
+      }
+
+      <app-provider-evidence-form
+        idPrefix="provider-form"
+        [facilityType]="facilityType()"
+        [(evidence)]="evidence"
+      />
+
+      <p class="required-legend">{{ 'PROVIDER.FORM.REQUIRED_LEGEND' | translate }}</p>
+
+      @if (errorKey(); as key) {
+        <div class="form-error" role="alert" data-test="form-error">
+          <span class="material-symbols-outlined" aria-hidden="true">error</span>
+          <span>{{ errorText() ?? (key | translate) }}</span>
+        </div>
+      }
+
+      <div class="form-actions">
+        <button
+          type="button"
+          class="btn-primary"
+          data-test="submit"
+          [disabled]="saving()"
+          (click)="submit()"
+        >
+          @if (saving()) {
+            {{ 'PROVIDER.COMMON.SAVING' | translate }}
+          } @else if (resubmitting()) {
+            {{ 'PROVIDER.FORM.RESUBMIT_SUBMIT' | translate }}
+          } @else {
+            {{ 'PROVIDER.FORM.CREATE_SUBMIT' | translate }}
+          }
+        </button>
+      </div>
+    </div>
+  }
+</div>

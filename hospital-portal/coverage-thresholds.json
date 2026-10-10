@@ -8,6 +8,8 @@
     "src/app/consultations/": { "statements": 75, "branches": 57, "functions": 64, "lines": 76 },
     "src/app/encounters/": { "statements": 47, "branches": 26, "functions": 44, "lines": 48 },
     "src/app/admissions/": { "statements": 90, "branches": 50, "functions": 89, "lines": 90 },
-    "src/app/auth/": { "statements": 60, "branches": 39, "functions": 58, "lines": 66 }
+    "src/app/auth/": { "statements": 60, "branches": 39, "functions": 58, "lines": 66 },
+    "src/app/provider/": { "statements": 95, "branches": 79, "functions": 97, "lines": 95 },
+    "src/app/super-admin/providers/": { "statements": 95, "branches": 82, "functions": 97, "lines": 96 }
   }
 }
