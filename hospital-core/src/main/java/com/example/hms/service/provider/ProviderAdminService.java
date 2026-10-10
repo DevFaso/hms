@@ -47,7 +47,9 @@ public interface ProviderAdminService {
      * PROVIDER_ADMIN at the facility: send the member a new invitation code
      * for each assignment here that is not active. The assignment comes on
      * when its holder enters the code, as everywhere else on the platform;
-     * only a super-admin switches an assignment on by hand.
+     * only a super-admin switches an assignment on by hand. A disabled account
+     * is out of reach (entering the code would switch it back on): only a
+     * super-admin re-enables an account.
      */
     Optional<ProviderStaffMemberDTO> activateStaff(String userId);
 

@@ -65,6 +65,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -586,6 +587,27 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     }
 
     /**
+     * {@link #findChangeable} for several rows, with the caller's scope read
+     * once and each holder's shield decided once. Every row is checked before
+     * the caller changes any: one out of scope (or missing) answers exactly as
+     * a missing id.
+     */
+    private List<UserRoleHospitalAssignment> findAllChangeable(Collection<UUID> ids) {
+        UserAccountAccess.AssignmentScope scope = accountAccess.assignmentScope();
+        Map<UUID, Boolean> shieldedByHolder = new HashMap<>();
+        // toList() is terminal: every row is checked (or the first refusal
+        // thrown) before the caller changes anything.
+        return new LinkedHashSet<>(ids).stream()
+            .map(id -> assignmentRepository.findById(id)
+                .filter(scope::mayChange)
+                .filter(found -> !shieldedByHolder.computeIfAbsent(
+                    found.getUser() == null ? null : found.getUser().getId(),
+                    holderId -> holderShielded(scope, found)))
+                .orElseThrow(() -> assignmentNotFound(id)))
+            .toList();
+    }
+
+    /**
      * A super-admin's account is out of a hospital admin's reach row by row
      * too, not only through {@code DELETE /user}: any trace of the role,
      * active or not, by assignment or global role ({@link UserAccountAccess.AssignmentScope#shields}).
@@ -757,8 +779,18 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public UserRoleHospitalAssignmentResponseDTO regenerateAssignmentCode(UUID assignmentId, boolean resendNotifications) {
-        UserRoleHospitalAssignment assignment = findChangeable(assignmentId);
+        return toDtoWithLinks(reissueCode(findChangeable(assignmentId), resendNotifications));
+    }
 
+    @Override
+    public void regenerateAssignmentCodes(Collection<UUID> ids, boolean resendNotifications) {
+        for (UserRoleHospitalAssignment assignment : findAllChangeable(ids)) {
+            reissueCode(assignment, resendNotifications);
+        }
+    }
+
+    /** A new assignment code and confirmation code for a row already found changeable. */
+    private UserRoleHospitalAssignment reissueCode(UserRoleHospitalAssignment assignment, boolean resendNotifications) {
         assignment.setAssignmentCode(generateAssignCode(assignment.getUser(), assignment.getHospital()));
         assignment.setConfirmationCode(generateConfirmationCode());
         assignment.setConfirmationSentAt(LocalDateTime.now());
@@ -769,8 +801,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             eventPublisher.publishEvent(new AssignmentCreatedEvent(saved.getId()));
         }
         recordAssignmentAudit(saved);
-        log.info("🔁 Regenerated assignment code for assignment '{}'", assignmentId);
-        return toDtoWithLinks(saved);
+        log.info("🔁 Regenerated assignment code for assignment '{}'", saved.getId());
+        return saved;
     }
 
     @Override
@@ -1079,6 +1111,17 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
         assignmentRepository.deleteById(id);
         log.info("🗑️ Deleted assignment ID '{}'", id);
+    }
+
+    @Override
+    public void deactivateAssignments(Collection<UUID> ids) {
+        List<UserRoleHospitalAssignment> retired = findAllChangeable(ids).stream()
+            .filter(UserRoleHospitalAssignmentServiceImpl::retire)
+            .toList();
+        if (!retired.isEmpty()) {
+            assignmentRepository.saveAll(retired);
+        }
+        log.info("🔒 Deactivated {} of {} assignment(s) (soft — history preserved).", retired.size(), ids.size());
     }
 
     @Override

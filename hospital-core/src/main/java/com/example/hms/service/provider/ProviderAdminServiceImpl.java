@@ -40,7 +40,7 @@ import java.util.UUID;
  * The provider admin pages (provider plan US-2, AC-6, §6.5).
  *
  * <p>The staff changes go through the assignment service's own
- * {@code deactivateAssignment} and {@code regenerateAssignmentCode}, so they
+ * {@code deactivateAssignments} and {@code regenerateAssignmentCodes}, so they
  * carry exactly the rules a hospital admin's changes carry (the row must be
  * one the caller may change: at a facility they administer, never an admin
  * role's row, never a super-admin's account; the invitation revoked with the
@@ -100,17 +100,14 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
     @Override
     @Transactional(readOnly = true)
     public Optional<List<ProviderStaffMemberDTO>> listStaff() {
-        return seatResolver.currentAdmin().map(seat -> {
-            List<ProviderStaffMemberDTO> members = new ArrayList<>();
-            for (List<UserRoleHospitalAssignment> rows : staffRowsByUser(seat.facility().getId()).values()) {
-                members.add(toMember(rows, seat));
-            }
-            members.sort(Comparator
+        return seatResolver.currentAdmin().map(seat -> staffRowsByUser(seat.facility().getId()).values().stream()
+            .map(rows -> toMember(rows, seat))
+            .flatMap(Optional::stream)
+            .sorted(Comparator
                 .comparing((ProviderStaffMemberDTO m) -> lower(m.getLastName()))
                 .thenComparing(m -> lower(m.getFirstName()))
-                .thenComparing(m -> lower(m.getUsername())));
-            return members;
-        });
+                .thenComparing(m -> lower(m.getUsername())))
+            .toList());
     }
 
     @Override
@@ -125,12 +122,12 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
         if (rows.isEmpty()) {
             return Optional.empty();
         }
-        for (UserRoleHospitalAssignment row : rows.get()) {
-            assignmentService.deactivateAssignment(row.getId());
-        }
+        // One scope read for the member's rows, all checked before any changes.
+        assignmentService.deactivateAssignments(idsOf(rows.get()));
         log.info("[PROVIDER-ADMIN] Staff {} deactivated at facility {} by user {}",
             memberId, seat.facility().getId(), seat.userId());
-        return Optional.of(memberAfterChange(seat, memberId));
+        // The rows just changed (the same managed instances), never a second read.
+        return toMember(rows.get(), seat);
     }
 
     @Override
@@ -142,19 +139,22 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
         ProviderSeat seat = found.get();
         UUID memberId = parseId(userId);
         Optional<List<UserRoleHospitalAssignment>> rows = manageableRows(seat, memberId);
-        if (rows.isEmpty()) {
+        // A disabled account stays disabled: entering the new code would
+        // switch it back on (and clear its lockout), and only a super-admin
+        // re-enables an account.
+        if (rows.isEmpty() || !rows.get().get(0).getUser().isActive()) {
             return Optional.empty();
         }
-        int reinvited = 0;
-        for (UserRoleHospitalAssignment row : rows.get()) {
-            if (!Boolean.TRUE.equals(row.getActive())) {
-                assignmentService.regenerateAssignmentCode(row.getId(), true);
-                reinvited++;
-            }
+        List<UUID> inactive = rows.get().stream()
+            .filter(row -> !Boolean.TRUE.equals(row.getActive()))
+            .map(UserRoleHospitalAssignment::getId)
+            .toList();
+        if (!inactive.isEmpty()) {
+            assignmentService.regenerateAssignmentCodes(inactive, true);
         }
         log.info("[PROVIDER-ADMIN] Staff {} re-invited at facility {} ({} assignment(s)) by user {}",
-            memberId, seat.facility().getId(), reinvited, seat.userId());
-        return Optional.of(memberAfterChange(seat, memberId));
+            memberId, seat.facility().getId(), inactive.size(), seat.userId());
+        return toMember(rows.get(), seat);
     }
 
     @Override
@@ -174,35 +174,33 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
      * The member's rows at the caller's facility, or empty when the member is
      * out of the caller's reach: unknown, deleted, holding no staff row here,
      * the caller, or holding an admin role (PROVIDER_ADMIN, HOSPITAL_ADMIN,
-     * ADMIN, SUPER_ADMIN) anywhere, active or not. Admins are administered by
-     * the platform, never by a peer, as {@code UserAccountAccess} decides for
-     * a hospital admin.
+     * ADMIN, SUPER_ADMIN) anywhere, active or not, by assignment OR by global
+     * role ({@link UserAccountAccess#holdsAdminRole}, the rule that shields a
+     * super-admin's account from a hospital admin). Admins are administered by
+     * the platform, never by a peer. Decided before anything changes, so such
+     * a member gets the unmapped answer and nothing is touched.
      */
     private Optional<List<UserRoleHospitalAssignment>> manageableRows(ProviderSeat seat, UUID userId) {
         if (userId == null || userId.equals(seat.userId())) {
             return Optional.empty();
         }
         List<UserRoleHospitalAssignment> everyRow = assignmentRepository.findByUserId(userId);
-        if (everyRow.stream().anyMatch(row -> UserAccountAccess.ADMIN_ROLES.contains(roleOf(row)))) {
-            return Optional.empty();
-        }
         List<UserRoleHospitalAssignment> here = everyRow.stream()
             .filter(row -> row.getHospital() != null && seat.facility().getId().equals(row.getHospital().getId()))
-            .filter(row -> !PATIENT.equals(roleOf(row)))
+            .filter(row -> !PATIENT.equals(UserAccountAccess.roleCode(row.getRole())))
             .toList();
         if (here.isEmpty()) {
             return Optional.empty();
         }
         User member = here.get(0).getUser();
-        if (member == null || member.isDeleted()) {
+        if (member == null || member.isDeleted() || UserAccountAccess.holdsAdminRole(member, everyRow)) {
             return Optional.empty();
         }
         return Optional.of(here);
     }
 
-    private ProviderStaffMemberDTO memberAfterChange(ProviderSeat seat, UUID userId) {
-        List<UserRoleHospitalAssignment> rows = staffRowsByUser(seat.facility().getId()).get(userId);
-        return toMember(rows == null ? List.of() : rows, seat);
+    private static List<UUID> idsOf(List<UserRoleHospitalAssignment> rows) {
+        return rows.stream().map(UserRoleHospitalAssignment::getId).toList();
     }
 
     /** Staff rows at the facility (no PATIENT row, no deleted account), grouped by holder in a stable order. */
@@ -210,7 +208,8 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
         Map<UUID, List<UserRoleHospitalAssignment>> byUser = new LinkedHashMap<>();
         for (UserRoleHospitalAssignment row : assignmentRepository.findStaffRowsByHospitalId(facilityId)) {
             User holder = row.getUser();
-            if (holder == null || holder.getId() == null || holder.isDeleted() || PATIENT.equals(roleOf(row))) {
+            if (holder == null || holder.getId() == null || holder.isDeleted()
+                    || PATIENT.equals(UserAccountAccess.roleCode(row.getRole()))) {
                 continue;
             }
             byUser.computeIfAbsent(holder.getId(), id -> new ArrayList<>()).add(row);
@@ -218,13 +217,17 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
         return byUser;
     }
 
-    private static ProviderStaffMemberDTO toMember(List<UserRoleHospitalAssignment> rows, ProviderSeat seat) {
+    /** One member from their rows here; empty when there are none (never an all-null member). */
+    private static Optional<ProviderStaffMemberDTO> toMember(List<UserRoleHospitalAssignment> rows, ProviderSeat seat) {
         User holder = rows.isEmpty() ? null : rows.get(0).getUser();
+        if (holder == null) {
+            return Optional.empty();
+        }
         TreeSet<String> roles = new TreeSet<>();
         boolean active = false;
         boolean pending = false;
         for (UserRoleHospitalAssignment row : rows) {
-            String role = roleOf(row);
+            String role = UserAccountAccess.roleCode(row.getRole());
             if (!role.isEmpty()) {
                 roles.add(role);
             }
@@ -232,10 +235,7 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
             active |= rowActive;
             pending |= !rowActive && row.getConfirmationCode() != null && row.getConfirmationVerifiedAt() == null;
         }
-        if (holder == null) {
-            return ProviderStaffMemberDTO.builder().roles(List.of()).build();
-        }
-        return ProviderStaffMemberDTO.builder()
+        return Optional.of(ProviderStaffMemberDTO.builder()
             .userId(holder.getId())
             .username(holder.getUsername())
             .firstName(holder.getFirstName())
@@ -246,7 +246,7 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
             .invitationPending(pending)
             .providerAdmin(roles.contains(RoleFacilityCompatibility.PROVIDER_ADMIN))
             .self(Objects.equals(holder.getId(), seat.userId()))
-            .build();
+            .build());
     }
 
     private ProviderProfileDTO toProfile(ProviderSeat seat) {
@@ -255,35 +255,38 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
             .id(facility.getId())
             .facilityType(FacilityType.orHospital(facility.getFacilityType()))
             .code(facility.getCode())
-            .name(facility.getName())
             .phoneNumber(facility.getPhoneNumber())
             .email(facility.getEmail())
             .website(facility.getWebsite())
-            .address(facility.getAddress())
-            .city(facility.getCity())
-            .region(facility.getRegion())
             .editable(seat.admin());
+        // The current state of the evidence (SUBMITTED during a resubmission,
+        // REVOKED...), but the identity only as the platform VERIFIED it:
+        // never a submitted, rejected or revoked one. None verified: no identity.
         verificationRepository.findFirstByHospital_IdOrderByCreatedAtDesc(facility.getId())
-            .ifPresent(v -> applyVerification(dto, v));
+            .ifPresent(latest -> dto.verificationStatus(latest.getStatus()));
+        verificationRepository.findFirstByHospital_IdAndStatusOrderByCreatedAtDesc(facility.getId(),
+                ProviderVerificationStatus.VERIFIED)
+            .ifPresent(verified -> applyVerifiedIdentity(dto, facility, verified));
         return dto.build();
     }
 
-    private static void applyVerification(ProviderProfileDTO.ProviderProfileDTOBuilder dto, ProviderVerification v) {
-        dto.legalName(v.getLegalName())
+    /**
+     * The identity as verified. The registered street address is the
+     * facility row's, which VERIFY itself wrote from this evidence (nothing
+     * else changes it while the evidence stays VERIFIED).
+     */
+    private static void applyVerifiedIdentity(ProviderProfileDTO.ProviderProfileDTOBuilder dto, Hospital facility,
+                                              ProviderVerification v) {
+        dto.name(v.getTradeName() != null ? v.getTradeName() : v.getLegalName())
+            .address(facility.getAddress())
+            .city(v.getAddressCity())
+            .region(v.getAddressRegion())
+            .legalName(v.getLegalName())
             .tradeName(v.getTradeName())
             .licenceNumber(v.getLicenceNumber())
             .licenceAuthority(v.getLicenceAuthority())
             .companyPhone(v.getCompanyPhone())
-            .verificationStatus(v.getStatus())
-            .verifiedAt(v.getStatus() == ProviderVerificationStatus.VERIFIED ? v.getDecidedAt() : null);
-    }
-
-    private static String roleOf(UserRoleHospitalAssignment row) {
-        if (row.getRole() == null) {
-            return "";
-        }
-        String code = row.getRole().getCode() != null ? row.getRole().getCode() : row.getRole().getName();
-        return RoleFacilityCompatibility.bare(code);
+            .verifiedAt(v.getDecidedAt());
     }
 
     /** The raw path segment as a user id; {@code null} (answered as unknown) when it is not one. */

@@ -5,12 +5,16 @@ import com.example.hms.enums.FacilityType;
 import com.example.hms.enums.ProviderVerificationStatus;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.User;
+import com.example.hms.model.Role;
+import com.example.hms.model.UserRole;
 import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.model.UserRoleId;
 import com.example.hms.model.provider.ProviderVerification;
 import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.provider.ProviderVerificationRepository;
 import com.example.hms.security.IdleSessionTracker;
@@ -72,9 +76,11 @@ class ProviderAdminSecurityIT extends BaseIT {
     @Autowired private ProviderVerificationRepository verificationRepository;
     @Autowired private IdleSessionTracker idleSessionTracker;
     @Autowired private ProviderOrganisationsFlag organisationsFlag;
+    @Autowired private UserRoleRepository userRoleRepository;
 
     private LinkedTestAccounts accounts;
     private final List<UUID> verificationIds = new ArrayList<>();
+    private final List<UserRole> globalRoles = new ArrayList<>();
     private UUID hospitalId;
     private UUID pharmacyId;
     private UUID otherPharmacyId;
@@ -100,6 +106,8 @@ class ProviderAdminSecurityIT extends BaseIT {
         ReflectionTestUtils.setField(organisationsFlag, "enabled", false);
         verificationRepository.deleteAllByIdInBatch(verificationIds);
         verificationIds.clear();
+        userRoleRepository.deleteAll(globalRoles);
+        globalRoles.clear();
         accounts.cleanUp();
     }
 
@@ -216,6 +224,47 @@ class ProviderAdminSecurityIT extends BaseIT {
         assertThat(rowOf(admin, pharmacyId).getActive()).isTrue();
     }
 
+    @Test
+    @DisplayName("a member with a GLOBAL admin role (ADMIN, SUPER_ADMIN) is out of reach: the unmapped answer, nothing changed")
+    void globalAdminRoleShieldsTheMember() throws Exception {
+        String unmapped = ProviderConfinementSecurityIT.refusalShape(as(doctorToken(), get(UNMAPPED)));
+        for (String globalRole : List.of("ADMIN", "SUPER_ADMIN")) {
+            User member = accounts.userAt("shielded", pharmacyId, PHARMACIST);
+            grantGlobal(member, globalRole);
+            UserRoleHospitalAssignment row = rowOf(member, pharmacyId);
+            row.setActive(false);
+            assignmentRepository.save(row);
+
+            for (String action : List.of("deactivate", "activate")) {
+                MvcResult result = as(adminToken, post("/provider/staff/{userId}/" + action, member.getId()));
+                assertThat(ProviderConfinementSecurityIT.refusalShape(result)).as(globalRole + " " + label(result))
+                    .isEqualTo(unmapped);
+            }
+            UserRoleHospitalAssignment after = rowOf(member, pharmacyId);
+            assertThat(after.getActive()).isFalse();
+            assertThat(after.getConfirmationCode()).isNull();
+        }
+    }
+
+    @Test
+    @DisplayName("activate never re-invites a disabled account: the unmapped answer, no code issued")
+    void disabledAccountIsNotReinvited() throws Exception {
+        UserRoleHospitalAssignment row = rowOf(pharmacist, pharmacyId);
+        row.setActive(false);
+        row.setConfirmationCode(null);
+        assignmentRepository.save(row);
+        User account = userRepository.findById(pharmacist.getId()).orElseThrow();
+        account.setActive(false);
+        userRepository.save(account);
+        String unmapped = ProviderConfinementSecurityIT.refusalShape(as(doctorToken(), get(UNMAPPED)));
+
+        MvcResult result = as(adminToken, post("/provider/staff/{userId}/activate", pharmacist.getId()));
+
+        assertThat(ProviderConfinementSecurityIT.refusalShape(result)).isEqualTo(unmapped);
+        assertThat(rowOf(pharmacist, pharmacyId).getConfirmationCode()).isNull();
+        assertThat(userRepository.findById(pharmacist.getId()).orElseThrow().isActive()).isFalse();
+    }
+
     // ── profile ─────────────────────────────────────────────────────────────
 
     @Test
@@ -235,6 +284,20 @@ class ProviderAdminSecurityIT extends BaseIT {
         assertThat(after.getName()).isEqualTo(before.getName());
         assertThat(after.getLicenseNumber()).isEqualTo(before.getLicenseNumber());
         assertThat(after.getCity()).isEqualTo(before.getCity());
+    }
+
+    @Test
+    @DisplayName("the profile's identity is the VERIFIED evidence's, or none at all")
+    void profileIdentityIsTheVerifiedOne() throws Exception {
+        JsonNode unverified = json(as(adminToken, get("/provider/profile")));
+        assertThat(unverified.get("name").isNull()).isTrue();
+        assertThat(unverified.get("licenceNumber").isNull()).isTrue();
+
+        String licence = verify(pharmacyId);
+        JsonNode verified = json(as(adminToken, get("/provider/profile")));
+        assertThat(verified.get("name").asText()).isEqualTo("Pharmacie Test SARL");
+        assertThat(verified.get("licenceNumber").asText()).isEqualTo(licence);
+        assertThat(verified.get("verificationStatus").asText()).isEqualTo("VERIFIED");
     }
 
     @Test
@@ -284,6 +347,19 @@ class ProviderAdminSecurityIT extends BaseIT {
         assertThat(as(doctorToken(), get("/provider-directory").param("type", "HOSPITAL")).getResponse().getStatus())
             .isEqualTo(400);
         assertThat(json(as(adminToken, get("/provider/settings"))).get("organisationsEnabled").asBoolean()).isTrue();
+    }
+
+    @Test
+    @DisplayName("flag ON: a caller the directory refuses gets 403 whatever the type (access before parameters)")
+    void directoryRefusalDoesNotDependOnParameters() throws Exception {
+        ReflectionTestUtils.setField(organisationsFlag, "enabled", true);
+        String superToken = tokenFor(accounts.userAt("sadmin", null, "SUPER_ADMIN"), "SUPER_ADMIN");
+
+        for (String type : List.of("PHARMACY", "not-a-type")) {
+            // Global view: no hospital named, so no acting HOSPITAL.
+            MvcResult result = as(superToken, get("/provider-directory").param("type", type));
+            assertThat(result.getResponse().getStatus()).as(type).isEqualTo(403);
+        }
     }
 
     @Test
@@ -355,6 +431,17 @@ class ProviderAdminSecurityIT extends BaseIT {
         verification.setDecidedAt(LocalDateTime.now());
         verificationIds.add(verificationRepository.save(verification).getId());
         return licence;
+    }
+
+    private void grantGlobal(User user, String roleCode) {
+        String code = "ROLE_" + roleCode;
+        Role role = roleRepository.findByCode(code).orElseGet(() -> roleRepository.save(Role.builder()
+            .name(code).code(code).description(code + " role").build()));
+        globalRoles.add(userRoleRepository.save(UserRole.builder()
+            .id(new UserRoleId(user.getId(), role.getId()))
+            .user(user)
+            .role(role)
+            .build()));
     }
 
     private UserRoleHospitalAssignment rowOf(User user, UUID facilityId) {

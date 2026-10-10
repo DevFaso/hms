@@ -4,26 +4,28 @@ import com.example.hms.config.SecurityConstants;
 import com.example.hms.enums.FacilityType;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.model.Hospital;
-import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.provider.ProviderVerification;
 import com.example.hms.payload.dto.provider.ProviderDirectoryEntryDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.provider.ProviderVerificationRepository;
-import com.example.hms.security.RoleExpansion;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.provider.RoleFacilityCompatibility;
 import com.example.hms.security.tenant.ActingScopeResolver;
+import com.example.hms.service.support.UserAccountAccess;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * The provider directory (provider plan §6.5, AC-14, T9).
@@ -49,9 +51,11 @@ public class ProviderDirectoryServiceImpl implements ProviderDirectoryService {
     private static final int MAX_QUERY_LENGTH = 100;
     private static final Set<FacilityType> PROVIDER_TYPES = EnumSet.of(FacilityType.PHARMACY, FacilityType.LABORATORY);
 
-    /** The directory roles, as authorities ({@code ROLE_*}). */
+    /** The directory roles, bare ({@code DOCTOR}), from the one list the annotation and the matcher read. */
     private static final Set<String> DIRECTORY_ROLES =
-        Set.of(SecurityConstants.authorities(SecurityConstants.PROVIDER_DIRECTORY_AUTHORITIES));
+        Arrays.stream(SecurityConstants.authorities(SecurityConstants.PROVIDER_DIRECTORY_AUTHORITIES))
+            .map(RoleFacilityCompatibility::bare)
+            .collect(Collectors.toUnmodifiableSet());
 
     private final ActingScopeResolver actingScopeResolver;
     private final HospitalRepository hospitalRepository;
@@ -60,9 +64,11 @@ public class ProviderDirectoryServiceImpl implements ProviderDirectoryService {
 
     @Override
     public List<ProviderDirectoryEntryDTO> search(String type, String query) {
-        Set<FacilityType> types = parseTypes(type);
+        // Who first, then what: a refused caller gets the same refusal
+        // whatever they send, never a 400 that depends on the parameters.
         UUID actingHospitalId = actingScopeResolver.requirePinned();
         requireDirectoryReader(actingHospitalId);
+        Set<FacilityType> types = parseTypes(type);
         return verificationRepository.findDirectory(types, namePattern(query), PageRequest.of(0, MAX_RESULTS))
             .stream()
             .map(ProviderDirectoryServiceImpl::toEntry)
@@ -85,24 +91,12 @@ public class ProviderDirectoryServiceImpl implements ProviderDirectoryService {
         UUID userId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
         boolean holdsRole = userId != null && assignmentRepository.findByUser_IdAndActiveTrue(userId).stream()
             .filter(row -> row.getHospital() != null && actingHospitalId.equals(row.getHospital().getId()))
-            .anyMatch(ProviderDirectoryServiceImpl::isDirectoryRole);
+            // A surgeon or a physician IS a doctor, as the annotation sees them.
+            .anyMatch(row -> UserAccountAccess.expandedCodes(row.getRole()).stream()
+                .anyMatch(DIRECTORY_ROLES::contains));
         if (!holdsRole) {
             throw new AccessDeniedException("Access denied");
         }
-    }
-
-    private static boolean isDirectoryRole(UserRoleHospitalAssignment row) {
-        if (row.getRole() == null) {
-            return false;
-        }
-        String code = row.getRole().getCode() != null ? row.getRole().getCode() : row.getRole().getName();
-        if (code == null || code.isBlank()) {
-            return false;
-        }
-        String upper = code.trim().toUpperCase(Locale.ROOT);
-        String prefixed = upper.startsWith("ROLE_") ? upper : "ROLE_" + upper;
-        // A surgeon or a physician IS a doctor, as the annotation sees them.
-        return RoleExpansion.expand(List.of(prefixed)).stream().anyMatch(DIRECTORY_ROLES::contains);
     }
 
     private static Set<FacilityType> parseTypes(String raw) {

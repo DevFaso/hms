@@ -148,7 +148,7 @@ class HospitalServiceImplTest {
                 .thenReturn(List.of(hospital));
 
         List<HospitalResponseDTO> results = hospitalService.getAllHospitals(
-                organizationId, false, "  Ouaga  ", " Centre  ", Locale.ENGLISH);
+                organizationId, false, "  Ouaga  ", " Centre  ", null, Locale.ENGLISH);
 
         assertEquals(1, results.size());
         assertEquals("FIL-01", results.get(0).getCode());
@@ -201,7 +201,7 @@ class HospitalServiceImplTest {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(List.of());
 
-        hospitalService.getAllHospitals(UUID.randomUUID(), true, null, null, Locale.ENGLISH);
+        hospitalService.getAllHospitals(UUID.randomUUID(), true, null, null, null, Locale.ENGLISH);
 
         verify(hospitalRepository).findAllForFilters(isNull(), eq(Boolean.TRUE), isNull(), isNull());
     }
@@ -212,7 +212,7 @@ class HospitalServiceImplTest {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(List.of());
 
-        hospitalService.getAllHospitals(null, null, "  ", "", Locale.ENGLISH);
+        hospitalService.getAllHospitals(null, null, "  ", "", null, Locale.ENGLISH);
 
         verify(hospitalRepository).findAllForFilters(isNull(), isNull(), isNull(), isNull());
     }
@@ -230,7 +230,7 @@ class HospitalServiceImplTest {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(List.of(h1, h2));
 
-        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
+        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
 
         // No scope filtering — both hospitals returned so clinicians can pick
         // referral destinations across the network.
@@ -248,7 +248,7 @@ class HospitalServiceImplTest {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(List.of(h1, h2));
 
-        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
+        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
         assertEquals(2, result.size());
     }
 
@@ -263,7 +263,7 @@ class HospitalServiceImplTest {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(List.of(h1));
 
-        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
+        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
         assertEquals(1, result.size());
     }
 
@@ -278,7 +278,7 @@ class HospitalServiceImplTest {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(List.of(h1));
 
-        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
+        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
         // Hospital directory is unscoped — even users with empty scope see the
         // full list so they can create referrals to other hospitals.
         assertEquals(1, result.size());
@@ -1133,7 +1133,7 @@ class HospitalServiceImplTest {
                 .thenReturn(null);
 
         // null-guard in getAllHospitals returns empty list
-        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
+        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
         assertTrue(result.isEmpty());
     }
 
@@ -1374,7 +1374,7 @@ class HospitalServiceImplTest {
                 .thenReturn(List.of(h1, h2));
 
         // No scope filtering — both hospitals returned (directory is public)
-        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
+        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
         assertEquals(2, result.size());
     }
 
@@ -1393,7 +1393,7 @@ class HospitalServiceImplTest {
                 .thenReturn(hospitals);
 
         // null entries are filtered out; non-null hospitals are kept
-        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
+        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
         assertEquals(1, result.size());
     }
 

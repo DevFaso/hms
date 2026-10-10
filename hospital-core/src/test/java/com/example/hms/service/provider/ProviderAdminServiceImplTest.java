@@ -5,6 +5,7 @@ import com.example.hms.enums.ProviderVerificationStatus;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Role;
 import com.example.hms.model.User;
+import com.example.hms.model.UserRole;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.provider.ProviderVerification;
 import com.example.hms.payload.dto.provider.ProviderProfileDTO;
@@ -31,8 +32,10 @@ import org.mockito.quality.Strictness;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -68,8 +71,8 @@ class ProviderAdminServiceImplTest {
     private final Hospital otherPharmacy = facility(FacilityType.PHARMACY);
     private final Hospital hospital = facility(FacilityType.HOSPITAL);
     private final User adminUser = user("admin");
-    private final ProviderSeat adminSeat = new ProviderSeat(pharmacy, adminUser.getId(), UUID.randomUUID(), true);
-    private final ProviderSeat staffSeat = new ProviderSeat(pharmacy, adminUser.getId(), UUID.randomUUID(), false);
+    private final ProviderSeat adminSeat = new ProviderSeat(pharmacy, adminUser.getId(), true);
+    private final ProviderSeat staffSeat = new ProviderSeat(pharmacy, adminUser.getId(), false);
 
     @BeforeAll
     static void validatorUp() {
@@ -151,26 +154,45 @@ class ProviderAdminServiceImplTest {
     }
 
     @Test
-    @DisplayName("the profile shows the verified identity read-only, verifiedAt only once VERIFIED")
+    @DisplayName("the identity (name included) comes from the VERIFIED evidence; the status is the latest row's")
     void profileShowsVerifiedIdentity() {
         when(seatResolver.current()).thenReturn(Optional.of(staffSeat));
-        ProviderVerification verification = new ProviderVerification();
-        verification.setStatus(ProviderVerificationStatus.VERIFIED);
-        verification.setLegalName("Pharmacie SARL");
-        verification.setLicenceNumber("LIC-9");
-        verification.setDecidedAt(LocalDateTime.of(2026, 10, 1, 9, 0));
-        when(verificationRepository.findFirstByHospital_IdOrderByCreatedAtDesc(pharmacy.getId()))
-            .thenReturn(Optional.of(verification));
+        pharmacy.setName("Name from the facility row");
+        ProviderVerification verified = verification(ProviderVerificationStatus.VERIFIED, "LIC-9");
+        verified.setTradeName("Pharmacie du Centre");
+        verified.setAddressCity("Ouagadougou");
+        verified.setDecidedAt(LocalDateTime.of(2026, 10, 1, 9, 0));
+        latestIs(verified);
+        verifiedIs(verified);
 
         ProviderProfileDTO profile = service.getProfile().orElseThrow();
 
+        assertThat(profile.getName()).isEqualTo("Pharmacie du Centre");
         assertThat(profile.getLegalName()).isEqualTo("Pharmacie SARL");
         assertThat(profile.getLicenceNumber()).isEqualTo("LIC-9");
+        assertThat(profile.getCity()).isEqualTo("Ouagadougou");
         assertThat(profile.getVerifiedAt()).isEqualTo(LocalDateTime.of(2026, 10, 1, 9, 0));
+        assertThat(profile.getVerificationStatus()).isEqualTo(ProviderVerificationStatus.VERIFIED);
         assertThat(profile.isEditable()).isFalse();
+    }
 
-        verification.setStatus(ProviderVerificationStatus.REVOKED);
-        assertThat(service.getProfile().orElseThrow().getVerifiedAt()).isNull();
+    @Test
+    @DisplayName("revoked, then new evidence submitted: no identity at all, never the submitted one; status SUBMITTED")
+    void revokedAndResubmittedShowsNoIdentity() {
+        when(seatResolver.current()).thenReturn(Optional.of(staffSeat));
+        pharmacy.setName("Name from the submitted evidence");
+        latestIs(verification(ProviderVerificationStatus.SUBMITTED, "LIC-NEW"));
+        verifiedIs(null);
+
+        ProviderProfileDTO profile = service.getProfile().orElseThrow();
+
+        assertThat(profile.getVerificationStatus()).isEqualTo(ProviderVerificationStatus.SUBMITTED);
+        assertThat(profile.getName()).isNull();
+        assertThat(profile.getLegalName()).isNull();
+        assertThat(profile.getLicenceNumber()).isNull();
+        assertThat(profile.getCity()).isNull();
+        assertThat(profile.getAddress()).isNull();
+        assertThat(profile.getVerifiedAt()).isNull();
     }
 
     @Test
@@ -229,11 +251,12 @@ class ProviderAdminServiceImplTest {
         UserRoleHospitalAssignment patient = row(pharmacist, "ROLE_PATIENT", hospital, true);
         member(pharmacist, here, branch, patient);
 
-        assertThat(service.deactivateStaff(pharmacist.getId().toString())).isPresent();
+        Optional<ProviderStaffMemberDTO> answer = service.deactivateStaff(pharmacist.getId().toString());
 
-        verify(assignmentService).deactivateAssignment(here.getId());
-        verify(assignmentService, never()).deactivateAssignment(branch.getId());
-        verify(assignmentService, never()).deactivateAssignment(patient.getId());
+        verify(assignmentService).deactivateAssignments(List.of(here.getId()));
+        assertThat(answer).map(ProviderStaffMemberDTO::getUserId).contains(pharmacist.getId());
+        // The answer is built from the rows just changed: no second read that could come back empty.
+        verify(assignmentRepository, never()).findStaffRowsByHospitalId(any());
     }
 
     @Test
@@ -251,11 +274,18 @@ class ProviderAdminServiceImplTest {
         deleted.setDeleted(true);
         member(deleted, row(deleted, "ROLE_PHARMACIST", pharmacy, false));
         member(adminUser, row(adminUser, "ROLE_PHARMACIST", pharmacy, true));
+        User globalAdmin = user("global-admin");
+        globalAdmin.setUserRoles(Set.of(UserRole.builder().user(globalAdmin).role(role("ADMIN")).build()));
+        member(globalAdmin, row(globalAdmin, "ROLE_PHARMACIST", pharmacy, true));
+        User globalSuper = user("global-super");
+        globalSuper.setUserRoles(Set.of(UserRole.builder().user(globalSuper).role(role("ROLE_SUPER_ADMIN")).build()));
+        member(globalSuper, row(globalSuper, "ROLE_PHARMACIST", pharmacy, false));
         UUID unknown = UUID.randomUUID();
         when(assignmentRepository.findByUserId(unknown)).thenReturn(List.of());
 
         List<String> targets = new ArrayList<>(List.of(elsewhere.getId().toString(), peer.getId().toString(),
             formerAdmin.getId().toString(), deleted.getId().toString(), adminUser.getId().toString(),
+            globalAdmin.getId().toString(), globalSuper.getId().toString(),
             unknown.toString(), "not-an-id", "", " "));
         targets.add(null);
         for (String target : targets) {
@@ -276,9 +306,20 @@ class ProviderAdminServiceImplTest {
 
         assertThat(service.activateStaff(member.getId().toString())).isPresent();
 
-        verify(assignmentService).regenerateAssignmentCode(inactive.getId(), true);
-        verify(assignmentService, never()).regenerateAssignmentCode(active.getId(), true);
-        verify(assignmentService, never()).deactivateAssignment(any());
+        verify(assignmentService).regenerateAssignmentCodes(List.of(inactive.getId()), true);
+        verify(assignmentService, never()).deactivateAssignments(any());
+    }
+
+    @Test
+    @DisplayName("activate never re-invites a disabled account: entering the code would switch it back on")
+    void activateRefusesADisabledAccount() {
+        admin();
+        User disabled = user("disabled");
+        disabled.setActive(false);
+        member(disabled, row(disabled, "ROLE_PHARMACIST", pharmacy, false));
+
+        assertThat(service.activateStaff(disabled.getId().toString())).isEmpty();
+        verifyNoInteractions(assignmentService);
     }
 
     // ── helpers ────────────────────────────────────────────────────────────
@@ -299,9 +340,37 @@ class ProviderAdminServiceImplTest {
         return h;
     }
 
+    private void latestIs(ProviderVerification verification) {
+        when(verificationRepository.findFirstByHospital_IdOrderByCreatedAtDesc(pharmacy.getId()))
+            .thenReturn(Optional.ofNullable(verification));
+    }
+
+    private void verifiedIs(ProviderVerification verification) {
+        when(verificationRepository.findFirstByHospital_IdAndStatusOrderByCreatedAtDesc(pharmacy.getId(),
+            ProviderVerificationStatus.VERIFIED)).thenReturn(Optional.ofNullable(verification));
+    }
+
+    private static ProviderVerification verification(ProviderVerificationStatus status, String licence) {
+        ProviderVerification v = new ProviderVerification();
+        v.setStatus(status);
+        v.setLegalName("Pharmacie SARL");
+        v.setLicenceNumber(licence);
+        return v;
+    }
+
+    private static Role role(String code) {
+        Role role = new Role();
+        role.setId(UUID.randomUUID());
+        role.setCode(code);
+        role.setName(code);
+        return role;
+    }
+
     private static User user(String name) {
         User u = new User();
         u.setId(UUID.randomUUID());
+        u.setActive(true);
+        u.setUserRoles(new HashSet<>());
         u.setUsername(name);
         u.setFirstName(name);
         u.setLastName("Test");
@@ -309,9 +378,7 @@ class ProviderAdminServiceImplTest {
     }
 
     private static UserRoleHospitalAssignment row(User user, String roleCode, Hospital at, boolean active) {
-        Role role = new Role();
-        role.setCode(roleCode);
-        role.setName(roleCode);
+        Role role = role(roleCode);
         UserRoleHospitalAssignment row = new UserRoleHospitalAssignment();
         row.setId(UUID.randomUUID());
         row.setUser(user);

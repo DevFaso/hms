@@ -112,6 +112,17 @@ class ProviderDirectoryServiceImplTest {
     }
 
     @Test
+    @DisplayName("a refused caller gets the refusal whatever the type: access is decided before the parameters")
+    void accessBeforeParameters() {
+        ActingScopeTestSupport.actingAt(callerId, hospital.getId());
+        callerHolds(row("ROLE_RECEPTIONIST", hospital));
+
+        for (String type : List.of("PHARMACY", "HOSPITAL", "not-a-type")) {
+            assertThatThrownBy(() -> service.search(type, null)).as(type).isInstanceOf(AccessDeniedException.class);
+        }
+    }
+
+    @Test
     @DisplayName("acting at a provider facility (a super-admin naming one) is refused")
     void providerActingFacilityIsRefused() {
         ActingScopeTestSupport.superAdminAt(callerId, pharmacy.getId());

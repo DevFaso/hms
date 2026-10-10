@@ -7,6 +7,7 @@ import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.security.provider.RoleFacilityCompatibility;
 import com.example.hms.security.tenant.ActingScope;
 import com.example.hms.security.tenant.ActingScopeResolver;
+import com.example.hms.service.support.UserAccountAccess;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -58,7 +59,7 @@ public class ProviderSeatResolver {
         List<UserRoleHospitalAssignment> providerRows = assignmentRepository.findByUser_IdAndActiveTrue(userId)
             .stream()
             .filter(row -> row.getHospital() != null && row.getHospital().isProvider())
-            .filter(row -> !PATIENT.equals(roleOf(row)))
+            .filter(row -> !PATIENT.equals(UserAccountAccess.roleCode(row.getRole())))
             .toList();
         UUID facilityId = facilityOf(scope, providerRows);
         if (facilityId == null) {
@@ -74,9 +75,10 @@ public class ProviderSeatResolver {
         // Live, AND presented: the same two conditions UserAccountAccess puts
         // on a provider admin's grants and changes, so the staff page never
         // offers what the assignment service would then refuse.
-        boolean admin = here.stream().anyMatch(row -> RoleFacilityCompatibility.PROVIDER_ADMIN.equals(roleOf(row)))
+        boolean admin = here.stream()
+            .anyMatch(row -> RoleFacilityCompatibility.PROVIDER_ADMIN.equals(UserAccountAccess.roleCode(row.getRole())))
             && roleValidator.hasAnyAuthority(RoleFacilityCompatibility.PROVIDER_ADMIN);
-        return Optional.of(new ProviderSeat(facility, userId, here.get(0).getId(), admin));
+        return Optional.of(new ProviderSeat(facility, userId, admin));
     }
 
     /**
@@ -99,13 +101,5 @@ public class ProviderSeatResolver {
             return facilities.size() == 1 ? facilities.iterator().next() : null;
         }
         return null;
-    }
-
-    private static String roleOf(UserRoleHospitalAssignment row) {
-        if (row.getRole() == null) {
-            return "";
-        }
-        String code = row.getRole().getCode() != null ? row.getRole().getCode() : row.getRole().getName();
-        return RoleFacilityCompatibility.bare(code);
     }
 }

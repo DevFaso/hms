@@ -22,6 +22,14 @@ import java.util.UUID;
  */
 public interface ProviderVerificationRepository extends JpaRepository<ProviderVerification, UUID> {
 
+    /**
+     * The facility's latest verification in this status: with VERIFIED, the
+     * identity the platform verified (V180's partial unique index allows at
+     * most one SUBMITTED-or-VERIFIED row per facility).
+     */
+    Optional<ProviderVerification> findFirstByHospital_IdAndStatusOrderByCreatedAtDesc(
+        UUID hospitalId, ProviderVerificationStatus status);
+
     /** The facility's latest verification, whatever its status. */
     Optional<ProviderVerification> findFirstByHospital_IdOrderByCreatedAtDesc(UUID hospitalId);
 

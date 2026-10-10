@@ -32,15 +32,16 @@ public class ProviderProfileDTO {
     private UUID id;
     private FacilityType facilityType;
     private String code;
-    /** The trade name, else the legal name, as verified. */
-    private String name;
 
     // Operational contact: PUT /provider/profile.
     private String phoneNumber;
     private String email;
     private String website;
 
-    // Verified identity: read-only.
+    // Verified identity, read-only, from the VERIFIED evidence only; all null
+    // while none is verified (a first submission, a rejection, a revocation).
+    /** The trade name, else the legal name, as verified. */
+    private String name;
     private String address;
     private String city;
     private String region;
@@ -49,8 +50,10 @@ public class ProviderProfileDTO {
     private String licenceNumber;
     private String licenceAuthority;
     private String companyPhone;
-    private ProviderVerificationStatus verificationStatus;
     private LocalDateTime verifiedAt;
+
+    /** The current state of the evidence (the latest verification row), whatever it is. */
+    private ProviderVerificationStatus verificationStatus;
 
     /** The caller may change the operational contact and manage staff (PROVIDER_ADMIN here). */
     private boolean editable;

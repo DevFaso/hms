@@ -519,11 +519,23 @@ public class UserAccountAccess {
             && !staffRepository.existsByUserId(target.getId());
     }
 
+    /**
+     * Does the target hold an admin role ({@link #ADMIN_ROLES}: SUPER_ADMIN,
+     * HOSPITAL_ADMIN, ADMIN, PROVIDER_ADMIN) anywhere, active or not, by
+     * assignment or by global role? Such an account is administered by the
+     * super-admin only: a hospital or provider admin never changes it.
+     *
+     * @param assignments every assignment the target holds, active or not
+     */
+    public static boolean holdsAdminRole(User target, List<UserRoleHospitalAssignment> assignments) {
+        return target != null && holdsAny(target, assignments, ADMIN_ROLES);
+    }
+
     /** Any trace of these roles on the target, active or not, global role or assignment. */
     private static boolean holdsAny(User target, List<UserRoleHospitalAssignment> assignments, Set<String> bareRoles) {
         boolean viaAssignment = assignments.stream()
             .anyMatch(a -> bareRoles.contains(roleCode(a.getRole())));
-        boolean viaGlobalRole = target.getUserRoles().stream()
+        boolean viaGlobalRole = target.getUserRoles() != null && target.getUserRoles().stream()
             .anyMatch(ur -> bareRoles.contains(roleCode(ur.getRole())));
         return viaAssignment || viaGlobalRole;
     }
@@ -539,8 +551,12 @@ public class UserAccountAccess {
         return assignment.getHospital() == null ? null : assignment.getHospital().getId();
     }
 
-    /** An assignment's role and what RoleExpansion implies by it, bare. */
-    private static Set<String> expandedCodes(Role role) {
+    /**
+     * A role and what {@link RoleExpansion} implies by it, bare (a surgeon is
+     * also a DOCTOR): for decisions about what the role may do. The one
+     * normalisation every role decision here and in the provider services uses.
+     */
+    public static Set<String> expandedCodes(Role role) {
         String code = roleCode(role);
         if (code.isEmpty()) {
             return Set.of();
@@ -550,8 +566,13 @@ public class UserAccountAccess {
             .collect(Collectors.toSet());
     }
 
-    /** The role's code without its {@code ROLE_} prefix, upper-case; "" when unknown. */
-    private static String roleCode(Role role) {
+    /**
+     * The role's code (else its name) without its {@code ROLE_} prefix,
+     * upper-case; "" when unknown. For decisions about WHICH role a row holds
+     * (PATIENT, PROVIDER_ADMIN, an admin role); {@link #expandedCodes} for
+     * what it may do.
+     */
+    public static String roleCode(Role role) {
         if (role == null) {
             return "";
         }

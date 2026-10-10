@@ -524,6 +524,40 @@ class UserRoleHospitalAssignmentServiceImplTest {
     }
 
     @Test
+    void batchDeactivationChecksEveryRowBeforeChangingAny() {
+        UUID id = assignment.getId();
+        UUID outOfScope = UUID.randomUUID();
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+        when(assignmentRepository.findById(outOfScope)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.deactivateAssignments(java.util.List.of(id, outOfScope)))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThat(assignment.getActive()).isTrue();
+        verify(assignmentRepository, never()).saveAll(any());
+
+        service.deactivateAssignments(java.util.List.of(id));
+        assertThat(assignment.getActive()).isFalse();
+        assertThat(assignment.getConfirmationCode()).isNull();
+        verify(assignmentRepository).saveAll(java.util.List.of(assignment));
+    }
+
+    @Test
+    void batchCodeReissueReadsTheScopeOnceAndIssuesANewCode() {
+        UUID id = assignment.getId();
+        assignment.setActive(false);
+        assignment.setConfirmationCode(null);
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+        when(assignmentRepository.save(assignment)).thenReturn(assignment);
+
+        service.regenerateAssignmentCodes(java.util.List.of(id, id), false);
+
+        assertThat(assignment.getConfirmationCode()).isNotBlank();
+        assertThat(assignment.getActive()).isFalse();
+        verify(accountAccess, org.mockito.Mockito.times(1)).assignmentScope();
+        verify(assignmentRepository, org.mockito.Mockito.times(1)).save(assignment);
+    }
+
+    @Test
     void reassigningARetiredRoleSaysToReactivateIt() {
         UserRoleHospitalAssignment retired = UserRoleHospitalAssignment.builder().active(false).build();
         retired.setId(UUID.randomUUID());

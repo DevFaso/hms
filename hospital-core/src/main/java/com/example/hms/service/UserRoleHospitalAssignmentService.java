@@ -12,6 +12,7 @@ import com.example.hms.payload.dto.assignment.UserRoleAssignmentMultiRequestDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -74,6 +75,21 @@ public interface UserRoleHospitalAssignmentService {
      * This is the preferred alternative to hard-deleting assignments.
      */
     void deactivateAssignment(UUID id);
+
+    /**
+     * {@link #deactivateAssignment} for several rows, with the caller's scope
+     * read once: every row must be one the caller may change (the same
+     * guards, a super-admin's account shielded), checked for all of them
+     * before any is changed. A row out of scope answers as a missing id and
+     * nothing is changed.
+     */
+    void deactivateAssignments(Collection<UUID> ids);
+
+    /**
+     * {@link #regenerateAssignmentCode} for several rows, under the same
+     * all-checked-first scope rule as {@link #deactivateAssignments}.
+     */
+    void regenerateAssignmentCodes(Collection<UUID> ids, boolean resendNotifications);
 
     /**
      * Retire all assignments of a specific user by DEACTIVATING them. The rows

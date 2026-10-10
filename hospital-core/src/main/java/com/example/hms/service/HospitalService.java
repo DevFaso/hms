@@ -9,15 +9,8 @@ import java.util.Locale;
 import java.util.UUID;
 
 public interface HospitalService {
-    List<HospitalResponseDTO> getAllHospitals(UUID organizationId,
-                                              Boolean unassignedOnly,
-                                              String city,
-                                              String state,
-                                              Locale locale);
-
     /**
-     * {@link #getAllHospitals(UUID, Boolean, String, String, Locale)} for one
-     * facility type. {@code null} or HOSPITAL is the clinical list everyone
+     * The hospital list. {@code null} or HOSPITAL is the clinical list everyone
      * the endpoint admits reads; PHARMACY or LABORATORY is the super-admin's
      * explicit filter (provider plan AC-11), refused to anyone else.
      *

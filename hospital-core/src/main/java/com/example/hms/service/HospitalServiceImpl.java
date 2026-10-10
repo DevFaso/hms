@@ -71,16 +71,6 @@ public class HospitalServiceImpl implements HospitalService {
                                                      Boolean unassignedOnly,
                                                      String city,
                                                      String state,
-                                                     Locale locale) {
-        return getAllHospitals(organizationId, unassignedOnly, city, state, null, locale);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<HospitalResponseDTO> getAllHospitals(UUID organizationId,
-                                                     Boolean unassignedOnly,
-                                                     String city,
-                                                     String state,
                                                      FacilityType facilityType,
                                                      Locale locale) {
         // AC-11: the list is clinical unless a verified super-admin names a
