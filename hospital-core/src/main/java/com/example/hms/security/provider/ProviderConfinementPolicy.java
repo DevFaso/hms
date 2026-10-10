@@ -212,10 +212,7 @@ public class ProviderConfinementPolicy implements SmartInitializingSingleton {
      */
     public void refuse(HttpServletRequest request, HttpServletResponse response) throws IOException {
         log.debug("[CONFINEMENT] Provider request outside the allow-list: {} refused as not found", request.getMethod());
-        String path = pathWithinApplication(request);
-        HttpMethod method = HttpMethod.valueOf(request.getMethod());
-        NoResourceFoundException notFound = new NoResourceFoundException(method, path,
-            path.startsWith("/") ? path.substring(1) : path);
+        NoResourceFoundException notFound = unmapped(request);
         HandlerExceptionResolver resolver = exceptionResolverProvider.getIfAvailable();
         ModelAndView answered = null;
         if (resolver != null) {
@@ -229,6 +226,19 @@ public class ProviderConfinementPolicy implements SmartInitializingSingleton {
         if (answered == null && !response.isCommitted()) {
             response.sendError(HttpServletResponse.SC_NOT_FOUND);
         }
+    }
+
+    /**
+     * The exception Spring MVC raises for an unmapped path, for this request.
+     * Thrown by a handler that answers a caller outside its reach (the
+     * {@code /provider/**} pages for a caller with no seat at a provider), it
+     * goes through the same resolvers as a real unmapped path, so the two
+     * answers cannot be told apart.
+     */
+    public static NoResourceFoundException unmapped(HttpServletRequest request) {
+        String path = pathWithinApplication(request);
+        HttpMethod method = HttpMethod.valueOf(request.getMethod());
+        return new NoResourceFoundException(method, path, path.startsWith("/") ? path.substring(1) : path);
     }
 
     /**

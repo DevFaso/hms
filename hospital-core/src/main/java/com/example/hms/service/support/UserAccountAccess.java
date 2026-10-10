@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -102,8 +103,8 @@ public class UserAccountAccess {
     /** The administrator of an external provider facility (provider plan §6.3). */
     private static final String PROVIDER_ADMIN = "PROVIDER_ADMIN";
 
-    /** Roles only a super-admin grants, and whose holders only a super-admin administers. */
-    static final Set<String> ADMIN_ROLES = Set.of(SUPER_ADMIN, HOSPITAL_ADMIN, "ADMIN", PROVIDER_ADMIN);
+    /** Roles only a super-admin grants, and whose holders only a super-admin administers. Bare codes. */
+    public static final Set<String> ADMIN_ROLES = Set.of(SUPER_ADMIN, HOSPITAL_ADMIN, "ADMIN", PROVIDER_ADMIN);
 
     /** The admin-register roles, bare; the same constant feeds the annotations and SecurityConfig. */
     static final Set<String> REGISTRAR_ROLES = Arrays.stream(
@@ -312,6 +313,13 @@ public class UserAccountAccess {
      *       HOSPITAL_ADMIN assignment; to change one, its role must not be an
      *       admin role, because admin roles are granted (and so administered)
      *       by the super-admin only;</li>
+     *   <li>a provider admin: the same, at the provider facilities where they
+     *       hold an ACTIVE PROVIDER_ADMIN assignment (provider plan AC-6), the
+     *       facilities {@link #requireMayGrant} already lets them grant at.
+     *       PROVIDER_ADMIN is an admin role, so a peer's row is never theirs
+     *       to change. The {@code /assignments} endpoints stay unreachable to
+     *       them (the confinement allow-list, and annotations naming no
+     *       provider role); {@code /provider/staff} is their only way in;</li>
      *   <li>anyone else: nothing.</li>
      * </ul>
      * Callers answer a row outside the scope exactly as they answer a missing
@@ -319,9 +327,17 @@ public class UserAccountAccess {
      */
     public AssignmentScope assignmentScope() {
         Caller caller = caller();
-        return caller.superAdmin()
-            ? AssignmentScope.SUPER_ADMIN_SCOPE
-            : new AssignmentScope(false, administeredHospitals(caller));
+        if (caller.superAdmin()) {
+            return AssignmentScope.SUPER_ADMIN_SCOPE;
+        }
+        Set<UUID> administered = administeredHospitals(caller);
+        Set<UUID> providerAdministered = providerAdministeredHospitals(caller);
+        if (providerAdministered.isEmpty()) {
+            return new AssignmentScope(false, administered);
+        }
+        Set<UUID> both = new HashSet<>(administered);
+        both.addAll(providerAdministered);
+        return new AssignmentScope(false, both);
     }
 
     /**
