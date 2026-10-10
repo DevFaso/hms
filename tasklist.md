@@ -4531,13 +4531,6 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   `angular.json` or the tsconfigs; `platform-browser`'s peer on animations
   is optional), so the replacement turned out to be a removal.
 
-- **`@angular/ssr` floats on a caret range (2026-10-10).** It ships at
-  runtime (server rendering) but is `^22.2.x`, next to exact-pinned
-  framework packages, and `@angular/build` peers on it with a caret too.
-  The pair can move ahead of the pinned `@angular/core` /
-  `platform-server` in a later `npm install`. Pin it exactly with the rest,
-  or record why it floats.
-
 - **Push notifications have app code and no backend (2026-10-04).** #791
   shipped dormant push registration on both apps (FCM initialised only when
   four BuildConfig values exist; APNs registration on iOS), but V176, the
