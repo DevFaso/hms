@@ -34,6 +34,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -553,8 +554,8 @@ class UserRoleHospitalAssignmentServiceImplTest {
 
         assertThat(assignment.getConfirmationCode()).isNotBlank();
         assertThat(assignment.getActive()).isFalse();
-        verify(accountAccess, org.mockito.Mockito.times(1)).assignmentScope();
-        verify(assignmentRepository, org.mockito.Mockito.times(1)).save(assignment);
+        verify(accountAccess, times(1)).assignmentScope();
+        verify(assignmentRepository, times(1)).save(assignment);
     }
 
     @Test
