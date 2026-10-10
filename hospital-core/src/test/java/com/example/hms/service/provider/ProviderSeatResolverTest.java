@@ -95,7 +95,7 @@ class ProviderSeatResolverTest {
     @DisplayName("the admin bit is UserAccountAccess's rule: it agrees with the rows the assignment service lets them change")
     void adminRuleAgreesWithTheAssignmentScope() {
         UserRoleHospitalAssignment staffRowHere = row("ROLE_PHARMACIST", pharmacy, true);
-        // {live PROVIDER_ADMIN row, role presented}
+        // Each case: whether the PROVIDER_ADMIN row is live, then whether the token presents the role.
         boolean[][] cases = {{true, true}, {true, false}, {false, true}};
         for (boolean[] c : cases) {
             boolean liveRow = c[0];
