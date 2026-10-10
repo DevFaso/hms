@@ -64,7 +64,9 @@ including but not limited to:
 - Changing client scopes, mappers, or default scopes (especially `hms-claims` / `hms-profile`).
 - Modifying the TOTP / password / brute-force policy.
 - Adding a new client.
-- Any structural change to `users`, `groups`, `clientScopes`, `components`, or `authenticationFlows`.
+- Any structural change to `users`, `groups`, `clientScopes`, `components`, or `authenticationFlows`
+  (flows, authenticator configs and client-scope mappers are applied by hand: see
+  [§ Provider MFA](#provider-mfa-one-time-steps-per-environment-d5-p1-t11) for the pattern).
 
 If a PR touches `realm-export.json` and this runbook is **not** followed,
 the change ships to nowhere. The CI does not enforce this — there is no
@@ -227,6 +229,95 @@ no automated path for realm-level settings short of a full
 `kc.sh import --override true`, which requires shell access to the
 Keycloak container that Railway does not provide on the standard
 plan.
+
+## Provider MFA: one-time steps per environment (D5 P1-T11)
+
+External providers (pharmacies and laboratories) need MFA on both auth paths
+(provider plan AC-13, §6.10, §9.4). The backend enforces it for every provider
+user from the token's `amr` claim; the realm must (a) know
+`ROLE_PROVIDER_ADMIN`, (b) ask a provider admin for OTP at every login, and
+(c) put `otp` in `amr` when OTP was used. `realm-export.json` carries all of
+it, but only the role reaches a running realm by Partial Import. The rest is
+done by hand, once per environment.
+
+**When.** Dev first. Prod only after the PR is synced to `main`, and
+**before the first provider admin account is created on Keycloak**. Nothing
+below touches users or client secrets. Do **not** tick *Clients* in a Partial
+Import for this: the export's `hms-backend` secret is a placeholder.
+
+| Part | Where in the export | How it reaches a running realm |
+|---|---|---|
+| `ROLE_PROVIDER_ADMIN` | `roles.realm` | Step 1 (Partial Import, *Realm Roles*, or by hand) |
+| `hms browser` flow and its five authenticator configs | `authenticationFlows`, `authenticatorConfig` | Steps 2–5, by hand |
+| Browser flow binding | `browserFlow` | Step 6, by hand |
+| `amr` mapper on `hms-profile` | `clientScopes` | Step 7, by hand |
+| Backend `MFA_REQUIRED_ROLES` (prod) | `application.properties` default | Step 9, Railway |
+
+1. **Role.** *Realm roles* → *Create role*: `ROLE_PROVIDER_ADMIN`, description
+   as in the export. (Or *Realm settings* → *Action* → *Partial import*, tick
+   **Realm Roles only**, strategy **Skip**.) `env-sync-verify.sh --full` check
+   A2 now expects 27 roles.
+2. **Flow.** *Authentication* → *Flows* → `browser` → *Action* → *Duplicate*,
+   name `hms browser` (Keycloak names the copied subflows `hms browser forms`,
+   `hms browser Browser - Conditional OTP`, … exactly as in the export).
+3. In `hms browser Browser - Conditional OTP`:
+   - *Add condition* → **Condition - user role**, requirement **Required**,
+     then its settings (gear): alias `hms-not-provider-admin`, user role
+     `ROLE_PROVIDER_ADMIN`, **Negate output on**. Drag it above *OTP Form*.
+   - *OTP Form* → settings: alias `hms-amr-otp`, *Authenticator Reference*
+     `otp`, *Authenticator Reference Max Age* `172800`.
+4. In `hms browser forms`: *Username Password Form* → settings: alias
+   `hms-amr-pwd`, *Authenticator Reference* `pwd`, max age `172800`.
+5. In `hms browser forms`: *Add sub-flow* `hms browser Provider admin OTP`
+   (generic), requirement **Conditional**. Inside it:
+   - *Add condition* → **Condition - user role**, **Required**, settings:
+     alias `hms-provider-admin`, user role `ROLE_PROVIDER_ADMIN`, negate
+     **off**;
+   - *Add step* → **OTP Form**, **Required**, settings: alias
+     `hms-amr-otp-provider-admin`, reference `otp`, max age `172800`.
+6. **Bind.** `hms browser` → *Action* → *Bind flow* → **Browser flow**.
+7. **AMR mapper.** *Client scopes* → `hms-profile` → *Mappers* → *Add mapper*
+   → *By configuration* → **Authentication Method Reference (AMR)**: name
+   `amr`, add to access token, ID token and token introspection.
+8. **Verify** (dev with test accounts; on prod with the first real provider
+   admin, before any staff are created):
+   - the flow matches the export:
+     `jq '.authenticationFlows[] | select(.alias | startswith("hms browser"))' keycloak/realm-export.json`
+     against *Authentication* → `hms browser`;
+   - a provider admin with no OTP is sent to *Mobile Authenticator Setup* at
+     login; a second login asks for the code; the access token then carries
+     `"amr":["pwd","otp"]` (decode it, or *Client scopes* → *Evaluate*);
+   - a hospital doctor without OTP still logs in with a password only and gets
+     `"amr":["pwd"]`;
+   - `GET /api/auth/session/bootstrap` for that provider admin answers
+     `"mfaEnrollmentRequired":false`, and for a provider pharmacist with no
+     OTP answers `true` (every other call 403 `mfa.enrollment.required`).
+9. **Backend env (prod only).** Railway → backend service → Variables →
+   `MFA_REQUIRED_ROLES`: append `,ROLE_PROVIDER_ADMIN`. The default in
+   `application.properties` never reaches prod, which overrides the list. The
+   legacy login challenges every provider user whatever the list says; this
+   keeps the list honest.
+
+**Behaviour to know** (verified on a local Keycloak 26.0.7, the prod image):
+
+- The login on which OTP is **first configured** yields `"amr":["pwd"]`, so
+  the backend answers `mfaEnrollmentRequired` until the user signs in again.
+  The provider shell (P1-T13) sends them back through login; until then they
+  sign out and in.
+- Provider **staff** (a pharmacist or lab role at a provider) are not forced
+  into OTP by the realm, because hospitals share those roles; the backend gate
+  is their control. Set the *Configure OTP* required action on the account
+  when creating it, or the user sets OTP up in the account console; the next
+  login carries `otp`.
+- The max age (172800 s) equals `ssoSessionMaxLifespan`. A reference older
+  than its max age drops out of `amr`, so a refreshed token would lose `otp`
+  and the backend would refuse the session: change the three max ages with
+  the session lifespan.
+
+**Rollback.** Rebind `browser` as the browser flow (step 6 with `browser`).
+The `hms browser` flow and the `amr` mapper are inert without the binding.
+The backend gate then refuses every provider user on Keycloak (no `otp`),
+which is acceptable while no provider is verified.
 
 ## After the procedure
 

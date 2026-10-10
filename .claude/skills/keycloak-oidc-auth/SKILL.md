@@ -53,10 +53,25 @@ Token TTL:
 `app.mfa.required-roles` controls which roles MUST enroll TOTP:
 
 ```
-ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_PHARMACIST, ROLE_FINANCE
+ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_PHARMACIST, ROLE_FINANCE, ROLE_PROVIDER_ADMIN
 ```
 
-Override via `MFA_REQUIRED_ROLES` env. Enrollment lives on
+Override via `MFA_REQUIRED_ROLES` env (prod does: any role added to the
+default must be added to the prod env var too).
+
+**Provider users (external pharmacies and labs, AC-13)** are gated on live
+assignments, not on that list, by `security/provider/ProviderMfaGate`: the
+proof is `otp` in the token's `amr` claim on BOTH paths. Keycloak emits it
+through the `amr` mapper on `hms-profile` and the Authenticator References of
+the `hms browser` flow; the legacy issuer stamps `amr: ["pwd","otp"]` only on
+the tokens `POST /auth/mfa/verify` mints (and on an impersonation token after
+a TOTP step-up), and a refresh carries it. Without it, the session bootstrap
+reports `mfaEnrollmentRequired` and the confinement filter answers 403
+`mfa.enrollment.required` outside the sign-in and MFA enrolment handlers
+(`CommonProviderConfinement.SECOND_FACTOR_EXEMPT_RULES`; the rest of `/auth`,
+the ws ticket included, needs the factor), and `POST /auth/mfa/enroll` refuses
+to replace a provider user's authenticator without it. Never mint a token with
+`secondFactor=true` on any other path. Enrollment lives on
 `UserMfaEnrollment` (TOTP secret encrypted via `TotpSecretEncryptor` —
 different converter from `EncryptedStringConverter`). Backup-code use
 emits `AuditEventType.MFA_BACKUP_USED`.
