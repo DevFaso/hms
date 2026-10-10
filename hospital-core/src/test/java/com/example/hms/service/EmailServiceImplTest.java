@@ -157,18 +157,101 @@ class EmailServiceImplTest {
         @Test
         @DisplayName("sendWithAttachment is the synchronous transport: straight to SMTP, never queued")
         void sendWithAttachmentSendsNow() throws Exception {
-            doNothing().when(mailSender).send(any(MimeMessagePreparator.class));
-            emailService.sendWithAttachment(List.of("awa@example.com"), List.of("cc@example.com"), List.of(),
-                "Subject", "<p>Body</p>", null, null, null);
+            MimeMessage message = sentMessage(List.of("cc@example.com"), null);
 
-            ArgumentCaptor<MimeMessagePreparator> captor = ArgumentCaptor.forClass(MimeMessagePreparator.class);
-            verify(mailSender).send(captor.capture());
-            MimeMessage message = new MimeMessage(Session.getInstance(new Properties()));
-            captor.getValue().prepare(message);
             assertThat(message.getSubject()).isEqualTo("Subject");
             assertThat(collectText(message.getContent())).contains("<p>Body</p>");
             assertThat(message.getRecipients(jakarta.mail.Message.RecipientType.CC)).hasSize(1);
             verify(mailOutbox, never()).enqueue(any(), any(), any(), any(), any());
+        }
+
+        private MimeMessage sentMessage(List<String> cc, byte[] attachment) throws Exception {
+            doNothing().when(mailSender).send(any(MimeMessagePreparator.class));
+            emailService.sendWithAttachment(List.of("awa@example.com"), cc, List.of(),
+                "Subject", "<p>Body</p>", attachment, attachment != null ? "invoice.pdf" : null, null);
+            ArgumentCaptor<MimeMessagePreparator> captor = ArgumentCaptor.forClass(MimeMessagePreparator.class);
+            verify(mailSender).send(captor.capture());
+            MimeMessage message = new MimeMessage(Session.getInstance(new Properties()));
+            captor.getValue().prepare(message);
+            return message;
+        }
+
+        private void sender(String from, String name, String replyTo) {
+            ReflectionTestUtils.setField(emailService, "fromSetting", from);
+            ReflectionTestUtils.setField(emailService, "fromNameSetting", name);
+            ReflectionTestUtils.setField(emailService, "replyToSetting", replyTo);
+            emailService.initSender();
+        }
+
+        private static jakarta.mail.internet.InternetAddress first(jakarta.mail.Address[] addresses) {
+            return (jakarta.mail.internet.InternetAddress) addresses[0];
+        }
+
+        @Test
+        @DisplayName("a configured From and Reply-To are set on every mail, the attachment path included")
+        void configuredSenderIsUsed() throws Exception {
+            sender(" noreply@e-keneya.com ", "e-Keneya", "support@e-keneya.com");
+
+            MimeMessage message = sentMessage(List.of(), new byte[] {1, 2, 3});
+
+            assertThat(first(message.getFrom()).getAddress()).isEqualTo("noreply@e-keneya.com");
+            assertThat(first(message.getFrom()).getPersonal()).isEqualTo("e-Keneya");
+            assertThat(first(message.getReplyTo()).getAddress()).isEqualTo("support@e-keneya.com");
+        }
+
+        @Test
+        @DisplayName("MAIL_FROM in the \"Name <addr>\" form keeps its own name and address")
+        void namedFromForm() throws Exception {
+            sender("e-Keneya Support <support@e-keneya.com>", "e-Keneya", "");
+
+            MimeMessage message = sentMessage(List.of(), null);
+
+            assertThat(first(message.getFrom()).getAddress()).isEqualTo("support@e-keneya.com");
+            assertThat(first(message.getFrom()).getPersonal()).isEqualTo("e-Keneya Support");
+            assertThat(message.getHeader("Reply-To")).isNull();
+        }
+
+        @Test
+        @DisplayName("with no MAIL_FROM no From header is set, so the server supplies its own as before")
+        void noMailFromLeavesTheServerDefault() throws Exception {
+            sender("", "e-Keneya", "");
+
+            MimeMessage message = sentMessage(List.of(), null);
+
+            assertThat(message.getHeader("From")).isNull();
+        }
+
+        @Test
+        @DisplayName("a blank display name, from either setting, sends the bare address")
+        void blankDisplayNameIsDropped() throws Exception {
+            sender("\"   \" <noreply@e-keneya.com>", "   ", "");
+
+            MimeMessage message = sentMessage(List.of(), null);
+
+            assertThat(first(message.getFrom()).getAddress()).isEqualTo("noreply@e-keneya.com");
+            assertThat(first(message.getFrom()).getPersonal()).isNull();
+        }
+
+        @Test
+        @DisplayName("an invalid, TLD-less or multi-address setting is ignored, never fatal")
+        void invalidSettingsAreIgnored() throws Exception {
+            sender("noreply@e-keneya", "e-Keneya", "support@e-keneya.com, ops@e-keneya.com");
+
+            MimeMessage message = sentMessage(List.of(), null);
+
+            assertThat(message.getHeader("From")).isNull();
+            assertThat(message.getHeader("Reply-To")).isNull();
+        }
+
+        @Test
+        @DisplayName("a non-ASCII display name is RFC 2047 encoded on both forms")
+        void nonAsciiNameIsEncoded() throws Exception {
+            sender("Clinique Médicale <noreply@e-keneya.com>", "e-Keneya", "");
+
+            MimeMessage message = sentMessage(List.of(), null);
+
+            assertThat(message.getHeader("From")[0]).contains("=?UTF-8?").doesNotContain("é");
+            assertThat(first(message.getFrom()).getPersonal()).isEqualTo("Clinique Médicale");
         }
     }
 

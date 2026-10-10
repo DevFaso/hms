@@ -4811,6 +4811,50 @@ they stay visible instead of living in a javadoc.
   Turn it off with `HMS_INTEGRATION_RETENTION_ENABLED=false`.
 - Set the repository variable `PLAY_APP_PUBLISHED` to `true` after the first
   Play publish (#791); until then `stage_and_submit` is refused.
+- **Hosting memory limits (2026-10-09).** The hosting bill had doubled in two
+  months, almost all of it RAM: services ran with the plan's per-service
+  maximum as their memory limit, so the JVMs (Keycloak especially) grew
+  unchecked. Owner-approved changes, applied one service at a time with each
+  redeploy checked healthy; the settings are recorded in
+  `docs/runbooks/railway-env-matrix.md` §3a.
+  - Done: `hms-backend-core` (prod) and `hms-backend-dev` at 2 GB with
+    `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=70` (about 1.4 GB heap). No
+    `ExitOnOutOfMemoryError`, by decision: a request-scoped OOM should fail
+    that request, not kill the process. #839 makes the image's entrypoint set the heap
+    (`JVM_HEAP_PERCENT`, default 70, of the service's limit); once it is
+    deployed, remove both hand-set `JAVA_TOOL_OPTIONS` variables (same value).
+  - Done: `hms-keycloak-dev` and `hms-keycloak-prod` at 2 GB (1.5 GB failed to
+    boot; 2 GB redeployed healthy). `hms-keycloak-prod` is also set to sleep
+    when idle (unused: portal
+    `oidc.enabled=false`, no `OIDC_*` on `hms-backend-core`).
+  - Open: confirm `hms-keycloak-prod` actually sleeps (DB traffic can keep it
+    awake); it is capped at 2 GB either way.
+  - Open: verify the effective heap on both backends (`jvm.memory.max`, area
+    heap, about 1.4 GB) and re-measure memory in 24-48 h. A limit too small for
+    the whole process ends as exit 137, then CRASHED; `hms-backend-core` also runs
+    the OpenTelemetry agent when `OTEL_EXPORTER_OTLP_ENDPOINT` is set; if it is
+    killed for non-heap memory, lower `JVM_HEAP_PERCENT` (after #839) rather
+    than raising the limit, since the heap grows with the limit.
+  - Open: a usage alert rather than a hard usage limit; a hard limit takes
+    every service offline when reached, prod included.
+  - Open, later: one shared dev Keycloak with a realm per project.
+- **App email sender (2026-10-09).** #836 adds optional `MAIL_FROM`,
+  `MAIL_FROM_NAME`, `MAIL_REPLY_TO` (unset = unchanged). Inbound mail for
+  support@/contact@/noreply@ is routed by the MX records; SPF lists Google
+  for outbound, DMARC is `p=none`. `MAIL_FROM` was removed from prod on
+  2026-10-09: through the consumer @gmail.com login it only worked because
+  Gmail rewrites an unverified alias, and verifying the alias would send an
+  @e-keneya.com From that neither SPF nor DKIM aligns with (spam-foldered).
+  `MAIL_REPLY_TO=support@` stays: once #836 is synced, replies to app mail go
+  to support@ (forwarded to the owner's inbox). `MAIL_FROM_NAME` only applies
+  together with `MAIL_FROM`, so the sender name stays the Gmail account's until
+  the provider switch. Keep DMARC at `p=none` until outbound mail moves to a sender
+  aligned with e-keneya.com. Open, owner decision: move outbound mail to a dedicated sender
+  (recommended: a transactional provider such as Brevo or Resend with
+  e-keneya.com verified); that switch needs the provider in SPF and its DKIM
+  record, then `MAIL_FROM`, then DMARC can be tightened. Keep
+  `MAIL_HEALTH_ENABLED` false: true makes the platform healthcheck depend on
+  the SMTP provider.
 
 ## Deliberate non-goals — recorded so they stop resurfacing
 

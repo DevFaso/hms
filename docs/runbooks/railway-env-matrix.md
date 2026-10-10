@@ -27,11 +27,11 @@ MediHub (project)
 ├── dev       (environment)   ◄─ tracks branch `develop`
 │   ├── hms-keycloak-dev          + hms-keycloak-dev-db (Postgres)
 │   ├── hms-backend-dev           + hms-db-dev (Postgres)
-│   └── hospital-portal-dev
+│   └── hms-frontend-dev
 └── prod      (environment)   ◄─ tracks branch `main`
     ├── hms-keycloak-prod         + hms-keycloak-prod-db
-    ├── hms-backend-prod          + hms-db-prod
-    └── hospital-portal-prod
+    ├── hms-backend-core          + hms-db-prod   (the prod backend; not "hms-backend-prod")
+    └── hms-frontend-prod
 ```
 
 > **Why per-env service names** (rather than one shared service name
@@ -101,9 +101,10 @@ app.auth.oidc.required=${OIDC_REQUIRED:false}
 
 | Variable | Type | dev | prod | Notes |
 | --- | --- | --- | --- | --- |
-| `OIDC_ISSUER_URI` | public | `https://hms-keycloak-dev-dev.up.railway.app/realms/hms` | `https://hms-keycloak-prod-prod.up.railway.app/realms/hms` | **MUST** match the `hms-keycloak-<env>` `KC_HOSTNAME` value above + `/realms/hms`. When unset, the OIDC bean graph stays off and the backend is pre-S-03 behavior. |
+| `OIDC_ISSUER_URI` | public | `https://hms-keycloak-dev-dev.up.railway.app/realms/hms` | `https://hms-keycloak-prod-prod.up.railway.app/realms/hms` | **MUST** match the `hms-keycloak-<env>` `KC_HOSTNAME` value above + `/realms/hms`. When unset, the OIDC bean graph stays off and the backend is pre-S-03 behavior. **Prod is unset today** (the SSO cutover has not happened) and `hms-keycloak-prod` is set to sleep. The backend fetches the issuer's discovery document at boot and the JWKS at runtime (`OidcResourceServerConfig`); the boot-time fetch runs while the decoder bean is created, so if the sleeping Keycloak is slow to wake the Spring context fails and the backend does not start. Turn `hms-keycloak-prod`'s sleep OFF before setting this on prod, and keep it off: `hms-keycloak-dev` never sleeps for the same reason. |
 | `OIDC_AUDIENCE` | public | `hms-backend` | `hms-backend` | **MUST.** Strict `aud` claim validation. The realm export hard-codes this audience on the issued tokens; mismatch → all KC-issued tokens rejected by the resource server. |
 | `OIDC_REQUIRED` | public | per phase plan (see [keycloak-implementation-gaps.md](../keycloak-implementation-gaps.md) §3 Phase 3) | per phase plan | **MUST.** Controls whether legacy `POST /api/auth/login` returns 410. The intended per-env value is documented in the gaps doc; this matrix only owns the *contract*, not the schedule. |
+| `JVM_HEAP_PERCENT` | public | unset (70) | unset (70) | Optional, read by the Dockerfile entrypoint once #839 is deployed: the heap is this percent (clamped 10-90) of the service's memory limit (§3a). Set it only to change the heap. A `MaxRAMPercentage` in `JAVA_TOOL_OPTIONS` loses to it; an `-Xmx` there overrides it. |
 | `JWT_SECRET` | secret | (env-specific) | (env-specific) | **MUST.** HMAC signing for the legacy issuer (still active until Phase 4 cleanup). 32-byte minimum. |
 | `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` / `JWT_PREVIOUS_PUBLIC_KEY` | secret | unset (HMAC mode) | unset | RS256 mode is Phase 6; leave unset for now. When set in any env, that env switches to RS256 — must be set in lockstep with the matching public key on JWT consumers. |
 | `DATABASE_URL` (or `SPRING_DATASOURCE_URL` + USERNAME / PASSWORD) | derived | `${{hms-db-dev.DATABASE_URL}}` | same, `-prod` | **MUST.** Application Postgres — separate DB from `hms-keycloak-<env>-db`. |
@@ -120,7 +121,7 @@ If the first line is absent in any env, `OIDC_ISSUER_URI` is unset.
 
 ---
 
-## 3. `hospital-portal-<env>` (Angular) — one per environment
+## 3. `hms-frontend-<env>` (Angular, `hospital-portal`) — one per environment
 
 Portal env vars are baked at build time into [`hospital-portal/src/environments/environment.<env>.ts`](../../hospital-portal/src/environments/), so the "matrix" here is what those files
 **must agree with** the matching `hms-keycloak-<env>` `KC_HOSTNAME`. There is
@@ -134,6 +135,37 @@ at PR-review time.
 | `oidc.enabled` | `true` (when ready per phase 2.8.B) | `false` until Phase 3 cutover | Drives whether the SSO button is rendered. Keep `false` in any env where the realm isn't yet imported / users aren't migrated. |
 
 **Verify with:** open the portal in each env, check `window.OIDC_ISSUER` (or the dev-tools network tab on `/realms/hms/.well-known/openid-configuration`) and confirm the issuer matches the realm.
+
+---
+
+## 3a. Resources (set on the service, not in variables)
+
+A JVM sizes its heap from the container's memory limit. With the plan's
+per-service maximum as the limit (32 GB on Pro as of 2026-10-09), an uncapped
+service grows until the bill does. Settings since 2026-10-09 (the prod backend
+service is `hms-backend-core`, dev is `hms-backend-dev`):
+
+| Service | Memory limit | `JAVA_TOOL_OPTIONS` | Sleep when idle |
+| --- | --- | --- | --- |
+| `hms-backend-core` (prod) | 2 GB | `-XX:MaxRAMPercentage=70` | off |
+| `hms-backend-dev` | 2 GB | `-XX:MaxRAMPercentage=70` | off |
+| `hms-keycloak-prod` | 2 GB (1.5 GB failed to boot) | none | on, requested; confirm it actually sleeps (DB traffic can keep it awake) |
+| `hms-keycloak-dev` | 2 GB | none | off (hms-backend-dev needs it at boot and for JWKS refresh) |
+
+No `ExitOnOutOfMemoryError`, by decision: it would turn one oversized request
+into a kill of the whole process. A request-scoped OOM fails that request and
+the heap recovers. An OOM can also land in a background thread (scheduler,
+pool housekeeper, exporter) and stop it while health stays UP; the
+`HmsHeapHigh` alert is the signal for that, not a process exit; `railway.toml` keeps `on_failure` with 3 restarts. A limit
+that is too small for the whole process (heap plus metaspace, threads and the
+OpenTelemetry agent) shows up as a kernel kill, exit 137, and a **CRASHED**
+deployment once the 3 restarts are spent (FAILED is for builds and deploy-time
+healthchecks). Once #839 is deployed, the image's entrypoint sets the heap itself:
+`JVM_HEAP_PERCENT` (default 70, clamped to 10-90) of the service's memory limit,
+logged at startup (`gc,init`, "Heap Max Capacity"). Every service must have a
+memory limit, or the JVM sizes from the platform's per-service maximum. The
+`JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=70` variables above then lose to the
+command line (same value, so the heap does not change) and can be removed.
 
 ---
 
@@ -159,8 +191,12 @@ To audit the matrix against reality without touching anything:
 
 ```bash
 # Per env, per service, list configured variables (names only — values stay in Railway)
-for env in dev prod; do
-  for svc in hms-keycloak-$env hms-backend-$env hospital-portal-$env; do
+# The prod backend is hms-backend-core and the portals are hms-frontend-<env>,
+# so the service names are listed per environment rather than templated.
+for pair in "dev:hms-keycloak-dev hms-backend-dev hms-frontend-dev" \
+            "prod:hms-keycloak-prod hms-backend-core hms-frontend-prod"; do
+  env=${pair%%:*}
+  for svc in ${pair#*:}; do
     echo "=== $env / $svc ==="
     railway environment $env
     railway service $svc
