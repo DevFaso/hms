@@ -34,6 +34,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -261,6 +262,56 @@ class ProviderAdminServiceImplTest {
         assertThat(member.isActive()).isFalse();
         assertThat(member.isInvitationPending()).isTrue();
         assertThat(member.getRoles()).containsExactly("PHARMACIST");
+    }
+
+    @Test
+    @DisplayName("canDeactivate / canReinvite follow the endpoints' own rules: never the caller, a peer admin, "
+        + "an admin anywhere or by global role; no re-invite for a disabled account or an all-active member")
+    void staffActionFlagsFollowTheServerRules() {
+        admin();
+        User active = user("active");
+        UserRoleHospitalAssignment activeRow = row(active, "ROLE_PHARMACIST", pharmacy, true);
+        member(active, activeRow);
+        User invited = user("invited");
+        UserRoleHospitalAssignment invitedRow = row(invited, "ROLE_PHARMACIST", pharmacy, false);
+        invitedRow.setConfirmationCode("123456");
+        member(invited, invitedRow);
+        User disabled = user("disabled");
+        disabled.setActive(false);
+        UserRoleHospitalAssignment disabledRow = row(disabled, "ROLE_PHARMACIST", pharmacy, false);
+        member(disabled, disabledRow);
+        User peer = user("peer");
+        UserRoleHospitalAssignment peerRow = row(peer, "ROLE_PROVIDER_ADMIN", pharmacy, true);
+        member(peer, peerRow);
+        User formerAdmin = user("former");
+        UserRoleHospitalAssignment formerRow = row(formerAdmin, "ROLE_PHARMACIST", pharmacy, false);
+        member(formerAdmin, formerRow, row(formerAdmin, "ROLE_HOSPITAL_ADMIN", hospital, false));
+        User globalAdmin = user("global-admin");
+        globalAdmin.setUserRoles(Set.of(UserRole.builder().user(globalAdmin).role(role("ADMIN")).build()));
+        UserRoleHospitalAssignment globalRow = row(globalAdmin, "ROLE_PHARMACIST", pharmacy, false);
+        member(globalAdmin, globalRow);
+        UserRoleHospitalAssignment selfRow = row(adminUser, "ROLE_PROVIDER_ADMIN", pharmacy, true);
+        member(adminUser, selfRow);
+        when(assignmentRepository.findStaffRowsByHospitalId(pharmacy.getId())).thenReturn(List.of(
+            activeRow, invitedRow, disabledRow, peerRow, formerRow, globalRow, selfRow));
+
+        Map<String, ProviderStaffMemberDTO> byName = new java.util.HashMap<>();
+        service.listStaff().orElseThrow().forEach(m -> byName.put(m.getUsername(), m));
+
+        assertThat(byName.get("active").isCanDeactivate()).isTrue();
+        assertThat(byName.get("active").isCanReinvite()).isFalse();
+        assertThat(byName.get("invited").isCanDeactivate()).isTrue();
+        assertThat(byName.get("invited").isCanReinvite()).isTrue();
+        assertThat(byName.get("disabled").isCanDeactivate()).isFalse();
+        assertThat(byName.get("disabled").isCanReinvite()).isFalse();
+        for (String shielded : List.of("peer", "former", "global-admin", "admin")) {
+            assertThat(byName.get(shielded).isCanDeactivate()).as(shielded).isFalse();
+            assertThat(byName.get(shielded).isCanReinvite()).as(shielded).isFalse();
+        }
+        // The flags agree with what the endpoints actually do.
+        assertThat(service.activateStaff(disabled.getId().toString())).isEmpty();
+        assertThat(service.deactivateStaff(formerAdmin.getId().toString())).isEmpty();
+        assertThat(service.activateStaff(globalAdmin.getId().toString())).isEmpty();
     }
 
     @Test

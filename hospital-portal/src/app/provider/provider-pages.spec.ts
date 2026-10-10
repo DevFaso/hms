@@ -1,10 +1,10 @@
-import { Type } from '@angular/core';
+import { Type, WritableSignal, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { Observable, of, throwError } from 'rxjs';
+import { Observable, Subject, of, throwError } from 'rxjs';
 
 import { ProviderContextService } from '../core/provider-context.service';
 import { ToastService } from '../core/toast.service';
@@ -61,6 +61,8 @@ function member(overrides: Partial<ProviderStaffMember> = {}): ProviderStaffMemb
     invitationPending: false,
     providerAdmin: false,
     self: false,
+    canDeactivate: true,
+    canReinvite: false,
     ...overrides,
   };
 }
@@ -69,6 +71,8 @@ describe('provider shell pages', () => {
   let portal: jasmine.SpyObj<ProviderPortalService>;
   let toast: jasmine.SpyObj<ToastService>;
   let settings: ProviderSettings | null;
+  /** What the context holds while a page is open: a signal, so a scope switch is seen. */
+  let settingsSignal: WritableSignal<ProviderSettings | null>;
 
   function configure(): void {
     TestBed.configureTestingModule({
@@ -81,7 +85,10 @@ describe('provider shell pages', () => {
         { provide: ToastService, useValue: toast },
         {
           provide: ProviderContextService,
-          useValue: { settings: () => settings, load: () => of(settings) },
+          useFactory: () => {
+            settingsSignal = signal(settings);
+            return { settings: settingsSignal, load: () => of(settingsSignal()) };
+          },
         },
       ],
     });
@@ -141,6 +148,21 @@ describe('provider shell pages', () => {
             roleName: 'PROVIDER_ADMIN',
             entityType: 'PROVIDER_FACILITY',
             resourceId: 'f-1',
+            impersonatorUserId: null,
+            impersonatorUsername: null,
+          },
+          {
+            id: 'a-2',
+            eventTimestamp: '2026-10-09T09:00:00',
+            eventType: 'DATA_UPDATE',
+            status: 'SUCCESS',
+            actorUserId: 'u-2',
+            actorName: 'pharm',
+            roleName: 'PHARMACIST',
+            entityType: 'PROVIDER_STAFF',
+            resourceId: 'u-3',
+            impersonatorUserId: 'sa-1',
+            impersonatorUsername: 'support-agent',
           },
         ],
         page: 0,
@@ -247,15 +269,36 @@ describe('provider shell pages', () => {
 
   // ── staff ─────────────────────────────────────────────────────────────
 
-  it('staff: lists members; no action on the admin themself or a peer administrator', () => {
+  it('staff: renders the actions the server says it would accept, and nothing else', () => {
+    portal.staff.and.returnValue(
+      of([
+        member({ userId: 'u-2', canDeactivate: true, canReinvite: false }),
+        member({
+          userId: 'u-3',
+          active: false,
+          invitationPending: true,
+          canDeactivate: true,
+          canReinvite: true,
+        }),
+        // Inactive with no invitation out: nothing to revoke, a new code to send.
+        member({ userId: 'u-5', active: false, canDeactivate: false, canReinvite: true }),
+        // An admin elsewhere, or a disabled account: the server offers nothing.
+        member({ userId: 'u-4', active: false, canDeactivate: false, canReinvite: false }),
+        member({ userId: 'u-1', self: true, providerAdmin: true, canDeactivate: false }),
+      ]),
+    );
     const { cmp, host } = render(ProviderStaffComponent);
-    expect(host().querySelectorAll('[data-test="staff-row"]').length).toBe(2);
-    expect(cmp.manageable(member())).toBeTrue();
-    expect(cmp.manageable(member({ self: true }))).toBeFalse();
-    expect(cmp.manageable(member({ providerAdmin: true }))).toBeFalse();
-    expect(host().querySelectorAll('[data-test="deactivate"]').length).toBe(1);
+    expect(host().querySelectorAll('[data-test="staff-row"]').length).toBe(5);
+    expect(host().querySelectorAll('[data-test="deactivate"]').length).toBe(2);
+    expect(host().querySelectorAll('[data-test="reinvite"]').length).toBe(2);
     expect(cmp.staffRoles()).toEqual(['PHARMACIST']);
     expect(cmp.displayName(member({ firstName: null, lastName: null }))).toBe('pharm');
+
+    // Not offered: never sent either.
+    cmp.askDeactivate(member({ userId: 'u-4', canDeactivate: false }));
+    expect(cmp.confirmDeactivate()).toBeNull();
+    cmp.reinvite(member({ userId: 'u-4', canReinvite: false }));
+    expect(portal.activate).not.toHaveBeenCalled();
   });
 
   it('staff: deactivate asks first, then replaces the row', () => {
@@ -273,16 +316,41 @@ describe('provider shell pages', () => {
 
   it('staff: re-invite reports where the code went', () => {
     const { cmp } = render(ProviderStaffComponent);
-    cmp.reinvite(member({ active: false }));
+    cmp.reinvite(member({ active: false, canReinvite: true }));
     expect(portal.activate).toHaveBeenCalledWith('u-2');
     expect(toast.success).toHaveBeenCalled();
 
     portal.activate.and.returnValue(
       of(member({ active: false, activationDelivery: [{ channel: 'SMS', outcome: 'FAILED' }] })),
     );
-    cmp.reinvite(member({ active: false }));
+    cmp.reinvite(member({ active: false, canReinvite: true }));
     expect(toast.info).toHaveBeenCalled();
     expect(toast.warning).toHaveBeenCalled();
+  });
+
+  it('staff: each row waits on its own; no double request; a failure clears only its row', () => {
+    const first = new Subject<ProviderStaffMember>();
+    const second = new Subject<ProviderStaffMember>();
+    portal.activate.and.returnValues(first, second);
+    const { cmp } = render(ProviderStaffComponent);
+    const a = member({ userId: 'u-a', active: false, canReinvite: true });
+    const b = member({ userId: 'u-b', active: false, canReinvite: true });
+
+    cmp.reinvite(a);
+    cmp.reinvite(a);
+    cmp.reinvite(b);
+    expect(portal.activate.calls.allArgs()).toEqual([['u-a'], ['u-b']]);
+    expect(cmp.isBusy(a)).toBeTrue();
+    expect(cmp.isBusy(b)).toBeTrue();
+
+    second.error(new HttpErrorResponse({ status: 500 }));
+    expect(cmp.isBusy(b)).toBeFalse();
+    expect(cmp.isBusy(a)).toBeTrue();
+    expect(toast.error).toHaveBeenCalled();
+
+    first.next(member({ userId: 'u-a', active: false, invitationPending: true }));
+    first.complete();
+    expect(cmp.isBusy(a)).toBeFalse();
   });
 
   it('staff: a refused action answers like a miss: the list is re-read, never an error page', () => {
@@ -293,11 +361,22 @@ describe('provider shell pages', () => {
     expect(toast.info).toHaveBeenCalled();
     expect(portal.staff).toHaveBeenCalledTimes(2);
     expect(cmp.confirmDeactivate()).toBeNull();
+    expect(cmp.isBusy(member())).toBeFalse();
+  });
 
-    portal.activate.and.returnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
-    cmp.reinvite(member({ active: false }));
-    expect(toast.error).toHaveBeenCalled();
-    expect(cmp.busyUserId()).toBeNull();
+  it('staff: a switch to another facility re-reads the list and closes the dialogs', () => {
+    const { cmp, host } = render(ProviderStaffComponent);
+    expect(portal.staff).toHaveBeenCalledTimes(1);
+    cmp.openRegister();
+    cmp.askDeactivate(member());
+
+    settingsSignal.set(settingsFixture({ facilityId: 'f-2' }));
+    host();
+
+    expect(cmp.facilityId()).toBe('f-2');
+    expect(portal.staff).toHaveBeenCalledTimes(2);
+    expect(cmp.registerOpen()).toBeFalse();
+    expect(cmp.confirmDeactivate()).toBeNull();
   });
 
   it('staff: registering reloads the list; a 404 on load is not-available', () => {
@@ -321,7 +400,10 @@ describe('provider shell pages', () => {
 
   it('audit: lists the trail and pages while the server has more', () => {
     const { cmp, host } = render(ProviderAuditComponent);
-    expect(host().querySelectorAll('[data-test="audit-row"]').length).toBe(1);
+    expect(host().querySelectorAll('[data-test="audit-row"]').length).toBe(2);
+    // Platform support acting as a member: the row says so, by whom.
+    const bySupport = host().querySelectorAll('[data-test="by-support"]');
+    expect(bySupport.length).toBe(1);
     expect(cmp.recordKey('PROVIDER_FACILITY')).toBe('PROVIDER.AUDIT.RECORD_FACILITY');
     expect(cmp.recordKey('PROVIDER_STAFF')).toBe('PROVIDER.AUDIT.RECORD_STAFF');
     expect(cmp.recordKey('USER')).toBe('PROVIDER.AUDIT.RECORD_ACCOUNT');

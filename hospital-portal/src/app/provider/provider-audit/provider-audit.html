@@ -52,7 +52,17 @@
           @for (entry of entries(); track entry.id) {
             <tr data-test="audit-row">
               <td>{{ entry.eventTimestamp | date: 'medium' }}</td>
-              <td>{{ entry.actorName || '—' }}</td>
+              <td>
+                {{ entry.actorName || '—' }}
+                @if (entry.impersonatorUserId) {
+                  <span class="support-note" data-test="by-support">
+                    {{
+                      'PROVIDER.AUDIT.BY_SUPPORT'
+                        | translate: { name: entry.impersonatorUsername || '—' }
+                    }}
+                  </span>
+                }
+              </td>
               <td>{{ entry.roleName ? (entry.roleName | roleLabel) : '—' }}</td>
               <td>{{ entry.eventType | enumLabel: 'auditEventType' }}</td>
               <td>{{ recordKey(entry.entityType) | translate }}</td>

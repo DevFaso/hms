@@ -161,7 +161,7 @@ describe('HospitalDetailComponent (MVP-c2-frontend)', () => {
   it('submitDialog(schedule-purge) sends scheduledFor + reason', () => {
     hospitalService.getById.and.returnValue(of(fakeHospital()));
     lifecycleService.get.and.returnValue(of(fakeLifecycle('ARCHIVED')));
-    lifecycleService.schedulePurge.and.returnValue(of(fakeLifecycle('PURGE_SCHEDULED')));
+    lifecycleService.schedulePurge.and.returnValue(of(fakeLifecycle('PENDING_PURGE')));
 
     const cmp = setup();
     cmp.openDialog('schedule-purge');
@@ -173,7 +173,24 @@ describe('HospitalDetailComponent (MVP-c2-frontend)', () => {
       reason: 'GDPR retention expiry',
       scheduledFor: '2026-06-01',
     });
-    expect(cmp.state()).toBe('PURGE_SCHEDULED');
+    expect(cmp.state()).toBe('PENDING_PURGE');
+    // The backend's own value: a scheduled purge offers "Cancel purge" again.
+    expect(cmp.canCancelPurge()).toBeTrue();
+    expect(cmp.canSchedulePurge()).toBeFalse();
+  });
+
+  it('offers "Cancel purge" for the PENDING_PURGE state the backend sends, labelled in every locale', () => {
+    hospitalService.getById.and.returnValue(of(fakeHospital()));
+    lifecycleService.get.and.returnValue(of(fakeLifecycle('PENDING_PURGE')));
+    lifecycleService.cancelPurge.and.returnValue(of(fakeLifecycle('ARCHIVED')));
+
+    const cmp = setup();
+
+    expect(cmp.canCancelPurge()).toBeTrue();
+    cmp.openDialog('cancel-purge');
+    cmp.submitDialog();
+    expect(lifecycleService.cancelPurge).toHaveBeenCalledWith('h-1');
+    expect(cmp.state()).toBe('ARCHIVED');
   });
 
   it('submitDialog() surfaces an error key on failure and keeps the dialog open', () => {

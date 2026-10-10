@@ -175,6 +175,10 @@ export interface ProviderStaffMember {
   invitationPending: boolean;
   providerAdmin: boolean;
   self: boolean;
+  /** The server's own rule: deactivating this member would be accepted. */
+  canDeactivate: boolean;
+  /** The server's own rule: re-inviting this member would be accepted. */
+  canReinvite: boolean;
   activationDelivery?: NotificationDeliveryStatus[] | null;
 }
 
@@ -188,6 +192,9 @@ export interface ProviderAuditEntry {
   roleName: string | null;
   entityType: string | null;
   resourceId: string | null;
+  /** Set when platform support acted while impersonating the actor. */
+  impersonatorUserId: string | null;
+  impersonatorUsername: string | null;
 }
 
 export interface ProviderAuditPage {

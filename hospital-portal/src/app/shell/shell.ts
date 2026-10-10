@@ -1456,6 +1456,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private broadcastOpened = false;
 
   constructor() {
+    // Ask whether this session acts at a provider facility, again whenever
+    // the scope changes or the session bootstrap resolves: the server answers
+    // for the facility the request acts at. The nav switches to the provider
+    // shell when it says so.
+    effect(() => {
+      this.roleContext.effectiveHospitalIdForRequest();
+      this.roleContext.sessionResolved();
+      untracked(() => this.providerContext.load().subscribe());
+    });
+
     effect(() => {
       const base = this.baseNavItems();
       const saved = this.navOrder.load();
@@ -1578,9 +1588,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   ngOnInit(): void {
     this.userProfile.set(this.auth.getUserProfile());
     this.permissions.loadFromBackend();
-    // Ask once whether this session acts at a provider facility; the nav
-    // switches to the provider shell when the server says so.
-    this.providerContext.load().subscribe();
 
     this.loadNotifications();
     this.loadUnreadMessages();

@@ -18,6 +18,7 @@ import {
   emptyEvidence,
   evidenceOf,
   isEvidenceComplete,
+  isNotAvailable,
   isProviderFacilityType,
   normaliseEvidence,
   serverMessage,
@@ -87,7 +88,7 @@ export class ProviderFormComponent implements OnInit {
         this.loading.set(false);
       },
       error: (err: unknown) => {
-        if ((err as { status?: number } | null)?.status === 404) {
+        if (isNotAvailable(err)) {
           this.notFound.set(true);
         } else {
           this.loadFailed.set(true);

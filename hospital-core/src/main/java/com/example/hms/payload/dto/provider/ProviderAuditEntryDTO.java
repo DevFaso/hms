@@ -40,4 +40,13 @@ public class ProviderAuditEntryDTO {
     private String entityType;
     /** The id of the record acted on, when there is one. */
     private String resourceId;
+
+    /**
+     * Set when platform support acted while impersonating the member named as
+     * the actor: who really acted. {@code null} for an ordinary row.
+     */
+    private UUID impersonatorUserId;
+
+    /** The impersonating support user's username, with {@link #impersonatorUserId}. */
+    private String impersonatorUsername;
 }

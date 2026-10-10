@@ -79,24 +79,25 @@
                 }
               </td>
               <td>
-                @if (manageable(member)) {
+                @if (member.canDeactivate || member.canReinvite) {
                   <div class="row-actions">
-                    @if (member.active) {
+                    @if (member.canDeactivate) {
                       <button
                         type="button"
                         class="btn-secondary small-btn"
                         data-test="deactivate"
-                        [disabled]="busyUserId() === member.userId"
+                        [disabled]="isBusy(member)"
                         (click)="askDeactivate(member)"
                       >
                         {{ 'PROVIDER.STAFF.DEACTIVATE' | translate }}
                       </button>
-                    } @else {
+                    }
+                    @if (member.canReinvite) {
                       <button
                         type="button"
                         class="btn-secondary small-btn"
                         data-test="reinvite"
-                        [disabled]="busyUserId() === member.userId"
+                        [disabled]="isBusy(member)"
                         (click)="reinvite(member)"
                       >
                         {{ 'PROVIDER.STAFF.REINVITE' | translate }}
@@ -147,7 +148,7 @@
             type="button"
             class="btn-primary"
             data-test="deactivate-confirm"
-            [disabled]="busyUserId() === member.userId"
+            [disabled]="isBusy(member)"
             (click)="deactivate()"
           >
             {{ 'PROVIDER.STAFF.DEACTIVATE' | translate }}

@@ -51,7 +51,7 @@ export interface HospitalResponse {
    * Hospital DTO so the list view can render a state chip per row
    * without an N+1 lookup. Optional for backwards compatibility.
    */
-  lifecycleState?: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED' | 'PURGE_SCHEDULED' | 'PURGED';
+  lifecycleState?: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED' | 'PENDING_PURGE' | 'PURGED';
   createdAt: string;
   updatedAt: string;
 }

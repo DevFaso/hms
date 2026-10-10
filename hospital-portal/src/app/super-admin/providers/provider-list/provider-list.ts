@@ -10,6 +10,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
+import { Subscription } from 'rxjs';
 
 import {
   PROVIDER_FACILITY_TYPES,
@@ -57,26 +58,38 @@ export class ProviderListComponent implements OnInit {
   readonly hasPrevious = computed(() => this.pageIndex() > 0);
   readonly hasNext = computed(() => this.pageIndex() + 1 < this.totalPages());
 
+  private listSub?: Subscription;
+
   ngOnInit(): void {
     this.refresh();
   }
 
   refresh(): void {
+    // A filter change cancels the request still in flight, and an answer for
+    // filters the page no longer shows is dropped: the table never shows one
+    // filter's rows under another's selects.
+    this.listSub?.unsubscribe();
+    const filters = { type: this.typeFilter(), status: this.statusFilter() };
+    const pageIndex = this.pageIndex();
+    const current = () =>
+      filters.type === this.typeFilter() &&
+      filters.status === this.statusFilter() &&
+      pageIndex === this.pageIndex();
     this.loading.set(true);
     this.errored.set(false);
-    this.service
-      .list({ type: this.typeFilter(), status: this.statusFilter() }, this.pageIndex(), PAGE_SIZE)
-      .subscribe({
-        next: (page) => {
-          this.page.set(page);
-          this.loading.set(false);
-        },
-        error: () => {
-          this.page.set(null);
-          this.errored.set(true);
-          this.loading.set(false);
-        },
-      });
+    this.listSub = this.service.list(filters, pageIndex, PAGE_SIZE).subscribe({
+      next: (page) => {
+        if (!current()) return;
+        this.page.set(page);
+        this.loading.set(false);
+      },
+      error: () => {
+        if (!current()) return;
+        this.page.set(null);
+        this.errored.set(true);
+        this.loading.set(false);
+      },
+    });
   }
 
   setType(type: ProviderFacilityType | ''): void {

@@ -1,12 +1,14 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  OnInit,
   computed,
+  effect,
   inject,
   signal,
+  untracked,
 } from '@angular/core';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { Subscription } from 'rxjs';
 
 import { ProviderContextService } from '../../core/provider-context.service';
 import { ToastService } from '../../core/toast.service';
@@ -29,8 +31,14 @@ import { ProviderStaffRegisterComponent } from '../provider-staff-register/provi
  * invitation code, and register a new member through the existing
  * admin-register flow, at this facility and in its type's roles only.
  *
- * Peers who administer the facility and the admin's own account are listed
- * but cannot be changed here: the server refuses both, so no button is offered.
+ * Which actions a row offers is the server's answer (`canDeactivate`,
+ * `canReinvite`), computed by the same rules the endpoints apply: the admin's
+ * own account, an administrator anywhere and a disabled account are never
+ * offered what would be refused.
+ *
+ * The page follows the facility the session acts at: when the scope moves to
+ * another branch, the list is read again and any open dialog closes, so
+ * nothing is registered or changed at a facility the page no longer shows.
  */
 @Component({
   selector: 'app-provider-staff',
@@ -40,7 +48,7 @@ import { ProviderStaffRegisterComponent } from '../provider-staff-register/provi
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: '../provider-pages.scss',
 })
-export class ProviderStaffComponent implements OnInit {
+export class ProviderStaffComponent {
   private readonly portal = inject(ProviderPortalService);
   private readonly context = inject(ProviderContextService);
   private readonly toast = inject(ToastService);
@@ -50,11 +58,12 @@ export class ProviderStaffComponent implements OnInit {
   readonly loading = signal(true);
   readonly notAvailable = signal(false);
   readonly loadFailed = signal(false);
-  /** The member an action is running for, so only their row's buttons wait. */
-  readonly busyUserId = signal<string | null>(null);
+  /** The members an action is running for: only their rows' buttons wait. */
+  readonly busyUserIds = signal<ReadonlySet<string>>(new Set<string>());
   readonly confirmDeactivate = signal<ProviderStaffMember | null>(null);
   readonly registerOpen = signal(false);
 
+  /** The facility the session acts at now: the one every action here targets. */
   readonly facilityId = computed(() => this.context.settings()?.facilityId ?? null);
 
   /** The roles a member of this facility may hold (plan §3.2); the backend enforces it. */
@@ -63,15 +72,27 @@ export class ProviderStaffComponent implements OnInit {
     return isProviderFacilityType(type) ? PROVIDER_STAFF_ROLES[type] : [];
   });
 
-  ngOnInit(): void {
-    this.load();
+  private loadSub?: Subscription;
+
+  constructor() {
+    effect(() => {
+      // Read on open, and again whenever the facility changes under the page.
+      this.facilityId();
+      untracked(() => {
+        this.confirmDeactivate.set(null);
+        this.registerOpen.set(false);
+        this.busyUserIds.set(new Set<string>());
+        this.load();
+      });
+    });
   }
 
   load(): void {
+    this.loadSub?.unsubscribe();
     this.loading.set(true);
     this.notAvailable.set(false);
     this.loadFailed.set(false);
-    this.portal.staff().subscribe({
+    this.loadSub = this.portal.staff().subscribe({
       next: (staff) => {
         this.staff.set(staff);
         this.loading.set(false);
@@ -87,9 +108,8 @@ export class ProviderStaffComponent implements OnInit {
     });
   }
 
-  /** The admin's own row and a peer administrator's row are not changed here. */
-  manageable(member: ProviderStaffMember): boolean {
-    return !member.self && !member.providerAdmin;
+  isBusy(member: ProviderStaffMember): boolean {
+    return this.busyUserIds().has(member.userId);
   }
 
   displayName(member: ProviderStaffMember): string {
@@ -98,6 +118,7 @@ export class ProviderStaffComponent implements OnInit {
   }
 
   askDeactivate(member: ProviderStaffMember): void {
+    if (!member.canDeactivate || this.isBusy(member)) return;
     this.confirmDeactivate.set(member);
   }
 
@@ -107,24 +128,23 @@ export class ProviderStaffComponent implements OnInit {
 
   deactivate(): void {
     const member = this.confirmDeactivate();
-    if (!member) return;
-    this.busyUserId.set(member.userId);
+    if (!member || !this.begin(member)) return;
+    this.confirmDeactivate.set(null);
     this.portal.deactivate(member.userId).subscribe({
       next: (updated) => {
-        this.busyUserId.set(null);
-        this.confirmDeactivate.set(null);
+        this.end(member);
         this.replace(updated);
         this.toast.success(this.translate.instant('PROVIDER.STAFF.DEACTIVATED'));
       },
-      error: (err: unknown) => this.failed(err),
+      error: (err: unknown) => this.failed(member, err),
     });
   }
 
   reinvite(member: ProviderStaffMember): void {
-    this.busyUserId.set(member.userId);
+    if (!member.canReinvite || !this.begin(member)) return;
     this.portal.activate(member.userId).subscribe({
       next: (updated) => {
-        this.busyUserId.set(null);
+        this.end(member);
         this.replace(updated);
         const report = updated.activationDelivery;
         if (hasActivationSent(report)) {
@@ -136,7 +156,7 @@ export class ProviderStaffComponent implements OnInit {
           this.toast.warning(this.translate.instant(key));
         }
       },
-      error: (err: unknown) => this.failed(err),
+      error: (err: unknown) => this.failed(member, err),
     });
   }
 
@@ -157,6 +177,21 @@ export class ProviderStaffComponent implements OnInit {
     this.load();
   }
 
+  /** Mark a row busy; false when an action already runs for it (no double request). */
+  private begin(member: ProviderStaffMember): boolean {
+    if (this.isBusy(member)) return false;
+    this.busyUserIds.update((ids) => new Set(ids).add(member.userId));
+    return true;
+  }
+
+  private end(member: ProviderStaffMember): void {
+    this.busyUserIds.update((ids) => {
+      const next = new Set(ids);
+      next.delete(member.userId);
+      return next;
+    });
+  }
+
   private replace(updated: ProviderStaffMember): void {
     this.staff.update((rows) => rows.map((row) => (row.userId === updated.userId ? updated : row)));
   }
@@ -164,10 +199,10 @@ export class ProviderStaffComponent implements OnInit {
   /**
    * A refusal answers like a miss (the member left, or this user is no longer
    * the admin): re-read the list rather than show the server's internals.
+   * Only this member's row stops waiting.
    */
-  private failed(err: unknown): void {
-    this.busyUserId.set(null);
-    this.confirmDeactivate.set(null);
+  private failed(member: ProviderStaffMember, err: unknown): void {
+    this.end(member);
     if (isNotAvailable(err)) {
       this.toast.info(this.translate.instant('PROVIDER.STAFF.MEMBER_UNAVAILABLE'));
       this.load();

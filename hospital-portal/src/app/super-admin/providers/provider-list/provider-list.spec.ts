@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 
 import { ProviderPage } from '../../../services/provider.model';
 import { SuperAdminProviderService } from '../../../services/super-admin-provider.service';
@@ -52,6 +52,22 @@ describe('ProviderListComponent', () => {
     expect(service.list).toHaveBeenCalledWith({ type: 'LABORATORY', status: '' }, 0, 20);
     cmp.setStatus('VERIFIED');
     expect(service.list).toHaveBeenCalledWith({ type: 'LABORATORY', status: 'VERIFIED' }, 0, 20);
+  });
+
+  it('a filter change cancels the slower request; an old answer never lands under the new filter', () => {
+    const slow = new Subject<ProviderPage>();
+    const fast = new Subject<ProviderPage>();
+    service.list.and.returnValues(of(page(2)), slow, fast);
+    const { cmp } = setup();
+
+    cmp.setType('PHARMACY');
+    cmp.setType('LABORATORY');
+    expect(slow.observed).toBeFalse();
+
+    fast.next(page(1));
+    slow.next(page(5));
+    expect(cmp.providers().length).toBe(1);
+    expect(cmp.loading()).toBeFalse();
   });
 
   it('pages forward and back only where a page exists', () => {

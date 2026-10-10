@@ -4814,6 +4814,11 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   token** as well as the live assignment (the assignment service's scope reads
   both), so on Keycloak they answer as unmapped until P1-T11 adds the realm role.
   Same as `POST /users/admin-register` today. Open until P1-T11.
+- **External providers: the facility audit trail scopes through a live assignment
+  join**, so rows whose assignment was hard-deleted vanish from it; it needs a
+  `hospital_id` snapshot on `audit_event_logs` (a migration; V183 is earmarked for
+  the Sage export, so take the next free number when this is scheduled) (found in
+  #852's round-1 review). Open.
 - **CDS acknowledgement with an unknown hospital id now answers 404** (was: saved as a
   global acknowledgement). Intended since #835; confirm no client relies on the old
   behaviour. Open.

@@ -170,6 +170,12 @@ class ProviderAdminSecurityIT extends BaseIT {
             if (member.get("userId").asText().equals(admin.getId().toString())) {
                 assertThat(member.get("providerAdmin").asBoolean()).isTrue();
                 assertThat(member.get("self").asBoolean()).isTrue();
+                // The server refuses both on the admin's own account, so it never offers them.
+                assertThat(member.get("canDeactivate").asBoolean()).isFalse();
+                assertThat(member.get("canReinvite").asBoolean()).isFalse();
+            } else {
+                assertThat(member.get("canDeactivate").asBoolean()).isTrue();
+                assertThat(member.get("canReinvite").asBoolean()).isFalse();
             }
         });
     }
@@ -378,16 +384,32 @@ class ProviderAdminSecurityIT extends BaseIT {
         UUID patientIdRow = auditRow(pharmacist, pharmacyId, "PRESCRIPTION", UUID.randomUUID());
         UUID patientEntityRow = auditRow(pharmacist, pharmacyId, "PATIENT", null);
         UUID staffRow = auditRow(pharmacist, pharmacyId, "PROVIDER_STAFF", null);
+        // Platform support acting as the pharmacist: the row says so.
+        UUID supportId = UUID.randomUUID();
+        AuditEventLog impersonated = auditEventLogRepository.findById(
+            auditRow(pharmacist, pharmacyId, "PROVIDER_FACILITY", null)).orElseThrow();
+        impersonated.setImpersonatorUserId(supportId);
+        impersonated.setImpersonatorUsername("support-agent");
+        auditEventLogRepository.save(impersonated);
 
         JsonNode page = json(as(adminToken, get("/provider/audit")));
 
         List<String> ids = new ArrayList<>();
         page.get("entries").forEach(entry -> ids.add(entry.get("id").asText()));
-        assertThat(ids).contains(ownRow.toString(), staffRow.toString())
+        assertThat(ids).contains(ownRow.toString(), staffRow.toString(), impersonated.getId().toString())
             .doesNotContain(otherFacilityRow.toString(), patientIdRow.toString(), patientEntityRow.toString());
         page.get("entries").forEach(entry -> assertThat(entry.has("eventDescription") || entry.has("ipAddress")
             || entry.has("details") || entry.has("patientId")).as(entry.toString()).isFalse());
         assertThat(page.get("totalElements").asLong()).isEqualTo(ids.size());
+        page.get("entries").forEach(entry -> {
+            boolean byImpersonation = entry.get("id").asText().equals(impersonated.getId().toString());
+            assertThat(entry.get("impersonatorUserId").isNull()).as(entry.toString()).isEqualTo(!byImpersonation);
+            if (byImpersonation) {
+                assertThat(entry.get("impersonatorUserId").asText()).isEqualTo(supportId.toString());
+                assertThat(entry.get("impersonatorUsername").asText()).isEqualTo("support-agent");
+                assertThat(entry.get("actorUserId").asText()).isEqualTo(pharmacist.getId().toString());
+            }
+        });
     }
 
     @Test

@@ -200,13 +200,15 @@ public interface AuditEventLogRepository
      * there, i.e. whose assignment is at the facility, newest first. Rows that
      * concern a patient (a {@code patient_id}, or the {@code PATIENT} entity
      * convention) are never returned, and the projection carries ids and codes
-     * only: no description, no details, no IP address (plan §6.9). A row whose
+     * only: no description, no details, no IP address (plan §6.9). Under
+     * impersonation the row's actor is the impersonated member; the
+     * impersonator columns say who really acted (platform support). A row whose
      * assignment was hard-deleted has no facility left and drops out, as it
      * does from every other hospital-scoped view.
      */
     @Query(value = "SELECT new com.example.hms.payload.dto.provider.ProviderAuditEntryDTO("
            + "a.id, a.eventTimestamp, a.eventType, a.status, u.id, a.userName, a.roleName, "
-           + "a.entityType, a.resourceId) "
+           + "a.entityType, a.resourceId, a.impersonatorUserId, a.impersonatorUsername) "
            + "FROM AuditEventLog a JOIN a.assignment asg LEFT JOIN a.user u "
            + "WHERE asg.hospital.id = :facilityId "
            + "AND a.patientId IS NULL "

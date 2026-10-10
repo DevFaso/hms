@@ -55,7 +55,7 @@ export class HospitalDetailComponent implements OnInit {
   readonly canRestore = computed(() => this.state() === 'SUSPENDED' || this.state() === 'ARCHIVED');
   readonly canArchive = computed(() => this.state() === 'ACTIVE' || this.state() === 'SUSPENDED');
   readonly canSchedulePurge = computed(() => this.state() === 'ARCHIVED');
-  readonly canCancelPurge = computed(() => this.state() === 'PURGE_SCHEDULED');
+  readonly canCancelPurge = computed(() => this.state() === 'PENDING_PURGE');
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
@@ -194,7 +194,7 @@ export class HospitalDetailComponent implements OnInit {
         return '#f59e0b';
       case 'ARCHIVED':
         return '#64748b';
-      case 'PURGE_SCHEDULED':
+      case 'PENDING_PURGE':
         return '#dc2626';
       case 'PURGED':
         return '#1e293b';

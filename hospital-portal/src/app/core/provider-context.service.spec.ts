@@ -1,18 +1,21 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Observable, of, throwError } from 'rxjs';
+import { Observable, Subject, of, throwError } from 'rxjs';
 
 import { AuthService } from '../auth/auth.service';
 import { ProviderSettings } from '../services/provider.model';
 import { ProviderPortalService } from '../services/provider-portal.service';
 import { settingsFixture } from '../testing/provider-fixtures';
 import { ProviderContextService } from './provider-context.service';
+import { RoleContextService } from './role-context.service';
 
 describe('ProviderContextService', () => {
   let userId: string | null;
   let roles: string[];
   let answer: () => Observable<ProviderSettings>;
   let calls: number;
+  let scope: string | null;
+  let resolved: boolean;
 
   function setup(): ProviderContextService {
     const auth = {
@@ -30,6 +33,13 @@ describe('ProviderContextService', () => {
       providers: [
         { provide: AuthService, useValue: auth },
         { provide: ProviderPortalService, useValue: portal },
+        {
+          provide: RoleContextService,
+          useValue: {
+            effectiveHospitalIdForRequest: () => scope,
+            sessionResolved: () => resolved,
+          },
+        },
       ],
     });
     return TestBed.inject(ProviderContextService);
@@ -46,6 +56,8 @@ describe('ProviderContextService', () => {
     roles = ['ROLE_PROVIDER_ADMIN'];
     answer = () => of(settingsFixture());
     calls = 0;
+    scope = 'f-1';
+    resolved = true;
   });
 
   afterEach(() => TestBed.resetTestingModule());
@@ -106,6 +118,49 @@ describe('ProviderContextService', () => {
 
     userId = null;
     expect(value(context)).toBeNull();
+  });
+
+  it('asks again when the scope moves to another facility, and never shows the old one meanwhile', () => {
+    const context = setup();
+    expect(value(context)?.facilityId).toBe('f-1');
+
+    scope = 'f-2';
+    answer = () => of(settingsFixture({ facilityId: 'f-2', providerAdmin: false }));
+    expect(value(context)?.facilityId).toBe('f-2');
+    expect(context.settings()?.providerAdmin).toBeFalse();
+    expect(calls).toBe(2);
+
+    // Back to the first branch: asked again, never the second branch's answer.
+    scope = 'f-1';
+    answer = () => of(settingsFixture());
+    expect(value(context)?.facilityId).toBe('f-1');
+    expect(calls).toBe(3);
+  });
+
+  it('a 404 before the session scope is resolved is not final: asked again once it is', () => {
+    roles = ['ROLE_PHARMACIST'];
+    resolved = false;
+    answer = () => throwError(() => new HttpErrorResponse({ status: 404 }));
+    const context = setup();
+
+    expect(value(context)).toBeNull();
+    resolved = true;
+    answer = () => of(settingsFixture());
+    expect(value(context)?.facilityType).toBe('PHARMACY');
+    expect(calls).toBe(2);
+  });
+
+  it('a late answer for a scope the session has left is dropped', () => {
+    const pending = new Subject<ProviderSettings>();
+    answer = () => pending;
+    const context = setup();
+    context.load().subscribe();
+
+    scope = 'f-2';
+    pending.next(settingsFixture({ facilityId: 'f-1' }));
+    pending.complete();
+
+    expect(context.settings()).toBeNull();
   });
 
   it('forget() drops the answer', () => {

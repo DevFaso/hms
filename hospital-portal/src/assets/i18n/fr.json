@@ -570,7 +570,7 @@
       "ACTIVE": "Actif",
       "SUSPENDED": "Suspendu",
       "ARCHIVED": "Archivé",
-      "PURGE_SCHEDULED": "Purge planifiée",
+      "PENDING_PURGE": "Purge planifiée",
       "PURGED": "Purgé"
     },
     "META": {
@@ -10337,7 +10337,8 @@
       "RECORD_STAFF": "Membre du personnel",
       "RECORD_ACCOUNT": "Compte utilisateur",
       "RECORD_ASSIGNMENT": "Attribution de rôle",
-      "RECORD_OTHER": "Autre"
+      "RECORD_OTHER": "Autre",
+      "BY_SUPPORT": "En son nom : support de la plateforme ({{name}})"
     }
   }
 }
