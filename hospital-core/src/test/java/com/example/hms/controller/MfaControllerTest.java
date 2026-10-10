@@ -34,6 +34,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @AutoConfigureMockMvc(addFilters = false)
 @WebMvcTest(
@@ -245,7 +248,7 @@ class MfaControllerTest {
                         .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"654321\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.message").value("Invalid or expired MFA token."));
-        org.mockito.Mockito.verifyNoInteractions(mfaService);
+        verifyNoInteractions(mfaService);
     }
 
     @Test
@@ -259,7 +262,7 @@ class MfaControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"654321\"}"))
                 .andExpect(status().isUnauthorized());
-        org.mockito.Mockito.verifyNoInteractions(mfaService);
+        verifyNoInteractions(mfaService);
     }
 
     @Test
@@ -277,7 +280,7 @@ class MfaControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"654321\"}"))
                 .andExpect(status().isOk());
-        org.mockito.Mockito.verify(tokenBlacklistService).blacklist("jti-1", exp.getTime());
+        verify(tokenBlacklistService).blacklist("jti-1", exp.getTime());
     }
 
     @Test
@@ -290,7 +293,7 @@ class MfaControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"999999\"}"))
                 .andExpect(status().isUnauthorized());
-        org.mockito.Mockito.verify(tokenBlacklistService, org.mockito.Mockito.never())
+        verify(tokenBlacklistService, never())
                 .blacklist(any(), org.mockito.ArgumentMatchers.anyLong());
     }
 }

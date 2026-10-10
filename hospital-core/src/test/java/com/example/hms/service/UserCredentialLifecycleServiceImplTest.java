@@ -34,6 +34,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -409,7 +410,7 @@ class UserCredentialLifecycleServiceImplTest {
     @Test
     void upsertOwnMfaEnrollments_aRefusedStepUpChangesNothing() {
         UUID userId = UUID.randomUUID();
-        org.mockito.Mockito.doThrow(new com.example.hms.exception.MfaStepUpRefusedException(
+        doThrow(new com.example.hms.exception.MfaStepUpRefusedException(
                 com.example.hms.exception.MfaStepUpRefusedException.Reason.REQUIRED))
             .when(mfaService).requireStepUpToChangeAuthenticator(userId, null, null);
 

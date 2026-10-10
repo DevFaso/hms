@@ -30,6 +30,7 @@ import org.springframework.util.StringUtils;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -117,7 +118,7 @@ public class MfaService {
             enrollment.setPendingTotpSecret(null);
             enrollment.setVerified(false);
             enrollment.setEnabled(false);
-            enrollment.setEnrolledAt(LocalDateTime.now());
+            enrollment.setEnrolledAt(now());
         }
         enrollmentRepository.save(enrollment);
 
@@ -175,12 +176,12 @@ public class MfaService {
                 log.warn("[MFA] Invalid TOTP code confirming a replacement for user={}", userId);
                 return false;
             }
-            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime confirmedAt = now();
             enrollment.setTotpSecret(enrollment.getPendingTotpSecret());
             enrollment.setPendingTotpSecret(null);
             enrollment.setPrimaryFactor(true);
-            enrollment.setEnrolledAt(now);
-            enrollment.setLastVerifiedAt(now);
+            enrollment.setEnrolledAt(confirmedAt);
+            enrollment.setLastVerifiedAt(confirmedAt);
             enrollmentRepository.save(enrollment);
             promotePendingBackupCodes(userId);
             log.info("[MFA] TOTP authenticator replaced for user={}", userId);
@@ -198,7 +199,7 @@ public class MfaService {
             enrollment.setEnabled(true);
             enrollment.setPrimaryFactor(true);
             enrollment.setPendingTotpSecret(null);
-            enrollment.setLastVerifiedAt(LocalDateTime.now());
+            enrollment.setLastVerifiedAt(now());
             enrollmentRepository.save(enrollment);
             log.info("[MFA] TOTP enrollment verified for user={}", userId);
         } else {
@@ -277,7 +278,7 @@ public class MfaService {
         }
         String candidate = code.trim();
         if (isValidTotp(enrollment.getTotpSecret(), candidate)) {
-            enrollment.setLastVerifiedAt(LocalDateTime.now());
+            enrollment.setLastVerifiedAt(now());
             enrollmentRepository.save(enrollment);
             return;
         }
@@ -322,7 +323,7 @@ public class MfaService {
         UserMfaEnrollment enrollment = opt.get();
         boolean valid = isValidTotp(enrollment.getTotpSecret(), code);
         if (valid) {
-            enrollment.setLastVerifiedAt(LocalDateTime.now());
+            enrollment.setLastVerifiedAt(now());
             enrollmentRepository.save(enrollment);
         }
         return valid;
@@ -346,7 +347,7 @@ public class MfaService {
         for (MfaBackupCode bc : unusedCodes) {
             if (passwordEncoder.matches(rawCode, bc.getCodeHash())) {
                 bc.setUsed(true);
-                bc.setUsedAt(LocalDateTime.now());
+                bc.setUsedAt(now());
                 backupCodeRepository.save(bc);
                 log.info("[MFA] Backup code consumed for user={}, remaining={}",
                         userId, unusedCodes.size() - 1);
@@ -358,6 +359,11 @@ public class MfaService {
 
     private boolean isValidTotp(String secret, String code) {
         return StringUtils.hasText(secret) && StringUtils.hasText(code) && codeVerifier.isValidCode(secret, code);
+    }
+
+    /** Server-local time, as every MFA timestamp has always been stored. */
+    private static LocalDateTime now() {
+        return LocalDateTime.now(ZoneId.systemDefault());
     }
 
     /** The authenticator that signs in: confirmed and enabled. */
