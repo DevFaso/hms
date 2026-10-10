@@ -20,6 +20,8 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,6 +66,7 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final UserRoleHospitalAssignmentService assignmentService;
     private final Validator validator;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional(readOnly = true)
@@ -72,12 +75,13 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
     }
 
     @Override
-    public Optional<ProviderProfileDTO> updateProfile(ProviderProfileUpdateDTO request) {
+    public Optional<ProviderProfileDTO> updateProfile(String rawBody) {
         Optional<ProviderSeat> found = seatResolver.currentAdmin();
         if (found.isEmpty()) {
             return Optional.empty();
         }
         ProviderSeat seat = found.get();
+        ProviderProfileUpdateDTO request = readBody(rawBody);
         // Trimmed first, so a blank optional field means "clear it", not an invalid value.
         ProviderProfileUpdateDTO body = ProviderProfileUpdateDTO.builder()
             .phoneNumber(request == null ? null : blankToNull(request.getPhoneNumber()))
@@ -287,6 +291,24 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
             .licenceAuthority(v.getLicenceAuthority())
             .companyPhone(v.getCompanyPhone())
             .verifiedAt(v.getDecidedAt());
+    }
+
+    /**
+     * The request body, read only once the caller is known to be the
+     * facility's admin: Jackson never ran before the seat check, so a
+     * malformed body cannot tell anyone else the page exists. Unknown
+     * properties are ignored (the configured mapper's rule), so the verified
+     * identity cannot be sent; a body that is not a JSON object is a 400.
+     */
+    private ProviderProfileUpdateDTO readBody(String rawBody) {
+        if (rawBody == null || rawBody.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(rawBody, ProviderProfileUpdateDTO.class);
+        } catch (JacksonException malformed) {
+            throw new IllegalArgumentException("Malformed request body.");
+        }
     }
 
     /** The raw path segment as a user id; {@code null} (answered as unknown) when it is not one. */

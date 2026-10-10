@@ -9,7 +9,6 @@ import com.example.hms.model.UserRole;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.provider.ProviderVerification;
 import com.example.hms.payload.dto.provider.ProviderProfileDTO;
-import com.example.hms.payload.dto.provider.ProviderProfileUpdateDTO;
 import com.example.hms.payload.dto.provider.ProviderStaffMemberDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -29,6 +28,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -88,7 +88,7 @@ class ProviderAdminServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new ProviderAdminServiceImpl(seatResolver, organisationsFlag, hospitalRepository,
-            verificationRepository, assignmentRepository, assignmentService, validator);
+            verificationRepository, assignmentRepository, assignmentService, validator, JsonMapper.builder().build());
     }
 
     // ── no seat ────────────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ class ProviderAdminServiceImplTest {
         assertThat(service.getProfile()).isEmpty();
         assertThat(service.getSettings()).isEmpty();
         assertThat(service.listStaff()).isEmpty();
-        assertThat(service.updateProfile(new ProviderProfileUpdateDTO())).isEmpty();
+        assertThat(service.updateProfile("{not json")).isEmpty();
         assertThat(service.deactivateStaff(UUID.randomUUID().toString())).isEmpty();
         assertThat(service.activateStaff(UUID.randomUUID().toString())).isEmpty();
         verifyNoInteractions(assignmentService, hospitalRepository, assignmentRepository);
@@ -116,8 +116,9 @@ class ProviderAdminServiceImplTest {
 
         assertThat(service.getProfile()).isPresent();
         assertThat(service.listStaff()).isEmpty();
-        assertThat(service.updateProfile(ProviderProfileUpdateDTO.builder().phoneNumber("+22670000000").build()))
-            .isEmpty();
+        assertThat(service.updateProfile("{\"phoneNumber\":\"+22670000000\"}")).isEmpty();
+        // The body is not even parsed before the seat check.
+        assertThat(service.updateProfile("{not json")).isEmpty();
         verifyNoInteractions(assignmentService, hospitalRepository);
     }
 
@@ -130,8 +131,8 @@ class ProviderAdminServiceImplTest {
         pharmacy.setName("Pharmacie du Centre");
         pharmacy.setLicenseNumber("LIC-1");
 
-        Optional<ProviderProfileDTO> profile = service.updateProfile(ProviderProfileUpdateDTO.builder()
-            .phoneNumber(" +22670112233 ").email(" ").website("https://pharmacy.test").build());
+        Optional<ProviderProfileDTO> profile = service.updateProfile("{\"phoneNumber\":\" +22670112233 \","
+            + "\"email\":\" \",\"website\":\"https://pharmacy.test\",\"name\":\"Renamed\"}");
 
         assertThat(profile).isPresent();
         assertThat(pharmacy.getPhoneNumber()).isEqualTo("+22670112233");
@@ -146,11 +147,32 @@ class ProviderAdminServiceImplTest {
     @DisplayName("an invalid update from the admin is a constraint violation, and nothing is saved")
     void updateProfileValidatesAfterTheSeat() {
         admin();
-        ProviderProfileUpdateDTO invalid = ProviderProfileUpdateDTO.builder().phoneNumber(" ").email("nope").build();
-
-        assertThatThrownBy(() -> service.updateProfile(invalid)).isInstanceOf(ConstraintViolationException.class);
+        for (String invalid : List.of(
+                "{\"phoneNumber\":\" \",\"email\":\"nope\"}",
+                "{\"phoneNumber\":\"+226701\"}",
+                "{\"phoneNumber\":\"+2267011223344556\"}",
+                "{\"phoneNumber\":\"+22670112233\",\"website\":\"javascript:alert(1)\"}",
+                "{\"phoneNumber\":\"+22670112233\",\"website\":\"data:text/html,x\"}",
+                "{\"phoneNumber\":\"+22670112233\",\"website\":\"pharmacy.test\"}",
+                "{\"phoneNumber\":\"+22670112233\",\"website\":\"https://\"}")) {
+            assertThatThrownBy(() -> service.updateProfile(invalid)).as(invalid)
+                .isInstanceOf(ConstraintViolationException.class);
+        }
         assertThatThrownBy(() -> service.updateProfile(null)).isInstanceOf(ConstraintViolationException.class);
+        assertThatThrownBy(() -> service.updateProfile("{not json")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.updateProfile("[1,2]")).isInstanceOf(IllegalArgumentException.class);
         verify(hospitalRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("an http or https website, any case, with a path, is accepted")
+    void websiteAcceptsHttpAndHttps() {
+        admin();
+        for (String website : List.of("http://pharmacy.test", "HTTPS://pharmacy.test/contact?x=1#top")) {
+            assertThat(service.updateProfile("{\"phoneNumber\":\"+22670112233\",\"website\":\"" + website + "\"}"))
+                .as(website).isPresent();
+            assertThat(pharmacy.getWebsite()).isEqualTo(website);
+        }
     }
 
     @Test

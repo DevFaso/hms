@@ -9,6 +9,8 @@ import com.example.hms.security.provider.ProviderConfinementPolicy;
 import com.example.hms.service.provider.ProviderAdminService;
 import com.example.hms.utility.ActivationDeliveryTracker;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -40,7 +42,8 @@ import java.util.List;
  * PROVIDER_ADMIN where that is required, a staff member who is unknown,
  * works elsewhere, is a peer administrator or is the caller) gets exactly the
  * answer of an unmapped path: a 403 would tell them the endpoint exists. The
- * seat is checked before the body is validated and before the member id is
+ * seat is checked before the body is even parsed (it arrives as a raw
+ * string; Jackson runs after the seat check) and before the member id is
  * parsed, so neither a 400 nor a malformed id tells them either. (A wrong
  * method or media type is still answered by MVC itself, before any handler.)
  *
@@ -73,8 +76,14 @@ public class ProviderAdminController {
     @PreAuthorize(AUTHENTICATED)
     @WriteAudited(entity = "PROVIDER_FACILITY")
     @Operation(summary = "PROVIDER_ADMIN: change the facility's operational contact (phone, email, website)",
+        // The body is bound as a raw string (parsed after the seat check); the
+        // schema it must follow is documented here. Fully qualified: Spring's
+        // @RequestBody has the same simple name.
+        requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            content = @Content(mediaType = "application/json",
+                schema = @Schema(implementation = ProviderProfileUpdateDTO.class))),
         security = @SecurityRequirement(name = "bearerAuth"))
-    public ResponseEntity<ProviderProfileDTO> updateProfile(@RequestBody(required = false) ProviderProfileUpdateDTO body,
+    public ResponseEntity<ProviderProfileDTO> updateProfile(@RequestBody(required = false) String body,
                                                             HttpServletRequest request) throws NoResourceFoundException {
         return ResponseEntity.ok(providerAdminService.updateProfile(body)
             .orElseThrow(() -> ProviderConfinementPolicy.unmapped(request)));

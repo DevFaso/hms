@@ -3,6 +3,7 @@ package com.example.hms.integration;
 import com.example.hms.BaseIT;
 import com.example.hms.enums.FacilityType;
 import com.example.hms.enums.ProviderVerificationStatus;
+import com.example.hms.model.AuditEventLog;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.User;
 import com.example.hms.model.Role;
@@ -301,6 +302,52 @@ class ProviderAdminSecurityIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("a malformed PUT body from a hospital nurse or a seatless provider user: the unmapped answer, never a 400")
+    void malformedBodyNeverRevealsThePage() throws Exception {
+        String unmapped = ProviderConfinementSecurityIT.refusalShape(as(doctorToken(), get(UNMAPPED)));
+        String nurse = tokenFor(accounts.userAt("nurse", hospitalId, "NURSE"), "NURSE");
+        User pharmacistPatient = accounts.userAt("pharmpat", pharmacyId, PHARMACIST);
+        accounts.assign(pharmacistPatient, hospitalId, "PATIENT");
+        String seatless = tokenFor(pharmacistPatient, PHARMACIST, "PATIENT");
+
+        for (String body : List.of("{not json", "[1,2]", "{\"phoneNumber\": {}}")) {
+            MvcResult fromNurse = as(nurse, put("/provider/profile").contentType(MediaType.APPLICATION_JSON).content(body));
+            assertThat(ProviderConfinementSecurityIT.refusalShape(fromNurse)).as("nurse " + body).isEqualTo(unmapped);
+            // Pinned to the hospital where they are a patient: no seat there.
+            MvcResult fromProvider = as(seatless, put("/provider/profile").contentType(MediaType.APPLICATION_JSON)
+                .content(body).header("X-Hospital-Id", hospitalId.toString()));
+            assertThat(ProviderConfinementSecurityIT.refusalShape(fromProvider)).as("provider " + body)
+                .isEqualTo(unmapped);
+        }
+        // From the admin, the same malformed body is a 400.
+        MvcResult fromAdmin = as(adminToken, put("/provider/profile").contentType(MediaType.APPLICATION_JSON)
+            .content("{not json"));
+        assertThat(fromAdmin.getResponse().getStatus()).isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName("an admin who is also a patient, naming no facility: the write is audited AT the facility")
+    void auditRowCarriesTheFacility() throws Exception {
+        User adminPatient = accounts.userAt("padminpat", pharmacyId, PROVIDER_ADMIN);
+        accounts.assign(adminPatient, hospitalId, "PATIENT");
+        UUID adminRowHere = rowOf(adminPatient, pharmacyId).getId();
+        String token = tokenFor(adminPatient, PROVIDER_ADMIN, "PATIENT");
+
+        MvcResult result = as(token, put("/provider/profile").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"phoneNumber\":\"+22670445566\"}"));
+
+        assertThat(result.getResponse().getStatus()).as(result.getResponse().getContentAsString()).isEqualTo(200);
+        List<AuditEventLog> rows = auditEventLogRepository.findAll().stream()
+            .filter(row -> row.getUser() != null && adminPatient.getId().equals(row.getUser().getId()))
+            .filter(row -> "PROVIDER_FACILITY".equals(row.getEntityType()))
+            .toList();
+        assertThat(rows).singleElement().satisfies(row -> {
+            assertThat(row.getAssignment()).isNotNull();
+            assertThat(row.getAssignment().getId()).isEqualTo(adminRowHere);
+        });
+    }
+
+    @Test
     @DisplayName("an invalid contact from the admin is a 400")
     void adminInvalidContactIsRefused() throws Exception {
         MvcResult result = as(adminToken, put("/provider/profile").contentType(MediaType.APPLICATION_JSON)
@@ -322,7 +369,9 @@ class ProviderAdminSecurityIT extends BaseIT {
                 get("/provider-directory").param("type", "NOT-A-TYPE"))) {
             MvcResult result = as(doctor, request);
             assertThat(result.getResponse().getStatus()).as(label(result)).isEqualTo(200);
-            assertThat(result.getResponse().getContentAsString()).isEqualTo("[]");
+            JsonNode page = json(result);
+            assertThat(page.get("entries")).isEmpty();
+            assertThat(page.get("hasMore").asBoolean()).isFalse();
         }
         assertThat(json(as(adminToken, get("/provider/settings"))).get("organisationsEnabled").asBoolean()).isFalse();
     }
@@ -334,7 +383,9 @@ class ProviderAdminSecurityIT extends BaseIT {
         String licence = verify(pharmacyId);
         // otherPharmacyId has no VERIFIED verification: never offered.
 
-        JsonNode entries = json(as(doctorToken(), get("/provider-directory").param("type", "PHARMACY")));
+        JsonNode page = json(as(doctorToken(), get("/provider-directory").param("type", "pharmacy")));
+        assertThat(page.get("hasMore").asBoolean()).isFalse();
+        JsonNode entries = page.get("entries");
         List<String> ids = new ArrayList<>();
         entries.forEach(entry -> ids.add(entry.get("id").asText()));
         assertThat(ids).contains(pharmacyId.toString()).doesNotContain(otherPharmacyId.toString(), hospitalId.toString());
@@ -379,7 +430,8 @@ class ProviderAdminSecurityIT extends BaseIT {
         User superAdmin = accounts.userAt("sadmin", null, "SUPER_ADMIN");
         String superToken = tokenFor(superAdmin, "SUPER_ADMIN");
 
-        JsonNode pharmacies = json(as(superToken, get("/hospitals").param("facilityType", "PHARMACY")));
+        // Case-insensitive, like the directory.
+        JsonNode pharmacies = json(as(superToken, get("/hospitals").param("facilityType", "pharmacy")));
         List<String> ids = new ArrayList<>();
         pharmacies.forEach(row -> ids.add(row.get("id").asText()));
         assertThat(ids).contains(pharmacyId.toString(), otherPharmacyId.toString()).doesNotContain(hospitalId.toString());
@@ -391,6 +443,8 @@ class ProviderAdminSecurityIT extends BaseIT {
 
         assertThat(as(doctorToken(), get("/hospitals").param("facilityType", "PHARMACY")).getResponse().getStatus())
             .isEqualTo(403);
+        assertThat(as(superToken, get("/hospitals").param("facilityType", "clinic")).getResponse().getStatus())
+            .isEqualTo(400);
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────

@@ -379,6 +379,17 @@ public class UserAccountAccess {
     }
 
     /**
+     * The provider facilities the caller administers: an ACTIVE PROVIDER_ADMIN
+     * assignment there, and the role presented. The one rule for "is the
+     * provider admin here": {@link #requireMayGrant} and {@link #assignmentScope}
+     * grant and change staff at exactly these facilities, and the provider
+     * admin pages ({@code ProviderSeatResolver}) open for exactly these.
+     */
+    public Set<UUID> providerAdministeredFacilities() {
+        return providerAdministeredHospitals(caller());
+    }
+
+    /**
      * The user directory (list and search) is for staff, and a staff member's
      * directory is their own hospitals. Throws {@link AccessDeniedException}
      * for everyone else, patients included.

@@ -7,7 +7,7 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.Role;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.provider.ProviderVerification;
-import com.example.hms.payload.dto.provider.ProviderDirectoryEntryDTO;
+import com.example.hms.payload.dto.provider.ProviderDirectoryPageDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.provider.ProviderVerificationRepository;
@@ -26,6 +26,8 @@ import org.mockito.quality.Strictness;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -40,6 +42,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -54,6 +57,7 @@ class ProviderDirectoryServiceImplTest {
     @Mock private HospitalRepository hospitalRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private ProviderVerificationRepository verificationRepository;
+    @Mock private ProviderOrganisationsFlag organisationsFlag;
 
     private ProviderDirectoryServiceImpl service;
 
@@ -63,7 +67,8 @@ class ProviderDirectoryServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new ProviderDirectoryServiceImpl(ActingScopeTestSupport.resolver(), hospitalRepository,
+        when(organisationsFlag.isEnabled()).thenReturn(true);
+        service = new ProviderDirectoryServiceImpl(organisationsFlag, ActingScopeTestSupport.resolver(), hospitalRepository,
             assignmentRepository, verificationRepository);
         when(hospitalRepository.findClinicalById(hospital.getId())).thenReturn(Optional.of(hospital));
         when(hospitalRepository.findClinicalById(pharmacy.getId())).thenReturn(Optional.empty());
@@ -82,13 +87,48 @@ class ProviderDirectoryServiceImplTest {
         ActingScopeTestSupport.actingAt(callerId, hospital.getId());
         callerHolds(row("ROLE_DOCTOR", hospital));
 
-        List<ProviderDirectoryEntryDTO> entries = service.search(null, null);
+        ProviderDirectoryPageDTO page = service.search(null, null);
 
-        assertThat(entries).singleElement().satisfies(entry -> {
+        assertThat(page.isHasMore()).isFalse();
+        assertThat(page.getEntries()).singleElement().satisfies(entry -> {
             assertThat(entry.getId()).isEqualTo(pharmacy.getId());
             assertThat(entry.getLicenceNumber()).isEqualTo("LIC-1");
             assertThat(entry.getFacilityType()).isEqualTo(FacilityType.PHARMACY);
         });
+    }
+
+    @Test
+    @DisplayName("AC-14 flag off: empty for every caller, whatever they send; nothing is read, nobody is refused")
+    void flagOffIsEmpty() {
+        when(organisationsFlag.isEnabled()).thenReturn(false);
+        ActingScopeTestSupport.globalSuperAdmin(callerId);
+
+        for (String type : Arrays.asList(null, "PHARMACY", "HOSPITAL", "not-a-type")) {
+            ProviderDirectoryPageDTO page = service.search(type, "x");
+            assertThat(page.getEntries()).as(String.valueOf(type)).isEmpty();
+            assertThat(page.isHasMore()).isFalse();
+        }
+        verifyNoInteractions(verificationRepository, hospitalRepository, assignmentRepository);
+    }
+
+    @Test
+    @DisplayName("more than the cap matched: the first 50, and hasMore")
+    void capSaysHasMore() {
+        ActingScopeTestSupport.actingAt(callerId, hospital.getId());
+        callerHolds(row("ROLE_DOCTOR", hospital));
+        List<ProviderVerification> many = new ArrayList<>();
+        for (int i = 0; i <= ProviderDirectoryService.MAX_RESULTS; i++) {
+            many.add(verified(facility(FacilityType.PHARMACY), "LIC-" + i));
+        }
+        when(verificationRepository.findDirectory(anyCollection(), any(), any(Pageable.class))).thenReturn(many);
+
+        ProviderDirectoryPageDTO page = service.search(null, null);
+
+        assertThat(page.getEntries()).hasSize(ProviderDirectoryService.MAX_RESULTS);
+        assertThat(page.isHasMore()).isTrue();
+        ArgumentCaptor<Pageable> asked = ArgumentCaptor.forClass(Pageable.class);
+        verify(verificationRepository).findDirectory(anyCollection(), any(), asked.capture());
+        assertThat(asked.getValue().getPageSize()).isEqualTo(ProviderDirectoryService.MAX_RESULTS + 1);
     }
 
     @Test
@@ -97,7 +137,7 @@ class ProviderDirectoryServiceImplTest {
         ActingScopeTestSupport.actingAt(callerId, hospital.getId());
         callerHolds(row("ROLE_SURGEON", hospital));
 
-        assertThat(service.search("PHARMACY", "x")).hasSize(1);
+        assertThat(service.search("PHARMACY", "x").getEntries()).hasSize(1);
     }
 
     @Test
@@ -134,7 +174,7 @@ class ProviderDirectoryServiceImplTest {
     @DisplayName("a verified super-admin acting at a hospital reads it; in global view they must pick a hospital")
     void superAdmin() {
         ActingScopeTestSupport.superAdminAt(callerId, hospital.getId());
-        assertThat(service.search(null, null)).hasSize(1);
+        assertThat(service.search(null, null).getEntries()).hasSize(1);
 
         HospitalContextHolder.clear();
         ActingScopeTestSupport.globalSuperAdmin(callerId);

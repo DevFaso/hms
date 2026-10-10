@@ -4794,6 +4794,13 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   the ordering hospital, a description of its own) with their first real
   caller, and its per-day dedupe keyed on the offer or the order (a key without
   it under-reports, see `CrossHospitalReachRecorder.recordBatchedReach`). Open.
+- **External providers: the provider admin pages read the caller's assignments
+  more than once per request** (`ProviderSeatResolver` reads them, then
+  `UserAccountAccess` reads them again for the admin rule and the assignment
+  service's scope; the profile GET reads the verification table twice, latest
+  and latest VERIFIED). Small facilities, so cheap today; carry one caller read
+  through the request, as the confinement debt above asks for the live context
+  (found in #840's round-2 review). Open.
 - **External providers: the provider admin pages need ROLE_PROVIDER_ADMIN in the
   token** as well as the live assignment (the assignment service's scope reads
   both), so on Keycloak they answer as unmapped until P1-T11 adds the realm role.

@@ -187,10 +187,14 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     List<Hospital> findAllWithDepartments(@Param("hospitalQuery") String hospitalQuery,
                             @Param("activeOnly") Boolean activeOnly);
 
-    @Query("""
-      SELECT h FROM Hospital h
-      WHERE (:organizationId IS NULL OR h.organization.id = :organizationId)
-        AND""" + CLINICAL_ONLY + """
+    /**
+     * The hospital list's filters (organisation, unassigned, city, state) and
+     * its order, after a facility-type condition: written once for
+     * {@link #findAllForFilters} (clinical) and
+     * {@link #findAllForFiltersByFacilityType} (the super-admin's filter).
+     */
+    String HOSPITAL_LIST_FILTERS = """
+        AND (:organizationId IS NULL OR h.organization.id = :organizationId)
         AND (:unassignedOnly IS NULL OR :unassignedOnly = false OR h.organization IS NULL)
         AND (
             :city IS NULL
@@ -201,7 +205,9 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
             OR LOWER(COALESCE(CAST(h.state AS string), '')) LIKE LOWER(CONCAT('%', CAST(:state AS string), '%'))
         )
       ORDER BY LOWER(CAST(h.name AS string))
-    """)
+    """;
+
+    @Query("SELECT h FROM Hospital h WHERE" + CLINICAL_ONLY + HOSPITAL_LIST_FILTERS)
     List<Hospital> findAllForFilters(@Param("organizationId") UUID organizationId,
                                      @Param("unassignedOnly") Boolean unassignedOnly,
                                      @Param("city") String city,
@@ -214,21 +220,7 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
      * filter"). NOT clinical-only: it returns PHARMACY or LABORATORY rows when
      * asked. Its only caller refuses anyone but a verified super-admin first.
      */
-    @Query("""
-      SELECT h FROM Hospital h
-      WHERE h.facilityType = :facilityType
-        AND (:organizationId IS NULL OR h.organization.id = :organizationId)
-        AND (:unassignedOnly IS NULL OR :unassignedOnly = false OR h.organization IS NULL)
-        AND (
-            :city IS NULL
-            OR LOWER(COALESCE(CAST(h.city AS string), '')) LIKE LOWER(CONCAT('%', CAST(:city AS string), '%'))
-        )
-        AND (
-            :state IS NULL
-            OR LOWER(COALESCE(CAST(h.state AS string), '')) LIKE LOWER(CONCAT('%', CAST(:state AS string), '%'))
-        )
-      ORDER BY LOWER(CAST(h.name AS string))
-    """)
+    @Query("SELECT h FROM Hospital h WHERE h.facilityType = :facilityType" + HOSPITAL_LIST_FILTERS)
     List<Hospital> findAllForFiltersByFacilityType(@Param("facilityType") FacilityType facilityType,
                                                    @Param("organizationId") UUID organizationId,
                                                    @Param("unassignedOnly") Boolean unassignedOnly,

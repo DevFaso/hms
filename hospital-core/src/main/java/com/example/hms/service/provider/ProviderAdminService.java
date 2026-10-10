@@ -1,7 +1,6 @@
 package com.example.hms.service.provider;
 
 import com.example.hms.payload.dto.provider.ProviderProfileDTO;
-import com.example.hms.payload.dto.provider.ProviderProfileUpdateDTO;
 import com.example.hms.payload.dto.provider.ProviderSettingsDTO;
 import com.example.hms.payload.dto.provider.ProviderStaffMemberDTO;
 
@@ -26,13 +25,16 @@ public interface ProviderAdminService {
     Optional<ProviderProfileDTO> getProfile();
 
     /**
-     * PROVIDER_ADMIN at the facility: the operational contact only. The
-     * request is validated AFTER the caller's seat is checked, so a caller
-     * with no seat gets the unmapped answer whatever the body holds.
+     * PROVIDER_ADMIN at the facility: the operational contact only. The body
+     * arrives raw and is parsed and validated AFTER the caller's seat is
+     * checked, so a caller with no seat gets the unmapped answer whatever the
+     * body holds (malformed JSON included).
      *
+     * @param rawBody the request body as sent, a {@code ProviderProfileUpdateDTO} in JSON
+     * @throws IllegalArgumentException for a body from the admin that is not that JSON
      * @throws jakarta.validation.ConstraintViolationException for an invalid request from the admin
      */
-    Optional<ProviderProfileDTO> updateProfile(ProviderProfileUpdateDTO request);
+    Optional<ProviderProfileDTO> updateProfile(String rawBody);
 
     /** PROVIDER_ADMIN at the facility. */
     Optional<List<ProviderStaffMemberDTO>> listStaff();

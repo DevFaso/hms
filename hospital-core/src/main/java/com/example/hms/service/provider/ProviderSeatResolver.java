@@ -1,14 +1,12 @@
 package com.example.hms.service.provider;
 
-import com.example.hms.model.Hospital;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
-import com.example.hms.security.provider.RoleFacilityCompatibility;
 import com.example.hms.security.tenant.ActingScope;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.service.support.UserAccountAccess;
-import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -38,6 +36,14 @@ import java.util.stream.Collectors;
  *       as an unmapped path, so a hospital user cannot tell the provider
  *       endpoints exist.</li>
  * </ul>
+ *
+ * <p>A seat PINS the request to its facility ({@link ActingScopeResolver#narrowTo}),
+ * so everything downstream acts there: the write audit row carries the
+ * caller's assignment at the facility even when the request named none.
+ *
+ * <p>Whether the caller is the facility's admin is one rule, owned by
+ * {@link UserAccountAccess#providerAdministeredFacilities()}: the same rule
+ * that decides which staff rows the assignment service lets them change.
  */
 @Component
 @RequiredArgsConstructor
@@ -47,12 +53,12 @@ public class ProviderSeatResolver {
 
     private final ActingScopeResolver actingScopeResolver;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
-    private final RoleValidator roleValidator;
+    private final UserAccountAccess accountAccess;
 
     /** The caller's seat at a provider facility, or empty (answer as an unmapped path). */
     public Optional<ProviderSeat> current() {
-        ActingScope scope = actingScopeResolver.current();
-        UUID userId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+        HospitalContext context = HospitalContextHolder.getContextOrEmpty();
+        UUID userId = context.getPrincipalUserId();
         if (userId == null) {
             return Optional.empty();
         }
@@ -61,7 +67,8 @@ public class ProviderSeatResolver {
             .filter(row -> row.getHospital() != null && row.getHospital().isProvider())
             .filter(row -> !PATIENT.equals(UserAccountAccess.roleCode(row.getRole())))
             .toList();
-        UUID facilityId = facilityOf(scope, providerRows);
+        // Read without sealing: the seat narrows the scope below.
+        UUID facilityId = facilityOf(ActingScopeResolver.scopeOf(context), providerRows);
         if (facilityId == null) {
             return Optional.empty();
         }
@@ -71,19 +78,18 @@ public class ProviderSeatResolver {
         if (here.isEmpty()) {
             return Optional.empty();
         }
-        Hospital facility = here.get(0).getHospital();
-        // Live, AND presented: the same two conditions UserAccountAccess puts
-        // on a provider admin's grants and changes, so the staff page never
-        // offers what the assignment service would then refuse.
-        boolean admin = here.stream()
-            .anyMatch(row -> RoleFacilityCompatibility.PROVIDER_ADMIN.equals(UserAccountAccess.roleCode(row.getRole())))
-            && roleValidator.hasAnyAuthority(RoleFacilityCompatibility.PROVIDER_ADMIN);
-        return Optional.of(new ProviderSeat(facility, userId, admin));
+        // Pin the request to the facility (a no-op when it already acts
+        // there); a refusal means no seat.
+        if (!(actingScopeResolver.narrowTo(facilityId) instanceof ActingScope.Pinned)) {
+            return Optional.empty();
+        }
+        boolean admin = accountAccess.providerAdministeredFacilities().contains(facilityId);
+        return Optional.of(new ProviderSeat(here.get(0).getHospital(), userId, admin));
     }
 
     /**
-     * The caller's seat, when they hold PROVIDER_ADMIN there (a live active
-     * assignment) and present the role; empty otherwise.
+     * The caller's seat, when they administer the facility (a live active
+     * PROVIDER_ADMIN assignment there, and the role presented); empty otherwise.
      */
     public Optional<ProviderSeat> currentAdmin() {
         return current().filter(ProviderSeat::admin);

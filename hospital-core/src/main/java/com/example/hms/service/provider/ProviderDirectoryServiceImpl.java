@@ -6,6 +6,7 @@ import com.example.hms.exception.BusinessException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.provider.ProviderVerification;
 import com.example.hms.payload.dto.provider.ProviderDirectoryEntryDTO;
+import com.example.hms.payload.dto.provider.ProviderDirectoryPageDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.provider.ProviderVerificationRepository;
@@ -57,22 +58,32 @@ public class ProviderDirectoryServiceImpl implements ProviderDirectoryService {
             .map(RoleFacilityCompatibility::bare)
             .collect(Collectors.toUnmodifiableSet());
 
+    private final ProviderOrganisationsFlag organisationsFlag;
     private final ActingScopeResolver actingScopeResolver;
     private final HospitalRepository hospitalRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final ProviderVerificationRepository verificationRepository;
 
     @Override
-    public List<ProviderDirectoryEntryDTO> search(String type, String query) {
-        // Who first, then what: a refused caller gets the same refusal
+    public ProviderDirectoryPageDTO search(String type, String query) {
+        // The flag first (AC-14): off, the directory is empty for everyone,
+        // whatever they send.
+        if (!organisationsFlag.isEnabled()) {
+            return ProviderDirectoryPageDTO.empty();
+        }
+        // Who next, then what: a refused caller gets the same refusal
         // whatever they send, never a 400 that depends on the parameters.
         UUID actingHospitalId = actingScopeResolver.requirePinned();
         requireDirectoryReader(actingHospitalId);
         Set<FacilityType> types = parseTypes(type);
-        return verificationRepository.findDirectory(types, namePattern(query), PageRequest.of(0, MAX_RESULTS))
+        // One more than the cap tells whether more matched.
+        List<ProviderDirectoryEntryDTO> found = verificationRepository
+            .findDirectory(types, namePattern(query), PageRequest.of(0, MAX_RESULTS + 1))
             .stream()
             .map(ProviderDirectoryServiceImpl::toEntry)
             .toList();
+        boolean hasMore = found.size() > MAX_RESULTS;
+        return new ProviderDirectoryPageDTO(hasMore ? found.subList(0, MAX_RESULTS) : found, hasMore);
     }
 
     /**
@@ -100,18 +111,19 @@ public class ProviderDirectoryServiceImpl implements ProviderDirectoryService {
     }
 
     private static Set<FacilityType> parseTypes(String raw) {
-        if (raw == null || raw.isBlank()) {
+        FacilityType parsed;
+        try {
+            parsed = FacilityType.fromParameter(raw);
+        } catch (IllegalArgumentException unknown) {
+            throw new BusinessException(MSG_TYPE_INVALID);
+        }
+        if (parsed == null) {
             return PROVIDER_TYPES;
         }
-        try {
-            FacilityType parsed = FacilityType.valueOf(raw.trim().toUpperCase(Locale.ROOT));
-            if (PROVIDER_TYPES.contains(parsed)) {
-                return EnumSet.of(parsed);
-            }
-        } catch (IllegalArgumentException unknown) {
-            // answered below, like a HOSPITAL type
+        if (!PROVIDER_TYPES.contains(parsed)) {
+            throw new BusinessException(MSG_TYPE_INVALID);
         }
-        throw new BusinessException(MSG_TYPE_INVALID);
+        return EnumSet.of(parsed);
     }
 
     /** Lower-case, LIKE-escaped, wrapped in {@code %}; {@code null} for no filter. */
