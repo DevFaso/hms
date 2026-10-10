@@ -3,6 +3,7 @@ package com.example.hms.service.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -312,39 +313,26 @@ class OrganizationLifecycleServiceImplTest {
         verify(organizationRepository, times(1)).save(any());
     }
 
-    // ── MFA step-up ────────────────────────────────────────────────────
+    // ── MFA step-up (the shared MfaService#requireStepUp; its branches are in MfaServiceTest) ──
 
     @Test
-    void suspendRejectsWhenMfaRequiredAndActorIsEnrolledButTokenIsMissing() {
+    void suspendStopsWhenTheSharedStepUpRefuses() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(true);
-        when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
-        TenantLifecycleActionRequestDTO req = withReason("non-payment");
-
-        assertThatThrownBy(() -> service.suspend(orgId, req, null))
-            .isInstanceOf(com.example.hms.exception.UnauthorizedException.class)
-            .hasMessageContaining("mfa_required");
-        verify(organizationRepository, never()).save(any());
-    }
-
-    @Test
-    void suspendRejectsWhenMfaRequiredAndTokenIsInvalid() {
-        ReflectionTestUtils.setField(service, "requireMfa", true);
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(true);
-        when(mfaService.verifyCode(actorId, "000000")).thenReturn(false);
+        when(mfaService.requireStepUp(actorId, "000000", "organization suspend", false))
+            .thenThrow(new com.example.hms.exception.MfaStepUpRefusedException(
+                com.example.hms.exception.MfaStepUpRefusedException.Reason.INVALID));
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
         TenantLifecycleActionRequestDTO req = withReason("non-payment");
 
         assertThatThrownBy(() -> service.suspend(orgId, req, "000000"))
-            .isInstanceOf(com.example.hms.exception.UnauthorizedException.class);
+            .isInstanceOf(com.example.hms.exception.MfaStepUpRefusedException.class);
         verify(organizationRepository, never()).save(any());
     }
 
     @Test
-    void suspendPassesWhenMfaRequiredAndTokenIsValid() {
+    void suspendPassesWhenTheSharedStepUpVerifies() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(true);
-        when(mfaService.verifyCode(actorId, "123456")).thenReturn(true);
+        when(mfaService.requireStepUp(actorId, "123456", "organization suspend", false)).thenReturn(true);
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
         when(organizationRepository.save(any(Organization.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -357,7 +345,7 @@ class OrganizationLifecycleServiceImplTest {
     void suspendAllowsUnenrolledActorAndAuditsTheBypassInNonStrictMode() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
         ReflectionTestUtils.setField(service, "requireMfaStrict", false);
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(false);
+        when(mfaService.requireStepUp(actorId, null, "organization suspend", false)).thenReturn(false);
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
         when(organizationRepository.save(any(Organization.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -366,25 +354,24 @@ class OrganizationLifecycleServiceImplTest {
         assertThat(result.getLifecycleState()).isEqualTo(OrganizationLifecycleState.SUSPENDED);
         ArgumentCaptor<AuditEventRequestDTO> auditCap = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
         verify(auditEventLogService, times(2)).logEvent(auditCap.capture());
-        // First audit is the SECURITY_ALERT_TRIGGERED bypass record; second is the
-        // TENANT_SUSPENDED record. The order is irrelevant; what matters is that
-        // both fired.
+        // The SECURITY_ALERT_TRIGGERED bypass record and the TENANT_SUSPENDED record.
         assertThat(auditCap.getAllValues()).extracting(AuditEventRequestDTO::getEventType)
             .containsExactlyInAnyOrder(
                 AuditEventType.SECURITY_ALERT_TRIGGERED, AuditEventType.TENANT_SUSPENDED);
     }
 
     @Test
-    void suspendRejectsUnenrolledActorInStrictMode() {
+    void suspendPassesStrictModeToTheSharedStepUp() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
         ReflectionTestUtils.setField(service, "requireMfaStrict", true);
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(false);
+        when(mfaService.requireStepUp(actorId, null, "organization suspend", true))
+            .thenThrow(new com.example.hms.exception.MfaStepUpRefusedException(
+                com.example.hms.exception.MfaStepUpRefusedException.Reason.NOT_ENROLLED));
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
         TenantLifecycleActionRequestDTO req = withReason("non-payment");
 
         assertThatThrownBy(() -> service.suspend(orgId, req, null))
-            .isInstanceOf(com.example.hms.exception.UnauthorizedException.class)
-            .hasMessageContaining("must enrol MFA");
+            .isInstanceOf(com.example.hms.exception.MfaStepUpRefusedException.class);
         verify(organizationRepository, never()).save(any());
     }
 
@@ -401,8 +388,7 @@ class OrganizationLifecycleServiceImplTest {
 
         assertThat(result.getLifecycleState()).isEqualTo(OrganizationLifecycleState.ACTIVE);
         // Crucially, MfaService is never consulted on a non-destructive path.
-        verify(mfaService, never()).isMfaEnabled(any());
-        verify(mfaService, never()).verifyCode(any(), any());
+        verify(mfaService, never()).requireStepUp(any(), any(), any(), anyBoolean());
     }
 
     @Test

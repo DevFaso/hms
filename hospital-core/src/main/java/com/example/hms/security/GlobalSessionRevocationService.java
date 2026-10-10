@@ -64,6 +64,16 @@ public class GlobalSessionRevocationService {
         return cachedGlobalMinTokenIat;
     }
 
+    /**
+     * A token issued at {@code issuedAt} predates the last force-logout-all.
+     * No revocation yet, or a token without an {@code iat}, is not revoked.
+     */
+    public boolean revokes(java.util.Date issuedAt) {
+        Instant minIat = cachedGlobalMinTokenIat;
+        return issuedAt != null && minIat != null && !EPOCH.equals(minIat)
+            && issuedAt.toInstant().isBefore(minIat);
+    }
+
     @Transactional
     public Instant revokeAll(UUID actorUserId, String actorUsername, String reason) {
         Instant now = Instant.now();

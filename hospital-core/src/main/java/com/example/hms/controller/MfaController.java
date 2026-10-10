@@ -11,9 +11,11 @@ import com.example.hms.payload.dto.mfa.MfaEnrollmentResponse;
 import com.example.hms.payload.dto.mfa.MfaVerifyRequest;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.GlobalSessionRevocationService;
 import com.example.hms.security.IdleSessionGate;
 import com.example.hms.security.JwtTokenProvider;
 import com.example.hms.security.RefreshTokenCookieService;
+import com.example.hms.security.TokenBlacklistService;
 import com.example.hms.security.TokenUserDescriptor;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.MfaService;
@@ -23,6 +25,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -59,6 +62,9 @@ public class MfaController {
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final RefreshTokenCookieService refreshTokenCookieService;
     private final IdleSessionGate idleSessionGate;
+    /** The challenge token is single-use: a spent or force-logged-out one is refused at verify. */
+    private final TokenBlacklistService tokenBlacklistService;
+    private final GlobalSessionRevocationService globalSessionRevocationService;
 
     /** 401 for a caller holding only a partial mfaToken, not a full access token. */
     private ResponseEntity<Object> notFullyAuthenticated() {
@@ -86,38 +92,30 @@ public class MfaController {
     }
 
     /**
-     * {@link #resolveFullyAuthenticatedUser}, for a caller about to enrol. A
-     * first enrolment needs nothing more (the login's MFA challenge token may
-     * start it); replacing a verified authenticator needs the step-up, which
-     * {@link MfaService#requireStepUpToReplaceAuthenticator} owns.
-     */
-    private Optional<User> resolveEnrollingUser(UserDetails principal, String stepUpCode) {
-        Optional<User> user = resolveFullyAuthenticatedUser(principal);
-        var caller = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        user.ifPresent(u -> mfaService.requireStepUpToReplaceAuthenticator(u.getId(), caller, stepUpCode));
-        return user;
-    }
-
-    /**
      * Start TOTP enrollment — returns secret, otpauth URI, and backup codes.
-     * Enrolling again resets the authenticator, so once one is verified this
-     * takes a current code from it in {@code X-Mfa-Token}.
+     * With an active authenticator this starts its replacement, which needs a
+     * full session and the step-up in {@code X-Mfa-Token} (a current code or
+     * an unused backup code; 403 with a reason code otherwise), and stays
+     * pending until verify-enrollment confirms it: see {@link MfaService#enrollTotp}.
      */
     @PostMapping("/enroll")
     public ResponseEntity<Object> enroll(@AuthenticationPrincipal UserDetails principal,
+                                         Authentication authentication,
                                          @RequestHeader(value = "X-Mfa-Token", required = false) String stepUpCode) {
-        Optional<User> authenticated = resolveEnrollingUser(principal, stepUpCode);
+        Optional<User> authenticated = resolveFullyAuthenticatedUser(principal);
         if (authenticated.isEmpty()) return notFullyAuthenticated();
         User user = authenticated.get();
 
-        MfaService.MfaEnrollmentResult result = mfaService.enrollTotp(user);
+        MfaService.MfaEnrollmentResult result = mfaService.enrollTotp(user, authentication, stepUpCode);
 
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .userId(user.getId())
                 .userName(user.getUsername())
                 .eventType(AuditEventType.MFA_ENROLLED)
                 .status(AuditStatus.PENDING)
-                .eventDescription("TOTP enrollment started")
+                .eventDescription(result.replacing()
+                        ? "TOTP replacement started (pending until confirmed)"
+                        : "TOTP enrollment started")
                 .build());
 
         return ResponseEntity.ok(new MfaEnrollmentResponse(
@@ -134,13 +132,14 @@ public class MfaController {
     @PostMapping("/verify-enrollment")
     public ResponseEntity<Object> verifyEnrollment(
             @AuthenticationPrincipal UserDetails principal,
+            Authentication authentication,
             @Valid @RequestBody MfaVerifyRequest request) {
 
         Optional<User> authenticated = resolveFullyAuthenticatedUser(principal);
         if (authenticated.isEmpty()) return notFullyAuthenticated();
         User user = authenticated.get();
 
-        boolean verified = mfaService.verifyEnrollment(user.getId(), request.code());
+        boolean verified = mfaService.verifyEnrollment(user.getId(), request.code(), authentication);
 
         if (verified) {
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
@@ -185,7 +184,7 @@ public class MfaController {
     public ResponseEntity<Object> verifyMfa(@Valid @RequestBody MfaLoginVerifyRequest request,
                                             HttpServletResponse httpResponse) {
         // Validate the mfaToken
-        if (!jwtTokenProvider.isMfaToken(request.mfaToken())) {
+        if (!jwtTokenProvider.isMfaToken(request.mfaToken()) || isSpentOrRevoked(request.mfaToken())) {
             return ResponseEntity.status(401)
                     .body(new MessageResponse("Invalid or expired MFA token."));
         }
@@ -215,7 +214,10 @@ public class MfaController {
                     .body(new MessageResponse("Invalid MFA code."));
         }
 
-        // MFA passed — issue full JWT pair
+        // MFA passed. The challenge is spent: it cannot mint a second session.
+        spend(request.mfaToken());
+
+        // Issue the full JWT pair
         var activeAssignments = assignmentRepository.findByUser_IdAndActiveTrue(user.getId());
         List<String> roles = activeAssignments.stream()
                 .map(a -> a.getRole().getName())
@@ -286,6 +288,23 @@ public class MfaController {
                 AuthorityUtils.createAuthorityList(roleCodes.toArray(new String[0])));
 
         return ResponseEntity.ok(body);
+    }
+
+    /**
+     * The challenge token was already used to complete a sign-in, or it
+     * predates the last force-logout-all: refused like an expired one.
+     */
+    private boolean isSpentOrRevoked(String challengeToken) {
+        String jti = jwtTokenProvider.getJtiFromToken(challengeToken);
+        return (jti != null && tokenBlacklistService.isBlacklisted(jti))
+                || globalSessionRevocationService.revokes(jwtTokenProvider.getIssuedAt(challengeToken));
+    }
+
+    private void spend(String challengeToken) {
+        String jti = jwtTokenProvider.getJtiFromToken(challengeToken);
+        if (jti != null) {
+            tokenBlacklistService.blacklist(jti, jwtTokenProvider.getExpiration(challengeToken).getTime());
+        }
     }
 
     // DTO for MFA login verification (unauthenticated)

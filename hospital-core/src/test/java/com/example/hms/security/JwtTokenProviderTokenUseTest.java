@@ -12,10 +12,18 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import org.springframework.security.authentication.BadCredentialsException;
+
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -124,5 +132,64 @@ class JwtTokenProviderTokenUseTest {
         assertThat(MfaChallengeScope.isChallengeSession(authentication)).isFalse();
         assertThat(authentication.getAuthorities()).extracting(GrantedAuthority::getAuthority)
             .contains("ROLE_HOSPITAL_ADMIN");
+    }
+
+    // ── Refresh tokens minted before the mark, and refresh tokens as bearers ──
+
+    /** A refresh token exactly as this issuer minted it before token_use existed. */
+    private static String legacyRefreshToken() {
+        return Jwts.builder()
+            .id(UUID.randomUUID().toString())
+            .subject(USERNAME)
+            .claim("roles", List.of("ROLE_HOSPITAL_ADMIN"))
+            .issuedAt(new Date())
+            .expiration(new Date(System.currentTimeMillis() + 3_600_000L))
+            .signWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)))
+            .compact();
+    }
+
+    @Test
+    @DisplayName("a legacy refresh token is accepted before the cutoff, and refused after it")
+    void legacyRefreshTokenOnlyUntilTheCutoff() {
+        String legacy = legacyRefreshToken();
+        assertThat(provider.isRefreshToken(legacy)).isTrue();
+
+        ReflectionTestUtils.setField(provider, "legacyRefreshAcceptedUntil", Instant.now().minusSeconds(1));
+
+        assertThat(provider.isRefreshToken(legacy)).isFalse();
+        assertThat(provider.isRefreshToken(provider.generateRefreshToken(descriptor()))).isTrue();
+    }
+
+    @Test
+    @DisplayName("the cutoff is configurable, and an access token is never mistaken for the legacy shape")
+    void accessTokenIsNeverTheLegacyShape() {
+        JwtTokenProvider configured = new JwtTokenProvider(userDetailsService, tenantRoleAssignmentAccessor);
+        ReflectionTestUtils.setField(configured, "jwtSecret", SECRET);
+        ReflectionTestUtils.setField(configured, "accessTokenExpirationMs", 900_000L);
+        ReflectionTestUtils.setField(configured, "refreshTokenExpirationMs", 172_800_000L);
+        ReflectionTestUtils.setField(configured, "rsaPrivateKeyPem", "");
+        ReflectionTestUtils.setField(configured, "rsaPublicKeyPem", "");
+        ReflectionTestUtils.setField(configured, "previousPublicKeyPem", "");
+        ReflectionTestUtils.setField(configured, "legacyRefreshAcceptedUntilSetting", "2999-01-01T00:00:00Z");
+        configured.init();
+
+        assertThat(ReflectionTestUtils.getField(configured, "legacyRefreshAcceptedUntil"))
+            .isEqualTo(Instant.parse("2999-01-01T00:00:00Z"));
+        assertThat(configured.isRefreshToken(configured.generateAccessToken(descriptor()))).isFalse();
+        assertThat(configured.isRefreshToken(configured.generateImpersonationAccessToken(
+            descriptor(), UUID.randomUUID(), "super.admin", 1_800_000L))).isFalse();
+        assertThat(configured.isRefreshToken(configured.generateMfaToken(USERNAME))).isFalse();
+    }
+
+    @Test
+    @DisplayName("a refresh token, marked or legacy, is not an access token")
+    void refreshTokenIsNoBearer() {
+        String marked = provider.generateRefreshToken(descriptor());
+        String legacy = legacyRefreshToken();
+
+        assertThatThrownBy(() -> provider.getAuthenticationFromJwt(marked))
+            .isInstanceOf(BadCredentialsException.class);
+        assertThatThrownBy(() -> provider.getAuthenticationFromJwt(legacy))
+            .isInstanceOf(BadCredentialsException.class);
     }
 }

@@ -1110,8 +1110,9 @@ public class AuthController {
 
     /**
      * Rewrites the caller's MFA records, which can disable or delete a verified
-     * authenticator: once one is verified, that takes a current code from it in
-     * {@code X-Mfa-Token} (the step-up {@link MfaService#requireStepUpToReplaceAuthenticator} owns).
+     * authenticator: while one is active, that takes the step-up in
+     * {@code X-Mfa-Token} (a current code or an unused backup code; 403 with a
+     * reason code otherwise), checked in the same transaction as the change.
      */
     @PutMapping("/credentials/mfa")
     public ResponseEntity<List<UserMfaEnrollmentDTO>> updateMfaEnrollments(
@@ -1121,9 +1122,8 @@ public class AuthController {
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        mfaService.requireStepUpToReplaceAuthenticator(
-                userId, SecurityContextHolder.getContext().getAuthentication(), stepUpCode);
-        List<UserMfaEnrollmentDTO> response = userCredentialLifecycleService.upsertMfaEnrollments(userId, payload);
+        List<UserMfaEnrollmentDTO> response = userCredentialLifecycleService.upsertOwnMfaEnrollments(
+                userId, payload, SecurityContextHolder.getContext().getAuthentication(), stepUpCode);
         return ResponseEntity.ok(response);
     }
 

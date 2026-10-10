@@ -11,6 +11,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -366,6 +367,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // (the message is already generic; the subject is PII). Operators who
             // need to investigate can correlate via the JTI from the request log.
             log.warn("[JWT] Rejecting token for a disabled/unverified principal.");
+            SecurityContextHolder.clearContext();
+            HospitalContextHolder.clear();
+            ImpersonationContextHolder.clear();
+            return false;
+        } catch (BadCredentialsException notAnAccessToken) {
+            // A refresh token presented as a bearer (TokenUse): 401, it is no session.
+            log.warn("[JWT] Rejecting a refresh token presented as an access token.");
             SecurityContextHolder.clearContext();
             HospitalContextHolder.clear();
             ImpersonationContextHolder.clear();

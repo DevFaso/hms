@@ -13,6 +13,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -31,6 +32,7 @@ import java.security.PublicKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;
@@ -89,6 +91,18 @@ public class JwtTokenProvider {
     @Value("${app.jwt.previous-public-key:}")
     private String previousPublicKeyPem;
 
+    /**
+     * Until when {@code /auth/token/refresh} still accepts a refresh token
+     * minted before the {@code token_use} mark (an ISO-8601 instant). Unset, it
+     * is boot time plus the refresh-token lifetime, which every such token has
+     * outlived by then; rotation always issues the marked shape, so set it to
+     * the deploy time plus 48 h to make the window exact.
+     */
+    @Value("${app.auth.legacy-refresh-accepted-until:}")
+    private String legacyRefreshAcceptedUntilSetting;
+
+    private Instant legacyRefreshAcceptedUntil;
+
     /** Signing key — either HMAC SecretKey or RSA PrivateKey. */
     private Key signingKey;
 
@@ -121,6 +135,9 @@ public class JwtTokenProvider {
         } else {
             initHmac();
         }
+        legacyRefreshAcceptedUntil = StringUtils.hasText(legacyRefreshAcceptedUntilSetting)
+            ? Instant.parse(legacyRefreshAcceptedUntilSetting.trim())
+            : Instant.now().plusMillis(refreshTokenExpirationMs);
     }
 
     private void initAsymmetric() {
@@ -563,6 +580,11 @@ public class JwtTokenProvider {
 
     public Authentication getAuthenticationFromJwt(String token) {
         Claims claims = parseClaimsWithRotation(token);
+        // A refresh token is no access token: it lives for days, so as a
+        // bearer it would outlast every access-token expiry.
+        if (TokenUse.isRefreshShaped(claims)) {
+            throw new BadCredentialsException("A refresh token is not an access token.");
+        }
 
         String username = claims.getSubject();
 
@@ -633,17 +655,20 @@ public class JwtTokenProvider {
 
     /**
      * The token is a refresh token this issuer minted: signed, unexpired and
-     * marked {@code token_use=refresh}. An access, impersonation or MFA
-     * challenge token is not, though the same key signs it, and neither is a
-     * refresh token minted before the mark existed.
+     * marked {@code token_use=refresh}, or, until
+     * {@code app.auth.legacy-refresh-accepted-until}, of the exact shape a
+     * refresh token had before the mark (so the deploy signs nobody out). An
+     * access, impersonation or MFA challenge token is never one, though the
+     * same key signs it.
      */
     public boolean isRefreshToken(String token) {
         if (!StringUtils.hasText(token)) {
             return false;
         }
         try {
-            return TokenUse.REFRESH.equals(jwtParser().parseSignedClaims(token).getPayload()
-                .get(TokenUse.CLAIM, String.class));
+            Claims claims = jwtParser().parseSignedClaims(token).getPayload();
+            return TokenUse.isMarkedRefresh(claims)
+                || (TokenUse.isLegacyRefreshShape(claims) && Instant.now().isBefore(legacyRefreshAcceptedUntil));
         } catch (JwtException | IllegalArgumentException ex) {
             return false;
         }

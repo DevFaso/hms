@@ -112,4 +112,16 @@ class GlobalSessionRevocationServiceTest {
         assertThat(row.getGlobalMinTokenIat()).isEqualTo(takenAt);
         assertThat(service.getGlobalMinTokenIat()).isEqualTo(takenAt);
     }
+
+    @Test
+    @DisplayName("revokes: only a token issued before the last force-logout-all")
+    void revokesOnlyTokensIssuedBeforeTheRevocation() {
+        assertThat(service.revokes(new java.util.Date())).isFalse();
+
+        Instant takenAt = service.revokeAll(null, null, null);
+
+        assertThat(service.revokes(java.util.Date.from(takenAt.minusSeconds(1)))).isTrue();
+        assertThat(service.revokes(java.util.Date.from(takenAt.plusSeconds(1)))).isFalse();
+        assertThat(service.revokes(null)).isFalse();
+    }
 }

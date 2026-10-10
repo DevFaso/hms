@@ -2240,6 +2240,10 @@ split out of #781; #785 the unguarded `/patients-v2` surface removed and #786
 CDS Hooks held to clinicians and a readable chart, both from #783's
 out-of-scope list; #787 the imaging-order writes held to the acting hospital,
 from #778's D13. Each source bullet below says what it left.
+- **TOTP codes have no replay protection within the ±30 s window (needs a used-code store).**
+  `MfaService` accepts the same TOTP code again for as long as it stays inside
+  the verifier window (the current step ±1), at login, at verify-enrollment
+  and at the shared step-up. Found in the review of #853. Open.
 - **~~Patient-admitting reads by patient id with no ownership check.~~
   Closed by #783** (2026-09-27): on the 13 reads its sweep found, a
   patient-only caller reads only their own rows and another patient's id

@@ -408,6 +408,20 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * A refused MFA step-up. 403 with the reason code, not 401: the session is
+     * fine, so the portal shows why instead of signing the user out.
+     */
+    @ExceptionHandler(MfaStepUpRefusedException.class)
+    public ResponseEntity<Object> handleMfaStepUpRefused(MfaStepUpRefusedException ex, WebRequest request) {
+        if (log.isWarnEnabled()) {
+            log.warn("MFA step-up refused ({}) at path {}", ex.getCode(), request.getDescription(false));
+        }
+        Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+        body.put("code", ex.getCode());
+        return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
+    }
+
+    /**
      * A hospital scope the request cannot have (design §3.6). 403 with a code
      * and the reason, so the portal re-reads its scope on a stale chip
      * ({@code NO_LONGER_PERMITTED}) instead of showing the forbidden page.

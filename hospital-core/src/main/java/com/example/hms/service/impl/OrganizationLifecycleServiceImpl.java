@@ -5,7 +5,6 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.OrganizationLifecycleState;
 import com.example.hms.exception.BusinessRuleException;
 import com.example.hms.exception.ResourceNotFoundException;
-import com.example.hms.exception.UnauthorizedException;
 import com.example.hms.model.Organization;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.superadmin.TenantLifecycleActionRequestDTO;
@@ -243,7 +242,7 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
      * <ul>
      *   <li>{@code requireMfa=false} → no-op (emergency rollback only).
      *   <li>{@code requireMfa=true}, actor has MFA enrolled → token must be
-     *       present and valid; rejects with 401 {@code mfa_required} otherwise.
+     *       present and valid (or an unused backup code); 403 with a reason code otherwise.
      *   <li>{@code requireMfa=true}, actor has no MFA enrollment → if
      *       {@code requireMfaStrict=true}, reject; otherwise audit a
      *       SECURITY_ALERT_TRIGGERED event and allow through (so unenrolled
@@ -255,28 +254,12 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
             return;
         }
         UUID actorId = currentActorId();
-        if (actorId == null) {
-            // No principal — should not happen on an authenticated endpoint, but
-            // failing closed is the right call.
-            throw new UnauthorizedException("mfa_required: cannot resolve actor for " + action);
-        }
-        boolean enrolled;
-        try {
-            enrolled = mfaService.isMfaEnabled(actorId);
-        } catch (RuntimeException ex) {
-            log.warn("[TENANT-LIFECYCLE] MFA enrollment lookup failed for actor {}: {}",
-                actorId, ex.getMessage());
-            // Fail closed when we cannot resolve the actor's MFA status.
-            throw new UnauthorizedException("mfa_required: enrollment lookup unavailable");
-        }
-        if (enrolled) {
-            if (mfaToken == null || mfaToken.isBlank() || !mfaService.verifyCode(actorId, mfaToken)) {
-                throw new UnauthorizedException("mfa_required: invalid or missing X-Mfa-Token for " + action);
-            }
+        // The shared step-up (MfaService#requireStepUp): a current TOTP code or an
+        // unused backup code. A refusal answers 403 with a reason code and is
+        // audited there; only the non-strict bypass of an unenrolled actor
+        // comes back here, to be audited below.
+        if (mfaService.requireStepUp(actorId, mfaToken, "organization " + action, requireMfaStrict)) {
             return;
-        }
-        if (requireMfaStrict) {
-            throw new UnauthorizedException("mfa_required: actor must enrol MFA before performing " + action);
         }
         // Unenrolled actor passing through under non-strict mode — audit it so
         // ops has a paper trail of every destructive action that bypassed MFA.

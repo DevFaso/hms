@@ -92,6 +92,7 @@ class MfaChallengeTokenScopeIT extends BaseIT {
     /** A hospital admin with a verified authenticator. */
     private User enrolled;
     private String enrolledSecret;
+    private List<String> enrolledBackupCodes;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -113,8 +114,10 @@ class MfaChallengeTokenScopeIT extends BaseIT {
             .organization(organization)
             .build());
         enrolled = account("mfaadm");
-        enrolledSecret = mfaService.enrollTotp(enrolled).secret();
-        assertThat(mfaService.verifyEnrollment(enrolled.getId(), code(enrolledSecret))).isTrue();
+        MfaService.MfaEnrollmentResult first = mfaService.enrollTotp(enrolled, null, null);
+        enrolledSecret = first.secret();
+        enrolledBackupCodes = first.backupCodes();
+        assertThat(mfaService.verifyEnrollment(enrolled.getId(), code(enrolledSecret), null)).isTrue();
     }
 
     @AfterEach
@@ -135,15 +138,16 @@ class MfaChallengeTokenScopeIT extends BaseIT {
     // ── What the challenge token may NOT do ──
 
     @Test
-    @DisplayName("the challenge token cannot reset a verified authenticator, even with a current code")
+    @DisplayName("the challenge token cannot replace an active authenticator, even with a current code (403)")
     void challengeCannotReEnrol() throws Exception {
         String challenge = challengeFor(enrolled, true);
 
-        assertThat(status(post("/auth/mfa/enroll"), challenge, null)).isEqualTo(401);
-        assertThat(status(post("/auth/mfa/enroll").header(STEP_UP, code(enrolledSecret)), challenge, null))
-            .isEqualTo(401);
+        assertThat(refusal(perform(post("/auth/mfa/enroll"), challenge, null))).isEqualTo("mfa.stepup.challenge");
+        assertThat(refusal(perform(post("/auth/mfa/enroll").header(STEP_UP, code(enrolledSecret)), challenge, null)))
+            .isEqualTo("mfa.stepup.challenge");
 
         assertThat(secretOf(enrolled)).isEqualTo(enrolledSecret);
+        assertThat(pendingOf(enrolled)).isNull();
         assertThat(mfaService.isMfaEnabled(enrolled.getId())).isTrue();
     }
 
@@ -155,7 +159,7 @@ class MfaChallengeTokenScopeIT extends BaseIT {
         MvcResult refused = perform(put("/auth/credentials/mfa"), challenge, List.of());
         assertThat(refused.getResponse().getStatus()).isEqualTo(401);
         // Refused as no caller at all, before the step-up is even asked for.
-        assertThat(refused.getResponse().getContentAsString()).doesNotContain("mfa_required");
+        assertThat(refused.getResponse().getContentAsString()).doesNotContain("mfa.stepup");
 
         assertThat(mfaService.isMfaEnabled(enrolled.getId())).isTrue();
         assertThat(secretOf(enrolled)).isEqualTo(enrolledSecret);
@@ -190,6 +194,20 @@ class MfaChallengeTokenScopeIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("the challenge token is single-use: a replay is refused, and so is its use as a bearer afterwards")
+    void challengeIsSingleUse() throws Exception {
+        String challenge = challengeFor(enrolled, true);
+        String code = code(enrolledSecret);
+
+        assertThat(verify(challenge, code).getResponse().getStatus()).isEqualTo(200);
+
+        MvcResult replay = verify(challenge, code);
+        assertThat(replay.getResponse().getStatus()).isEqualTo(401);
+        assertThat(replay.getResponse().getContentAsString()).doesNotContain("accessToken");
+        assertThat(status(post("/auth/mfa/enroll"), challenge, null)).isEqualTo(401);
+    }
+
+    @Test
     @DisplayName("refresh takes only a refresh token: an access token is refused, a real refresh token still rotates")
     void refreshTakesOnlyARefreshToken() throws Exception {
         JsonNode session = verified(enrolled, enrolledSecret);
@@ -199,6 +217,15 @@ class MfaChallengeTokenScopeIT extends BaseIT {
         MvcResult rotated = refresh(session.get("refreshToken").asString());
         assertThat(rotated.getResponse().getStatus()).isEqualTo(200);
         assertThat(body(rotated).get("accessToken").asString()).isNotBlank();
+    }
+
+    @Test
+    @DisplayName("a refresh token is no access token: as a bearer it is refused")
+    void refreshTokenIsNoBearer() throws Exception {
+        JsonNode session = verified(enrolled, enrolledSecret);
+
+        assertThat(status(get("/me/assignments"), session.get("refreshToken").asString(), null)).isEqualTo(401);
+        assertThat(status(get("/me/assignments"), session.get("accessToken").asString(), null)).isEqualTo(200);
     }
 
     // ── What it still does ──
@@ -225,8 +252,8 @@ class MfaChallengeTokenScopeIT extends BaseIT {
             .isEqualTo(200);
         assertThat(mfaService.isMfaEnabled(fresh.getId())).isTrue();
 
-        // Now that it is verified, the same challenge token cannot replace it.
-        assertThat(status(post("/auth/mfa/enroll"), challenge, null)).isEqualTo(401);
+        // Now that it is active, the same challenge token cannot replace it.
+        assertThat(refusal(perform(post("/auth/mfa/enroll"), challenge, null))).isEqualTo("mfa.stepup.challenge");
         assertThat(secretOf(fresh)).isEqualTo(secret);
     }
 
@@ -243,46 +270,79 @@ class MfaChallengeTokenScopeIT extends BaseIT {
         assertThat(secretOf(fresh)).isEqualTo(body(again).get("secret").asString());
     }
 
-    @Test
-    @DisplayName("a re-enrolment left half done does not hand the account back to the password alone")
-    void halfDoneReEnrolmentStaysProtected() throws Exception {
-        String access = fullSession(enrolled, enrolledSecret);
-        MvcResult reEnrolled = perform(post("/auth/mfa/enroll").header(STEP_UP, code(enrolledSecret)), access, null);
-        assertThat(reEnrolled.getResponse().getStatus()).isEqualTo(200);
-        String pending = body(reEnrolled).get("secret").asString();
-        assertThat(mfaService.isMfaEnabled(enrolled.getId())).isFalse();
-
-        // Abandoned before the first code. The password now yields a challenge
-        // for an account that looks unenrolled, and it still cannot enrol.
-        String challenge = challengeFor(enrolled, false);
-        assertThat(status(post("/auth/mfa/enroll"), challenge, null)).isEqualTo(401);
-        assertThat(secretOf(enrolled)).isEqualTo(pending);
-    }
-
-    // ── A full session replaces it only with the step-up ──
+    // ── Replacing an active authenticator ──
 
     @Test
-    @DisplayName("a full session re-enrols only with a current code in X-Mfa-Token")
-    void fullSessionReEnrolsWithTheStepUp() throws Exception {
+    @DisplayName("a full session replaces it only with the step-up: none or a wrong code answers 403 with a reason")
+    void fullSessionReplacesOnlyWithTheStepUp() throws Exception {
         String access = fullSession(enrolled, enrolledSecret);
 
-        assertThat(status(post("/auth/mfa/enroll"), access, null)).isEqualTo(401);
-        assertThat(status(post("/auth/mfa/enroll").header(STEP_UP, "ABCDEF"), access, null)).isEqualTo(401);
+        assertThat(refusal(perform(post("/auth/mfa/enroll"), access, null))).isEqualTo("mfa.stepup.required");
+        assertThat(refusal(perform(post("/auth/mfa/enroll").header(STEP_UP, "ABCDEF"), access, null)))
+            .isEqualTo("mfa.stepup.invalid");
+        assertThat(pendingOf(enrolled)).isNull();
+
+        MvcResult started = perform(post("/auth/mfa/enroll").header(STEP_UP, code(enrolledSecret)), access, null);
+        assertThat(started.getResponse().getStatus()).isEqualTo(200);
+        assertThat(pendingOf(enrolled)).isEqualTo(body(started).get("secret").asString());
         assertThat(secretOf(enrolled)).isEqualTo(enrolledSecret);
-
-        MvcResult reEnrolled = perform(post("/auth/mfa/enroll").header(STEP_UP, code(enrolledSecret)), access, null);
-        assertThat(reEnrolled.getResponse().getStatus()).isEqualTo(200);
-        assertThat(secretOf(enrolled))
-            .isEqualTo(body(reEnrolled).get("secret").asString())
-            .isNotEqualTo(enrolledSecret);
     }
 
     @Test
-    @DisplayName("a full session rewrites the MFA records only with a current code in X-Mfa-Token")
+    @DisplayName("an unused backup code is a step-up too, and it is spent")
+    void backupCodeIsAStepUp() throws Exception {
+        String access = fullSession(enrolled, enrolledSecret);
+        String backup = enrolledBackupCodes.get(0);
+
+        assertThat(status(post("/auth/mfa/enroll").header(STEP_UP, backup), access, null)).isEqualTo(200);
+        assertThat(refusal(perform(post("/auth/mfa/enroll").header(STEP_UP, backup), access, null)))
+            .isEqualTo("mfa.stepup.invalid");
+    }
+
+    @Test
+    @DisplayName("a replacement left half done changes nothing: the current authenticator keeps signing in")
+    void halfDoneReplacementLeavesTheCurrentAuthenticator() throws Exception {
+        String access = fullSession(enrolled, enrolledSecret);
+        MvcResult started = perform(post("/auth/mfa/enroll").header(STEP_UP, code(enrolledSecret)), access, null);
+        assertThat(started.getResponse().getStatus()).isEqualTo(200);
+        String pendingBackup = body(started).get("backupCodes").get(0).asString();
+
+        // Abandoned before the first code from the new one.
+        assertThat(mfaService.isMfaEnabled(enrolled.getId())).isTrue();
+        String challenge = challengeFor(enrolled, true);
+        assertThat(refusal(perform(post("/auth/mfa/enroll"), challenge, null))).isEqualTo("mfa.stepup.challenge");
+        // The pending replacement's backup codes do not sign in; the current ones still do.
+        assertThat(verify(challenge, pendingBackup).getResponse().getStatus()).isEqualTo(401);
+        assertThat(verify(challenge, enrolledBackupCodes.get(1)).getResponse().getStatus()).isEqualTo(200);
+        assertThat(verify(challengeFor(enrolled, true), code(enrolledSecret)).getResponse().getStatus())
+            .isEqualTo(200);
+        assertThat(secretOf(enrolled)).isEqualTo(enrolledSecret);
+    }
+
+    @Test
+    @DisplayName("confirming the replacement swaps the authenticators: the new one signs in, the old one no longer does")
+    void confirmedReplacementSwaps() throws Exception {
+        String access = fullSession(enrolled, enrolledSecret);
+        MvcResult started = perform(post("/auth/mfa/enroll").header(STEP_UP, code(enrolledSecret)), access, null);
+        String replacement = body(started).get("secret").asString();
+
+        assertThat(status(post("/auth/mfa/verify-enrollment"), access, Map.of("code", code(replacement))))
+            .isEqualTo(200);
+
+        assertThat(secretOf(enrolled)).isEqualTo(replacement);
+        assertThat(pendingOf(enrolled)).isNull();
+        assertThat(verify(challengeFor(enrolled, true), code(enrolledSecret)).getResponse().getStatus())
+            .isEqualTo(401);
+        assertThat(verify(challengeFor(enrolled, true), code(replacement)).getResponse().getStatus())
+            .isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("a full session rewrites the MFA records only with the step-up")
     void fullSessionRewritesMfaRecordsWithTheStepUp() throws Exception {
         String access = fullSession(enrolled, enrolledSecret);
 
-        assertThat(status(put("/auth/credentials/mfa"), access, List.of())).isEqualTo(401);
+        assertThat(refusal(perform(put("/auth/credentials/mfa"), access, List.of()))).isEqualTo("mfa.stepup.required");
         assertThat(mfaService.isMfaEnabled(enrolled.getId())).isTrue();
 
         assertThat(status(put("/auth/credentials/mfa").header(STEP_UP, code(enrolledSecret)), access, List.of()))
@@ -336,6 +396,26 @@ class MfaChallengeTokenScopeIT extends BaseIT {
 
     private String fullSession(User user, String secret) throws Exception {
         return verified(user, secret).get("accessToken").asString();
+    }
+
+    /** {@code POST /auth/mfa/verify}: the challenge token in the body, never as a bearer. */
+    private MvcResult verify(String challenge, String code) throws Exception {
+        return mockMvc.perform(post("/auth/mfa/verify").with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("mfaToken", challenge, "code", code))))
+            .andReturn();
+    }
+
+    /** A refused step-up: 403, never 401, and its reason code. */
+    private String refusal(MvcResult result) throws Exception {
+        assertThat(result.getResponse().getStatus())
+            .as(result.getResponse().getContentAsString()).isEqualTo(403);
+        return body(result).get("code").asString();
+    }
+
+    private String pendingOf(User user) {
+        return enrollmentRepository.findByUserIdAndMethod(user.getId(), MfaMethodType.TOTP)
+            .map(UserMfaEnrollment::getPendingTotpSecret).orElse(null);
     }
 
     /** {@code POST /auth/token/refresh} with the token in the body, as the native apps send it. */

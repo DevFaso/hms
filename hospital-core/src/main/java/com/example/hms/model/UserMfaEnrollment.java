@@ -59,6 +59,15 @@ public class UserMfaEnrollment extends BaseEntity {
     @Column(name = "totp_secret", length = 512)
     private String totpSecret;
 
+    /**
+     * A replacement authenticator that has been started but not confirmed
+     * (V183). {@link #totpSecret} stays the current one, and keeps verifying,
+     * until verify-enrollment confirms a code from this one and swaps them.
+     */
+    @Convert(converter = TotpSecretEncryptor.class)
+    @Column(name = "pending_totp_secret", length = 512)
+    private String pendingTotpSecret;
+
     @Builder.Default
     @Column(name = "verified", nullable = false)
     private boolean verified = false;

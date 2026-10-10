@@ -15,6 +15,7 @@ import com.example.hms.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -47,6 +48,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
     private final UserRecoveryContactRepository recoveryContactRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+    private final MfaService mfaService;
     /**
      * Writes the recovery-code expiry and reads it back on verify; also stamps
      * {@code lastLoginAt}/{@code verifiedAt}, which nothing compares in time.
@@ -149,6 +151,14 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
         }
 
         return saved.stream().map(this::toDto).toList();
+    }
+
+    @Override
+    @Transactional
+    public List<UserMfaEnrollmentDTO> upsertOwnMfaEnrollments(UUID userId, List<UserMfaEnrollmentRequestDTO> payload,
+                                                              Authentication caller, String stepUpCode) {
+        mfaService.requireStepUpToChangeAuthenticator(userId, caller, stepUpCode);
+        return upsertMfaEnrollments(userId, payload);
     }
 
     @Override

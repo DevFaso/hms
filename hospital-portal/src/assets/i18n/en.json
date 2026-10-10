@@ -6023,7 +6023,16 @@
     "VERIFICATION_SEND_FAILED": "Failed to send verification code.",
     "VERIFIED": "Verified",
     "VERIFY": "Verify",
-    "VIEW_DETAILS": "View Details"
+    "VIEW_DETAILS": "View Details",
+    "MFA_REPLACE": "Replace authenticator",
+    "MFA_REPLACE_INTRO": "To replace your authenticator app, enter a current code from it, or one of your unused backup codes.",
+    "MFA_REPLACE_CONTINUE": "Continue",
+    "MFA_REPLACE_PENDING": "Your current authenticator keeps working until you confirm a code from the new one.",
+    "MFA_STEPUP_LABEL": "Current code or backup code",
+    "MFA_STEPUP_PLACEHOLDER": "Code or backup code",
+    "MFA_STEPUP_REQUIRED": "Enter a current code from your authenticator app, or an unused backup code.",
+    "MFA_STEPUP_INVALID": "That code was not accepted. Enter a current code from your authenticator app, or an unused backup code.",
+    "MFA_STEPUP_CHALLENGE": "Sign in completely, including the verification code, before replacing your authenticator."
   },
   "RECEPTION": {
     "ACCEPT_OFFER": "Accept",

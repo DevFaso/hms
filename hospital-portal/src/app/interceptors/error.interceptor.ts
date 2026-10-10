@@ -107,6 +107,21 @@ function refusedHospitalId(error: HttpErrorResponse): string | null {
     : null;
 }
 
+/**
+ * A refused MFA step-up (X-Mfa-Token): 403 with a code under `mfa.stepup.`.
+ * The session is fine, so this is neither a sign-out nor a forbidden page:
+ * the page that asked for the code shows why it was refused.
+ */
+export function mfaStepUpRefusal(error: HttpErrorResponse): string | null {
+  const body = error.error as { code?: unknown } | null;
+  return body &&
+    typeof body === 'object' &&
+    typeof body.code === 'string' &&
+    body.code.startsWith('mfa.stepup.')
+    ? body.code
+    : null;
+}
+
 function hospitalScopeRefusal(error: HttpErrorResponse): string | null {
   const body = error.error as { code?: unknown; reason?: unknown } | null;
   if (body && typeof body === 'object' && body.code === HOSPITAL_SCOPE_REFUSED) {
@@ -267,6 +282,8 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         // why their save failed.
         const body = error.error as { message?: string } | null;
         downtime.markReadOnly(body?.message ?? null);
+      } else if (error.status === 403 && mfaStepUpRefusal(error) !== null) {
+        // A refused MFA step-up: rethrown to the page, no redirect.
       } else if (error.status === 403 && hospitalScopeRefusal(error) !== null) {
         // A refused hospital scope is the page's to report, not a forbidden
         // page; a stale chip is corrected by re-reading the scope.

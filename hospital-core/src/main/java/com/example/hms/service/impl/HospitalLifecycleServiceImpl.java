@@ -10,7 +10,6 @@ import com.example.hms.repository.provider.ProviderVerificationRepository;
 import com.example.hms.service.provider.ProviderOnboardingService;
 import com.example.hms.utility.MessageUtil;
 import com.example.hms.exception.ResourceNotFoundException;
-import com.example.hms.exception.UnauthorizedException;
 import com.example.hms.model.Hospital;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.superadmin.HospitalLifecycleResponseDTO;
@@ -286,25 +285,12 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
             return;
         }
         UUID actorId = currentActorId();
-        if (actorId == null) {
-            throw new UnauthorizedException("mfa_required: cannot resolve actor for " + action);
-        }
-        boolean enrolled;
-        try {
-            enrolled = mfaService.isMfaEnabled(actorId);
-        } catch (RuntimeException ex) {
-            log.warn("[HOSPITAL-LIFECYCLE] MFA enrollment lookup failed for actor {}: {}",
-                actorId, ex.getMessage());
-            throw new UnauthorizedException("mfa_required: enrollment lookup unavailable");
-        }
-        if (enrolled) {
-            if (mfaToken == null || mfaToken.isBlank() || !mfaService.verifyCode(actorId, mfaToken)) {
-                throw new UnauthorizedException("mfa_required: invalid or missing X-Mfa-Token for " + action);
-            }
+        // The shared step-up (MfaService#requireStepUp): a current TOTP code or an
+        // unused backup code. A refusal answers 403 with a reason code and is
+        // audited there; only the non-strict bypass of an unenrolled actor
+        // comes back here, to be audited below.
+        if (mfaService.requireStepUp(actorId, mfaToken, "hospital " + action, requireMfaStrict)) {
             return;
-        }
-        if (requireMfaStrict) {
-            throw new UnauthorizedException("mfa_required: actor must enrol MFA before performing " + action);
         }
         try {
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()

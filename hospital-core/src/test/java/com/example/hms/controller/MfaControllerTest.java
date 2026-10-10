@@ -75,6 +75,12 @@ class MfaControllerTest {
     @MockitoBean
     private com.example.hms.security.IdleSessionGate idleSessionGate;
 
+    @MockitoBean
+    private com.example.hms.security.TokenBlacklistService tokenBlacklistService;
+
+    @MockitoBean
+    private com.example.hms.security.GlobalSessionRevocationService globalSessionRevocationService;
+
     private static final UUID USER_ID = UUID.randomUUID();
     private static final String USERNAME = "doctor@hms.com";
     private User testUser;
@@ -105,9 +111,9 @@ class MfaControllerTest {
         var result = new MfaService.MfaEnrollmentResult(
                 UUID.randomUUID(), "BASE32SECRET", "otpauth://totp/HMS:doctor@hms.com?secret=BASE32SECRET",
                 "data:image/png;base64,fake",
-                List.of("AAAA1111", "BBBB2222"));
+                List.of("AAAA1111", "BBBB2222"), false);
 
-        when(mfaService.enrollTotp(any(User.class))).thenReturn(result);
+        when(mfaService.enrollTotp(any(User.class), any(), org.mockito.ArgumentMatchers.isNull())).thenReturn(result);
 
         mockMvc.perform(post("/auth/mfa/enroll"))
                 .andExpect(status().isOk())
@@ -121,7 +127,8 @@ class MfaControllerTest {
 
     @Test
     void verifyEnrollment_validCode_returnsSuccess() throws Exception {
-        when(mfaService.verifyEnrollment(USER_ID, "123456")).thenReturn(true);
+        when(mfaService.verifyEnrollment(org.mockito.ArgumentMatchers.eq(USER_ID), org.mockito.ArgumentMatchers.eq("123456"), any()))
+                .thenReturn(true);
 
         mockMvc.perform(post("/auth/mfa/verify-enrollment")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -132,7 +139,8 @@ class MfaControllerTest {
 
     @Test
     void verifyEnrollment_invalidCode_returnsBadRequest() throws Exception {
-        when(mfaService.verifyEnrollment(USER_ID, "000000")).thenReturn(false);
+        when(mfaService.verifyEnrollment(org.mockito.ArgumentMatchers.eq(USER_ID), org.mockito.ArgumentMatchers.eq("000000"), any()))
+                .thenReturn(false);
 
         mockMvc.perform(post("/auth/mfa/verify-enrollment")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -222,5 +230,67 @@ class MfaControllerTest {
                         .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"BACKUP01\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").value("access-jwt"));
+    }
+
+    // ── The challenge token is single-use ──
+
+    @Test
+    void verifyMfa_spentChallenge_returns401_beforeAnyCodeIsTried() throws Exception {
+        when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
+        when(jwtTokenProvider.getJtiFromToken("mfa-tok-123")).thenReturn("jti-1");
+        when(tokenBlacklistService.isBlacklisted("jti-1")).thenReturn(true);
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"654321\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Invalid or expired MFA token."));
+        org.mockito.Mockito.verifyNoInteractions(mfaService);
+    }
+
+    @Test
+    void verifyMfa_challengeIssuedBeforeAForceLogout_returns401() throws Exception {
+        java.util.Date issuedAt = new java.util.Date();
+        when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
+        when(jwtTokenProvider.getIssuedAt("mfa-tok-123")).thenReturn(issuedAt);
+        when(globalSessionRevocationService.revokes(issuedAt)).thenReturn(true);
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"654321\"}"))
+                .andExpect(status().isUnauthorized());
+        org.mockito.Mockito.verifyNoInteractions(mfaService);
+    }
+
+    @Test
+    void verifyMfa_success_spendsTheChallenge() throws Exception {
+        java.util.Date exp = new java.util.Date(System.currentTimeMillis() + 300_000);
+        when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
+        when(jwtTokenProvider.getJtiFromToken("mfa-tok-123")).thenReturn("jti-1");
+        when(jwtTokenProvider.getExpiration("mfa-tok-123")).thenReturn(exp);
+        when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
+        when(mfaService.verifyCode(USER_ID, "654321")).thenReturn(true);
+        when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID)).thenReturn(List.of());
+        when(jwtTokenProvider.resolvePreferredRole(any())).thenReturn("ROLE_DOCTOR");
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"654321\"}"))
+                .andExpect(status().isOk());
+        org.mockito.Mockito.verify(tokenBlacklistService).blacklist("jti-1", exp.getTime());
+    }
+
+    @Test
+    void verifyMfa_wrongCode_doesNotSpendTheChallenge() throws Exception {
+        when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
+        when(jwtTokenProvider.getJtiFromToken("mfa-tok-123")).thenReturn("jti-1");
+        when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"999999\"}"))
+                .andExpect(status().isUnauthorized());
+        org.mockito.Mockito.verify(tokenBlacklistService, org.mockito.Mockito.never())
+                .blacklist(any(), org.mockito.ArgumentMatchers.anyLong());
     }
 }

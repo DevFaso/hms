@@ -223,6 +223,22 @@ describe('errorInterceptor', () => {
     });
   });
 
+  it('a refused MFA step-up (403 mfa.stepup.*) goes back to the page: no redirect, no refresh, no sign-out', () => {
+    let error: HttpErrorResponse | undefined;
+    http.post('/auth/mfa/enroll', {}).subscribe({ error: (e) => (error = e) });
+    httpMock
+      .expectOne('/auth/mfa/enroll')
+      .flush(
+        { code: 'mfa.stepup.invalid', message: 'not accepted' },
+        { status: 403, statusText: 'Forbidden' },
+      );
+
+    expect(router.navigate).not.toHaveBeenCalled();
+    httpMock.expectNone('/auth/token/refresh');
+    expect(error?.status).toBe(403);
+    expect((error?.error as { code: string }).code).toBe('mfa.stepup.invalid');
+  });
+
   it('on non-silent 403, redirects to the error page', () => {
     let error: HttpErrorResponse | undefined;
     http.post('/billing-invoices', {}).subscribe({ error: (e) => (error = e) });

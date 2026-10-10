@@ -58,6 +58,9 @@ class UserCredentialLifecycleServiceImplTest {
     @Mock
     private EmailService emailService;
 
+    @Mock
+    private MfaService mfaService;
+
     /** Fixed instant: the recovery-code expiry is written and checked against the injected clock. */
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 3, 1, 10, 0);
 
@@ -401,6 +404,35 @@ class UserCredentialLifecycleServiceImplTest {
 
         assertThat(response).isEmpty();
         verify(mfaEnrollmentRepository).delete(existing);
+    }
+
+    @Test
+    void upsertOwnMfaEnrollments_aRefusedStepUpChangesNothing() {
+        UUID userId = UUID.randomUUID();
+        org.mockito.Mockito.doThrow(new com.example.hms.exception.MfaStepUpRefusedException(
+                com.example.hms.exception.MfaStepUpRefusedException.Reason.REQUIRED))
+            .when(mfaService).requireStepUpToChangeAuthenticator(userId, null, null);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.upsertOwnMfaEnrollments(userId, null, null, null))
+            .isInstanceOf(com.example.hms.exception.MfaStepUpRefusedException.class);
+
+        verifyNoInteractions(mfaEnrollmentRepository);
+    }
+
+    @Test
+    void upsertOwnMfaEnrollments_runsTheUpsertOnceTheStepUpPasses() {
+        UUID userId = UUID.randomUUID();
+        User user = User.builder().username("own-user").email("own@example.com").build();
+        user.setId(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(mfaEnrollmentRepository.findByUserId(userId)).thenReturn(List.of());
+        when(mfaEnrollmentRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThat(service.upsertOwnMfaEnrollments(userId, null, null, "123456")).isEmpty();
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(mfaService, mfaEnrollmentRepository);
+        order.verify(mfaService).requireStepUpToChangeAuthenticator(userId, null, "123456");
+        order.verify(mfaEnrollmentRepository).findByUserId(userId);
     }
 
     @Test

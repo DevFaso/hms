@@ -6,6 +6,8 @@ import com.example.hms.payload.dto.credential.UserMfaEnrollmentRequestDTO;
 import com.example.hms.payload.dto.credential.UserRecoveryContactDTO;
 import com.example.hms.payload.dto.credential.UserRecoveryContactRequestDTO;
 
+import org.springframework.security.core.Authentication;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -16,6 +18,15 @@ public interface UserCredentialLifecycleService {
     UserCredentialHealthDTO getCredentialHealth(UUID userId);
 
     List<UserMfaEnrollmentDTO> upsertMfaEnrollments(UUID userId, List<UserMfaEnrollmentRequestDTO> payload);
+
+    /**
+     * The caller's own MFA records ({@code PUT /auth/credentials/mfa}), which
+     * can disable or delete the authenticator. With an active one, the step-up
+     * ({@code MfaService#requireStepUpToChangeAuthenticator}) guards the change
+     * in the same transaction, on the row it locked.
+     */
+    List<UserMfaEnrollmentDTO> upsertOwnMfaEnrollments(UUID userId, List<UserMfaEnrollmentRequestDTO> payload,
+                                                       Authentication caller, String stepUpCode);
 
     List<UserRecoveryContactDTO> upsertRecoveryContacts(UUID userId, List<UserRecoveryContactRequestDTO> payload);
 

@@ -2,7 +2,11 @@ package com.example.hms.repository;
 
 import com.example.hms.model.UserMfaEnrollment;
 import com.example.hms.enums.MfaMethodType;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -21,4 +25,14 @@ public interface UserMfaEnrollmentRepository extends JpaRepository<UserMfaEnroll
     boolean existsByUserIdAndPrimaryFactorTrue(UUID userId);
 
     Optional<UserMfaEnrollment> findByUserIdAndMethod(UUID userId, MfaMethodType method);
+
+    /**
+     * The row, locked for the rest of the transaction: a step-up check and the
+     * change it guards (MfaService) read and write the same row, so a
+     * concurrent replacement cannot slip in between them.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select e from UserMfaEnrollment e where e.user.id = :userId and e.method = :method")
+    Optional<UserMfaEnrollment> lockByUserIdAndMethod(@Param("userId") UUID userId,
+                                                      @Param("method") MfaMethodType method);
 }
