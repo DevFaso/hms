@@ -11,7 +11,9 @@ import {
   normaliseEvidence,
   serverMessage,
 } from './provider.model';
+import { HospitalLifecycleService } from './hospital-lifecycle.service';
 import { ProviderPortalService } from './provider-portal.service';
+import { STEP_UP_REQUEST, isStepUpRefusal } from './step-up';
 import { providerFixture } from '../testing/provider-fixtures';
 import { SuperAdminProviderService } from './super-admin-provider.service';
 
@@ -103,6 +105,57 @@ describe('SuperAdminProviderService', () => {
     http.expectOne('/super-admin/providers/p-1/resubmit').flush(providerFixture());
     service.revoke('p-1', { reason: 'r' }).subscribe();
     http.expectOne('/super-admin/providers/p-1/revoke').flush(providerFixture());
+  });
+});
+
+describe('HospitalLifecycleService step-up', () => {
+  it('sends the current code as X-Mfa-Token and marks the step-up; restore sends neither', () => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(withXhr()), provideHttpClientTesting()],
+    });
+    const service = TestBed.inject(HospitalLifecycleService);
+    const http = TestBed.inject(HttpTestingController);
+
+    service.suspend('h 1', { reason: 'audit' }, ' 123456 ').subscribe();
+    const suspend = http.expectOne('/super-admin/hospitals/h%201/suspend');
+    expect(suspend.request.headers.get('X-Mfa-Token')).toBe('123456');
+    expect(suspend.request.context.get(STEP_UP_REQUEST)).toBeTrue();
+    suspend.flush({});
+
+    service.archive('h', { reason: 'audit' }).subscribe();
+    const archive = http.expectOne('/super-admin/hospitals/h/archive');
+    expect(archive.request.headers.has('X-Mfa-Token')).toBeFalse();
+    expect(archive.request.context.get(STEP_UP_REQUEST)).toBeTrue();
+    archive.flush({});
+
+    service.schedulePurge('h', { reason: 'r', scheduledFor: '2026-12-01' }, '999999').subscribe();
+    expect(
+      http.expectOne('/super-admin/hospitals/h/schedule-purge').request.headers.get('X-Mfa-Token'),
+    ).toBe('999999');
+
+    service.restore('h').subscribe();
+    const restore = http.expectOne('/super-admin/hospitals/h/restore');
+    expect(restore.request.context.get(STEP_UP_REQUEST)).toBeFalse();
+    http.verify();
+  });
+
+  it('only a step-up refusal is exempt: 403 always, 401 when it names MFA', () => {
+    expect(isStepUpRefusal(new HttpErrorResponse({ status: 403 }))).toBeTrue();
+    expect(
+      isStepUpRefusal(
+        new HttpErrorResponse({ status: 401, error: { message: 'mfa_required: missing' } }),
+      ),
+    ).toBeTrue();
+    expect(
+      isStepUpRefusal(new HttpErrorResponse({ status: 401, error: { code: 'MFA_STEP_UP' } })),
+    ).toBeTrue();
+    expect(
+      isStepUpRefusal(new HttpErrorResponse({ status: 401, error: 'mfa required' })),
+    ).toBeTrue();
+    expect(
+      isStepUpRefusal(new HttpErrorResponse({ status: 401, error: { message: 'expired' } })),
+    ).toBeFalse();
+    expect(isStepUpRefusal(new HttpErrorResponse({ status: 500 }))).toBeFalse();
   });
 });
 

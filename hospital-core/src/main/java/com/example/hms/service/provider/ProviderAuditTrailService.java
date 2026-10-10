@@ -26,11 +26,14 @@ public interface ProviderAuditTrailService {
 
     /**
      * The only kinds of record the facility trail shows: administering the
-     * facility (its profile, its staff, accounts and role assignments). An
+     * facility (its profile, its staff, and role assignments there; a staff
+     * registration at the facility shows as its USER_ROLE_ASSIGNMENT row). An
      * allowlist, so nothing clinical written at the facility can ever reach
-     * it. Upper-case, as the query compares them.
+     * it. Deliberately not {@code USER}: that is any {@code /users/**} write,
+     * a patient account's included. Compared exactly as the producers write
+     * them (upper-case).
      */
-    List<String> FACILITY_ENTITY_TYPES = List.of("PROVIDER_FACILITY", "PROVIDER_STAFF", "USER", "USER_ROLE_ASSIGNMENT");
+    List<String> FACILITY_ENTITY_TYPES = List.of("PROVIDER_FACILITY", "PROVIDER_STAFF", "USER_ROLE_ASSIGNMENT");
 
     /**
      * One page of the facility's audit rows, newest first: only the

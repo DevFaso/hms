@@ -1,7 +1,7 @@
 import { Injector, inject } from '@angular/core';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { ActivatedRouteSnapshot, CanActivateFn, Router, UrlTree } from '@angular/router';
-import { Observable, filter, map, of, switchMap, take, timeout } from 'rxjs';
+import { Observable, catchError, filter, map, of, switchMap, take, timeout } from 'rxjs';
 
 import { ProviderContextService } from '../core/provider-context.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -38,7 +38,9 @@ function sessionResolved(): Observable<unknown> {
  * has resolved: does this session act at a provider facility of one of
  * `data.facilityTypes`, and, when `data.providerAdmin` is true, as its
  * PROVIDER_ADMIN? Anyone else lands on the not-found page, the portal's
- * counterpart of the backend's identical 404.
+ * counterpart of the backend's identical 404. A transient failure (5xx,
+ * network) is not a "no": the page opens and shows its retry state (the
+ * context status says `error`), never the not-found page.
  */
 export const FacilityTypeGuard: CanActivateFn = (
   route: ActivatedRouteSnapshot,
@@ -58,6 +60,7 @@ export const FacilityTypeGuard: CanActivateFn = (
       if (adminOnly && !settings.providerAdmin) return router.parseUrl('/error/404');
       return true;
     }),
+    catchError(() => of(true)),
   );
 };
 
@@ -65,7 +68,9 @@ export const FacilityTypeGuard: CanActivateFn = (
  * `/dashboard` is the hospital landing page: a provider user is sent to the
  * provider home instead (AC-12), unless they chose to act as a patient. Only a
  * session the bootstrap marked as a provider user asks the server; everyone
- * else, hospital pharmacists and lab staff included, goes straight on.
+ * else, hospital pharmacists and lab staff included, goes straight on. When
+ * the server cannot be asked for now, a provider user still goes to the
+ * provider home (which offers a retry), never to the hospital dashboard.
  */
 export const ProviderHomeRedirectGuard: CanActivateFn = (): Observable<boolean | UrlTree> => {
   const context = inject(ProviderContextService);
@@ -79,5 +84,6 @@ export const ProviderHomeRedirectGuard: CanActivateFn = (): Observable<boolean |
         : of(null),
     ),
     map((settings) => (settings ? router.parseUrl('/provider') : true)),
+    catchError(() => of(router.parseUrl('/provider'))),
   );
 };

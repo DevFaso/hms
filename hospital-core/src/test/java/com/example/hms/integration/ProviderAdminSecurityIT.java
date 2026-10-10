@@ -389,6 +389,8 @@ class ProviderAdminSecurityIT extends BaseIT {
         UUID prescriptionRow = auditRow(pharmacist, pharmacyId, "PRESCRIPTION", null);
         UUID labOrderRow = auditRow(pharmacist, pharmacyId, "LAB_ORDER", null);
         UUID documentRow = auditRow(pharmacist, pharmacyId, "PATIENT_DOCUMENT", null);
+        // Any /users/** write (a patient account's included) is not facility administration.
+        UUID userRow = auditRow(pharmacist, pharmacyId, "USER", null);
         // Platform support acting as the pharmacist: the row says so.
         UUID supportId = UUID.randomUUID();
         AuditEventLog impersonated = auditEventLogRepository.findById(
@@ -403,7 +405,7 @@ class ProviderAdminSecurityIT extends BaseIT {
         page.get("entries").forEach(entry -> ids.add(entry.get("id").asText()));
         assertThat(ids).contains(ownRow.toString(), staffRow.toString(), impersonated.getId().toString())
             .doesNotContain(otherFacilityRow.toString(), patientIdRow.toString(), patientEntityRow.toString(),
-                prescriptionRow.toString(), labOrderRow.toString(), documentRow.toString());
+                prescriptionRow.toString(), labOrderRow.toString(), documentRow.toString(), userRow.toString());
         page.get("entries").forEach(entry -> assertThat(entry.has("eventDescription") || entry.has("ipAddress")
             || entry.has("details") || entry.has("patientId")).as(entry.toString()).isFalse());
         assertThat(page.get("totalElements").asLong()).isEqualTo(ids.size());

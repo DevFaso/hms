@@ -1464,7 +1464,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       this.roleContext.effectiveHospitalIdForRequest();
       this.roleContext.sessionResolved();
       this.roleContext.providerUser();
-      untracked(() => this.providerContext.load().subscribe());
+      untracked(() => this.providerContext.load().subscribe({ error: () => undefined }));
     });
 
     effect(() => {

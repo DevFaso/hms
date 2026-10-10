@@ -310,7 +310,7 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
         // never a submitted, rejected or revoked one. None verified: no identity.
         verificationRepository.findFirstByHospital_IdOrderByCreatedAtDescIdDesc(facility.getId())
             .ifPresent(latest -> dto.verificationStatus(latest.getStatus()));
-        verificationRepository.findFirstByHospital_IdAndStatusOrderByCreatedAtDesc(facility.getId(),
+        verificationRepository.findFirstByHospital_IdAndStatusOrderByCreatedAtDescIdDesc(facility.getId(),
                 ProviderVerificationStatus.VERIFIED)
             .ifPresent(verified -> applyVerifiedIdentity(dto, facility, verified));
         return dto.build();

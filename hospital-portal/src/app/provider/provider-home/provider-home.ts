@@ -44,8 +44,33 @@ export class ProviderHomeComponent {
   });
 
   /** The facility the page shows; a branch switch re-reads it. */
-  private readonly shownFacility = followFacility(() => this.load());
+  private readonly shownFacility = followFacility({
+    load: () => this.load(),
+    cleared: () => this.leave(false),
+    failed: () => this.leave(true),
+  });
   private loadSub?: Subscription;
+
+  /** The facility went away (or could not be read): nothing of it stays on screen. */
+  private leave(failed: boolean): void {
+    this.loadSub?.unsubscribe();
+    this.profile.set(null);
+    this.loading.set(false);
+    this.notAvailable.set(!failed);
+    this.loadFailed.set(failed);
+  }
+
+  /**
+   * Retry after a failure: the page's own read when it still shows a
+   * facility, otherwise the context itself (it could not be read).
+   */
+  retry(): void {
+    if (this.shownFacility()) {
+      this.load();
+    } else {
+      this.context.invalidate();
+    }
+  }
 
   load(): void {
     this.loadSub?.unsubscribe();

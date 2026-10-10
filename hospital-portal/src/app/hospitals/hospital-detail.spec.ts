@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient, withXhr } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -137,9 +137,15 @@ describe('HospitalDetailComponent (MVP-c2-frontend)', () => {
 
     cmp.patchDialog('reason', 'non-payment');
     expect(cmp.isReasonValid(cmp.dialog()!)).toBeTrue();
+    cmp.patchDialog('mfaCode', '123456');
     cmp.submitDialog();
 
-    expect(lifecycleService.suspend).toHaveBeenCalledWith('h-1', { reason: 'non-payment' });
+    // The current code goes along as the step-up (X-Mfa-Token).
+    expect(lifecycleService.suspend).toHaveBeenCalledWith(
+      'h-1',
+      { reason: 'non-payment' },
+      '123456',
+    );
     expect(cmp.state()).toBe('SUSPENDED');
     expect(cmp.dialog()).toBeNull();
   });
@@ -169,10 +175,11 @@ describe('HospitalDetailComponent (MVP-c2-frontend)', () => {
     cmp.patchDialog('scheduledFor', '2026-06-01');
     cmp.submitDialog();
 
-    expect(lifecycleService.schedulePurge).toHaveBeenCalledWith('h-1', {
-      reason: 'GDPR retention expiry',
-      scheduledFor: '2026-06-01',
-    });
+    expect(lifecycleService.schedulePurge).toHaveBeenCalledWith(
+      'h-1',
+      { reason: 'GDPR retention expiry', scheduledFor: '2026-06-01' },
+      '',
+    );
     expect(cmp.state()).toBe('PENDING_PURGE');
     // The backend's own value: a scheduled purge offers "Cancel purge" again.
     expect(cmp.canCancelPurge()).toBeTrue();
@@ -207,6 +214,40 @@ describe('HospitalDetailComponent (MVP-c2-frontend)', () => {
     expect(cmp.dialog()?.busy).toBeFalse();
     // State unchanged.
     expect(cmp.state()).toBe('ACTIVE');
+  });
+
+  it('a refused step-up keeps the dialog open with the server reason, for a 401 and a 403', () => {
+    hospitalService.getById.and.returnValue(of(fakeHospital()));
+    lifecycleService.get.and.returnValue(of(fakeLifecycle()));
+    const cmp = setup();
+    expect(cmp.needsStepUp('suspend')).toBeTrue();
+    expect(cmp.needsStepUp('restore')).toBeFalse();
+
+    lifecycleService.suspend.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 401,
+            error: { message: 'mfa_required: invalid or missing X-Mfa-Token for suspend' },
+          }),
+      ),
+    );
+    cmp.openDialog('suspend');
+    cmp.patchDialog('reason', 'non-payment');
+    cmp.submitDialog();
+    expect(cmp.dialog()?.errorKey).toBe('HOSPITAL_LIFECYCLE.ERROR.STEP_UP_FAILED');
+    expect(cmp.dialog()?.errorText).toContain('mfa_required');
+
+    lifecycleService.archive.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 403, error: { message: 'Wrong code' } })),
+    );
+    cmp.openDialog('archive');
+    cmp.patchDialog('reason', 'closing down');
+    cmp.patchDialog('mfaCode', '000000');
+    cmp.submitDialog();
+    expect(cmp.dialog()?.errorKey).toBe('HOSPITAL_LIFECYCLE.ERROR.STEP_UP_FAILED');
+    expect(cmp.dialog()?.errorText).toBe('Wrong code');
+    expect(cmp.dialog()?.busy).toBeFalse();
   });
 
   it('stateColor returns a sane fallback for null', () => {

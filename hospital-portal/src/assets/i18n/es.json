@@ -597,10 +597,13 @@
       "REASON": "Motivo (auditado, ≥ 5 caracteres)",
       "REASON_HELP": "El motivo se guarda en la auditoría y se muestra al personal que intente iniciar sesión.",
       "SCHEDULED_FOR": "Fecha programada de purga",
-      "WORKING": "Procesando…"
+      "WORKING": "Procesando…",
+      "MFA_CODE": "Código del autenticador o código de respaldo",
+      "MFA_CODE_HELP": "Necesario si su cuenta usa la verificación en dos pasos: esta acción pide un código vigente."
     },
     "ERROR": {
-      "ACTION_FAILED": "La acción del ciclo de vida falló. Reintente."
+      "ACTION_FAILED": "La acción del ciclo de vida falló. Reintente.",
+      "STEP_UP_FAILED": "La verificación en dos pasos ha fallado. Introduzca un código del autenticador o de respaldo vigente."
     }
   },
   "REGION_POLICY": {
@@ -10257,7 +10260,10 @@
       "ARCHIVE_HELP": "El establecimiento queda cerrado. Se podrá restablecer más adelante.",
       "RESTORE_TITLE": "Restablecer el establecimiento",
       "RESTORE_HELP": "Un establecimiento verificado vuelve a estar activo. Uno no verificado vuelve suspendido hasta su verificación.",
-      "REASON": "Motivo (5 caracteres como mínimo, registrado en el registro de auditoría)"
+      "REASON": "Motivo (5 caracteres como mínimo, registrado en el registro de auditoría)",
+      "MFA_CODE": "Código del autenticador o código de respaldo",
+      "MFA_CODE_HELP": "Necesario si su cuenta usa la verificación en dos pasos: esta acción pide un código vigente.",
+      "STEP_UP_FAILED": "La verificación en dos pasos ha fallado. Introduzca un código del autenticador o de respaldo vigente."
     },
     "REGISTER": {
       "TITLE": "Registrar a un miembro del personal",

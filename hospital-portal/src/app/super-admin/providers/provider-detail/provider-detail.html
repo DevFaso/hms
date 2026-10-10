@@ -339,6 +339,7 @@
                 <th scope="col">{{ 'PROVIDER.EVIDENCE.LICENCE_NUMBER' | translate }}</th>
                 <th scope="col">{{ 'PROVIDER.DETAIL.DECIDED_AT' | translate }}</th>
                 <th scope="col">{{ 'PROVIDER.DETAIL.DECISION_REASON' | translate }}</th>
+                <th scope="col">{{ 'PROVIDER.DETAIL.EVIDENCE_NOTE' | translate }}</th>
               </tr>
             </thead>
             <tbody>
@@ -353,7 +354,8 @@
                   <td>{{ row.legalName || '—' }}</td>
                   <td>{{ row.licenceNumber || '—' }}</td>
                   <td>{{ row.decidedAt ? (row.decidedAt | date: 'medium') : '—' }}</td>
-                  <td>{{ row.decisionReason || row.evidenceNote || '—' }}</td>
+                  <td data-test="history-reason">{{ row.decisionReason || '—' }}</td>
+                  <td data-test="history-note">{{ row.evidenceNote || '—' }}</td>
                 </tr>
               }
             </tbody>
@@ -643,6 +645,25 @@
                   [ngModel]="dialog.reason"
                   (ngModelChange)="setLifecycleReason($event)"
                 ></textarea>
+              </div>
+            }
+            @if (lifecycleNeedsStepUp(dialog.kind)) {
+              <div class="field">
+                <label for="lifecycle-mfa-code">{{
+                  'PROVIDER.LIFECYCLE.MFA_CODE' | translate
+                }}</label>
+                <input
+                  id="lifecycle-mfa-code"
+                  type="text"
+                  inputmode="numeric"
+                  autocomplete="one-time-code"
+                  maxlength="32"
+                  [ngModel]="dialog.mfaCode"
+                  (ngModelChange)="setLifecycleMfaCode($event)"
+                />
+                <small class="card-help">{{
+                  'PROVIDER.LIFECYCLE.MFA_CODE_HELP' | translate
+                }}</small>
               </div>
             }
             @if (dialogError(); as error) {

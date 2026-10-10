@@ -49,7 +49,7 @@ describe('ProviderContextService', () => {
 
   function value(context: ProviderContextService): ProviderSettings | null | undefined {
     let result: ProviderSettings | null | undefined;
-    context.load().subscribe((s) => (result = s));
+    context.load().subscribe({ next: (s) => (result = s), error: () => (result = undefined) });
     return result;
   }
 
@@ -71,7 +71,7 @@ describe('ProviderContextService', () => {
     expect(value(context)?.facilityType).toBe('PHARMACY');
     expect(value(context)?.facilityId).toBe('f-1');
     expect(calls).toBe(1);
-    expect(context.isProvider()).toBeTrue();
+    expect(context.status()).toBe('provider');
   });
 
   it('never asks for a user the session bootstrap did not mark as a provider user', () => {
@@ -82,7 +82,7 @@ describe('ProviderContextService', () => {
 
     expect(value(context)).toBeNull();
     expect(calls).toBe(0);
-    expect(context.isProvider()).toBeFalse();
+    expect(context.status()).toBe('none');
   });
 
   it('a 404 (no seat at a provider) is a final answer: no provider shell, not asked again', () => {
@@ -95,11 +95,14 @@ describe('ProviderContextService', () => {
     expect(calls).toBe(1);
   });
 
-  it('another failure is not cached: the next load asks again', () => {
+  it('a transient failure is an error, never a "not a provider" answer, and is not cached', () => {
     answer = () => throwError(() => new HttpErrorResponse({ status: 503 }));
     const context = setup();
 
-    expect(value(context)).toBeNull();
+    let failed = false;
+    context.load().subscribe({ error: () => (failed = true) });
+    expect(failed).toBeTrue();
+    expect(context.status()).toBe('error');
     answer = () => of(settingsFixture());
     expect(value(context)?.facilityType).toBe('PHARMACY');
     expect(calls).toBe(2);
@@ -162,7 +165,7 @@ describe('ProviderContextService', () => {
 
     expect(calls).toBe(2);
     expect(context.settings()).toBeNull();
-    expect(context.isProvider()).toBeFalse();
+    expect(context.status()).toBe('none');
   });
 
   it('a late answer for a scope the session has left is dropped', () => {
@@ -176,6 +179,18 @@ describe('ProviderContextService', () => {
     pending.complete();
 
     expect(context.settings()).toBeNull();
+  });
+
+  it('a "none" cached while the bootstrap said non-provider does not outlive a re-bootstrap saying provider', () => {
+    providerUser = false;
+    const context = setup();
+    expect(value(context)).toBeNull();
+    expect(calls).toBe(0);
+
+    providerUser = true;
+    expect(value(context)?.facilityId).toBe('f-1');
+    expect(calls).toBe(1);
+    expect(context.status()).toBe('provider');
   });
 
   it('forget() drops the answer', () => {

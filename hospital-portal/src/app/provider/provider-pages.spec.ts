@@ -1,4 +1,4 @@
-import { Type, WritableSignal, signal } from '@angular/core';
+import { Type, WritableSignal, computed, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
@@ -6,7 +6,7 @@ import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { Observable, Subject, of, throwError } from 'rxjs';
 
-import { ProviderContextService } from '../core/provider-context.service';
+import { ProviderContextService, ProviderContextStatus } from '../core/provider-context.service';
 import { ToastService } from '../core/toast.service';
 import {
   ProviderAuditPage,
@@ -74,6 +74,8 @@ describe('provider shell pages', () => {
   /** What the context holds while a page is open: a signal, so a scope switch is seen. */
   let settingsSignal: WritableSignal<ProviderSettings | null>;
   let invalidate: jasmine.Spy;
+  /** Forces the context status (none, error); otherwise it follows the settings. */
+  let statusOverride: WritableSignal<ProviderContextStatus | null>;
 
   function configure(): void {
     TestBed.configureTestingModule({
@@ -88,8 +90,17 @@ describe('provider shell pages', () => {
           provide: ProviderContextService,
           useFactory: () => {
             settingsSignal = signal(settings);
+            statusOverride = signal<ProviderContextStatus | null>(null);
             invalidate = jasmine.createSpy('invalidate');
-            return { settings: settingsSignal, load: () => of(settingsSignal()), invalidate };
+            const status = computed<ProviderContextStatus>(
+              () => statusOverride() ?? (settingsSignal() ? 'provider' : 'pending'),
+            );
+            return {
+              settings: settingsSignal,
+              status,
+              load: () => of(settingsSignal()),
+              invalidate,
+            };
           },
         },
       ],
@@ -537,6 +548,110 @@ describe('provider shell pages', () => {
     const unavailable = render(ProviderStaffComponent);
     expect(unavailable.host().querySelector('[data-test="not-available"]')).not.toBeNull();
     expect(invalidate).toHaveBeenCalled();
+  });
+
+  // ── the facility goes away, or cannot be read ─────────────────────────
+
+  it('a switch to a non-provider scope clears every page: no data, not available, no action', () => {
+    const staff = render(ProviderStaffComponent);
+    staff.cmp.openRegister();
+    staff.cmp.askDeactivate(member());
+    statusOverride.set('none');
+    settingsSignal.set(null);
+    const page = staff.host();
+    expect(staff.cmp.staff()).toEqual([]);
+    expect(staff.cmp.notAvailable()).toBeTrue();
+    expect(staff.cmp.registerOpen()).toBeFalse();
+    expect(staff.cmp.confirmDeactivate()).toBeNull();
+    expect(page.querySelector('[data-test="deactivate"]')).toBeNull();
+    expect(page.querySelector('[data-test="register"]')).toBeNull();
+    TestBed.resetTestingModule();
+
+    const profilePage = render(ProviderProfileComponent);
+    profilePage.cmp.phoneNumber.set('+22670999999');
+    statusOverride.set('none');
+    settingsSignal.set(null);
+    profilePage.host();
+    expect(profilePage.cmp.profile()).toBeNull();
+    expect(profilePage.cmp.phoneNumber()).toBe('');
+    expect(profilePage.cmp.canSave()).toBeFalse();
+    profilePage.cmp.save();
+    expect(portal.updateProfile).not.toHaveBeenCalled();
+    TestBed.resetTestingModule();
+
+    const audit = render(ProviderAuditComponent);
+    statusOverride.set('none');
+    audit.host();
+    expect(audit.cmp.page()).toBeNull();
+    expect(audit.cmp.notAvailable()).toBeTrue();
+    TestBed.resetTestingModule();
+
+    const home = render(ProviderHomeComponent);
+    statusOverride.set('none');
+    home.host();
+    expect(home.cmp.profile()).toBeNull();
+    expect(home.cmp.notAvailable()).toBeTrue();
+  });
+
+  it('a context that cannot be read shows the retry state; retry asks the context again', () => {
+    const { cmp, host } = render(ProviderStaffComponent);
+    statusOverride.set('error');
+    settingsSignal.set(null);
+    host();
+    expect(cmp.loadFailed()).toBeTrue();
+    expect(cmp.staff()).toEqual([]);
+
+    cmp.retry();
+    expect(invalidate).toHaveBeenCalledTimes(1);
+
+    // Back to the facility: read again.
+    statusOverride.set(null);
+    settingsSignal.set(settingsFixture());
+    host();
+    expect(portal.staff).toHaveBeenCalledTimes(2);
+    expect(cmp.loadFailed()).toBeFalse();
+
+    // A page-level failure with the facility still shown retries the page read.
+    portal.staff.and.returnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+    cmp.load();
+    cmp.retry();
+    expect(portal.staff).toHaveBeenCalledTimes(4);
+    expect(invalidate).toHaveBeenCalledTimes(1);
+  });
+
+  it('home, profile and audit retry the same way', () => {
+    for (const component of [
+      ProviderHomeComponent,
+      ProviderProfileComponent,
+      ProviderAuditComponent,
+    ]) {
+      const { cmp, host } = render<{ retry: () => void; loadFailed: () => boolean }>(
+        component as Type<{ retry: () => void; loadFailed: () => boolean }>,
+      );
+      statusOverride.set('error');
+      host();
+      expect(cmp.loadFailed()).toBeTrue();
+      cmp.retry();
+      expect(invalidate).toHaveBeenCalled();
+      invalidate.calls.reset();
+      TestBed.resetTestingModule();
+    }
+  });
+
+  it('audit: an empty page after the first keeps Previous', () => {
+    const { cmp, host } = render(ProviderAuditComponent);
+    portal.audit.and.returnValue(
+      of({ entries: [], page: 1, size: 20, totalElements: 20, hasMore: false }),
+    );
+    cmp.nextPage();
+    const page = host();
+    expect(page.querySelector('[data-test="empty"]')).not.toBeNull();
+    const pager = page.querySelector('[data-test="pager"]');
+    expect(pager).not.toBeNull();
+    const previous = pager!.querySelector('button') as HTMLButtonElement;
+    expect(previous.disabled).toBeFalse();
+    cmp.previousPage();
+    expect(portal.audit).toHaveBeenCalledWith(0, 20);
   });
 
   // ── audit ─────────────────────────────────────────────────────────────

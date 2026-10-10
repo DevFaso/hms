@@ -211,19 +211,19 @@ public interface AuditEventLogRepository
      * assignment was hard-deleted has no facility left and drops out, as it
      * does from every other hospital-scoped view.
      *
-     * @param entityTypes the allowed entity types, upper-case
+     * @param entityTypes the allowed entity types, exactly as the producers write them (upper-case)
      */
     @Query(value = "SELECT new com.example.hms.payload.dto.provider.ProviderAuditEntryDTO("
            + "a.id, a.eventTimestamp, a.eventType, a.status, u.id, a.userName, a.roleName, "
            + "a.entityType, a.resourceId, a.impersonatorUserId, a.impersonatorUsername) "
            + "FROM AuditEventLog a JOIN a.assignment asg LEFT JOIN a.user u "
            + "WHERE asg.hospital.id = :facilityId "
-           + "AND UPPER(a.entityType) IN :entityTypes "
+           + "AND a.entityType IN :entityTypes "
            + "AND a.patientId IS NULL "
            + "ORDER BY a.eventTimestamp DESC, a.id DESC",
         countQuery = "SELECT COUNT(a) FROM AuditEventLog a JOIN a.assignment asg "
            + "WHERE asg.hospital.id = :facilityId "
-           + "AND UPPER(a.entityType) IN :entityTypes "
+           + "AND a.entityType IN :entityTypes "
            + "AND a.patientId IS NULL")
     Page<ProviderAuditEntryDTO> findProviderFacilityTrail(@Param("facilityId") UUID facilityId,
                                                           @Param("entityTypes") Collection<String> entityTypes,

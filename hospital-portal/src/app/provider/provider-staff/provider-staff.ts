@@ -70,12 +70,42 @@ export class ProviderStaffComponent {
   private loadSub?: Subscription;
 
   /** The facility the list shows: read on open, and again on every branch switch. */
-  private readonly shownFacility = followFacility(() => {
+  private readonly shownFacility = followFacility({
+    load: () => {
+      this.closeEverything();
+      this.load();
+    },
+    cleared: () => this.leave(false),
+    failed: () => this.leave(true),
+  });
+
+  private closeEverything(): void {
     this.confirmDeactivate.set(null);
     this.registerOpen.set(false);
     this.busyUserIds.set(new Set<string>());
-    this.load();
-  });
+  }
+
+  /** The facility went away (or could not be read): no member, no dialog, no action stays. */
+  private leave(failed: boolean): void {
+    this.loadSub?.unsubscribe();
+    this.closeEverything();
+    this.staff.set([]);
+    this.loading.set(false);
+    this.notAvailable.set(!failed);
+    this.loadFailed.set(failed);
+  }
+
+  /**
+   * Retry after a failure: the page's own read when it still shows a
+   * facility, otherwise the context itself (it could not be read).
+   */
+  retry(): void {
+    if (this.shownFacility()) {
+      this.load();
+    } else {
+      this.context.invalidate();
+    }
+  }
 
   load(): void {
     this.loadSub?.unsubscribe();

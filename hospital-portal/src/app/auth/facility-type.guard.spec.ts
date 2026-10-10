@@ -1,7 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { WritableSignal, signal } from '@angular/core';
 import { ActivatedRouteSnapshot, Router, UrlTree, provideRouter } from '@angular/router';
-import { Observable, of } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Observable, of, throwError } from 'rxjs';
 
 import { ProviderContextService } from '../core/provider-context.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -86,6 +87,16 @@ describe('FacilityTypeGuard and ProviderHomeRedirectGuard', () => {
 
     expect(load).toHaveBeenCalledTimes(1);
     expect(guard.result()).toBeTrue();
+  });
+
+  it('a transient failure is not a "no": the page opens (it shows the retry), never /error/404', () => {
+    load.and.returnValue(throwError(() => new HttpErrorResponse({ status: 503 })));
+    expect(run({ facilityTypes: ['PHARMACY'], providerAdmin: true }).result()).toBeTrue();
+  });
+
+  it('a provider user the server cannot answer for now goes to the provider home, not the hospital dashboard', () => {
+    load.and.returnValue(throwError(() => new HttpErrorResponse({ status: 0 })));
+    expect(path(redirect().result())).toBe('/provider');
   });
 
   it('sends anyone who acts at no provider facility to the not-found page', () => {

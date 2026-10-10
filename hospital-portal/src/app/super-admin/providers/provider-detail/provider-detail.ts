@@ -1,4 +1,5 @@
 import { DatePipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -28,6 +29,7 @@ import {
   serverMessage,
 } from '../../../services/provider.model';
 import { SuperAdminProviderService } from '../../../services/super-admin-provider.service';
+import { isStepUpRefusal } from '../../../services/step-up';
 import { UserDetail } from '../../../services/user.service';
 import { deliveryWarningKeys } from '../../../shared/delivery-warnings';
 import { EnumLabelPipe } from '../../../shared/pipes/enum-label.pipe';
@@ -94,7 +96,11 @@ export class ProviderDetailComponent implements OnInit {
 
   readonly verifyDialog = signal<VerifyDialog | null>(null);
   readonly decisionDialog = signal<{ kind: DecisionKind; reason: string } | null>(null);
-  readonly lifecycleDialog = signal<{ kind: LifecycleKind; reason: string } | null>(null);
+  readonly lifecycleDialog = signal<{
+    kind: LifecycleKind;
+    reason: string;
+    mfaCode: string;
+  } | null>(null);
   readonly registerOpen = signal(false);
   readonly busy = signal(false);
   readonly dialogError = signal<string | null>(null);
@@ -242,11 +248,20 @@ export class ProviderDetailComponent implements OnInit {
 
   openLifecycle(kind: LifecycleKind): void {
     this.dialogError.set(null);
-    this.lifecycleDialog.set({ kind, reason: '' });
+    this.lifecycleDialog.set({ kind, reason: '', mfaCode: '' });
   }
 
   setLifecycleReason(reason: string): void {
     this.lifecycleDialog.update((dialog) => (dialog ? { ...dialog, reason } : dialog));
+  }
+
+  setLifecycleMfaCode(mfaCode: string): void {
+    this.lifecycleDialog.update((dialog) => (dialog ? { ...dialog, mfaCode } : dialog));
+  }
+
+  /** Suspend and archive are MFA step-up actions on the backend (X-Mfa-Token); restore is not. */
+  lifecycleNeedsStepUp(kind: LifecycleKind): boolean {
+    return kind !== 'restore';
   }
 
   lifecycleNeedsReason(kind: LifecycleKind): boolean {
@@ -270,11 +285,11 @@ export class ProviderDetailComponent implements OnInit {
     let doneKey: string;
     switch (dialog.kind) {
       case 'suspend':
-        request = this.lifecycleService.suspend(id, { reason });
+        request = this.lifecycleService.suspend(id, { reason }, dialog.mfaCode);
         doneKey = 'PROVIDER.DETAIL.SUSPENDED';
         break;
       case 'archive':
-        request = this.lifecycleService.archive(id, { reason });
+        request = this.lifecycleService.archive(id, { reason }, dialog.mfaCode);
         doneKey = 'PROVIDER.DETAIL.ARCHIVED';
         break;
       default:
@@ -323,9 +338,13 @@ export class ProviderDetailComponent implements OnInit {
       },
       error: (err: unknown) => {
         this.busy.set(false);
-        this.dialogError.set(
-          serverMessage(err) ?? this.translate.instant('PROVIDER.DETAIL.ACTION_FAILED'),
-        );
+        // A refused MFA step-up stays in the dialog with the server's reason;
+        // the error interceptor leaves the session alone for it.
+        const fallback =
+          err instanceof HttpErrorResponse && isStepUpRefusal(err)
+            ? 'PROVIDER.LIFECYCLE.STEP_UP_FAILED'
+            : 'PROVIDER.DETAIL.ACTION_FAILED';
+        this.dialogError.set(serverMessage(err) ?? this.translate.instant(fallback));
       },
     });
   }

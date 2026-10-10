@@ -27,7 +27,7 @@ public interface ProviderVerificationRepository extends JpaRepository<ProviderVe
      * identity the platform verified (V180's partial unique index allows at
      * most one SUBMITTED-or-VERIFIED row per facility).
      */
-    Optional<ProviderVerification> findFirstByHospital_IdAndStatusOrderByCreatedAtDesc(
+    Optional<ProviderVerification> findFirstByHospital_IdAndStatusOrderByCreatedAtDescIdDesc(
         UUID hospitalId, ProviderVerificationStatus status);
 
     /**

@@ -597,10 +597,13 @@
       "REASON": "Reason (audited, ≥ 5 chars)",
       "REASON_HELP": "The reason is persisted in the audit trail and surfaced to staff who try to log in.",
       "SCHEDULED_FOR": "Scheduled purge date",
-      "WORKING": "Working…"
+      "WORKING": "Working…",
+      "MFA_CODE": "Authenticator or backup code",
+      "MFA_CODE_HELP": "Needed if your account uses two-step verification: this action asks for a current code."
     },
     "ERROR": {
-      "ACTION_FAILED": "Lifecycle action failed. Try again."
+      "ACTION_FAILED": "Lifecycle action failed. Try again.",
+      "STEP_UP_FAILED": "Two-step verification failed. Enter a current authenticator or backup code."
     }
   },
   "REGION_POLICY": {
@@ -10257,7 +10260,10 @@
       "ARCHIVE_HELP": "The facility is closed. It can be restored later.",
       "RESTORE_TITLE": "Restore the facility",
       "RESTORE_HELP": "A verified facility becomes active again. One that is not verified comes back suspended until it is verified.",
-      "REASON": "Reason (at least 5 characters, recorded in the audit trail)"
+      "REASON": "Reason (at least 5 characters, recorded in the audit trail)",
+      "MFA_CODE": "Authenticator or backup code",
+      "MFA_CODE_HELP": "Needed if your account uses two-step verification: this action asks for a current code.",
+      "STEP_UP_FAILED": "Two-step verification failed. Enter a current authenticator or backup code."
     },
     "REGISTER": {
       "TITLE": "Register a staff member",

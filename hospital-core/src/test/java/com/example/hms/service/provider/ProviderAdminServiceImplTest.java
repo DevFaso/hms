@@ -431,7 +431,7 @@ class ProviderAdminServiceImplTest {
     }
 
     private void verifiedIs(ProviderVerification verification) {
-        when(verificationRepository.findFirstByHospital_IdAndStatusOrderByCreatedAtDesc(pharmacy.getId(),
+        when(verificationRepository.findFirstByHospital_IdAndStatusOrderByCreatedAtDescIdDesc(pharmacy.getId(),
             ProviderVerificationStatus.VERIFIED)).thenReturn(Optional.ofNullable(verification));
     }
 

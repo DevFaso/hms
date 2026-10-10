@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import {
   HttpClient,
+  HttpContext,
   HttpErrorResponse,
   provideHttpClient,
   withInterceptors,
@@ -16,6 +17,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { SessionScopeService } from '../core/session-scope.service';
 import { ImpersonationService } from '../services/impersonation.service';
 import { DowntimeService } from '../services/downtime.service';
+import { STEP_UP_REQUEST } from '../services/step-up';
 
 describe('errorInterceptor', () => {
   let http: HttpClient;
@@ -88,6 +90,53 @@ describe('errorInterceptor', () => {
     expect(auth.setToken).toHaveBeenCalledWith('new-token');
     expect(auth.setRefreshToken).toHaveBeenCalledWith('r2');
     expect(body).toEqual({ ok: true });
+  });
+
+  it('a refused MFA step-up (401 mfa_required, 403 with a reason) is for the dialog: no refresh, no sign-out, no 403 page', () => {
+    auth.getRefreshToken.and.returnValue('r1');
+    const context = new HttpContext().set(STEP_UP_REQUEST, true);
+
+    let unauthorized: HttpErrorResponse | undefined;
+    http.post('/super-admin/hospitals/h/suspend', {}, { context }).subscribe({
+      error: (e: HttpErrorResponse) => (unauthorized = e),
+    });
+    httpMock
+      .expectOne('/super-admin/hospitals/h/suspend')
+      .flush(
+        { message: 'mfa_required: invalid or missing X-Mfa-Token for suspend' },
+        { status: 401, statusText: 'Unauthorized' },
+      );
+
+    let forbidden: HttpErrorResponse | undefined;
+    http.post('/super-admin/hospitals/h/archive', {}, { context }).subscribe({
+      error: (e: HttpErrorResponse) => (forbidden = e),
+    });
+    httpMock
+      .expectOne('/super-admin/hospitals/h/archive')
+      .flush(
+        { code: 'mfa_step_up_refused', message: 'Wrong code' },
+        { status: 403, statusText: 'Forbidden' },
+      );
+
+    expect(unauthorized?.status).toBe(401);
+    expect(forbidden?.status).toBe(403);
+    expect(auth.refreshTokenRequest).not.toHaveBeenCalled();
+    expect(auth.logout).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it('a step-up request whose 401 is NOT about MFA (an expired session) still refreshes', () => {
+    auth.getRefreshToken.and.returnValue('r1');
+    auth.refreshTokenRequest.and.returnValue(of({ accessToken: 'new-token', refreshToken: 'r2' }));
+    const context = new HttpContext().set(STEP_UP_REQUEST, true);
+
+    http.post('/super-admin/hospitals/h/suspend', {}, { context }).subscribe();
+    httpMock
+      .expectOne('/super-admin/hospitals/h/suspend')
+      .flush({ message: 'Token expired' }, { status: 401, statusText: 'Unauthorized' });
+    httpMock.expectOne('/super-admin/hospitals/h/suspend').flush({});
+
+    expect(auth.refreshTokenRequest).toHaveBeenCalled();
   });
 
   it('on 401 with a failing refresh, logs out and redirects to /login', () => {

@@ -597,10 +597,13 @@
       "REASON": "Motif (audité, ≥ 5 caractères)",
       "REASON_HELP": "Le motif est conservé dans l'audit et présenté au personnel qui tente de se connecter.",
       "SCHEDULED_FOR": "Date de purge planifiée",
-      "WORKING": "Traitement en cours…"
+      "WORKING": "Traitement en cours…",
+      "MFA_CODE": "Code de l'authentificateur ou code de secours",
+      "MFA_CODE_HELP": "Nécessaire si votre compte utilise la vérification en deux étapes : cette action demande un code en cours de validité."
     },
     "ERROR": {
-      "ACTION_FAILED": "Échec de l'action sur le cycle de vie. Réessayez."
+      "ACTION_FAILED": "Échec de l'action sur le cycle de vie. Réessayez.",
+      "STEP_UP_FAILED": "La vérification en deux étapes a échoué. Saisissez un code d'authentificateur ou de secours en cours de validité."
     }
   },
   "REGION_POLICY": {
@@ -10257,7 +10260,10 @@
       "ARCHIVE_HELP": "L'établissement est fermé. Il pourra être rétabli plus tard.",
       "RESTORE_TITLE": "Rétablir l'établissement",
       "RESTORE_HELP": "Un établissement vérifié redevient actif. Un établissement non vérifié revient suspendu jusqu'à sa vérification.",
-      "REASON": "Motif (5 caractères minimum, consigné dans le journal d'audit)"
+      "REASON": "Motif (5 caractères minimum, consigné dans le journal d'audit)",
+      "MFA_CODE": "Code de l'authentificateur ou code de secours",
+      "MFA_CODE_HELP": "Nécessaire si votre compte utilise la vérification en deux étapes : cette action demande un code en cours de validité.",
+      "STEP_UP_FAILED": "La vérification en deux étapes a échoué. Saisissez un code d'authentificateur ou de secours en cours de validité."
     },
     "REGISTER": {
       "TITLE": "Inscrire un membre du personnel",

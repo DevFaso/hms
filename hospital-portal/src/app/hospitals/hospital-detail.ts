@@ -1,4 +1,5 @@
 import { CommonModule, DatePipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
   OnInit,
@@ -18,6 +19,8 @@ import {
 } from '../services/hospital-lifecycle.model';
 import { HospitalLifecycleService } from '../services/hospital-lifecycle.service';
 import { HospitalResponse, HospitalService } from '../services/hospital.service';
+import { serverMessage } from '../services/provider.model';
+import { isStepUpRefusal } from '../services/step-up';
 
 type ActionKind = 'suspend' | 'restore' | 'archive' | 'schedule-purge' | 'cancel-purge';
 
@@ -25,8 +28,12 @@ interface ActionDialog {
   kind: ActionKind;
   reason: string;
   scheduledFor: string;
+  /** The current authenticator or backup code, sent as X-Mfa-Token on a step-up action. */
+  mfaCode: string;
   busy: boolean;
   errorKey: string | null;
+  /** The server's own reason for a refused step-up, when it gave one. */
+  errorText: string | null;
 }
 
 @Component({
@@ -100,8 +107,10 @@ export class HospitalDetailComponent implements OnInit {
       kind,
       reason: '',
       scheduledFor: this.defaultPurgeDate(),
+      mfaCode: '',
       busy: false,
       errorKey: null,
+      errorText: null,
     });
   }
 
@@ -116,14 +125,24 @@ export class HospitalDetailComponent implements OnInit {
   submitDialog(): void {
     const state = this.dialog();
     if (!state) return;
-    this.dialog.set({ ...state, busy: true, errorKey: null });
+    this.dialog.set({ ...state, busy: true, errorKey: null, errorText: null });
 
     this.dispatchLifecycleAction(state)
       .pipe(
-        catchError(() => {
+        catchError((error: unknown) => {
+          // A refused step-up (401 mfa_required, or 403 with a reason) stays in
+          // the dialog: the code is asked again, the session is untouched.
+          const stepUp = error instanceof HttpErrorResponse && isStepUpRefusal(error);
           this.dialog.update((current) =>
             current
-              ? { ...current, busy: false, errorKey: 'HOSPITAL_LIFECYCLE.ERROR.ACTION_FAILED' }
+              ? {
+                  ...current,
+                  busy: false,
+                  errorKey: stepUp
+                    ? 'HOSPITAL_LIFECYCLE.ERROR.STEP_UP_FAILED'
+                    : 'HOSPITAL_LIFECYCLE.ERROR.ACTION_FAILED',
+                  errorText: stepUp ? serverMessage(error) : null,
+                }
               : current,
           );
           return of(null);
@@ -146,22 +165,28 @@ export class HospitalDetailComponent implements OnInit {
     const reason = state.reason.trim();
     switch (state.kind) {
       case 'suspend':
-        return this.lifecycleService.suspend(id, { reason });
+        return this.lifecycleService.suspend(id, { reason }, state.mfaCode);
       case 'restore':
         return this.lifecycleService.restore(id);
       case 'archive':
-        return this.lifecycleService.archive(id, { reason });
+        return this.lifecycleService.archive(id, { reason }, state.mfaCode);
       case 'schedule-purge':
-        return this.lifecycleService.schedulePurge(id, {
-          reason,
-          scheduledFor: state.scheduledFor,
-        });
+        return this.lifecycleService.schedulePurge(
+          id,
+          { reason, scheduledFor: state.scheduledFor },
+          state.mfaCode,
+        );
       case 'cancel-purge':
         return this.lifecycleService.cancelPurge(id);
     }
   }
 
   // ── helpers ──────────────────────────────────────────────────────────
+
+  /** The actions the backend guards with an MFA step-up (X-Mfa-Token). */
+  needsStepUp(kind: ActionKind): boolean {
+    return kind === 'suspend' || kind === 'archive' || kind === 'schedule-purge';
+  }
 
   needsReason(kind: ActionKind): boolean {
     return kind === 'suspend' || kind === 'archive' || kind === 'schedule-purge';

@@ -42,14 +42,52 @@ export class ProviderAuditComponent {
   readonly entries = computed(() => this.page()?.entries ?? []);
   readonly hasPrevious = computed(() => this.pageIndex() > 0);
   readonly hasNext = computed(() => this.page()?.hasMore ?? false);
+  /**
+   * The pager stays whenever there is somewhere to go, the rows or not: an
+   * empty page after the first (rows aged out, a smaller trail) keeps
+   * Previous, so the user is never stranded on it.
+   */
+  readonly showPager = computed(
+    () =>
+      !this.loading() &&
+      !this.notAvailable() &&
+      !this.loadFailed() &&
+      (this.hasPrevious() || this.hasNext()),
+  );
 
   /** The facility the trail shows; a branch switch starts it again. */
-  private readonly shownFacility = followFacility(() => {
-    this.pageIndex.set(0);
-    this.page.set(null);
-    this.load();
+  private readonly shownFacility = followFacility({
+    load: () => {
+      this.pageIndex.set(0);
+      this.page.set(null);
+      this.load();
+    },
+    cleared: () => this.leave(false),
+    failed: () => this.leave(true),
   });
   private loadSub?: Subscription;
+
+  /** The facility went away (or could not be read): nothing of it stays on screen. */
+  private leave(failed: boolean): void {
+    this.loadSub?.unsubscribe();
+    this.page.set(null);
+    this.pageIndex.set(0);
+    this.loading.set(false);
+    this.notAvailable.set(!failed);
+    this.loadFailed.set(failed);
+  }
+
+  /**
+   * Retry after a failure: the page's own read when it still shows a
+   * facility, otherwise the context itself (it could not be read).
+   */
+  retry(): void {
+    if (this.shownFacility()) {
+      this.load();
+    } else {
+      this.context.invalidate();
+    }
+  }
 
   /** What kind of record a row acted on, in words: the entity type is a code, never shown raw. */
   recordKey(entityType: string | null): string {

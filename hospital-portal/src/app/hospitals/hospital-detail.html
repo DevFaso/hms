@@ -170,8 +170,26 @@
             </label>
           }
 
+          @if (needsStepUp(state.kind)) {
+            <label class="field">
+              <span>{{ 'HOSPITAL_LIFECYCLE.DIALOG.MFA_CODE' | translate }}</span>
+              <input
+                type="text"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                maxlength="32"
+                data-test="dialog-mfa-code"
+                [ngModel]="state.mfaCode"
+                (ngModelChange)="patchDialog('mfaCode', $event)"
+              />
+              <small>{{ 'HOSPITAL_LIFECYCLE.DIALOG.MFA_CODE_HELP' | translate }}</small>
+            </label>
+          }
+
           @if (state.errorKey) {
-            <p class="form-error">{{ state.errorKey | translate }}</p>
+            <p class="form-error" role="alert">
+              {{ state.errorText ?? (state.errorKey | translate) }}
+            </p>
           }
 
           <div class="dialog-actions">

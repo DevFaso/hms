@@ -64,7 +64,7 @@ describe('ProviderDetailComponent', () => {
           decidedAt: null,
           decidedByUserId: null,
           decisionReason: null,
-          evidenceNote: null,
+          evidenceNote: 'Checked at the counter',
           legalName: 'Pharmacie SARL',
           licenceNumber: 'LIC-77',
           licenceAuthority: 'DGPML',
@@ -254,18 +254,67 @@ describe('ProviderDetailComponent', () => {
     cmp.submitLifecycle();
     expect(lifecycle.suspend).not.toHaveBeenCalled();
     cmp.setLifecycleReason('Licence under review');
+    expect(cmp.lifecycleNeedsStepUp('suspend')).toBeTrue();
+    cmp.setLifecycleMfaCode('123456');
     cmp.submitLifecycle();
-    expect(lifecycle.suspend).toHaveBeenCalledWith('p-1', { reason: 'Licence under review' });
+    // The current code goes along as the step-up (X-Mfa-Token).
+    expect(lifecycle.suspend).toHaveBeenCalledWith(
+      'p-1',
+      { reason: 'Licence under review' },
+      '123456',
+    );
 
     cmp.openLifecycle('archive');
     cmp.setLifecycleReason('Closed for good');
     cmp.submitLifecycle();
-    expect(lifecycle.archive).toHaveBeenCalledWith('p-1', { reason: 'Closed for good' });
+    expect(lifecycle.archive).toHaveBeenCalledWith('p-1', { reason: 'Closed for good' }, '');
 
     cmp.openLifecycle('restore');
     expect(cmp.lifecycleNeedsReason('restore')).toBeFalse();
     cmp.submitLifecycle();
     expect(lifecycle.restore).toHaveBeenCalledWith('p-1');
+  });
+
+  it('a refused step-up keeps the lifecycle dialog open with the reason (401 or 403)', () => {
+    const cmp = setup(
+      providerFixture({ verificationStatus: 'VERIFIED', lifecycleState: 'ACTIVE' }),
+    );
+    lifecycle.suspend.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 403, error: { message: 'Wrong code' } })),
+    );
+    cmp.openLifecycle('suspend');
+    cmp.setLifecycleReason('Licence under review');
+    cmp.submitLifecycle();
+    expect(cmp.lifecycleDialog()).not.toBeNull();
+    expect(cmp.dialogError()).toBe('Wrong code');
+    expect(host().querySelector('#lifecycle-mfa-code')).not.toBeNull();
+
+    // A refusal with no reason in the body: the dialog says what to do.
+    lifecycle.suspend.and.returnValue(throwError(() => new HttpErrorResponse({ status: 403 })));
+    cmp.submitLifecycle();
+    expect(cmp.dialogError()).toBe('PROVIDER.LIFECYCLE.STEP_UP_FAILED');
+    lifecycle.suspend.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({ status: 401, error: { message: 'mfa_required: missing code' } }),
+      ),
+    );
+    cmp.submitLifecycle();
+    expect(cmp.dialogError()).toBe('mfa_required: missing code');
+    expect(cmp.lifecycleNeedsStepUp('restore')).toBeFalse();
+  });
+
+  it('the history shows the decision reason and the evidence note in their own columns', () => {
+    setup();
+    const page = host();
+    const reasons = [...page.querySelectorAll('[data-test="history-reason"]')].map((c) =>
+      c.textContent?.trim(),
+    );
+    expect(reasons).toEqual(['—', 'Unreadable extract']);
+    const notes = [...page.querySelectorAll('[data-test="history-note"]')].map((c) =>
+      c.textContent?.trim(),
+    );
+    expect(notes).toEqual(['Checked at the counter', '—']);
   });
 
   it('offers the facility admin and its staff roles to register, and reports where the code went', () => {

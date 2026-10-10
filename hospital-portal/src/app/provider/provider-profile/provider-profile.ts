@@ -55,7 +55,39 @@ export class ProviderProfileComponent {
   readonly verified = computed(() => !!this.profile()?.verifiedAt);
 
   /** The facility the page shows: the one its form was read from. */
-  private readonly shownFacility = followFacility(() => this.load());
+  private readonly shownFacility = followFacility({
+    load: () => this.load(),
+    cleared: () => this.leave(false),
+    failed: () => this.leave(true),
+  });
+
+  /**
+   * The facility went away (or could not be read): the form and its edit are
+   * dropped, so nothing can be saved anywhere.
+   */
+  private leave(failed: boolean): void {
+    this.loadSub?.unsubscribe();
+    this.profile.set(null);
+    this.phoneNumber.set('');
+    this.email.set('');
+    this.website.set('');
+    this.saveError.set(null);
+    this.loading.set(false);
+    this.notAvailable.set(!failed);
+    this.loadFailed.set(failed);
+  }
+
+  /**
+   * Retry after a failure: the page's own read when it still shows a
+   * facility, otherwise the context itself (it could not be read).
+   */
+  retry(): void {
+    if (this.shownFacility()) {
+      this.load();
+    } else {
+      this.context.invalidate();
+    }
+  }
 
   /**
    * Saving needs the form to hold THIS facility's profile: read, not

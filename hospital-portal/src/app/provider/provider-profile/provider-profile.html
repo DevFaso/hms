@@ -21,6 +21,9 @@
     <div class="empty-state" data-test="load-failed">
       <span class="material-symbols-outlined empty-icon" aria-hidden="true">error</span>
       <p>{{ 'PROVIDER.COMMON.LOAD_FAILED' | translate }}</p>
+      <button type="button" class="btn-secondary" data-test="retry" (click)="retry()">
+        {{ 'PROVIDER.COMMON.RETRY' | translate }}
+      </button>
     </div>
   } @else if (profile(); as p) {
     <section class="detail-card" aria-labelledby="profile-contact-title">
