@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.enums.ProviderVerificationStatus;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.repository.provider.ProviderVerificationRepository;
@@ -71,12 +72,33 @@ public class HospitalServiceImpl implements HospitalService {
                                                      String city,
                                                      String state,
                                                      Locale locale) {
+        return getAllHospitals(organizationId, unassignedOnly, city, state, null, locale);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<HospitalResponseDTO> getAllHospitals(UUID organizationId,
+                                                     Boolean unassignedOnly,
+                                                     String city,
+                                                     String state,
+                                                     FacilityType facilityType,
+                                                     Locale locale) {
+        // AC-11: the list is clinical unless a verified super-admin names a
+        // provider type. Decided before any read, so nobody else learns
+        // anything about the providers from this endpoint.
+        boolean providerList = facilityType != null && facilityType != FacilityType.HOSPITAL;
+        if (providerList && !roleValidator.isSuperAdminFromJwtClaim()) {
+            throw new AccessDeniedException("Access denied");
+        }
         UUID organizationFilter = Boolean.TRUE.equals(unassignedOnly) ? null : organizationId;
         Boolean unassignedFilter = Boolean.TRUE.equals(unassignedOnly) ? Boolean.TRUE : null;
         String normalizedCity = normalizeQuery(city);
         String normalizedState = normalizeQuery(state);
 
-        List<Hospital> hospitals = hospitalRepository.findAllForFilters(organizationFilter, unassignedFilter, normalizedCity, normalizedState);
+        List<Hospital> hospitals = providerList
+            ? hospitalRepository.findAllForFiltersByFacilityType(facilityType, organizationFilter, unassignedFilter,
+                normalizedCity, normalizedState)
+            : hospitalRepository.findAllForFilters(organizationFilter, unassignedFilter, normalizedCity, normalizedState);
         if (hospitals == null || hospitals.isEmpty()) {
             return List.of();
         }

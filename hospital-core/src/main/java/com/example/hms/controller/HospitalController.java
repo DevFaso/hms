@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.payload.dto.HospitalOrganizationAssignmentRequest;
 import com.example.hms.payload.dto.HospitalRequestDTO;
 import com.example.hms.payload.dto.HospitalResponseDTO;
@@ -52,9 +53,12 @@ public class HospitalController {
             @RequestParam(name = "unassignedOnly", required = false) Boolean unassignedOnly,
             @RequestParam(name = "city", required = false) String city,
             @RequestParam(name = "state", required = false) String state,
+            @RequestParam(name = "facilityType", required = false) FacilityType facilityType,
             Locale locale) {
+        // facilityType: HOSPITAL (the default) for everyone; PHARMACY or
+        // LABORATORY is the super-admin's explicit filter (provider plan AC-11).
         return ResponseEntity.ok(
-                hospitalService.getAllHospitals(organizationId, unassignedOnly, city, state, locale));
+                hospitalService.getAllHospitals(organizationId, unassignedOnly, city, state, facilityType, locale));
     }
 
     @GetMapping("/organization/{organizationId}")

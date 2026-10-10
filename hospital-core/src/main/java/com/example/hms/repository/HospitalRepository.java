@@ -1,5 +1,6 @@
 package com.example.hms.repository;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.enums.HospitalLifecycleState;
 import com.example.hms.model.Hospital;
 import org.springframework.data.domain.Page;
@@ -205,5 +206,33 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
                                      @Param("unassignedOnly") Boolean unassignedOnly,
                                      @Param("city") String city,
                                      @Param("state") String state);
+
+    /**
+     * {@link #findAllForFilters} for one facility type the caller names: the
+     * super-admin's explicit {@code facilityType} filter on the hospital list
+     * (provider plan AC-11, "super-admin views take an explicit facilityType
+     * filter"). NOT clinical-only: it returns PHARMACY or LABORATORY rows when
+     * asked. Its only caller refuses anyone but a verified super-admin first.
+     */
+    @Query("""
+      SELECT h FROM Hospital h
+      WHERE h.facilityType = :facilityType
+        AND (:organizationId IS NULL OR h.organization.id = :organizationId)
+        AND (:unassignedOnly IS NULL OR :unassignedOnly = false OR h.organization IS NULL)
+        AND (
+            :city IS NULL
+            OR LOWER(COALESCE(CAST(h.city AS string), '')) LIKE LOWER(CONCAT('%', CAST(:city AS string), '%'))
+        )
+        AND (
+            :state IS NULL
+            OR LOWER(COALESCE(CAST(h.state AS string), '')) LIKE LOWER(CONCAT('%', CAST(:state AS string), '%'))
+        )
+      ORDER BY LOWER(CAST(h.name AS string))
+    """)
+    List<Hospital> findAllForFiltersByFacilityType(@Param("facilityType") FacilityType facilityType,
+                                                   @Param("organizationId") UUID organizationId,
+                                                   @Param("unassignedOnly") Boolean unassignedOnly,
+                                                   @Param("city") String city,
+                                                   @Param("state") String state);
 }
 

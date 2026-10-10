@@ -95,6 +95,46 @@ public class CrossHospitalReachRecorder {
             && result.getLabOrder().isPerformedAt(actingHospitalId);
     }
 
+    /**
+     * Provider plan AC-15: the description every provider read that surfaces
+     * patient data carries (a pharmacy opening an offer, a laboratory opening
+     * an order it performs). One string for every provider surface, so the
+     * patient's disclosure report groups them under one reason; the row's
+     * {@code RECORD_SHARE} type already lands in {@code SHARED_WITH_PROVIDER}.
+     */
+    public static final String PROVIDER_SHARE_DESCRIPTION =
+        "Order-bound disclosure to an external provider facility";
+
+    /**
+     * One {@code RECORD_SHARE} row for a provider read (provider plan AC-15):
+     * acting = the provider facility, source = the hospital that placed the
+     * order or wrote the prescription. Nothing is recorded without a patient
+     * or a source, or when the source is the provider itself.
+     *
+     * <p>Every read is recorded, as on every other surface (see
+     * {@link #recordBatchedReach}): the per-day deduplication AC-15 asks for
+     * is left to the P2 callers, which know the order and can key on it,
+     * because a key without it under-reports (the reasons above).
+     *
+     * <p>Never throws: an audit failure must not fail the read it accounts for.
+     *
+     * @param assignmentId the reader's assignment at the provider facility
+     */
+    public void recordProviderShare(UUID patientId, UUID providerFacilityId, UUID sourceHospitalId,
+                                    UUID requesterUserId, UUID assignmentId) {
+        if (patientId == null || providerFacilityId == null || sourceHospitalId == null
+                || sourceHospitalId.equals(providerFacilityId)) {
+            return;
+        }
+        try {
+            recordReach(patientId, providerFacilityId, requesterUserId, assignmentId,
+                Map.of(sourceHospitalId.toString(), 1L), PROVIDER_SHARE_DESCRIPTION);
+        } catch (RuntimeException ex) {
+            log.warn("[record-access] provider disclosure audit failed for patient {} at facility {}: {}",
+                patientId, providerFacilityId, ex.getClass().getSimpleName());
+        }
+    }
+
     /** Merge {@code more} into {@code into}, summing counts per source hospital. */
     public static Map<String, Long> merge(Map<String, Long> into, Map<String, Long> more) {
         more.forEach((k, v) -> into.merge(k, v, Long::sum));

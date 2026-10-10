@@ -4,6 +4,7 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.service.AuditEventLogService;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -287,5 +288,44 @@ class CrossHospitalReachRecorderTest {
         ArgumentCaptor<AuditEventRequestDTO> captor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
         verify(auditEventLogService).logEvent(captor.capture());
         assertThat(String.valueOf(captor.getValue().getDetails())).doesNotContain("breakGlassSessionId");
+    }
+
+    @Test
+    @DisplayName("AC-15: a provider read writes one RECORD_SHARE row, acting = the provider, source = the ordering hospital")
+    void providerShareRecordsOneRow() {
+        UUID patient = UUID.randomUUID();
+        UUID provider = UUID.randomUUID();
+        UUID source = UUID.randomUUID();
+        UUID reader = UUID.randomUUID();
+        UUID assignment = UUID.randomUUID();
+        when(breakGlassGate.liveSessionId(reader, patient, provider)).thenReturn(Optional.empty());
+
+        recorder.recordProviderShare(patient, provider, source, reader, assignment);
+
+        ArgumentCaptor<AuditEventRequestDTO> row = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(row.capture());
+        assertThat(row.getValue().getEventType()).isEqualTo(AuditEventType.RECORD_SHARE);
+        assertThat(row.getValue().getPatientId()).isEqualTo(patient);
+        assertThat(row.getValue().getUserId()).isEqualTo(reader);
+        assertThat(row.getValue().getAssignmentId()).isEqualTo(assignment);
+        assertThat(row.getValue().getEventDescription()).isEqualTo(CrossHospitalReachRecorder.PROVIDER_SHARE_DESCRIPTION);
+        assertThat(row.getValue().getDetails()).asInstanceOf(InstanceOfAssertFactories.MAP)
+            .containsEntry("actingHospitalId", provider.toString())
+            .containsEntry("sourceHospitalId", source.toString())
+            .containsEntry("rowsSurfaced", 1L);
+    }
+
+    @Test
+    @DisplayName("AC-15: no patient, no source, or the provider as its own source records nothing; a failure never throws")
+    void providerShareSkipsAndNeverThrows() {
+        UUID provider = UUID.randomUUID();
+        recorder.recordProviderShare(null, provider, UUID.randomUUID(), UUID.randomUUID(), null);
+        recorder.recordProviderShare(UUID.randomUUID(), provider, null, UUID.randomUUID(), null);
+        recorder.recordProviderShare(UUID.randomUUID(), provider, provider, UUID.randomUUID(), null);
+        verify(auditEventLogService, never()).logEvent(any());
+
+        when(breakGlassGate.liveSessionId(any(), any(), any())).thenThrow(new IllegalStateException("db down"));
+        recorder.recordProviderShare(UUID.randomUUID(), provider, UUID.randomUUID(), UUID.randomUUID(), null);
+        verify(auditEventLogService, never()).logEvent(any());
     }
 }
