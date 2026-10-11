@@ -11,24 +11,29 @@
  * instead. The theme's class names are hashed (.fc-classic-xxx), so these
  * variables are the only supported way to restyle it.
  *
+ * The variables sit on :root, not on the page: FullCalendar portals some of
+ * its DOM into document.body (the "+N more" popover; the drag mirror if
+ * dragging is ever enabled), where nothing under the page could reach it.
+ * They are still not global: this stylesheet ships in the lazy calendar
+ * chunk, and Angular removes it when the component is destroyed.
+ *
  * The component uses ViewEncapsulation.None (FullCalendar's DOM is created by
  * Preact, outside Angular's renderer, so emulated attributes never reach it),
- * which is why every rule of our own is scoped under the page's root
- * element (.cal-page, not the component tag: TestBed hosts the component in
- * a plain <div>, so a tag selector would leave the specs unthemed).
+ * which is why the page's own rules are scoped under its root element
+ * (.cal-page, not the component tag: TestBed hosts the component in a plain
+ * <div>, so a tag selector would leave the specs unthemed).
  */
 @use 'fullcalendar/skeleton';
 @use 'fullcalendar/themes/classic/theme';
 
-.cal-page {
-  padding: 1.5rem;
-
+:root {
   /* buttons (toolbar: prev/next/today and the view switcher) */
   --fc-classic-button: var(--primary);
   --fc-classic-button-border: var(--primary);
   --fc-classic-button-strong: var(--primary-dark);
   --fc-classic-button-strong-border: var(--primary-dark);
-  --fc-classic-button-outline: var(--primary-light);
+  /* the keyboard focus ring: --primary-light is 2.52:1 (fills only) */
+  --fc-classic-button-outline: var(--primary);
   --fc-classic-button-foreground: var(--surface, #fff);
 
   /* primary (focus outlines, selection) */
@@ -41,7 +46,8 @@
   --fc-classic-background-event: var(--primary-light);
   --fc-classic-background-event-opacity: 15%;
   --fc-classic-background-event-foreground-opacity: 50%;
-  --fc-classic-highlight: var(--primary-tint);
+  /* selection/drop highlight is painted over the grid: keep it translucent */
+  --fc-classic-highlight: color-mix(in srgb, var(--primary-tint) 60%, transparent);
   --fc-classic-today: var(--primary-soft);
   --fc-classic-now: var(--danger, #b00020);
   --fc-classic-small-dot-width: 8px;
@@ -61,6 +67,10 @@
   /* neutral borders */
   --fc-classic-border: var(--border);
   --fc-classic-strong-border: color-mix(in srgb, var(--border), var(--text-secondary));
+}
+
+.cal-page {
+  padding: 1.5rem;
 
   &__header {
     display: flex;
@@ -84,7 +94,8 @@
 
     select {
       padding: 0.4rem 0.6rem;
-      border: 1px solid var(--border);
+      /* a control's boundary needs 3:1 (WCAG 1.4.11): --border is 1.23:1 */
+      border: 1px solid var(--text-secondary);
       border-radius: 6px;
     }
   }

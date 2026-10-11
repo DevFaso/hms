@@ -49,10 +49,12 @@ updates:
       # of the family across a major while the rest stayed behind (#849:
       # @fullcalendar/core to 7.x, the other four on 6.x). Same argument as
       # the angular group: one PR for the family, every update type.
+      # temporal-polyfill rides with it: every v7 package peer-requires it.
       fullcalendar:
         patterns:
           - "@fullcalendar/*"
           - "fullcalendar"
+          - "temporal-polyfill"
       # Everything else, batched so a quiet week is one PR rather than twelve.
       portal-minor-and-patch:
         patterns:

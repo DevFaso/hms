@@ -29,6 +29,11 @@ import dayGridPlugin from '@fullcalendar/angular/daygrid';
 import timeGridPlugin from '@fullcalendar/angular/timegrid';
 import interactionPlugin from '@fullcalendar/angular/interaction';
 import classicThemePlugin from '@fullcalendar/angular/themes/classic';
+// Imported from `fullcalendar` itself: the wrapper's own `locales/*`
+// entrypoint is broken in 7.1.1 (its export map points at locales/*.mjs
+// files the package does not ship). English is built in.
+import esLocale from 'fullcalendar/locales/es';
+import frLocale from 'fullcalendar/locales/fr';
 
 import {
   AppointmentCalendarEvent,
@@ -36,6 +41,7 @@ import {
 } from '../../services/appointment-calendar.service';
 import { StaffService, StaffResponse } from '../../services/staff.service';
 import { RoleContextService } from '../../core/role-context.service';
+import { storedLang } from '../../shared/i18n/app-locale';
 
 type State = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -123,9 +129,15 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
 
   private readonly destroyed$ = new Subject<void>();
   private inFlight?: Subscription;
+  /** The range on screen, as last reported by datesSet. */
+  private visibleRange?: { from: string; to: string };
 
   protected calendarOptions: CalendarOptions = {
     plugins: [classicThemePlugin, dayGridPlugin, timeGridPlugin, interactionPlugin],
+    // Same source as LOCALE_ID: the language is fixed for the page's life
+    // (switching it reloads), so reading it once here is enough.
+    locales: [frLocale, esLocale],
+    locale: storedLang(),
     initialView: 'timeGridWeek',
     headerToolbar: {
       left: 'prev,next today',
@@ -140,7 +152,10 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
     slotMaxTime: '21:00:00',
     eventClick: (arg: EventClickInfo) => this.openAppointment(arg.event.id),
     dateClick: (arg: DateClickInfo) => this.openCreateForSlot(arg.date),
-    datesSet: (arg) => this.loadRange(toIsoDate(arg.start), toIsoDate(addDays(arg.end, -1))),
+    datesSet: (arg) => {
+      this.visibleRange = { from: toIsoDate(arg.start), to: toIsoDate(addDays(arg.end, -1)) };
+      this.loadRange(this.visibleRange.from, this.visibleRange.to);
+    },
     events: [],
   };
 
@@ -163,11 +178,15 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
     this.destroyed$.complete();
   }
 
-  protected onProviderChange(_value: string): void {
-    // The next datesSet (FullCalendar refreshes the visible range on
-    // re-render) will trigger a fresh loadRange with the new staff filter.
-    // Force the calendar to refetch its events by replacing the array.
+  protected onProviderChange(value: string): void {
+    // datesSet fires only when the visible dates change, never for a new
+    // filter, so reload the range on screen directly. Replacing `events`
+    // (here and in loadRange) does not fire datesSet, so this cannot loop.
+    this.selectedStaffId = value;
     this.calendarOptions = { ...this.calendarOptions, events: [] };
+    if (this.visibleRange) {
+      this.loadRange(this.visibleRange.from, this.visibleRange.to);
+    }
   }
 
   private loadRange(from: string, to: string): void {

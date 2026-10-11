@@ -11,6 +11,7 @@ import {
 } from '../../services/appointment-calendar.service';
 import { StaffService } from '../../services/staff.service';
 import { RoleContextService } from '../../core/role-context.service';
+import { resetStoredLangForTests } from '../../shared/i18n/app-locale';
 
 describe('AppointmentCalendarComponent', () => {
   let fixture: ComponentFixture<AppointmentCalendarComponent>;
@@ -78,17 +79,87 @@ describe('AppointmentCalendarComponent', () => {
     const buttons = Array.from(grid.querySelectorAll('button'));
     expect(buttons.length).toBeGreaterThan(0);
 
-    // The colour the portal's --primary token resolves to, measured the same
-    // way as the calendar's buttons so the comparison is like for like.
-    const probe = document.createElement('span');
-    probe.style.backgroundColor = 'var(--primary)';
-    document.body.appendChild(probe);
-    const primary = getComputedStyle(probe).backgroundColor;
-    probe.remove();
+    // What a token resolves to, measured the same way as the calendar's own
+    // elements so the comparison is like for like. The probe sits directly
+    // in <body>, where FullCalendar portals its "+N more" popover: it only
+    // sees the --fc-classic-* tokens if they are not scoped to the page.
+    const resolve = (value: string): string => {
+      const probe = document.createElement('span');
+      probe.style.backgroundColor = value;
+      document.body.appendChild(probe);
+      const color = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return color;
+    };
+    const primary = resolve('var(--primary)');
     expect(primary).not.toBe('rgba(0, 0, 0, 0)');
 
     const backgrounds = buttons.map((b) => getComputedStyle(b).backgroundColor);
     expect(backgrounds).toContain(primary);
+
+    // Portaled content inherits the theme.
+    expect(resolve('var(--fc-classic-button)')).toBe(primary);
+
+    // The keyboard focus ring is the 5.10:1 primary, not the fills-only light.
+    expect(buttons.map((b) => getComputedStyle(b).outlineColor)).toContain(primary);
+
+    // The selection highlight is painted over the grid, so it must be translucent.
+    const highlight = resolve('var(--fc-classic-highlight)');
+    expect(highlight).toMatch(/(\/\s*0?\.\d+\)|,\s*0?\.\d+\))$/);
+
+    // The provider <select> boundary reaches 3:1: it uses --text-secondary.
+    const select: HTMLSelectElement = fixture.nativeElement.querySelector(
+      '[data-testid="appointment-calendar-provider"]',
+    );
+    expect(getComputedStyle(select).borderTopColor).toBe(resolve('var(--text-secondary)'));
+  });
+
+  describe('renders in the portal language', () => {
+    let savedLang: string | null;
+    beforeEach(() => {
+      savedLang = localStorage.getItem('lang');
+    });
+    afterEach(() => {
+      if (savedLang === null) localStorage.removeItem('lang');
+      else localStorage.setItem('lang', savedLang);
+      resetStoredLangForTests();
+    });
+
+    async function toolbarText(lang: string): Promise<string[]> {
+      localStorage.setItem('lang', lang);
+      resetStoredLangForTests();
+      await configure('h1');
+      fixture = TestBed.createComponent(AppointmentCalendarComponent);
+      fixture.detectChanges();
+      const grid: HTMLElement = fixture.nativeElement.querySelector(
+        '[data-testid="appointment-calendar-grid"]',
+      );
+      // Visible text and accessible names (prev/next are icon-only).
+      return Array.from(grid.querySelectorAll('button')).flatMap((b) => [
+        (b.textContent ?? '').trim(),
+        b.getAttribute('aria-label') ?? '',
+      ]);
+    }
+
+    it('French', async () => {
+      const text = await toolbarText('fr');
+      expect(text).toContain("Aujourd'hui");
+      expect(text).toContain('Mois');
+      expect(text).toContain('Précédent');
+    });
+
+    it('English (built in; must not fall back to the first loaded locale)', async () => {
+      const text = await toolbarText('en');
+      expect(text).toContain('Today');
+      expect(text).toContain('Month');
+    });
+
+    it('Spanish', async () => {
+      const text = await toolbarText('es');
+      expect(text).toContain('Hoy');
+      expect(text).toContain('Mes');
+      expect(text).toContain('Semana siguiente');
+    });
   });
 
   it('shows the error state when no hospital is active', async () => {
@@ -101,24 +172,32 @@ describe('AppointmentCalendarComponent', () => {
     ).not.toBeNull();
   });
 
-  it('clears events on provider filter change so the next datesSet refetches', async () => {
+  it('refetches the visible range for the new provider when the filter changes', async () => {
+    // FullCalendar fires datesSet only when the visible dates change, so the
+    // filter cannot wait for one: it must reload the range on screen itself.
     await configure('h1');
     fixture = TestBed.createComponent(AppointmentCalendarComponent);
     fixture.detectChanges();
+    // The real calendar rendered and reported its range exactly once; feeding
+    // the events back in did not trigger another datesSet (no reload loop).
+    expect(calendarSvc.getRange).toHaveBeenCalledTimes(1);
+    const [hid, from, to, staff] = calendarSvc.getRange.calls.mostRecent().args;
+    expect(hid).toBe('h1');
+    expect(staff).toBeUndefined();
 
-    // Pre-load some events so we can verify the clear.
+    const select: HTMLSelectElement = fixture.nativeElement.querySelector(
+      '[data-testid="appointment-calendar-provider"]',
+    );
     (
-      fixture.componentInstance as unknown as { calendarOptions: { events: unknown } }
-    ).calendarOptions.events = [{ id: 'stale' }];
+      fixture.componentInstance as unknown as { providers: { set(v: unknown[]): void } }
+    ).providers.set([{ id: 's-9', name: 'Dr Nine' }]);
+    fixture.detectChanges();
+    select.value = select.options[1].value;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
 
-    (
-      fixture.componentInstance as unknown as { onProviderChange(v: string): void }
-    ).onProviderChange('s-9');
-
-    expect(
-      (fixture.componentInstance as unknown as { calendarOptions: { events: unknown[] } })
-        .calendarOptions.events,
-    ).toEqual([]);
+    expect(calendarSvc.getRange).toHaveBeenCalledTimes(2);
+    expect(calendarSvc.getRange.calls.mostRecent().args).toEqual(['h1', from, to, 's-9']);
   });
 
   it('renders the inline error state when the calendar service errors', async () => {
