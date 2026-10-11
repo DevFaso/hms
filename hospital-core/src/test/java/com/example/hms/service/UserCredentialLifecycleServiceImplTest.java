@@ -640,7 +640,8 @@ class UserCredentialLifecycleServiceImplTest {
         user.setId(userId);
         org.mockito.Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
-        assertThatThrownBy(() -> service.upsertMfaEnrollments(userId, List.of(first, second)))
+        List<UserMfaEnrollmentRequestDTO> twoTotp = List.of(first, second);
+        assertThatThrownBy(() -> service.upsertMfaEnrollments(userId, twoTotp))
             .isInstanceOf(IllegalArgumentException.class);
         verify(mfaEnrollmentRepository, never()).saveAll(anyList());
     }
