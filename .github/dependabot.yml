@@ -4,8 +4,8 @@ version: 2
 #
 # Two defects, both visible on PRs #592-#595:
 #
-# 1. Angular packages are released in lockstep and peer-depend on each other
-#    at the EXACT same version, and this project pins the framework exactly
+# 1. Angular framework packages are released in lockstep and peer-depend on
+#    each other at the EXACT same version, and this project pins them exactly
 #    (no caret); zone.js and the CLI line (build, cli, ssr) are caret ranges,
 #    see the angular group below.
 #    Ungrouped, Dependabot opened one PR per package, each bumping a single
@@ -28,7 +28,7 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     groups:
-      # The framework proper: lockstep peer deps, exact pins. Never split.
+      # Never split this group.
       # Two release lines share this group: the framework (core, common,
       # compiler, compiler-cli, forms, router, platform-*) is pinned exactly
       # at one version; the CLI line (build, cli, ssr) has its own version,

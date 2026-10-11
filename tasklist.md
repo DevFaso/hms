@@ -4539,6 +4539,15 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   the Dependabot PR itself (the CLI line - build, cli, ssr - is a caret
   range on its own version, see `.github/dependabot.yml`).
 
+- **The portal overrides Vite to 7.3.5 under an Angular 22 builder that
+  wants Vite 8 (2026-10-11).** `overrides.vite` was set to 7.3.5 by
+  f4f70b844 (a security pin, Angular 20 era) and never revisited; on
+  develop `@angular/build` 22.2.x pins vite 8.x, yet the tree holds one
+  vite at 7.3.5. `ng build` and Karma barely touch Vite, so CI stays green;
+  `ng serve` and HMR run the builder on the wrong major (a local `ng serve`
+  failure was seen in the #855 worktree, unconfirmed as this cause). Drop
+  the override or move it to a patched 8.x, then run `npm start`.
+
 - **Push notifications have app code and no backend (2026-10-04).** #791
   shipped dormant push registration on both apps (FCM initialised only when
   four BuildConfig values exist; APNs registration on iOS), but V176, the
