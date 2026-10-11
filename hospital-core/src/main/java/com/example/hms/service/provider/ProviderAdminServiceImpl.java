@@ -172,7 +172,7 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
         // canReinvite's rule: an account that may be re-invited AND a row that
         // is not active. All active is a no-op: refused (no 200, no audit row).
         if (rows.isEmpty() || !mayReinvite(rows.get().here().get(0).getUser())
-                || rows.get().here().stream().allMatch(row -> Boolean.TRUE.equals(row.getActive()))) {
+                || rows.get().here().stream().noneMatch(row -> Boolean.FALSE.equals(row.getActive()))) {
             return Optional.empty();
         }
         List<UUID> inactive = rows.get().here().stream()
@@ -328,7 +328,7 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
             }
             boolean rowActive = Boolean.TRUE.equals(row.getActive());
             active |= rowActive;
-            anyInactive |= !rowActive;
+            anyInactive |= Boolean.FALSE.equals(row.getActive());
             pending |= isPendingInvitation(row);
         }
         return Optional.of(ProviderStaffMemberDTO.builder()

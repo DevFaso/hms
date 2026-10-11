@@ -597,6 +597,8 @@ class UserServiceImplTest {
             // Existing user was soft-deleted by the FE compensation flow
             // (admin-register succeeded → /api/patients failed → DELETE /users/{id}).
             user.setDeleted(true);
+            // V184: the clean-up delete recorded a disable too.
+            user.setDeactivatedByAdminAt(java.time.LocalDateTime.now());
             when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(
                     "patient.doe", "existing@test.com", "+1111111111"))
                 .thenReturn(Optional.of(user));
@@ -624,6 +626,9 @@ class UserServiceImplTest {
                 .isNotInstanceOf(ConflictException.class);
 
             assertThat(user.isDeleted()).isFalse();
+            // Registering the person again undoes the delete's disable too, or
+            // their code and activation link would refuse them forever.
+            assertThat(user.getDeactivatedByAdminAt()).isNull();
             verify(userRepository).save(user);
         }
 

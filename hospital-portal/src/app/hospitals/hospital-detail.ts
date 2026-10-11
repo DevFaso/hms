@@ -20,6 +20,7 @@ import {
 import { HospitalLifecycleService } from '../services/hospital-lifecycle.service';
 import { HospitalResponse, HospitalService } from '../services/hospital.service';
 import { isStepUpAction, isStepUpRefusal, stepUpRefusalKey } from '../services/step-up';
+import { localDateString } from '../shared/date-utils';
 
 type ActionKind = 'suspend' | 'restore' | 'archive' | 'schedule-purge' | 'cancel-purge';
 
@@ -246,8 +247,7 @@ export class HospitalDetailComponent implements OnInit {
 export function localDay(offset: number): string {
   const d = new Date();
   d.setDate(d.getDate() + offset);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return localDateString(d);
 }
 
 /**

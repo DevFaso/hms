@@ -481,6 +481,11 @@ public class UserServiceImpl implements UserService {
         log.info("♻️ Re-registering soft-deleted user {} ({}); restoring account.",
                 user.getId(), user.getUsername());
         user.setDeleted(false);
+        // Registering the person again undoes the delete, the disable it
+        // recorded included (V184): otherwise a patient re-registered after
+        // a failed first attempt (the registrar's clean-up delete) could
+        // never activate.
+        user.setDeactivatedByAdminAt(null);
         userRepository.save(user);
 
         for (Staff staff : staffRepository.findByUserId(user.getId())) {
@@ -1369,7 +1374,7 @@ public class UserServiceImpl implements UserService {
         // An account an administrator switched off stays off (V184): only an
         // administrator re-enables it, never an activation link.
         if (user.getDeactivatedByAdminAt() != null) {
-            log.warn("⚠️ Activation refused for {}: disabled by an administrator", email);
+            log.warn("⚠️ Activation refused for user {}: disabled by an administrator", user.getId());
             return false;
         }
 
