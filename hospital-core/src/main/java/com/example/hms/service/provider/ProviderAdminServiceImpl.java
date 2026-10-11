@@ -229,13 +229,6 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
     }
 
     /**
-     * The one rule of who an admin may change here (deactivate, re-invite):
-     * not the caller, not a deleted account, and nobody holding an admin role
-     * anywhere, active or not, by assignment or by global role. The staff
-     * list's {@code canDeactivate} / {@code canReinvite} come from this same
-     * method, so the portal never offers what the server refuses.
-     */
-    /**
      * May this account receive a new invitation code? An enabled account, or
      * one that was NEVER activated: under Option A every admin-registered
      * account starts inactive and entering the code is what activates it. An
@@ -257,6 +250,13 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
         return !everActivated;
     }
 
+    /**
+     * The one rule of who an admin may change here (deactivate, re-invite):
+     * not the caller, not a deleted account, and nobody holding an admin role
+     * anywhere, active or not, by assignment or by global role. The staff
+     * list's {@code canDeactivate} / {@code canReinvite} come from this same
+     * method, so the portal never offers what the server refuses.
+     */
     private static boolean manageable(ProviderSeat seat, User member, List<UserRoleHospitalAssignment> everyRow) {
         return member != null
             && !member.isDeleted()
