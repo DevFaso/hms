@@ -181,7 +181,9 @@ public class MfaService {
      * Confirms an enrolment with a code from the new authenticator: the first
      * one, or a pending replacement, which then takes the place of the current
      * one (secret and backup codes) in this transaction. Only a full session
-     * confirms a replacement: the session that started it.
+     * of the user confirms a replacement, never the login's challenge token
+     * (any full session of that user: there is no binding to the session
+     * that started it).
      *
      * @return true if the code confirmed it (or the authenticator was already confirmed)
      * @throws MfaStepUpRefusedException (403) when the login's MFA challenge token
@@ -232,8 +234,11 @@ public class MfaService {
             if (MfaChallengeScope.isChallengeSession(caller)) {
                 throw refused(userId, caller, ACTION_REPLACE, MfaStepUpRefusedException.Reason.CHALLENGE);
             }
+            // The code is NOT evaluated: answering whether it is current,
+            // with no attempt limit, would let a stolen session test guesses
+            // here and bypass the step-up lockout. Already confirmed: done.
             log.warn("[MFA] TOTP already verified for user={}", userId);
-            return isValidTotp(enrollment.getTotpSecret(), code);
+            return true;
         }
 
         boolean valid = matchingTotpStep(enrollment.getTotpSecret(), code).isPresent();
@@ -344,7 +349,9 @@ public class MfaService {
             if (!claimTotpStep(enrollment, userId, step.getAsLong())) {
                 // A right code, already accepted (the sign-in a moment ago, an
                 // earlier step-up): replay protection, so say "wait for the
-                // next code" rather than "wrong code".
+                // next code" rather than "wrong code". Knowing a current code
+                // is not a wrong guess: the reserved attempt is given back.
+                attemptStore.clear(throttleKey);
                 throw refused(userId, caller, action, MfaStepUpRefusedException.Reason.REUSED);
             }
             attemptStore.clear(throttleKey);

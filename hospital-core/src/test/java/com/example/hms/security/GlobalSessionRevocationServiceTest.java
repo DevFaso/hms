@@ -96,7 +96,8 @@ class GlobalSessionRevocationServiceTest {
         assertThat(saved.getLastRevokedByUserId()).isEqualTo(actorId);
         assertThat(saved.getLastRevokedByUsername()).isEqualTo("super.alice");
         assertThat(saved.getLastRevokedReason()).isEqualTo("incident X");
-        assertThat(service.getGlobalMinTokenIat()).isEqualTo(takenAt);
+        // Reported at its real time; the token cut-off is that time rounded up.
+        assertThat(service.getGlobalMinTokenIat()).isEqualTo(GlobalSessionRevocationService.cutOff(takenAt));
     }
 
     @Test
@@ -109,8 +110,9 @@ class GlobalSessionRevocationServiceTest {
 
         Instant takenAt = service.revokeAll(null, null, null);
 
-        assertThat(row.getGlobalMinTokenIat()).isEqualTo(takenAt);
-        assertThat(service.getGlobalMinTokenIat()).isEqualTo(takenAt);
+        assertThat(row.getGlobalMinTokenIat()).isEqualTo(GlobalSessionRevocationService.cutOff(takenAt));
+        assertThat(service.getGlobalMinTokenIat()).isEqualTo(GlobalSessionRevocationService.cutOff(takenAt));
+        assertThat(row.getUpdatedAt()).isEqualTo(takenAt);
     }
 
     @Test
@@ -128,7 +130,11 @@ class GlobalSessionRevocationServiceTest {
     @Test
     @DisplayName("revokes: every token of the revocation's whole second is revoked (a kill switch errs safe)")
     void everyTokenOfTheRevocationsSecond_isRevoked() {
-        java.time.Instant cutOff = service.revokeAll(java.util.UUID.randomUUID(), "admin", "test");
+        java.time.Instant takenAt = service.revokeAll(java.util.UUID.randomUUID(), "admin", "test");
+        java.time.Instant cutOff = GlobalSessionRevocationService.cutOff(takenAt);
+        // The revocation is reported at its real time; only the cut-off rounds up.
+        assertThat(takenAt).isBeforeOrEqualTo(java.time.Instant.now());
+        assertThat(service.getGlobalMinTokenIat()).isEqualTo(cutOff);
 
         // The stored cut-off is a whole second, rounded UP from the moment of
         // the revocation: a JWT iat is whole seconds, so a token minted in

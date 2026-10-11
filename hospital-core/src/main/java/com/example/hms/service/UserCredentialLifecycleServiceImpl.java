@@ -180,12 +180,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
             .map(this::mfaKey)
             .collect(Collectors.toSet());
 
-        // One TOTP row per user (V183): a payload naming two is a bad request,
-        // not a unique-index violation (500).
-        if (payload != null && payload.stream()
-                .filter(dto -> dto != null && dto.getMethod() == MfaMethodType.TOTP).count() > 1) {
-            throw new IllegalArgumentException("At most one TOTP authenticator can be listed.");
-        }
+        requireAtMostOneTotp(payload);
 
         List<UserMfaEnrollment> toPersist = new ArrayList<>();
         if (payload != null) {

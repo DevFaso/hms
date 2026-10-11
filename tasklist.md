@@ -4839,6 +4839,18 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   token** as well as the live assignment (the assignment service's scope reads
   both), so on Keycloak they answer as unmapped until P1-T11 adds the realm role.
   Same as `POST /users/admin-register` today. Open until P1-T11.
+- **The patient apps and the refresh 409 (#853): fix before their next release.** A
+  refresh token is now spent atomically: of concurrent refreshes with one token, one
+  wins and the rest get 409 "superseded". The portal retries (the shared cookie has
+  rotated); the apps do not. iOS fires concurrent refreshes and surfaces the 409 as a
+  request error; Android refreshes under a mutex but clears the tokens (signs out) on
+  any non-2xx, so a 409 would sign the patient out. Both: single-flight the refresh,
+  and on 409 retry the original request with the token the winner stored. Both apps
+  are with testers only today (found in #853's round-8 review). Open.
+- **One refresh parses the same JWT 6-7 times.** `isRefreshToken`, `getIssuedAt`,
+  `getJtiFromToken`, `getUsernameFromJWT`, `getExpiration` each verify the signature
+  again; the MFA verify does the same. Parse once and read the claims (found in #853's
+  round-8 review). Open.
 - **MFA step-up holds a second pooled connection.** `requireStepUp` runs in its own
   transaction (REQUIRES_NEW, so a caller's long transaction never locks the actor's MFA
   row), but its callers (lifecycle, emergency controls, the super-admin MFA endpoint)

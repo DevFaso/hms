@@ -88,20 +88,22 @@ public class GlobalSessionRevocationService {
 
     @Transactional
     public Instant revokeAll(UUID actorUserId, String actorUsername, String reason) {
-        Instant now = cutOff(Instant.now());
+        // The revocation happened now; only the token cut-off rounds up.
+        Instant now = Instant.now();
+        Instant minIat = cutOff(now);
         SecurityRevocation row = repository.findById(SecurityRevocation.SINGLETON_ID)
             .orElseGet(() -> {
                 SecurityRevocation seeded = new SecurityRevocation();
                 seeded.setId(SecurityRevocation.SINGLETON_ID);
                 return seeded;
             });
-        row.setGlobalMinTokenIat(now);
+        row.setGlobalMinTokenIat(minIat);
         row.setLastRevokedByUserId(actorUserId);
         row.setLastRevokedByUsername(actorUsername);
         row.setLastRevokedReason(reason);
         row.setUpdatedAt(now);
         repository.save(row);
-        cachedGlobalMinTokenIat = now;
+        cachedGlobalMinTokenIat = minIat;
         return now;
     }
 }

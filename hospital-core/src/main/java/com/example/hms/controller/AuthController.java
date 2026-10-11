@@ -708,6 +708,10 @@ public class AuthController {
      */
     static final long REFRESH_ROTATION_GRACE_MS = 30_000L;
 
+    /** The 409: a readable sentence (clients show it); the status is what a client acts on. */
+    private static final String REFRESH_SUPERSEDED_MESSAGE =
+            "This session was just refreshed by another tab or request. Retry with the latest token.";
+
     private static final String REFRESH_INVALID_MESSAGE =
             "Refresh token is invalid or has expired. Please log in again.";
 
@@ -715,7 +719,7 @@ public class AuthController {
     private ResponseEntity<Object> refreshSuperseded(String jti) {
         log.info("🔄 [REFRESH] Superseded — refresh token jti={} was just rotated by a concurrent refresh", jti);
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new MessageResponse("refresh.superseded"));
+                .body(new MessageResponse(REFRESH_SUPERSEDED_MESSAGE));
     }
 
     /**

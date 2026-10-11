@@ -207,7 +207,7 @@ class MfaServiceTest {
     }
 
     @Test
-    void verifyEnrollment_alreadyVerified_isNotConfirmedByAnyCode() throws Exception {
+    void verifyEnrollment_alreadyVerified_isNoCodeOracle() throws Exception {
         UserMfaEnrollment enrollment = UserMfaEnrollment.builder()
                 .user(testUser).method(MfaMethodType.TOTP).verified(true).enabled(true)
                 .totpSecret(SECRET).build();
@@ -215,8 +215,10 @@ class MfaServiceTest {
         when(enrollmentRepository.lockByUserIdAndMethod(userId, MfaMethodType.TOTP))
                 .thenReturn(Optional.of(enrollment));
 
-        // A wrong code is a "no"; a current one a "yes"; nothing changes either way.
-        assertThat(mfaService.verifyEnrollment(userId, "000000", fullSession())).isFalse();
+        // The same answer for a wrong and a current code: this endpoint never
+        // tells a (possibly stolen) session whether a guess is current, which
+        // would bypass the step-up's wrong-code lockout. Nothing changes.
+        assertThat(mfaService.verifyEnrollment(userId, "000000", fullSession())).isTrue();
         assertThat(mfaService.verifyEnrollment(userId, codeFor(SECRET), fullSession())).isTrue();
         verify(enrollmentRepository, never()).save(any());
     }
@@ -663,6 +665,8 @@ class MfaServiceTest {
         // "wait for the next code", not "wrong code".
         refusedWith(MfaStepUpRefusedException.Reason.REUSED,
                 () -> mfaService.requireStepUp(userId, code, "test action", true));
+        // A right code is not a wrong guess: the reserved attempt is given back.
+        verify(attemptStore).clear(MfaService.STEP_UP_KEY_PREFIX + userId);
     }
 
     @Test

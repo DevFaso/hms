@@ -194,9 +194,9 @@ public class MfaController {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalStateException("User not found"));
 
-        // The per-user budget of wrong codes, shared with every step-up and
-        // reserved BEFORE the code is checked, so neither rotating IPs nor
-        // parallel requests buy more guesses.
+        // The per-user budget of wrong LOGIN codes (its own, never the
+        // step-ups': see MfaService), reserved BEFORE the code is checked, so
+        // neither rotating IPs nor parallel requests buy more guesses.
         if (!mfaService.reserveCodeAttempt(user.getId())) {
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .userId(user.getId())
@@ -243,7 +243,9 @@ public class MfaController {
                 : mfaService.spendBackupCode(backupCode.get());
         if (!spent) {
             // Used by another request in between: this one signs nobody in,
-            // and its challenge is already spent, so it must start again.
+            // and its challenge is already spent, so it must start again. The
+            // code was right: not a wrong guess, the attempt is given back.
+            mfaService.clearCodeAttempts(user.getId());
             return ResponseEntity.status(401)
                     .body(new MessageResponse("That code was just used. Sign in again."));
         }

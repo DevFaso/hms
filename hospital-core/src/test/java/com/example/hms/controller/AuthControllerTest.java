@@ -820,7 +820,7 @@ class AuthControllerTest {
                 // rotated cookie, never "sign in again" (which signs every
                 // tab out).
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message").value("refresh.superseded"));
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("refreshed by another")));
         verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class));
         // Rotated BEFORE spent: a sibling that sees the token spent always
         // sees it rotated too (409, never 401 and a sign-out).
@@ -840,7 +840,7 @@ class AuthControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"old.refresh.token\"}"))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message").value("refresh.superseded"));
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("refreshed by another")));
         verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class));
     }
 
