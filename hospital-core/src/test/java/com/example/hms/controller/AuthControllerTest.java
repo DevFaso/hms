@@ -806,10 +806,8 @@ class AuthControllerTest {
                         .value("Refresh token is invalid or has expired. Please log in again."));
 
         // Refused on the revocation itself, before the token's user is even looked up.
-        org.mockito.Mockito.verify(jwtTokenProvider, org.mockito.Mockito.never())
-                .getUsernameFromJWT(org.mockito.ArgumentMatchers.any());
-        org.mockito.Mockito.verify(userRepository, org.mockito.Mockito.never())
-                .findByUsername(org.mockito.ArgumentMatchers.any());
+        verify(jwtTokenProvider, never()).getUsernameFromJWT(any());
+        verify(userRepository, never()).findByUsername(any());
     }
 
     // ───────────────────────────── S-01: refresh-token cookie ─────────────────────────────
@@ -873,7 +871,7 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.accessToken").value("new.access.token"));
 
         // The cookie value, not the body value, must have been validated
-        org.mockito.Mockito.verify(jwtTokenProvider).isRefreshToken("cookie.refresh.token");
+        verify(jwtTokenProvider).isRefreshToken("cookie.refresh.token");
         // Rotation must have written a fresh cookie back to the response
         org.mockito.Mockito.verify(refreshTokenCookieService)
                 .write(org.mockito.ArgumentMatchers.any(),
