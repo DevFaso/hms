@@ -4834,6 +4834,11 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   token** as well as the live assignment (the assignment service's scope reads
   both), so on Keycloak they answer as unmapped until P1-T11 adds the realm role.
   Same as `POST /users/admin-register` today. Open until P1-T11.
+- **The appointment calendar keeps the hospital it opened with.** The hospital id is
+  read once in `ngOnInit` and captured by the events source, so a global-scope user who
+  switches the scope chip while on `/appointments/calendar` keeps seeing (and fetching)
+  the first hospital under the new chip. Pre-existing; read the scope at fetch time, as
+  the other scope-aware pages do (found in #855's final review). Open.
 - **CDS acknowledgement with an unknown hospital id now answers 404** (was: saved as a
   global acknowledgement). Intended since #835; confirm no client relies on the old
   behaviour. Open.
