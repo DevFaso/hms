@@ -4851,6 +4851,21 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   `getJtiFromToken`, `getUsernameFromJWT`, `getExpiration` each verify the signature
   again; the MFA verify does the same. Parse once and read the claims (found in #853's
   round-8 review). Open.
+- **Per-user MFA lockouts can be used to lock the real user out (#853, accepted).** The
+  login code budget and the step-up budget are per user (5 wrong codes, 15 minutes), so
+  someone holding only the password can lock the user's MFA sign-in, and someone holding
+  a stolen session can lock their step-ups (the emergency controls included). That is
+  the price of brute-force resistance. Mitigations to weigh: key the budget per user AND
+  source, a super-admin unlock, a backup code bypassing the lock (found in #853's
+  round-9 review). Open.
+- **MFA login: a code read before an authenticator swap can still be claimed after it.**
+  `verifyMfa` reads the current secret, then claims the step by (user, method, step); a
+  replacement confirmed in between resets the step, so an old-authenticator code can
+  sign in once in that window. Narrow (password + an old code + a concurrent confirm);
+  close it by claiming against the secret version (found in #853's round-9 review). Open.
+- **Concurrent first MFA enrolments: the loser gets a generic error.** V183's unique
+  index refuses the second insert (no corruption any more); answer it as 409 "already
+  started" instead (found in #853's round-9 review). Open.
 - **MFA step-up holds a second pooled connection.** `requireStepUp` runs in its own
   transaction (REQUIRES_NEW, so a caller's long transaction never locks the actor's MFA
   row), but its callers (lifecycle, emergency controls, the super-admin MFA endpoint)

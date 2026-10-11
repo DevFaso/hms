@@ -349,9 +349,9 @@ public class MfaService {
             if (!claimTotpStep(enrollment, userId, step.getAsLong())) {
                 // A right code, already accepted (the sign-in a moment ago, an
                 // earlier step-up): replay protection, so say "wait for the
-                // next code" rather than "wrong code". Knowing a current code
-                // is not a wrong guess: the reserved attempt is given back.
-                attemptStore.clear(throttleKey);
+                // next code" rather than "wrong code". The attempt still
+                // counts: clearing the count here would let anyone who saw one
+                // accepted code reset the lockout between guesses.
                 throw refused(userId, caller, action, MfaStepUpRefusedException.Reason.REUSED);
             }
             attemptStore.clear(throttleKey);
@@ -498,10 +498,6 @@ public class MfaService {
             log.info("[MFA] Backup code consumed for user={}", userId);
         }
         return spent;
-    }
-
-    private boolean isValidTotp(String secret, String code) {
-        return matchingTotpStep(secret, code).isPresent();
     }
 
     /**

@@ -720,4 +720,24 @@ class UserCredentialLifecycleServiceImplTest {
 
         verify(mfaService, never()).requireStepUp(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
     }
+
+    @Test
+    void anEntryListedTwice_isABadRequest_beforeAnyStepUp() {
+        UUID actorId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        User target = User.builder().username("target").email("t@example.com").build();
+        target.setId(targetId);
+        when(userRepository.findById(targetId)).thenReturn(Optional.of(target));
+        UserMfaEnrollmentRequestDTO sms = new UserMfaEnrollmentRequestDTO();
+        sms.setMethod(MfaMethodType.SMS);
+        sms.setChannel("+22670000000");
+        UserMfaEnrollmentRequestDTO same = new UserMfaEnrollmentRequestDTO();
+        same.setMethod(MfaMethodType.SMS);
+        same.setChannel(" +22670000000 ");
+        List<UserMfaEnrollmentRequestDTO> twice = List.of(sms, same);
+
+        assertThatThrownBy(() -> service.upsertMfaEnrollmentsAsSuperAdmin(actorId, targetId, twice, "12345678"))
+            .isInstanceOf(IllegalArgumentException.class);
+        verify(mfaService, never()).requireStepUp(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
 }

@@ -140,11 +140,23 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
             && (dto.getMethod() != MfaMethodType.TOTP || enrollment.getId() == null || enrollment.isEnabled());
     }
 
-    /** One TOTP row per user (V183): a payload naming two is a bad request, not a unique-index violation (500). */
-    private static void requireAtMostOneTotp(List<UserMfaEnrollmentRequestDTO> payload) {
-        if (payload != null && payload.stream()
-                .filter(dto -> dto != null && dto.getMethod() == MfaMethodType.TOTP).count() > 1) {
+    /**
+     * One TOTP row per user (V183), and no entry listed twice (same method and
+     * channel): a bad request, checked before any step-up spends a code, never
+     * a unique-index violation or a map collision after it.
+     */
+    private void requireAtMostOneTotp(List<UserMfaEnrollmentRequestDTO> payload) {
+        if (payload == null) {
+            return;
+        }
+        if (payload.stream().filter(dto -> dto != null && dto.getMethod() == MfaMethodType.TOTP).count() > 1) {
             throw new IllegalArgumentException("At most one TOTP authenticator can be listed.");
+        }
+        Set<String> keys = new java.util.HashSet<>();
+        for (UserMfaEnrollmentRequestDTO dto : payload) {
+            if (dto != null && dto.getMethod() != null && !keys.add(mfaKey(dto))) {
+                throw new IllegalArgumentException("An MFA method and channel can be listed only once.");
+            }
         }
     }
 

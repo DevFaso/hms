@@ -244,8 +244,7 @@ public class MfaController {
         if (!spent) {
             // Used by another request in between: this one signs nobody in,
             // and its challenge is already spent, so it must start again. The
-            // code was right: not a wrong guess, the attempt is given back.
-            mfaService.clearCodeAttempts(user.getId());
+            // attempt still counts (never a way to reset the lockout).
             return ResponseEntity.status(401)
                     .body(new MessageResponse("That code was just used. Sign in again."));
         }

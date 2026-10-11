@@ -665,8 +665,8 @@ class MfaServiceTest {
         // "wait for the next code", not "wrong code".
         refusedWith(MfaStepUpRefusedException.Reason.REUSED,
                 () -> mfaService.requireStepUp(userId, code, "test action", true));
-        // A right code is not a wrong guess: the reserved attempt is given back.
-        verify(attemptStore).clear(MfaService.STEP_UP_KEY_PREFIX + userId);
+        // The attempt still counts: clearing here would reset the lockout.
+        verify(attemptStore, never()).clear(MfaService.STEP_UP_KEY_PREFIX + userId);
     }
 
     @Test
