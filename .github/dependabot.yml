@@ -5,7 +5,8 @@ version: 2
 # Two defects, both visible on PRs #592-#595:
 #
 # 1. Angular packages are released in lockstep and peer-depend on each other
-#    at the EXACT same version, and this project pins them exactly (no caret).
+#    at the EXACT same version, and this project pins the framework exactly
+#    (no caret); the CLI line (build, cli, ssr) is the exception, see below.
 #    Ungrouped, Dependabot opened one PR per package, each bumping a single
 #    @angular/* to 20.3.28+ while the lockfile held 20.3.27 for the rest. Every
 #    one of those PRs failed `npm ci` with ERESOLVE before a test ever ran —
@@ -29,9 +30,10 @@ updates:
       # The framework proper: lockstep peer deps, exact pins. Never split.
       # Two release lines share this group: the framework (core, common,
       # compiler, compiler-cli, forms, router, platform-*) is pinned exactly
-      # at one version; the CLI line (build, cli, ssr) is a caret range one
-      # patch ahead, because @angular/build peers on @angular/ssr at its own
-      # version - pinning ssr alone breaks the next build bump (#854).
+      # at one version; the CLI line (build, cli, ssr) has its own version,
+      # which may differ, and stays a caret range because @angular/build
+      # peers on @angular/ssr at build's own version - pinning ssr alone
+      # breaks the next build bump (#854).
       # zone.js rides with it: each Angular major peer-requires a zone.js
       # minor (20 -> 0.15, 21+ -> 0.16), so a zone.js bump in the minor group
       # failed npm ci against the pinned core on PR #638 (2026-09-13).
