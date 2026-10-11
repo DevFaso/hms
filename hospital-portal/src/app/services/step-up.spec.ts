@@ -103,6 +103,14 @@ describe('step-up requests', () => {
       expect(isStepUpRefusal(scope)).toBeFalse();
     });
 
+    it('a 401 that says the actor cannot be resolved is a broken session, not a wrong code', () => {
+      const broken = new HttpErrorResponse({
+        status: 401,
+        error: { message: 'mfa_required: cannot resolve actor for suspend' },
+      });
+      expect(isStepUpRefusal(broken)).toBeFalse();
+    });
+
     it('a 401 naming MFA is one; an expired session is not', () => {
       const mfa = new HttpErrorResponse({
         status: 401,

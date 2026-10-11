@@ -204,14 +204,16 @@ describe('HospitalDetailComponent (MVP-c2-frontend)', () => {
     const cmp = setup();
     cmp.openDialog('schedule-purge');
     cmp.patchDialog('reason', 'GDPR retention expiry');
-    cmp.patchDialog('scheduledFor', '2026-06-01');
+    const picked = localDay(40);
+    cmp.patchDialog('scheduledFor', picked);
     cmp.submitDialog();
 
+    const [y, m, d] = picked.split('-').map(Number);
     expect(lifecycleService.schedulePurge).toHaveBeenCalledWith(
       'h-1',
       // Not `scheduledFor`: the backend ignores it and purges after its
       // 30-day default instead of the day the operator picked.
-      { reason: 'GDPR retention expiry', purgeScheduledFor: new Date(2026, 5, 1).toISOString() },
+      { reason: 'GDPR retention expiry', purgeScheduledFor: new Date(y, m - 1, d).toISOString() },
       '',
     );
     expect(cmp.state()).toBe('PENDING_PURGE');

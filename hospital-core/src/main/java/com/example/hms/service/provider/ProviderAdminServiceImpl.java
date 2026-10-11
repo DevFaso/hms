@@ -141,7 +141,9 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
         ProviderSeat seat = found.get();
         UUID memberId = parseId(userId);
         Optional<MemberRows> rows = manageableRows(seat, memberId);
-        if (rows.isEmpty()) {
+        // canDeactivate's rule: nothing active or invited here is nothing to
+        // retire, answered like any refusal (no 200, no audit row for a no-op).
+        if (rows.isEmpty() || !hasSomethingToRetire(rows.get().here())) {
             return Optional.empty();
         }
         // One scope read for the member's rows, all checked before any changes.
@@ -264,6 +266,16 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
      * list's {@code canDeactivate} / {@code canReinvite} come from this same
      * method, so the portal never offers what the server refuses.
      */
+    /** A row deactivate would change: active, or an invitation not confirmed yet. */
+    private static boolean hasSomethingToRetire(List<UserRoleHospitalAssignment> rows) {
+        return rows.stream().anyMatch(row -> Boolean.TRUE.equals(row.getActive()) || isPendingInvitation(row));
+    }
+
+    private static boolean isPendingInvitation(UserRoleHospitalAssignment row) {
+        return !Boolean.TRUE.equals(row.getActive())
+            && row.getConfirmationCode() != null && row.getConfirmationVerifiedAt() == null;
+    }
+
     private static boolean manageable(ProviderSeat seat, User member, List<UserRoleHospitalAssignment> everyRow) {
         return member != null
             && !member.isDeleted()
@@ -309,7 +321,7 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
             boolean rowActive = Boolean.TRUE.equals(row.getActive());
             active |= rowActive;
             anyInactive |= !rowActive;
-            pending |= !rowActive && row.getConfirmationCode() != null && row.getConfirmationVerifiedAt() == null;
+            pending |= isPendingInvitation(row);
         }
         return Optional.of(ProviderStaffMemberDTO.builder()
             .userId(holder.getId())

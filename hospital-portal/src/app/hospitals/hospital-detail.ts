@@ -120,7 +120,8 @@ export class HospitalDetailComponent implements OnInit {
 
   submitDialog(): void {
     const state = this.dialog();
-    if (!state) return;
+    // The button's rules again: a dialog left open past midnight, or Enter.
+    if (!state || state.busy || !this.isReasonValid(state) || !this.isPurgeDateValid(state)) return;
     this.dialog.set({ ...state, busy: true, errorKey: null });
 
     this.dispatchLifecycleAction(state)

@@ -354,6 +354,17 @@ class ProviderAdminServiceImplTest {
     }
 
     @Test
+    @DisplayName("deactivate with nothing active or invited here is refused like canDeactivate says: no no-op 200")
+    void deactivateANoOpIsRefused() {
+        admin();
+        User retired = user("retired");
+        member(retired, row(retired, "ROLE_PHARMACIST", pharmacy, false));
+
+        assertThat(service.deactivateStaff(retired.getId().toString())).isEmpty();
+        verify(assignmentService, never()).deactivateProviderStaffAssignments(any());
+    }
+
+    @Test
     @DisplayName("out of reach: elsewhere only, a peer admin, an admin anywhere, the caller, deleted, unknown, malformed")
     void outOfReach() {
         admin();

@@ -86,7 +86,12 @@ export function isStepUpRefusal(error: HttpErrorResponse): boolean {
   const body = error.error as { message?: unknown; code?: unknown; reason?: unknown } | null;
   const fields = body && typeof body === 'object' ? [body.message, body.code, body.reason] : [body];
   if (error.status === 401) {
-    return fields.some((part) => typeof part === 'string' && /mfa/i.test(part));
+    // "mfa_required: cannot resolve actor" is a broken session, not a code:
+    // it must go the interceptor's way (refresh, sign-out).
+    return fields.some(
+      (part) =>
+        typeof part === 'string' && /mfa/i.test(part) && !/cannot resolve actor/i.test(part),
+    );
   }
   if (error.status === 403 && body && typeof body === 'object') {
     return [body.reason, body.code].some(
