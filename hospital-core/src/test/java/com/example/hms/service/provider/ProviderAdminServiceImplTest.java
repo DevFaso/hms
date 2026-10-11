@@ -365,6 +365,31 @@ class ProviderAdminServiceImplTest {
     }
 
     @Test
+    @DisplayName("a row left inactive with a live code is something to retire: deactivate clears it")
+    void deactivateRetiresAWedgedRow() {
+        admin();
+        User wedged = user("wedged");
+        UserRoleHospitalAssignment row = row(wedged, "ROLE_PHARMACIST", pharmacy, false);
+        row.setConfirmationCode("123456");
+        row.setConfirmationVerifiedAt(java.time.LocalDateTime.now());
+        member(wedged, row);
+
+        assertThat(service.deactivateStaff(wedged.getId().toString())).isPresent();
+        verify(assignmentService).deactivateProviderStaffAssignments(List.of(row.getId()));
+    }
+
+    @Test
+    @DisplayName("re-invite with every row already active is a no-op: refused like canReinvite says")
+    void reinviteANoOpIsRefused() {
+        admin();
+        User live = user("live");
+        member(live, row(live, "ROLE_PHARMACIST", pharmacy, true));
+
+        assertThat(service.activateStaff(live.getId().toString())).isEmpty();
+        verify(assignmentService, never()).regenerateProviderStaffAssignmentCodes(any(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
     @DisplayName("out of reach: elsewhere only, a peer admin, an admin anywhere, the caller, deleted, unknown, malformed")
     void outOfReach() {
         admin();

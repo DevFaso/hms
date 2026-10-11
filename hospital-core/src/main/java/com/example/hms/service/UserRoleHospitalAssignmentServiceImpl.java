@@ -976,7 +976,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // outright, with nothing confirmed and no credentials handed out.
         if (assignment.getUser() != null && assignment.getUser().getDeactivatedByAdminAt() != null) {
             throw new BusinessException(messageSource.getMessage(
-                MSG_ACCOUNT_DISABLED_BY_ADMIN, null, DEFAULT_ACCOUNT_DISABLED_BY_ADMIN, Locale.getDefault()));
+                MSG_ACCOUNT_DISABLED_BY_ADMIN, null, DEFAULT_ACCOUNT_DISABLED_BY_ADMIN,
+                org.springframework.context.i18n.LocaleContextHolder.getLocale()));
         }
         // One kind of facility per user: two pending rows, one at a hospital
         // and one at a provider, cannot both come on.

@@ -169,7 +169,10 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
         // re-enables an account. An account that was never activated is
         // another matter: every admin-registered account starts inactive
         // (Option A) and the code IS its activation, so it may be re-invited.
-        if (rows.isEmpty() || !mayReinvite(rows.get().here().get(0).getUser())) {
+        // canReinvite's rule: an account that may be re-invited AND a row that
+        // is not active. All active is a no-op: refused (no 200, no audit row).
+        if (rows.isEmpty() || !mayReinvite(rows.get().here().get(0).getUser())
+                || rows.get().here().stream().allMatch(row -> Boolean.TRUE.equals(row.getActive()))) {
             return Optional.empty();
         }
         List<UUID> inactive = rows.get().here().stream()
@@ -260,15 +263,13 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
     }
 
     /**
-     * The one rule of who an admin may change here (deactivate, re-invite):
-     * not the caller, not a deleted account, and nobody holding an admin role
-     * anywhere, active or not, by assignment or by global role. The staff
-     * list's {@code canDeactivate} / {@code canReinvite} come from this same
-     * method, so the portal never offers what the server refuses.
+     * A row deactivate would change: retire()'s own rule (active, any code
+     * still on it, or a temporary password). A row left inactive with a live
+     * code can still switch the account on, so it is something to retire.
      */
-    /** A row deactivate would change: active, or an invitation not confirmed yet. */
     private static boolean hasSomethingToRetire(List<UserRoleHospitalAssignment> rows) {
-        return rows.stream().anyMatch(row -> Boolean.TRUE.equals(row.getActive()) || isPendingInvitation(row));
+        return rows.stream().anyMatch(row -> !Boolean.FALSE.equals(row.getActive())
+            || row.getConfirmationCode() != null || row.getTempPlainPassword() != null);
     }
 
     private static boolean isPendingInvitation(UserRoleHospitalAssignment row) {
@@ -276,6 +277,13 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
             && row.getConfirmationCode() != null && row.getConfirmationVerifiedAt() == null;
     }
 
+    /**
+     * The one rule of who an admin may change here (deactivate, re-invite):
+     * not the caller, not a deleted account, and nobody holding an admin role
+     * anywhere, active or not, by assignment or by global role. The staff
+     * list's {@code canDeactivate} / {@code canReinvite} come from this same
+     * method, so the portal never offers what the server refuses.
+     */
     private static boolean manageable(ProviderSeat seat, User member, List<UserRoleHospitalAssignment> everyRow) {
         return member != null
             && !member.isDeleted()
@@ -337,7 +345,7 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
             // The server's own rules (manageable, and activateStaff's): a
             // deactivate retires what is active or invited; a re-invite needs
             // an account that may be re-invited and a row that is not active.
-            .canDeactivate(manageable && (active || pending))
+            .canDeactivate(manageable && hasSomethingToRetire(rows))
             .canReinvite(manageable && mayReinvite(holder) && anyInactive)
             .build());
     }

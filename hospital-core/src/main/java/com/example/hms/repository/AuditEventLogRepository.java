@@ -245,6 +245,7 @@ public interface AuditEventLogRepository
     @Query(value = "SELECT new com.example.hms.payload.dto.provider.ProviderAuditEntryDTO("
            + "a.id, a.eventTimestamp, a.eventType, a.status, a.user.id, a.userName, "
            + "COALESCE("
+           + "CASE WHEN a.entityType <> 'USER_ROLE_ASSIGNMENT' THEN a.roleName ELSE NULL END, "
            + "(SELECT MIN(adminSeat.role.code) FROM UserRoleHospitalAssignment adminSeat "
            + "  WHERE adminSeat.user.id = a.user.id AND adminSeat.hospital.id = :facilityId "
            + "  AND adminSeat.active = true "

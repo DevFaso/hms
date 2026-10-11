@@ -35,6 +35,7 @@ import { DowntimeService } from '../services/downtime.service';
 import { NavOrderService } from './nav-order.service';
 import {
   NAV_GROUP_IDS,
+  PROVIDER_NAV,
   navGroupForRoute,
   navGroupTranslationKey,
   providerNavEntries,
@@ -278,6 +279,18 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     const provider = this.providerContext.settings();
     if (provider) {
       return providerNavEntries(provider.facilityType, provider.providerAdmin).map((entry) => ({
+        icon: entry.icon,
+        label: entry.label,
+        translationKey: entry.translationKey,
+        route: entry.route,
+      }));
+    }
+    // A provider user whose settings are being asked again or failed for now
+    // (pending, error): the provider home only, never the hospital nav,
+    // every entry of which would 404 under provider confinement.
+    const status = this.providerContext.status();
+    if (this.roleContext.providerUser() && (status === 'pending' || status === 'error')) {
+      return PROVIDER_NAV.filter((entry) => entry.route === '/provider').map((entry) => ({
         icon: entry.icon,
         label: entry.label,
         translationKey: entry.translationKey,

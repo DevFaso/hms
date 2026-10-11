@@ -1089,6 +1089,22 @@ describe('ShellComponent — inbox surfaces live in the topbar', () => {
     expect(broadcastSpy().connect).toHaveBeenCalledTimes(1);
   });
 
+  it('a provider user whose settings are being asked again keeps the provider home, never the hospital nav', () => {
+    const fixture = build(['ROLE_PHARMACIST'], 'ROLE_PHARMACIST', true);
+    const context = TestBed.inject(ProviderContextService) as unknown as {
+      settingsSignal: WritableSignal<ProviderSettings | null>;
+      statusSignal: WritableSignal<string>;
+    };
+    context.settingsSignal.set(null);
+    context.statusSignal.set('error');
+    const routes = (fixture.componentInstance as unknown as { baseNavItems: () => NavItem[] })
+      .baseNavItems()
+      .map((i) => i.route);
+
+    // Every hospital entry would 404 under provider confinement.
+    expect(routes).toEqual(['/provider']);
+  });
+
   it('never opens it for a provider user (the server refuses them the topic)', () => {
     const fixture = build(['ROLE_PHARMACIST'], 'ROLE_PHARMACIST', true);
     TestBed.inject(RoleContextService).markSessionResolved();

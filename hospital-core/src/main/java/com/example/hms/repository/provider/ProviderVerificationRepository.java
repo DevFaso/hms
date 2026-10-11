@@ -83,7 +83,9 @@ public interface ProviderVerificationRepository extends JpaRepository<ProviderVe
           AND (:status IS NULL OR v.status = :status)
           AND NOT EXISTS (
               SELECT 1 FROM ProviderVerification newer
-              WHERE newer.hospital = v.hospital AND newer.createdAt > v.createdAt)
+              WHERE newer.hospital = v.hospital
+                AND (newer.createdAt > v.createdAt
+                     OR (newer.createdAt = v.createdAt AND newer.id > v.id)))
         ORDER BY v.createdAt DESC, v.id DESC
         """,
         countQuery = """
@@ -92,7 +94,9 @@ public interface ProviderVerificationRepository extends JpaRepository<ProviderVe
           AND (:status IS NULL OR v.status = :status)
           AND NOT EXISTS (
               SELECT 1 FROM ProviderVerification newer
-              WHERE newer.hospital = v.hospital AND newer.createdAt > v.createdAt)
+              WHERE newer.hospital = v.hospital
+                AND (newer.createdAt > v.createdAt
+                     OR (newer.createdAt = v.createdAt AND newer.id > v.id)))
         """)
     Page<ProviderVerification> findLatestByFacilityTypes(@Param("types") Collection<FacilityType> types,
                                                          @Param("status") ProviderVerificationStatus status,
