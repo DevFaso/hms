@@ -63,6 +63,10 @@ updates:
           - "@fullcalendar/*"
           - "fullcalendar"
           - "temporal-polyfill"
+          # fullcalendar 7 pins these at its own version (and preact at a
+          # range): a lone bump of either would break the family's peer pins.
+          - "@full-ui/*"
+          - "preact"
       # Everything else, batched so a quiet week is one PR rather than twelve.
       portal-minor-and-patch:
         patterns:
@@ -74,6 +78,8 @@ updates:
           - "@fullcalendar/*"
           - "fullcalendar"
           - "temporal-polyfill"
+          - "@full-ui/*"
+          - "preact"
         update-types:
           - minor
           - patch

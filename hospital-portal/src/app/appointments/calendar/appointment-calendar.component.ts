@@ -116,7 +116,7 @@ const FULLCALENDAR_LOCALES: Partial<Record<SupportedLang, () => Promise<LocaleIn
       </p>
 
       @if (state() === 'error') {
-        <p class="cal-page__error" data-testid="appointment-calendar-error">
+        <p class="cal-page__error" role="alert" data-testid="appointment-calendar-error">
           {{ 'APPOINTMENT_CALENDAR.ERROR' | translate }}
           @if (calendarOptions()) {
             <button
@@ -153,6 +153,7 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
 
   private inFlight?: Subscription;
+  private destroyed = false;
   /** Set by a failed fetch: the next view change must fetch even inside a loaded range. */
   private retryOnNextView = false;
 
@@ -180,10 +181,16 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
     const locale: Promise<LocaleInput | null> = loadLocale
       ? loadLocale().catch(() => null)
       : Promise.resolve(null);
-    void locale.then((l) => this.calendarOptions.set(this.buildOptions(hid, l)));
+    void locale.then((l) => {
+      // The page may be gone by the time the locale chunk arrives.
+      if (!this.destroyed) {
+        this.calendarOptions.set(this.buildOptions(hid, l));
+      }
+    });
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
     this.inFlight?.unsubscribe();
   }
 
@@ -228,7 +235,9 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
       // counts a FAILED fetch as loaded: Week -> Day after an error would
       // never ask again. So after a failure, the next view change refetches.
       datesSet: () => {
-        if (this.retryOnNextView) {
+        // Only when FullCalendar did not just ask by itself (a range it had not
+        // loaded): refetching then would send the same request twice.
+        if (this.retryOnNextView && (!this.inFlight || this.inFlight.closed)) {
           this.retryOnNextView = false;
           this.calendar?.getApi().refetchEvents();
         }
@@ -260,7 +269,7 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
       .getRange(hid, from, to, this.selectedStaffId || undefined)
       .subscribe({
         next: (rows) => {
-          const events: EventInput[] = rows.map((r: AppointmentCalendarEvent) => ({
+          const events: EventInput[] = (rows ?? []).map((r: AppointmentCalendarEvent) => ({
             id: r.id,
             title: r.title,
             start: r.start,
