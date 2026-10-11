@@ -581,6 +581,11 @@ class MfaServiceTest {
         MfaService throttled = new MfaService(enrollmentRepository, backupCodeRepository, passwordEncoder,
                 auditEventLogService, new com.example.hms.security.InMemoryLoginAttemptStore());
         activeAuthenticator();
+        // A backup-code-shaped guess costs a BCrypt check, so the threads truly
+        // overlap: without the reservation, every one would pass the lock check
+        // before any failure was counted.
+        when(backupCodeRepository.findByUserIdAndUsedFalseAndPendingFalse(userId)).thenReturn(List.of(
+                MfaBackupCode.builder().userId(userId).codeHash(passwordEncoder.encode("99999999")).build()));
         int threads = 20;
         java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(threads);
         java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
@@ -592,7 +597,7 @@ class MfaServiceTest {
                 all.add(pool.submit(() -> {
                     go.await();
                     try {
-                        throttled.requireStepUp(userId, "ABCDEF", "test action", true);
+                        throttled.requireStepUp(userId, "00000000", "test action", true);
                     } catch (MfaStepUpRefusedException ex) {
                         reasons.add(ex.getReason());
                     }
