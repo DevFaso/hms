@@ -4847,6 +4847,13 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   (#852 round 6, V184 `security.users.deactivated_by_admin_at`).** An administrator's
   disable is recorded; while it is set neither a provider re-invite nor an invitation
   code switches the account back on.
+- **The "disabled by an administrator" rule lives in its callers, not on `User`.**
+  V184's marker is set or read by hand in three writers (user update, soft delete,
+  restore) and four readers (two verify-email paths, assignment confirmation, the
+  provider re-invite). Any other path that calls `setActive` (an import, a Keycloak
+  sync) skips it. Move it onto the entity (`disableByAdmin()`, `enableByAdmin()`,
+  `activateFromInvitation()`) and make `setActive` private to it (found in #852's
+  round-7 review). Open.
 - **Provider audit trail query scans platform-wide `USER_ROLE_ASSIGNMENT` rows.** The
   facility trail filters every role-assignment row of the platform through correlated
   seat subqueries, twice per page (content and count). Anchor it on the facility's

@@ -5,7 +5,7 @@ import { ActivatedRoute, provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
-import { HospitalDetailComponent } from './hospital-detail';
+import { HospitalDetailComponent, localDay } from './hospital-detail';
 import { HospitalLifecycleResponse } from '../services/hospital-lifecycle.model';
 import { HospitalLifecycleService } from '../services/hospital-lifecycle.service';
 import { HospitalResponse, HospitalService } from '../services/hospital.service';
@@ -162,6 +162,38 @@ describe('HospitalDetailComponent (MVP-c2-frontend)', () => {
 
     expect(lifecycleService.restore).toHaveBeenCalledWith('h-1');
     expect(cmp.state()).toBe('ACTIVE');
+  });
+
+  it('a cleared purge date sends no date (the server default), and never throws', () => {
+    hospitalService.getById.and.returnValue(of(fakeHospital()));
+    lifecycleService.get.and.returnValue(of(fakeLifecycle('ARCHIVED')));
+    lifecycleService.schedulePurge.and.returnValue(of(fakeLifecycle('PENDING_PURGE')));
+
+    const cmp = setup();
+    cmp.openDialog('schedule-purge');
+    cmp.patchDialog('reason', 'GDPR retention expiry');
+    cmp.patchDialog('scheduledFor', '');
+    cmp.submitDialog();
+
+    expect(lifecycleService.schedulePurge).toHaveBeenCalledWith(
+      'h-1',
+      { reason: 'GDPR retention expiry', purgeScheduledFor: undefined },
+      '',
+    );
+  });
+
+  it('today is not a purge day the dialog accepts (it starts at midnight, already past); tomorrow is', () => {
+    hospitalService.getById.and.returnValue(of(fakeHospital()));
+    lifecycleService.get.and.returnValue(of(fakeLifecycle('ARCHIVED')));
+    const cmp = setup();
+    cmp.openDialog('schedule-purge');
+    const state = () => cmp.dialog()!;
+
+    cmp.patchDialog('scheduledFor', localDay(0));
+    expect(cmp.isPurgeDateValid(state())).toBeFalse();
+    cmp.patchDialog('scheduledFor', localDay(1));
+    expect(cmp.isPurgeDateValid(state())).toBeTrue();
+    expect(cmp.minPurgeDate).toBe(localDay(1));
   });
 
   it('submitDialog(schedule-purge) sends the picked day as purgeScheduledFor, the field the backend reads', () => {

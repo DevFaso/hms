@@ -34,6 +34,7 @@ export interface HospitalLifecycleReason {
  * the server falls back to its 30-day default.
  */
 export interface HospitalLifecyclePurgeSchedule {
-  purgeScheduledFor: string;
+  /** Omitted: the server applies its 30-day default. */
+  purgeScheduledFor?: string;
   reason: string;
 }

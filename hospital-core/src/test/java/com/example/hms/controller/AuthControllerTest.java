@@ -968,4 +968,28 @@ class AuthControllerTest {
         verify(loginAttemptService, never()).resetAttempts(any());
         assertThat(user.isActive()).isFalse();
     }
+
+    @Test
+    void verifyEmail_anAccountAnAdministratorDisabled_isRefused_withNoSideEffects() throws Exception {
+        var user = new com.example.hms.model.User();
+        user.setId(java.util.UUID.randomUUID());
+        user.setUsername("apatient");
+        user.setEmail("apatient@example.com");
+        user.setActive(false);
+        user.setActivationToken("tok-1");
+        user.setActivationTokenExpiresAt(java.time.LocalDateTime.now().plusHours(1));
+        user.setDeactivatedByAdminAt(java.time.LocalDateTime.now());
+        when(userRepository.findByEmail("apatient@example.com")).thenReturn(java.util.Optional.of(user));
+
+        mockMvc.perform(get("/auth/verify-email")
+                        .param("email", "apatient@example.com")
+                        .param("token", "tok-1"))
+                .andExpect(status().isBadRequest());
+
+        // V184: an activation link never undoes an administrator's disable,
+        // nor clears the lockout or switches the account's assignments on.
+        assertThat(user.isActive()).isFalse();
+        verify(loginAttemptService, never()).resetAttempts(any());
+        verify(assignmentRepository, never()).findByUserId(any());
+    }
 }

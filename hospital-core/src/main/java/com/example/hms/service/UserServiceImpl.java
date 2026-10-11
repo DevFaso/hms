@@ -1356,11 +1356,14 @@ public class UserServiceImpl implements UserService {
             return false;
         }
 
-        // An account an administrator switched off stays off (V184): the
-        // token verifies the address, only an administrator re-enables.
-        if (user.getDeactivatedByAdminAt() == null) {
-            user.setActive(true);
+        // An account an administrator switched off stays off (V184): only an
+        // administrator re-enables it, never an activation link.
+        if (user.getDeactivatedByAdminAt() != null) {
+            log.warn("⚠️ Activation refused for {}: disabled by an administrator", email);
+            return false;
         }
+
+        user.setActive(true);
         user.setActivationToken(null);
         user.setActivationTokenExpiresAt(null);
         userRepository.save(user);

@@ -481,11 +481,15 @@ public class AuthController {
                     .body(new EmailVerificationResponseDTO("Email verification failed.", false));
         }
 
-        // 1. Activate the user account, unless an administrator switched it
-        //    off (V184): the token verifies the address, it never undoes a disable.
-        if (user.getDeactivatedByAdminAt() == null) {
-            user.setActive(true);
+        // An account an administrator switched off (V184) is not verified
+        // from below: no activation, no lockout reset, no assignment change.
+        if (user.getDeactivatedByAdminAt() != null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new EmailVerificationResponseDTO("Email verification failed.", false));
         }
+
+        // 1. Activate the user account
+        user.setActive(true);
         user.setActivationToken(null);
         user.setActivationTokenExpiresAt(null);
         userRepository.save(user);
