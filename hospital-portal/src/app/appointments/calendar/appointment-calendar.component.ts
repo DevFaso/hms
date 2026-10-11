@@ -3,6 +3,7 @@ import {
   Component,
   OnDestroy,
   OnInit,
+  ViewChild,
   ViewEncapsulation,
   inject,
   signal,
@@ -23,6 +24,8 @@ import {
   DateClickInfo,
   EventClickInfo,
   EventInput,
+  EventSourceFuncInfo,
+  FullCalendarComponent,
   FullCalendarModule,
 } from '@fullcalendar/angular';
 import dayGridPlugin from '@fullcalendar/angular/daygrid';
@@ -81,7 +84,7 @@ type State = 'idle' | 'loading' | 'ready' | 'error';
         <select
           id="provider-filter"
           [(ngModel)]="selectedStaffId"
-          (ngModelChange)="onProviderChange($event)"
+          (ngModelChange)="onProviderChange()"
           data-testid="appointment-calendar-provider"
         >
           <option [ngValue]="''">{{ 'APPOINTMENT_CALENDAR.ALL_PROVIDERS' | translate }}</option>
@@ -129,10 +132,10 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
 
   private readonly destroyed$ = new Subject<void>();
   private inFlight?: Subscription;
-  /** The range on screen, as last reported by datesSet. */
-  private visibleRange?: { from: string; to: string };
 
-  protected calendarOptions: CalendarOptions = {
+  @ViewChild(FullCalendarComponent) private calendar?: FullCalendarComponent;
+
+  protected readonly calendarOptions: CalendarOptions = {
     plugins: [classicThemePlugin, dayGridPlugin, timeGridPlugin, interactionPlugin],
     // Same source as LOCALE_ID: the language is fixed for the page's life
     // (switching it reloads), so reading it once here is enough.
@@ -151,12 +154,14 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
     slotMinTime: '06:00:00',
     slotMaxTime: '21:00:00',
     eventClick: (arg: EventClickInfo) => this.openAppointment(arg.event.id),
-    dateClick: (arg: DateClickInfo) => this.openCreateForSlot(arg.date),
-    datesSet: (arg) => {
-      this.visibleRange = { from: toIsoDate(arg.start), to: toIsoDate(addDays(arg.end, -1)) };
-      this.loadRange(this.visibleRange.from, this.visibleRange.to);
-    },
-    events: [],
+    dateClick: (arg: DateClickInfo) => this.openCreateForSlot(arg.date, arg.allDay),
+    // A function source: FullCalendar calls it for every range it needs
+    // (first render, navigation, view change) and again on refetchEvents(),
+    // so the provider filter goes through the same single path.
+    events: (info, success, failure) => this.fetchEvents(info, success, failure),
+    // Every failed fetch lands here and becomes the page's error state;
+    // handling it also stops FullCalendar logging "Unhandled event source error".
+    eventSourceFailure: () => this.state.set('error'),
   };
 
   ngOnInit(): void {
@@ -178,22 +183,28 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
     this.destroyed$.complete();
   }
 
-  protected onProviderChange(value: string): void {
-    // datesSet fires only when the visible dates change, never for a new
-    // filter, so reload the range on screen directly. Replacing `events`
-    // (here and in loadRange) does not fire datesSet, so this cannot loop.
-    this.selectedStaffId = value;
-    this.calendarOptions = { ...this.calendarOptions, events: [] };
-    if (this.visibleRange) {
-      this.loadRange(this.visibleRange.from, this.visibleRange.to);
-    }
+  protected onProviderChange(): void {
+    // [(ngModel)] has already stored the pick; the range on screen is
+    // unchanged, so FullCalendar would not fetch on its own.
+    this.calendar?.getApi().refetchEvents();
   }
 
-  private loadRange(from: string, to: string): void {
+  private fetchEvents(
+    info: EventSourceFuncInfo,
+    success: (events: EventInput[]) => void,
+    failure: (error: Error) => void,
+  ): void {
     const hid = this.hospitalId();
-    if (!hid) return;
+    if (!hid) {
+      success([]);
+      return;
+    }
+    // A newer fetch supersedes an older one (FullCalendar ignores the stale
+    // answer anyway); dropping the subscription also stops its side effects.
     this.inFlight?.unsubscribe();
     this.state.set('loading');
+    const from = toIsoDate(info.start);
+    const to = toIsoDate(addDays(info.end, -1)); // FullCalendar's end is exclusive
     this.inFlight = this.calendarSvc
       .getRange(hid, from, to, this.selectedStaffId || undefined)
       .subscribe({
@@ -211,10 +222,10 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
               resourceName: r.resourceName,
             },
           }));
-          this.calendarOptions = { ...this.calendarOptions, events };
           this.state.set('ready');
+          success(events);
         },
-        error: () => this.state.set('error'),
+        error: (err: unknown) => failure(err instanceof Error ? err : new Error(String(err))),
       });
   }
 
@@ -223,13 +234,12 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
     this.router.navigate(['/appointments', id]);
   }
 
-  private openCreateForSlot(date: Date): void {
-    this.router.navigate(['/appointments/new'], {
-      queryParams: {
-        date: toIsoDate(date),
-        time: toIsoTime(date),
-      },
-    });
+  private openCreateForSlot(date: Date, allDay: boolean): void {
+    // A month-view day cell is all-day: its Date is midnight, which is not a
+    // time anyone picked, so only the date goes along.
+    const queryParams: Record<string, string> = { date: toIsoDate(date) };
+    if (!allDay) queryParams['time'] = toIsoTime(date);
+    this.router.navigate(['/appointments/new'], { queryParams });
   }
 }
 

@@ -61,6 +61,11 @@ updates:
           - "*"
         exclude-patterns:
           - "zone.js"
+          # the fullcalendar group's members, like zone.js above: a family
+          # bump must never be split across two PRs
+          - "@fullcalendar/*"
+          - "fullcalendar"
+          - "temporal-polyfill"
         update-types:
           - minor
           - patch

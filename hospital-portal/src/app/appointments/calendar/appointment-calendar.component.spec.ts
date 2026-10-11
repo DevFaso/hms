@@ -53,10 +53,36 @@ describe('AppointmentCalendarComponent', () => {
     }).compileComponents();
   }
 
-  it('renders the calendar shell when a hospital is active', async () => {
-    await configure('h1');
+  /** configure → create → first render; returns the FullCalendar host. */
+  async function render(activeHospital: string | null = 'h1'): Promise<HTMLElement> {
+    await configure(activeHospital);
     fixture = TestBed.createComponent(AppointmentCalendarComponent);
     fixture.detectChanges();
+    return fixture.nativeElement.querySelector('[data-testid="appointment-calendar-grid"]');
+  }
+
+  /** What a colour value resolves to, measured from a probe in <body>. */
+  function resolve(value: string): string {
+    const probe = document.createElement('span');
+    probe.style.backgroundColor = value;
+    document.body.appendChild(probe);
+    const color = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return color;
+  }
+
+  interface ClickOptions {
+    eventClick?: (a: { event: { id: string } }) => void;
+    dateClick?: (a: { date: Date; allDay: boolean }) => void;
+  }
+
+  function options(): ClickOptions {
+    return (fixture.componentInstance as unknown as { calendarOptions: ClickOptions })
+      .calendarOptions;
+  }
+
+  it('renders the calendar shell when a hospital is active', async () => {
+    await render('h1');
 
     expect(
       fixture.nativeElement.querySelector('[data-testid="appointment-calendar"]'),
@@ -69,35 +95,27 @@ describe('AppointmentCalendarComponent', () => {
     // stylesheets and the theme plugin, the grid renders as unstyled markup.
     // This pins all three, and that the theme colours come from the design
     // tokens rather than FullCalendar's stock blue palette.
-    await configure('h1');
-    fixture = TestBed.createComponent(AppointmentCalendarComponent);
-    fixture.detectChanges();
-
-    const grid: HTMLElement = fixture.nativeElement.querySelector(
-      '[data-testid="appointment-calendar-grid"]',
-    );
+    const grid = await render('h1');
     const buttons = Array.from(grid.querySelectorAll('button'));
     expect(buttons.length).toBeGreaterThan(0);
 
-    // What a token resolves to, measured the same way as the calendar's own
-    // elements so the comparison is like for like. The probe sits directly
-    // in <body>, where FullCalendar portals its "+N more" popover: it only
-    // sees the --fc-classic-* tokens if they are not scoped to the page.
-    const resolve = (value: string): string => {
-      const probe = document.createElement('span');
-      probe.style.backgroundColor = value;
-      document.body.appendChild(probe);
-      const color = getComputedStyle(probe).backgroundColor;
-      probe.remove();
-      return color;
-    };
     const primary = resolve('var(--primary)');
     expect(primary).not.toBe('rgba(0, 0, 0, 0)');
 
     const backgrounds = buttons.map((b) => getComputedStyle(b).backgroundColor);
     expect(backgrounds).toContain(primary);
 
-    // Portaled content inherits the theme.
+    // Text on primary is plain white, not tied to a token the portal does
+    // not have: defining a --surface page colour later must not recolour it.
+    document.documentElement.style.setProperty('--surface', 'rgb(1, 2, 3)');
+    try {
+      expect(resolve('var(--fc-classic-button-foreground)')).toBe(resolve('#fff'));
+    } finally {
+      document.documentElement.style.removeProperty('--surface');
+    }
+
+    // The probe sits directly in <body>, where FullCalendar portals its
+    // "+N more" popover: it only sees the tokens if they are not page-scoped.
     expect(resolve('var(--fc-classic-button)')).toBe(primary);
 
     // The keyboard focus ring is the 5.10:1 primary, not the fills-only light.
@@ -114,6 +132,24 @@ describe('AppointmentCalendarComponent', () => {
     expect(getComputedStyle(select).borderTopColor).toBe(resolve('var(--text-secondary)'));
   });
 
+  it('marks the active view tab by more than a shade of the same fill', async () => {
+    // The theme tells the selected view apart only by --primary-dark against
+    // --primary (about 1.5:1); WCAG 1.4.11 wants 3:1 for a state indicator.
+    const grid = await render('h1');
+    const tabs = Array.from(grid.querySelectorAll<HTMLElement>('[role="tab"]'));
+    const selected = tabs.filter((t) => t.getAttribute('aria-selected') === 'true');
+    const others = tabs.filter((t) => t.getAttribute('aria-selected') !== 'true');
+    expect(selected.length).toBe(1);
+    expect(others.length).toBe(2);
+
+    const primary = resolve('var(--primary)');
+    expect(getComputedStyle(selected[0]).backgroundColor).toBe(resolve('#fff'));
+    expect(getComputedStyle(selected[0]).color).toBe(primary);
+    for (const t of others) {
+      expect(getComputedStyle(t).backgroundColor).toBe(primary);
+    }
+  });
+
   describe('renders in the portal language', () => {
     let savedLang: string | null;
     beforeEach(() => {
@@ -128,12 +164,7 @@ describe('AppointmentCalendarComponent', () => {
     async function toolbarText(lang: string): Promise<string[]> {
       localStorage.setItem('lang', lang);
       resetStoredLangForTests();
-      await configure('h1');
-      fixture = TestBed.createComponent(AppointmentCalendarComponent);
-      fixture.detectChanges();
-      const grid: HTMLElement = fixture.nativeElement.querySelector(
-        '[data-testid="appointment-calendar-grid"]',
-      );
+      const grid = await render('h1');
       // Visible text and accessible names (prev/next are icon-only).
       return Array.from(grid.querySelectorAll('button')).flatMap((b) => [
         (b.textContent ?? '').trim(),
@@ -163,9 +194,7 @@ describe('AppointmentCalendarComponent', () => {
   });
 
   it('shows the error state when no hospital is active', async () => {
-    await configure(null);
-    fixture = TestBed.createComponent(AppointmentCalendarComponent);
-    fixture.detectChanges();
+    await render(null);
 
     expect(
       fixture.nativeElement.querySelector('[data-testid="appointment-calendar-error"]'),
@@ -173,13 +202,10 @@ describe('AppointmentCalendarComponent', () => {
   });
 
   it('refetches the visible range for the new provider when the filter changes', async () => {
-    // FullCalendar fires datesSet only when the visible dates change, so the
-    // filter cannot wait for one: it must reload the range on screen itself.
-    await configure('h1');
-    fixture = TestBed.createComponent(AppointmentCalendarComponent);
-    fixture.detectChanges();
-    // The real calendar rendered and reported its range exactly once; feeding
-    // the events back in did not trigger another datesSet (no reload loop).
+    // The range on screen does not change, so FullCalendar would never fetch
+    // on its own: the filter must ask it to.
+    await render('h1');
+    // The real calendar fetched its range exactly once on render.
     expect(calendarSvc.getRange).toHaveBeenCalledTimes(1);
     const [hid, from, to, staff] = calendarSvc.getRange.calls.mostRecent().args;
     expect(hid).toBe('h1');
@@ -204,39 +230,43 @@ describe('AppointmentCalendarComponent', () => {
     await configure('h1');
     calendarSvc.getRange.and.returnValue(throwError(() => new Error('500')));
     fixture = TestBed.createComponent(AppointmentCalendarComponent);
+    fixture.detectChanges(); // the real calendar fetches its first range here
     fixture.detectChanges();
 
-    // Force a datesSet by invoking loadRange via the calendarOptions hook —
-    // simulate FullCalendar emitting the visible range.
-    const opts = (
-      fixture.componentInstance as unknown as {
-        calendarOptions: { datesSet?: (a: { start: Date; end: Date }) => void };
-      }
-    ).calendarOptions;
-    opts.datesSet?.({
-      start: new Date('2026-05-01T00:00:00'),
-      end: new Date('2026-05-08T00:00:00'),
-    });
-    fixture.detectChanges();
-
+    expect(calendarSvc.getRange).toHaveBeenCalledTimes(1);
     expect(
       fixture.nativeElement.querySelector('[data-testid="appointment-calendar-error"]'),
     ).not.toBeNull();
   });
 
   it('navigates to the appointment detail when an event is clicked', async () => {
-    await configure('h1');
-    fixture = TestBed.createComponent(AppointmentCalendarComponent);
-    fixture.detectChanges();
+    await render('h1');
     const navSpy = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
 
-    const opts = (
-      fixture.componentInstance as unknown as {
-        calendarOptions: { eventClick?: (a: { event: { id: string } }) => void };
-      }
-    ).calendarOptions;
-    opts.eventClick?.({ event: { id: 'a-1' } });
+    options().eventClick?.({ event: { id: 'a-1' } });
 
     expect(navSpy).toHaveBeenCalledWith(['/appointments', 'a-1']);
+  });
+
+  it('pre-fills the date and time from a time-grid slot', async () => {
+    await render('h1');
+    const navSpy = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+
+    options().dateClick?.({ date: new Date(2026, 9, 7, 10, 30), allDay: false });
+
+    expect(navSpy).toHaveBeenCalledWith(['/appointments/new'], {
+      queryParams: { date: '2026-10-07', time: '10:30' },
+    });
+  });
+
+  it('pre-fills only the date from an all-day (month) cell, never a midnight time', async () => {
+    await render('h1');
+    const navSpy = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+
+    options().dateClick?.({ date: new Date(2026, 9, 7), allDay: true });
+
+    expect(navSpy).toHaveBeenCalledWith(['/appointments/new'], {
+      queryParams: { date: '2026-10-07' },
+    });
   });
 });

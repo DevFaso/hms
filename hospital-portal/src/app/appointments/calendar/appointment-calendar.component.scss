@@ -22,6 +22,11 @@
  * which is why the page's own rules are scoped under its root element
  * (.cal-page, not the component tag: TestBed hosts the component in a plain
  * <div>, so a tag selector would leave the specs unthemed).
+ *
+ * Colours the portal has no token for are literals, named as such: white
+ * text on primary, and the error red. The color-mix() tints come after a
+ * plain fallback inside @supports, the way FullCalendar's own theme.css
+ * guards its color-mix() use.
  */
 @use 'fullcalendar/skeleton';
 @use 'fullcalendar/themes/classic/theme';
@@ -34,43 +39,68 @@
   --fc-classic-button-strong-border: var(--primary-dark);
   /* the keyboard focus ring: --primary-light is 2.52:1 (fills only) */
   --fc-classic-button-outline: var(--primary);
-  --fc-classic-button-foreground: var(--surface, #fff);
+  --fc-classic-button-foreground: #fff; /* white on primary: no token */
 
   /* primary (focus outlines, selection) */
   --fc-classic-primary: var(--primary);
-  --fc-classic-primary-foreground: var(--surface, #fff);
+  --fc-classic-primary-foreground: #fff;
 
   /* calendar content */
   --fc-classic-event: var(--primary);
-  --fc-classic-event-contrast: var(--surface, #fff);
+  --fc-classic-event-contrast: #fff;
   --fc-classic-background-event: var(--primary-light);
   --fc-classic-background-event-opacity: 15%;
   --fc-classic-background-event-foreground-opacity: 50%;
-  /* selection/drop highlight is painted over the grid: keep it translucent */
-  --fc-classic-highlight: color-mix(in srgb, var(--primary-tint) 60%, transparent);
+  /* selection/drop highlight is painted over the grid: keep it translucent
+     (fallback = --primary-tint #ccebe4 at 60%) */
+  --fc-classic-highlight: rgba(204, 235, 228, 0.6);
   --fc-classic-today: var(--primary-soft);
-  --fc-classic-now: var(--danger, #b00020);
+  /* the now-line: styles.scss has no danger/error token; the page's own
+     error-text red */
+  --fc-classic-now: #b00020;
   --fc-classic-small-dot-width: 8px;
   --fc-classic-large-dot-width: 10px;
 
-  /* neutral backgrounds: tints of the body text colour */
-  --fc-classic-background: var(--surface, #fff);
-  --fc-classic-faint: color-mix(in srgb, var(--text-primary) 4%, transparent);
-  --fc-classic-muted: color-mix(in srgb, var(--text-primary) 8%, transparent);
-  --fc-classic-strong: color-mix(in srgb, var(--text-primary) 14%, transparent);
+  /* neutral backgrounds: tints of the body text colour
+     (fallbacks = --text-primary #1e293b at 4/8/14%) */
+  --fc-classic-background: #fff;
+  --fc-classic-faint: rgba(30, 41, 59, 0.04);
+  --fc-classic-muted: rgba(30, 41, 59, 0.08);
+  --fc-classic-strong: rgba(30, 41, 59, 0.14);
 
   /* neutral foregrounds (--text-secondary is 4.76:1 on white: AA) */
   --fc-classic-foreground: var(--text-primary);
   --fc-classic-faint-foreground: var(--text-secondary);
   --fc-classic-muted-foreground: var(--text-secondary);
 
-  /* neutral borders */
+  /* neutral borders (fallback = --border and --text-secondary half and half) */
   --fc-classic-border: var(--border);
-  --fc-classic-strong-border: color-mix(in srgb, var(--border), var(--text-secondary));
+  --fc-classic-strong-border: #a3aebe;
+}
+
+@supports (color: color-mix(in srgb, red, blue)) {
+  :root {
+    --fc-classic-highlight: color-mix(in srgb, var(--primary-tint) 60%, transparent);
+    --fc-classic-faint: color-mix(in srgb, var(--text-primary) 4%, transparent);
+    --fc-classic-muted: color-mix(in srgb, var(--text-primary) 8%, transparent);
+    --fc-classic-strong: color-mix(in srgb, var(--text-primary) 14%, transparent);
+    --fc-classic-strong-border: color-mix(in srgb, var(--border), var(--text-secondary));
+  }
 }
 
 .cal-page {
   padding: 1.5rem;
+
+  /* The theme marks the active view only by --primary-dark against --primary
+     (about 1.5:1). WCAG 1.4.11 asks 3:1 of a state indicator, so the active
+     tab inverts: white fill (5.10:1 against its primary neighbours) with
+     primary text and border. Selected by the ARIA state FullCalendar renders,
+     since its class names are hashed. */
+  [role='tab'][aria-selected='true'] {
+    background-color: #fff;
+    border-color: var(--primary);
+    color: var(--primary);
+  }
 
   &__header {
     display: flex;
@@ -101,6 +131,6 @@
   }
 
   &__error {
-    color: var(--danger, #b00020);
+    color: #b00020; /* no danger/error token in styles.scss */
   }
 }
