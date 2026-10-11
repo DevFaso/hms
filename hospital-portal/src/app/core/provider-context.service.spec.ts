@@ -238,6 +238,26 @@ describe('ProviderContextService', () => {
     expect(context.settings()?.facilityId).toBe('f-2');
   });
 
+  it('a non-provider answer in between forgets the older request: going back asks afresh, never joins it', () => {
+    const stale = new Subject<ProviderSettings>();
+    answer = () => (calls === 1 ? stale : of(settingsFixture()));
+    const context = setup();
+    context.load().subscribe();
+    expect(calls).toBe(1);
+
+    providerUser = false; // a re-bootstrap says non-provider: another key
+    expect(value(context)).toBeNull();
+
+    providerUser = true; // and back: the old request must not be joined
+    expect(value(context)?.facilityId).toBe('f-1');
+    expect(calls).toBe(2);
+    expect(context.status()).toBe('provider');
+
+    stale.next(settingsFixture({ facilityId: 'stale' }));
+    stale.complete();
+    expect(context.settings()?.facilityId).toBe('f-1');
+  });
+
   it('reportUnavailable() shows the retry state and caches nothing', () => {
     const context = setup();
     value(context);

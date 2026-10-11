@@ -52,6 +52,18 @@ describe('ProviderFormComponent', () => {
     expect(service.create).not.toHaveBeenCalled();
   });
 
+  it('a second click while saving shows no error and sends nothing more', () => {
+    const { cmp } = setup(null);
+    cmp.code.set('lab-1');
+    cmp.evidence.set(evidenceOf(providerFixture()));
+    cmp.saving.set(true);
+
+    cmp.submit();
+
+    expect(cmp.errorKey()).toBeNull();
+    expect(service.create).not.toHaveBeenCalled();
+  });
+
   it('creates with the type, code and both evidence layers, then opens the new facility', () => {
     const { cmp } = setup(null);
     cmp.facilityType.set('LABORATORY');

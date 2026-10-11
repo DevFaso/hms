@@ -1089,6 +1089,21 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("V184: an edit that echoes active=false on a pending invitee marks nothing")
+        void echoingInactiveOnAPendingInvitee_isNotADisable() {
+            stubHappyPath();
+            user.setActive(false);
+            UpdateUserRequestDTO echo = new UpdateUserRequestDTO();
+            echo.setActive(false);
+            echo.setPhoneNumber("+22670999999");
+
+            userService.updateUser(userId, echo);
+
+            // Only a real active -> inactive change is an administrator's disable.
+            assertThat(user.getDeactivatedByAdminAt()).isNull();
+        }
+
+        @Test
         @DisplayName("V184: re-enabling clears the administrator's disable; echoing active=true does not")
         void reenableClearsTheDisable_anEchoDoesNot() {
             stubHappyPath();

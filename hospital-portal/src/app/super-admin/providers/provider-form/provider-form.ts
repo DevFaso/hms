@@ -99,6 +99,8 @@ export class ProviderFormComponent implements OnInit {
   }
 
   submit(): void {
+    // A second click while saving: nothing to say, the first is on its way.
+    if (this.saving()) return;
     if (!this.canSubmit()) {
       this.errorKey.set('PROVIDER.FORM.REQUIRED_FIELDS');
       this.errorText.set(null);

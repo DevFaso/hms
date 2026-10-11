@@ -1160,12 +1160,14 @@ public class UserServiceImpl implements UserService {
         if (dto.getActive() != null) {
             reactivated = Boolean.TRUE.equals(dto.getActive())
                     && !Boolean.TRUE.equals(user.isActive());
+            boolean disabled = Boolean.FALSE.equals(dto.getActive()) && user.isActive();
             user.setActive(dto.getActive());
-            // Record a disable (keeping the first one's time) and clear it only
-            // on a real re-enable, so a provider re-invite or an invitation
-            // code can never switch the account back on from below. An edit
-            // that merely echoes active=true changes nothing.
-            if (Boolean.FALSE.equals(dto.getActive()) && user.getDeactivatedByAdminAt() == null) {
+            // Record a real disable (active -> inactive) and clear it only on
+            // a real re-enable, so a provider re-invite or an invitation code
+            // can never switch the account back on from below. An edit that
+            // merely echoes the current state (active=false on a pending
+            // invitee, active=true on a live account) changes nothing.
+            if (disabled && user.getDeactivatedByAdminAt() == null) {
                 user.setDeactivatedByAdminAt(LocalDateTime.now());
             } else if (reactivated) {
                 user.setDeactivatedByAdminAt(null);

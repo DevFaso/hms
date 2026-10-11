@@ -103,6 +103,10 @@ export class ProviderContextService {
     this.settingsSignal.set(null);
     this.statusSignal.set('pending');
     if (!this.roleContext.providerUser()) {
+      // Any request still in flight belongs to an older key: forget it, so a
+      // later load() for that key asks afresh instead of joining it.
+      this.inFlight = null;
+      this.inFlightFor = null;
       this.answer(key, null, ++this.generation);
       return of(null);
     }

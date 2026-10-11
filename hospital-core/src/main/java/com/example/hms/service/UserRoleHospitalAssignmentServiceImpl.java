@@ -126,6 +126,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final String MSG_ASSIGNMENT_NOT_FOUND_BY_CODE = "assignment.notfound.bycode";
     private static final String DEFAULT_CONFIRMATION_CODE_INVALID = "Invalid confirmation code.";
     private static final String DEFAULT_ASSIGNMENT_ALREADY_CONFIRMED = "This assignment has already been confirmed.";
+    private static final String MSG_ACCOUNT_DISABLED_BY_ADMIN = "assignment.confirmation.accountDisabled";
+    private static final String DEFAULT_ACCOUNT_DISABLED_BY_ADMIN =
+        "This account was disabled by an administrator. Ask them to re-enable it.";
     private static final String DEFAULT_CONFIRMATION_ACTOR_MISMATCH = "Only the assigner who created this assignment can confirm it.";
     private static final String DEFAULT_ACTOR_RESOLUTION_FAILURE = "Unable to resolve the current user.";
     private static final String DEFAULT_HOLDER_CHANGE =
@@ -968,6 +971,13 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     }
 
     private void activateVerifiedAssignment(UserRoleHospitalAssignment assignment, String source) {
+        // An account an administrator switched off (V184) is not turned on
+        // from below, and neither is its assignment: the code is refused
+        // outright, with nothing confirmed and no credentials handed out.
+        if (assignment.getUser() != null && assignment.getUser().getDeactivatedByAdminAt() != null) {
+            throw new BusinessException(messageSource.getMessage(
+                MSG_ACCOUNT_DISABLED_BY_ADMIN, null, DEFAULT_ACCOUNT_DISABLED_BY_ADMIN, Locale.getDefault()));
+        }
         // One kind of facility per user: two pending rows, one at a hospital
         // and one at a provider, cannot both come on.
         facilityAssignmentGuard.requireSingleFacilityKind(assignment.getUser(), getRoleCode(assignment.getRole()),
@@ -985,12 +995,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
         // Activate the user account if it was pending assignment verification
         User user = assignment.getUser();
-        if (user != null && user.getDeactivatedByAdminAt() != null) {
-            // An administrator switched this account off: the code confirms
-            // the assignment, but only an administrator turns the account on.
-            log.info("Assignment '{}' confirmed; user {} stays inactive (disabled by an administrator).",
-                assignment.getId(), user.getId());
-        } else if (user != null && !Boolean.TRUE.equals(user.isActive())) {
+        if (user != null && !Boolean.TRUE.equals(user.isActive())) {
             user.setActive(true);
             userRepository.save(user);
             // Clear any login lockout accumulated while the account was

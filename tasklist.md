@@ -4845,8 +4845,16 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   `followFacility` (found in #852's round-4 review). Open.
 - **~~External providers: an account has no "disabled by an administrator" flag~~ Done
   (#852 round 6, V184 `security.users.deactivated_by_admin_at`).** An administrator's
-  disable is recorded; while it is set neither a provider re-invite nor an invitation
-  code switches the account back on.
+  disable (a real active -> inactive change, or a soft delete) is recorded; while it is
+  set neither a provider re-invite, an invitation code nor an activation link switches
+  the account back on. Limit, on purpose: no backfill, because a disable made before
+  V184 cannot be told from a revoked invitation (both clear the code). Before the prod
+  sync, list inactive provider-staff accounts that never signed in and check none was
+  disabled by an administrator.
+- **Provider staff list: one `userRoles` load per member.** `toMember`'s `manageable()`
+  check walks each member's global roles, which the batch staff queries do not fetch:
+  N+1 on every staff-page load. Fetch `user.userRoles.role` in the batch, or pass the
+  resolved roles in (found in #852's round-8 review). Open.
 - **The "disabled by an administrator" rule lives in its callers, not on `User`.**
   V184's marker is set or read by hand in three writers (user update, soft delete,
   restore) and four readers (two verify-email paths, assignment confirmation, the
