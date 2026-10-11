@@ -373,7 +373,7 @@ class MfaChallengeTokenScopeIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("two concurrent refreshes with one refresh token yield exactly one new pair")
+    @DisplayName("two concurrent refreshes with one refresh token yield exactly one new pair; the other is superseded (409), never a sign-out")
     void concurrentRefreshesOfOneTokenYieldOnePair() throws Exception {
         String refreshToken = verified(enrolled, enrolledSecret).get("refreshToken").asString();
         java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
@@ -389,7 +389,7 @@ class MfaChallengeTokenScopeIT extends BaseIT {
             List<Integer> statuses = List.of(first.get(30, java.util.concurrent.TimeUnit.SECONDS),
                 second.get(30, java.util.concurrent.TimeUnit.SECONDS));
 
-            assertThat(statuses).containsExactlyInAnyOrder(200, 401);
+            assertThat(statuses).containsExactlyInAnyOrder(200, 409);
         } finally {
             pool.shutdownNow();
         }
@@ -409,7 +409,9 @@ class MfaChallengeTokenScopeIT extends BaseIT {
             // stays open while the replacement is confirmed elsewhere.
             new org.springframework.transaction.support.TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
                 try {
-                    assertThat(mfaService.verifyCode(enrolled.getId(), code(enrolledSecret))).isTrue();
+                    var step = mfaService.currentTotpStep(enrolled.getId(), code(enrolledSecret));
+                    assertThat(step).isPresent();
+                    assertThat(mfaService.claimTotpStep(enrolled.getId(), step.getAsLong())).isTrue();
                     var swap = pool.submit(() -> {
                         // Retry while the stamp holds the row (H2 times a lock
                         // wait out instead of waiting like Postgres).
@@ -646,9 +648,29 @@ class MfaChallengeTokenScopeIT extends BaseIT {
             .andReturn();
     }
 
+    /** The last TOTP time-step handed out per secret. */
+    private static final java.util.Map<String, Long> ISSUED_STEPS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * A valid code the server has not accepted yet. A code is accepted once
+     * (its time-step is claimed), so each call moves to a later step inside
+     * the ±1-step window, waiting for the next 30 s window when all three are
+     * used. Callers that need the SAME code twice keep the string.
+     */
     private static String code(String secret) throws Exception {
-        return new DefaultCodeGenerator(HashingAlgorithm.SHA1, 6)
-            .generate(secret, System.currentTimeMillis() / 1000 / 30);
+        long step;
+        synchronized (ISSUED_STEPS) {
+            step = Math.max(currentStep() - 1, ISSUED_STEPS.getOrDefault(secret, Long.MIN_VALUE) + 1);
+            while (step > currentStep() + 1) {
+                Thread.sleep(250);
+            }
+            ISSUED_STEPS.put(secret, step);
+        }
+        return new DefaultCodeGenerator(HashingAlgorithm.SHA1, 6).generate(secret, step);
+    }
+
+    private static long currentStep() {
+        return System.currentTimeMillis() / 1000 / 30;
     }
 
     private String secretOf(User user) {

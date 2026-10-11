@@ -661,6 +661,19 @@ public class AuthController {
     }
 
     /**
+     * How long after a rotation another use of the old refresh token counts as
+     * a sibling tab that lost the race (409, retry) rather than a replay (401).
+     */
+    static final long REFRESH_ROTATION_GRACE_MS = 30_000L;
+
+    /** Another tab rotated this refresh token a moment ago: no tokens, retry with the new cookie. */
+    private ResponseEntity<Object> refreshSuperseded(String jti) {
+        log.info("🔄 [REFRESH] Superseded — refresh token jti={} was just rotated by a concurrent refresh", jti);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new MessageResponse("refresh.superseded"));
+    }
+
+    /**
      * Silent token refresh.
      *
      * <p>Accepts a still-valid refresh token and issues a new short-lived access token.
@@ -680,6 +693,7 @@ public class AuthController {
         description = "Exchange a valid refresh token for a new access token + rotated refresh token.")
     @ApiResponse(responseCode = "200", description = "Tokens refreshed")
     @ApiResponse(responseCode = "401", description = "Refresh token missing, invalid, or expired")
+    @ApiResponse(responseCode = "409", description = "Superseded: another tab just rotated this refresh token; retry")
     public ResponseEntity<Object> refreshToken(
             @RequestBody(required = false) java.util.Map<String, String> body,
             HttpServletRequest request,
@@ -727,9 +741,15 @@ public class AuthController {
         }
 
         // Replay detection: an already-used refresh token is refused here; the
-        // atomic claim below settles a race between two concurrent uses.
+        // atomic claim below settles a race between two concurrent uses. Used
+        // a moment ago by another tab of the same browser: superseded (409),
+        // not replayed, so that tab retries with the rotated cookie instead
+        // of signing every tab out.
         String refreshJti = jwtTokenProvider.getJtiFromToken(refreshToken);
         if (refreshJti != null && tokenBlacklistService.isBlacklisted(refreshJti)) {
+            if (tokenBlacklistService.wasRecentlyRotated(refreshJti)) {
+                return refreshSuperseded(refreshJti);
+            }
             log.warn("🔄 [REFRESH] Replay detected — refresh token jti={} already used", refreshJti);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse("Refresh token has already been used. Please log in again."));
@@ -791,13 +811,17 @@ public class AuthController {
         }
 
         // Spend the refresh token atomically BEFORE minting: of two concurrent
-        // refreshes with one token, exactly one gets a new pair.
-        if (refreshJti == null || !tokenBlacklistService.claim(refreshJti,
-                jwtTokenProvider.getExpiration(refreshToken).getTime())) {
-            log.warn("🔄 [REFRESH] Replay detected — refresh token jti={} already used", refreshJti);
+        // refreshes with one token, exactly one gets a new pair. The other is
+        // superseded (409): it gets no tokens and retries with the cookie the
+        // winner rotated, so two tabs refreshing at once stay signed in.
+        if (refreshJti == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("Refresh token has already been used. Please log in again."));
+                    .body(new MessageResponse("Refresh token is invalid or has expired. Please log in again."));
         }
+        if (!tokenBlacklistService.claim(refreshJti, jwtTokenProvider.getExpiration(refreshToken).getTime())) {
+            return refreshSuperseded(refreshJti);
+        }
+        tokenBlacklistService.markRotated(refreshJti, REFRESH_ROTATION_GRACE_MS);
 
         var descriptor = new com.example.hms.security.TokenUserDescriptor(user.getId(), username, roles);
         String newAccessToken  = jwtTokenProvider.generateAccessToken(descriptor);

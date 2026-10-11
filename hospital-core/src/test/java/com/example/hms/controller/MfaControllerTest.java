@@ -26,9 +26,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -174,12 +176,24 @@ class MfaControllerTest {
 
     // ── Verify Login (MFA challenge) ──
 
+    /** The user's wrong-code budget is not exhausted unless a test says so. */
+    @BeforeEach
+    void codeAttemptsAvailable() {
+        when(mfaService.reserveCodeAttempt(any())).thenReturn(true);
+    }
+
+    /** A current TOTP code of time-step 42, which this sign-in can still claim. */
+    private void currentTotp(String code) {
+        when(mfaService.currentTotpStep(USER_ID, code)).thenReturn(OptionalLong.of(42L));
+        when(mfaService.claimTotpStep(USER_ID, 42L)).thenReturn(true);
+    }
+
     @Test
     void verifyMfa_validCode_returnsFullJwt() throws Exception {
         when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
         claimable("mfa-tok-123");
         when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
-        when(mfaService.isCurrentTotp(USER_ID, "654321")).thenReturn(true);
+        currentTotp("654321");
         when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID)).thenReturn(List.of());
         when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class))).thenReturn("access-jwt");
         when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class))).thenReturn("refresh-jwt");
@@ -208,7 +222,6 @@ class MfaControllerTest {
     void verifyMfa_invalidCode_returns401() throws Exception {
         when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
         when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
-        when(mfaService.isCurrentTotp(USER_ID, "999999")).thenReturn(false);
         when(mfaService.matchingBackupCode(USER_ID, "999999")).thenReturn(Optional.empty());
 
         mockMvc.perform(post("/auth/mfa/verify")
@@ -224,7 +237,6 @@ class MfaControllerTest {
         claimable("mfa-tok-123");
         when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
         UUID backupId = UUID.randomUUID();
-        when(mfaService.isCurrentTotp(USER_ID, "BACKUP01")).thenReturn(false);
         when(mfaService.matchingBackupCode(USER_ID, "BACKUP01")).thenReturn(Optional.of(backupId));
         when(mfaService.spendBackupCode(backupId)).thenReturn(true);
         when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID)).thenReturn(List.of());
@@ -283,7 +295,7 @@ class MfaControllerTest {
         when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
         java.util.Date exp = claimable("mfa-tok-123");
         when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
-        when(mfaService.isCurrentTotp(USER_ID, "654321")).thenReturn(true);
+        currentTotp("654321");
         when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID)).thenReturn(List.of());
         when(jwtTokenProvider.resolvePreferredRole(any())).thenReturn("ROLE_DOCTOR");
 
@@ -316,7 +328,7 @@ class MfaControllerTest {
         when(jwtTokenProvider.getExpiration("mfa-tok-123")).thenReturn(exp);
         when(tokenBlacklistService.claim("jti-1", exp.getTime())).thenReturn(false);
         when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
-        when(mfaService.isCurrentTotp(USER_ID, "654321")).thenReturn(true);
+        currentTotp("654321");
 
         mockMvc.perform(post("/auth/mfa/verify")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -342,7 +354,7 @@ class MfaControllerTest {
                 .andExpect(status().isUnauthorized());
 
         verify(mfaService, never()).spendBackupCode(any());
-        verify(mfaService, never()).recordTotpUse(any());
+        verify(mfaService, never()).claimTotpStep(any(), anyLong());
     }
 
     @Test
@@ -357,7 +369,71 @@ class MfaControllerTest {
         mockMvc.perform(post("/auth/mfa/verify")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"12345678\"}"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                // The challenge is spent: "invalid code" would invite a retry that cannot work.
+                .andExpect(jsonPath("$.message").value("That code was just used. Sign in again."));
         verify(jwtTokenProvider, never()).generateAccessToken(any(TokenUserDescriptor.class));
+    }
+
+    // ── Round 4: replay and the per-user budget ──
+
+    @Test
+    void verifyMfa_aTotpCodeAlreadyAccepted_signsNobodyIn() throws Exception {
+        when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
+        claimable("mfa-tok-123");
+        when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
+        when(mfaService.currentTotpStep(USER_ID, "654321")).thenReturn(OptionalLong.of(42L));
+        when(mfaService.claimTotpStep(USER_ID, 42L)).thenReturn(false);
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"654321\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("That code was just used. Sign in again."));
+        verify(jwtTokenProvider, never()).generateAccessToken(any(TokenUserDescriptor.class));
+    }
+
+    @Test
+    void verifyMfa_theUsersWrongCodeBudgetSpent_429_beforeAnyCodeIsChecked() throws Exception {
+        when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
+        when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
+        when(mfaService.reserveCodeAttempt(USER_ID)).thenReturn(false);
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"654321\"}"))
+                .andExpect(status().isTooManyRequests());
+        verify(mfaService, never()).currentTotpStep(any(), any());
+        verify(mfaService, never()).matchingBackupCode(any(), any());
+        verify(tokenBlacklistService, never()).claim(any(), anyLong());
+    }
+
+    @Test
+    void verifyMfa_success_clearsTheWrongCodeCount() throws Exception {
+        when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
+        claimable("mfa-tok-123");
+        when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
+        currentTotp("654321");
+        when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID)).thenReturn(List.of());
+        when(jwtTokenProvider.resolvePreferredRole(any())).thenReturn("ROLE_DOCTOR");
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"654321\"}"))
+                .andExpect(status().isOk());
+        verify(mfaService).clearCodeAttempts(USER_ID);
+    }
+
+    @Test
+    void verifyMfa_aWrongCode_keepsTheWrongCodeCount() throws Exception {
+        when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
+        when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"999999\"}"))
+                .andExpect(status().isUnauthorized());
+        verify(mfaService).reserveCodeAttempt(USER_ID);
+        verify(mfaService, never()).clearCodeAttempts(any());
     }
 }

@@ -124,4 +124,16 @@ class GlobalSessionRevocationServiceTest {
         assertThat(service.revokes(java.util.Date.from(takenAt.plusSeconds(1)))).isFalse();
         assertThat(service.revokes(null)).isFalse();
     }
+
+    @Test
+    @DisplayName("revokes: a token from the same whole second as the revocation survives")
+    void aTokenFromTheSameSecondAsTheRevocation_isNotRevoked() {
+        java.time.Instant takenAt = service.revokeAll(java.util.UUID.randomUUID(), "admin", "test");
+        java.time.Instant sameSecond = takenAt.truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+
+        // A JWT iat is whole seconds: a token minted just after the
+        // revocation, in the same second, carries this iat.
+        assertThat(service.revokes(java.util.Date.from(sameSecond))).isFalse();
+        assertThat(service.revokes(java.util.Date.from(sameSecond.minusSeconds(1)))).isTrue();
+    }
 }

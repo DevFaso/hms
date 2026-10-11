@@ -816,9 +816,68 @@ class AuthControllerTest {
         mockMvc.perform(post("/auth/token/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"old.refresh.token\"}"))
+                // A sibling tab won the race: superseded, retry with the
+                // rotated cookie, never "sign in again" (which signs every
+                // tab out).
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("refresh.superseded"));
+        verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class));
+        verify(tokenBlacklistService, never()).markRotated(any(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void refreshToken_aTokenAnotherTabJustRotated_isSuperseded_409_mintsNothing() throws Exception {
+        when(jwtTokenProvider.isRefreshToken("old.refresh.token")).thenReturn(true);
+        when(jwtTokenProvider.getJtiFromToken("old.refresh.token")).thenReturn("jti-old");
+        when(tokenBlacklistService.isBlacklisted("jti-old")).thenReturn(true);
+        when(tokenBlacklistService.wasRecentlyRotated("jti-old")).thenReturn(true);
+
+        mockMvc.perform(post("/auth/token/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"old.refresh.token\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("refresh.superseded"));
+        verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class));
+    }
+
+    @Test
+    void refreshToken_aTokenUsedLongAgo_isAReplay_401() throws Exception {
+        when(jwtTokenProvider.isRefreshToken("old.refresh.token")).thenReturn(true);
+        when(jwtTokenProvider.getJtiFromToken("old.refresh.token")).thenReturn("jti-old");
+        when(tokenBlacklistService.isBlacklisted("jti-old")).thenReturn(true);
+        when(tokenBlacklistService.wasRecentlyRotated("jti-old")).thenReturn(false);
+
+        mockMvc.perform(post("/auth/token/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"old.refresh.token\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.message").value("Refresh token has already been used. Please log in again."));
-        verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class));
+    }
+
+    @Test
+    void refreshToken_aSuccessfulRotation_opensTheGraceWindowForSiblingTabs() throws Exception {
+        com.example.hms.model.User activeUser = com.example.hms.model.User.builder()
+                .username("doctor@example.com").isActive(true).build();
+        org.springframework.test.util.ReflectionTestUtils.setField(activeUser, "id", java.util.UUID.randomUUID());
+        when(jwtTokenProvider.isRefreshToken("old.refresh.token")).thenReturn(true);
+        claimableRefresh("old.refresh.token");
+        when(jwtTokenProvider.getUsernameFromJWT("old.refresh.token")).thenReturn("doctor@example.com");
+        when(userRepository.findByUsername("doctor@example.com")).thenReturn(java.util.Optional.of(activeUser));
+        when(jwtTokenProvider.generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class)))
+                .thenReturn("new.access.token");
+        when(jwtTokenProvider.generateRefreshToken(any(
+                org.springframework.security.authentication.UsernamePasswordAuthenticationToken.class)))
+                .thenReturn("new.refresh.token");
+        when(jwtTokenProvider.getExpiration("new.access.token"))
+                .thenReturn(new java.util.Date(System.currentTimeMillis() + 60_000L));
+        when(jwtTokenProvider.getExpiration("new.refresh.token"))
+                .thenReturn(new java.util.Date(System.currentTimeMillis() + 3_600_000L));
+
+        mockMvc.perform(post("/auth/token/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"old.refresh.token\"}"))
+                .andExpect(status().isOk());
+        verify(tokenBlacklistService).markRotated("jti-old.refresh.token", AuthController.REFRESH_ROTATION_GRACE_MS);
     }
 
     @Test

@@ -30,6 +30,8 @@ public class InMemoryTokenBlacklistService implements TokenBlacklistService {
 
     /** jti → expiration epoch-millis */
     private final Map<String, Long> blacklistedTokens = new ConcurrentHashMap<>();
+    /** jti → end of its rotation grace, epoch-millis */
+    private final Map<String, Long> recentlyRotated = new ConcurrentHashMap<>();
 
     @Override
     public void blacklist(String jti, long expirationMs) {
@@ -50,6 +52,23 @@ public class InMemoryTokenBlacklistService implements TokenBlacklistService {
     }
 
     @Override
+    public void markRotated(String jti, long graceMs) {
+        if (jti == null || jti.isBlank() || graceMs <= 0) {
+            return;
+        }
+        recentlyRotated.put(jti, System.currentTimeMillis() + graceMs);
+    }
+
+    @Override
+    public boolean wasRecentlyRotated(String jti) {
+        if (jti == null || jti.isBlank()) {
+            return false;
+        }
+        Long until = recentlyRotated.get(jti);
+        return until != null && until > System.currentTimeMillis();
+    }
+
+    @Override
     public boolean isBlacklisted(String jti) {
         if (jti == null || jti.isBlank()) {
             return false;
@@ -66,6 +85,7 @@ public class InMemoryTokenBlacklistService implements TokenBlacklistService {
         long now = System.currentTimeMillis();
         int before = blacklistedTokens.size();
         blacklistedTokens.entrySet().removeIf(e -> e.getValue() <= now);
+        recentlyRotated.entrySet().removeIf(e -> e.getValue() <= now);
         int evicted = before - blacklistedTokens.size();
         if (evicted > 0) {
             log.info("[BLACKLIST] Evicted {} expired entries, {} remaining", evicted, blacklistedTokens.size());

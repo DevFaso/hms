@@ -24,6 +24,7 @@ import java.time.Duration;
 public class RedisTokenBlacklistService implements TokenBlacklistService {
 
     private static final String KEY_PREFIX = "hms:blacklist:jti:";
+    private static final String ROTATED_PREFIX = "hms:rotated:jti:";
 
     private final StringRedisTemplate redisTemplate;
 
@@ -58,6 +59,22 @@ public class RedisTokenBlacklistService implements TokenBlacklistService {
         }
         return Boolean.TRUE.equals(redisTemplate.opsForValue()
             .setIfAbsent(KEY_PREFIX + jti, Long.toString(expirationMs), Duration.ofMillis(ttlMs)));
+    }
+
+    @Override
+    public void markRotated(String jti, long graceMs) {
+        if (jti == null || jti.isBlank() || graceMs <= 0) {
+            return;
+        }
+        redisTemplate.opsForValue().set(ROTATED_PREFIX + jti, "1", Duration.ofMillis(graceMs));
+    }
+
+    @Override
+    public boolean wasRecentlyRotated(String jti) {
+        if (jti == null || jti.isBlank()) {
+            return false;
+        }
+        return Boolean.TRUE.equals(redisTemplate.hasKey(ROTATED_PREFIX + jti));
     }
 
     @Override

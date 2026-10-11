@@ -30,4 +30,16 @@ public interface TokenBlacklistService {
      * within its JVM, so a multi-instance deployment needs Redis.
      */
     boolean claim(String jti, long expirationMs);
+
+    /**
+     * Records that the refresh token {@code jti} was just rotated, for
+     * {@code graceMs}. Another tab of the same browser that refreshed with the
+     * same cookie a moment later is then told "superseded, retry" (409)
+     * instead of "replayed, sign in again" (401), which would sign out every
+     * tab: the browser already holds the rotated cookie.
+     */
+    void markRotated(String jti, long graceMs);
+
+    /** {@code jti} was rotated within its grace period ({@link #markRotated}). */
+    boolean wasRecentlyRotated(String jti);
 }

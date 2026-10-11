@@ -39,11 +39,16 @@ public interface UserMfaEnrollmentRepository extends JpaRepository<UserMfaEnroll
                                                       @Param("method") MfaMethodType method);
 
     /**
-     * Stamps one column, so a sign-in never writes back a secret it read
+     * Accepts a TOTP code's time-step once: sets {@code lastTotpStep} (and
+     * stamps {@code lastVerifiedAt}) only when the step is newer than the last
+     * accepted one, so a replayed or concurrently used code updates nothing
+     * (0). Targeted columns, so a sign-in never writes back a secret it read
      * before a replacement was confirmed (a full-entity save would).
      */
     @Modifying
-    @Query("update UserMfaEnrollment e set e.lastVerifiedAt = :at where e.user.id = :userId and e.method = :method")
-    int touchLastVerifiedAt(@Param("userId") UUID userId, @Param("method") MfaMethodType method,
-                            @Param("at") LocalDateTime at);
+    @Query("update UserMfaEnrollment e set e.lastTotpStep = :step, e.lastVerifiedAt = :at "
+            + "where e.user.id = :userId and e.method = :method "
+            + "and (e.lastTotpStep is null or e.lastTotpStep < :step)")
+    int claimTotpStep(@Param("userId") UUID userId, @Param("method") MfaMethodType method,
+                      @Param("step") long step, @Param("at") LocalDateTime at);
 }

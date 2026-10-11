@@ -14,9 +14,11 @@ import {
   Observable,
   catchError,
   filter,
+  retry,
   switchMap,
   take,
   throwError,
+  timer,
 } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -165,6 +167,29 @@ function rebootstrapScope(sessionScope: SessionScopeService): void {
 let isRefreshing = false;
 const refreshDone$ = new BehaviorSubject<string | null>(null);
 
+/**
+ * A 409 from the refresh means another tab of this browser rotated the shared
+ * refresh cookie a moment earlier ("superseded"). The browser now holds the
+ * rotated cookie, so asking again shortly after succeeds: retry instead of
+ * signing out, which would also revoke the other tab's fresh session.
+ */
+export const REFRESH_SUPERSEDED_RETRIES = 2;
+export const REFRESH_SUPERSEDED_DELAY_MS = 600;
+
+function refreshWithSupersededRetry(
+  auth: AuthService,
+): Observable<{ accessToken: string; refreshToken: string }> {
+  return auth.refreshTokenRequest().pipe(
+    retry({
+      count: REFRESH_SUPERSEDED_RETRIES,
+      delay: (err: unknown) =>
+        err instanceof HttpErrorResponse && err.status === 409
+          ? timer(REFRESH_SUPERSEDED_DELAY_MS)
+          : throwError(() => err),
+    }),
+  );
+}
+
 function cloneWithToken(req: HttpRequest<unknown>, token: string): HttpRequest<unknown> {
   return req.clone({ setHeaders: { Authorization: `Bearer ${token}` } });
 }
@@ -181,7 +206,7 @@ function tryRefreshAndRetry(
     isRefreshing = true;
     refreshDone$.next(null); // reset before the call
 
-    return auth.refreshTokenRequest().pipe(
+    return refreshWithSupersededRetry(auth).pipe(
       switchMap((tokens) => {
         isRefreshing = false;
         auth.setToken(tokens.accessToken);

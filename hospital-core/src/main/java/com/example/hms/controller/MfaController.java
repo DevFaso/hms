@@ -39,6 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 
 /**
  * MFA enrollment and verification endpoints.
@@ -193,9 +194,25 @@ public class MfaController {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalStateException("User not found"));
 
+        // The per-user budget of wrong codes, shared with every step-up and
+        // reserved BEFORE the code is checked, so neither rotating IPs nor
+        // parallel requests buy more guesses.
+        if (!mfaService.reserveCodeAttempt(user.getId())) {
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .userId(user.getId())
+                    .userName(username)
+                    .eventType(AuditEventType.MFA_FAILURE)
+                    .status(AuditStatus.FAILURE)
+                    .eventDescription("MFA code refused during login: too many wrong codes")
+                    .build());
+            return ResponseEntity.status(429)
+                    .body(new MessageResponse("Too many wrong codes. Try again in a few minutes."));
+        }
+
         // Check the code without writing anything yet: TOTP first, then a
         // backup code. A typo leaves the challenge usable.
-        boolean totp = mfaService.isCurrentTotp(user.getId(), request.code());
+        OptionalLong totpStep = mfaService.currentTotpStep(user.getId(), request.code());
+        boolean totp = totpStep.isPresent();
         Optional<java.util.UUID> backupCode = totp
                 ? Optional.empty()
                 : mfaService.matchingBackupCode(user.getId(), request.code());
@@ -221,13 +238,16 @@ public class MfaController {
             return ResponseEntity.status(401)
                     .body(new MessageResponse("Invalid or expired MFA token."));
         }
-        if (totp) {
-            mfaService.recordTotpUse(user.getId());
-        } else if (!mfaService.spendBackupCode(backupCode.get())) {
-            // Spent by another request in between: this one signs nobody in.
+        boolean spent = totp
+                ? mfaService.claimTotpStep(user.getId(), totpStep.getAsLong())
+                : mfaService.spendBackupCode(backupCode.get());
+        if (!spent) {
+            // Used by another request in between: this one signs nobody in,
+            // and its challenge is already spent, so it must start again.
             return ResponseEntity.status(401)
-                    .body(new MessageResponse("Invalid MFA code."));
+                    .body(new MessageResponse("That code was just used. Sign in again."));
         }
+        mfaService.clearCodeAttempts(user.getId());
 
         // Issue the full JWT pair
         var activeAssignments = assignmentRepository.findByUser_IdAndActiveTrue(user.getId());

@@ -33,6 +33,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -61,6 +62,9 @@ class UserCredentialLifecycleServiceImplTest {
 
     @Mock
     private MfaService mfaService;
+
+    @Mock
+    private AuditEventLogService auditEventLogService;
 
     /** Fixed instant: the recovery-code expiry is written and checked against the injected clock. */
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 3, 1, 10, 0);
@@ -582,5 +586,66 @@ class UserCredentialLifecycleServiceImplTest {
         UserRecoveryContact saved = persisted.get(0);
         assertThat(saved.isVerified()).isFalse();
         assertThat(saved.getVerifiedAt()).isNull();
+    }
+
+    // ── Round 4: a super-admin's change to any account's MFA needs the ACTOR's step-up ──
+
+    @Test
+    void aSuperAdminChange_needsTheActorsStepUp_andARefusalChangesNothing() {
+        UUID actorId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        when(mfaService.requireStepUp(eq(actorId), eq("000000"), any(), eq(false)))
+            .thenThrow(new com.example.hms.exception.MfaStepUpRefusedException(
+                com.example.hms.exception.MfaStepUpRefusedException.Reason.INVALID));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                service.upsertMfaEnrollmentsAsSuperAdmin(actorId, targetId, List.of(), "000000"))
+            .isInstanceOf(com.example.hms.exception.MfaStepUpRefusedException.class);
+
+        verify(mfaEnrollmentRepository, never()).saveAll(anyList());
+        verify(mfaEnrollmentRepository, never()).delete(any());
+    }
+
+    @Test
+    void aSuperAdminChangeWithoutAnActiveFactor_inNonStrictMode_isAuditedAsABypass() {
+        UUID actorId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        User target = User.builder().username("target").email("t@example.com").build();
+        target.setId(targetId);
+        when(mfaService.requireStepUp(eq(actorId), eq(null), any(), eq(false))).thenReturn(false);
+        when(userRepository.findById(targetId)).thenReturn(Optional.of(target));
+        when(mfaEnrollmentRepository.findByUserId(targetId)).thenReturn(List.of());
+        when(mfaEnrollmentRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.upsertMfaEnrollmentsAsSuperAdmin(actorId, targetId, List.of(), null);
+
+        verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+            e.getEventType() == com.example.hms.enums.AuditEventType.SECURITY_ALERT_TRIGGERED
+                && actorId.equals(e.getUserId())));
+    }
+
+    @Test
+    void aTotpRowWithAChangedChannel_isUpdatedInPlace_neverInsertedBesideTheOld() {
+        UUID userId = UUID.randomUUID();
+        User user = User.builder().username("mfa-user").email("mfa@example.com").build();
+        user.setId(userId);
+        UserMfaEnrollment totp = UserMfaEnrollment.builder()
+            .user(user).method(MfaMethodType.TOTP).channel("old-device").enabled(true).build();
+        totp.setId(UUID.randomUUID());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(mfaEnrollmentRepository.findByUserId(userId)).thenReturn(List.of(totp));
+        when(mfaEnrollmentRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UserMfaEnrollmentRequestDTO request = new UserMfaEnrollmentRequestDTO();
+        request.setMethod(MfaMethodType.TOTP);
+        request.setChannel("new-device");
+        request.setEnabled(true);
+
+        var response = service.upsertMfaEnrollments(userId, List.of(request));
+
+        // One TOTP row per user (V183's unique index): the same row, renamed.
+        assertThat(response).hasSize(1);
+        assertThat(totp.getChannel()).isEqualTo("new-device");
+        verify(mfaEnrollmentRepository, never()).delete(any());
     }
 }

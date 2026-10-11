@@ -30,6 +30,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -159,7 +160,7 @@ class MfaServiceTest {
     }
 
     @Test
-    void verifyBackupCode_consumesMatchingCode() {
+    void aMatchingBackupCode_isFoundThenSpentOnce() {
         String rawCode = "12345678";
         String hashed = passwordEncoder.encode(rawCode);
 
@@ -171,23 +172,20 @@ class MfaServiceTest {
                 .thenReturn(List.of(code));
         when(backupCodeRepository.markUsed(eq(code.getId()), any())).thenReturn(1);
 
-        boolean result = mfaService.verifyBackupCode(userId, rawCode);
-
-        assertThat(result).isTrue();
+        assertThat(mfaService.matchingBackupCode(userId, rawCode)).contains(code.getId());
+        assertThat(mfaService.spendBackupCode(code.getId())).isTrue();
         verify(backupCodeRepository).markUsed(eq(code.getId()), any());
     }
 
     @Test
-    void verifyBackupCode_returnsFalseForInvalidCode() {
+    void aWrongBackupCode_matchesNothing() {
         MfaBackupCode code = MfaBackupCode.builder()
                 .userId(userId).codeHash(passwordEncoder.encode("99999999")).used(false).build();
 
         when(backupCodeRepository.findByUserIdAndUsedFalseAndPendingFalse(userId))
                 .thenReturn(List.of(code));
 
-        boolean result = mfaService.verifyBackupCode(userId, "00000000");
-
-        assertThat(result).isFalse();
+        assertThat(mfaService.matchingBackupCode(userId, "00000000")).isEmpty();
         verify(backupCodeRepository, never()).markUsed(any(), any());
     }
 
@@ -220,15 +218,15 @@ class MfaServiceTest {
     }
 
     @Test
-    void verifyCode_noEnrollment_returnsFalse() {
+    void currentTotpStep_noEnrollment_isEmpty() {
         when(enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP))
                 .thenReturn(Optional.empty());
 
-        assertThat(mfaService.verifyCode(userId, "123456")).isFalse();
+        assertThat(mfaService.currentTotpStep(userId, "123456")).isEmpty();
     }
 
     @Test
-    void verifyCode_notVerified_returnsFalse() {
+    void currentTotpStep_notVerified_isEmpty() {
         UserMfaEnrollment enrollment = UserMfaEnrollment.builder()
                 .user(testUser).method(MfaMethodType.TOTP).verified(false).enabled(true)
                 .totpSecret("SECRET").build();
@@ -236,11 +234,11 @@ class MfaServiceTest {
         when(enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP))
                 .thenReturn(Optional.of(enrollment));
 
-        assertThat(mfaService.verifyCode(userId, "123456")).isFalse();
+        assertThat(mfaService.currentTotpStep(userId, "123456")).isEmpty();
     }
 
     @Test
-    void verifyCode_notEnabled_returnsFalse() {
+    void currentTotpStep_notEnabled_isEmpty() {
         UserMfaEnrollment enrollment = UserMfaEnrollment.builder()
                 .user(testUser).method(MfaMethodType.TOTP).verified(true).enabled(false)
                 .totpSecret("SECRET").build();
@@ -248,15 +246,15 @@ class MfaServiceTest {
         when(enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP))
                 .thenReturn(Optional.of(enrollment));
 
-        assertThat(mfaService.verifyCode(userId, "123456")).isFalse();
+        assertThat(mfaService.currentTotpStep(userId, "123456")).isEmpty();
     }
 
     @Test
-    void verifyBackupCode_emptyList_returnsFalse() {
+    void noBackupCodesLeft_matchesNothing() {
         when(backupCodeRepository.findByUserIdAndUsedFalseAndPendingFalse(userId))
                 .thenReturn(List.of());
 
-        assertThat(mfaService.verifyBackupCode(userId, "12345678")).isFalse();
+        assertThat(mfaService.matchingBackupCode(userId, "12345678")).isEmpty();
     }
 
     @Test
@@ -268,18 +266,6 @@ class MfaServiceTest {
                 .thenReturn(Optional.of(enrollment));
 
         assertThat(mfaService.isMfaEnabled(userId)).isFalse();
-    }
-
-    @Test
-    void regenerateBackupCodes_deletesOldAndCreatesNew() {
-        when(backupCodeRepository.save(any(MfaBackupCode.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
-
-        List<String> codes = mfaService.regenerateBackupCodes(userId);
-
-        assertThat(codes).hasSize(10);
-        verify(backupCodeRepository).deleteAllByUserId(userId);
-        verify(backupCodeRepository, times(10)).save(any(MfaBackupCode.class));
     }
 
     // ── The step-up and the replacement of an active authenticator ──
@@ -296,6 +282,8 @@ class MfaServiceTest {
                 .thenReturn(Optional.of(enrollment));
         lenient().when(enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP))
                 .thenReturn(Optional.of(enrollment));
+        lenient().when(enrollmentRepository.claimTotpStep(eq(userId), eq(MfaMethodType.TOTP), anyLong(), any()))
+                .thenReturn(1);
         return enrollment;
     }
 
@@ -516,7 +504,7 @@ class MfaServiceTest {
     void pendingBackupCodes_doNotSignIn() {
         when(backupCodeRepository.findByUserIdAndUsedFalseAndPendingFalse(userId)).thenReturn(List.of());
 
-        assertThat(mfaService.verifyBackupCode(userId, "12345678")).isFalse();
+        assertThat(mfaService.matchingBackupCode(userId, "12345678")).isEmpty();
 
         verify(backupCodeRepository, never()).findByUserIdAndPending(any(), anyBoolean());
     }
@@ -618,12 +606,11 @@ class MfaServiceTest {
     }
 
     @Test
-    void verifyCode_recordsItsUseWithATargetedUpdate_neverASaveOfTheEntityItRead() throws Exception {
-        activeAuthenticator();
+    void claimingATotpStep_isATargetedConditionalUpdate_neverASaveOfTheEntityItRead() {
+        when(enrollmentRepository.claimTotpStep(eq(userId), eq(MfaMethodType.TOTP), eq(42L), any())).thenReturn(1);
 
-        assertThat(mfaService.verifyCode(userId, codeFor(SECRET))).isTrue();
+        assertThat(mfaService.claimTotpStep(userId, 42L)).isTrue();
 
-        verify(enrollmentRepository).touchLastVerifiedAt(eq(userId), eq(MfaMethodType.TOTP), any());
         verify(enrollmentRepository, never()).save(any());
     }
 
@@ -631,9 +618,63 @@ class MfaServiceTest {
     void theLoginCheck_writesNothing() throws Exception {
         activeAuthenticator();
 
-        assertThat(mfaService.isCurrentTotp(userId, codeFor(SECRET))).isTrue();
+        assertThat(mfaService.currentTotpStep(userId, codeFor(SECRET))).isPresent();
 
         verify(enrollmentRepository, never()).save(any());
-        verify(enrollmentRepository, never()).touchLastVerifiedAt(any(), any(), any());
+        verify(enrollmentRepository, never()).claimTotpStep(any(), any(), anyLong(), any());
+    }
+
+    // ── Round 4: a TOTP code is accepted once ──
+
+    @Test
+    void theLoginCheck_refusesACodeAtOrBeforeTheLastAcceptedStep() throws Exception {
+        UserMfaEnrollment enrollment = activeAuthenticator();
+        enrollment.setLastTotpStep(System.currentTimeMillis() / 1000 / 30 + 1);
+
+        assertThat(mfaService.currentTotpStep(userId, codeFor(SECRET))).isEmpty();
+    }
+
+    @Test
+    void stepUp_aTotpStepAlreadyAccepted_isRefused() throws Exception {
+        activeAuthenticator();
+        when(enrollmentRepository.claimTotpStep(eq(userId), eq(MfaMethodType.TOTP), anyLong(), any())).thenReturn(0);
+        String code = codeFor(SECRET);
+
+        refusedWith(MfaStepUpRefusedException.Reason.INVALID,
+                () -> mfaService.requireStepUp(userId, code, "test action", true));
+    }
+
+    @Test
+    void stepUp_claimsTheStepOfTheCodeItAccepts() throws Exception {
+        activeAuthenticator();
+        long step = System.currentTimeMillis() / 1000 / 30;
+        String code = new DefaultCodeGenerator(HashingAlgorithm.SHA1, 6).generate(SECRET, step);
+
+        assertThat(mfaService.requireStepUp(userId, code, "test action", true)).isTrue();
+
+        verify(enrollmentRepository).claimTotpStep(eq(userId), eq(MfaMethodType.TOTP), eq(step), any());
+    }
+
+    @Test
+    void confirmingTheFirstAuthenticator_spendsTheConfirmingCode() throws Exception {
+        UserMfaEnrollment enrollment = UserMfaEnrollment.builder()
+                .user(testUser).method(MfaMethodType.TOTP).verified(false).enabled(false)
+                .totpSecret(SECRET).build();
+        when(enrollmentRepository.lockByUserIdAndMethod(userId, MfaMethodType.TOTP))
+                .thenReturn(Optional.of(enrollment));
+
+        long step = System.currentTimeMillis() / 1000 / 30;
+        String code = new DefaultCodeGenerator(HashingAlgorithm.SHA1, 6).generate(SECRET, step);
+
+        assertThat(mfaService.verifyEnrollment(userId, code, fullSession())).isTrue();
+
+        assertThat(enrollment.getLastTotpStep()).isEqualTo(step);
+    }
+
+    @Test
+    void theLoginVerify_andEveryStepUp_shareOnePerUserBudget() {
+        when(attemptStore.remainingLockMs(MfaService.STEP_UP_KEY_PREFIX + userId)).thenReturn(60_000L);
+
+        assertThat(mfaService.reserveCodeAttempt(userId)).isFalse();
     }
 }

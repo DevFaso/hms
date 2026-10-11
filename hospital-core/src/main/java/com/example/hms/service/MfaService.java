@@ -12,9 +12,8 @@ import com.example.hms.repository.UserMfaEnrollmentRepository;
 import com.example.hms.security.LoginAttemptStore;
 import com.example.hms.security.MfaChallengeScope;
 import dev.samstevens.totp.code.CodeGenerator;
-import dev.samstevens.totp.code.CodeVerifier;
 import dev.samstevens.totp.code.DefaultCodeGenerator;
-import dev.samstevens.totp.code.DefaultCodeVerifier;
+import dev.samstevens.totp.exceptions.CodeGenerationException;
 import dev.samstevens.totp.code.HashingAlgorithm;
 import dev.samstevens.totp.qr.QrData;
 import dev.samstevens.totp.secret.DefaultSecretGenerator;
@@ -30,12 +29,15 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -55,8 +57,9 @@ public class MfaService {
     private static final String ACTION_REPLACE = "authenticator replacement";
 
     /**
-     * Failed step-ups per user before a short lockout, kept in the login
-     * throttle's store (Redis when wired, so a lock holds on every instance).
+     * Wrong second-factor codes per user before a short lockout, shared by the
+     * login MFA verify and every step-up, kept in the login throttle's store
+     * (Redis when wired, so a lock holds on every instance).
      */
     static final int STEP_UP_MAX_FAILURES = 5;
     static final long STEP_UP_WINDOW_MS = 15 * 60 * 1000L;
@@ -72,7 +75,11 @@ public class MfaService {
     private final AuditEventLogService auditEventLogService;
     private final LoginAttemptStore attemptStore;
     private final SecretGenerator secretGenerator = new DefaultSecretGenerator(32);
-    private final CodeVerifier codeVerifier;
+    private final CodeGenerator codeGenerator = new DefaultCodeGenerator(HashingAlgorithm.SHA1, 6);
+    private final TimeProvider timeProvider = new SystemTimeProvider();
+    /** TOTP period in seconds, and the steps either side accepted for clock skew. */
+    private static final int TOTP_PERIOD = 30;
+    private static final int TOTP_SKEW_STEPS = 1;
 
     public MfaService(UserMfaEnrollmentRepository enrollmentRepository,
                       MfaBackupCodeRepository backupCodeRepository,
@@ -84,12 +91,6 @@ public class MfaService {
         this.passwordEncoder = passwordEncoder;
         this.auditEventLogService = auditEventLogService;
         this.attemptStore = attemptStore;
-
-        TimeProvider timeProvider = new SystemTimeProvider();
-        CodeGenerator codeGenerator = new DefaultCodeGenerator(HashingAlgorithm.SHA1, 6);
-        this.codeVerifier = new DefaultCodeVerifier(codeGenerator, timeProvider);
-        // Allow ±1 time step (30 seconds each direction) for clock skew
-        ((DefaultCodeVerifier) this.codeVerifier).setAllowedTimePeriodDiscrepancy(1);
     }
 
     // ───── Enrollment ─────
@@ -196,11 +197,14 @@ public class MfaService {
             if (MfaChallengeScope.isChallengeSession(caller)) {
                 throw refused(userId, caller, ACTION_REPLACE, MfaStepUpRefusedException.Reason.CHALLENGE);
             }
-            if (!isValidTotp(enrollment.getPendingTotpSecret(), code)) {
+            OptionalLong confirmStep = matchingTotpStep(enrollment.getPendingTotpSecret(), code);
+            if (confirmStep.isEmpty()) {
                 log.warn("[MFA] Invalid TOTP code confirming a replacement for user={}", userId);
                 return false;
             }
             LocalDateTime confirmedAt = now();
+            // The confirming code is spent: it cannot also sign in.
+            enrollment.setLastTotpStep(confirmStep.getAsLong());
             enrollment.setTotpSecret(enrollment.getPendingTotpSecret());
             enrollment.setPendingTotpSecret(null);
             enrollment.setVerified(true);
@@ -219,8 +223,11 @@ public class MfaService {
             return true;
         }
 
-        boolean valid = isValidTotp(enrollment.getTotpSecret(), code);
+        OptionalLong firstStep = matchingTotpStep(enrollment.getTotpSecret(), code);
+        boolean valid = firstStep.isPresent();
         if (valid) {
+            // The confirming code is spent: it cannot also sign in.
+            enrollment.setLastTotpStep(firstStep.getAsLong());
             enrollment.setVerified(true);
             enrollment.setEnabled(true);
             enrollment.setPrimaryFactor(true);
@@ -315,19 +322,46 @@ public class MfaService {
         if (!StringUtils.hasText(code)) {
             throw refused(userId, caller, action, MfaStepUpRefusedException.Reason.REQUIRED);
         }
-        String throttleKey = STEP_UP_KEY_PREFIX + userId;
-        if (attemptStore.remainingLockMs(throttleKey) > 0
-                || attemptStore.recordFailure(throttleKey, STEP_UP_MAX_FAILURES, STEP_UP_WINDOW_MS,
-                        STEP_UP_LOCK_MS) > STEP_UP_MAX_FAILURES) {
+        if (!reserveCodeAttempt(userId)) {
             throw refused(userId, caller, action, MfaStepUpRefusedException.Reason.LOCKED);
         }
         String candidate = code.trim();
-        if ((TOTP_SHAPE.matcher(candidate).matches() && isValidTotp(enrollment.getTotpSecret(), candidate))
-                || consumeBackupCode(userId, candidate)) {
-            attemptStore.clear(throttleKey);
+        if (claimCurrentTotp(enrollment, userId, candidate) || consumeBackupCode(userId, candidate)) {
+            clearCodeAttempts(userId);
             return;
         }
         throw refused(userId, caller, action, MfaStepUpRefusedException.Reason.INVALID);
+    }
+
+    /** A current code of the active secret, accepted once: its time-step is claimed atomically. */
+    private boolean claimCurrentTotp(UserMfaEnrollment enrollment, UUID userId, String candidate) {
+        OptionalLong step = matchingTotpStep(enrollment.getTotpSecret(), candidate);
+        if (step.isEmpty() || !claimTotpStep(userId, step.getAsLong())) {
+            return false;
+        }
+        // The row may be managed here (the replacement's locked read): keep it
+        // in step with the claim, so its own save (DynamicUpdate) agrees.
+        enrollment.setLastTotpStep(step.getAsLong());
+        return true;
+    }
+
+    /**
+     * Reserves one second-factor attempt for the user BEFORE the code is
+     * evaluated: the store counts it atomically, so concurrent guesses cannot
+     * exceed {@value #STEP_UP_MAX_FAILURES} per window, at login or at any
+     * step-up. {@code false}: the user is locked out for now. A code that
+     * verifies clears the count ({@link #clearCodeAttempts}).
+     */
+    public boolean reserveCodeAttempt(UUID userId) {
+        String throttleKey = STEP_UP_KEY_PREFIX + userId;
+        return attemptStore.remainingLockMs(throttleKey) <= 0
+                && attemptStore.recordFailure(throttleKey, STEP_UP_MAX_FAILURES, STEP_UP_WINDOW_MS,
+                        STEP_UP_LOCK_MS) <= STEP_UP_MAX_FAILURES;
+    }
+
+    /** A second-factor code verified: the user's failure count starts again. */
+    public void clearCodeAttempts(UUID userId) {
+        attemptStore.clear(STEP_UP_KEY_PREFIX + userId);
     }
 
     /** Audits the refusal (never the code) and returns the exception to throw. */
@@ -351,26 +385,34 @@ public class MfaService {
     // ───── Verification (login flow) ─────
 
     /**
-     * The code is a current TOTP code of the user's active authenticator.
-     * Writes nothing: the sign-in records the use ({@link #recordTotpUse})
-     * only once it has claimed the challenge.
+     * The TOTP time-step the code matches on the user's active authenticator,
+     * when it is a current code newer than the last one accepted. Writes
+     * nothing: the sign-in claims the step ({@link #claimTotpStep}) only once
+     * it has claimed the challenge.
      */
     @Transactional(readOnly = true)
-    public boolean isCurrentTotp(UUID userId, String code) {
+    public OptionalLong currentTotpStep(UUID userId, String code) {
         return enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP)
                 .filter(MfaService::isActive)
-                .map(enrollment -> isValidTotp(enrollment.getTotpSecret(), code))
-                .orElse(false);
+                .map(enrollment -> newerThanLast(enrollment,
+                        matchingTotpStep(enrollment.getTotpSecret(), code)))
+                .orElse(OptionalLong.empty());
+    }
+
+    private static OptionalLong newerThanLast(UserMfaEnrollment enrollment, OptionalLong step) {
+        Long last = enrollment.getLastTotpStep();
+        return step.isPresent() && last != null && step.getAsLong() <= last ? OptionalLong.empty() : step;
     }
 
     /**
-     * Stamps {@code lastVerifiedAt} with a targeted update of that one column:
-     * never a save of an entity read earlier, which would write its stale
-     * secret back over a replacement confirmed in between.
+     * Accepts the code of this time-step once: a conditional update that sets
+     * {@code last_totp_step} (and stamps {@code lastVerifiedAt}) only when the
+     * step is newer than the last accepted one. Targeted columns, never a save
+     * of an entity read earlier. {@code false}: replayed, or used concurrently.
      */
     @Transactional
-    public void recordTotpUse(UUID userId) {
-        enrollmentRepository.touchLastVerifiedAt(userId, MfaMethodType.TOTP, now());
+    public boolean claimTotpStep(UUID userId, long step) {
+        return enrollmentRepository.claimTotpStep(userId, MfaMethodType.TOTP, step, now()) == 1;
     }
 
     /**
@@ -394,28 +436,6 @@ public class MfaService {
     @Transactional
     public boolean spendBackupCode(UUID codeId) {
         return backupCodeRepository.markUsed(codeId, now()) == 1;
-    }
-
-    /**
-     * Verifies a TOTP code and records its use (the targeted update). The
-     * sign-in uses {@link #isCurrentTotp} and {@link #recordTotpUse} instead,
-     * with the challenge claimed in between.
-     */
-    @Transactional
-    public boolean verifyCode(UUID userId, String code) {
-        if (!isCurrentTotp(userId, code)) {
-            return false;
-        }
-        recordTotpUse(userId);
-        return true;
-    }
-
-    /**
-     * Verifies a backup code during login. Consumes the code on success.
-     */
-    @Transactional
-    public boolean verifyBackupCode(UUID userId, String rawCode) {
-        return consumeBackupCode(userId, rawCode);
     }
 
     /**
@@ -443,8 +463,28 @@ public class MfaService {
         return false;
     }
 
-    private boolean isValidTotp(String secret, String code) {
-        return StringUtils.hasText(secret) && StringUtils.hasText(code) && codeVerifier.isValidCode(secret, code);
+    /**
+     * The time-step (epoch seconds / 30) whose code matches, within one step
+     * of clock skew either side, compared in constant time. Only a six-digit
+     * input is tried.
+     */
+    private OptionalLong matchingTotpStep(String secret, String code) {
+        if (!StringUtils.hasText(secret) || code == null || !TOTP_SHAPE.matcher(code.trim()).matches()) {
+            return OptionalLong.empty();
+        }
+        byte[] candidate = code.trim().getBytes(StandardCharsets.US_ASCII);
+        long current = Math.floorDiv(timeProvider.getTime(), TOTP_PERIOD);
+        try {
+            for (long step = current - TOTP_SKEW_STEPS; step <= current + TOTP_SKEW_STEPS; step++) {
+                byte[] expected = codeGenerator.generate(secret, step).getBytes(StandardCharsets.US_ASCII);
+                if (MessageDigest.isEqual(expected, candidate)) {
+                    return OptionalLong.of(step);
+                }
+            }
+        } catch (CodeGenerationException ex) {
+            log.warn("[MFA] TOTP code generation failed: {}", ex.getMessage());
+        }
+        return OptionalLong.empty();
     }
 
     /** Server-local time, as every MFA timestamp has always been stored. */
@@ -482,11 +522,6 @@ public class MfaService {
     }
 
     // ───── Backup codes ─────
-
-    @Transactional
-    public List<String> regenerateBackupCodes(UUID userId) {
-        return generateBackupCodes(userId, false);
-    }
 
     /**
      * A fresh set of backup codes. {@code pending}: issued with a replacement

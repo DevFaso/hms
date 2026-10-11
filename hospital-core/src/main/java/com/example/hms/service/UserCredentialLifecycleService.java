@@ -17,7 +17,18 @@ public interface UserCredentialLifecycleService {
 
     UserCredentialHealthDTO getCredentialHealth(UUID userId);
 
-    List<UserMfaEnrollmentDTO> upsertMfaEnrollments(UUID userId, List<UserMfaEnrollmentRequestDTO> payload);
+    /**
+     * A super-admin's change to any account's MFA records
+     * ({@code PUT /super-admin/credentials/{userId}/mfa}), which can disable or
+     * delete an authenticator, the actor's own included. The ACTOR's step-up
+     * ({@code MfaService#requireStepUp}, {@code X-Mfa-Token}) comes first, so a
+     * stolen super-admin session cannot switch MFA off without the second
+     * factor. An actor with no active factor passes only in non-strict mode,
+     * and the bypass is audited.
+     */
+    List<UserMfaEnrollmentDTO> upsertMfaEnrollmentsAsSuperAdmin(UUID actorId, UUID userId,
+                                                                List<UserMfaEnrollmentRequestDTO> payload,
+                                                                String stepUpCode);
 
     /**
      * The caller's own MFA records ({@code PUT /auth/credentials/mfa}), which
