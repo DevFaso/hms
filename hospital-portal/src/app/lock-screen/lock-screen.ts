@@ -8,6 +8,7 @@ import { Observable, of, tap } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { IdleService } from '../core/idle.service';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
+import { refreshWithSupersededRetry } from '../interceptors/error.interceptor';
 
 @Component({
   selector: 'app-lock-screen',
@@ -88,7 +89,9 @@ export class LockScreenComponent {
     if (this.auth.getToken() && !this.auth.isExpired()) {
       return of(null);
     }
-    return this.auth.refreshTokenRequest().pipe(
+    // The same 409 "superseded" retry as the interceptor: another tab may
+    // have rotated the shared refresh cookie a moment earlier.
+    return refreshWithSupersededRetry(this.auth).pipe(
       tap((tokens) => {
         this.auth.setToken(tokens.accessToken);
         if (tokens.refreshToken) {

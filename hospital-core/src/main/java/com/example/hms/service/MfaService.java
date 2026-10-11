@@ -144,6 +144,8 @@ public class MfaService {
                     .build());
             enrollment.setTotpSecret(secret);
             enrollment.setPendingTotpSecret(null);
+            // A new secret: the old one's accepted step means nothing for it.
+            enrollment.setLastTotpStep(null);
             enrollment.setVerified(false);
             enrollment.setEnabled(false);
             enrollment.setEnrolledAt(now());
@@ -337,24 +339,33 @@ public class MfaService {
             throw refused(userId, caller, action, MfaStepUpRefusedException.Reason.LOCKED);
         }
         String candidate = code.trim();
-        if (claimCurrentTotp(enrollment, userId, candidate) || consumeBackupCode(userId, candidate)) {
+        OptionalLong step = matchingTotpStep(enrollment.getTotpSecret(), candidate);
+        if (step.isPresent()) {
+            if (!claimTotpStep(enrollment, userId, step.getAsLong())) {
+                // A right code, already accepted (the sign-in a moment ago, an
+                // earlier step-up): replay protection, so say "wait for the
+                // next code" rather than "wrong code".
+                throw refused(userId, caller, action, MfaStepUpRefusedException.Reason.REUSED);
+            }
+            attemptStore.clear(throttleKey);
+            return;
+        }
+        if (consumeBackupCode(userId, candidate)) {
             attemptStore.clear(throttleKey);
             return;
         }
         throw refused(userId, caller, action, MfaStepUpRefusedException.Reason.INVALID);
     }
 
-    /** A current code of the active secret, accepted once: its time-step is claimed atomically. */
-    private boolean claimCurrentTotp(UserMfaEnrollment enrollment, UUID userId, String candidate) {
-        OptionalLong step = matchingTotpStep(enrollment.getTotpSecret(), candidate);
+    /** Accepts the code of this time-step once (atomically); {@code false}: already accepted. */
+    private boolean claimTotpStep(UserMfaEnrollment enrollment, UUID userId, long step) {
         // The repository directly: this runs inside the caller's transaction.
-        if (step.isEmpty()
-                || enrollmentRepository.claimTotpStep(userId, MfaMethodType.TOTP, step.getAsLong(), now()) != 1) {
+        if (enrollmentRepository.claimTotpStep(userId, MfaMethodType.TOTP, step, now()) != 1) {
             return false;
         }
         // The row may be managed here (the replacement's locked read): keep it
         // in step with the claim, so its own save (DynamicUpdate) agrees.
-        enrollment.setLastTotpStep(step.getAsLong());
+        enrollment.setLastTotpStep(step);
         return true;
     }
 
@@ -439,7 +450,12 @@ public class MfaService {
      */
     @Transactional(readOnly = true)
     public Optional<UUID> matchingBackupCode(UUID userId, String rawCode) {
-        return findMatchingBackupCode(userId, rawCode);
+        // The one active-factor rule: a backup code stands in for an ACTIVE
+        // authenticator only. Leftover codes of a disabled or deleted one
+        // must not skip the forced enrolment login asks for.
+        boolean active = enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP)
+                .filter(MfaService::isActive).isPresent();
+        return active ? findMatchingBackupCode(userId, rawCode) : Optional.empty();
     }
 
     /** {@link #matchingBackupCode}'s rule, callable inside this class without a proxy. */

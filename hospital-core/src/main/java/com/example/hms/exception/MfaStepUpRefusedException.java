@@ -28,7 +28,9 @@ public class MfaStepUpRefusedException extends RuntimeException {
         /** No actor could be identified for the action, so there is no authenticator to ask. */
         UNIDENTIFIED("mfa.stepup.unidentified"),
         /** Too many wrong codes: the step-up is locked for a while. */
-        LOCKED("mfa.stepup.locked");
+        LOCKED("mfa.stepup.locked"),
+        /** A current code, but one already accepted (a sign-in, an earlier step-up): wait for the next. */
+        REUSED("mfa.stepup.reused");
 
         private final String code;
 

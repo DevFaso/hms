@@ -177,7 +177,7 @@ export const REFRESH_SUPERSEDED_RETRIES = 4;
 /** Backs off 600, 1200, 1800, 2400 ms: about 6 s for the winning tab's cookie to land on a slow link. */
 export const REFRESH_SUPERSEDED_DELAY_MS = 600;
 
-function refreshWithSupersededRetry(
+export function refreshWithSupersededRetry(
   auth: AuthService,
 ): Observable<{ accessToken: string; refreshToken: string }> {
   return auth.refreshTokenRequest().pipe(

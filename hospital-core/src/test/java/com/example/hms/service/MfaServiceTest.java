@@ -161,6 +161,7 @@ class MfaServiceTest {
 
     @Test
     void aMatchingBackupCode_isFoundThenSpentOnce() {
+        activeAuthenticator();
         String rawCode = "12345678";
         String hashed = passwordEncoder.encode(rawCode);
 
@@ -179,6 +180,7 @@ class MfaServiceTest {
 
     @Test
     void aWrongBackupCode_matchesNothing() {
+        activeAuthenticator();
         MfaBackupCode code = MfaBackupCode.builder()
                 .userId(userId).codeHash(passwordEncoder.encode("99999999")).used(false).build();
 
@@ -266,6 +268,7 @@ class MfaServiceTest {
 
     @Test
     void noBackupCodesLeft_matchesNothing() {
+        activeAuthenticator();
         when(backupCodeRepository.findByUserIdAndUsedFalseAndPendingFalse(userId))
                 .thenReturn(List.of());
 
@@ -517,6 +520,7 @@ class MfaServiceTest {
 
     @Test
     void pendingBackupCodes_doNotSignIn() {
+        activeAuthenticator();
         when(backupCodeRepository.findByUserIdAndUsedFalseAndPendingFalse(userId)).thenReturn(List.of());
 
         assertThat(mfaService.matchingBackupCode(userId, "12345678")).isEmpty();
@@ -650,12 +654,14 @@ class MfaServiceTest {
     }
 
     @Test
-    void stepUp_aTotpStepAlreadyAccepted_isRefused() throws Exception {
+    void stepUp_aTotpStepAlreadyAccepted_isRefusedAsReused_notAsWrong() throws Exception {
         activeAuthenticator();
         when(enrollmentRepository.claimTotpStep(eq(userId), eq(MfaMethodType.TOTP), anyLong(), any())).thenReturn(0);
         String code = codeFor(SECRET);
 
-        refusedWith(MfaStepUpRefusedException.Reason.INVALID,
+        // The code is right but already used (the sign-in a moment ago):
+        // "wait for the next code", not "wrong code".
+        refusedWith(MfaStepUpRefusedException.Reason.REUSED,
                 () -> mfaService.requireStepUp(userId, code, "test action", true));
     }
 
@@ -708,5 +714,34 @@ class MfaServiceTest {
         when(attemptStore.remainingLockMs(MfaService.LOGIN_CODE_KEY_PREFIX + userId)).thenReturn(60_000L);
 
         assertThat(mfaService.reserveCodeAttempt(userId)).isFalse();
+    }
+
+    // ── Round 7 ──
+
+    @Test
+    void leftoverBackupCodes_ofAnInactiveFactor_doNotSignIn() {
+        UserMfaEnrollment disabled = UserMfaEnrollment.builder()
+                .user(testUser).method(MfaMethodType.TOTP).verified(true).enabled(false)
+                .totpSecret(SECRET).build();
+        when(enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP))
+                .thenReturn(Optional.of(disabled));
+
+        // The one active-factor rule: no active authenticator, no stand-in.
+        assertThat(mfaService.matchingBackupCode(userId, "12345678")).isEmpty();
+        verify(backupCodeRepository, never()).findByUserIdAndUsedFalseAndPendingFalse(any());
+    }
+
+    @Test
+    void restartingAnEnrolment_forgetsTheOldSecretsAcceptedStep() {
+        UserMfaEnrollment inactive = UserMfaEnrollment.builder()
+                .user(testUser).method(MfaMethodType.TOTP).verified(false).enabled(false)
+                .totpSecret(SECRET).lastTotpStep(Long.MAX_VALUE).build();
+        when(enrollmentRepository.lockByUserIdAndMethod(userId, MfaMethodType.TOTP))
+                .thenReturn(Optional.of(inactive));
+        lenient().when(backupCodeRepository.save(any(MfaBackupCode.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        mfaService.enrollTotp(testUser, fullSession(), null);
+
+        assertThat(inactive.getLastTotpStep()).isNull();
     }
 }

@@ -36,7 +36,7 @@ public class InMemoryTokenBlacklistService implements TokenBlacklistService {
     private final java.util.Set<String> claimedOnly = ConcurrentHashMap.newKeySet();
 
     @Override
-    public void blacklist(String jti, long expirationMs) {
+    public synchronized void blacklist(String jti, long expirationMs) {
         if (jti == null || jti.isBlank()) {
             return;
         }
@@ -47,7 +47,7 @@ public class InMemoryTokenBlacklistService implements TokenBlacklistService {
 
     /** Atomic within this JVM only: a multi-instance deployment needs the Redis store. */
     @Override
-    public boolean claim(String jti, long expirationMs) {
+    public synchronized boolean claim(String jti, long expirationMs) {
         if (jti == null || jti.isBlank() || expirationMs <= System.currentTimeMillis()) {
             return false;
         }
@@ -67,7 +67,7 @@ public class InMemoryTokenBlacklistService implements TokenBlacklistService {
     }
 
     @Override
-    public void release(String jti) {
+    public synchronized void release(String jti) {
         if (jti == null || jti.isBlank()) {
             return;
         }

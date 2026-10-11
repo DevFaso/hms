@@ -27,10 +27,12 @@ public class RedisTokenBlacklistService implements TokenBlacklistService {
     private static final String ROTATED_PREFIX = "hms:rotated:jti:";
     /** A claim's value carries this prefix, a revocation's does not: release removes only the former. */
     private static final String CLAIM_VALUE_PREFIX = "claim:";
-    /** Delete the key only if it still holds the claim's own value (atomic). */
+    /** Delete the key only if it still holds a claim's value, not a revocation's (atomic). */
     private static final org.springframework.data.redis.core.script.RedisScript<Long> RELEASE_CLAIM =
         new org.springframework.data.redis.core.script.DefaultRedisScript<>(
-            "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+            "local v = redis.call('get', KEYS[1]) "
+                + "if v and string.sub(v, 1, string.len(ARGV[1])) == ARGV[1] then return redis.call('del', KEYS[1]) "
+                + "else return 0 end",
             Long.class);
 
     private final StringRedisTemplate redisTemplate;
@@ -81,11 +83,8 @@ public class RedisTokenBlacklistService implements TokenBlacklistService {
         if (jti == null || jti.isBlank()) {
             return;
         }
-        String key = KEY_PREFIX + jti;
-        String value = redisTemplate.opsForValue().get(key);
-        if (value != null && value.startsWith(CLAIM_VALUE_PREFIX)) {
-            redisTemplate.execute(RELEASE_CLAIM, java.util.List.of(key), value);
-        }
+        // One atomic call: delete only if the value is still a claim's.
+        redisTemplate.execute(RELEASE_CLAIM, java.util.List.of(KEY_PREFIX + jti), CLAIM_VALUE_PREFIX);
         redisTemplate.delete(ROTATED_PREFIX + jti);
     }
 

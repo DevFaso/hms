@@ -4839,6 +4839,14 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   token** as well as the live assignment (the assignment service's scope reads
   both), so on Keycloak they answer as unmapped until P1-T11 adds the realm role.
   Same as `POST /users/admin-register` today. Open until P1-T11.
+- **MFA step-up holds a second pooled connection.** `requireStepUp` runs in its own
+  transaction (REQUIRES_NEW, so a caller's long transaction never locks the actor's MFA
+  row), but its callers (lifecycle, emergency controls, the super-admin MFA endpoint)
+  already hold a connection and often a row lock: each concurrent request needs two, three
+  on a refused code (the audit). On a small Hikari pool, enough concurrent step-ups block
+  until the connection timeout. Check the prod pool size against the concurrency of these
+  super-admin endpoints, or run the step-up before the caller opens its transaction
+  (found in #853's round-7 review). Open.
 - **MFA step-up: the non-strict bypass audit belongs inside `MfaService.requireStepUp`.**
   Its five callers (emergency controls, hospital and organization lifecycle, support
   impersonation, the super-admin MFA endpoint) each carry their own copy of the
