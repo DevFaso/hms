@@ -283,6 +283,7 @@ export class ProviderDetailComponent implements OnInit {
     const reason = dialog.reason.trim();
     let request: Observable<HospitalLifecycleResponse>;
     let doneKey: string;
+    const stepUp = this.lifecycleNeedsStepUp(dialog.kind);
     switch (dialog.kind) {
       case 'suspend':
         request = this.lifecycleService.suspend(id, { reason }, dialog.mfaCode);
@@ -296,7 +297,7 @@ export class ProviderDetailComponent implements OnInit {
         request = this.lifecycleService.restore(id);
         doneKey = 'PROVIDER.DETAIL.RESTORED';
     }
-    this.run(request, doneKey);
+    this.run(request, doneKey, stepUp);
   }
 
   // ── first administrator (AC-5) ────────────────────────────────────────
@@ -325,8 +326,12 @@ export class ProviderDetailComponent implements OnInit {
     this.dialogError.set(null);
   }
 
-  /** Run one action; on success close the dialog, say so and re-read the provider from the server. */
-  private run(request: Observable<unknown>, doneKey: string): void {
+  /**
+   * Run one action; on success close the dialog, say so and re-read the
+   * provider from the server. `stepUp` marks the actions that send an MFA
+   * step-up (suspend, archive): only their refusal is a step-up refusal.
+   */
+  private run(request: Observable<unknown>, doneKey: string, stepUp = false): void {
     this.busy.set(true);
     this.dialogError.set(null);
     request.subscribe({
@@ -338,13 +343,17 @@ export class ProviderDetailComponent implements OnInit {
       },
       error: (err: unknown) => {
         this.busy.set(false);
-        // A refused MFA step-up stays in the dialog with the server's reason;
-        // the error interceptor leaves the session alone for it.
-        const fallback =
-          err instanceof HttpErrorResponse && isStepUpRefusal(err)
-            ? 'PROVIDER.LIFECYCLE.STEP_UP_FAILED'
-            : 'PROVIDER.DETAIL.ACTION_FAILED';
-        this.dialogError.set(serverMessage(err) ?? this.translate.instant(fallback));
+        // A refused MFA step-up stays in the dialog, in the user's language
+        // (the server's text is an English code); the error interceptor
+        // leaves the session alone for it. Only a step-up action's refusal
+        // is one: a 403 on verify, reject or revoke is an ordinary refusal.
+        if (stepUp && err instanceof HttpErrorResponse && isStepUpRefusal(err)) {
+          this.dialogError.set(this.translate.instant('PROVIDER.LIFECYCLE.STEP_UP_FAILED'));
+          return;
+        }
+        this.dialogError.set(
+          serverMessage(err) ?? this.translate.instant('PROVIDER.DETAIL.ACTION_FAILED'),
+        );
       },
     });
   }

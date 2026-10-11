@@ -14,18 +14,22 @@ import { FacilityType } from '../services/provider.model';
  */
 const SESSION_WAIT_MS = 15000;
 
+/** Marks the session wait timing out, apart from a `null` (no provider facility) answer. */
+const TIMED_OUT = 'timed-out' as const;
+
 /**
- * Emits once the session bootstrap has resolved: before that the scope and
- * the provider flag are unknown, and an answer about them is not an answer.
- * A deep link opened on a hard refresh waits here instead of being refused.
+ * Emits once the session bootstrap has resolved (`true`), or `false` when the
+ * wait timed out: before that the scope and the provider flag are unknown,
+ * and an answer about them is not an answer. A deep link opened on a hard
+ * refresh waits here instead of being refused.
  */
-function sessionResolved(): Observable<unknown> {
+function sessionResolved(): Observable<boolean> {
   const roleContext = inject(RoleContextService);
   if (roleContext.sessionResolved()) return of(true);
   return toObservable(roleContext.sessionResolved, { injector: inject(Injector) }).pipe(
     filter((resolved) => resolved),
     take(1),
-    timeout({ first: SESSION_WAIT_MS, with: () => of(true) }),
+    timeout({ first: SESSION_WAIT_MS, with: () => of(false) }),
   );
 }
 
@@ -51,8 +55,16 @@ export const FacilityTypeGuard: CanActivateFn = (
   const adminOnly = route.data['providerAdmin'] === true;
 
   return sessionResolved().pipe(
-    switchMap(() => context.load()),
+    switchMap((resolved) => {
+      if (!resolved) {
+        // A timeout is not a "no": the page opens in its retry state.
+        context.reportUnavailable();
+        return of(TIMED_OUT);
+      }
+      return context.load();
+    }),
     map((settings) => {
+      if (settings === TIMED_OUT) return true;
       if (!settings) return router.parseUrl('/error/404');
       if (facilityTypes?.length && !facilityTypes.includes(settings.facilityType)) {
         return router.parseUrl('/error/404');

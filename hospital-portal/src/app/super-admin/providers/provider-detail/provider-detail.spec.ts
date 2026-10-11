@@ -286,7 +286,8 @@ describe('ProviderDetailComponent', () => {
     cmp.setLifecycleReason('Licence under review');
     cmp.submitLifecycle();
     expect(cmp.lifecycleDialog()).not.toBeNull();
-    expect(cmp.dialogError()).toBe('Wrong code');
+    // Translated, never the server's English code text.
+    expect(cmp.dialogError()).toBe('PROVIDER.LIFECYCLE.STEP_UP_FAILED');
     expect(host().querySelector('#lifecycle-mfa-code')).not.toBeNull();
 
     // A refusal with no reason in the body: the dialog says what to do.
@@ -300,8 +301,19 @@ describe('ProviderDetailComponent', () => {
       ),
     );
     cmp.submitLifecycle();
-    expect(cmp.dialogError()).toBe('mfa_required: missing code');
+    expect(cmp.dialogError()).toBe('PROVIDER.LIFECYCLE.STEP_UP_FAILED');
     expect(cmp.lifecycleNeedsStepUp('restore')).toBeFalse();
+  });
+
+  it('a 403 on verify (no step-up sent) is an ordinary refusal with the server reason', () => {
+    service.verify.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 403, error: { message: 'Access denied' } })),
+    );
+    const cmp = setup();
+    cmp.openVerify();
+    cmp.patchVerify({ ifuMatchesRccm: true, cnssMatchesRccm: true });
+    cmp.submitVerify();
+    expect(cmp.dialogError()).toBe('Access denied');
   });
 
   it('the history shows the decision reason and the evidence note in their own columns', () => {

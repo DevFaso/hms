@@ -54,6 +54,13 @@ export class ProviderContextService {
   private answeredFor: string | null = null;
   private inFlight: Observable<ProviderSettings | null> | null = null;
   private inFlightFor: string | null = null;
+  /**
+   * Bumped by every new request and by {@link forget}: a request answers,
+   * and clears the in-flight slot, only while its generation is current, so
+   * a request {@link invalidate} superseded can neither write a stale answer
+   * nor clear its successor.
+   */
+  private generation = 0;
 
   /**
    * The provider settings of the signed-in user at the facility the session
@@ -85,26 +92,27 @@ export class ProviderContextService {
     this.settings.set(null);
     this.statusSignal.set('pending');
     if (!this.roleContext.providerUser()) {
-      this.answer(key, null);
+      this.answer(key, null, ++this.generation);
       return of(null);
     }
+    const generation = ++this.generation;
     this.inFlightFor = key;
     this.inFlight = this.portal.settings().pipe(
       map((settings) => (isProviderFacilityType(settings?.facilityType) ? settings : null)),
-      tap((settings) => this.answer(key, settings)),
+      tap((settings) => this.answer(key, settings, generation)),
       catchError((error: unknown) => {
         if (error instanceof HttpErrorResponse && error.status === 404) {
-          this.answer(key, null);
+          this.answer(key, null, generation);
           return of(null);
         }
-        if (key === this.key()) {
+        if (this.isCurrent(key, generation)) {
           this.settings.set(null);
           this.statusSignal.set('error');
         }
         return throwError(() => error);
       }),
       finalize(() => {
-        if (this.inFlightFor === key) {
+        if (generation === this.generation) {
           this.inFlight = null;
           this.inFlightFor = null;
         }
@@ -124,8 +132,19 @@ export class ProviderContextService {
     this.load().subscribe({ error: () => undefined });
   }
 
+  /**
+   * The session could not be resolved in time (a hung bootstrap): show the
+   * provider pages' retry state rather than a "not available" answer. Nothing
+   * is cached; the next ask starts afresh.
+   */
+  reportUnavailable(): void {
+    this.forget();
+    this.statusSignal.set('error');
+  }
+
   /** Forget the cached answer (sign-out, or a change the server must be asked about again). */
   forget(): void {
+    this.generation++;
     this.answeredFor = null;
     this.inFlight = null;
     this.inFlightFor = null;
@@ -133,12 +152,17 @@ export class ProviderContextService {
     this.statusSignal.set('pending');
   }
 
-  private answer(key: string, settings: ProviderSettings | null): void {
-    // A late answer for a scope (or verdict) the session has since left is dropped.
-    if (key !== this.key()) return;
+  private answer(key: string, settings: ProviderSettings | null, generation: number): void {
+    // A late answer, for a scope (or verdict) the session has since left or
+    // from a request since superseded, is dropped.
+    if (!this.isCurrent(key, generation)) return;
     this.answeredFor = key;
     this.settings.set(settings);
     this.statusSignal.set(settings ? 'provider' : 'none');
+  }
+
+  private isCurrent(key: string, generation: number): boolean {
+    return generation === this.generation && key === this.key();
   }
 
   /**

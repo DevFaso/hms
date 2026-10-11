@@ -19,7 +19,6 @@ import {
 } from '../services/hospital-lifecycle.model';
 import { HospitalLifecycleService } from '../services/hospital-lifecycle.service';
 import { HospitalResponse, HospitalService } from '../services/hospital.service';
-import { serverMessage } from '../services/provider.model';
 import { isStepUpRefusal } from '../services/step-up';
 
 type ActionKind = 'suspend' | 'restore' | 'archive' | 'schedule-purge' | 'cancel-purge';
@@ -32,8 +31,6 @@ interface ActionDialog {
   mfaCode: string;
   busy: boolean;
   errorKey: string | null;
-  /** The server's own reason for a refused step-up, when it gave one. */
-  errorText: string | null;
 }
 
 @Component({
@@ -110,7 +107,6 @@ export class HospitalDetailComponent implements OnInit {
       mfaCode: '',
       busy: false,
       errorKey: null,
-      errorText: null,
     });
   }
 
@@ -125,14 +121,18 @@ export class HospitalDetailComponent implements OnInit {
   submitDialog(): void {
     const state = this.dialog();
     if (!state) return;
-    this.dialog.set({ ...state, busy: true, errorKey: null, errorText: null });
+    this.dialog.set({ ...state, busy: true, errorKey: null });
 
     this.dispatchLifecycleAction(state)
       .pipe(
         catchError((error: unknown) => {
           // A refused step-up (401 mfa_required, or 403 with a reason) stays in
-          // the dialog: the code is asked again, the session is untouched.
-          const stepUp = error instanceof HttpErrorResponse && isStepUpRefusal(error);
+          // the dialog, in the user's language: the code is asked again, the
+          // session is untouched. Only a step-up action's refusal is one.
+          const stepUp =
+            this.needsStepUp(state.kind) &&
+            error instanceof HttpErrorResponse &&
+            isStepUpRefusal(error);
           this.dialog.update((current) =>
             current
               ? {
@@ -141,7 +141,6 @@ export class HospitalDetailComponent implements OnInit {
                   errorKey: stepUp
                     ? 'HOSPITAL_LIFECYCLE.ERROR.STEP_UP_FAILED'
                     : 'HOSPITAL_LIFECYCLE.ERROR.ACTION_FAILED',
-                  errorText: stepUp ? serverMessage(error) : null,
                 }
               : current,
           );

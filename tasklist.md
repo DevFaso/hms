@@ -4819,6 +4819,15 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   `hospital_id` snapshot on `audit_event_logs` (a migration; V183 is earmarked for
   the Sage export, so take the next free number when this is scheduled) (found in
   #852's round-1 review). Open.
+- **Provider pages: fold leave/retry/stale-answer/404-invalidate into followFacility.**
+  The four provider pages (home, profile, staff, audit) each repeat the same
+  clear-on-leave, retry, drop-a-stale-answer and invalidate-on-404 code around
+  `followFacility` (found in #852's round-4 review). Open.
+- **External providers: an account has no "disabled by an administrator" flag**, so
+  the provider staff page tells "never activated" from "disabled" by use (a sign-in
+  or a confirmed assignment). A never-activated account a super-admin disabled before
+  its first use still reads as never activated and can be re-invited (found in #852's
+  round-4 review). Open.
 - **CDS acknowledgement with an unknown hospital id now answers 404** (was: saved as a
   global acknowledgement). Intended since #835; confirm no client relies on the old
   behaviour. Open.

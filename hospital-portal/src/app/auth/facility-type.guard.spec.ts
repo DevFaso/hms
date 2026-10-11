@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { WritableSignal, signal } from '@angular/core';
 import { ActivatedRouteSnapshot, Router, UrlTree, provideRouter } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -16,6 +16,7 @@ describe('FacilityTypeGuard and ProviderHomeRedirectGuard', () => {
   let resolved: WritableSignal<boolean>;
   let providerUser: WritableSignal<boolean>;
   let load: jasmine.Spy<() => Observable<ProviderSettings | null>>;
+  let reportUnavailable: jasmine.Spy;
 
   beforeEach(() => {
     settings = settingsFixture();
@@ -24,10 +25,11 @@ describe('FacilityTypeGuard and ProviderHomeRedirectGuard', () => {
     providerUser = signal(true);
     // The real context answers null until the session has resolved.
     load = jasmine.createSpy('load').and.callFake(() => of(resolved() ? settings : null));
+    reportUnavailable = jasmine.createSpy('reportUnavailable');
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
-        { provide: ProviderContextService, useValue: { load } },
+        { provide: ProviderContextService, useValue: { load, reportUnavailable } },
         {
           provide: RoleContextService,
           useFactory: () => ({
@@ -98,6 +100,19 @@ describe('FacilityTypeGuard and ProviderHomeRedirectGuard', () => {
     load.and.returnValue(throwError(() => new HttpErrorResponse({ status: 0 })));
     expect(path(redirect().result())).toBe('/provider');
   });
+
+  it('a session that never resolves in time opens the page in its retry state, never /error/404', fakeAsync(() => {
+    resolved.set(false);
+    const guard = run({ facilityTypes: ['PHARMACY'], providerAdmin: true });
+    TestBed.tick();
+    expect(guard.result()).toBeUndefined();
+
+    tick(15001);
+
+    expect(guard.result()).toBeTrue();
+    expect(reportUnavailable).toHaveBeenCalledTimes(1);
+    expect(load).not.toHaveBeenCalled();
+  }));
 
   it('sends anyone who acts at no provider facility to the not-found page', () => {
     settings = null;

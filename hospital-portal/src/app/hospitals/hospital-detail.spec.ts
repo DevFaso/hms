@@ -236,7 +236,6 @@ describe('HospitalDetailComponent (MVP-c2-frontend)', () => {
     cmp.patchDialog('reason', 'non-payment');
     cmp.submitDialog();
     expect(cmp.dialog()?.errorKey).toBe('HOSPITAL_LIFECYCLE.ERROR.STEP_UP_FAILED');
-    expect(cmp.dialog()?.errorText).toContain('mfa_required');
 
     lifecycleService.archive.and.returnValue(
       throwError(() => new HttpErrorResponse({ status: 403, error: { message: 'Wrong code' } })),
@@ -246,8 +245,19 @@ describe('HospitalDetailComponent (MVP-c2-frontend)', () => {
     cmp.patchDialog('mfaCode', '000000');
     cmp.submitDialog();
     expect(cmp.dialog()?.errorKey).toBe('HOSPITAL_LIFECYCLE.ERROR.STEP_UP_FAILED');
-    expect(cmp.dialog()?.errorText).toBe('Wrong code');
     expect(cmp.dialog()?.busy).toBeFalse();
+  });
+
+  it('a 403 on an action that sends no step-up (restore) is an ordinary failure', () => {
+    hospitalService.getById.and.returnValue(of(fakeHospital()));
+    lifecycleService.get.and.returnValue(of(fakeLifecycle('SUSPENDED')));
+    lifecycleService.restore.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 403, error: { message: 'Not verified' } })),
+    );
+    const cmp = setup();
+    cmp.openDialog('restore');
+    cmp.submitDialog();
+    expect(cmp.dialog()?.errorKey).toBe('HOSPITAL_LIFECYCLE.ERROR.ACTION_FAILED');
   });
 
   it('stateColor returns a sane fallback for null', () => {

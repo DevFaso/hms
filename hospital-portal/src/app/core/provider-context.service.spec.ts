@@ -193,6 +193,40 @@ describe('ProviderContextService', () => {
     expect(context.status()).toBe('provider');
   });
 
+  it('invalidate() while a request is pending: the superseded answer is dropped and never clears its successor', () => {
+    const first = new Subject<ProviderSettings>();
+    const second = new Subject<ProviderSettings>();
+    const answers = [first, second];
+    answer = () => answers.shift()!;
+    const context = setup();
+    context.load().subscribe();
+    context.invalidate();
+    expect(calls).toBe(2);
+
+    first.next(settingsFixture({ facilityId: 'stale' }));
+    first.complete();
+    expect(context.settings()).toBeNull();
+    expect(context.status()).toBe('pending');
+    // The successor is still the one in flight: no third request.
+    context.load().subscribe();
+    expect(calls).toBe(2);
+
+    second.next(settingsFixture());
+    second.complete();
+    expect(context.settings()?.facilityId).toBe('f-1');
+    expect(context.status()).toBe('provider');
+  });
+
+  it('reportUnavailable() shows the retry state and caches nothing', () => {
+    const context = setup();
+    value(context);
+    context.reportUnavailable();
+    expect(context.status()).toBe('error');
+    expect(context.settings()).toBeNull();
+    value(context);
+    expect(calls).toBe(2);
+  });
+
   it('forget() drops the answer', () => {
     const context = setup();
     value(context);

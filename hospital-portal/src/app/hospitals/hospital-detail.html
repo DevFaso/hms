@@ -188,7 +188,7 @@
 
           @if (state.errorKey) {
             <p class="form-error" role="alert">
-              {{ state.errorText ?? (state.errorKey | translate) }}
+              {{ state.errorKey | translate }}
             </p>
           }
 

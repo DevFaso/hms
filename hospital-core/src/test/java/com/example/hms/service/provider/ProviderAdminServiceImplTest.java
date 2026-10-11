@@ -285,8 +285,16 @@ class ProviderAdminServiceImplTest {
         member(invited, invitedRow);
         User disabled = user("disabled");
         disabled.setActive(false);
+        // Signed in once, so it was activated: inactive now means disabled.
+        disabled.setLastLoginAt(LocalDateTime.of(2026, 9, 1, 8, 0));
         UserRoleHospitalAssignment disabledRow = row(disabled, "ROLE_PHARMACIST", pharmacy, false);
         member(disabled, disabledRow);
+        // Registered, never activated (Option A: every account starts inactive).
+        User neverActivated = user("never-activated");
+        neverActivated.setActive(false);
+        UserRoleHospitalAssignment neverActivatedRow = row(neverActivated, "ROLE_PHARMACIST", pharmacy, false);
+        neverActivatedRow.setConfirmationCode("654321");
+        member(neverActivated, neverActivatedRow);
         User peer = user("peer");
         UserRoleHospitalAssignment peerRow = row(peer, "ROLE_PROVIDER_ADMIN", pharmacy, true);
         member(peer, peerRow);
@@ -300,7 +308,7 @@ class ProviderAdminServiceImplTest {
         UserRoleHospitalAssignment selfRow = row(adminUser, "ROLE_PROVIDER_ADMIN", pharmacy, true);
         member(adminUser, selfRow);
         when(assignmentRepository.findStaffRowsByHospitalId(pharmacy.getId())).thenReturn(List.of(
-            activeRow, invitedRow, disabledRow, peerRow, formerRow, globalRow, selfRow));
+            activeRow, invitedRow, disabledRow, neverActivatedRow, peerRow, formerRow, globalRow, selfRow));
 
         Map<String, ProviderStaffMemberDTO> byName = new java.util.HashMap<>();
         service.listStaff().orElseThrow().forEach(m -> byName.put(m.getUsername(), m));
@@ -311,13 +319,15 @@ class ProviderAdminServiceImplTest {
         assertThat(byName.get("invited").isCanReinvite()).isTrue();
         assertThat(byName.get("disabled").isCanDeactivate()).isFalse();
         assertThat(byName.get("disabled").isCanReinvite()).isFalse();
+        assertThat(byName.get("never-activated").isCanReinvite()).isTrue();
+        assertThat(byName.get("never-activated").isCanDeactivate()).isTrue();
         for (String shielded : List.of("peer", "former", "global-admin", "admin")) {
             assertThat(byName.get(shielded).isCanDeactivate()).as(shielded).isFalse();
             assertThat(byName.get(shielded).isCanReinvite()).as(shielded).isFalse();
         }
         // One batched read of every member's rows, never one per member.
         verify(assignmentRepository).findByUserIdIn(Set.of(active.getId(), invited.getId(), disabled.getId(),
-            peer.getId(), formerAdmin.getId(), globalAdmin.getId(), adminUser.getId()));
+            neverActivated.getId(), peer.getId(), formerAdmin.getId(), globalAdmin.getId(), adminUser.getId()));
         verify(assignmentRepository, never()).findByUserId(any());
         // The flags agree with what the endpoints actually do.
         assertThat(service.activateStaff(disabled.getId().toString())).isEmpty();
@@ -395,15 +405,37 @@ class ProviderAdminServiceImplTest {
     }
 
     @Test
-    @DisplayName("activate never re-invites a disabled account: entering the code would switch it back on")
+    @DisplayName("activate never re-invites a disabled account (activated once): entering the code would switch it back on")
     void activateRefusesADisabledAccount() {
         admin();
-        User disabled = user("disabled");
-        disabled.setActive(false);
-        member(disabled, row(disabled, "ROLE_PHARMACIST", pharmacy, false));
+        User signedInOnce = user("signed-in-once");
+        signedInOnce.setActive(false);
+        signedInOnce.setLastLoginAt(LocalDateTime.of(2026, 9, 1, 8, 0));
+        member(signedInOnce, row(signedInOnce, "ROLE_PHARMACIST", pharmacy, false));
+        User confirmedOnce = user("confirmed-once");
+        confirmedOnce.setActive(false);
+        UserRoleHospitalAssignment confirmed = row(confirmedOnce, "ROLE_PHARMACIST", pharmacy, false);
+        confirmed.setConfirmationVerifiedAt(LocalDateTime.of(2026, 9, 1, 8, 0));
+        member(confirmedOnce, confirmed);
 
-        assertThat(service.activateStaff(disabled.getId().toString())).isEmpty();
+        assertThat(service.activateStaff(signedInOnce.getId().toString())).isEmpty();
+        assertThat(service.activateStaff(confirmedOnce.getId().toString())).isEmpty();
         verifyNoInteractions(assignmentService);
+    }
+
+    @Test
+    @DisplayName("activate re-invites an account that was NEVER activated (Option A: it starts inactive)")
+    void activateReinvitesANeverActivatedAccount() {
+        admin();
+        User fresh = user("fresh");
+        fresh.setActive(false);
+        UserRoleHospitalAssignment pending = row(fresh, "ROLE_PHARMACIST", pharmacy, false);
+        member(fresh, pending);
+
+        Optional<ProviderStaffMemberDTO> answer = service.activateStaff(fresh.getId().toString());
+
+        assertThat(answer).isPresent();
+        verify(assignmentService).regenerateProviderStaffAssignmentCodes(List.of(pending.getId()), true);
     }
 
     // ── helpers ────────────────────────────────────────────────────────────

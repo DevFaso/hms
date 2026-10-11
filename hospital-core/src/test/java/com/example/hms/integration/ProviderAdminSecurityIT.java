@@ -257,6 +257,31 @@ class ProviderAdminSecurityIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("activate re-invites a member who NEVER activated (Option A: accounts start inactive)")
+    void neverActivatedMemberIsReinvited() throws Exception {
+        UserRoleHospitalAssignment row = rowOf(pharmacist, pharmacyId);
+        row.setActive(false);
+        row.setConfirmationCode(null);
+        row.setConfirmationVerifiedAt(null);
+        assignmentRepository.save(row);
+        User account = userRepository.findById(pharmacist.getId()).orElseThrow();
+        account.setActive(false);
+        account.setLastLoginAt(null);
+        userRepository.save(account);
+
+        JsonNode listed = json(as(adminToken, get("/provider/staff")));
+        listed.forEach(member -> {
+            if (member.get("userId").asText().equals(pharmacist.getId().toString())) {
+                assertThat(member.get("canReinvite").asBoolean()).isTrue();
+            }
+        });
+        MvcResult result = as(adminToken, post("/provider/staff/{userId}/activate", pharmacist.getId()));
+
+        assertThat(result.getResponse().getStatus()).as(result.getResponse().getContentAsString()).isEqualTo(200);
+        assertThat(rowOf(pharmacist, pharmacyId).getConfirmationCode()).isNotBlank();
+    }
+
+    @Test
     @DisplayName("activate never re-invites a disabled account: the unmapped answer, no code issued")
     void disabledAccountIsNotReinvited() throws Exception {
         UserRoleHospitalAssignment row = rowOf(pharmacist, pharmacyId);
@@ -265,6 +290,8 @@ class ProviderAdminSecurityIT extends BaseIT {
         assignmentRepository.save(row);
         User account = userRepository.findById(pharmacist.getId()).orElseThrow();
         account.setActive(false);
+        // Signed in once: inactive now means disabled, not never activated.
+        account.setLastLoginAt(LocalDateTime.now());
         userRepository.save(account);
         String unmapped = ProviderConfinementSecurityIT.refusalShape(as(doctorToken(), get(UNMAPPED)));
 
@@ -391,6 +418,23 @@ class ProviderAdminSecurityIT extends BaseIT {
         UUID documentRow = auditRow(pharmacist, pharmacyId, "PATIENT_DOCUMENT", null);
         // Any /users/** write (a patient account's included) is not facility administration.
         UUID userRow = auditRow(pharmacist, pharmacyId, "USER", null);
+        // A role-assignment row about a seat here, written by no seat holder
+        // (a registrar, a super-admin, the system): never shown as a facility actor.
+        UUID notTheHolderRow = auditEventLogRepository.save(AuditEventLog.builder()
+            .assignment(rowOf(pharmacist, pharmacyId))
+            .hospitalName("Test facility")
+            .eventType(AuditEventType.ROLE_ASSIGNED)
+            .eventDescription("Assigned role")
+            .eventTimestamp(LocalDateTime.now())
+            .status(AuditStatus.SUCCESS)
+            .entityType("USER_ROLE_ASSIGNMENT")
+            .roleName("PHARMACIST")
+            .build()).getId();
+        // A row naming the PATIENT role, with no patient id: excluded all the same.
+        AuditEventLog patientRole = auditEventLogRepository.findById(
+            auditRow(pharmacist, pharmacyId, "USER_ROLE_ASSIGNMENT", null)).orElseThrow();
+        patientRole.setRoleName("ROLE_PATIENT");
+        auditEventLogRepository.save(patientRole);
         // Platform support acting as the pharmacist: the row says so.
         UUID supportId = UUID.randomUUID();
         AuditEventLog impersonated = auditEventLogRepository.findById(
@@ -405,7 +449,8 @@ class ProviderAdminSecurityIT extends BaseIT {
         page.get("entries").forEach(entry -> ids.add(entry.get("id").asText()));
         assertThat(ids).contains(ownRow.toString(), staffRow.toString(), impersonated.getId().toString())
             .doesNotContain(otherFacilityRow.toString(), patientIdRow.toString(), patientEntityRow.toString(),
-                prescriptionRow.toString(), labOrderRow.toString(), documentRow.toString(), userRow.toString());
+                prescriptionRow.toString(), labOrderRow.toString(), documentRow.toString(), userRow.toString(),
+                notTheHolderRow.toString(), patientRole.getId().toString());
         page.get("entries").forEach(entry -> assertThat(entry.has("eventDescription") || entry.has("ipAddress")
             || entry.has("details") || entry.has("patientId")).as(entry.toString()).isFalse());
         assertThat(page.get("totalElements").asLong()).isEqualTo(ids.size());

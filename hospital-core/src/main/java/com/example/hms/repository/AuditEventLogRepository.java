@@ -205,7 +205,16 @@ public interface AuditEventLogRepository
      * written at the facility later (a prescription, a lab order, a document)
      * can never appear, whatever its entity type is called. A row naming a
      * patient is excluded on top of that. The projection carries ids and codes
-     * only: no description, no details, no IP address (plan §6.9). Under
+     * only: no description, no details, no IP address (plan §6.9).
+     *
+     * <p>The actor must be the holder of the assignment that places the row
+     * at the facility ({@code a.user = asg.user}), i.e. hold a seat there: a
+     * row about someone else's seat (a registrar or a super-admin recording a
+     * role assigned AT the facility) never shows its writer as a facility
+     * actor, and the Role column is always the actor's own role there. The
+     * audit service already drops such a link today (it unlinks an assignment
+     * whose holder is not the actor); this keeps the trail right whatever a
+     * producer sends. A row naming the PATIENT role is excluded too. Under
      * impersonation the row's actor is the impersonated member; the
      * impersonator columns say who really acted (platform support). A row whose
      * assignment was hard-deleted has no facility left and drops out, as it
@@ -214,17 +223,21 @@ public interface AuditEventLogRepository
      * @param entityTypes the allowed entity types, exactly as the producers write them (upper-case)
      */
     @Query(value = "SELECT new com.example.hms.payload.dto.provider.ProviderAuditEntryDTO("
-           + "a.id, a.eventTimestamp, a.eventType, a.status, u.id, a.userName, a.roleName, "
+           + "a.id, a.eventTimestamp, a.eventType, a.status, a.user.id, a.userName, a.roleName, "
            + "a.entityType, a.resourceId, a.impersonatorUserId, a.impersonatorUsername) "
-           + "FROM AuditEventLog a JOIN a.assignment asg LEFT JOIN a.user u "
+           + "FROM AuditEventLog a JOIN a.assignment asg "
            + "WHERE asg.hospital.id = :facilityId "
+           + "AND a.user.id = asg.user.id "
            + "AND a.entityType IN :entityTypes "
            + "AND a.patientId IS NULL "
+           + "AND (a.roleName IS NULL OR UPPER(a.roleName) NOT IN ('PATIENT', 'ROLE_PATIENT')) "
            + "ORDER BY a.eventTimestamp DESC, a.id DESC",
         countQuery = "SELECT COUNT(a) FROM AuditEventLog a JOIN a.assignment asg "
            + "WHERE asg.hospital.id = :facilityId "
+           + "AND a.user.id = asg.user.id "
            + "AND a.entityType IN :entityTypes "
-           + "AND a.patientId IS NULL")
+           + "AND a.patientId IS NULL "
+           + "AND (a.roleName IS NULL OR UPPER(a.roleName) NOT IN ('PATIENT', 'ROLE_PATIENT'))")
     Page<ProviderAuditEntryDTO> findProviderFacilityTrail(@Param("facilityId") UUID facilityId,
                                                           @Param("entityTypes") Collection<String> entityTypes,
                                                           Pageable pageable);
