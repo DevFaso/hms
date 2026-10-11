@@ -232,6 +232,25 @@ describe('provider shell pages', () => {
     expect(failed.host().querySelector('[data-test="load-failed"]')).not.toBeNull();
   });
 
+  it('staff: losing the admin role at the same facility reads the page again (and its 404 clears it)', () => {
+    const { cmp, host } = render(ProviderStaffComponent);
+    expect(portal.staff).toHaveBeenCalledTimes(1);
+
+    // A re-ask: same facility, no longer admin. The page reads again.
+    portal.staff.and.returnValue(throwError(() => NOT_AVAILABLE));
+    settingsSignal.set(settingsFixture({ providerAdmin: false }));
+    host();
+
+    expect(portal.staff).toHaveBeenCalledTimes(2);
+    expect(cmp.notAvailable()).toBeTrue();
+    expect(cmp.staff()).toEqual([]);
+
+    // The same answer again reloads nothing: a key change, never a loop.
+    settingsSignal.set(settingsFixture({ providerAdmin: false }));
+    host();
+    expect(portal.staff).toHaveBeenCalledTimes(2);
+  });
+
   it('home: follows the facility; a re-ask of the same facility does not reload; stale answers drop', () => {
     const lateA = new Subject<ProviderProfile>();
     portal.profile.and.returnValue(lateA);

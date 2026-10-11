@@ -142,6 +142,9 @@ export class ProviderStaffComponent {
         if (facility !== this.shownFacility()) return;
         if (isNotAvailable(err)) {
           this.notAvailable.set(true);
+          // Nothing of the old list stays: no row actions on a page the
+          // caller may no longer read.
+          this.staff.set([]);
           // The seat went away: the shell and the guards ask the server again.
           this.context.invalidate();
         } else {

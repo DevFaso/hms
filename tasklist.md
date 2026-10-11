@@ -4836,9 +4836,15 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   Same as `POST /users/admin-register` today. Open until P1-T11.
 - **External providers: the facility audit trail scopes through a live assignment
   join**, so rows whose assignment was hard-deleted vanish from it; it needs a
-  `hospital_id` snapshot on `audit_event_logs` (a migration; V183 is earmarked for
-  the Sage export, so take the next free number when this is scheduled) (found in
-  #852's round-1 review). Open.
+  `hospital_id` snapshot on `audit_event_logs` (a migration: V183 is #853's MFA
+  hotfix, V184 #852's admin-disable marker, the Sage export plan takes V185, so
+  take the next free number when this is scheduled) (found in #852's round-1
+  review). Open.
+- **Provider audit page: its 400 answers are English text.** A bad `page`/`size` on
+  `GET /provider/audit` answers "The page size must be at least 1." and similar as
+  literal English (IllegalArgumentException), not message-bundle keys: the
+  backend-composed-text layer of French completeness (found in #852's round-9
+  review). Open.
 - **Provider pages: fold leave/retry/stale-answer/404-invalidate into followFacility.**
   The four provider pages (home, profile, staff, audit) each repeat the same
   clear-on-leave, retry, drop-a-stale-answer and invalidate-on-404 code around

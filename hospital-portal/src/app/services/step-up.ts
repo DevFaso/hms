@@ -50,6 +50,25 @@ export function isStepUpAction(action: string): boolean {
   return STEP_UP_ACTIONS.has(action);
 }
 
+/**
+ * The translated message for a step-up refusal: a wrong or missing code is
+ * not the same remedy as "enrol MFA first" or "try again in a moment".
+ */
+export function stepUpRefusalKey(error: HttpErrorResponse): string {
+  const body = error.error as { message?: unknown; code?: unknown; reason?: unknown } | null;
+  const text = [body?.reason, body?.code, body?.message]
+    .filter((part): part is string => typeof part === 'string')
+    .join(' ')
+    .toLowerCase();
+  if (text.includes('notenrolled') || text.includes('must enrol')) {
+    return 'HOSPITAL_LIFECYCLE.ERROR.STEP_UP_NOT_ENROLLED';
+  }
+  if (text.includes('unavailable')) {
+    return 'HOSPITAL_LIFECYCLE.ERROR.STEP_UP_UNAVAILABLE';
+  }
+  return 'HOSPITAL_LIFECYCLE.ERROR.STEP_UP_FAILED';
+}
+
 /** The reason-code prefix of a step-up refusal answered 403 (hotfix #853). */
 const STEP_UP_REASON_PREFIX = 'mfa.stepup.';
 

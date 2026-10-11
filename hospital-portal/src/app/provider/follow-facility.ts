@@ -33,19 +33,29 @@ export interface FacilityFollower {
 export function followFacility(follower: FacilityFollower): () => string | null {
   const context = inject(ProviderContextService);
   let shown: string | null = null;
+  let shownKey: string | null = null;
   effect(() => {
     const status = context.status();
     const facilityId = context.settings()?.facilityId ?? null;
+    // The admin flag is part of what the page shows (admin-only pages, row
+    // actions): a re-ask that keeps the facility but drops the admin role
+    // reads the page again, and its 404 then clears it. A key change, never
+    // a loop: the same answer twice reloads nothing.
+    const key =
+      facilityId === null ? null : `${facilityId}:${context.settings()?.providerAdmin === true}`;
     untracked(() => {
-      if (status === 'provider' && facilityId !== null) {
-        if (facilityId === shown) return;
+      if (status === 'provider' && facilityId !== null && key !== null) {
+        if (key === shownKey) return;
+        shownKey = key;
         shown = facilityId;
         follower.load(facilityId);
       } else if (status === 'none') {
         shown = null;
+        shownKey = null;
         follower.cleared();
       } else if (status === 'error') {
         shown = null;
+        shownKey = null;
         follower.failed();
       }
     });

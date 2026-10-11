@@ -296,7 +296,7 @@ describe('ProviderDetailComponent', () => {
     cmp.submitLifecycle();
     expect(cmp.lifecycleDialog()).not.toBeNull();
     // Translated, never the server's English code text.
-    expect(cmp.dialogError()).toBe('PROVIDER.LIFECYCLE.STEP_UP_FAILED');
+    expect(cmp.dialogError()).toBe('HOSPITAL_LIFECYCLE.ERROR.STEP_UP_FAILED');
     expect(host().querySelector('#lifecycle-mfa-code')).not.toBeNull();
 
     // A 403 that is not a step-up refusal (no mfa.stepup.* reason): an ordinary failure.
@@ -310,7 +310,7 @@ describe('ProviderDetailComponent', () => {
       ),
     );
     cmp.submitLifecycle();
-    expect(cmp.dialogError()).toBe('PROVIDER.LIFECYCLE.STEP_UP_FAILED');
+    expect(cmp.dialogError()).toBe('HOSPITAL_LIFECYCLE.ERROR.STEP_UP_FAILED');
     expect(cmp.lifecycleNeedsStepUp('restore')).toBeFalse();
   });
 

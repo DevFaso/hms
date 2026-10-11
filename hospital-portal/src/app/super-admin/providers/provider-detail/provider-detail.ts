@@ -29,7 +29,7 @@ import {
   serverMessage,
 } from '../../../services/provider.model';
 import { SuperAdminProviderService } from '../../../services/super-admin-provider.service';
-import { isStepUpAction, isStepUpRefusal } from '../../../services/step-up';
+import { isStepUpAction, isStepUpRefusal, stepUpRefusalKey } from '../../../services/step-up';
 import { UserDetail } from '../../../services/user.service';
 import { deliveryWarningKeys } from '../../../shared/delivery-warnings';
 import { EnumLabelPipe } from '../../../shared/pipes/enum-label.pipe';
@@ -355,7 +355,7 @@ export class ProviderDetailComponent implements OnInit {
         // leaves the session alone for it. Only a step-up action's refusal
         // is one: a 403 on verify, reject or revoke is an ordinary refusal.
         if (stepUp && err instanceof HttpErrorResponse && isStepUpRefusal(err)) {
-          this.dialogError.set(this.translate.instant('PROVIDER.LIFECYCLE.STEP_UP_FAILED'));
+          this.dialogError.set(this.translate.instant(stepUpRefusalKey(err)));
           return;
         }
         this.dialogError.set(

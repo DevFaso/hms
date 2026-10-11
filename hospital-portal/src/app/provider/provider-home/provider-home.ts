@@ -88,6 +88,7 @@ export class ProviderHomeComponent {
         if (facility !== this.shownFacility()) return;
         if (isNotAvailable(err)) {
           this.notAvailable.set(true);
+          this.profile.set(null);
           // The seat went away: the shell and the guards ask the server again.
           this.context.invalidate();
         } else {

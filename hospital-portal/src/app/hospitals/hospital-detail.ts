@@ -19,7 +19,7 @@ import {
 } from '../services/hospital-lifecycle.model';
 import { HospitalLifecycleService } from '../services/hospital-lifecycle.service';
 import { HospitalResponse, HospitalService } from '../services/hospital.service';
-import { isStepUpAction, isStepUpRefusal } from '../services/step-up';
+import { isStepUpAction, isStepUpRefusal, stepUpRefusalKey } from '../services/step-up';
 
 type ActionKind = 'suspend' | 'restore' | 'archive' | 'schedule-purge' | 'cancel-purge';
 
@@ -139,7 +139,7 @@ export class HospitalDetailComponent implements OnInit {
                   ...current,
                   busy: false,
                   errorKey: stepUp
-                    ? 'HOSPITAL_LIFECYCLE.ERROR.STEP_UP_FAILED'
+                    ? stepUpRefusalKey(error as HttpErrorResponse)
                     : 'HOSPITAL_LIFECYCLE.ERROR.ACTION_FAILED',
                 }
               : current,
@@ -205,7 +205,10 @@ export class HospitalDetailComponent implements OnInit {
    * the beginning of the picked day, so today is already past (the server
    * refuses it) and a cleared field means the server's 30-day default.
    */
-  readonly minPurgeDate = localDay(1);
+  get minPurgeDate(): string {
+    // Read each time: a page left open past midnight moves with the clock.
+    return localDay(1);
+  }
 
   isPurgeDateValid(state: ActionDialog): boolean {
     if (!this.needsScheduledFor(state.kind) || !state.scheduledFor) return true;
@@ -238,10 +241,6 @@ export class HospitalDetailComponent implements OnInit {
   }
 }
 
-/**
- * The picked purge day (`YYYY-MM-DD` from the date input) as the ISO instant
- * the backend reads: the start of that day in the operator's time zone.
- */
 /** `YYYY-MM-DD` of the local day `offset` days from today. */
 export function localDay(offset: number): string {
   const d = new Date();
@@ -250,6 +249,10 @@ export function localDay(offset: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/**
+ * The picked purge day (`YYYY-MM-DD` from the date input) as the ISO instant
+ * the backend reads: the start of that day in the operator's time zone.
+ */
 export function purgeInstant(day: string | null | undefined): string | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day ?? '');
   if (!match) {

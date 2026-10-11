@@ -21,7 +21,7 @@ import {
   TenantLifecycleResponse,
 } from '../services/organization.service';
 import { ToastService } from '../core/toast.service';
-import { isStepUpRefusal } from '../services/step-up';
+import { isStepUpRefusal, stepUpRefusalKey } from '../services/step-up';
 
 type LifecycleAction = 'suspend' | 'restore' | 'archive' | 'schedule-purge' | 'cancel-purge';
 
@@ -204,7 +204,7 @@ export class OrganizationDetailComponent implements OnInit {
         this.submitting.set(false);
         this.toast.error(
           err instanceof HttpErrorResponse && isStepUpRefusal(err)
-            ? this.translate.instant('HOSPITAL_LIFECYCLE.ERROR.STEP_UP_FAILED')
+            ? this.translate.instant(stepUpRefusalKey(err))
             : (err?.error?.message ??
                 this.translate.instant('TENANT_LIFECYCLE.TOAST.ACTION_FAILED')),
         );

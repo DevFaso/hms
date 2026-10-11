@@ -603,7 +603,9 @@
     },
     "ERROR": {
       "ACTION_FAILED": "Lifecycle action failed. Try again.",
-      "STEP_UP_FAILED": "Two-step verification failed. Enter a current authenticator or backup code."
+      "STEP_UP_FAILED": "Two-step verification failed. Enter a current authenticator or backup code.",
+      "STEP_UP_NOT_ENROLLED": "This action needs two-step verification, and your account has no authenticator yet. Set one up in your profile, then try again.",
+      "STEP_UP_UNAVAILABLE": "Two-step verification could not be checked just now. Try again in a moment."
     }
   },
   "REGION_POLICY": {

@@ -9,6 +9,7 @@ import {
   MFA_TOKEN_HEADER,
   STEP_UP_REQUEST,
   isStepUpRefusal,
+  stepUpRefusalKey,
   stepUpRequestOptions,
 } from './step-up';
 
@@ -66,6 +67,29 @@ describe('step-up requests', () => {
     const req = httpMock.expectOne((r) => r.url.endsWith('/h-1/suspend'));
     expect(req.request.context.get(STEP_UP_REQUEST)).toBeTrue();
     req.flush({});
+  });
+
+  describe('stepUpRefusalKey', () => {
+    it('a wrong or missing code, an actor with no authenticator, and an outage each say what to do', () => {
+      const wrong = new HttpErrorResponse({ status: 403, error: { reason: 'mfa.stepup.invalid' } });
+      const notEnrolled = new HttpErrorResponse({
+        status: 403,
+        error: { reason: 'mfa.stepup.notEnrolled' },
+      });
+      const strict401 = new HttpErrorResponse({
+        status: 401,
+        error: { message: 'mfa_required: actor must enrol MFA before suspending' },
+      });
+      const unavailable = new HttpErrorResponse({
+        status: 403,
+        error: { reason: 'mfa.stepup.unavailable' },
+      });
+
+      expect(stepUpRefusalKey(wrong)).toBe('HOSPITAL_LIFECYCLE.ERROR.STEP_UP_FAILED');
+      expect(stepUpRefusalKey(notEnrolled)).toBe('HOSPITAL_LIFECYCLE.ERROR.STEP_UP_NOT_ENROLLED');
+      expect(stepUpRefusalKey(strict401)).toBe('HOSPITAL_LIFECYCLE.ERROR.STEP_UP_NOT_ENROLLED');
+      expect(stepUpRefusalKey(unavailable)).toBe('HOSPITAL_LIFECYCLE.ERROR.STEP_UP_UNAVAILABLE');
+    });
   });
 
   describe('isStepUpRefusal', () => {

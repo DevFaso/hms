@@ -603,7 +603,9 @@
     },
     "ERROR": {
       "ACTION_FAILED": "La acción del ciclo de vida falló. Reintente.",
-      "STEP_UP_FAILED": "La verificación en dos pasos ha fallado. Introduzca un código del autenticador o de respaldo vigente."
+      "STEP_UP_FAILED": "La verificación en dos pasos ha fallado. Introduzca un código del autenticador o de respaldo vigente.",
+      "STEP_UP_NOT_ENROLLED": "Esta acción requiere verificación en dos pasos y su cuenta aún no tiene autenticador. Configure uno en su perfil y vuelva a intentarlo.",
+      "STEP_UP_UNAVAILABLE": "No se pudo comprobar la verificación en dos pasos en este momento. Vuelva a intentarlo en un momento."
     }
   },
   "REGION_POLICY": {

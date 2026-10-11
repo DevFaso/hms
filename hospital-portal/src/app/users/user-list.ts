@@ -22,7 +22,7 @@ import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
-import { isStepUpRefusal } from '../services/step-up';
+import { isStepUpRefusal, stepUpRefusalKey } from '../services/step-up';
 
 const MEDICAL_ROLE_CODES = new Set([
   'ROLE_DOCTOR',
@@ -563,7 +563,7 @@ export class UserListComponent implements OnInit, OnDestroy {
           this.impersonating.set(false);
           this.impersonateError.set(
             err instanceof HttpErrorResponse && isStepUpRefusal(err)
-              ? this.translate.instant('HOSPITAL_LIFECYCLE.ERROR.STEP_UP_FAILED')
+              ? this.translate.instant(stepUpRefusalKey(err))
               : (err?.error?.message ?? this.translate.instant('USERS.TOAST.IMPERSONATE_FAILED')),
           );
         },

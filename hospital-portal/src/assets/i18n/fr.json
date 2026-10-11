@@ -603,7 +603,9 @@
     },
     "ERROR": {
       "ACTION_FAILED": "Échec de l'action sur le cycle de vie. Réessayez.",
-      "STEP_UP_FAILED": "La vérification en deux étapes a échoué. Saisissez un code d'authentificateur ou de secours en cours de validité."
+      "STEP_UP_FAILED": "La vérification en deux étapes a échoué. Saisissez un code d'authentificateur ou de secours en cours de validité.",
+      "STEP_UP_NOT_ENROLLED": "Cette action demande une vérification en deux étapes et votre compte n'a pas encore d'authentificateur. Configurez-en un dans votre profil, puis réessayez.",
+      "STEP_UP_UNAVAILABLE": "La vérification en deux étapes n'a pas pu être contrôlée pour le moment. Réessayez dans un instant."
     }
   },
   "REGION_POLICY": {

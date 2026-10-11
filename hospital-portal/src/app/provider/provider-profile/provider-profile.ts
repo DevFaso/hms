@@ -124,6 +124,7 @@ export class ProviderProfileComponent {
         if (facility !== this.shownFacility()) return;
         if (isNotAvailable(err)) {
           this.notAvailable.set(true);
+          this.profile.set(null);
           this.context.invalidate();
         } else {
           this.loadFailed.set(true);

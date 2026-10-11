@@ -1089,18 +1089,17 @@ class UserServiceImplTest {
         }
 
         @Test
-        @DisplayName("V184: an edit that echoes active=false on a pending invitee marks nothing")
-        void echoingInactiveOnAPendingInvitee_isNotADisable() {
+        @DisplayName("V184: an explicit active=false on a pending invitee is a disable: their code cannot switch them on")
+        void explicitInactiveOnAPendingInvitee_isADisable() {
             stubHappyPath();
             user.setActive(false);
-            UpdateUserRequestDTO echo = new UpdateUserRequestDTO();
-            echo.setActive(false);
-            echo.setPhoneNumber("+22670999999");
+            UpdateUserRequestDTO disable = new UpdateUserRequestDTO();
+            disable.setActive(false);
 
-            userService.updateUser(userId, echo);
+            userService.updateUser(userId, disable);
 
-            // Only a real active -> inactive change is an administrator's disable.
-            assertThat(user.getDeactivatedByAdminAt()).isNull();
+            // The portal's edit never sends `active`: its presence is intent.
+            assertThat(user.getDeactivatedByAdminAt()).isNotNull();
         }
 
         @Test

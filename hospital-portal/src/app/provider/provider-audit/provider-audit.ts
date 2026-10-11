@@ -121,6 +121,7 @@ export class ProviderAuditComponent {
         if (!current()) return;
         if (isNotAvailable(err)) {
           this.notAvailable.set(true);
+          this.page.set(null);
           this.context.invalidate();
         } else {
           this.loadFailed.set(true);

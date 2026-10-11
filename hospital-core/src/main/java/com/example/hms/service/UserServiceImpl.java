@@ -1160,14 +1160,13 @@ public class UserServiceImpl implements UserService {
         if (dto.getActive() != null) {
             reactivated = Boolean.TRUE.equals(dto.getActive())
                     && !Boolean.TRUE.equals(user.isActive());
-            boolean disabled = Boolean.FALSE.equals(dto.getActive()) && user.isActive();
             user.setActive(dto.getActive());
-            // Record a real disable (active -> inactive) and clear it only on
-            // a real re-enable, so a provider re-invite or an invitation code
-            // can never switch the account back on from below. An edit that
-            // merely echoes the current state (active=false on a pending
-            // invitee, active=true on a live account) changes nothing.
-            if (disabled && user.getDeactivatedByAdminAt() == null) {
+            // An explicit active=false is an administrator's disable, also on
+            // a pending invitee (whose emailed code would otherwise switch the
+            // account on). The portal's user edit never sends `active`, so its
+            // presence is intent, not an echo. Cleared only on a real
+            // re-enable: an echoed active=true on a live account changes nothing.
+            if (Boolean.FALSE.equals(dto.getActive()) && user.getDeactivatedByAdminAt() == null) {
                 user.setDeactivatedByAdminAt(LocalDateTime.now());
             } else if (reactivated) {
                 user.setDeactivatedByAdminAt(null);

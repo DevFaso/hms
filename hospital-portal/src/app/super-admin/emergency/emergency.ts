@@ -20,7 +20,7 @@ import { HospitalResponse, HospitalService } from '../../services/hospital.servi
 import { Subject, debounceTime, switchMap, of, catchError, map } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RoleLabelPipe } from '../../shared/pipes/role-label.pipe';
-import { isStepUpRefusal } from '../../services/step-up';
+import { isStepUpRefusal, stepUpRefusalKey } from '../../services/step-up';
 
 interface PanelState {
   busy: boolean;
@@ -306,7 +306,7 @@ export class EmergencyComponent {
     // A refused step-up code: the translated answer, never the server's
     // English reason text.
     if (err instanceof HttpErrorResponse && isStepUpRefusal(err)) {
-      return this.translate.instant('HOSPITAL_LIFECYCLE.ERROR.STEP_UP_FAILED');
+      return this.translate.instant(stepUpRefusalKey(err));
     }
     if (err && typeof err === 'object' && 'error' in err) {
       const inner = (err as { error?: { message?: string } }).error;
