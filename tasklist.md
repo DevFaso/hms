@@ -4526,11 +4526,31 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   organizations only (the existing page size). (c) Department platform links
   have no UI and no enable/disable endpoint, only create and delete.
 
-- **Angular 22.2 deprecates `@angular/animations` and
-  `@angular/platform-browser-dynamic` (2026-10-04).** Dependabot's group bump
-  (#801) skipped both, so they were brought to 22.2.0 by hand to keep `npm ci`
-  working; replacing them (`animate.enter` / `animate.leave`, and
-  `@angular/platform-browser`) is separate work.
+- **~~Angular 22.2 deprecates `@angular/animations` and
+  `@angular/platform-browser-dynamic` (2026-10-04).~~ Done (#854,
+  2026-10-10): both removed.** Dependabot's group bump skipped both, twice:
+  on #801 they were brought to 22.2.0 by hand, and on #846 they stayed at
+  22.2.0 while `@angular/core` went to 22.2.1, so `npm ci` failed with
+  ERESOLVE. Nothing referenced either one (no import in `src/`, nothing in
+  `angular.json` or the tsconfigs; `platform-browser`'s peer on animations
+  is optional), so the replacement turned out to be a removal.
+
+- **No check that the pinned Angular framework packages agree (2026-10-10).**
+  Twice (#801, #846) a Dependabot group PR left one framework `@angular/*`
+  a patch behind `@angular/core`, and it only surfaced as an ERESOLVE in
+  `npm ci`. A small script in the portal gate that fails when the
+  exact-pinned framework entries in `package.json` differ would flag it on
+  the Dependabot PR itself (the CLI line - build, cli, ssr - is a caret
+  range on its own version, see `.github/dependabot.yml`).
+
+- **The portal overrides Vite to 7.3.5 under an Angular 22 builder that
+  wants Vite 8 (2026-10-11).** `overrides.vite` was set to 7.3.5 by
+  f4f70b844 (a security pin, Angular 20 era) and never revisited; on
+  develop `@angular/build` 22.2.x pins vite 8.x, yet the tree holds one
+  vite at 7.3.5. `ng build` and Karma barely touch Vite, so CI stays green;
+  `ng serve` and HMR run the builder on the wrong major (a local `ng serve`
+  failure was seen in the #855 worktree, unconfirmed as this cause). Drop
+  the override or move it to a patched 8.x, then run `npm start`.
 
 - **Push notifications have app code and no backend (2026-10-04).** #791
   shipped dormant push registration on both apps (FCM initialised only when

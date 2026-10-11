@@ -4,8 +4,10 @@ version: 2
 #
 # Two defects, both visible on PRs #592-#595:
 #
-# 1. Angular packages are released in lockstep and peer-depend on each other
-#    at the EXACT same version, and this project pins them exactly (no caret).
+# 1. Angular framework packages are released in lockstep and peer-depend on
+#    each other at the EXACT same version, and this project pins them exactly
+#    (no caret); zone.js and the CLI line (build, cli, ssr) are caret ranges,
+#    see the angular group below.
 #    Ungrouped, Dependabot opened one PR per package, each bumping a single
 #    @angular/* to 20.3.28+ while the lockfile held 20.3.27 for the rest. Every
 #    one of those PRs failed `npm ci` with ERESOLVE before a test ever ran —
@@ -26,7 +28,13 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     groups:
-      # The framework proper: lockstep peer deps, exact pins. Never split.
+      # Never split this group.
+      # Two release lines share this group: the framework (core, common,
+      # compiler, compiler-cli, forms, router, platform-*) is pinned exactly
+      # at one version; the CLI line (build, cli, ssr) has its own version,
+      # which may differ from the framework's. @angular/ssr tracks
+      # @angular/build's version, not @angular/core's (build peers on ssr at
+      # its own version), so all three stay caret ranges together (#854).
       # zone.js rides with it: each Angular major peer-requires a zone.js
       # minor (20 -> 0.15, 21+ -> 0.16), so a zone.js bump in the minor group
       # failed npm ci against the pinned core on PR #638 (2026-09-13).
@@ -37,7 +45,7 @@ updates:
         exclude-patterns:
           - "@angular/cdk"
           - "@angular/material"
-      # CDK and Material share their own version line (20.2.x here) and
+      # CDK and Material share their own version line and
       # peer-depend on each other; same argument, separate track.
       angular-components:
         patterns:
