@@ -12,7 +12,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { Subject, Subscription } from 'rxjs';
+import { Subscription } from 'rxjs';
 
 // FullCalendar 7: the plugins are entrypoints of the Angular wrapper (the
 // separate @fullcalendar/daygrid|timegrid|interaction packages ended at 6.x),
@@ -27,16 +27,12 @@ import {
   EventSourceFuncInfo,
   FullCalendarComponent,
   FullCalendarModule,
+  LocaleInput,
 } from '@fullcalendar/angular';
 import dayGridPlugin from '@fullcalendar/angular/daygrid';
 import timeGridPlugin from '@fullcalendar/angular/timegrid';
 import interactionPlugin from '@fullcalendar/angular/interaction';
 import classicThemePlugin from '@fullcalendar/angular/themes/classic';
-// Imported from `fullcalendar` itself: the wrapper's own `locales/*`
-// entrypoint is broken in 7.1.1 (its export map points at locales/*.mjs
-// files the package does not ship). English is built in.
-import esLocale from 'fullcalendar/locales/es';
-import frLocale from 'fullcalendar/locales/fr';
 
 import {
   AppointmentCalendarEvent,
@@ -44,9 +40,21 @@ import {
 } from '../../services/appointment-calendar.service';
 import { StaffService, StaffResponse } from '../../services/staff.service';
 import { RoleContextService } from '../../core/role-context.service';
-import { storedLang } from '../../shared/i18n/app-locale';
+import { storedLang, SupportedLang } from '../../shared/i18n/app-locale';
 
 type State = 'idle' | 'loading' | 'ready' | 'error';
+
+/**
+ * FullCalendar's locale for each portal language, loaded on demand so only
+ * the one in use is downloaded. English is built in. Imported from
+ * `fullcalendar` itself: the wrapper's `@fullcalendar/angular/locales/*`
+ * export is broken in 7.1.1 (it maps to locales/*.mjs files the package
+ * does not ship).
+ */
+const FULLCALENDAR_LOCALES: Partial<Record<SupportedLang, () => Promise<LocaleInput>>> = {
+  fr: () => import('fullcalendar/locales/fr').then((m) => m.default),
+  es: () => import('fullcalendar/locales/es').then((m) => m.default),
+};
 
 /**
  * Cadence-style visual scheduling grid for appointments. Wraps
@@ -55,8 +63,9 @@ type State = 'idle' | 'loading' | 'ready' | 'error';
  * provider view substitutes for the Premium "resource-timeline" plan.
  *
  * <p>Click an event → navigate to {@code /appointments/:id}.
- * Click an empty slot → navigate to {@code /appointments/new} with
- * the date + start time pre-filled in the route's query string.
+ * Click an empty slot → navigate to {@code /appointments/new} with the
+ * date (and, for a timed slot, the start time) in the query string. The
+ * form does not read them yet (tasklist.md, Standing platform debt).
  */
 @Component({
   selector: 'app-appointment-calendar',
@@ -105,24 +114,33 @@ type State = 'idle' | 'loading' | 'ready' | 'error';
       @if (state() === 'error') {
         <p class="cal-page__error" data-testid="appointment-calendar-error">
           {{ 'APPOINTMENT_CALENDAR.ERROR' | translate }}
+          @if (calendarOptions()) {
+            <button
+              type="button"
+              class="btn-secondary"
+              data-testid="appointment-calendar-retry"
+              (click)="retry()"
+            >
+              {{ 'COMMON.RETRY' | translate }}
+            </button>
+          }
         </p>
       }
 
-      @if (hospitalId(); as hid) {
-        <full-calendar [options]="calendarOptions" data-testid="appointment-calendar-grid" />
+      @if (calendarOptions(); as opts) {
+        <full-calendar [options]="opts" data-testid="appointment-calendar-grid" />
       }
     </section>
   `,
   // FullCalendar renders its DOM outside Angular's renderer, so emulated
-  // encapsulation could never reach it; every rule in the stylesheet is
-  // scoped under the page's .cal-page root instead.
+  // encapsulation could never reach it: the page's own rules are scoped
+  // under .cal-page, and the theme tokens sit on :root (see the stylesheet).
   encapsulation: ViewEncapsulation.None,
   styleUrl: './appointment-calendar.component.scss',
 })
 export class AppointmentCalendarComponent implements OnInit, OnDestroy {
   protected readonly state = signal<State>('idle');
   protected readonly providers = signal<StaffResponse[]>([]);
-  protected readonly hospitalId = signal<string | null>(null);
   protected selectedStaffId = '';
 
   private readonly calendarSvc = inject(AppointmentCalendarService);
@@ -130,43 +148,15 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
   private readonly roleContext = inject(RoleContextService);
   private readonly router = inject(Router);
 
-  private readonly destroyed$ = new Subject<void>();
   private inFlight?: Subscription;
 
   @ViewChild(FullCalendarComponent) private calendar?: FullCalendarComponent;
 
-  protected readonly calendarOptions: CalendarOptions = {
-    plugins: [classicThemePlugin, dayGridPlugin, timeGridPlugin, interactionPlugin],
-    // Same source as LOCALE_ID: the language is fixed for the page's life
-    // (switching it reloads), so reading it once here is enough.
-    locales: [frLocale, esLocale],
-    locale: storedLang(),
-    initialView: 'timeGridWeek',
-    headerToolbar: {
-      left: 'prev,next today',
-      center: 'title',
-      right: 'dayGridMonth,timeGridWeek,timeGridDay',
-    },
-    weekends: true,
-    nowIndicator: true,
-    height: 'auto',
-    allDaySlot: false,
-    slotMinTime: '06:00:00',
-    slotMaxTime: '21:00:00',
-    eventClick: (arg: EventClickInfo) => this.openAppointment(arg.event.id),
-    dateClick: (arg: DateClickInfo) => this.openCreateForSlot(arg.date, arg.allDay),
-    // A function source: FullCalendar calls it for every range it needs
-    // (first render, navigation, view change) and again on refetchEvents(),
-    // so the provider filter goes through the same single path.
-    events: (info, success, failure) => this.fetchEvents(info, success, failure),
-    // Every failed fetch lands here and becomes the page's error state;
-    // handling it also stops FullCalendar logging "Unhandled event source error".
-    eventSourceFailure: () => this.state.set('error'),
-  };
+  /** Null until the locale is in: the calendar never renders in English first. */
+  protected readonly calendarOptions = signal<CalendarOptions | null>(null);
 
   ngOnInit(): void {
     const hid = this.roleContext.effectiveHospitalIdForRequest();
-    this.hospitalId.set(hid ?? null);
     if (!hid) {
       this.state.set('error');
       return;
@@ -175,30 +165,75 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
       next: (s) => this.providers.set((s ?? []).filter((p) => isProvider(p))),
       error: () => this.providers.set([]),
     });
+    // Same source as LOCALE_ID: the language is fixed for the page's life
+    // (switching it reloads). A locale chunk that fails to load leaves the
+    // calendar in English rather than not there at all.
+    const loadLocale = FULLCALENDAR_LOCALES[storedLang()];
+    const locale: Promise<LocaleInput | null> = loadLocale
+      ? loadLocale().catch(() => null)
+      : Promise.resolve(null);
+    void locale.then((l) => this.calendarOptions.set(this.buildOptions(hid, l)));
   }
 
   ngOnDestroy(): void {
     this.inFlight?.unsubscribe();
-    this.destroyed$.next();
-    this.destroyed$.complete();
   }
 
   protected onProviderChange(): void {
-    // [(ngModel)] has already stored the pick; the range on screen is
-    // unchanged, so FullCalendar would not fetch on its own.
+    // [(ngModel)] has already stored the pick. Empty the grid first so the
+    // previous provider's patients are never shown under the new filter,
+    // even if the refetch fails; then fetch the unchanged range again.
+    const api = this.calendar?.getApi();
+    api?.removeAllEvents();
+    api?.refetchEvents();
+  }
+
+  protected retry(): void {
     this.calendar?.getApi().refetchEvents();
   }
 
+  private buildOptions(hid: string, locale: LocaleInput | null): CalendarOptions {
+    return {
+      plugins: [classicThemePlugin, dayGridPlugin, timeGridPlugin, interactionPlugin],
+      locale: locale ?? 'en',
+      initialView: 'timeGridWeek',
+      headerToolbar: {
+        left: 'prev,next today',
+        center: 'title',
+        right: 'dayGridMonth,timeGridWeek,timeGridDay',
+      },
+      weekends: true,
+      nowIndicator: true,
+      height: 'auto',
+      allDaySlot: false,
+      slotMinTime: '06:00:00',
+      slotMaxTime: '21:00:00',
+      eventClick: (arg: EventClickInfo) => this.openAppointment(arg.event.id),
+      dateClick: (arg: DateClickInfo) => this.openCreateForSlot(arg.date, arg.allDay),
+      // A function source: FullCalendar calls it for every range it needs
+      // (first render, navigation, view change) and on refetchEvents(), so
+      // the provider filter and Retry go through the same single path.
+      events: (info, success, failure) => this.fetchEvents(hid, info, success, failure),
+      // Lazy fetching would reuse a range already asked for, and FullCalendar
+      // counts a FAILED fetch as asked for: Week -> Day after an error would
+      // never retry. Every view change fetches instead (fresh data, too).
+      lazyFetching: false,
+      // Every failed fetch lands here (handling it also stops FullCalendar
+      // logging "Unhandled event source error"). The grid is emptied: after
+      // a failure nothing on screen can be trusted to match the filter.
+      eventSourceFailure: () => {
+        this.state.set('error');
+        this.calendar?.getApi().removeAllEvents();
+      },
+    };
+  }
+
   private fetchEvents(
+    hid: string,
     info: EventSourceFuncInfo,
     success: (events: EventInput[]) => void,
     failure: (error: Error) => void,
   ): void {
-    const hid = this.hospitalId();
-    if (!hid) {
-      success([]);
-      return;
-    }
     // A newer fetch supersedes an older one (FullCalendar ignores the stale
     // answer anyway); dropping the subscription also stops its side effects.
     this.inFlight?.unsubscribe();
@@ -225,7 +260,7 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
           this.state.set('ready');
           success(events);
         },
-        error: (err: unknown) => failure(err instanceof Error ? err : new Error(String(err))),
+        error: (err: unknown) => failure(toError(err)),
       });
   }
 
@@ -241,6 +276,21 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
     if (!allDay) queryParams['time'] = toIsoTime(date);
     this.router.navigate(['/appointments/new'], { queryParams });
   }
+}
+
+/**
+ * An Error for FullCalendar's failure callback that keeps what went wrong.
+ * An HttpErrorResponse is not an Error, and String() of it is
+ * "[object Object]"; its message (or status) is, and the original stays as
+ * the cause.
+ */
+function toError(err: unknown): Error {
+  if (err instanceof Error) return err;
+  const { message, status } = (err ?? {}) as { message?: unknown; status?: unknown };
+  let text = String(err);
+  if (typeof message === 'string' && message) text = message;
+  else if (typeof status === 'number') text = `HTTP ${status}`;
+  return new Error(text, { cause: err });
 }
 
 function isProvider(s: StaffResponse): boolean {
