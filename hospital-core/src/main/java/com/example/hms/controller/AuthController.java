@@ -679,7 +679,10 @@ public class AuthController {
         // Force-logout-all revokes refresh tokens too: one issued before it
         // must not mint a new session (GlobalSessionRevocationService#revokes,
         // the rule the filter applies to access tokens).
-        if (globalSessionRevocationService.revokes(jwtTokenProvider.getIssuedAt(refreshToken))) {
+        // The fresh read, not the 30-second cache: an instance that has not
+        // caught up would otherwise mint a post-cut-off pair from a revoked
+        // token, which then outlives the kill switch. Refresh is rare.
+        if (globalSessionRevocationService.revokesFresh(jwtTokenProvider.getIssuedAt(refreshToken))) {
             log.warn("🔄 [REFRESH] Refused — refresh token predates the last force-logout-all");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse(REFRESH_INVALID_MESSAGE));
@@ -717,7 +720,9 @@ public class AuthController {
 
     /** Another tab rotated this refresh token a moment ago: no tokens, retry with the new cookie. */
     private ResponseEntity<Object> refreshSuperseded(String jti) {
-        log.info("🔄 [REFRESH] Superseded — refresh token jti={} was just rotated by a concurrent refresh", jti);
+        // WARN, like a replay: a sibling tab looks exactly like a stolen copy
+        // replayed inside the grace, and theft alerting must still see it.
+        log.warn("🔄 [REFRESH] Superseded (or a replay within the grace) — refresh token jti={} was just rotated", jti);
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new MessageResponse(REFRESH_SUPERSEDED_MESSAGE));
     }

@@ -451,4 +451,17 @@ class MfaControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.message").value("Invalid or expired MFA token."));
     }
+
+    @Test
+    void verifyMfa_aChallengeThatExpiresBeforeTheSpentCheck_is401_not500() throws Exception {
+        when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
+        when(jwtTokenProvider.getJtiFromToken("mfa-tok-123"))
+                .thenThrow(new io.jsonwebtoken.ExpiredJwtException(null, null, "expired"));
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"654321\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Invalid or expired MFA token."));
+    }
 }

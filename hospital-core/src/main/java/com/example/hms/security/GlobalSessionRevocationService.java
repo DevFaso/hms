@@ -80,6 +80,16 @@ public class GlobalSessionRevocationService {
             && issuedAt.toInstant().isBefore(minIat);
     }
 
+    /**
+     * {@link #revokes} against the row itself, not the 30-second cache: for
+     * the rare paths that MINT a session (refresh), where a lagging instance
+     * must not issue a post-cut-off pair from a token the kill switch revoked.
+     */
+    public boolean revokesFresh(java.util.Date issuedAt) {
+        refresh();
+        return revokes(issuedAt);
+    }
+
     /** The cut-off for a revocation at {@code at}: the next whole second (a JWT iat is whole seconds). */
     static Instant cutOff(Instant at) {
         Instant second = at.truncatedTo(java.time.temporal.ChronoUnit.SECONDS);

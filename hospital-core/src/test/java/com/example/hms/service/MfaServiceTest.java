@@ -748,4 +748,17 @@ class MfaServiceTest {
 
         assertThat(inactive.getLastTotpStep()).isNull();
     }
+
+    @Test
+    void verifyEnrollment_aConfirmedButSwitchedOffAuthenticator_isNoSuccess() {
+        UserMfaEnrollment disabled = UserMfaEnrollment.builder()
+                .user(testUser).method(MfaMethodType.TOTP).verified(true).enabled(false)
+                .totpSecret(SECRET).pendingTotpSecret(NEW_SECRET).build();
+        when(enrollmentRepository.lockByUserIdAndMethod(userId, MfaMethodType.TOTP))
+                .thenReturn(Optional.of(disabled));
+
+        // No false "verified": nothing was confirmed, MFA stays off.
+        assertThat(mfaService.verifyEnrollment(userId, "000000", fullSession())).isFalse();
+        verify(enrollmentRepository, never()).save(any());
+    }
 }

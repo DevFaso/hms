@@ -236,9 +236,11 @@ public class MfaService {
             }
             // The code is NOT evaluated: answering whether it is current,
             // with no attempt limit, would let a stolen session test guesses
-            // here and bypass the step-up lockout. Already confirmed: done.
+            // here and bypass the step-up lockout. The answer is the row's
+            // state: confirmed and active is "done"; confirmed but switched
+            // off is not a success this call earned.
             log.warn("[MFA] TOTP already verified for user={}", userId);
-            return true;
+            return isActive(enrollment);
         }
 
         boolean valid = matchingTotpStep(enrollment.getTotpSecret(), code).isPresent();

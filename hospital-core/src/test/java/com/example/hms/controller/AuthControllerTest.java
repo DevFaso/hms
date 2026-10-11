@@ -912,7 +912,7 @@ class AuthControllerTest {
         java.util.Date issuedAt = new java.util.Date(System.currentTimeMillis() - 60_000L);
         when(jwtTokenProvider.isRefreshToken("old.refresh.token")).thenReturn(true);
         when(jwtTokenProvider.getIssuedAt("old.refresh.token")).thenReturn(issuedAt);
-        when(globalSessionRevocationService.revokes(issuedAt)).thenReturn(true);
+        when(globalSessionRevocationService.revokesFresh(issuedAt)).thenReturn(true);
 
         mockMvc.perform(post("/auth/token/refresh")
                         .contentType(MediaType.APPLICATION_JSON)

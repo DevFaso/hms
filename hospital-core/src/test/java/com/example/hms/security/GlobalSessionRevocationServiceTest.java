@@ -153,4 +153,18 @@ class GlobalSessionRevocationServiceTest {
         assertThat(GlobalSessionRevocationService.cutOff(java.time.Instant.parse("2026-10-11T12:00:00Z")))
             .isEqualTo(java.time.Instant.parse("2026-10-11T12:00:00Z"));
     }
+
+    @Test
+    @DisplayName("revokesFresh reads the row, not the 30-second cache (a lagging instance must not mint)")
+    void revokesFreshReadsTheRow() {
+        java.time.Instant cutOff = java.time.Instant.parse("2026-10-11T12:00:01Z");
+        SecurityRevocation row = new SecurityRevocation();
+        row.setId(SecurityRevocation.SINGLETON_ID);
+        row.setGlobalMinTokenIat(cutOff);
+        when(repository.findById(SecurityRevocation.SINGLETON_ID)).thenReturn(Optional.of(row));
+
+        // The cache still says "no revocation" (another instance revoked).
+        assertThat(service.revokes(java.util.Date.from(cutOff.minusSeconds(5)))).isFalse();
+        assertThat(service.revokesFresh(java.util.Date.from(cutOff.minusSeconds(5)))).isTrue();
+    }
 }

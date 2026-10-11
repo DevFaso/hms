@@ -4866,6 +4866,20 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 - **Concurrent first MFA enrolments: the loser gets a generic error.** V183's unique
   index refuses the second insert (no corruption any more); answer it as 409 "already
   started" instead (found in #853's round-9 review). Open.
+- **MFA: BCrypt work inside a transaction.** `enrollTotp` holds the user's MFA row lock
+  while it hashes 10 backup codes and renders the QR (about a second, blocking that user's
+  sign-in claim), and a backup-code check BCrypt-scans up to 10 hashes inside a
+  transaction (a pooled connection held for the scan). Hash and render before locking;
+  load the hashes, then match outside the transaction (found in #853's round-10
+  review). Open.
+- **The portal's 409 refresh retries draw on the per-IP refresh rate limit.** Up to 4
+  retries per losing tab, against 30 refreshes per minute per IP: staff behind one NAT
+  can exhaust it, and a 429 there ends in sign-out. Exempt a superseded retry, or key
+  the refresh bucket per user (found in #853's round-10 review). Open.
+- **Legacy refresh tokens are recognised by claim shape with no end date.** Bound
+  `TokenUse.isLegacyRefreshShape` by an `iat` before the #853 deploy, or remove it one
+  refresh lifetime after, so a future minimal token type can never pass as a refresh
+  token (found in #853's round-10 review). Open.
 - **MFA step-up holds a second pooled connection.** `requireStepUp` runs in its own
   transaction (REQUIRES_NEW, so a caller's long transaction never locks the actor's MFA
   row), but its callers (lifecycle, emergency controls, the super-admin MFA endpoint)

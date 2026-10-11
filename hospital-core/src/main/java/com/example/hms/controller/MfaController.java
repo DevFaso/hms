@@ -328,9 +328,14 @@ public class MfaController {
      * predates the last force-logout-all: refused like an expired one.
      */
     private boolean isSpentOrRevoked(String challengeToken) {
-        String jti = jwtTokenProvider.getJtiFromToken(challengeToken);
-        return (jti != null && tokenBlacklistService.isBlacklisted(jti))
-                || globalSessionRevocationService.revokes(jwtTokenProvider.getIssuedAt(challengeToken));
+        try {
+            String jti = jwtTokenProvider.getJtiFromToken(challengeToken);
+            return (jti != null && tokenBlacklistService.isBlacklisted(jti))
+                    || globalSessionRevocationService.revokes(jwtTokenProvider.getIssuedAt(challengeToken));
+        } catch (io.jsonwebtoken.JwtException | IllegalArgumentException expired) {
+            // Expired since isMfaToken read it: "sign in again", not a 500.
+            return true;
+        }
     }
 
     /** The one caller that spends the challenge (TokenBlacklistService#claim). */
