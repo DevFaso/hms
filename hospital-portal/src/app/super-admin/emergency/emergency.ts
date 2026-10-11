@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
   DestroyRef,
@@ -19,6 +20,7 @@ import { HospitalResponse, HospitalService } from '../../services/hospital.servi
 import { Subject, debounceTime, switchMap, of, catchError, map } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RoleLabelPipe } from '../../shared/pipes/role-label.pipe';
+import { isStepUpRefusal } from '../../services/step-up';
 
 interface PanelState {
   busy: boolean;
@@ -301,6 +303,11 @@ export class EmergencyComponent {
   }
 
   private errorText(err: unknown): string {
+    // A refused step-up code: the translated answer, never the server's
+    // English reason text.
+    if (err instanceof HttpErrorResponse && isStepUpRefusal(err)) {
+      return this.translate.instant('HOSPITAL_LIFECYCLE.ERROR.STEP_UP_FAILED');
+    }
     if (err && typeof err === 'object' && 'error' in err) {
       const inner = (err as { error?: { message?: string } }).error;
       // Pass through any server-provided message as-is. The backend

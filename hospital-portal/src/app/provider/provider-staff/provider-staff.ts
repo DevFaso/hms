@@ -66,6 +66,14 @@ export class ProviderStaffComponent {
 
   /** The facility the session acts at now: the one every action here targets. */
   readonly facilityId = computed(() => this.context.settings()?.facilityId ?? null);
+  /**
+   * Admin-only controls (Register) show only on a successful answer that says
+   * so: on a settings error the page opens in its retry state, and the route
+   * guard let it through without knowing, so nothing admin-only appears.
+   */
+  readonly isAdmin = computed(
+    () => this.context.status() === 'provider' && this.context.settings()?.providerAdmin === true,
+  );
 
   /** The roles a member of this facility may hold (plan §3.2); the backend enforces it. */
   readonly staffRoles = computed(() => {

@@ -481,8 +481,11 @@ public class AuthController {
                     .body(new EmailVerificationResponseDTO("Email verification failed.", false));
         }
 
-        // 1. Activate the user account
-        user.setActive(true);
+        // 1. Activate the user account, unless an administrator switched it
+        //    off (V184): the token verifies the address, it never undoes a disable.
+        if (user.getDeactivatedByAdminAt() == null) {
+            user.setActive(true);
+        }
         user.setActivationToken(null);
         user.setActivationTokenExpiresAt(null);
         userRepository.save(user);

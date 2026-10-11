@@ -1081,9 +1081,31 @@ class UserServiceImplTest {
             User saved = cap.getValue();
 
             assertThat(saved.isActive()).isFalse();
+            // V184: the disable is recorded, so no re-invite or code undoes it.
+            assertThat(saved.getDeactivatedByAdminAt()).isNotNull();
             assertThat(saved.getFirstName()).isEqualTo("Test");
             assertThat(saved.getEmail()).isEqualTo("test@example.com");
             assertThat(saved.getPasswordHash()).isEqualTo("$2a$10$existingHash");
+        }
+
+        @Test
+        @DisplayName("V184: re-enabling clears the administrator's disable; echoing active=true does not")
+        void reenableClearsTheDisable_anEchoDoesNot() {
+            stubHappyPath();
+            java.time.LocalDateTime disabledAt = java.time.LocalDateTime.of(2026, 1, 1, 9, 0);
+
+            user.setActive(true);
+            user.setDeactivatedByAdminAt(disabledAt);
+            UpdateUserRequestDTO echo = new UpdateUserRequestDTO();
+            echo.setActive(true);
+            userService.updateUser(userId, echo);
+            assertThat(user.getDeactivatedByAdminAt()).isEqualTo(disabledAt);
+
+            user.setActive(false);
+            UpdateUserRequestDTO reenable = new UpdateUserRequestDTO();
+            reenable.setActive(true);
+            userService.updateUser(userId, reenable);
+            assertThat(user.getDeactivatedByAdminAt()).isNull();
         }
 
         @Test

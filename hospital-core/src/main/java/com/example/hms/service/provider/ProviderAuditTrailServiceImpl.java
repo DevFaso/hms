@@ -38,6 +38,11 @@ public class ProviderAuditTrailServiceImpl implements ProviderAuditTrailService 
         if (pageSize < 1) {
             throw new IllegalArgumentException("The page size must be at least 1.");
         }
+        // page x size is the row offset, an int: past it Spring Data throws
+        // (a 500). Refuse it here, as the documented 400.
+        if ((long) pageNumber * pageSize > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("The page number is too large.");
+        }
         Page<ProviderAuditEntryDTO> rows = auditEventLogRepository.findProviderFacilityTrail(
             found.get().facility().getId(), FACILITY_ENTITY_TYPES, PageRequest.of(pageNumber, pageSize));
         return Optional.of(ProviderAuditPageDTO.builder()

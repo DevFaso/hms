@@ -1034,6 +1034,8 @@ public class UserServiceImpl implements UserService {
 
         user.setDeleted(true);
         user.setActive(false);
+        // An administrator's disable: no invitation code or provider re-invite undoes it.
+        user.setDeactivatedByAdminAt(LocalDateTime.now());
         userRepository.save(user);
         assignmentService.deleteAllAssignmentsForUser(id);
 
@@ -1067,6 +1069,7 @@ public class UserServiceImpl implements UserService {
 
         user.setDeleted(false);
         user.setActive(true);
+        user.setDeactivatedByAdminAt(null);
         userRepository.save(user);
         // A lockout collected while the account was switched off must not
         // survive it being switched on. After commit: a rollback must not
@@ -1158,6 +1161,15 @@ public class UserServiceImpl implements UserService {
             reactivated = Boolean.TRUE.equals(dto.getActive())
                     && !Boolean.TRUE.equals(user.isActive());
             user.setActive(dto.getActive());
+            // Record a disable (keeping the first one's time) and clear it only
+            // on a real re-enable, so a provider re-invite or an invitation
+            // code can never switch the account back on from below. An edit
+            // that merely echoes active=true changes nothing.
+            if (Boolean.FALSE.equals(dto.getActive()) && user.getDeactivatedByAdminAt() == null) {
+                user.setDeactivatedByAdminAt(LocalDateTime.now());
+            } else if (reactivated) {
+                user.setDeactivatedByAdminAt(null);
+            }
         }
 
         // Reactivation clears the login lockout, so the holder is not refused
@@ -1344,7 +1356,11 @@ public class UserServiceImpl implements UserService {
             return false;
         }
 
-        user.setActive(true);
+        // An account an administrator switched off stays off (V184): the
+        // token verifies the address, only an administrator re-enables.
+        if (user.getDeactivatedByAdminAt() == null) {
+            user.setActive(true);
+        }
         user.setActivationToken(null);
         user.setActivationTokenExpiresAt(null);
         userRepository.save(user);

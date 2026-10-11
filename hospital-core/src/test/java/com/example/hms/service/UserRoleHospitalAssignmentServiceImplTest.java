@@ -198,6 +198,24 @@ class UserRoleHospitalAssignmentServiceImplTest {
     }
 
     @Test
+    void verifyAssignmentByCode_neverSwitchesOnAnAccountAnAdministratorDisabled() {
+        // V184: a super-admin disabled the invitee before their first sign-in.
+        // The outstanding code still confirms the assignment, but only an
+        // administrator turns the account back on.
+        assignee.setActive(false);
+        assignee.setDeactivatedByAdminAt(java.time.LocalDateTime.now());
+        when(assignmentRepository.findByAssignmentCode(VALID_CODE))
+            .thenReturn(Optional.of(assignment));
+        when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.verifyAssignmentByCode(VALID_CODE, VALID_PIN);
+
+        assertThat(assignment.getConfirmationVerifiedAt()).isNotNull();
+        assertThat(assignee.isActive()).isFalse();
+        verify(userRepository, never()).save(assignee);
+    }
+
+    @Test
     void verifyAssignmentByCode_activatesBothTheAssignmentAndTheUser() {
         // Since option A (2026-09-02), admin-registered accounts - staff AND
         // patients - start inactive, and this call is the ONE thing that

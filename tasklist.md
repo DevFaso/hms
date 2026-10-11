@@ -4823,11 +4823,15 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   The four provider pages (home, profile, staff, audit) each repeat the same
   clear-on-leave, retry, drop-a-stale-answer and invalidate-on-404 code around
   `followFacility` (found in #852's round-4 review). Open.
-- **External providers: an account has no "disabled by an administrator" flag**, so
-  the provider staff page tells "never activated" from "disabled" by use (a sign-in
-  or a confirmed assignment). A never-activated account a super-admin disabled before
-  its first use still reads as never activated and can be re-invited (found in #852's
-  round-4 review). Open.
+- **~~External providers: an account has no "disabled by an administrator" flag~~ Done
+  (#852 round 6, V184 `security.users.deactivated_by_admin_at`).** An administrator's
+  disable is recorded; while it is set neither a provider re-invite nor an invitation
+  code switches the account back on.
+- **Provider audit trail query scans platform-wide `USER_ROLE_ASSIGNMENT` rows.** The
+  facility trail filters every role-assignment row of the platform through correlated
+  seat subqueries, twice per page (content and count). Anchor it on the facility's
+  assignments (`idx_audit_assignment`) UNION the target-assignment branch, and return a
+  `Slice` for "has more" instead of a counted `Page` (found in #852's round-6 review). Open.
 - **CDS acknowledgement with an unknown hospital id now answers 404** (was: saved as a
   global acknowledgement). Intended since #835; confirm no client relies on the old
   behaviour. Open.

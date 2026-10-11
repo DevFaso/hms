@@ -319,6 +319,35 @@ class ProviderAdminSecurityIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("an account an administrator disabled before its first sign-in is not re-invited (V184)")
+    void anAdminDisableBeforeFirstSignIn_isNotUndoneByAReinvite() throws Exception {
+        UserRoleHospitalAssignment row = rowOf(pharmacist, pharmacyId);
+        row.setActive(false);
+        row.setConfirmationCode(null);
+        row.setConfirmationVerifiedAt(null);
+        assignmentRepository.save(row);
+        User account = userRepository.findById(pharmacist.getId()).orElseThrow();
+        account.setLastLoginAt(null);
+        account.setLastOidcLoginAt(null);
+        // What an administrator's disable writes (UserServiceImpl, unit-tested there).
+        account.setActive(false);
+        account.setDeactivatedByAdminAt(LocalDateTime.now());
+        userRepository.save(account);
+        String unmapped = ProviderConfinementSecurityIT.refusalShape(as(doctorToken(), get(UNMAPPED)));
+
+        json(as(adminToken, get("/provider/staff"))).forEach(member -> {
+            if (member.get("userId").asText().equals(pharmacist.getId().toString())) {
+                assertThat(member.get("canReinvite").asBoolean()).isFalse();
+            }
+        });
+        MvcResult reinvite = as(adminToken, post("/provider/staff/{userId}/activate", pharmacist.getId()));
+
+        assertThat(ProviderConfinementSecurityIT.refusalShape(reinvite)).isEqualTo(unmapped);
+        assertThat(rowOf(pharmacist, pharmacyId).getConfirmationCode()).isNull();
+        assertThat(userRepository.findById(pharmacist.getId()).orElseThrow().isActive()).isFalse();
+    }
+
+    @Test
     @DisplayName("activate never re-invites a disabled account: the unmapped answer, no code issued")
     void disabledAccountIsNotReinvited() throws Exception {
         UserRoleHospitalAssignment row = rowOf(pharmacist, pharmacyId);
@@ -517,6 +546,25 @@ class ProviderAdminSecurityIT extends BaseIT {
                 assertThat(entry.get("actorUserId").asText()).isEqualTo(pharmacist.getId().toString());
             }
         });
+    }
+
+    @Test
+    @DisplayName("the trail's role column: PROVIDER_ADMIN first for an admin who also dispenses")
+    void anAdminWhoAlsoDispenses_isShownActingAsTheAdmin() throws Exception {
+        // 'PHARMACIST' sorts before 'PROVIDER_ADMIN': the role is chosen by
+        // precedence, not by the lowest code. (A PATIENT seat cannot be held
+        // at a provider facility at all, so the query's PATIENT filter is
+        // defence in depth, not a case this facility can produce.)
+        User dispensingAdmin = accounts.userAt("dispadmin", pharmacyId, "PROVIDER_ADMIN", PHARMACIST);
+        UUID adminRow = auditRow(dispensingAdmin, pharmacyId, "PROVIDER_STAFF", null);
+        UUID pharmacistRow = auditRow(pharmacist, pharmacyId, "PROVIDER_STAFF", null);
+
+        JsonNode page = json(as(adminToken, get("/provider/audit")));
+
+        java.util.Map<String, String> roleById = new java.util.HashMap<>();
+        page.get("entries").forEach(entry -> roleById.put(entry.get("id").asText(), entry.get("roleName").asText()));
+        assertThat(roleById.get(adminRow.toString())).endsWith("PROVIDER_ADMIN");
+        assertThat(roleById.get(pharmacistRow.toString())).endsWith(PHARMACIST);
     }
 
     @Test

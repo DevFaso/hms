@@ -128,7 +128,9 @@ describe('HospitalLifecycleService step-up', () => {
     expect(archive.request.context.get(STEP_UP_REQUEST)).toBeTrue();
     archive.flush({});
 
-    service.schedulePurge('h', { reason: 'r', scheduledFor: '2026-12-01' }, '999999').subscribe();
+    service
+      .schedulePurge('h', { reason: 'r', purgeScheduledFor: '2026-12-01T00:00:00.000Z' }, '999999')
+      .subscribe();
     expect(
       http.expectOne('/super-admin/hospitals/h/schedule-purge').request.headers.get('X-Mfa-Token'),
     ).toBe('999999');

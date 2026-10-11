@@ -28,7 +28,12 @@ export interface HospitalLifecycleReason {
   reason: string;
 }
 
+/**
+ * The backend's TenantLifecycleActionRequestDTO: the date travels as
+ * `purgeScheduledFor`, an ISO instant. Any other name is silently ignored and
+ * the server falls back to its 30-day default.
+ */
 export interface HospitalLifecyclePurgeSchedule {
-  scheduledFor: string;
+  purgeScheduledFor: string;
   reason: string;
 }

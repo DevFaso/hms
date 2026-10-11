@@ -164,7 +164,7 @@ describe('HospitalDetailComponent (MVP-c2-frontend)', () => {
     expect(cmp.state()).toBe('ACTIVE');
   });
 
-  it('submitDialog(schedule-purge) sends scheduledFor + reason', () => {
+  it('submitDialog(schedule-purge) sends the picked day as purgeScheduledFor, the field the backend reads', () => {
     hospitalService.getById.and.returnValue(of(fakeHospital()));
     lifecycleService.get.and.returnValue(of(fakeLifecycle('ARCHIVED')));
     lifecycleService.schedulePurge.and.returnValue(of(fakeLifecycle('PENDING_PURGE')));
@@ -177,7 +177,9 @@ describe('HospitalDetailComponent (MVP-c2-frontend)', () => {
 
     expect(lifecycleService.schedulePurge).toHaveBeenCalledWith(
       'h-1',
-      { reason: 'GDPR retention expiry', scheduledFor: '2026-06-01' },
+      // Not `scheduledFor`: the backend ignores it and purges after its
+      // 30-day default instead of the day the operator picked.
+      { reason: 'GDPR retention expiry', purgeScheduledFor: new Date(2026, 5, 1).toISOString() },
       '',
     );
     expect(cmp.state()).toBe('PENDING_PURGE');

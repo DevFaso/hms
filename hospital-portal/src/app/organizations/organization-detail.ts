@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
   OnInit,
@@ -20,6 +21,7 @@ import {
   TenantLifecycleResponse,
 } from '../services/organization.service';
 import { ToastService } from '../core/toast.service';
+import { isStepUpRefusal } from '../services/step-up';
 
 type LifecycleAction = 'suspend' | 'restore' | 'archive' | 'schedule-purge' | 'cancel-purge';
 
@@ -201,7 +203,10 @@ export class OrganizationDetailComponent implements OnInit {
       error: (err) => {
         this.submitting.set(false);
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('TENANT_LIFECYCLE.TOAST.ACTION_FAILED'),
+          err instanceof HttpErrorResponse && isStepUpRefusal(err)
+            ? this.translate.instant('HOSPITAL_LIFECYCLE.ERROR.STEP_UP_FAILED')
+            : (err?.error?.message ??
+                this.translate.instant('TENANT_LIFECYCLE.TOAST.ACTION_FAILED')),
         );
       },
     });

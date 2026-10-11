@@ -114,7 +114,9 @@ describe('FacilityTypeGuard and ProviderHomeRedirectGuard', () => {
     expect(load).not.toHaveBeenCalled();
   }));
 
-  it('the dashboard redirect on a session timeout goes to the provider retry state, never the dashboard', fakeAsync(() => {
+  it('a session timeout redirects nobody: who the user is is unknown, so /dashboard opens', fakeAsync(() => {
+    // Nearly every user is hospital staff: a nurse on a slow network must not
+    // be stranded on the provider page's "not available" screen.
     resolved.set(false);
     const guard = redirect();
     TestBed.tick();
@@ -122,8 +124,8 @@ describe('FacilityTypeGuard and ProviderHomeRedirectGuard', () => {
 
     tick(15001);
 
-    expect(path(guard.result())).toBe('/provider');
-    expect(reportUnavailable).toHaveBeenCalledTimes(1);
+    expect(guard.result()).toBeTrue();
+    expect(reportUnavailable).not.toHaveBeenCalled();
     expect(load).not.toHaveBeenCalled();
   }));
 

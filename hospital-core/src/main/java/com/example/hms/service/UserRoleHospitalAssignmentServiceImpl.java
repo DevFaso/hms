@@ -985,7 +985,12 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
         // Activate the user account if it was pending assignment verification
         User user = assignment.getUser();
-        if (user != null && !Boolean.TRUE.equals(user.isActive())) {
+        if (user != null && user.getDeactivatedByAdminAt() != null) {
+            // An administrator switched this account off: the code confirms
+            // the assignment, but only an administrator turns the account on.
+            log.info("Assignment '{}' confirmed; user {} stays inactive (disabled by an administrator).",
+                assignment.getId(), user.getId());
+        } else if (user != null && !Boolean.TRUE.equals(user.isActive())) {
             user.setActive(true);
             userRepository.save(user);
             // Clear any login lockout accumulated while the account was

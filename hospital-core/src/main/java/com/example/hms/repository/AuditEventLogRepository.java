@@ -27,7 +27,8 @@ public interface AuditEventLogRepository
         + "AND a.patientId IS NULL "
         + "AND (a.roleName IS NULL OR UPPER(a.roleName) NOT IN ('PATIENT', 'ROLE_PATIENT')) "
         + "AND a.user.id IN (SELECT seat.user.id FROM UserRoleHospitalAssignment seat "
-        + "  WHERE seat.hospital.id = :facilityId) "
+        + "  WHERE seat.hospital.id = :facilityId "
+        + "  AND UPPER(seat.role.code) NOT IN ('PATIENT', 'ROLE_PATIENT')) "
         + "AND (asg.hospital.id = :facilityId "
         + "  OR (a.entityType = 'USER_ROLE_ASSIGNMENT' AND a.resourceId IN ("
         + "    SELECT CAST(target.id AS String) FROM UserRoleHospitalAssignment target "
@@ -230,8 +231,12 @@ public interface AuditEventLogRepository
      *
      * <p>The projection carries ids and codes only (plan §6.9): no
      * description, no details, no IP address. The role shown is the ACTOR's
-     * own role at the facility (the lowest code when they hold several); the
-     * role a role-assignment row assigned is its subject, a separate field.
+     * own STAFF role at the facility: never PATIENT (defence in depth: the
+     * facility guard refuses a PATIENT seat at a provider facility, but a row
+     * that names one must still never show it), and PROVIDER_ADMIN
+     * first when they hold it, otherwise the lowest other code, so an admin
+     * who also dispenses is shown acting as the admin. The role a
+     * role-assignment row assigned is its subject, a separate field.
      * Under impersonation the row's actor is the impersonated member; the
      * impersonator columns say who really acted (platform support).
      *
@@ -239,8 +244,13 @@ public interface AuditEventLogRepository
      */
     @Query(value = "SELECT new com.example.hms.payload.dto.provider.ProviderAuditEntryDTO("
            + "a.id, a.eventTimestamp, a.eventType, a.status, a.user.id, a.userName, "
+           + "COALESCE("
+           + "(SELECT MIN(adminSeat.role.code) FROM UserRoleHospitalAssignment adminSeat "
+           + "  WHERE adminSeat.user.id = a.user.id AND adminSeat.hospital.id = :facilityId "
+           + "  AND UPPER(adminSeat.role.code) IN ('PROVIDER_ADMIN', 'ROLE_PROVIDER_ADMIN')), "
            + "(SELECT MIN(seatRole.role.code) FROM UserRoleHospitalAssignment seatRole "
-           + "  WHERE seatRole.user.id = a.user.id AND seatRole.hospital.id = :facilityId), "
+           + "  WHERE seatRole.user.id = a.user.id AND seatRole.hospital.id = :facilityId "
+           + "  AND UPPER(seatRole.role.code) NOT IN ('PATIENT', 'ROLE_PATIENT'))), "
            + "a.entityType, a.resourceId, "
            + "CASE WHEN a.entityType = 'USER_ROLE_ASSIGNMENT' THEN a.roleName ELSE NULL END, "
            + "a.impersonatorUserId, a.impersonatorUsername) "

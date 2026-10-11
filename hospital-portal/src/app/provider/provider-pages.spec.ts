@@ -626,6 +626,21 @@ describe('provider shell pages', () => {
     expect(home.cmp.notAvailable()).toBeTrue();
   });
 
+  it('admin-only controls appear only on a successful answer that says admin', () => {
+    const { host } = render(ProviderStaffComponent);
+    expect(host().querySelector('[data-test="register"]')).not.toBeNull();
+
+    // A settings error: the guard let the page open in its retry state
+    // without knowing, so nothing admin-only shows, stale settings or not.
+    statusOverride.set('error');
+    expect(host().querySelector('[data-test="register"]')).toBeNull();
+
+    // A plain staff member's answer: no Register either.
+    statusOverride.set(null);
+    settingsSignal.set(settingsFixture({ providerAdmin: false }));
+    expect(host().querySelector('[data-test="register"]')).toBeNull();
+  });
+
   it('a context that cannot be read shows the retry state; retry asks the context again', () => {
     const { cmp, host } = render(ProviderStaffComponent);
     statusOverride.set('error');

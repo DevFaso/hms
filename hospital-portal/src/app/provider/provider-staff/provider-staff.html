@@ -4,7 +4,7 @@
       <h1 class="page-title">{{ 'PROVIDER.STAFF.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'PROVIDER.STAFF.SUBTITLE' | translate }}</p>
     </div>
-    @if (!notAvailable() && facilityId() && staffRoles().length > 0) {
+    @if (isAdmin() && !notAvailable() && facilityId() && staffRoles().length > 0) {
       <button type="button" class="btn-primary" data-test="register" (click)="openRegister()">
         <span class="material-symbols-outlined" aria-hidden="true">person_add</span>
         {{ 'PROVIDER.STAFF.REGISTER' | translate }}

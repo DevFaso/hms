@@ -1,4 +1,9 @@
-import { HttpContextToken, HttpErrorResponse } from '@angular/common/http';
+import {
+  HttpContext,
+  HttpContextToken,
+  HttpErrorResponse,
+  HttpHeaders,
+} from '@angular/common/http';
 
 /**
  * Marks a request that carries an MFA step-up (`X-Mfa-Token`): a destructive
@@ -9,8 +14,25 @@ import { HttpContextToken, HttpErrorResponse } from '@angular/common/http';
  */
 export const STEP_UP_REQUEST = new HttpContextToken<boolean>(() => false);
 
-/** The step-up header the hospital lifecycle endpoints read. */
+/** The step-up header every step-up endpoint reads. */
 export const MFA_TOKEN_HEADER = 'X-Mfa-Token';
+
+/**
+ * The options of EVERY request that sends a step-up: the code in
+ * `X-Mfa-Token` (when given) and the {@link STEP_UP_REQUEST} mark, so a
+ * refused code comes back to the dialog instead of refreshing the session or
+ * signing the user out. A service that sends `X-Mfa-Token` builds its options
+ * here, never by hand, so it cannot forget the mark.
+ */
+export function stepUpRequestOptions(mfaToken?: string | null): {
+  headers: HttpHeaders;
+  context: HttpContext;
+} {
+  return {
+    headers: new HttpHeaders(mfaToken ? { [MFA_TOKEN_HEADER]: mfaToken } : {}),
+    context: new HttpContext().set(STEP_UP_REQUEST, true),
+  };
+}
 
 /**
  * The hospital lifecycle actions the backend guards with an MFA step-up

@@ -172,7 +172,7 @@ export class HospitalDetailComponent implements OnInit {
       case 'schedule-purge':
         return this.lifecycleService.schedulePurge(
           id,
-          { reason, scheduledFor: state.scheduledFor },
+          { reason, purgeScheduledFor: purgeInstant(state.scheduledFor) },
           state.mfaCode,
         );
       case 'cancel-purge':
@@ -226,4 +226,13 @@ export class HospitalDetailComponent implements OnInit {
         return '#94a3b8';
     }
   }
+}
+
+/**
+ * The picked purge day (`YYYY-MM-DD` from the date input) as the ISO instant
+ * the backend reads: the start of that day in the operator's time zone.
+ */
+export function purgeInstant(day: string): string {
+  const [y, m, d] = day.split('-').map(Number);
+  return new Date(y, m - 1, d).toISOString();
 }

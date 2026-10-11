@@ -243,12 +243,12 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
      * disabled, and only a super-admin re-enables it: a peer admin's re-invite
      * would undo that.
      *
-     * <p>Limit (standing debt): an account has no "disabled by an
-     * administrator" flag, so one disabled before its first sign-in still
-     * reads as never activated.
+     * <p>And never an account an administrator switched off
+     * ({@code deactivatedByAdminAt}, V184), signed in or not: a disable before
+     * the first sign-in would otherwise read as a pending invitation.
      */
     static boolean mayReinvite(User member) {
-        if (member == null) {
+        if (member == null || member.getDeactivatedByAdminAt() != null) {
             return false;
         }
         if (member.isActive()) {

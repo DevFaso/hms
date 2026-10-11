@@ -108,6 +108,8 @@ class ProviderAuditTrailServiceImplTest {
         assertThatThrownBy(() -> service.trail("-1", null)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> service.trail(null, "0")).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> service.trail(null, "1.5")).isInstanceOf(IllegalArgumentException.class);
+        // An offset past an int: a 400 here, not Spring Data's exception (a 500).
+        assertThatThrownBy(() -> service.trail("2147483647", "100")).isInstanceOf(IllegalArgumentException.class);
         verifyNoInteractions(auditEventLogRepository);
     }
 

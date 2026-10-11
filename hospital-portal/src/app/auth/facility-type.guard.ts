@@ -81,9 +81,15 @@ export const FacilityTypeGuard: CanActivateFn = (
  * provider home instead (AC-12), unless they chose to act as a patient. Only a
  * session the bootstrap marked as a provider user asks the server; everyone
  * else, hospital pharmacists and lab staff included, goes straight on. When
- * the server cannot be asked for now, or the session did not resolve in
- * time, the user goes to the provider home in its retry state, never to the
- * hospital dashboard on a guess.
+ * a provider user's settings cannot be fetched for now, they go to the
+ * provider home in its retry state.
+ *
+ * When the session did not resolve in time we do not know who this is. The
+ * dashboard then opens: nearly every user is hospital staff, and the
+ * dashboard has its own error states. Sending everyone to the provider home
+ * instead would strand ordinary staff on its "not available" screen. The
+ * cost is that a provider user on a slow network may see the hospital
+ * dashboard's empty states until they navigate again.
  */
 export const ProviderHomeRedirectGuard: CanActivateFn = (): Observable<boolean | UrlTree> => {
   const context = inject(ProviderContextService);
@@ -93,10 +99,8 @@ export const ProviderHomeRedirectGuard: CanActivateFn = (): Observable<boolean |
   return sessionResolved().pipe(
     switchMap((resolved) => {
       if (!resolved) {
-        // A timeout tells nothing about who this is: never the hospital
-        // dashboard on a guess. The provider home opens in its retry state.
-        context.reportUnavailable();
-        return of(TIMED_OUT);
+        // A timeout tells nothing about who this is: no redirect on a guess.
+        return of(null);
       }
       return roleContext.providerUser() && roleContext.activeRole !== 'ROLE_PATIENT'
         ? context.load()
