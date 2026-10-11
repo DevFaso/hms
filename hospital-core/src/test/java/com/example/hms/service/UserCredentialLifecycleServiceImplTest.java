@@ -625,6 +625,45 @@ class UserCredentialLifecycleServiceImplTest {
     }
 
     @Test
+    void twoTotpEntries_areABadRequest_notAUniqueIndexViolation() {
+        UUID userId = UUID.randomUUID();
+        UserMfaEnrollmentRequestDTO first = new UserMfaEnrollmentRequestDTO();
+        first.setMethod(MfaMethodType.TOTP);
+        first.setChannel("a");
+        UserMfaEnrollmentRequestDTO second = new UserMfaEnrollmentRequestDTO();
+        second.setMethod(MfaMethodType.TOTP);
+        second.setChannel("b");
+        User user = User.builder().username("u").email("u@example.com").build();
+        user.setId(userId);
+        org.mockito.Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> service.upsertMfaEnrollments(userId, List.of(first, second)))
+            .isInstanceOf(IllegalArgumentException.class);
+        verify(mfaEnrollmentRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    void aDisabledTotpAuthenticator_isNeverSwitchedBackOnByTheList() {
+        UUID userId = UUID.randomUUID();
+        User user = User.builder().username("mfa-user").email("mfa@example.com").build();
+        user.setId(userId);
+        UserMfaEnrollment totp = UserMfaEnrollment.builder()
+            .user(user).method(MfaMethodType.TOTP).verified(true).enabled(false).build();
+        totp.setId(UUID.randomUUID());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(mfaEnrollmentRepository.findByUserId(userId)).thenReturn(List.of(totp));
+        when(mfaEnrollmentRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        UserMfaEnrollmentRequestDTO request = new UserMfaEnrollmentRequestDTO();
+        request.setMethod(MfaMethodType.TOTP);
+        request.setEnabled(true);
+
+        service.upsertMfaEnrollments(userId, List.of(request));
+
+        // Only confirming a code turns it on: no old secret revived without one.
+        assertThat(totp.isEnabled()).isFalse();
+    }
+
+    @Test
     void aTotpRowWithAChangedChannel_isUpdatedInPlace_neverInsertedBesideTheOld() {
         UUID userId = UUID.randomUUID();
         User user = User.builder().username("mfa-user").email("mfa@example.com").build();

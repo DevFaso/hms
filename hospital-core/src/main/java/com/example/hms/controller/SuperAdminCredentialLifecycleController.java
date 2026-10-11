@@ -14,8 +14,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
+import com.example.hms.security.PrincipalUserIds;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -34,7 +34,6 @@ import java.util.UUID;
 public class SuperAdminCredentialLifecycleController {
 
     private final UserCredentialLifecycleService userCredentialLifecycleService;
-    private final UserRepository userRepository;
 
     @GetMapping("/health")
     @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
@@ -57,10 +56,11 @@ public class SuperAdminCredentialLifecycleController {
         @PathVariable UUID userId,
         @Valid @RequestBody List<UserMfaEnrollmentRequestDTO> payload,
         @RequestHeader(value = "X-Mfa-Token", required = false) String stepUpCode,
-        @AuthenticationPrincipal UserDetails principal
+        Authentication authentication
     ) {
-        UUID actorId = principal == null ? null
-            : userRepository.findByUsername(principal.getUsername()).map(User::getId).orElse(null);
+        // Both session kinds: a Keycloak principal carries the local id in
+        // its appUserId claim (never its sub); a legacy one, the user.
+        UUID actorId = PrincipalUserIds.of(authentication).orElse(null);
         return ResponseEntity.ok(userCredentialLifecycleService.upsertMfaEnrollmentsAsSuperAdmin(
             actorId, userId, payload, stepUpCode));
     }

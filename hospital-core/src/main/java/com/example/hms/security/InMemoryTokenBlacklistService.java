@@ -60,6 +60,15 @@ public class InMemoryTokenBlacklistService implements TokenBlacklistService {
     }
 
     @Override
+    public void release(String jti) {
+        if (jti == null || jti.isBlank()) {
+            return;
+        }
+        blacklistedTokens.remove(jti);
+        recentlyRotated.remove(jti);
+    }
+
+    @Override
     public boolean wasRecentlyRotated(String jti) {
         if (jti == null || jti.isBlank()) {
             return false;

@@ -68,22 +68,27 @@ public class GlobalSessionRevocationService {
      * A token issued at {@code issuedAt} predates the last force-logout-all.
      * No revocation yet, or a token without an {@code iat}, is not revoked.
      *
-     * <p>A JWT {@code iat} has whole-second precision, the revocation instant
-     * milliseconds: compared as is, a token minted in the same second just
-     * AFTER a force-logout-all (iat 12:00:00 against 12:00:00.700) would be
-     * revoked on issue, and the user bounced straight back to sign-in. So the
-     * cut-off is the start of that second: a token from the same second
-     * survives, which leaves at most a sub-second window before the revocation.
+     * <p>A JWT {@code iat} has whole-second precision. {@link #revokeAll}
+     * therefore stores its cut-off rounded UP to the next whole second, and
+     * this compares strictly: every token minted in the revocation's second,
+     * before it or just after, is revoked. A kill switch errs on the safe
+     * side; a session started in that same second signs in once more.
      */
     public boolean revokes(java.util.Date issuedAt) {
         Instant minIat = cachedGlobalMinTokenIat;
         return issuedAt != null && minIat != null && !EPOCH.equals(minIat)
-            && issuedAt.toInstant().isBefore(minIat.truncatedTo(java.time.temporal.ChronoUnit.SECONDS));
+            && issuedAt.toInstant().isBefore(minIat);
+    }
+
+    /** The cut-off for a revocation at {@code at}: the next whole second (a JWT iat is whole seconds). */
+    static Instant cutOff(Instant at) {
+        Instant second = at.truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        return second.equals(at) ? at : second.plusSeconds(1);
     }
 
     @Transactional
     public Instant revokeAll(UUID actorUserId, String actorUsername, String reason) {
-        Instant now = Instant.now();
+        Instant now = cutOff(Instant.now());
         SecurityRevocation row = repository.findById(SecurityRevocation.SINGLETON_ID)
             .orElseGet(() -> {
                 SecurityRevocation seeded = new SecurityRevocation();

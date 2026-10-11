@@ -70,6 +70,14 @@ public class RedisTokenBlacklistService implements TokenBlacklistService {
     }
 
     @Override
+    public void release(String jti) {
+        if (jti == null || jti.isBlank()) {
+            return;
+        }
+        redisTemplate.delete(java.util.List.of(KEY_PREFIX + jti, ROTATED_PREFIX + jti));
+    }
+
+    @Override
     public boolean wasRecentlyRotated(String jti) {
         if (jti == null || jti.isBlank()) {
             return false;

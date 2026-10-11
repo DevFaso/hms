@@ -823,59 +823,67 @@ public class AuthController {
         }
         tokenBlacklistService.markRotated(refreshJti, REFRESH_ROTATION_GRACE_MS);
 
-        var descriptor = new com.example.hms.security.TokenUserDescriptor(user.getId(), username, roles);
-        String newAccessToken  = jwtTokenProvider.generateAccessToken(descriptor);
+        // Claimed and marked rotated above: if anything below fails before
+        // the new pair is out, give the old token back, or the session is
+        // stranded (every retry would read "superseded" until it expires).
+        try {
+            var descriptor = new com.example.hms.security.TokenUserDescriptor(user.getId(), username, roles);
+            String newAccessToken  = jwtTokenProvider.generateAccessToken(descriptor);
 
-        // Rotate the refresh token so each use yields a fresh one
-        var refreshAuth = new UsernamePasswordAuthenticationToken(
-                new com.example.hms.security.CustomUserDetails(user,
-                        roles.stream()
-                             .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
-                             .collect(java.util.stream.Collectors.toSet())),
-                null,
-                roles.stream()
-                     .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
-                     .toList());
-        String newRefreshToken = jwtTokenProvider.generateRefreshToken(refreshAuth);
+            // Rotate the refresh token so each use yields a fresh one
+            var refreshAuth = new UsernamePasswordAuthenticationToken(
+                    new com.example.hms.security.CustomUserDetails(user,
+                            roles.stream()
+                                 .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
+                                 .collect(java.util.stream.Collectors.toSet())),
+                    null,
+                    roles.stream()
+                         .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
+                         .toList());
+            String newRefreshToken = jwtTokenProvider.generateRefreshToken(refreshAuth);
 
-        // ── Idle session timeout — touch on successful refresh ──────────
-        // Only after the rotation has succeeded; touching pre-rotation
-        // would extend the window even if rotation failed downstream.
-        idleSessionGate.touchIfHuman(user.getId(), refreshAuthorities);
+            // ── Idle session timeout — touch on successful refresh ──────────
+            // Only after the rotation has succeeded; touching pre-rotation
+            // would extend the window even if rotation failed downstream.
+            idleSessionGate.touchIfHuman(user.getId(), refreshAuthorities);
 
-        long nowMs      = System.currentTimeMillis();
-        long accessExp  = jwtTokenProvider.getExpiration(newAccessToken).getTime();
-        long refreshExp = jwtTokenProvider.getExpiration(newRefreshToken).getTime();
+            long nowMs      = System.currentTimeMillis();
+            long accessExp  = jwtTokenProvider.getExpiration(newAccessToken).getTime();
+            long refreshExp = jwtTokenProvider.getExpiration(newRefreshToken).getTime();
 
-        log.info("🔄 [REFRESH] Tokens rotated for user='{}'", username);
+            log.info("🔄 [REFRESH] Tokens rotated for user='{}'", username);
 
-        auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                .eventType(AuditEventType.TOKEN_REFRESH)
-                .eventDescription("Token pair rotated (old refresh jti=" + refreshJti + ")")
-                .userName(username)
-                .userId(user.getId())
-                .status(AuditStatus.SUCCESS)
-                .build());
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.TOKEN_REFRESH)
+                    .eventDescription("Token pair rotated (old refresh jti=" + refreshJti + ")")
+                    .userName(username)
+                    .userId(user.getId())
+                    .status(AuditStatus.SUCCESS)
+                    .build());
 
-        // Include fresh hospital context so the frontend can re-hydrate
-        var hospitalContext = resolveHospitalContext(user.getId());
+            // Include fresh hospital context so the frontend can re-hydrate
+            var hospitalContext = resolveHospitalContext(user.getId());
 
-        // S-01: rotate the HttpOnly refresh-token cookie
-        writeRefreshCookie(response, newRefreshToken);
+            // S-01: rotate the HttpOnly refresh-token cookie
+            writeRefreshCookie(response, newRefreshToken);
 
-        return ResponseEntity.ok(JwtResponse.builder()
-                .accessToken(newAccessToken)
-                .refreshToken(newRefreshToken)
-                .issuedAt(nowMs)
-                .accessTokenExpiresAt(accessExp)
-                .refreshTokenExpiresAt(refreshExp)
-                .id(user.getId())
-                .username(user.getUsername())
-                .roles(roles)
-                .primaryHospitalId(hospitalContext.primaryHospitalId())
-                .primaryHospitalName(hospitalContext.primaryHospitalName())
-                .hospitalIds(hospitalContext.hospitalIds())
-                .build());
+            return ResponseEntity.ok(JwtResponse.builder()
+                    .accessToken(newAccessToken)
+                    .refreshToken(newRefreshToken)
+                    .issuedAt(nowMs)
+                    .accessTokenExpiresAt(accessExp)
+                    .refreshTokenExpiresAt(refreshExp)
+                    .id(user.getId())
+                    .username(user.getUsername())
+                    .roles(roles)
+                    .primaryHospitalId(hospitalContext.primaryHospitalId())
+                    .primaryHospitalName(hospitalContext.primaryHospitalName())
+                    .hospitalIds(hospitalContext.hospitalIds())
+                    .build());
+        } catch (RuntimeException mintFailed) {
+            tokenBlacklistService.release(refreshJti);
+            throw mintFailed;
+        }
     }
 
     /**

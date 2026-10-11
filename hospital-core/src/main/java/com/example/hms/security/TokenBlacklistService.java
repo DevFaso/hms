@@ -42,4 +42,11 @@ public interface TokenBlacklistService {
 
     /** {@code jti} was rotated within its grace period ({@link #markRotated}). */
     boolean wasRecentlyRotated(String jti);
+
+    /**
+     * Undoes {@link #claim} and {@link #markRotated} for {@code jti}: the
+     * caller claimed a refresh token but failed before issuing its successor,
+     * so the old token must stay usable rather than strand the session.
+     */
+    void release(String jti);
 }

@@ -881,6 +881,29 @@ class AuthControllerTest {
     }
 
     @Test
+    void refreshToken_aMintThatFails_givesTheOldTokenBack() throws Exception {
+        com.example.hms.model.User activeUser = com.example.hms.model.User.builder()
+                .username("doctor@example.com").isActive(true).build();
+        org.springframework.test.util.ReflectionTestUtils.setField(activeUser, "id", java.util.UUID.randomUUID());
+        when(jwtTokenProvider.isRefreshToken("old.refresh.token")).thenReturn(true);
+        claimableRefresh("old.refresh.token");
+        when(jwtTokenProvider.getUsernameFromJWT("old.refresh.token")).thenReturn("doctor@example.com");
+        when(userRepository.findByUsername("doctor@example.com")).thenReturn(java.util.Optional.of(activeUser));
+        when(jwtTokenProvider.generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class)))
+                .thenThrow(new IllegalStateException("transient"));
+
+        try {
+            mockMvc.perform(post("/auth/token/refresh")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"refreshToken\":\"old.refresh.token\"}"));
+        } catch (Exception propagated) {
+            // the slice may rethrow the failure; what matters is the release below
+        }
+        // Not stranded: the next refresh with the same cookie can still succeed.
+        verify(tokenBlacklistService).release("jti-old.refresh.token");
+    }
+
+    @Test
     void refreshToken_issuedBeforeAForceLogoutAll_returns401() throws Exception {
         java.util.Date issuedAt = new java.util.Date(System.currentTimeMillis() - 60_000L);
         when(jwtTokenProvider.isRefreshToken("old.refresh.token")).thenReturn(true);

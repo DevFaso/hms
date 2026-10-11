@@ -45,7 +45,7 @@ USING (
                PARTITION BY user_id
                ORDER BY verified DESC, enabled DESC,
                         last_verified_at DESC NULLS LAST,
-                        updated_at DESC, id
+                        updated_at DESC NULLS LAST, id
            ) AS rn
     FROM security.user_mfa_enrollments
     WHERE method = 'TOTP'

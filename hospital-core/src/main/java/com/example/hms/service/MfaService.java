@@ -57,14 +57,17 @@ public class MfaService {
     private static final String ACTION_REPLACE = "authenticator replacement";
 
     /**
-     * Wrong second-factor codes per user before a short lockout, shared by the
-     * login MFA verify and every step-up, kept in the login throttle's store
-     * (Redis when wired, so a lock holds on every instance).
+     * Wrong second-factor codes per user before a short lockout, kept in the
+     * login throttle's store (Redis when wired, so a lock holds on every
+     * instance). The login verify and the step-ups have SEPARATE budgets:
+     * someone holding only a password can burn the login one, and must not be
+     * able to lock the account's emergency controls with it.
      */
     static final int STEP_UP_MAX_FAILURES = 5;
     static final long STEP_UP_WINDOW_MS = 15 * 60 * 1000L;
     static final long STEP_UP_LOCK_MS = 15 * 60 * 1000L;
     static final String STEP_UP_KEY_PREFIX = "stepup:";
+    static final String LOGIN_CODE_KEY_PREFIX = "mfa-login:";
     /** A TOTP code is six digits, a backup code eight: BCrypt only ever runs on the latter. */
     private static final Pattern TOTP_SHAPE = Pattern.compile("\\d{6}");
     private static final Pattern BACKUP_CODE_SHAPE = Pattern.compile("\\d{" + BACKUP_CODE_LENGTH + "}");
@@ -197,14 +200,15 @@ public class MfaService {
             if (MfaChallengeScope.isChallengeSession(caller)) {
                 throw refused(userId, caller, ACTION_REPLACE, MfaStepUpRefusedException.Reason.CHALLENGE);
             }
-            OptionalLong confirmStep = matchingTotpStep(enrollment.getPendingTotpSecret(), code);
-            if (confirmStep.isEmpty()) {
+            if (matchingTotpStep(enrollment.getPendingTotpSecret(), code).isEmpty()) {
                 log.warn("[MFA] Invalid TOTP code confirming a replacement for user={}", userId);
                 return false;
             }
             LocalDateTime confirmedAt = now();
-            // The confirming code is spent: it cannot also sign in.
-            enrollment.setLastTotpStep(confirmStep.getAsLong());
+            // A new secret: no code of it has been accepted yet. The code
+            // that confirmed it stays usable once, for the sign-in the user
+            // is sent to next.
+            enrollment.setLastTotpStep(null);
             enrollment.setTotpSecret(enrollment.getPendingTotpSecret());
             enrollment.setPendingTotpSecret(null);
             enrollment.setVerified(true);
@@ -223,11 +227,10 @@ public class MfaService {
             return true;
         }
 
-        OptionalLong firstStep = matchingTotpStep(enrollment.getTotpSecret(), code);
-        boolean valid = firstStep.isPresent();
+        boolean valid = matchingTotpStep(enrollment.getTotpSecret(), code).isPresent();
         if (valid) {
-            // The confirming code is spent: it cannot also sign in.
-            enrollment.setLastTotpStep(firstStep.getAsLong());
+            // The confirming code stays usable once, for the sign-in the user
+            // is sent to next (claiming it here refused that sign-in).
             enrollment.setVerified(true);
             enrollment.setEnabled(true);
             enrollment.setPrimaryFactor(true);
@@ -322,12 +325,13 @@ public class MfaService {
         if (!StringUtils.hasText(code)) {
             throw refused(userId, caller, action, MfaStepUpRefusedException.Reason.REQUIRED);
         }
-        if (!reserveCodeAttempt(userId)) {
+        String throttleKey = STEP_UP_KEY_PREFIX + userId;
+        if (!reserve(throttleKey)) {
             throw refused(userId, caller, action, MfaStepUpRefusedException.Reason.LOCKED);
         }
         String candidate = code.trim();
         if (claimCurrentTotp(enrollment, userId, candidate) || consumeBackupCode(userId, candidate)) {
-            clearCodeAttempts(userId);
+            attemptStore.clear(throttleKey);
             return;
         }
         throw refused(userId, caller, action, MfaStepUpRefusedException.Reason.INVALID);
@@ -346,22 +350,26 @@ public class MfaService {
     }
 
     /**
-     * Reserves one second-factor attempt for the user BEFORE the code is
+     * Reserves one login-code attempt for the user BEFORE the code is
      * evaluated: the store counts it atomically, so concurrent guesses cannot
-     * exceed {@value #STEP_UP_MAX_FAILURES} per window, at login or at any
-     * step-up. {@code false}: the user is locked out for now. A code that
-     * verifies clears the count ({@link #clearCodeAttempts}).
+     * exceed {@value #STEP_UP_MAX_FAILURES} per window. {@code false}: locked
+     * out for now. Its own budget, never the step-ups' (see
+     * {@link #STEP_UP_MAX_FAILURES}). A code that verifies clears it
+     * ({@link #clearCodeAttempts}).
      */
     public boolean reserveCodeAttempt(UUID userId) {
-        String throttleKey = STEP_UP_KEY_PREFIX + userId;
+        return reserve(LOGIN_CODE_KEY_PREFIX + userId);
+    }
+
+    /** A login code verified: the user's login failure count starts again. */
+    public void clearCodeAttempts(UUID userId) {
+        attemptStore.clear(LOGIN_CODE_KEY_PREFIX + userId);
+    }
+
+    private boolean reserve(String throttleKey) {
         return attemptStore.remainingLockMs(throttleKey) <= 0
                 && attemptStore.recordFailure(throttleKey, STEP_UP_MAX_FAILURES, STEP_UP_WINDOW_MS,
                         STEP_UP_LOCK_MS) <= STEP_UP_MAX_FAILURES;
-    }
-
-    /** A second-factor code verified: the user's failure count starts again. */
-    public void clearCodeAttempts(UUID userId) {
-        attemptStore.clear(STEP_UP_KEY_PREFIX + userId);
     }
 
     /** Audits the refusal (never the code) and returns the exception to throw. */
@@ -444,23 +452,13 @@ public class MfaService {
      * is a conditional update, so two requests cannot both use one code.
      */
     private boolean consumeBackupCode(UUID userId, String rawCode) {
-        if (rawCode == null || !BACKUP_CODE_SHAPE.matcher(rawCode.trim()).matches()) {
-            return false;
+        // One rule of which codes count (shape, unused, never pending):
+        // matchingBackupCode's, the login's too.
+        boolean spent = matchingBackupCode(userId, rawCode).map(this::spendBackupCode).orElse(false);
+        if (spent) {
+            log.info("[MFA] Backup code consumed for user={}", userId);
         }
-        String candidate = rawCode.trim();
-        List<MfaBackupCode> unusedCodes = backupCodeRepository.findByUserIdAndUsedFalseAndPendingFalse(userId);
-
-        for (MfaBackupCode bc : unusedCodes) {
-            if (passwordEncoder.matches(candidate, bc.getCodeHash())) {
-                if (backupCodeRepository.markUsed(bc.getId(), now()) != 1) {
-                    return false;
-                }
-                log.info("[MFA] Backup code consumed for user={}, remaining={}",
-                        userId, unusedCodes.size() - 1);
-                return true;
-            }
-        }
-        return false;
+        return spent;
     }
 
     /**

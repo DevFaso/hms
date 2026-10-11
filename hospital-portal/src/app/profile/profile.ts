@@ -300,7 +300,15 @@ export class ProfileComponent implements OnInit {
         this.mfaLoading.set(false);
       },
       error: (err) => {
-        const refusal = MFA_STEP_UP_MESSAGES[err?.error?.code as string];
+        const code = err?.error?.code as string | undefined;
+        const refusal = MFA_STEP_UP_MESSAGES[code as string];
+        // The page thought there was no active authenticator (stale data:
+        // one was confirmed in another tab), but the server asks for the
+        // step-up: show the code field instead of a dead "Set up" button.
+        if (code === 'mfa.stepup.required' && this.mfaStep() !== 'stepup') {
+          this.mfaReplacing.set(true);
+          this.mfaStep.set('stepup');
+        }
         this.mfaError.set(
           refusal
             ? this.translate.instant(refusal)

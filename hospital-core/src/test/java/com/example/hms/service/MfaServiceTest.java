@@ -656,7 +656,7 @@ class MfaServiceTest {
     }
 
     @Test
-    void confirmingTheFirstAuthenticator_spendsTheConfirmingCode() throws Exception {
+    void confirmingTheFirstAuthenticator_leavesTheConfirmingCodeUsableForTheSignInThatFollows() throws Exception {
         UserMfaEnrollment enrollment = UserMfaEnrollment.builder()
                 .user(testUser).method(MfaMethodType.TOTP).verified(false).enabled(false)
                 .totpSecret(SECRET).build();
@@ -668,12 +668,29 @@ class MfaServiceTest {
 
         assertThat(mfaService.verifyEnrollment(userId, code, fullSession())).isTrue();
 
-        assertThat(enrollment.getLastTotpStep()).isEqualTo(step);
+        // The portal sends the user straight to sign-in, where the code still
+        // on screen must work: confirming does not claim its step.
+        assertThat(enrollment.getLastTotpStep()).isNull();
     }
 
     @Test
-    void theLoginVerify_andEveryStepUp_shareOnePerUserBudget() {
-        when(attemptStore.remainingLockMs(MfaService.STEP_UP_KEY_PREFIX + userId)).thenReturn(60_000L);
+    void theLoginVerify_hasItsOwnBudget_soAPasswordOnlyAttackerCannotLockTheStepUps() {
+        // The step-up budget is spent; the login one is not affected, and
+        // spending the login one never touches the step-up key.
+        lenient().when(attemptStore.remainingLockMs(MfaService.STEP_UP_KEY_PREFIX + userId)).thenReturn(60_000L);
+        when(attemptStore.remainingLockMs(MfaService.LOGIN_CODE_KEY_PREFIX + userId)).thenReturn(0L);
+        when(attemptStore.recordFailure(eq(MfaService.LOGIN_CODE_KEY_PREFIX + userId), anyInt(), anyLong(), anyLong()))
+                .thenReturn(1);
+
+        assertThat(mfaService.reserveCodeAttempt(userId)).isTrue();
+
+        verify(attemptStore, never()).recordFailure(eq(MfaService.STEP_UP_KEY_PREFIX + userId),
+                anyInt(), anyLong(), anyLong());
+    }
+
+    @Test
+    void aLockedLoginBudget_refusesTheLoginCode() {
+        when(attemptStore.remainingLockMs(MfaService.LOGIN_CODE_KEY_PREFIX + userId)).thenReturn(60_000L);
 
         assertThat(mfaService.reserveCodeAttempt(userId)).isFalse();
     }

@@ -157,6 +157,13 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
             .map(this::mfaKey)
             .collect(Collectors.toSet());
 
+        // One TOTP row per user (V183): a payload naming two is a bad request,
+        // not a unique-index violation (500).
+        if (payload != null && payload.stream()
+                .filter(dto -> dto != null && dto.getMethod() == MfaMethodType.TOTP).count() > 1) {
+            throw new IllegalArgumentException("At most one TOTP authenticator can be listed.");
+        }
+
         List<UserMfaEnrollment> toPersist = new ArrayList<>();
         if (payload != null) {
             for (UserMfaEnrollmentRequestDTO dto : payload) {
@@ -168,7 +175,13 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
                 enrollment.setUser(user);
                 enrollment.setMethod(dto.getMethod());
                 enrollment.setChannel(normalize(dto.getChannel()));
-                enrollment.setEnabled(dto.isEnabled());
+                // Only confirming a code turns a TOTP authenticator on
+                // (MfaService#verifyEnrollment): this list may switch one off,
+                // never back on, or it would revive a secret nobody has shown
+                // a code from since, as the login factor, with no code at all.
+                boolean enable = dto.isEnabled()
+                    && (dto.getMethod() != MfaMethodType.TOTP || enrollment.getId() == null || enrollment.isEnabled());
+                enrollment.setEnabled(enable);
                 enrollment.setPrimaryFactor(dto.isPrimaryFactor());
                 enrollment.setEnrolledAt(dto.getEnrolledAt());
                 // Never from the client: lastVerifiedAt (like verified) records

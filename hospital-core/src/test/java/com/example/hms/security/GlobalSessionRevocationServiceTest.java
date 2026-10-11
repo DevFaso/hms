@@ -126,14 +126,25 @@ class GlobalSessionRevocationServiceTest {
     }
 
     @Test
-    @DisplayName("revokes: a token from the same whole second as the revocation survives")
-    void aTokenFromTheSameSecondAsTheRevocation_isNotRevoked() {
-        java.time.Instant takenAt = service.revokeAll(java.util.UUID.randomUUID(), "admin", "test");
-        java.time.Instant sameSecond = takenAt.truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+    @DisplayName("revokes: every token of the revocation's whole second is revoked (a kill switch errs safe)")
+    void everyTokenOfTheRevocationsSecond_isRevoked() {
+        java.time.Instant cutOff = service.revokeAll(java.util.UUID.randomUUID(), "admin", "test");
 
-        // A JWT iat is whole seconds: a token minted just after the
-        // revocation, in the same second, carries this iat.
-        assertThat(service.revokes(java.util.Date.from(sameSecond))).isFalse();
-        assertThat(service.revokes(java.util.Date.from(sameSecond.minusSeconds(1)))).isTrue();
+        // The stored cut-off is a whole second, rounded UP from the moment of
+        // the revocation: a JWT iat is whole seconds, so a token minted in
+        // that second (iat = the second before the cut-off) is revoked, even
+        // one minted a few milliseconds BEFORE the revocation.
+        assertThat(cutOff.getNano()).isZero();
+        assertThat(service.revokes(java.util.Date.from(cutOff.minusSeconds(1)))).isTrue();
+        assertThat(service.revokes(java.util.Date.from(cutOff))).isFalse();
+    }
+
+    @Test
+    @DisplayName("the cut-off rounds up to the next whole second, and keeps an exact second as is")
+    void theCutOffRoundsUp() {
+        assertThat(GlobalSessionRevocationService.cutOff(java.time.Instant.parse("2026-10-11T12:00:00.100Z")))
+            .isEqualTo(java.time.Instant.parse("2026-10-11T12:00:01Z"));
+        assertThat(GlobalSessionRevocationService.cutOff(java.time.Instant.parse("2026-10-11T12:00:00Z")))
+            .isEqualTo(java.time.Instant.parse("2026-10-11T12:00:00Z"));
     }
 }

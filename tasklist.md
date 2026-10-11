@@ -4838,6 +4838,13 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   token** as well as the live assignment (the assignment service's scope reads
   both), so on Keycloak they answer as unmapped until P1-T11 adds the realm role.
   Same as `POST /users/admin-register` today. Open until P1-T11.
+- **MFA step-up: the non-strict bypass audit belongs inside `MfaService.requireStepUp`.**
+  Its five callers (emergency controls, hospital and organization lifecycle, support
+  impersonation, the super-admin MFA endpoint) each carry their own copy of the
+  "audit the bypass as SECURITY_ALERT_TRIGGERED" block, with slightly different fields;
+  a new caller that forgets it lets an unenrolled actor through with no forensic row.
+  Move it next to the refusal audit and return the outcome (found in #853's round-5
+  review). Open.
 - **CDS acknowledgement with an unknown hospital id now answers 404** (was: saved as a
   global acknowledgement). Intended since #835; confirm no client relies on the old
   behaviour. Open.

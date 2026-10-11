@@ -174,6 +174,19 @@ describe('ProfileComponent — replacing the authenticator', () => {
     expect(fixture.nativeElement.textContent).toContain('PROFILE.MFA_REPLACE_PENDING');
   });
 
+  it('stale data (an authenticator confirmed in another tab): the step-up the server asks for is offered', async () => {
+    await setUp(false);
+    mfa.enroll.and.returnValue(throwError(() => refused('mfa.stepup.required')));
+
+    component.startMfaEnrollment();
+    fixture.detectChanges();
+
+    // Not a dead "Set up" button: the code field appears.
+    expect(component.mfaStep()).toBe('stepup');
+    expect(component.mfaReplacing()).toBeTrue();
+    expect(el('[data-testid="mfa-stepup"]')).not.toBeNull();
+  });
+
   it('an empty step-up is not sent', async () => {
     await setUp(true);
     component.startMfaReplacement();
