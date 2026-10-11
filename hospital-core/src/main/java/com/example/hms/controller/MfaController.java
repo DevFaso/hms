@@ -334,9 +334,15 @@ public class MfaController {
 
     /** The one caller that spends the challenge (TokenBlacklistService#claim). */
     private boolean claim(String challengeToken) {
-        String jti = jwtTokenProvider.getJtiFromToken(challengeToken);
-        return jti != null
-                && tokenBlacklistService.claim(jti, jwtTokenProvider.getExpiration(challengeToken).getTime());
+        try {
+            String jti = jwtTokenProvider.getJtiFromToken(challengeToken);
+            return jti != null
+                    && tokenBlacklistService.claim(jti, jwtTokenProvider.getExpiration(challengeToken).getTime());
+        } catch (io.jsonwebtoken.JwtException | IllegalArgumentException expired) {
+            // The challenge expired while the code was being checked (a backup
+            // code's BCrypt scan takes time): "sign in again", not a 500.
+            return false;
+        }
     }
 
     // DTO for MFA login verification (unauthenticated)

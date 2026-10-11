@@ -205,16 +205,31 @@ class MfaServiceTest {
     }
 
     @Test
-    void verifyEnrollment_alreadyVerified_returnsTrue() {
+    void verifyEnrollment_alreadyVerified_isNotConfirmedByAnyCode() throws Exception {
         UserMfaEnrollment enrollment = UserMfaEnrollment.builder()
                 .user(testUser).method(MfaMethodType.TOTP).verified(true).enabled(true)
-                .totpSecret("SECRET").build();
+                .totpSecret(SECRET).build();
 
         when(enrollmentRepository.lockByUserIdAndMethod(userId, MfaMethodType.TOTP))
                 .thenReturn(Optional.of(enrollment));
 
-        assertThat(mfaService.verifyEnrollment(userId, "123456", fullSession())).isTrue();
+        // A wrong code is a "no"; a current one a "yes"; nothing changes either way.
+        assertThat(mfaService.verifyEnrollment(userId, "000000", fullSession())).isFalse();
+        assertThat(mfaService.verifyEnrollment(userId, codeFor(SECRET), fullSession())).isTrue();
         verify(enrollmentRepository, never()).save(any());
+    }
+
+    @Test
+    void verifyEnrollment_alreadyVerified_fromTheLoginChallenge_isRefused() {
+        UserMfaEnrollment enrollment = UserMfaEnrollment.builder()
+                .user(testUser).method(MfaMethodType.TOTP).verified(true).enabled(true)
+                .totpSecret(SECRET).build();
+        when(enrollmentRepository.lockByUserIdAndMethod(userId, MfaMethodType.TOTP))
+                .thenReturn(Optional.of(enrollment));
+
+        // The password alone learns nothing about the active authenticator here.
+        refusedWith(MfaStepUpRefusedException.Reason.CHALLENGE,
+                () -> mfaService.verifyEnrollment(userId, "000000", challengeSession()));
     }
 
     @Test

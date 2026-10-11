@@ -119,10 +119,33 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
     public List<UserMfaEnrollmentDTO> upsertMfaEnrollmentsAsSuperAdmin(UUID actorId, UUID userId,
                                                                        List<UserMfaEnrollmentRequestDTO> payload,
                                                                        String stepUpCode) {
+        // Validate first: the step-up commits on its own (a backup code is
+        // spent), so a request that would fail anyway must fail before it.
+        resolveUser(userId);
+        requireAtMostOneTotp(payload);
         if (!mfaService.requireStepUp(actorId, stepUpCode, "MFA enrolment change", requireMfaStrict)) {
             auditMfaChangeBypass(actorId, userId);
         }
         return upsertMfaEnrollments(userId, payload);
+    }
+
+    /**
+     * Only confirming a code turns a TOTP authenticator on
+     * (MfaService#verifyEnrollment): this list may switch one off, never back
+     * on, or it would revive a secret nobody has shown a code from since, as
+     * the login factor, with no code at all.
+     */
+    private static boolean mayEnable(UserMfaEnrollmentRequestDTO dto, UserMfaEnrollment enrollment) {
+        return dto.isEnabled()
+            && (dto.getMethod() != MfaMethodType.TOTP || enrollment.getId() == null || enrollment.isEnabled());
+    }
+
+    /** One TOTP row per user (V183): a payload naming two is a bad request, not a unique-index violation (500). */
+    private static void requireAtMostOneTotp(List<UserMfaEnrollmentRequestDTO> payload) {
+        if (payload != null && payload.stream()
+                .filter(dto -> dto != null && dto.getMethod() == MfaMethodType.TOTP).count() > 1) {
+            throw new IllegalArgumentException("At most one TOTP authenticator can be listed.");
+        }
     }
 
     private void auditMfaChangeBypass(UUID actorId, UUID userId) {
@@ -175,13 +198,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
                 enrollment.setUser(user);
                 enrollment.setMethod(dto.getMethod());
                 enrollment.setChannel(normalize(dto.getChannel()));
-                // Only confirming a code turns a TOTP authenticator on
-                // (MfaService#verifyEnrollment): this list may switch one off,
-                // never back on, or it would revive a secret nobody has shown
-                // a code from since, as the login factor, with no code at all.
-                boolean enable = dto.isEnabled()
-                    && (dto.getMethod() != MfaMethodType.TOTP || enrollment.getId() == null || enrollment.isEnabled());
-                enrollment.setEnabled(enable);
+                enrollment.setEnabled(mayEnable(dto, enrollment));
                 enrollment.setPrimaryFactor(dto.isPrimaryFactor());
                 enrollment.setEnrolledAt(dto.getEnrolledAt());
                 // Never from the client: lastVerifiedAt (like verified) records
@@ -425,7 +442,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
     }
 
     private String mfaKey(MfaMethodType method, String channel) {
-        return method == MfaMethodType.TOTP ? key(method, null) : key(method, channel);
+        return key(method, method == MfaMethodType.TOTP ? null : channel);
     }
 
     private String recoveryKey(UserRecoveryContact contact) {

@@ -92,6 +92,9 @@ class MfaControllerTest {
 
     @BeforeEach
     void setUp() {
+        // The user's wrong-code budget is not exhausted unless a test says so.
+        when(mfaService.reserveCodeAttempt(any())).thenReturn(true);
+
         testUser = new User();
         testUser.setId(USER_ID);
         testUser.setUsername(USERNAME);
@@ -176,11 +179,6 @@ class MfaControllerTest {
 
     // ── Verify Login (MFA challenge) ──
 
-    /** The user's wrong-code budget is not exhausted unless a test says so. */
-    @BeforeEach
-    void codeAttemptsAvailable() {
-        when(mfaService.reserveCodeAttempt(any())).thenReturn(true);
-    }
 
     /** A current TOTP code of time-step 42, which this sign-in can still claim. */
     private void currentTotp(String code) {
@@ -435,5 +433,22 @@ class MfaControllerTest {
                 .andExpect(status().isUnauthorized());
         verify(mfaService).reserveCodeAttempt(USER_ID);
         verify(mfaService, never()).clearCodeAttempts(any());
+    }
+
+    @Test
+    void verifyMfa_aChallengeThatExpiresWhileTheCodeIsChecked_is401_not500() throws Exception {
+        when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
+        when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
+        currentTotp("654321");
+        // isSpentOrRevoked read it fine; by the claim, it has expired.
+        when(jwtTokenProvider.getJtiFromToken("mfa-tok-123"))
+                .thenReturn(null)
+                .thenThrow(new io.jsonwebtoken.ExpiredJwtException(null, null, "expired"));
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"654321\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Invalid or expired MFA token."));
     }
 }

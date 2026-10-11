@@ -46,7 +46,9 @@ public interface TokenBlacklistService {
     /**
      * Undoes {@link #claim} and {@link #markRotated} for {@code jti}: the
      * caller claimed a refresh token but failed before issuing its successor,
-     * so the old token must stay usable rather than strand the session.
+     * so the old token must stay usable rather than strand the session. Only
+     * the claim's own entry is removed: if {@link #blacklist} revoked the jti
+     * meanwhile (a logout), that revocation stands.
      */
     void release(String jti);
 }

@@ -344,7 +344,7 @@ class MfaChallengeTokenScopeIT extends BaseIT {
 
     @Test
     @DisplayName("an actor whose factor is inactive: non-strict, the emergency action proceeds and the bypass is audited; strict, refused")
-    void inactiveActorStepUpFollowsStrictMode() throws Exception {
+    void inactiveActorStepUpFollowsStrictMode() {
         UserMfaEnrollment row = enrollmentRepository.findByUserIdAndMethod(enrolled.getId(), MfaMethodType.TOTP)
             .orElseThrow();
         row.setEnabled(false);
@@ -423,7 +423,7 @@ class MfaChallengeTokenScopeIT extends BaseIT {
                                 if (System.currentTimeMillis() > deadline) {
                                     throw busy;
                                 }
-                                Thread.sleep(200);
+                                java.util.concurrent.locks.LockSupport.parkNanos(200_000_000L);
                             }
                         }
                     });
@@ -662,7 +662,7 @@ class MfaChallengeTokenScopeIT extends BaseIT {
         synchronized (ISSUED_STEPS) {
             step = Math.max(currentStep() - 1, ISSUED_STEPS.getOrDefault(secret, Long.MIN_VALUE) + 1);
             while (step > currentStep() + 1) {
-                Thread.sleep(250);
+                java.util.concurrent.locks.LockSupport.parkNanos(250_000_000L);
             }
             ISSUED_STEPS.put(secret, step);
         }

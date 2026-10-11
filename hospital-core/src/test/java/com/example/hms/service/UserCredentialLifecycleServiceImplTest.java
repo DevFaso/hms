@@ -594,6 +594,9 @@ class UserCredentialLifecycleServiceImplTest {
     void aSuperAdminChange_needsTheActorsStepUp_andARefusalChangesNothing() {
         UUID actorId = UUID.randomUUID();
         UUID targetId = UUID.randomUUID();
+        User target = User.builder().username("target").email("t@example.com").build();
+        target.setId(targetId);
+        when(userRepository.findById(targetId)).thenReturn(Optional.of(target));
         when(mfaService.requireStepUp(eq(actorId), eq("000000"), any(), eq(false)))
             .thenThrow(new com.example.hms.exception.MfaStepUpRefusedException(
                 com.example.hms.exception.MfaStepUpRefusedException.Reason.INVALID));
@@ -686,5 +689,35 @@ class UserCredentialLifecycleServiceImplTest {
         assertThat(response).hasSize(1);
         assertThat(totp.getChannel()).isEqualTo("new-device");
         verify(mfaEnrollmentRepository, never()).delete(any());
+    }
+
+    @Test
+    void anUnknownTarget_orTwoTotpEntries_spendNoStepUp() {
+        // The step-up commits on its own (a backup code is spent): a request
+        // that fails anyway must fail before it.
+        UUID actorId = UUID.randomUUID();
+        UUID missing = UUID.randomUUID();
+        when(userRepository.findById(missing)).thenReturn(Optional.empty());
+
+        List<UserMfaEnrollmentRequestDTO> none = List.of();
+        assertThatThrownBy(() -> service.upsertMfaEnrollmentsAsSuperAdmin(actorId, missing, none, "12345678"))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+
+        UUID targetId = UUID.randomUUID();
+        User target = User.builder().username("target").email("t@example.com").build();
+        target.setId(targetId);
+        when(userRepository.findById(targetId)).thenReturn(Optional.of(target));
+        UserMfaEnrollmentRequestDTO first = new UserMfaEnrollmentRequestDTO();
+        first.setMethod(MfaMethodType.TOTP);
+        first.setChannel("a");
+        UserMfaEnrollmentRequestDTO second = new UserMfaEnrollmentRequestDTO();
+        second.setMethod(MfaMethodType.TOTP);
+        second.setChannel("b");
+
+        List<UserMfaEnrollmentRequestDTO> twoTotp = List.of(first, second);
+        assertThatThrownBy(() -> service.upsertMfaEnrollmentsAsSuperAdmin(actorId, targetId, twoTotp, "12345678"))
+            .isInstanceOf(IllegalArgumentException.class);
+
+        verify(mfaService, never()).requireStepUp(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 }

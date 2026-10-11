@@ -150,7 +150,13 @@ describe('errorInterceptor', () => {
 
       http.get('/data').subscribe({ error: () => undefined });
       httpMock.expectOne('/data').flush(null, { status: 401, statusText: 'Unauthorized' });
-      tick(REFRESH_SUPERSEDED_DELAY_MS * (REFRESH_SUPERSEDED_RETRIES + 1));
+      // Every back-off step: 600 + 1200 + ... ms.
+      tick(
+        (REFRESH_SUPERSEDED_DELAY_MS *
+          REFRESH_SUPERSEDED_RETRIES *
+          (REFRESH_SUPERSEDED_RETRIES + 1)) /
+          2,
+      );
 
       expect(calls).toBe(REFRESH_SUPERSEDED_RETRIES + 1);
       expect(auth.logout).toHaveBeenCalled();

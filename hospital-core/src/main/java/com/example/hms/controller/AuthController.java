@@ -661,10 +661,55 @@ public class AuthController {
     }
 
     /**
+     * Why this token may not mint a session, or {@code null} when it may
+     * go on: not a refresh token, issued before a force-logout-all, or
+     * already spent (superseded by a sibling tab: 409; replayed: 401).
+     */
+    private ResponseEntity<Object> refreshRefusal(String refreshToken) {
+        // A refresh token, and nothing else the same key signs: the MFA
+        // challenge token would mint a session past MFA, an impersonation
+        // token an ordinary session that outlives the impersonation, and an
+        // access token a session that never ends.
+        if (!jwtTokenProvider.isRefreshToken(refreshToken)) {
+            log.warn("🔄 [REFRESH] Invalid or expired refresh token");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse(REFRESH_INVALID_MESSAGE));
+        }
+
+        // Force-logout-all revokes refresh tokens too: one issued before it
+        // must not mint a new session (GlobalSessionRevocationService#revokes,
+        // the rule the filter applies to access tokens).
+        if (globalSessionRevocationService.revokes(jwtTokenProvider.getIssuedAt(refreshToken))) {
+            log.warn("🔄 [REFRESH] Refused — refresh token predates the last force-logout-all");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse(REFRESH_INVALID_MESSAGE));
+        }
+
+        // Replay detection: an already-used refresh token is refused here; the
+        // atomic claim below settles a race between two concurrent uses. Used
+        // a moment ago by another tab of the same browser: superseded (409),
+        // not replayed, so that tab retries with the rotated cookie instead
+        // of signing every tab out.
+        String refreshJti = jwtTokenProvider.getJtiFromToken(refreshToken);
+        if (refreshJti != null && tokenBlacklistService.isBlacklisted(refreshJti)) {
+            if (tokenBlacklistService.wasRecentlyRotated(refreshJti)) {
+                return refreshSuperseded(refreshJti);
+            }
+            log.warn("🔄 [REFRESH] Replay detected — refresh token jti={} already used", refreshJti);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse("Refresh token has already been used. Please log in again."));
+        }
+        return null;
+    }
+
+    /**
      * How long after a rotation another use of the old refresh token counts as
      * a sibling tab that lost the race (409, retry) rather than a replay (401).
      */
     static final long REFRESH_ROTATION_GRACE_MS = 30_000L;
+
+    private static final String REFRESH_INVALID_MESSAGE =
+            "Refresh token is invalid or has expired. Please log in again.";
 
     /** Another tab rotated this refresh token a moment ago: no tokens, retry with the new cookie. */
     private ResponseEntity<Object> refreshSuperseded(String jti) {
@@ -721,39 +766,11 @@ public class AuthController {
                     .body(new MessageResponse("Refresh token is required."));
         }
 
-        // A refresh token, and nothing else the same key signs: the MFA
-        // challenge token would mint a session past MFA, an impersonation
-        // token an ordinary session that outlives the impersonation, and an
-        // access token a session that never ends.
-        if (!jwtTokenProvider.isRefreshToken(refreshToken)) {
-            log.warn("🔄 [REFRESH] Invalid or expired refresh token");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("Refresh token is invalid or has expired. Please log in again."));
+        ResponseEntity<Object> refusal = refreshRefusal(refreshToken);
+        if (refusal != null) {
+            return refusal;
         }
-
-        // Force-logout-all revokes refresh tokens too: one issued before it
-        // must not mint a new session (GlobalSessionRevocationService#revokes,
-        // the rule the filter applies to access tokens).
-        if (globalSessionRevocationService.revokes(jwtTokenProvider.getIssuedAt(refreshToken))) {
-            log.warn("🔄 [REFRESH] Refused — refresh token predates the last force-logout-all");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("Refresh token is invalid or has expired. Please log in again."));
-        }
-
-        // Replay detection: an already-used refresh token is refused here; the
-        // atomic claim below settles a race between two concurrent uses. Used
-        // a moment ago by another tab of the same browser: superseded (409),
-        // not replayed, so that tab retries with the rotated cookie instead
-        // of signing every tab out.
         String refreshJti = jwtTokenProvider.getJtiFromToken(refreshToken);
-        if (refreshJti != null && tokenBlacklistService.isBlacklisted(refreshJti)) {
-            if (tokenBlacklistService.wasRecentlyRotated(refreshJti)) {
-                return refreshSuperseded(refreshJti);
-            }
-            log.warn("🔄 [REFRESH] Replay detected — refresh token jti={} already used", refreshJti);
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("Refresh token has already been used. Please log in again."));
-        }
 
         String username = jwtTokenProvider.getUsernameFromJWT(refreshToken);
         var user = userRepository.findByUsername(username).orElse(null);
@@ -816,12 +833,17 @@ public class AuthController {
         // winner rotated, so two tabs refreshing at once stay signed in.
         if (refreshJti == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("Refresh token is invalid or has expired. Please log in again."));
+                    .body(new MessageResponse(REFRESH_INVALID_MESSAGE));
         }
+        // Rotated is recorded BEFORE the token is spent: a sibling tab that
+        // sees it spent always sees it rotated too, so it is told
+        // "superseded" (409, retry), never "replayed" (401, sign out). Marking
+        // a token we then fail to claim is harmless: it only turns another
+        // use within the grace from 401 into 409, and issues nothing.
+        tokenBlacklistService.markRotated(refreshJti, REFRESH_ROTATION_GRACE_MS);
         if (!tokenBlacklistService.claim(refreshJti, jwtTokenProvider.getExpiration(refreshToken).getTime())) {
             return refreshSuperseded(refreshJti);
         }
-        tokenBlacklistService.markRotated(refreshJti, REFRESH_ROTATION_GRACE_MS);
 
         // Claimed and marked rotated above: if anything below fails before
         // the new pair is out, give the old token back, or the session is

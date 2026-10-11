@@ -173,7 +173,8 @@ const refreshDone$ = new BehaviorSubject<string | null>(null);
  * rotated cookie, so asking again shortly after succeeds: retry instead of
  * signing out, which would also revoke the other tab's fresh session.
  */
-export const REFRESH_SUPERSEDED_RETRIES = 2;
+export const REFRESH_SUPERSEDED_RETRIES = 4;
+/** Backs off 600, 1200, 1800, 2400 ms: about 6 s for the winning tab's cookie to land on a slow link. */
 export const REFRESH_SUPERSEDED_DELAY_MS = 600;
 
 function refreshWithSupersededRetry(
@@ -182,9 +183,9 @@ function refreshWithSupersededRetry(
   return auth.refreshTokenRequest().pipe(
     retry({
       count: REFRESH_SUPERSEDED_RETRIES,
-      delay: (err: unknown) =>
+      delay: (err: unknown, attempt: number) =>
         err instanceof HttpErrorResponse && err.status === 409
-          ? timer(REFRESH_SUPERSEDED_DELAY_MS)
+          ? timer(REFRESH_SUPERSEDED_DELAY_MS * attempt)
           : throwError(() => err),
     }),
   );

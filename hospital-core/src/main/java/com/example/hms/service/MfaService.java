@@ -223,8 +223,15 @@ public class MfaService {
         }
 
         if (enrollment.isVerified()) {
+            // Nothing to confirm. Never a "yes" for any code: the login's
+            // challenge token (password only) must learn nothing here, and a
+            // profile tab must not show a success it did not earn. A current
+            // code of the active secret still answers true; nothing changes.
+            if (MfaChallengeScope.isChallengeSession(caller)) {
+                throw refused(userId, caller, ACTION_REPLACE, MfaStepUpRefusedException.Reason.CHALLENGE);
+            }
             log.warn("[MFA] TOTP already verified for user={}", userId);
-            return true;
+            return isValidTotp(enrollment.getTotpSecret(), code);
         }
 
         boolean valid = matchingTotpStep(enrollment.getTotpSecret(), code).isPresent();
@@ -340,7 +347,9 @@ public class MfaService {
     /** A current code of the active secret, accepted once: its time-step is claimed atomically. */
     private boolean claimCurrentTotp(UserMfaEnrollment enrollment, UUID userId, String candidate) {
         OptionalLong step = matchingTotpStep(enrollment.getTotpSecret(), candidate);
-        if (step.isEmpty() || !claimTotpStep(userId, step.getAsLong())) {
+        // The repository directly: this runs inside the caller's transaction.
+        if (step.isEmpty()
+                || enrollmentRepository.claimTotpStep(userId, MfaMethodType.TOTP, step.getAsLong(), now()) != 1) {
             return false;
         }
         // The row may be managed here (the replacement's locked read): keep it
@@ -430,6 +439,11 @@ public class MfaService {
      */
     @Transactional(readOnly = true)
     public Optional<UUID> matchingBackupCode(UUID userId, String rawCode) {
+        return findMatchingBackupCode(userId, rawCode);
+    }
+
+    /** {@link #matchingBackupCode}'s rule, callable inside this class without a proxy. */
+    private Optional<UUID> findMatchingBackupCode(UUID userId, String rawCode) {
         if (rawCode == null || !BACKUP_CODE_SHAPE.matcher(rawCode.trim()).matches()) {
             return Optional.empty();
         }
@@ -454,11 +468,17 @@ public class MfaService {
     private boolean consumeBackupCode(UUID userId, String rawCode) {
         // One rule of which codes count (shape, unused, never pending):
         // matchingBackupCode's, the login's too.
-        boolean spent = matchingBackupCode(userId, rawCode).map(this::spendBackupCode).orElse(false);
+        boolean spent = findMatchingBackupCode(userId, rawCode)
+                .map(codeId -> backupCodeRepository.markUsed(codeId, now()) == 1)
+                .orElse(false);
         if (spent) {
             log.info("[MFA] Backup code consumed for user={}", userId);
         }
         return spent;
+    }
+
+    private boolean isValidTotp(String secret, String code) {
+        return matchingTotpStep(secret, code).isPresent();
     }
 
     /**

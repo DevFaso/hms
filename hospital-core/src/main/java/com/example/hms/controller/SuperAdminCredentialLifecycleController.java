@@ -1,12 +1,10 @@
 package com.example.hms.controller;
 
-import com.example.hms.model.User;
 import com.example.hms.payload.dto.credential.UserCredentialHealthDTO;
 import com.example.hms.payload.dto.credential.UserMfaEnrollmentDTO;
 import com.example.hms.payload.dto.credential.UserMfaEnrollmentRequestDTO;
 import com.example.hms.payload.dto.credential.UserRecoveryContactDTO;
 import com.example.hms.payload.dto.credential.UserRecoveryContactRequestDTO;
-import com.example.hms.repository.UserRepository;
 import com.example.hms.service.UserCredentialLifecycleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

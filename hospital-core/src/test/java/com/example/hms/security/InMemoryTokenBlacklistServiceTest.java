@@ -83,4 +83,23 @@ class InMemoryTokenBlacklistServiceTest {
         assertThat(service.claim(" ", System.currentTimeMillis() + 60_000)).isFalse();
         assertThat(service.claim(null, System.currentTimeMillis() + 60_000)).isFalse();
     }
+
+    @org.junit.jupiter.api.Test
+    void releaseUndoesOnlyItsOwnClaim_neverARevocation() {
+        long exp = System.currentTimeMillis() + 60_000L;
+
+        // A claim, then a failed mint: released, the token is usable again.
+        org.assertj.core.api.Assertions.assertThat(service.claim("jti-a", exp)).isTrue();
+        service.markRotated("jti-a", 30_000L);
+        service.release("jti-a");
+        org.assertj.core.api.Assertions.assertThat(service.isBlacklisted("jti-a")).isFalse();
+        org.assertj.core.api.Assertions.assertThat(service.wasRecentlyRotated("jti-a")).isFalse();
+
+        // A claim, then a logout revokes the same jti, then the mint fails:
+        // the logout's revocation stands.
+        org.assertj.core.api.Assertions.assertThat(service.claim("jti-b", exp)).isTrue();
+        service.blacklist("jti-b", exp);
+        service.release("jti-b");
+        org.assertj.core.api.Assertions.assertThat(service.isBlacklisted("jti-b")).isTrue();
+    }
 }

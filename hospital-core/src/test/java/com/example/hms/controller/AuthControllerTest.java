@@ -822,7 +822,11 @@ class AuthControllerTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value("refresh.superseded"));
         verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class));
-        verify(tokenBlacklistService, never()).markRotated(any(), org.mockito.ArgumentMatchers.anyLong());
+        // Rotated BEFORE spent: a sibling that sees the token spent always
+        // sees it rotated too (409, never 401 and a sign-out).
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(tokenBlacklistService);
+        order.verify(tokenBlacklistService).markRotated("jti-old", AuthController.REFRESH_ROTATION_GRACE_MS);
+        order.verify(tokenBlacklistService).claim("jti-old", exp);
     }
 
     @Test
