@@ -86,8 +86,22 @@ public class GlobalSessionRevocationService {
      * must not issue a post-cut-off pair from a token the kill switch revoked.
      */
     public boolean revokesFresh(java.util.Date issuedAt) {
-        refresh();
-        return revokes(issuedAt);
+        // Read the row WITHOUT writing it into the cache: a revokeAll on this
+        // instance may have put a newer cut-off there before its commit, and
+        // the row would carry it back. The later of the two decides.
+        Instant minIat = cachedGlobalMinTokenIat;
+        try {
+            Instant row = repository.findById(SecurityRevocation.SINGLETON_ID)
+                .map(SecurityRevocation::getGlobalMinTokenIat)
+                .orElse(null);
+            if (row != null && (minIat == null || row.isAfter(minIat))) {
+                minIat = row;
+            }
+        } catch (RuntimeException ex) {
+            log.warn("[REVOCATION] Fresh read failed, using the cached cut-off: {}", ex.getMessage());
+        }
+        return issuedAt != null && minIat != null && !EPOCH.equals(minIat)
+            && issuedAt.toInstant().isBefore(minIat);
     }
 
     /** The cut-off for a revocation at {@code at}: the next whole second (a JWT iat is whole seconds). */

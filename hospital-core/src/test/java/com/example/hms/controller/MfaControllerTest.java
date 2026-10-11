@@ -270,7 +270,7 @@ class MfaControllerTest {
         java.util.Date issuedAt = new java.util.Date();
         when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
         when(jwtTokenProvider.getIssuedAt("mfa-tok-123")).thenReturn(issuedAt);
-        when(globalSessionRevocationService.revokes(issuedAt)).thenReturn(true);
+        when(globalSessionRevocationService.revokesFresh(issuedAt)).thenReturn(true);
 
         mockMvc.perform(post("/auth/mfa/verify")
                         .contentType(MediaType.APPLICATION_JSON)

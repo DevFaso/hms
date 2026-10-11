@@ -167,4 +167,21 @@ class GlobalSessionRevocationServiceTest {
         assertThat(service.revokes(java.util.Date.from(cutOff.minusSeconds(5)))).isFalse();
         assertThat(service.revokesFresh(java.util.Date.from(cutOff.minusSeconds(5)))).isTrue();
     }
+
+    @Test
+    @DisplayName("revokesFresh never lets an older committed row undo a newer cut-off already in the cache")
+    void revokesFreshKeepsTheLaterCutOff() {
+        // This instance's revokeAll set the cache (T2) before its commit; the
+        // row still says T1. The later one decides, and the cache stays T2.
+        when(repository.findById(SecurityRevocation.SINGLETON_ID)).thenReturn(Optional.empty());
+        java.time.Instant t2 = service.revokeAll(java.util.UUID.randomUUID(), "admin", "incident");
+        java.time.Instant cutOff = GlobalSessionRevocationService.cutOff(t2);
+        SecurityRevocation older = new SecurityRevocation();
+        older.setId(SecurityRevocation.SINGLETON_ID);
+        older.setGlobalMinTokenIat(cutOff.minusSeconds(3600));
+        when(repository.findById(SecurityRevocation.SINGLETON_ID)).thenReturn(Optional.of(older));
+
+        assertThat(service.revokesFresh(java.util.Date.from(cutOff.minusSeconds(1)))).isTrue();
+        assertThat(service.getGlobalMinTokenIat()).isEqualTo(cutOff);
+    }
 }

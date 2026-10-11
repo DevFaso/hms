@@ -154,6 +154,16 @@ public class GlobalExceptionHandler {
      * rather than "your code was wrong". Found 2026-09-05 testing the
      * emergency controls on dev.
      */
+    /**
+     * A token that was valid a moment earlier in the same request and expired
+     * (or failed to parse) on a later read: "sign in again", never a 500.
+     */
+    @ExceptionHandler(io.jsonwebtoken.JwtException.class)
+    public ResponseEntity<Object> handleJwt(io.jsonwebtoken.JwtException ex, WebRequest request) {
+        log.warn("Token no longer valid at path {}: {}", request.getDescription(false), ex.getClass().getSimpleName());
+        return buildErrorResponse(HttpStatus.UNAUTHORIZED, "Session expired. Please log in again.", request);
+    }
+
     @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<Object> handleUnauthorized(UnauthorizedException ex, WebRequest request) {
         log.warn("Unauthorized at path {}: {}", request.getDescription(false), ex.getMessage());

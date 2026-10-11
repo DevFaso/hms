@@ -331,7 +331,8 @@ public class MfaController {
         try {
             String jti = jwtTokenProvider.getJtiFromToken(challengeToken);
             return (jti != null && tokenBlacklistService.isBlacklisted(jti))
-                    || globalSessionRevocationService.revokes(jwtTokenProvider.getIssuedAt(challengeToken));
+                    // Fresh: this mints a session, like refresh.
+                    || globalSessionRevocationService.revokesFresh(jwtTokenProvider.getIssuedAt(challengeToken));
         } catch (io.jsonwebtoken.JwtException | IllegalArgumentException expired) {
             // Expired since isMfaToken read it: "sign in again", not a 500.
             return true;

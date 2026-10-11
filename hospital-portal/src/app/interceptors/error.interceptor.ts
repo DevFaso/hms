@@ -13,6 +13,7 @@ import {
   EMPTY,
   Observable,
   catchError,
+  defer,
   filter,
   retry,
   switchMap,
@@ -180,7 +181,9 @@ export const REFRESH_SUPERSEDED_DELAY_MS = 600;
 export function refreshWithSupersededRetry(
   auth: AuthService,
 ): Observable<{ accessToken: string; refreshToken: string }> {
-  return auth.refreshTokenRequest().pipe(
+  // defer: each retry builds the request again, so a body-borne (legacy)
+  // refresh token is re-read after the other tab stored the rotated one.
+  return defer(() => auth.refreshTokenRequest()).pipe(
     retry({
       count: REFRESH_SUPERSEDED_RETRIES,
       delay: (err: unknown, attempt: number) =>
