@@ -133,9 +133,8 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
                 enrollment.setEnabled(dto.isEnabled());
                 enrollment.setPrimaryFactor(dto.isPrimaryFactor());
                 enrollment.setEnrolledAt(dto.getEnrolledAt());
-                // Never from the client: lastVerifiedAt (and verified) record a
-                // code that verified, and decide whether the authenticator is
-                // protected (MfaService#isConfirmed). An existing row keeps its own.
+                // Never from the client: lastVerifiedAt (like verified) records
+                // a code that verified. An existing row keeps its own.
                 toPersist.add(enrollment);
             }
         }
@@ -391,7 +390,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
             .primaryFactor(enrollment.isPrimaryFactor())
             .enrolledAt(enrollment.getEnrolledAt())
             .lastVerifiedAt(enrollment.getLastVerifiedAt())
-            .confirmed(MfaService.isConfirmed(enrollment))
+            .active(MfaService.isActive(enrollment))
             .build();
     }
 

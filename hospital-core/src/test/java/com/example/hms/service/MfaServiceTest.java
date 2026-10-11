@@ -98,34 +98,34 @@ class MfaServiceTest {
         verify(backupCodeRepository).deleteAllByUserId(userId);
     }
 
-    @Test
-    void enrollTotp_aDisabledButVerifiedAuthenticator_isNoFirstEnrolment_soTheChallengeCannotRestartIt() {
-        UserMfaEnrollment existing = UserMfaEnrollment.builder()
-                .user(testUser).method(MfaMethodType.TOTP).totpSecret("OLDSECRET")
-                .verified(true).enabled(false).build();
+    /** A row login does not ask for: the challenge may enrol, and the enrolment simply restarts. */
+    private void assertTheChallengeRestarts(UserMfaEnrollment existing) {
         when(enrollmentRepository.lockByUserIdAndMethod(userId, MfaMethodType.TOTP))
                 .thenReturn(Optional.of(existing));
+        when(enrollmentRepository.save(any(UserMfaEnrollment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(backupCodeRepository.save(any(MfaBackupCode.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        refusedWith(MfaStepUpRefusedException.Reason.CHALLENGE,
-                () -> mfaService.enrollTotp(testUser, challengeSession(), null));
+        MfaService.MfaEnrollmentResult result = mfaService.enrollTotp(testUser, challengeSession(), null);
 
-        assertThat(existing.getTotpSecret()).isEqualTo("OLDSECRET");
-        assertThat(existing.isVerified()).isTrue();
-        verify(enrollmentRepository, never()).save(any());
+        assertThat(result.replacing()).isFalse();
+        assertThat(existing.getTotpSecret()).isEqualTo(result.secret()).isNotEqualTo("OLDSECRET");
+        assertThat(existing.isVerified()).isFalse();
+        assertThat(existing.getPendingTotpSecret()).isNull();
+        verify(backupCodeRepository).deleteAllByUserId(userId);
     }
 
     @Test
-    void enrollTotp_onceVerified_evenUnverifiedSince_isNoFirstEnrolment() {
-        UserMfaEnrollment existing = UserMfaEnrollment.builder()
+    void enrollTotp_aDisabledVerifiedAuthenticator_isNotActive_soTheChallengeMayRestartIt() {
+        assertTheChallengeRestarts(UserMfaEnrollment.builder()
                 .user(testUser).method(MfaMethodType.TOTP).totpSecret("OLDSECRET")
-                .verified(false).enabled(false).lastVerifiedAt(java.time.LocalDateTime.now().minusDays(2)).build();
-        when(enrollmentRepository.lockByUserIdAndMethod(userId, MfaMethodType.TOTP))
-                .thenReturn(Optional.of(existing));
+                .verified(true).enabled(false).build());
+    }
 
-        refusedWith(MfaStepUpRefusedException.Reason.CHALLENGE,
-                () -> mfaService.enrollTotp(testUser, challengeSession(), null));
-
-        assertThat(existing.getTotpSecret()).isEqualTo("OLDSECRET");
+    @Test
+    void enrollTotp_aLegacyHalfReplacedRow_isNotActive_soTheChallengeMayRestartIt() {
+        assertTheChallengeRestarts(UserMfaEnrollment.builder()
+                .user(testUser).method(MfaMethodType.TOTP).totpSecret("OLDSECRET")
+                .verified(false).enabled(false).lastVerifiedAt(java.time.LocalDateTime.now().minusDays(2)).build());
     }
 
     @Test
@@ -429,20 +429,6 @@ class MfaServiceTest {
     }
 
     @Test
-    void confirmingAReplacement_ofADisabledAuthenticator_enablesTheNewOne() throws Exception {
-        UserMfaEnrollment enrollment = activeAuthenticator();
-        enrollment.setEnabled(false);
-        enrollment.setPendingTotpSecret(NEW_SECRET);
-        when(backupCodeRepository.findByUserIdAndPending(any(), anyBoolean())).thenReturn(List.of());
-
-        assertThat(mfaService.verifyEnrollment(userId, codeFor(NEW_SECRET), fullSession())).isTrue();
-
-        assertThat(enrollment.getTotpSecret()).isEqualTo(NEW_SECRET);
-        assertThat(enrollment.isEnabled()).isTrue();
-        assertThat(enrollment.isVerified()).isTrue();
-    }
-
-    @Test
     void replacing_fromTheChallenge_isRefusedEvenWithACurrentCode() throws Exception {
         UserMfaEnrollment enrollment = activeAuthenticator();
         String code = codeFor(SECRET);
@@ -556,20 +542,93 @@ class MfaServiceTest {
     }
 
     @Test
-    void changingTheMfaRecords_ofADisabledButVerifiedAuthenticator_stillNeedsTheStepUp() {
+    void changingTheMfaRecords_ofAnInactiveAuthenticator_needsNoStepUp() {
         UserMfaEnrollment enrollment = activeAuthenticator();
         enrollment.setEnabled(false);
 
-        refusedWith(MfaStepUpRefusedException.Reason.REQUIRED,
-                () -> mfaService.requireStepUpToChangeAuthenticator(userId, fullSession(), null));
+        mfaService.requireStepUpToChangeAuthenticator(userId, fullSession(), null);
+
+        verifyNoInteractions(auditEventLogService);
     }
 
     @Test
-    void stepUp_ofAnActorWhoseAuthenticatorIsDisabled_isNoBypass() {
+    void stepUp_ofAnActorWhoseAuthenticatorIsInactive_followsStrictMode() {
         UserMfaEnrollment enrollment = activeAuthenticator();
         enrollment.setEnabled(false);
 
-        refusedWith(MfaStepUpRefusedException.Reason.REQUIRED,
-                () -> mfaService.requireStepUp(userId, null, "test action", false));
+        // Non-strict: the caller audits the bypass. Strict: refused, not enrolled.
+        assertThat(mfaService.requireStepUp(userId, null, "test action", false)).isFalse();
+        refusedWith(MfaStepUpRefusedException.Reason.NOT_ENROLLED,
+                () -> mfaService.requireStepUp(userId, null, "test action", true));
+    }
+
+    @Test
+    void stepUp_aReservationBeyondTheBudget_isRefusedWithoutEvaluatingTheCode() throws Exception {
+        activeAuthenticator();
+        when(attemptStore.recordFailure(MfaService.STEP_UP_KEY_PREFIX + userId, MfaService.STEP_UP_MAX_FAILURES,
+                MfaService.STEP_UP_WINDOW_MS, MfaService.STEP_UP_LOCK_MS))
+                .thenReturn(MfaService.STEP_UP_MAX_FAILURES + 1);
+        String code = codeFor(SECRET);
+
+        refusedWith(MfaStepUpRefusedException.Reason.LOCKED,
+                () -> mfaService.requireStepUp(userId, code, "test action", true));
+
+        verify(attemptStore, never()).clear(any());
+    }
+
+    @Test
+    void stepUp_concurrentGuessesNeverExceedTheBudget() throws Exception {
+        MfaService throttled = new MfaService(enrollmentRepository, backupCodeRepository, passwordEncoder,
+                auditEventLogService, new com.example.hms.security.InMemoryLoginAttemptStore());
+        activeAuthenticator();
+        int threads = 20;
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(threads);
+        java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.ConcurrentLinkedQueue<MfaStepUpRefusedException.Reason> reasons =
+                new java.util.concurrent.ConcurrentLinkedQueue<>();
+        try {
+            List<java.util.concurrent.Future<?>> all = new java.util.ArrayList<>();
+            for (int i = 0; i < threads; i++) {
+                all.add(pool.submit(() -> {
+                    go.await();
+                    try {
+                        throttled.requireStepUp(userId, "ABCDEF", "test action", true);
+                    } catch (MfaStepUpRefusedException ex) {
+                        reasons.add(ex.getReason());
+                    }
+                    return null;
+                }));
+            }
+            go.countDown();
+            for (java.util.concurrent.Future<?> f : all) {
+                f.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(reasons).hasSize(threads);
+        assertThat(reasons.stream().filter(r -> r == MfaStepUpRefusedException.Reason.INVALID).count())
+                .isEqualTo(MfaService.STEP_UP_MAX_FAILURES);
+    }
+
+    @Test
+    void verifyCode_recordsItsUseWithATargetedUpdate_neverASaveOfTheEntityItRead() throws Exception {
+        activeAuthenticator();
+
+        assertThat(mfaService.verifyCode(userId, codeFor(SECRET))).isTrue();
+
+        verify(enrollmentRepository).touchLastVerifiedAt(eq(userId), eq(MfaMethodType.TOTP), any());
+        verify(enrollmentRepository, never()).save(any());
+    }
+
+    @Test
+    void theLoginCheck_writesNothing() throws Exception {
+        activeAuthenticator();
+
+        assertThat(mfaService.isCurrentTotp(userId, codeFor(SECRET))).isTrue();
+
+        verify(enrollmentRepository, never()).save(any());
+        verify(enrollmentRepository, never()).touchLastVerifiedAt(any(), any(), any());
     }
 }

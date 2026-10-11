@@ -137,6 +137,24 @@ class SupportImpersonationServiceImplTest {
     }
 
     @Test
+    @DisplayName("a target with no active role is refused before the step-up can spend a backup code")
+    void targetWithoutRolesRefusedBeforeTheStepUp() {
+        when(tenantRoleAssignmentAccessor.findAssignmentsForUser(targetId))
+            .thenReturn(List.of(assignment("NURSE", "Nurse", false)));
+
+        assertThatThrownBy(() -> service.start(
+            ImpersonationStartRequestDTO.builder()
+                .targetUserId(targetId)
+                .reason("debug")
+                .build(),
+            "12345678",
+            "original.super-admin.jwt"))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("no active role");
+        verify(mfaService, never()).requireStepUp(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
     @DisplayName("self-impersonation is rejected")
     void selfImpersonationBlocked() {
         when(userRepository.findById(actorId)).thenReturn(Optional.of(actor));

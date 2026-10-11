@@ -176,7 +176,6 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
         Hospital hospital = lockOrThrow(hospitalId);
         requireTransition(hospital, PURGE_SCHEDULABLE, ACTION_SCHEDULE_PURGE);
         String reason = requireReason(request, ACTION_SCHEDULE_PURGE);
-        requireStepUp(ACTION_SCHEDULE_PURGE, mfaToken);
 
         Instant scheduledFor = request.getPurgeScheduledFor() != null
             ? request.getPurgeScheduledFor()
@@ -185,6 +184,9 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
         if (scheduledFor.isBefore(Instant.now(clock))) {
             throw new BusinessRuleException("Purge cannot be scheduled in the past.");
         }
+        // Checked before the step-up, which would otherwise spend a backup code
+        // on a request that cannot run.
+        requireStepUp(ACTION_SCHEDULE_PURGE, mfaToken);
 
         hospital.setLifecycleState(HospitalLifecycleState.PENDING_PURGE);
         hospital.setPurgeScheduledFor(scheduledFor);

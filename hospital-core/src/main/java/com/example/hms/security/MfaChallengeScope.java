@@ -17,9 +17,9 @@ import java.util.Set;
  * leaves the caller anonymous, exactly as if no token had been sent, and
  * {@code /auth/token/refresh} refuses it.
  *
- * <p>Even on those two requests it cannot replace an authenticator that is
- * already verified: {@code MfaService#requireStepUpToReplaceAuthenticator}
- * refuses a challenge session outright.
+ * <p>Even on those two requests it cannot replace an active authenticator:
+ * {@code MfaService#enrollTotp} (and {@code MfaService#verifyEnrollment} for a
+ * pending replacement) refuses a challenge session outright.
  */
 public final class MfaChallengeScope {
 

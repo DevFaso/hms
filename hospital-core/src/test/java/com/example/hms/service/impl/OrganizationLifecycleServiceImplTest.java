@@ -243,16 +243,18 @@ class OrganizationLifecycleServiceImplTest {
     }
 
     @Test
-    void schedulePurgeRejectsPastTime() {
+    void schedulePurgeRejectsPastTime_beforeTheStepUpCanSpendACode() {
+        ReflectionTestUtils.setField(service, "requireMfa", true);
         org.setLifecycleState(OrganizationLifecycleState.ARCHIVED);
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
 
         TenantLifecycleActionRequestDTO req = TenantLifecycleActionRequestDTO.builder()
             .reason("oops").purgeScheduledFor(NOW.minus(1, ChronoUnit.DAYS)).build();
 
-        assertThatThrownBy(() -> service.schedulePurge(orgId, req, null))
+        assertThatThrownBy(() -> service.schedulePurge(orgId, req, "12345678"))
             .isInstanceOf(BusinessRuleException.class)
             .hasMessageContaining("past");
+        verify(mfaService, never()).requireStepUp(any(), any(), any(), anyBoolean());
     }
 
     @Test

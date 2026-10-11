@@ -254,13 +254,13 @@ export class ProfileComponent implements OnInit {
   mfaReplacing = signal(false);
 
   /**
-   * An authenticator app the server counts as confirmed: it can be replaced
+   * An authenticator app the server counts as active: it can be replaced
    * (with the step-up), not set up again. The server decides; the portal does
    * not re-derive the rule from the other fields.
    */
   hasActiveTotp(): boolean {
     return (this.credentials()?.mfaEnrollments ?? []).some(
-      (m) => m.method === 'TOTP' && m.confirmed === true,
+      (m) => m.method === 'TOTP' && m.active === true,
     );
   }
 

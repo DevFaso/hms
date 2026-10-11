@@ -726,7 +726,8 @@ public class AuthController {
                     .body(new MessageResponse("Refresh token is invalid or has expired. Please log in again."));
         }
 
-        // Replay detection: reject already-used refresh tokens
+        // Replay detection: an already-used refresh token is refused here; the
+        // atomic claim below settles a race between two concurrent uses.
         String refreshJti = jwtTokenProvider.getJtiFromToken(refreshToken);
         if (refreshJti != null && tokenBlacklistService.isBlacklisted(refreshJti)) {
             log.warn("🔄 [REFRESH] Replay detected — refresh token jti={} already used", refreshJti);
@@ -789,6 +790,15 @@ public class AuthController {
                         "Session timed out due to inactivity. Please log in again."));
         }
 
+        // Spend the refresh token atomically BEFORE minting: of two concurrent
+        // refreshes with one token, exactly one gets a new pair.
+        if (refreshJti == null || !tokenBlacklistService.claim(refreshJti,
+                jwtTokenProvider.getExpiration(refreshToken).getTime())) {
+            log.warn("🔄 [REFRESH] Replay detected — refresh token jti={} already used", refreshJti);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse("Refresh token has already been used. Please log in again."));
+        }
+
         var descriptor = new com.example.hms.security.TokenUserDescriptor(user.getId(), username, roles);
         String newAccessToken  = jwtTokenProvider.generateAccessToken(descriptor);
 
@@ -803,13 +813,6 @@ public class AuthController {
                      .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
                      .toList());
         String newRefreshToken = jwtTokenProvider.generateRefreshToken(refreshAuth);
-
-        // Blacklist the old refresh token to prevent replay
-        if (refreshJti != null) {
-            long oldRefreshExp = jwtTokenProvider.getExpiration(refreshToken).getTime();
-            tokenBlacklistService.blacklist(refreshJti, oldRefreshExp);
-            log.debug("🔄 [REFRESH] Blacklisted old refresh token jti={}", refreshJti);
-        }
 
         // ── Idle session timeout — touch on successful refresh ──────────
         // Only after the rotation has succeeded; touching pre-rotation

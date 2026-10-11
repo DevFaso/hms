@@ -170,7 +170,6 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
         Organization org = loadOrThrow(organizationId);
         requireTransition(org, PURGE_SCHEDULABLE, ACTION_SCHEDULE_PURGE);
         String reason = requireReason(request, ACTION_SCHEDULE_PURGE);
-        requireStepUp(ACTION_SCHEDULE_PURGE, mfaToken);
 
         // `request` is guaranteed non-null here — requireReason() above throws
         // otherwise. Only the per-call override on getPurgeScheduledFor() is optional.
@@ -181,6 +180,9 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
         if (scheduledFor.isBefore(Instant.now(clock))) {
             throw new BusinessRuleException("Purge cannot be scheduled in the past.");
         }
+        // Checked before the step-up, which would otherwise spend a backup code
+        // on a request that cannot run.
+        requireStepUp(ACTION_SCHEDULE_PURGE, mfaToken);
 
         org.setLifecycleState(OrganizationLifecycleState.PENDING_PURGE);
         org.setPurgeScheduledFor(scheduledFor);

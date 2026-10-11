@@ -368,11 +368,11 @@ class UserCredentialLifecycleServiceImplTest {
 
         assertThat(confirmedTotp.getLastVerifiedAt()).isEqualTo(verifiedAt);
         assertThat(response).filteredOn(d -> d.getMethod() == MfaMethodType.TOTP)
-            .singleElement().satisfies(d -> assertThat(d.isConfirmed()).isTrue());
+            .singleElement().satisfies(d -> assertThat(d.isActive()).isTrue());
         assertThat(response).filteredOn(d -> d.getMethod() == MfaMethodType.EMAIL)
             .singleElement().satisfies(d -> {
                 assertThat(d.getLastVerifiedAt()).isNull();
-                assertThat(d.isConfirmed()).isFalse();
+                assertThat(d.isActive()).isFalse();
             });
     }
 

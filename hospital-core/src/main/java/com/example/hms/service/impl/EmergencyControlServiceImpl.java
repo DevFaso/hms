@@ -117,15 +117,18 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
     @Transactional
     public EmergencyActionResponseDTO forceMfaReenrol(EmergencyForceMfaRequestDTO request, String mfaToken) {
         String actorUsername = SecurityUtils.getCurrentUsername();
-        verifyMfaStepUp(currentUserId(), mfaToken, "force-mfa-reenrol");
         List<UUID> targets = request.getUserIds();
-        if (targets == null || targets.isEmpty()) {
-            if (!Boolean.TRUE.equals(request.getResetAll())) {
-                throw new BusinessException(
-                    "Refusing a platform-wide MFA reset: no userIds were given and resetAll is not true. "
-                        + "Name the users, or set resetAll=true to reset every enrolled user"
-                        + (request.getHospitalId() != null ? " at the given hospital." : " on the platform."));
-            }
+        boolean everyone = targets == null || targets.isEmpty();
+        // Refuse a request that cannot run BEFORE the step-up, which would
+        // otherwise spend a backup code on it.
+        if (everyone && !Boolean.TRUE.equals(request.getResetAll())) {
+            throw new BusinessException(
+                "Refusing a platform-wide MFA reset: no userIds were given and resetAll is not true. "
+                    + "Name the users, or set resetAll=true to reset every enrolled user"
+                    + (request.getHospitalId() != null ? " at the given hospital." : " on the platform."));
+        }
+        verifyMfaStepUp(currentUserId(), mfaToken, "force-mfa-reenrol");
+        if (everyone) {
             // Fall back to every user with an active enrolment row.
             // UserMfaEnrollment exposes the user via the JPA association — there
             // is no flat `userId` field on the entity, so navigate through getUser().

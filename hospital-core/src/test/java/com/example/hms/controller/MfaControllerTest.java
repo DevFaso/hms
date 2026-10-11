@@ -179,7 +179,7 @@ class MfaControllerTest {
         when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
         claimable("mfa-tok-123");
         when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
-        when(mfaService.verifyCode(USER_ID, "654321")).thenReturn(true);
+        when(mfaService.isCurrentTotp(USER_ID, "654321")).thenReturn(true);
         when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID)).thenReturn(List.of());
         when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class))).thenReturn("access-jwt");
         when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class))).thenReturn("refresh-jwt");
@@ -208,8 +208,8 @@ class MfaControllerTest {
     void verifyMfa_invalidCode_returns401() throws Exception {
         when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
         when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
-        when(mfaService.verifyCode(USER_ID, "999999")).thenReturn(false);
-        when(mfaService.verifyBackupCode(USER_ID, "999999")).thenReturn(false);
+        when(mfaService.isCurrentTotp(USER_ID, "999999")).thenReturn(false);
+        when(mfaService.matchingBackupCode(USER_ID, "999999")).thenReturn(Optional.empty());
 
         mockMvc.perform(post("/auth/mfa/verify")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -223,8 +223,10 @@ class MfaControllerTest {
         when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
         claimable("mfa-tok-123");
         when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
-        when(mfaService.verifyCode(USER_ID, "BACKUP01")).thenReturn(false);
-        when(mfaService.verifyBackupCode(USER_ID, "BACKUP01")).thenReturn(true);
+        UUID backupId = UUID.randomUUID();
+        when(mfaService.isCurrentTotp(USER_ID, "BACKUP01")).thenReturn(false);
+        when(mfaService.matchingBackupCode(USER_ID, "BACKUP01")).thenReturn(Optional.of(backupId));
+        when(mfaService.spendBackupCode(backupId)).thenReturn(true);
         when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID)).thenReturn(List.of());
         when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class))).thenReturn("access-jwt");
         when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class))).thenReturn("refresh-jwt");
@@ -281,7 +283,7 @@ class MfaControllerTest {
         when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
         java.util.Date exp = claimable("mfa-tok-123");
         when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
-        when(mfaService.verifyCode(USER_ID, "654321")).thenReturn(true);
+        when(mfaService.isCurrentTotp(USER_ID, "654321")).thenReturn(true);
         when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID)).thenReturn(List.of());
         when(jwtTokenProvider.resolvePreferredRole(any())).thenReturn("ROLE_DOCTOR");
 
@@ -314,11 +316,47 @@ class MfaControllerTest {
         when(jwtTokenProvider.getExpiration("mfa-tok-123")).thenReturn(exp);
         when(tokenBlacklistService.claim("jti-1", exp.getTime())).thenReturn(false);
         when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
-        when(mfaService.verifyCode(USER_ID, "654321")).thenReturn(true);
+        when(mfaService.isCurrentTotp(USER_ID, "654321")).thenReturn(true);
 
         mockMvc.perform(post("/auth/mfa/verify")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"654321\"}"))
+                .andExpect(status().isUnauthorized());
+        verify(jwtTokenProvider, never()).generateAccessToken(any(TokenUserDescriptor.class));
+    }
+
+    @Test
+    void verifyMfa_aLostClaim_spendsNoBackupCodeAndRecordsNoTotpUse() throws Exception {
+        java.util.Date exp = new java.util.Date(System.currentTimeMillis() + 300_000);
+        UUID backupId = UUID.randomUUID();
+        when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
+        when(jwtTokenProvider.getJtiFromToken("mfa-tok-123")).thenReturn("jti-1");
+        when(jwtTokenProvider.getExpiration("mfa-tok-123")).thenReturn(exp);
+        when(tokenBlacklistService.claim("jti-1", exp.getTime())).thenReturn(false);
+        when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
+        when(mfaService.matchingBackupCode(USER_ID, "12345678")).thenReturn(Optional.of(backupId));
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"12345678\"}"))
+                .andExpect(status().isUnauthorized());
+
+        verify(mfaService, never()).spendBackupCode(any());
+        verify(mfaService, never()).recordTotpUse(any());
+    }
+
+    @Test
+    void verifyMfa_aBackupCodeSpentByAnotherRequestInBetween_signsNobodyIn() throws Exception {
+        UUID backupId = UUID.randomUUID();
+        when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
+        claimable("mfa-tok-123");
+        when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
+        when(mfaService.matchingBackupCode(USER_ID, "12345678")).thenReturn(Optional.of(backupId));
+        when(mfaService.spendBackupCode(backupId)).thenReturn(false);
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"12345678\"}"))
                 .andExpect(status().isUnauthorized());
         verify(jwtTokenProvider, never()).generateAccessToken(any(TokenUserDescriptor.class));
     }

@@ -42,7 +42,7 @@ const health = (verifiedTotp: boolean): CredentialHealth => ({
           enabled: true,
           primaryFactor: true,
           lastVerifiedAt: '2026-10-01T10:00:00',
-          confirmed: true,
+          active: true,
         },
       ]
     : [],
@@ -121,12 +121,27 @@ describe('ProfileComponent — replacing the authenticator', () => {
   it('offers Replace from the server rule only, not from the other fields', async () => {
     await setUp(true);
     const looksActive = health(true);
-    looksActive.mfaEnrollments[0].confirmed = false;
+    looksActive.mfaEnrollments[0].active = false;
     component.credentials.set(looksActive);
     fixture.detectChanges();
 
     expect(component.hasActiveTotp()).toBeFalse();
     expect(el('[data-testid="mfa-replace"]')).toBeNull();
+  });
+
+  it('an inactive authenticator offers set-up, not Replace, and sends no step-up', async () => {
+    await setUp(true);
+    const inactive = health(true);
+    inactive.mfaEnrollments[0].active = false;
+    inactive.mfaEnrollments[0].enabled = false;
+    component.credentials.set(inactive);
+    fixture.detectChanges();
+    mfa.enroll.and.returnValue(of(enrollment));
+
+    expect(el('[data-testid="mfa-replace"]')).toBeNull();
+    (el('[data-testid="mfa-setup"]') as HTMLButtonElement).click();
+
+    expect(mfa.enroll).toHaveBeenCalledOnceWith(undefined);
   });
 
   it('without an authenticator there is nothing to replace: setting one up sends no step-up', async () => {

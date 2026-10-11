@@ -99,13 +99,18 @@ public class MfaService {
      * The gate and the change share one transaction and one locked row read, so
      * nothing can change the row between the check and the write.
      *
+     * <p>One rule decides, the one login uses for {@code mfaEnrolled}: does
+     * the user have an ACTIVE second factor ({@link #isMfaEnabled}, verified
+     * and enabled)? A factor login does not ask for protects nothing, so a
+     * row that is not active never blocks anything here.
+     *
      * <ul>
-     *   <li>No authenticator was ever confirmed ({@link #isConfirmed}): a first
-     *       enrolment, open from the login's MFA challenge token too, which
-     *       simply restarts with a fresh secret and backup codes.</li>
-     *   <li>One was confirmed, even if it is disabled now: replacing it needs a
-     *       full session, never the challenge token, and the step-up against
-     *       that authenticator ({@link #requireStepUp}), or an admin MFA reset.
+     *   <li>No active factor (none yet, one never confirmed, a disabled one, a
+     *       replacement left half done before this rule): enrolment is open,
+     *       from the login's MFA challenge token too, and simply restarts with
+     *       a fresh secret and backup codes.</li>
+     *   <li>An active factor: replacing it needs a full session, never the
+     *       challenge token, and the step-up against it ({@link #requireStepUp}).
      *       The new secret and backup codes stay PENDING: the current
      *       authenticator and its backup codes keep working until
      *       {@link #verifyEnrollment} confirms a code from the new one and swaps
@@ -119,7 +124,7 @@ public class MfaService {
         UUID userId = user.getId();
         Optional<UserMfaEnrollment> existing =
                 enrollmentRepository.lockByUserIdAndMethod(userId, MfaMethodType.TOTP);
-        boolean replacing = existing.filter(MfaService::isConfirmed).isPresent();
+        boolean replacing = existing.filter(MfaService::isActive).isPresent();
 
         String secret = secretGenerator.generate();
         UserMfaEnrollment enrollment;
@@ -187,7 +192,7 @@ public class MfaService {
         }
 
         UserMfaEnrollment enrollment = opt.get();
-        if (isConfirmed(enrollment) && enrollment.getPendingTotpSecret() != null) {
+        if (isActive(enrollment) && enrollment.getPendingTotpSecret() != null) {
             if (MfaChallengeScope.isChallengeSession(caller)) {
                 throw refused(userId, caller, ACTION_REPLACE, MfaStepUpRefusedException.Reason.CHALLENGE);
             }
@@ -262,7 +267,7 @@ public class MfaService {
             log.warn("[MFA] Step-up lookup failed for user={}: {}", userId, ex.getMessage());
             throw refused(userId, null, action, MfaStepUpRefusedException.Reason.UNAVAILABLE);
         }
-        if (enrollment.filter(MfaService::isConfirmed).isEmpty()) {
+        if (enrollment.filter(MfaService::isActive).isEmpty()) {
             if (strict) {
                 throw refused(userId, null, action, MfaStepUpRefusedException.Reason.NOT_ENROLLED);
             }
@@ -284,7 +289,7 @@ public class MfaService {
     public void requireStepUpToChangeAuthenticator(UUID userId, Authentication caller, String stepUpCode) {
         Optional<UserMfaEnrollment> enrollment =
                 enrollmentRepository.lockByUserIdAndMethod(userId, MfaMethodType.TOTP);
-        if (enrollment.filter(MfaService::isConfirmed).isPresent()) {
+        if (enrollment.filter(MfaService::isActive).isPresent()) {
             requireStepUpToReplace(enrollment.get(), userId, caller, stepUpCode);
         }
     }
@@ -299,10 +304,11 @@ public class MfaService {
     }
 
     /**
-     * A current TOTP code from the authenticator (even a disabled one), or an
-     * unused backup code. {@value #STEP_UP_MAX_FAILURES} wrong codes within
-     * the window lock the step-up for the user for a while, so neither the
-     * six digits nor the backup codes can be guessed through it.
+     * A current TOTP code from the active authenticator, or an unused backup
+     * code. The attempt is reserved BEFORE the code is evaluated (the store
+     * counts it atomically), so concurrent guesses cannot exceed
+     * {@value #STEP_UP_MAX_FAILURES} per window whatever the endpoint; a code
+     * that verifies clears the count.
      */
     private void checkStepUpCode(UserMfaEnrollment enrollment, UUID userId, Authentication caller,
                                  String code, String action) {
@@ -310,7 +316,9 @@ public class MfaService {
             throw refused(userId, caller, action, MfaStepUpRefusedException.Reason.REQUIRED);
         }
         String throttleKey = STEP_UP_KEY_PREFIX + userId;
-        if (attemptStore.remainingLockMs(throttleKey) > 0) {
+        if (attemptStore.remainingLockMs(throttleKey) > 0
+                || attemptStore.recordFailure(throttleKey, STEP_UP_MAX_FAILURES, STEP_UP_WINDOW_MS,
+                        STEP_UP_LOCK_MS) > STEP_UP_MAX_FAILURES) {
             throw refused(userId, caller, action, MfaStepUpRefusedException.Reason.LOCKED);
         }
         String candidate = code.trim();
@@ -319,7 +327,6 @@ public class MfaService {
             attemptStore.clear(throttleKey);
             return;
         }
-        attemptStore.recordFailure(throttleKey, STEP_UP_MAX_FAILURES, STEP_UP_WINDOW_MS, STEP_UP_LOCK_MS);
         throw refused(userId, caller, action, MfaStepUpRefusedException.Reason.INVALID);
     }
 
@@ -344,24 +351,63 @@ public class MfaService {
     // ───── Verification (login flow) ─────
 
     /**
-     * Verifies a TOTP code during login.
+     * The code is a current TOTP code of the user's active authenticator.
+     * Writes nothing: the sign-in records the use ({@link #recordTotpUse})
+     * only once it has claimed the challenge.
+     */
+    @Transactional(readOnly = true)
+    public boolean isCurrentTotp(UUID userId, String code) {
+        return enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP)
+                .filter(MfaService::isActive)
+                .map(enrollment -> isValidTotp(enrollment.getTotpSecret(), code))
+                .orElse(false);
+    }
+
+    /**
+     * Stamps {@code lastVerifiedAt} with a targeted update of that one column:
+     * never a save of an entity read earlier, which would write its stale
+     * secret back over a replacement confirmed in between.
+     */
+    @Transactional
+    public void recordTotpUse(UUID userId) {
+        enrollmentRepository.touchLastVerifiedAt(userId, MfaMethodType.TOTP, now());
+    }
+
+    /**
+     * The id of an unused backup code of the current set that matches, without
+     * spending it ({@link #spendBackupCode}). Only a backup-code-shaped input
+     * reaches BCrypt.
+     */
+    @Transactional(readOnly = true)
+    public Optional<UUID> matchingBackupCode(UUID userId, String rawCode) {
+        if (rawCode == null || !BACKUP_CODE_SHAPE.matcher(rawCode.trim()).matches()) {
+            return Optional.empty();
+        }
+        String candidate = rawCode.trim();
+        return backupCodeRepository.findByUserIdAndUsedFalseAndPendingFalse(userId).stream()
+                .filter(bc -> passwordEncoder.matches(candidate, bc.getCodeHash()))
+                .map(MfaBackupCode::getId)
+                .findFirst();
+    }
+
+    /** Spends a backup code; {@code false} when another request spent it first. */
+    @Transactional
+    public boolean spendBackupCode(UUID codeId) {
+        return backupCodeRepository.markUsed(codeId, now()) == 1;
+    }
+
+    /**
+     * Verifies a TOTP code and records its use (the targeted update). The
+     * sign-in uses {@link #isCurrentTotp} and {@link #recordTotpUse} instead,
+     * with the challenge claimed in between.
      */
     @Transactional
     public boolean verifyCode(UUID userId, String code) {
-        Optional<UserMfaEnrollment> opt =
-                enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP);
-
-        if (opt.isEmpty() || !isActive(opt.get())) {
+        if (!isCurrentTotp(userId, code)) {
             return false;
         }
-
-        UserMfaEnrollment enrollment = opt.get();
-        boolean valid = isValidTotp(enrollment.getTotpSecret(), code);
-        if (valid) {
-            enrollment.setLastVerifiedAt(now());
-            enrollmentRepository.save(enrollment);
-        }
-        return valid;
+        recordTotpUse(userId);
+        return true;
     }
 
     /**
@@ -406,20 +452,15 @@ public class MfaService {
         return LocalDateTime.now(ZoneId.systemDefault());
     }
 
-    /** The authenticator that signs in: confirmed and enabled. */
-    private static boolean isActive(UserMfaEnrollment enrollment) {
-        return enrollment.isVerified() && enrollment.isEnabled();
-    }
-
     /**
-     * An authenticator that was verified at least once, whether or not it is
-     * enabled now (or unverified by an earlier half-done replacement): never a
-     * first enrolment, so the password-only challenge may not restart it.
-     * The portal reads the same rule from the credential DTO.
+     * The second factor login asks for: a TOTP authenticator, verified and
+     * enabled. The one rule for login ({@code mfaEnrolled}), for whether the
+     * challenge may enrol, and for whether a step-up needs a code. The portal
+     * reads it from the credential DTO ({@code active}).
      */
-    public static boolean isConfirmed(UserMfaEnrollment enrollment) {
+    public static boolean isActive(UserMfaEnrollment enrollment) {
         return enrollment.getMethod() == MfaMethodType.TOTP
-                && (enrollment.isVerified() || enrollment.getLastVerifiedAt() != null);
+                && enrollment.isVerified() && enrollment.isEnabled();
     }
 
     // ───── Queries ─────

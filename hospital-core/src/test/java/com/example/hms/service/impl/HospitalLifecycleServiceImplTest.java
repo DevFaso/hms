@@ -258,6 +258,20 @@ class HospitalLifecycleServiceImplTest {
     }
 
     @Test
+    void schedulePurgeInThePast_isRefusedBeforeTheStepUpCanSpendACode() {
+        ReflectionTestUtils.setField(service, "requireMfa", true);
+        hospital.setLifecycleState(HospitalLifecycleState.ARCHIVED);
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
+        TenantLifecycleActionRequestDTO req = TenantLifecycleActionRequestDTO.builder()
+            .reason("oops").purgeScheduledFor(NOW.minus(1, java.time.temporal.ChronoUnit.DAYS)).build();
+
+        assertThatThrownBy(() -> service.schedulePurge(hospitalId, req, "12345678"))
+            .isInstanceOf(com.example.hms.exception.BusinessRuleException.class)
+            .hasMessageContaining("past");
+        verify(mfaService, never()).requireStepUp(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
     void archiveAndDefaultPurgeDateComeFromTheInjectedClock() {
         when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));

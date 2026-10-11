@@ -276,6 +276,8 @@ class EmergencyControlServiceImplTest {
         verify(mfaEnrollmentRepository, never()).findAll();
         verify(mfaEnrollmentRepository, never()).deleteAll(any());
         verify(mfaBackupCodeRepository, never()).deleteAllByUserId(any());
+        // Refused before the step-up, which would otherwise spend a backup code.
+        verify(mfaService, never()).requireStepUp(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     @Test

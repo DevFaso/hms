@@ -760,6 +760,7 @@ class AuthControllerTest {
         long refreshExp = nowMs + 7 * 86_400_000L; // +7 d
 
         when(jwtTokenProvider.isRefreshToken("old.refresh.token")).thenReturn(true);
+        claimableRefresh("old.refresh.token");
         when(jwtTokenProvider.getUsernameFromJWT("old.refresh.token"))
                 .thenReturn("doctor@example.com");
         when(userRepository.findByUsername("doctor@example.com"))
@@ -789,6 +790,35 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.refreshToken").value("new.refresh.token"))
                 .andExpect(jsonPath("$.accessTokenExpiresAt").value(accessExp))
                 .andExpect(jsonPath("$.refreshTokenExpiresAt").value(refreshExp));
+    }
+
+    /** The refresh token has a jti, and this refresh is the one that claims it. */
+    private void claimableRefresh(String token) {
+        long exp = System.currentTimeMillis() + 3_600_000L;
+        when(jwtTokenProvider.getJtiFromToken(token)).thenReturn("jti-" + token);
+        when(jwtTokenProvider.getExpiration(token)).thenReturn(new java.util.Date(exp));
+        when(tokenBlacklistService.claim("jti-" + token, exp)).thenReturn(true);
+    }
+
+    @Test
+    void refreshToken_aTokenAnotherRefreshClaimedFirst_mintsNothing() throws Exception {
+        long exp = System.currentTimeMillis() + 3_600_000L;
+        com.example.hms.model.User activeUser = com.example.hms.model.User.builder()
+                .username("doctor@example.com").isActive(true).build();
+        org.springframework.test.util.ReflectionTestUtils.setField(activeUser, "id", java.util.UUID.randomUUID());
+        when(jwtTokenProvider.isRefreshToken("old.refresh.token")).thenReturn(true);
+        when(jwtTokenProvider.getJtiFromToken("old.refresh.token")).thenReturn("jti-old");
+        when(jwtTokenProvider.getExpiration("old.refresh.token")).thenReturn(new java.util.Date(exp));
+        when(tokenBlacklistService.claim("jti-old", exp)).thenReturn(false);
+        when(jwtTokenProvider.getUsernameFromJWT("old.refresh.token")).thenReturn("doctor@example.com");
+        when(userRepository.findByUsername("doctor@example.com")).thenReturn(java.util.Optional.of(activeUser));
+
+        mockMvc.perform(post("/auth/token/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"old.refresh.token\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Refresh token has already been used. Please log in again."));
+        verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class));
     }
 
     @Test
@@ -842,6 +872,7 @@ class AuthControllerTest {
         when(refreshTokenCookieService.read(org.mockito.ArgumentMatchers.any()))
                 .thenReturn("cookie.refresh.token");
         when(jwtTokenProvider.isRefreshToken("cookie.refresh.token")).thenReturn(true);
+        claimableRefresh("cookie.refresh.token");
         when(jwtTokenProvider.getUsernameFromJWT("cookie.refresh.token"))
                 .thenReturn("doctor@example.com");
         when(userRepository.findByUsername("doctor@example.com"))

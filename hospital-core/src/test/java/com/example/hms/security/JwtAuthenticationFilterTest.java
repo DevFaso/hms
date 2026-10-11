@@ -193,7 +193,6 @@ class JwtAuthenticationFilterTest {
         when(tokenProvider.validateToken(GHOST_TOKEN)).thenReturn(true);
         when(tokenProvider.getUsernameFromJWT(GHOST_TOKEN)).thenReturn("user1");
         when(tokenProvider.getIssuedAt(GHOST_TOKEN)).thenReturn(issuedAt);
-        when(globalSessionRevocationService.getGlobalMinTokenIat()).thenReturn(java.time.Instant.now());
         when(globalSessionRevocationService.revokes(issuedAt)).thenReturn(true);
 
         filter.doFilter(request, response, chain);

@@ -126,8 +126,6 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
             throw new BusinessException("Cannot impersonate another super admin");
         }
 
-        verifyMfaStepUp(actor.getId(), mfaToken);
-
         List<String> targetRoles = targetAssignments.stream()
             .filter(TenantRoleAssignment::active)
             .map(this::roleLabel)
@@ -138,6 +136,10 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
             throw new BusinessException(
                 "Target user has no active role assignments and cannot be impersonated");
         }
+
+        // Last, once the request is known to be runnable: the step-up may
+        // spend a backup code.
+        verifyMfaStepUp(actor.getId(), mfaToken);
 
         TokenUserDescriptor descriptor = new TokenUserDescriptor(
             target.getId(), target.getUsername(), targetRoles);

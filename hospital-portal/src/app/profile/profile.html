@@ -724,6 +724,17 @@
                     <span class="material-symbols-outlined">sync_lock</span>
                     {{ 'PROFILE.MFA_REPLACE' | translate }}
                   </button>
+                } @else {
+                  <!-- No active authenticator (none confirmed, or disabled): set one up. -->
+                  <button
+                    class="btn-primary mfa-setup-btn"
+                    data-testid="mfa-setup"
+                    (click)="startMfaEnrollment()"
+                    [disabled]="mfaLoading()"
+                  >
+                    <span class="material-symbols-outlined">security</span>
+                    {{ 'PROFILE.MFA_SET_UP' | translate }}
+                  </button>
                 }
               } @else {
                 <div class="empty-security-state">

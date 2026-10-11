@@ -21,7 +21,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.util.Deque;
 import java.util.List;
 import java.util.Set;
@@ -157,12 +156,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * call already guarded structural validity).
      */
     private boolean isRevokedByGlobalIat(String jwt) {
-        // The one rule, shared with the MFA challenge and refresh paths
-        // (GlobalSessionRevocationService#revokes). The iat is not even parsed
-        // while nothing has ever been revoked.
-        if (Instant.EPOCH.equals(globalSessionRevocationService.getGlobalMinTokenIat())) {
-            return false;
-        }
+        // The one rule, shared with the MFA challenge and refresh paths.
         try {
             return globalSessionRevocationService.revokes(tokenProvider.getIssuedAt(jwt));
         } catch (RuntimeException ex) {

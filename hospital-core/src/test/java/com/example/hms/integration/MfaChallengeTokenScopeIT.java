@@ -85,6 +85,7 @@ class MfaChallengeTokenScopeIT extends BaseIT {
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private com.example.hms.security.LoginAttemptStore attemptStore;
     @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
+    @Autowired private com.example.hms.service.EmergencyControlService emergencyControlService;
 
     private final List<UUID> createdUsers = new ArrayList<>();
     private final List<UUID> createdRoles = new ArrayList<>();
@@ -299,19 +300,147 @@ class MfaChallengeTokenScopeIT extends BaseIT {
 
     // ── Replacing an active authenticator ──
 
+    /**
+     * Login says "not enrolled" for a row that is not active, so it sends the
+     * user to /mfa-enroll: the challenge must then be able to enrol, and the
+     * new authenticator must sign in. One rule, no dead end.
+     */
+    private void theChallengeReEnrolsAnInactiveRow() throws Exception {
+        String challenge = challengeFor(enrolled, false);
+
+        MvcResult started = perform(post("/auth/mfa/enroll"), challenge, null);
+        assertThat(started.getResponse().getStatus()).isEqualTo(200);
+        String secret = body(started).get("secret").asString();
+        assertThat(status(post("/auth/mfa/verify-enrollment"), challenge, Map.of("code", code(secret))))
+            .isEqualTo(200);
+        assertThat(mfaService.isMfaEnabled(enrolled.getId())).isTrue();
+        assertThat(verify(challengeFor(enrolled, true), code(secret)).getResponse().getStatus()).isEqualTo(200);
+    }
+
     @Test
-    @DisplayName("a verified authenticator that is disabled now is no first enrolment: the challenge cannot restart it")
-    void disabledVerifiedAuthenticatorIsNotRestartedFromTheChallenge() throws Exception {
+    @DisplayName("an admin-disabled authenticator: login sends to enrolment, the challenge enrols, the new one signs in")
+    void adminDisabledRowReEnrolsFromTheChallenge() throws Exception {
         UserMfaEnrollment row = enrollmentRepository.findByUserIdAndMethod(enrolled.getId(), MfaMethodType.TOTP)
             .orElseThrow();
         row.setEnabled(false);
         enrollmentRepository.save(row);
 
-        // MFA no longer signs in, so login offers enrolment; the challenge still cannot take it.
-        String challenge = challengeFor(enrolled, false);
-        assertThat(refusal(perform(post("/auth/mfa/enroll"), challenge, null))).isEqualTo("mfa.stepup.challenge");
+        theChallengeReEnrolsAnInactiveRow();
+    }
 
-        assertThat(secretOf(enrolled)).isEqualTo(enrolledSecret);
+    @Test
+    @DisplayName("a legacy half-replaced row (unverified, lastVerifiedAt set): login sends to enrolment, and it works")
+    void legacyHalfReplacedRowReEnrolsFromTheChallenge() throws Exception {
+        UserMfaEnrollment row = enrollmentRepository.findByUserIdAndMethod(enrolled.getId(), MfaMethodType.TOTP)
+            .orElseThrow();
+        row.setVerified(false);
+        row.setEnabled(false);
+        row.setTotpSecret("LEGACYUNCONFIRMEDSECRETLEGACYUNC");
+        row.setLastVerifiedAt(java.time.LocalDateTime.now().minusDays(30));
+        enrollmentRepository.save(row);
+
+        theChallengeReEnrolsAnInactiveRow();
+    }
+
+    @Test
+    @DisplayName("an actor whose factor is inactive: non-strict, the emergency action proceeds and the bypass is audited; strict, refused")
+    void inactiveActorStepUpFollowsStrictMode() throws Exception {
+        UserMfaEnrollment row = enrollmentRepository.findByUserIdAndMethod(enrolled.getId(), MfaMethodType.TOTP)
+            .orElseThrow();
+        row.setEnabled(false);
+        enrollmentRepository.save(row);
+        Object target = org.springframework.test.util.AopTestUtils.getUltimateTargetObject(emergencyControlService);
+        var request = com.example.hms.payload.dto.superadmin.EmergencyBroadcastRequestDTO.builder()
+            .message("MFA step-up IT broadcast").severity("INFO").build();
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                enrolled.getUsername(), null, List.of()));
+        try {
+            org.springframework.test.util.ReflectionTestUtils.setField(target, "requireMfaStrict", false);
+            assertThat(emergencyControlService.broadcast(request, null).getAction()).isEqualTo("BROADCAST");
+            assertThat(auditEventLogRepository.findAll())
+                .anyMatch(a -> a.getEventType() == com.example.hms.enums.AuditEventType.SECURITY_ALERT_TRIGGERED
+                    && String.valueOf(a.getEventDescription()).contains("Emergency broadcast performed without MFA step-up"));
+
+            org.springframework.test.util.ReflectionTestUtils.setField(target, "requireMfaStrict", true);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> emergencyControlService.broadcast(request, null))
+                .isInstanceOfSatisfying(com.example.hms.exception.MfaStepUpRefusedException.class,
+                    ex -> assertThat(ex.getCode()).isEqualTo("mfa.stepup.notEnrolled"));
+        } finally {
+            org.springframework.test.util.ReflectionTestUtils.setField(target, "requireMfaStrict", false);
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    @DisplayName("two concurrent refreshes with one refresh token yield exactly one new pair")
+    void concurrentRefreshesOfOneTokenYieldOnePair() throws Exception {
+        String refreshToken = verified(enrolled, enrolledSecret).get("refreshToken").asString();
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
+        try {
+            java.util.concurrent.Callable<Integer> attempt = () -> {
+                go.await();
+                return refresh(refreshToken).getResponse().getStatus();
+            };
+            var first = pool.submit(attempt);
+            var second = pool.submit(attempt);
+            go.countDown();
+            List<Integer> statuses = List.of(first.get(30, java.util.concurrent.TimeUnit.SECONDS),
+                second.get(30, java.util.concurrent.TimeUnit.SECONDS));
+
+            assertThat(statuses).containsExactlyInAnyOrder(200, 401);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    @DisplayName("a sign-in that read the row before a replacement was confirmed never writes the old secret back")
+    void aSignInNeverUndoesAConfirmedReplacement() throws Exception {
+        org.springframework.security.core.Authentication fullSession =
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                enrolled.getUsername(), null,
+                org.springframework.security.core.authority.AuthorityUtils.createAuthorityList(ROLE));
+        String replacement = mfaService.enrollTotp(enrolled, fullSession, code(enrolledSecret)).secret();
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            // The sign-in's transaction reads the row and stamps its use, then
+            // stays open while the replacement is confirmed elsewhere.
+            new org.springframework.transaction.support.TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
+                try {
+                    assertThat(mfaService.verifyCode(enrolled.getId(), code(enrolledSecret))).isTrue();
+                    var swap = pool.submit(() -> {
+                        // Retry while the stamp holds the row (H2 times a lock
+                        // wait out instead of waiting like Postgres).
+                        long deadline = System.currentTimeMillis() + 30_000;
+                        while (true) {
+                            try {
+                                return mfaService.verifyEnrollment(enrolled.getId(), code(replacement), fullSession);
+                            } catch (org.springframework.dao.PessimisticLockingFailureException busy) {
+                                if (System.currentTimeMillis() > deadline) {
+                                    throw busy;
+                                }
+                                Thread.sleep(200);
+                            }
+                        }
+                    });
+                    try {
+                        swap.get(3, java.util.concurrent.TimeUnit.SECONDS);
+                    } catch (java.util.concurrent.TimeoutException blockedByTheStamp) {
+                        // The targeted update holds the row until this commits; the swap waits.
+                    }
+                } catch (Exception ex) {
+                    throw new IllegalStateException(ex);
+                }
+            });
+            pool.shutdown();
+            assertThat(pool.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(secretOf(enrolled)).isEqualTo(replacement);
         assertThat(pendingOf(enrolled)).isNull();
     }
 

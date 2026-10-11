@@ -61,10 +61,11 @@ export interface MfaEnrollment {
   enrolledAt?: string;
   lastVerifiedAt?: string;
   /**
-   * The server's rule: verified at least once, so replacing it needs the
-   * step-up. The portal offers "Replace" from this flag only.
+   * The server's rule (the one login uses): an active second factor, verified
+   * and enabled, so replacing it needs the step-up. The portal offers
+   * "Replace" from this flag only.
    */
-  confirmed?: boolean;
+  active?: boolean;
 }
 
 export interface RecoveryContact {

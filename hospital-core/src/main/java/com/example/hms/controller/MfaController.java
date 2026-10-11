@@ -193,16 +193,15 @@ public class MfaController {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalStateException("User not found"));
 
-        // Try TOTP code first, then backup code
-        boolean verified = mfaService.verifyCode(user.getId(), request.code());
-        boolean usedBackup = false;
+        // Check the code without writing anything yet: TOTP first, then a
+        // backup code. A typo leaves the challenge usable.
+        boolean totp = mfaService.isCurrentTotp(user.getId(), request.code());
+        Optional<java.util.UUID> backupCode = totp
+                ? Optional.empty()
+                : mfaService.matchingBackupCode(user.getId(), request.code());
+        boolean usedBackup = backupCode.isPresent();
 
-        if (!verified) {
-            verified = mfaService.verifyBackupCode(user.getId(), request.code());
-            usedBackup = verified;
-        }
-
-        if (!verified) {
+        if (!totp && !usedBackup) {
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .userId(user.getId())
                     .userName(username)
@@ -214,12 +213,20 @@ public class MfaController {
                     .body(new MessageResponse("Invalid MFA code."));
         }
 
-        // MFA passed. Spend the challenge atomically BEFORE issuing anything:
-        // of two concurrent verifies of one challenge, only the one that
-        // claims it gets a session.
+        // The code is right. Claim the challenge atomically BEFORE anything is
+        // spent or issued: of two concurrent verifies of one challenge, only
+        // the one that claims it records the TOTP use, spends the backup code
+        // and gets a session; the other spends nothing.
         if (!claim(request.mfaToken())) {
             return ResponseEntity.status(401)
                     .body(new MessageResponse("Invalid or expired MFA token."));
+        }
+        if (totp) {
+            mfaService.recordTotpUse(user.getId());
+        } else if (!mfaService.spendBackupCode(backupCode.get())) {
+            // Spent by another request in between: this one signs nobody in.
+            return ResponseEntity.status(401)
+                    .body(new MessageResponse("Invalid MFA code."));
         }
 
         // Issue the full JWT pair
