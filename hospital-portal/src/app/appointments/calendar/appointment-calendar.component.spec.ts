@@ -337,12 +337,17 @@ describe('AppointmentCalendarComponent', () => {
 
   it('fetches again on a view change after a failed fetch', async () => {
     // With lazy fetching, FullCalendar counts a failed range as fetched and a
-    // view inside it (Week -> Day) would never ask again.
+    // view inside it (Week -> Day) would never ask again. The failure arrives
+    // after the first render, as an HTTP error does.
     await configure('h1');
-    calendarSvc.getRange.and.returnValue(throwError(() => new Error('500')));
+    const pending = new Subject<AppointmentCalendarEvent[]>();
+    calendarSvc.getRange.and.returnValue(pending);
     fixture = TestBed.createComponent(AppointmentCalendarComponent);
     fixture.detectChanges();
     await calendarReady();
+    pending.error(new Error('500'));
+    fixture.detectChanges();
+    expect(errorBanner()).not.toBeNull();
     expect(calendarSvc.getRange).toHaveBeenCalledTimes(1);
 
     calendarSvc.getRange.and.returnValue(of([sample]));
@@ -351,6 +356,64 @@ describe('AppointmentCalendarComponent', () => {
 
     expect(calendarSvc.getRange).toHaveBeenCalledTimes(2);
     expect(errorBanner()).toBeNull();
+  });
+
+  it('does not refetch on a view change within a loaded range', async () => {
+    // Lazy fetching stays on: Week -> Day inside the week already loaded
+    // reuses it.
+    await render('h1');
+    expect(calendarSvc.getRange).toHaveBeenCalledTimes(1);
+
+    api().changeView('timeGridDay', nine);
+    fixture.detectChanges();
+
+    expect(calendarSvc.getRange).toHaveBeenCalledTimes(1);
+  });
+
+  it('fetches the whole six-week month grid in one request', async () => {
+    // The month grid is always six weeks; the server must accept that range
+    // (AppointmentController.CALENDAR_MAX_RANGE_DAYS = 42).
+    await render('h1');
+    api().changeView('dayGridMonth', nine);
+    fixture.detectChanges();
+
+    const [, from, to] = calendarSvc.getRange.calls.mostRecent().args;
+    const view = api().view;
+    const lastCell = new Date(view.activeEnd.getTime() - 86_400_000);
+    const iso = (d: Date): string => local(d).slice(0, 10);
+    expect(from).toBe(iso(view.activeStart));
+    expect(to).toBe(iso(lastCell));
+    const days = Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000) + 1;
+    expect(days).toBe(42);
+  });
+
+  it('shows the loading cue while the locale loads, not a blank page', async () => {
+    await configure('h1');
+    fixture = TestBed.createComponent(AppointmentCalendarComponent);
+    fixture.detectChanges();
+
+    expect(grid()).toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="appointment-calendar-loading"]'),
+    ).not.toBeNull();
+    await calendarReady();
+  });
+
+  it('keeps a fixed-height status line so the grid does not move while loading', async () => {
+    await render('h1');
+    const status: HTMLElement = fixture.nativeElement.querySelector('.cal-page__status');
+    expect(status).not.toBeNull();
+    expect(status.getAttribute('role')).toBe('status');
+    const top = (grid() as HTMLElement).getBoundingClientRect().top;
+
+    calendarSvc.getRange.and.returnValue(new Subject<AppointmentCalendarEvent[]>());
+    api().refetchEvents();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="appointment-calendar-loading"]'),
+    ).not.toBeNull();
+    expect((grid() as HTMLElement).getBoundingClientRect().top).toBe(top);
   });
 
   it('hands FullCalendar an Error that keeps the HTTP failure', async () => {

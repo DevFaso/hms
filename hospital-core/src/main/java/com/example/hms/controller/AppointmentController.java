@@ -84,6 +84,18 @@ public class AppointmentController {
 
     private static final String SORT_APPOINTMENT_DATE = "appointmentDate";
 
+    /**
+     * Longest calendar range accepted, in days counted INCLUSIVELY. The
+     * longest view the portal shows is FullCalendar's month grid, which is
+     * always six full weeks (fixedWeekCount): 42 days. The portal sends
+     * {@code from} = the first cell and {@code to} = the last cell (it turns
+     * FullCalendar's exclusive end into an inclusive one), so from..to spans
+     * 42 days and {@code DAYS.between(from, to)} is 41. Anything longer is
+     * not a view the portal can ask for, and is refused to keep the result
+     * set bounded.
+     */
+    static final int CALENDAR_MAX_RANGE_DAYS = 42;
+
     // ---- LIST BY PATIENT USERNAME ----
     // Not attributable by PatientAccessAuditInterceptor: the patient arrives
     // as a username, and turning that into an id is a database lookup the
@@ -439,8 +451,9 @@ public class AppointmentController {
 
     /**
      * Date-range slice for the Cadence calendar grid. Hospital-scoped;
-     * optionally filtered by provider. Caps the viewport at 31 days to
-     * keep the result set bounded; broader ranges return 400.
+     * optionally filtered by provider. Caps the range at
+     * {@link #CALENDAR_MAX_RANGE_DAYS} days inclusive (a six-week month grid)
+     * to keep the result set bounded; broader ranges return 400.
      */
     @GetMapping("/calendar")
     @PreAuthorize(APPOINTMENT_MANAGE_ROLES)
@@ -456,9 +469,9 @@ public class AppointmentController {
         if (from == null || to == null || from.isAfter(to)) {
             return ResponseEntity.badRequest().build();
         }
-        // 31-day cap is INCLUSIVE: ChronoUnit.DAYS.between is exclusive of
-        // the end date, so a 31-day range yields 30; reject when > 30.
-        if (java.time.temporal.ChronoUnit.DAYS.between(from, to) > 30) {
+        // The cap is INCLUSIVE: ChronoUnit.DAYS.between excludes the end date,
+        // so the 42-day month grid yields 41; reject anything longer.
+        if (java.time.temporal.ChronoUnit.DAYS.between(from, to) > CALENDAR_MAX_RANGE_DAYS - 1) {
             return ResponseEntity.badRequest().build();
         }
         Locale locale = (acceptLanguage == null || acceptLanguage.isBlank())

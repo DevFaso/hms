@@ -92,8 +92,8 @@ const FULLCALENDAR_LOCALES: Partial<Record<SupportedLang, () => Promise<LocaleIn
         }}</label>
         <select
           id="provider-filter"
-          [(ngModel)]="selectedStaffId"
-          (ngModelChange)="onProviderChange()"
+          [ngModel]="selectedStaffId"
+          (ngModelChange)="onProviderChange($event)"
           data-testid="appointment-calendar-provider"
         >
           <option [ngValue]="''">{{ 'APPOINTMENT_CALENDAR.ALL_PROVIDERS' | translate }}</option>
@@ -105,11 +105,15 @@ const FULLCALENDAR_LOCALES: Partial<Record<SupportedLang, () => Promise<LocaleIn
         </select>
       </div>
 
-      @if (state() === 'loading') {
-        <p class="cal-page__loading" data-testid="appointment-calendar-loading">
-          {{ 'APPOINTMENT_CALENDAR.LOADING' | translate }}
-        </p>
-      }
+      <!-- Always present and of fixed height, so the grid never moves when
+           a fetch starts or ends; role=status is a polite live region. -->
+      <p class="cal-page__status" role="status">
+        @if (state() === 'loading') {
+          <span data-testid="appointment-calendar-loading">{{
+            'APPOINTMENT_CALENDAR.LOADING' | translate
+          }}</span>
+        }
+      </p>
 
       @if (state() === 'error') {
         <p class="cal-page__error" data-testid="appointment-calendar-error">
@@ -149,6 +153,8 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
 
   private inFlight?: Subscription;
+  /** Set by a failed fetch: the next view change must fetch even inside a loaded range. */
+  private retryOnNextView = false;
 
   @ViewChild(FullCalendarComponent) private calendar?: FullCalendarComponent;
 
@@ -167,7 +173,9 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
     });
     // Same source as LOCALE_ID: the language is fixed for the page's life
     // (switching it reloads). A locale chunk that fails to load leaves the
-    // calendar in English rather than not there at all.
+    // calendar in English rather than not there at all. The page shows its
+    // loading cue meanwhile, not a blank space.
+    this.state.set('loading');
     const loadLocale = FULLCALENDAR_LOCALES[storedLang()];
     const locale: Promise<LocaleInput | null> = loadLocale
       ? loadLocale().catch(() => null)
@@ -179,10 +187,12 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
     this.inFlight?.unsubscribe();
   }
 
-  protected onProviderChange(): void {
-    // [(ngModel)] has already stored the pick. Empty the grid first so the
-    // previous provider's patients are never shown under the new filter,
-    // even if the refetch fails; then fetch the unchanged range again.
+  protected onProviderChange(staffId: string): void {
+    // Store the pick here rather than rely on a [(ngModel)] listener having
+    // run first. Then empty the grid so the previous provider's patients
+    // are never shown under the new filter, even if the refetch fails, and
+    // fetch the unchanged range again.
+    this.selectedStaffId = staffId;
     const api = this.calendar?.getApi();
     api?.removeAllEvents();
     api?.refetchEvents();
@@ -211,18 +221,24 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
       eventClick: (arg: EventClickInfo) => this.openAppointment(arg.event.id),
       dateClick: (arg: DateClickInfo) => this.openCreateForSlot(arg.date, arg.allDay),
       // A function source: FullCalendar calls it for every range it needs
-      // (first render, navigation, view change) and on refetchEvents(), so
-      // the provider filter and Retry go through the same single path.
+      // (first render, navigation outside the loaded range) and on
+      // refetchEvents(), so the filter and Retry share the one path.
       events: (info, success, failure) => this.fetchEvents(hid, info, success, failure),
-      // Lazy fetching would reuse a range already asked for, and FullCalendar
-      // counts a FAILED fetch as asked for: Week -> Day after an error would
-      // never retry. Every view change fetches instead (fresh data, too).
-      lazyFetching: false,
+      // Lazy fetching (the default) reuses a loaded range, and FullCalendar
+      // counts a FAILED fetch as loaded: Week -> Day after an error would
+      // never ask again. So after a failure, the next view change refetches.
+      datesSet: () => {
+        if (this.retryOnNextView) {
+          this.retryOnNextView = false;
+          this.calendar?.getApi().refetchEvents();
+        }
+      },
       // Every failed fetch lands here (handling it also stops FullCalendar
       // logging "Unhandled event source error"). The grid is emptied: after
       // a failure nothing on screen can be trusted to match the filter.
       eventSourceFailure: () => {
         this.state.set('error');
+        this.retryOnNextView = true;
         this.calendar?.getApi().removeAllEvents();
       },
     };
@@ -258,6 +274,7 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
             },
           }));
           this.state.set('ready');
+          this.retryOnNextView = false;
           success(events);
         },
         error: (err: unknown) => failure(toError(err)),
