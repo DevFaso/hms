@@ -58,6 +58,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -1035,7 +1036,7 @@ public class UserServiceImpl implements UserService {
         user.setDeleted(true);
         user.setActive(false);
         // An administrator's disable: no invitation code or provider re-invite undoes it.
-        user.setDeactivatedByAdminAt(LocalDateTime.now());
+        user.setDeactivatedByAdminAt(LocalDateTime.now(ZoneId.systemDefault()));
         userRepository.save(user);
         assignmentService.deleteAllAssignmentsForUser(id);
 
@@ -1158,19 +1159,7 @@ public class UserServiceImpl implements UserService {
             user.setPhoneNumber(dto.getPhoneNumber());
         }
         if (dto.getActive() != null) {
-            reactivated = Boolean.TRUE.equals(dto.getActive())
-                    && !Boolean.TRUE.equals(user.isActive());
-            user.setActive(dto.getActive());
-            // An explicit active=false is an administrator's disable, also on
-            // a pending invitee (whose emailed code would otherwise switch the
-            // account on). The portal's user edit never sends `active`, so its
-            // presence is intent, not an echo. Cleared only on a real
-            // re-enable: an echoed active=true on a live account changes nothing.
-            if (Boolean.FALSE.equals(dto.getActive()) && user.getDeactivatedByAdminAt() == null) {
-                user.setDeactivatedByAdminAt(LocalDateTime.now());
-            } else if (reactivated) {
-                user.setDeactivatedByAdminAt(null);
-            }
+            reactivated = applyActive(user, dto.getActive());
         }
 
         // Reactivation clears the login lockout, so the holder is not refused
@@ -1331,6 +1320,26 @@ public class UserServiceImpl implements UserService {
     /** The one answer for a missing account and for one the caller may not touch. */
     private static ResourceNotFoundException userNotFound(UUID id) {
         return new ResourceNotFoundException(USER_NOT_FOUND_KEY, id);
+    }
+
+    /**
+     * Sets the account's active flag from an administrator's update and
+     * keeps V184's marker in step. An explicit active=false is an
+     * administrator's disable, also on a pending invitee (whose emailed code
+     * would otherwise switch the account on): the portal's user edit never
+     * sends `active`, so its presence is intent, not an echo. The marker is
+     * cleared only on a real re-enable; an echoed active=true on a live
+     * account changes nothing. Returns whether the account was re-enabled.
+     */
+    private static boolean applyActive(User user, Boolean active) {
+        boolean reactivated = Boolean.TRUE.equals(active) && !Boolean.TRUE.equals(user.isActive());
+        user.setActive(active);
+        if (Boolean.FALSE.equals(active) && user.getDeactivatedByAdminAt() == null) {
+            user.setDeactivatedByAdminAt(LocalDateTime.now(ZoneId.systemDefault()));
+        } else if (reactivated) {
+            user.setDeactivatedByAdminAt(null);
+        }
+        return reactivated;
     }
 
     /** True when the string is non-null and non-blank. */
