@@ -26,11 +26,10 @@ public interface ProviderAuditTrailService {
 
     /**
      * The only kinds of record the facility trail shows: administering the
-     * facility (its profile, its staff, and role assignments there, as their
-     * holder records them, e.g. confirming an invitation: the query shows a
-     * row only when its actor holds the seat that places it at the facility,
-     * so a registrar's or a super-admin's record of a role assigned there is
-     * excluded, never shown as a facility actor). An
+     * facility (its profile, its staff, and role assignments there: a
+     * registration by the facility's own admin shows, with the admin as the
+     * actor; a super-admin's or support user's never does, since the query
+     * requires the actor to hold a seat at the facility). An
      * allowlist, so nothing clinical written at the facility can ever reach
      * it. Deliberately not {@code USER}: that is any {@code /users/**} write,
      * a patient account's included. Compared exactly as the producers write

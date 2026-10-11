@@ -7,7 +7,7 @@ import {
   HospitalLifecycleReason,
   HospitalLifecycleResponse,
 } from './hospital-lifecycle.model';
-import { MFA_TOKEN_HEADER, STEP_UP_REQUEST } from './step-up';
+import { MFA_TOKEN_HEADER, STEP_UP_REQUEST, isStepUpAction } from './step-up';
 
 const BASE = '/super-admin/hospitals';
 
@@ -16,15 +16,20 @@ const BASE = '/super-admin/hospitals';
  * endpoints. All endpoints are gated `ROLE_SUPER_ADMIN` server-side.
  */
 /**
- * The options of a step-up call (suspend, archive, schedule-purge): the
- * current authenticator or backup code as `X-Mfa-Token` when given, and the
- * {@link STEP_UP_REQUEST} mark so a refused code never signs the user out.
+ * The options of a lifecycle call: for a step-up action (the one
+ * {@link isStepUpAction} list), the current authenticator or backup code as
+ * `X-Mfa-Token` when given, and the {@link STEP_UP_REQUEST} mark so a refused
+ * code never signs the user out.
  */
-function stepUp(mfaCode?: string | null): { headers?: HttpHeaders; context: HttpContext } {
-  const code = mfaCode?.trim();
+function stepUp(
+  action: string,
+  mfaCode?: string | null,
+): { headers?: HttpHeaders; context: HttpContext } {
+  const marked = isStepUpAction(action);
+  const code = marked ? mfaCode?.trim() : undefined;
   return {
     ...(code ? { headers: new HttpHeaders({ [MFA_TOKEN_HEADER]: code }) } : {}),
-    context: new HttpContext().set(STEP_UP_REQUEST, true),
+    context: new HttpContext().set(STEP_UP_REQUEST, marked),
   };
 }
 
@@ -46,7 +51,7 @@ export class HospitalLifecycleService {
     return this.http.post<HospitalLifecycleResponse>(
       `${BASE}/${encodeURIComponent(hospitalId)}/suspend`,
       body,
-      stepUp(mfaCode),
+      stepUp('suspend', mfaCode),
     );
   }
 
@@ -65,7 +70,7 @@ export class HospitalLifecycleService {
     return this.http.post<HospitalLifecycleResponse>(
       `${BASE}/${encodeURIComponent(hospitalId)}/archive`,
       body,
-      stepUp(mfaCode),
+      stepUp('archive', mfaCode),
     );
   }
 
@@ -77,7 +82,7 @@ export class HospitalLifecycleService {
     return this.http.post<HospitalLifecycleResponse>(
       `${BASE}/${encodeURIComponent(hospitalId)}/schedule-purge`,
       body,
-      stepUp(mfaCode),
+      stepUp('schedule-purge', mfaCode),
     );
   }
 

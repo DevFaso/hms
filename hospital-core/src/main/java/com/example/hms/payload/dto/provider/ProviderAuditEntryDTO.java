@@ -35,11 +35,15 @@ public class ProviderAuditEntryDTO {
     private UUID actorUserId;
     /** The acting staff member's name as the row recorded it (a member of this facility's staff). */
     private String actorName;
+    /** The ACTOR's own role at the facility (the role they act in there), never the role a row assigned. */
     private String roleName;
     /** The kind of record acted on, e.g. PROVIDER_FACILITY or PROVIDER_STAFF. */
     private String entityType;
     /** The id of the record acted on, when there is one. */
     private String resourceId;
+
+    /** For a role-assignment row, the role it assigned or confirmed: the row's subject, not the actor's role. */
+    private String subjectRole;
 
     /**
      * Set when platform support acted while impersonating the member named as

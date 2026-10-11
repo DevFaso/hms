@@ -405,21 +405,21 @@ class ProviderAdminServiceImplTest {
     }
 
     @Test
-    @DisplayName("activate never re-invites a disabled account (activated once): entering the code would switch it back on")
+    @DisplayName("activate never re-invites a disabled account (signed in once, either path): entering the code would switch it back on")
     void activateRefusesADisabledAccount() {
         admin();
         User signedInOnce = user("signed-in-once");
         signedInOnce.setActive(false);
         signedInOnce.setLastLoginAt(LocalDateTime.of(2026, 9, 1, 8, 0));
         member(signedInOnce, row(signedInOnce, "ROLE_PHARMACIST", pharmacy, false));
-        User confirmedOnce = user("confirmed-once");
-        confirmedOnce.setActive(false);
-        UserRoleHospitalAssignment confirmed = row(confirmedOnce, "ROLE_PHARMACIST", pharmacy, false);
-        confirmed.setConfirmationVerifiedAt(LocalDateTime.of(2026, 9, 1, 8, 0));
-        member(confirmedOnce, confirmed);
+        // Signed in through Keycloak only: the bootstrap stamped lastOidcLoginAt, not lastLoginAt.
+        User oidcOnce = user("oidc-once");
+        oidcOnce.setActive(false);
+        oidcOnce.setLastOidcLoginAt(java.time.OffsetDateTime.parse("2026-09-01T08:00:00Z"));
+        member(oidcOnce, row(oidcOnce, "ROLE_PHARMACIST", pharmacy, false));
 
         assertThat(service.activateStaff(signedInOnce.getId().toString())).isEmpty();
-        assertThat(service.activateStaff(confirmedOnce.getId().toString())).isEmpty();
+        assertThat(service.activateStaff(oidcOnce.getId().toString())).isEmpty();
         verifyNoInteractions(assignmentService);
     }
 

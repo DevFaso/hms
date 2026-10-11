@@ -114,6 +114,19 @@ describe('FacilityTypeGuard and ProviderHomeRedirectGuard', () => {
     expect(load).not.toHaveBeenCalled();
   }));
 
+  it('the dashboard redirect on a session timeout goes to the provider retry state, never the dashboard', fakeAsync(() => {
+    resolved.set(false);
+    const guard = redirect();
+    TestBed.tick();
+    expect(guard.result()).toBeUndefined();
+
+    tick(15001);
+
+    expect(path(guard.result())).toBe('/provider');
+    expect(reportUnavailable).toHaveBeenCalledTimes(1);
+    expect(load).not.toHaveBeenCalled();
+  }));
+
   it('sends anyone who acts at no provider facility to the not-found page', () => {
     settings = null;
     expect(path(run({ facilityTypes: ['PHARMACY'] }).result())).toBe('/error/404');

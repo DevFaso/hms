@@ -192,6 +192,8 @@ export interface ProviderAuditEntry {
   roleName: string | null;
   entityType: string | null;
   resourceId: string | null;
+  /** For a role-assignment row, the role it assigned (its subject); never the actor's role. */
+  subjectRole: string | null;
   /** Set when platform support acted while impersonating the actor. */
   impersonatorUserId: string | null;
   impersonatorUsername: string | null;

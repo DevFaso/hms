@@ -3,12 +3,15 @@ import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/h
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 
 import { ToastService } from '../../../core/toast.service';
 import { HospitalLifecycleResponse } from '../../../services/hospital-lifecycle.model';
 import { HospitalLifecycleService } from '../../../services/hospital-lifecycle.service';
-import { ProviderResponse } from '../../../services/provider.model';
+import {
+  ProviderResponse,
+  ProviderVerificationHistoryEntry,
+} from '../../../services/provider.model';
 import { SuperAdminProviderService } from '../../../services/super-admin-provider.service';
 import { UserDetail } from '../../../services/user.service';
 import { providerFixture } from '../../../testing/provider-fixtures';
@@ -280,7 +283,13 @@ describe('ProviderDetailComponent', () => {
       providerFixture({ verificationStatus: 'VERIFIED', lifecycleState: 'ACTIVE' }),
     );
     lifecycle.suspend.and.returnValue(
-      throwError(() => new HttpErrorResponse({ status: 403, error: { message: 'Wrong code' } })),
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 403,
+            error: { reason: 'mfa.stepup.invalid-code', message: 'Wrong code' },
+          }),
+      ),
     );
     cmp.openLifecycle('suspend');
     cmp.setLifecycleReason('Licence under review');
@@ -290,10 +299,10 @@ describe('ProviderDetailComponent', () => {
     expect(cmp.dialogError()).toBe('PROVIDER.LIFECYCLE.STEP_UP_FAILED');
     expect(host().querySelector('#lifecycle-mfa-code')).not.toBeNull();
 
-    // A refusal with no reason in the body: the dialog says what to do.
+    // A 403 that is not a step-up refusal (no mfa.stepup.* reason): an ordinary failure.
     lifecycle.suspend.and.returnValue(throwError(() => new HttpErrorResponse({ status: 403 })));
     cmp.submitLifecycle();
-    expect(cmp.dialogError()).toBe('PROVIDER.LIFECYCLE.STEP_UP_FAILED');
+    expect(cmp.dialogError()).toBe('PROVIDER.DETAIL.ACTION_FAILED');
     lifecycle.suspend.and.returnValue(
       throwError(
         () =>
@@ -376,6 +385,26 @@ describe('ProviderDetailComponent', () => {
     fixture.detectChanges();
     expect(fixture.componentInstance.notFound()).toBeTrue();
     expect(host().querySelector('[data-test="not-found"]')).not.toBeNull();
+  });
+
+  it('a newer refresh cancels the older one: a late answer never overwrites a newer one', () => {
+    const slow = new Subject<ProviderResponse>();
+    const slowHistory = new Subject<ProviderVerificationHistoryEntry[]>();
+    const cmp = setup();
+    service.get.and.returnValue(slow);
+    cmp.refresh();
+    expect(slow.observed).toBeTrue();
+    service.get.and.returnValue(of(providerFixture({ verificationStatus: 'VERIFIED' })));
+    service.history.and.returnValue(slowHistory);
+    cmp.refresh();
+
+    expect(slow.observed).toBeFalse();
+    slow.next(providerFixture({ verificationStatus: 'REJECTED' }));
+    expect(cmp.status()).toBe('VERIFIED');
+    // A newer history read cancels the pending one too.
+    service.history.and.returnValue(of([]));
+    cmp.refresh();
+    expect(slowHistory.observed).toBeFalse();
   });
 
   it('closeDialogs waits while an action runs', () => {

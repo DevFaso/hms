@@ -114,7 +114,7 @@ describe('errorInterceptor', () => {
     httpMock
       .expectOne('/super-admin/hospitals/h/archive')
       .flush(
-        { code: 'mfa_step_up_refused', message: 'Wrong code' },
+        { reason: 'mfa.stepup.invalid-code', message: 'Wrong code' },
         { status: 403, statusText: 'Forbidden' },
       );
 
@@ -123,6 +123,20 @@ describe('errorInterceptor', () => {
     expect(auth.refreshTokenRequest).not.toHaveBeenCalled();
     expect(auth.logout).not.toHaveBeenCalled();
     expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it('any other 403 on a step-up request goes the normal way: the not-allowed page', () => {
+    const context = new HttpContext().set(STEP_UP_REQUEST, true);
+    let error: HttpErrorResponse | undefined;
+    http.post('/super-admin/hospitals/h/suspend', {}, { context }).subscribe({
+      error: (e: HttpErrorResponse) => (error = e),
+    });
+    httpMock
+      .expectOne('/super-admin/hospitals/h/suspend')
+      .flush({ message: 'Access denied' }, { status: 403, statusText: 'Forbidden' });
+
+    expect(error?.status).toBe(403);
+    expect(router.navigate).toHaveBeenCalledWith(['/error/403']);
   });
 
   it('a step-up request whose 401 is NOT about MFA (an expired session) still refreshes', () => {

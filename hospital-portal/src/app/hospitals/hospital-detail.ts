@@ -19,7 +19,7 @@ import {
 } from '../services/hospital-lifecycle.model';
 import { HospitalLifecycleService } from '../services/hospital-lifecycle.service';
 import { HospitalResponse, HospitalService } from '../services/hospital.service';
-import { isStepUpRefusal } from '../services/step-up';
+import { isStepUpAction, isStepUpRefusal } from '../services/step-up';
 
 type ActionKind = 'suspend' | 'restore' | 'archive' | 'schedule-purge' | 'cancel-purge';
 
@@ -184,7 +184,7 @@ export class HospitalDetailComponent implements OnInit {
 
   /** The actions the backend guards with an MFA step-up (X-Mfa-Token). */
   needsStepUp(kind: ActionKind): boolean {
-    return kind === 'suspend' || kind === 'archive' || kind === 'schedule-purge';
+    return isStepUpAction(kind);
   }
 
   needsReason(kind: ActionKind): boolean {

@@ -217,6 +217,27 @@ describe('ProviderContextService', () => {
     expect(context.status()).toBe('provider');
   });
 
+  it('a scope switch mid-flight: the waiting subscriber (a guard) gets the answer for the NEW facility', () => {
+    const forA = new Subject<ProviderSettings>();
+    const forB = new Subject<ProviderSettings>();
+    answer = () => (scope === 'f-2' ? forB : forA);
+    const context = setup();
+    let decided: ProviderSettings | null | undefined;
+    context.load().subscribe((s) => (decided = s));
+
+    scope = 'f-2';
+    forA.next(settingsFixture({ facilityId: 'f-1' }));
+    forA.complete();
+    // A's answer never reaches the subscriber; B is asked instead.
+    expect(decided).toBeUndefined();
+    expect(calls).toBe(2);
+
+    forB.next(settingsFixture({ facilityId: 'f-2' }));
+    forB.complete();
+    expect(decided?.facilityId).toBe('f-2');
+    expect(context.settings()?.facilityId).toBe('f-2');
+  });
+
   it('reportUnavailable() shows the retry state and caches nothing', () => {
     const context = setup();
     value(context);

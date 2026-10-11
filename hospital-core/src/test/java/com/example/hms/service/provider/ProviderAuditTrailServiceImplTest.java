@@ -68,7 +68,7 @@ class ProviderAuditTrailServiceImplTest {
         admin();
         ProviderAuditEntryDTO row = new ProviderAuditEntryDTO(UUID.randomUUID(), LocalDateTime.now(),
             AuditEventType.DATA_UPDATE, AuditStatus.SUCCESS, UUID.randomUUID(), "padmin", "PROVIDER_ADMIN",
-            "PROVIDER_FACILITY", pharmacy.getId().toString(), null, null);
+            "PROVIDER_FACILITY", pharmacy.getId().toString(), null, null, null);
         when(auditEventLogRepository.findProviderFacilityTrail(eq(pharmacy.getId()), eq(ProviderAuditTrailService.FACILITY_ENTITY_TYPES), any()))
             .thenReturn(new PageImpl<>(List.of(row), PageRequest.of(0, 20), 41));
 

@@ -11,7 +11,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { Observable } from 'rxjs';
+import { Observable, Subscription } from 'rxjs';
 
 import { ToastService } from '../../../core/toast.service';
 import { HospitalLifecycleResponse } from '../../../services/hospital-lifecycle.model';
@@ -29,7 +29,7 @@ import {
   serverMessage,
 } from '../../../services/provider.model';
 import { SuperAdminProviderService } from '../../../services/super-admin-provider.service';
-import { isStepUpRefusal } from '../../../services/step-up';
+import { isStepUpAction, isStepUpRefusal } from '../../../services/step-up';
 import { UserDetail } from '../../../services/user.service';
 import { deliveryWarningKeys } from '../../../shared/delivery-warnings';
 import { EnumLabelPipe } from '../../../shared/pipes/enum-label.pipe';
@@ -153,12 +153,18 @@ export class ProviderDetailComponent implements OnInit {
     this.refresh();
   }
 
+  /** The reads in flight: a newer refresh cancels the older one, so it can never land after it. */
+  private refreshSub?: Subscription;
+  private historySub?: Subscription;
+
   refresh(): void {
+    this.refreshSub?.unsubscribe();
+    this.historySub?.unsubscribe();
     const id = this.providerId();
     this.loading.set(true);
     this.notFound.set(false);
     this.loadFailed.set(false);
-    this.service.get(id).subscribe({
+    this.refreshSub = this.service.get(id).subscribe({
       next: (provider) => {
         this.provider.set(provider);
         this.loading.set(false);
@@ -176,8 +182,9 @@ export class ProviderDetailComponent implements OnInit {
   }
 
   private loadHistory(): void {
+    this.historySub?.unsubscribe();
     this.historyFailed.set(false);
-    this.service.history(this.providerId()).subscribe({
+    this.historySub = this.service.history(this.providerId()).subscribe({
       next: (rows) => this.history.set(rows),
       error: () => {
         this.history.set([]);
@@ -261,7 +268,7 @@ export class ProviderDetailComponent implements OnInit {
 
   /** Suspend and archive are MFA step-up actions on the backend (X-Mfa-Token); restore is not. */
   lifecycleNeedsStepUp(kind: LifecycleKind): boolean {
-    return kind !== 'restore';
+    return isStepUpAction(kind);
   }
 
   lifecycleNeedsReason(kind: LifecycleKind): boolean {

@@ -1,6 +1,16 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, catchError, finalize, map, of, shareReplay, tap, throwError } from 'rxjs';
+import { Injectable, inject, signal } from '@angular/core';
+import {
+  Observable,
+  catchError,
+  finalize,
+  map,
+  of,
+  shareReplay,
+  switchMap,
+  tap,
+  throwError,
+} from 'rxjs';
 
 import { AuthService } from '../auth/auth.service';
 import { ProviderSettings, isProviderFacilityType } from '../services/provider.model';
@@ -42,13 +52,14 @@ export class ProviderContextService {
   private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
 
-  /** The settings when the session acts at a provider facility; `null` otherwise or until known. */
-  readonly settings = signal<ProviderSettings | null>(null);
-
+  private readonly settingsSignal = signal<ProviderSettings | null>(null);
   private readonly statusSignal = signal<ProviderContextStatus>('pending');
 
-  /** Where the context stands; the provider pages follow it (`followFacility`). */
-  readonly status = computed(() => this.statusSignal());
+  /** The settings when the session acts at a provider facility; `null` otherwise or until known. Read-only. */
+  readonly settings = this.settingsSignal.asReadonly();
+
+  /** Where the context stands; the provider pages follow it (`followFacility`). Read-only. */
+  readonly status = this.statusSignal.asReadonly();
 
   /** The user, scope and bootstrap verdict the cached answer belongs to. */
   private answeredFor: string | null = null;
@@ -85,11 +96,11 @@ export class ProviderContextService {
       return of(this.settings());
     }
     if (this.inFlight && this.inFlightFor === key) {
-      return this.inFlight;
+      return this.current(this.inFlight, key, this.generation);
     }
     // Another user's, scope's or verdict's answer never stands in while this one is asked.
     this.answeredFor = null;
-    this.settings.set(null);
+    this.settingsSignal.set(null);
     this.statusSignal.set('pending');
     if (!this.roleContext.providerUser()) {
       this.answer(key, null, ++this.generation);
@@ -106,7 +117,7 @@ export class ProviderContextService {
           return of(null);
         }
         if (this.isCurrent(key, generation)) {
-          this.settings.set(null);
+          this.settingsSignal.set(null);
           this.statusSignal.set('error');
         }
         return throwError(() => error);
@@ -119,7 +130,26 @@ export class ProviderContextService {
       }),
       shareReplay(1),
     );
-    return this.inFlight;
+    return this.current(this.inFlight, key, generation);
+  }
+
+  /**
+   * The request's answer, but only while it is still the CURRENT one: a
+   * request superseded meanwhile (a scope switch, an {@link invalidate})
+   * never reaches its subscribers. They get the current key's answer
+   * instead, so a guard never decides on an old facility's settings.
+   */
+  private current(
+    request: Observable<ProviderSettings | null>,
+    key: string,
+    generation: number,
+  ): Observable<ProviderSettings | null> {
+    return request.pipe(
+      switchMap((settings) => (this.isCurrent(key, generation) ? of(settings) : this.load())),
+      catchError((error: unknown) =>
+        this.isCurrent(key, generation) ? throwError(() => error) : this.load(),
+      ),
+    );
   }
 
   /**
@@ -148,7 +178,7 @@ export class ProviderContextService {
     this.answeredFor = null;
     this.inFlight = null;
     this.inFlightFor = null;
-    this.settings.set(null);
+    this.settingsSignal.set(null);
     this.statusSignal.set('pending');
   }
 
@@ -157,7 +187,7 @@ export class ProviderContextService {
     // from a request since superseded, is dropped.
     if (!this.isCurrent(key, generation)) return;
     this.answeredFor = key;
-    this.settings.set(settings);
+    this.settingsSignal.set(settings);
     this.statusSignal.set(settings ? 'provider' : 'none');
   }
 

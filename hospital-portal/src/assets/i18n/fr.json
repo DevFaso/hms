@@ -10341,10 +10341,10 @@
       "PAGE": "Page {{page}}",
       "RECORD_FACILITY": "Profil de l'établissement",
       "RECORD_STAFF": "Membre du personnel",
-      "RECORD_ACCOUNT": "Compte utilisateur",
       "RECORD_ASSIGNMENT": "Attribution de rôle",
       "RECORD_OTHER": "Autre",
-      "BY_SUPPORT": "En son nom : support de la plateforme ({{name}})"
+      "BY_SUPPORT": "En son nom : support de la plateforme ({{name}})",
+      "RECORD_ROLE_ASSIGNED": "Rôle attribué : {{role}}"
     }
   }
 }

@@ -161,6 +161,7 @@ describe('provider shell pages', () => {
             roleName: 'PROVIDER_ADMIN',
             entityType: 'PROVIDER_FACILITY',
             resourceId: 'f-1',
+            subjectRole: null,
             impersonatorUserId: null,
             impersonatorUsername: null,
           },
@@ -172,8 +173,9 @@ describe('provider shell pages', () => {
             actorUserId: 'u-2',
             actorName: 'pharm',
             roleName: 'PHARMACIST',
-            entityType: 'PROVIDER_STAFF',
-            resourceId: 'u-3',
+            entityType: 'USER_ROLE_ASSIGNMENT',
+            resourceId: 'a-9',
+            subjectRole: 'PHARMACIST',
             impersonatorUserId: 'sa-1',
             impersonatorUsername: 'support-agent',
           },
@@ -532,6 +534,37 @@ describe('provider shell pages', () => {
     expect(cmp.staff().map((m) => m.userId)).toEqual(['u-9']);
   });
 
+  it('staff: a branch switch while a registration is in flight never loses its result', () => {
+    const { cmp, host } = render(ProviderStaffComponent);
+    cmp.openRegister();
+    expect(cmp.registerFacilityId()).toBe('f-1');
+    cmp.onRegisterSubmitting(true);
+
+    settingsSignal.set(settingsFixture({ facilityId: 'f-2' }));
+    host();
+    // Still open: destroying it would drop the toast, the warnings and the refresh.
+    expect(cmp.registerOpen()).toBeTrue();
+    expect(cmp.registerFacilityId()).toBe('f-1');
+
+    cmp.onRegisterSubmitting(false);
+    cmp.onRegistered({
+      activationDelivery: [{ channel: 'EMAIL', outcome: 'NOT_CONFIGURED' }],
+    } as unknown as UserDetail);
+    expect(cmp.registerOpen()).toBeFalse();
+    expect(toast.success).toHaveBeenCalled();
+    expect(toast.warning).toHaveBeenCalled();
+    expect(portal.staff).toHaveBeenCalledTimes(3);
+
+    // A failed registration that settles after a switch closes then.
+    cmp.openRegister();
+    cmp.onRegisterSubmitting(true);
+    settingsSignal.set(settingsFixture({ facilityId: 'f-3' }));
+    host();
+    expect(cmp.registerOpen()).toBeTrue();
+    cmp.onRegisterSubmitting(false);
+    expect(cmp.registerOpen()).toBeFalse();
+  });
+
   it('staff: registering reloads the list; a 404 on load is not-available', () => {
     const { cmp, host } = render(ProviderStaffComponent);
     cmp.openRegister();
@@ -662,9 +695,14 @@ describe('provider shell pages', () => {
     // Platform support acting as a member: the row says so, by whom.
     const bySupport = host().querySelectorAll('[data-test="by-support"]');
     expect(bySupport.length).toBe(1);
+    // A role-assignment row names the role it assigned as its subject.
+    const records = [...host().querySelectorAll('[data-test="audit-record"]')].map((c) =>
+      c.textContent?.trim(),
+    );
+    expect(records[1]).toBe('PROVIDER.AUDIT.RECORD_ROLE_ASSIGNED');
     expect(cmp.recordKey('PROVIDER_FACILITY')).toBe('PROVIDER.AUDIT.RECORD_FACILITY');
     expect(cmp.recordKey('PROVIDER_STAFF')).toBe('PROVIDER.AUDIT.RECORD_STAFF');
-    expect(cmp.recordKey('USER')).toBe('PROVIDER.AUDIT.RECORD_ACCOUNT');
+    expect(cmp.recordKey('USER')).toBe('PROVIDER.AUDIT.RECORD_OTHER');
     expect(cmp.recordKey('USER_ROLE_ASSIGNMENT')).toBe('PROVIDER.AUDIT.RECORD_ASSIGNMENT');
     expect(cmp.recordKey(null)).toBe('PROVIDER.AUDIT.RECORD_OTHER');
 
@@ -764,7 +802,9 @@ describe('ProviderStaffRegisterComponent', () => {
   it('registers at the facility, in the chosen role, with the licence a pharmacist needs', () => {
     const cmp = render(['PHARMACIST']);
     let registered: UserDetail | undefined;
+    const submitting: boolean[] = [];
     cmp.registered.subscribe((u) => (registered = u));
+    cmp.submitting.subscribe((busy) => submitting.push(busy));
     fill(cmp);
     expect(cmp.needsLicence()).toBeTrue();
     expect(cmp.complete()).toBeFalse();
@@ -786,6 +826,8 @@ describe('ProviderStaffRegisterComponent', () => {
       licenseNumber: 'ONP-9',
     });
     expect(registered?.id).toBe('u-9');
+    // The parent is told while it is in flight, and when it settles.
+    expect(submitting).toEqual([true, false]);
   });
 
   it('the platform registers a facility admin without a licence; a refusal shows the server message', () => {

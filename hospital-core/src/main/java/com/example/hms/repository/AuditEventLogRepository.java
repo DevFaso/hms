@@ -21,6 +21,18 @@ import java.util.UUID;
 public interface AuditEventLogRepository
     extends JpaRepository<AuditEventLog, UUID>, JpaSpecificationExecutor<AuditEventLog> {
 
+    /** The FROM/WHERE of {@link #findProviderFacilityTrail}, shared by its page and count queries. */
+    String FACILITY_TRAIL_WHERE = "FROM AuditEventLog a LEFT JOIN a.assignment asg "
+        + "WHERE a.entityType IN :entityTypes "
+        + "AND a.patientId IS NULL "
+        + "AND (a.roleName IS NULL OR UPPER(a.roleName) NOT IN ('PATIENT', 'ROLE_PATIENT')) "
+        + "AND a.user.id IN (SELECT seat.user.id FROM UserRoleHospitalAssignment seat "
+        + "  WHERE seat.hospital.id = :facilityId) "
+        + "AND (asg.hospital.id = :facilityId "
+        + "  OR (a.entityType = 'USER_ROLE_ASSIGNMENT' AND a.resourceId IN ("
+        + "    SELECT CAST(target.id AS String) FROM UserRoleHospitalAssignment target "
+        + "    WHERE target.hospital.id = :facilityId))) ";
+
     Page<AuditEventLog> findByUserId(UUID userId, Pageable pageable);
 
     Page<AuditEventLog> findByEventType(AuditEventType eventType, Pageable pageable);
@@ -196,48 +208,45 @@ public interface AuditEventLogRepository
 
     /**
      * A provider facility's OWN audit trail (provider plan §3.1,
-     * {@code GET /provider/audit}): the rows written by its staff while acting
-     * there, i.e. whose assignment is at the facility, newest first.
+     * {@code GET /provider/audit}), newest first.
      *
-     * <p>An ALLOWLIST, never a denylist: only rows about administering the
-     * facility (the {@code entityTypes} the caller passes: its profile, its
-     * staff, accounts and role assignments) are returned, so a clinical row
-     * written at the facility later (a prescription, a lab order, a document)
-     * can never appear, whatever its entity type is called. A row naming a
-     * patient is excluded on top of that. The projection carries ids and codes
-     * only: no description, no details, no IP address (plan §6.9).
+     * <p>A row is shown when:
+     * <ul>
+     *   <li>it is ANCHORED at the facility: its assignment is there (a write
+     *       the interceptor recorded at the facility, a holder confirming their
+     *       own invitation), or it records a role assignment whose target
+     *       ({@code target_resource_id}) is an assignment there (a registration
+     *       at the facility: the audit service unlinks the registrar's row from
+     *       an assignment that is not theirs, so the target is the anchor);</li>
+     *   <li>its ACTOR holds a seat at the facility (any assignment of theirs
+     *       there): the facility's own staff and admin. A super-admin or a
+     *       support user with no seat there is never shown as a facility
+     *       actor, so their rows are excluded;</li>
+     *   <li>its entity type is in the {@code entityTypes} ALLOWLIST (facility
+     *       administration only: nothing clinical written at the facility can
+     *       ever appear), it names no patient, and it is not about the PATIENT
+     *       role.</li>
+     * </ul>
      *
-     * <p>The actor must be the holder of the assignment that places the row
-     * at the facility ({@code a.user = asg.user}), i.e. hold a seat there: a
-     * row about someone else's seat (a registrar or a super-admin recording a
-     * role assigned AT the facility) never shows its writer as a facility
-     * actor, and the Role column is always the actor's own role there. The
-     * audit service already drops such a link today (it unlinks an assignment
-     * whose holder is not the actor); this keeps the trail right whatever a
-     * producer sends. A row naming the PATIENT role is excluded too. Under
-     * impersonation the row's actor is the impersonated member; the
-     * impersonator columns say who really acted (platform support). A row whose
-     * assignment was hard-deleted has no facility left and drops out, as it
-     * does from every other hospital-scoped view.
+     * <p>The projection carries ids and codes only (plan §6.9): no
+     * description, no details, no IP address. The role shown is the ACTOR's
+     * own role at the facility (the lowest code when they hold several); the
+     * role a role-assignment row assigned is its subject, a separate field.
+     * Under impersonation the row's actor is the impersonated member; the
+     * impersonator columns say who really acted (platform support).
      *
      * @param entityTypes the allowed entity types, exactly as the producers write them (upper-case)
      */
     @Query(value = "SELECT new com.example.hms.payload.dto.provider.ProviderAuditEntryDTO("
-           + "a.id, a.eventTimestamp, a.eventType, a.status, a.user.id, a.userName, a.roleName, "
-           + "a.entityType, a.resourceId, a.impersonatorUserId, a.impersonatorUsername) "
-           + "FROM AuditEventLog a JOIN a.assignment asg "
-           + "WHERE asg.hospital.id = :facilityId "
-           + "AND a.user.id = asg.user.id "
-           + "AND a.entityType IN :entityTypes "
-           + "AND a.patientId IS NULL "
-           + "AND (a.roleName IS NULL OR UPPER(a.roleName) NOT IN ('PATIENT', 'ROLE_PATIENT')) "
+           + "a.id, a.eventTimestamp, a.eventType, a.status, a.user.id, a.userName, "
+           + "(SELECT MIN(seatRole.role.code) FROM UserRoleHospitalAssignment seatRole "
+           + "  WHERE seatRole.user.id = a.user.id AND seatRole.hospital.id = :facilityId), "
+           + "a.entityType, a.resourceId, "
+           + "CASE WHEN a.entityType = 'USER_ROLE_ASSIGNMENT' THEN a.roleName ELSE NULL END, "
+           + "a.impersonatorUserId, a.impersonatorUsername) "
+           + FACILITY_TRAIL_WHERE
            + "ORDER BY a.eventTimestamp DESC, a.id DESC",
-        countQuery = "SELECT COUNT(a) FROM AuditEventLog a JOIN a.assignment asg "
-           + "WHERE asg.hospital.id = :facilityId "
-           + "AND a.user.id = asg.user.id "
-           + "AND a.entityType IN :entityTypes "
-           + "AND a.patientId IS NULL "
-           + "AND (a.roleName IS NULL OR UPPER(a.roleName) NOT IN ('PATIENT', 'ROLE_PATIENT'))")
+        countQuery = "SELECT COUNT(a) " + FACILITY_TRAIL_WHERE)
     Page<ProviderAuditEntryDTO> findProviderFacilityTrail(@Param("facilityId") UUID facilityId,
                                                           @Param("entityTypes") Collection<String> entityTypes,
                                                           Pageable pageable);

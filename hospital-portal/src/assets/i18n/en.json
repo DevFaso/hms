@@ -10341,10 +10341,10 @@
       "PAGE": "Page {{page}}",
       "RECORD_FACILITY": "Facility profile",
       "RECORD_STAFF": "Staff member",
-      "RECORD_ACCOUNT": "User account",
       "RECORD_ASSIGNMENT": "Role assignment",
       "RECORD_OTHER": "Other",
-      "BY_SUPPORT": "On their behalf: platform support ({{name}})"
+      "BY_SUPPORT": "On their behalf: platform support ({{name}})",
+      "RECORD_ROLE_ASSIGNED": "Role assigned: {{role}}"
     }
   }
 }

@@ -13,7 +13,7 @@ import {
 } from './provider.model';
 import { HospitalLifecycleService } from './hospital-lifecycle.service';
 import { ProviderPortalService } from './provider-portal.service';
-import { STEP_UP_REQUEST, isStepUpRefusal } from './step-up';
+import { STEP_UP_REQUEST, isStepUpAction, isStepUpRefusal } from './step-up';
 import { providerFixture } from '../testing/provider-fixtures';
 import { SuperAdminProviderService } from './super-admin-provider.service';
 
@@ -139,8 +139,29 @@ describe('HospitalLifecycleService step-up', () => {
     http.verify();
   });
 
-  it('only a step-up refusal is exempt: 403 always, 401 when it names MFA', () => {
-    expect(isStepUpRefusal(new HttpErrorResponse({ status: 403 }))).toBeTrue();
+  it('only a step-up refusal is exempt: a 403 with an mfa.stepup.* reason, a 401 naming MFA', () => {
+    expect(
+      isStepUpRefusal(
+        new HttpErrorResponse({ status: 403, error: { reason: 'mfa.stepup.invalid-code' } }),
+      ),
+    ).toBeTrue();
+    expect(
+      isStepUpRefusal(
+        new HttpErrorResponse({ status: 403, error: { code: 'mfa.stepup.required' } }),
+      ),
+    ).toBeTrue();
+    // Any other 403 (a hospital-scope or a role refusal) is not one.
+    expect(isStepUpRefusal(new HttpErrorResponse({ status: 403 }))).toBeFalse();
+    expect(
+      isStepUpRefusal(
+        new HttpErrorResponse({
+          status: 403,
+          error: { code: 'hospital_scope_refused', reason: 'NOT_PERMITTED' },
+        }),
+      ),
+    ).toBeFalse();
+    expect(isStepUpAction('suspend')).toBeTrue();
+    expect(isStepUpAction('restore')).toBeFalse();
     expect(
       isStepUpRefusal(
         new HttpErrorResponse({ status: 401, error: { message: 'mfa_required: missing' } }),

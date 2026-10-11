@@ -161,10 +161,11 @@
     </div>
   }
 
-  @if (registerOpen() && facilityId(); as facility) {
+  @if (registerOpen() && registerFacilityId(); as facility) {
     <app-provider-staff-register
       [facilityId]="facility"
       [roles]="staffRoles()"
+      (submitting)="onRegisterSubmitting($event)"
       (registered)="onRegistered($event)"
       (closed)="closeRegister()"
     />

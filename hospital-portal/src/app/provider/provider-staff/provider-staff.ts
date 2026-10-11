@@ -57,6 +57,12 @@ export class ProviderStaffComponent {
   readonly busyUserIds = signal<ReadonlySet<string>>(new Set<string>());
   readonly confirmDeactivate = signal<ProviderStaffMember | null>(null);
   readonly registerOpen = signal(false);
+  /** The facility the open registration targets: fixed when it opens, never the next branch's. */
+  readonly registerFacilityId = signal<string | null>(null);
+  /** A registration is in flight: a branch switch must not destroy it (its result would be lost). */
+  private registerBusy = false;
+  /** A branch switch arrived while a registration was in flight: close it once it settles. */
+  private closeRegisterWhenSettled = false;
 
   /** The facility the session acts at now: the one every action here targets. */
   readonly facilityId = computed(() => this.context.settings()?.facilityId ?? null);
@@ -81,7 +87,12 @@ export class ProviderStaffComponent {
 
   private closeEverything(): void {
     this.confirmDeactivate.set(null);
-    this.registerOpen.set(false);
+    if (this.registerBusy) {
+      // Its success toast, delivery warnings and list refresh must not be lost.
+      this.closeRegisterWhenSettled = true;
+    } else {
+      this.registerOpen.set(false);
+    }
     this.busyUserIds.set(new Set<string>());
   }
 
@@ -190,11 +201,22 @@ export class ProviderStaffComponent {
   }
 
   openRegister(): void {
+    this.registerFacilityId.set(this.facilityId());
+    this.closeRegisterWhenSettled = false;
     this.registerOpen.set(true);
   }
 
   closeRegister(): void {
     this.registerOpen.set(false);
+  }
+
+  onRegisterSubmitting(submitting: boolean): void {
+    this.registerBusy = submitting;
+    if (!submitting && this.closeRegisterWhenSettled) {
+      // Settled after a branch switch: the dialog belonged to the old branch.
+      this.closeRegisterWhenSettled = false;
+      this.registerOpen.set(false);
+    }
   }
 
   onRegistered(user: UserDetail): void {

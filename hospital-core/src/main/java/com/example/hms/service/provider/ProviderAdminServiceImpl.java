@@ -167,7 +167,7 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
         // re-enables an account. An account that was never activated is
         // another matter: every admin-registered account starts inactive
         // (Option A) and the code IS its activation, so it may be re-invited.
-        if (rows.isEmpty() || !mayReinvite(rows.get().here().get(0).getUser(), rows.get().everyRow())) {
+        if (rows.isEmpty() || !mayReinvite(rows.get().here().get(0).getUser())) {
             return Optional.empty();
         }
         List<UUID> inactive = rows.get().here().stream()
@@ -231,23 +231,30 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
     /**
      * May this account receive a new invitation code? An enabled account, or
      * one that was NEVER activated: under Option A every admin-registered
-     * account starts inactive and entering the code is what activates it. An
-     * account that was activated once (it signed in, or confirmed any
-     * assignment) and is inactive now was disabled, and only a super-admin
-     * re-enables it. The account carries no "disabled by" flag, so a
-     * never-activated account a super-admin disabled before its first use
-     * reads as never activated; recorded as standing debt.
+     * account starts inactive and entering the code is what activates it.
+     *
+     * <p>"Never activated" means it never signed in, on either path: no
+     * {@code lastLoginAt} (the legacy login and the MFA verify stamp it) and
+     * no {@code lastOidcLoginAt} (the Keycloak session bootstrap stamps it).
+     * Those are the only sign-in stamps an account carries. The assignments'
+     * {@code confirmationVerifiedAt} is NOT used: re-issuing or restarting an
+     * invitation clears it, so it cannot tell "never used" from "disabled
+     * after use". An account that signed in once and is inactive now was
+     * disabled, and only a super-admin re-enables it: a peer admin's re-invite
+     * would undo that.
+     *
+     * <p>Limit (standing debt): an account has no "disabled by an
+     * administrator" flag, so one disabled before its first sign-in still
+     * reads as never activated.
      */
-    static boolean mayReinvite(User member, List<UserRoleHospitalAssignment> everyRow) {
+    static boolean mayReinvite(User member) {
         if (member == null) {
             return false;
         }
         if (member.isActive()) {
             return true;
         }
-        boolean everActivated = member.getLastLoginAt() != null
-            || everyRow.stream().anyMatch(row -> row.getConfirmationVerifiedAt() != null);
-        return !everActivated;
+        return member.getLastLoginAt() == null && member.getLastOidcLoginAt() == null;
     }
 
     /**
@@ -319,7 +326,7 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
             // deactivate retires what is active or invited; a re-invite needs
             // an account that may be re-invited and a row that is not active.
             .canDeactivate(manageable && (active || pending))
-            .canReinvite(manageable && mayReinvite(holder, everyRow) && anyInactive)
+            .canReinvite(manageable && mayReinvite(holder) && anyInactive)
             .build());
     }
 

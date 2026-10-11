@@ -10341,10 +10341,10 @@
       "PAGE": "Página {{page}}",
       "RECORD_FACILITY": "Perfil del establecimiento",
       "RECORD_STAFF": "Miembro del personal",
-      "RECORD_ACCOUNT": "Cuenta de usuario",
       "RECORD_ASSIGNMENT": "Asignación de rol",
       "RECORD_OTHER": "Otro",
-      "BY_SUPPORT": "En su nombre: soporte de la plataforma ({{name}})"
+      "BY_SUPPORT": "En su nombre: soporte de la plataforma ({{name}})",
+      "RECORD_ROLE_ASSIGNED": "Rol asignado: {{role}}"
     }
   }
 }

@@ -19,6 +19,8 @@ import { navGroupForRoute, providerNavEntries } from './nav-groups';
 import { ProviderContextService } from '../core/provider-context.service';
 import { FacilityTypeGuard } from '../auth/facility-type.guard';
 import { settingsFixture } from '../testing/provider-fixtures';
+import { ProviderSettings } from '../services/provider.model';
+import { WritableSignal } from '@angular/core';
 import { routes } from '../app.routes';
 import { roleSatisfies } from '../core/role-equivalence';
 
@@ -581,13 +583,17 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
       roles: ['ROLE_PROVIDER_ADMIN'],
       wildcardPermission: false,
     });
-    const context = TestBed.inject(ProviderContextService);
+    // The context's state is read-only to consumers; the test drives it as the server would.
+    const context = TestBed.inject(ProviderContextService) as unknown as {
+      settingsSignal: WritableSignal<ProviderSettings | null>;
+    };
+    const set = (settings: ProviderSettings | null) => context.settingsSignal.set(settings);
     const read = () =>
       (component as unknown as { baseNavItems: () => NavItem[] })
         .baseNavItems()
         .map((i) => i.route);
 
-    context.settings.set(settingsFixture());
+    set(settingsFixture());
     expect(read()).toEqual([
       '/provider',
       '/provider/profile',
@@ -599,7 +605,7 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     }
 
     // A pharmacist there: no admin pages.
-    context.settings.set(settingsFixture({ providerAdmin: false }));
+    set(settingsFixture({ providerAdmin: false }));
     expect(read()).toEqual(['/provider', '/provider/profile']);
 
     // Every provider nav entry is a real route, guarded by the facility guard.
@@ -611,7 +617,7 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     }
 
     // No provider settings: the hospital nav as before.
-    context.settings.set(null);
+    set(null);
     expect(read()).toContain('/dashboard');
   });
 

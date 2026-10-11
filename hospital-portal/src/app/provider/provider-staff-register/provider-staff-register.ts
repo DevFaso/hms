@@ -49,6 +49,8 @@ export class ProviderStaffRegisterComponent implements OnInit {
 
   readonly registered = output<UserDetail>();
   readonly closed = output<void>();
+  /** True while the registration is in flight, false once it settles: the parent must not drop it meanwhile. */
+  readonly submitting = output<boolean>();
 
   readonly firstName = signal('');
   readonly lastName = signal('');
@@ -88,6 +90,7 @@ export class ProviderStaffRegisterComponent implements OnInit {
       return;
     }
     this.saving.set(true);
+    this.submitting.emit(true);
     this.errorKey.set(null);
     this.errorText.set(null);
     this.users
@@ -104,10 +107,12 @@ export class ProviderStaffRegisterComponent implements OnInit {
       .subscribe({
         next: (user) => {
           this.saving.set(false);
+          this.submitting.emit(false);
           this.registered.emit(user);
         },
         error: (err: unknown) => {
           this.saving.set(false);
+          this.submitting.emit(false);
           this.errorText.set(serverMessage(err));
           this.errorKey.set('PROVIDER.REGISTER.FAILED');
         },

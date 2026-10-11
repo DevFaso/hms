@@ -282,6 +282,43 @@ class ProviderAdminSecurityIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("a peer admin cannot undo a super-admin's disable: OIDC sign-in, deactivate, re-invite, "
+        + "disable, then no re-invite offered and activate unmapped")
+    void peerAdminCannotUndoADisableAfterAnOidcSignIn() throws Exception {
+        String unmapped = ProviderConfinementSecurityIT.refusalShape(as(doctorToken(), get(UNMAPPED)));
+        // 1. The pharmacist signs in through Keycloak: the session bootstrap stamps lastOidcLoginAt.
+        User account = userRepository.findById(pharmacist.getId()).orElseThrow();
+        account.setAuthSource("keycloak");
+        account.setLastLoginAt(null);
+        userRepository.save(account);
+        MvcResult bootstrap = as(tokenFor(pharmacist, PHARMACIST), get("/auth/session/bootstrap"));
+        assertThat(bootstrap.getResponse().getStatus()).as(bootstrap.getResponse().getContentAsString())
+            .isEqualTo(200);
+        assertThat(userRepository.findById(pharmacist.getId()).orElseThrow().getLastOidcLoginAt()).isNotNull();
+        // 2. The admin deactivates them, then 3. re-invites them (which clears confirmationVerifiedAt).
+        assertThat(as(adminToken, post("/provider/staff/{userId}/deactivate", pharmacist.getId()))
+            .getResponse().getStatus()).isEqualTo(200);
+        assertThat(as(adminToken, post("/provider/staff/{userId}/activate", pharmacist.getId()))
+            .getResponse().getStatus()).isEqualTo(200);
+        // 4. A super-admin disables the account.
+        User disabled = userRepository.findById(pharmacist.getId()).orElseThrow();
+        disabled.setActive(false);
+        userRepository.save(disabled);
+
+        // 5. No re-invite is offered, and the endpoint answers as an unmapped path; no new code.
+        String codeBefore = rowOf(pharmacist, pharmacyId).getConfirmationCode();
+        json(as(adminToken, get("/provider/staff"))).forEach(member -> {
+            if (member.get("userId").asText().equals(pharmacist.getId().toString())) {
+                assertThat(member.get("canReinvite").asBoolean()).isFalse();
+            }
+        });
+        MvcResult reinvite = as(adminToken, post("/provider/staff/{userId}/activate", pharmacist.getId()));
+        assertThat(ProviderConfinementSecurityIT.refusalShape(reinvite)).isEqualTo(unmapped);
+        assertThat(rowOf(pharmacist, pharmacyId).getConfirmationCode()).isEqualTo(codeBefore);
+        assertThat(userRepository.findById(pharmacist.getId()).orElseThrow().isActive()).isFalse();
+    }
+
+    @Test
     @DisplayName("activate never re-invites a disabled account: the unmapped answer, no code issued")
     void disabledAccountIsNotReinvited() throws Exception {
         UserRoleHospitalAssignment row = rowOf(pharmacist, pharmacyId);
@@ -430,6 +467,14 @@ class ProviderAdminSecurityIT extends BaseIT {
             .entityType("USER_ROLE_ASSIGNMENT")
             .roleName("PHARMACIST")
             .build()).getId();
+        // The facility's own admin registering a pharmacist here, as recordAssignmentAudit
+        // writes it: the registrar as actor, no assignment link (the audit service unlinks
+        // an assignment that is not the actor's), the new assignment as the target.
+        UUID pharmacistSeat = rowOf(pharmacist, pharmacyId).getId();
+        UUID registrationByAdmin = registrationRow(admin, pharmacistSeat);
+        // The same registration written by a super-admin, who holds no seat here: never shown.
+        User superAdmin = accounts.userAt("sadmin", null, "SUPER_ADMIN");
+        UUID registrationBySuperAdmin = registrationRow(superAdmin, pharmacistSeat);
         // A row naming the PATIENT role, with no patient id: excluded all the same.
         AuditEventLog patientRole = auditEventLogRepository.findById(
             auditRow(pharmacist, pharmacyId, "USER_ROLE_ASSIGNMENT", null)).orElseThrow();
@@ -450,10 +495,19 @@ class ProviderAdminSecurityIT extends BaseIT {
         assertThat(ids).contains(ownRow.toString(), staffRow.toString(), impersonated.getId().toString())
             .doesNotContain(otherFacilityRow.toString(), patientIdRow.toString(), patientEntityRow.toString(),
                 prescriptionRow.toString(), labOrderRow.toString(), documentRow.toString(), userRow.toString(),
-                notTheHolderRow.toString(), patientRole.getId().toString());
+                notTheHolderRow.toString(), patientRole.getId().toString(), registrationBySuperAdmin.toString())
+            .contains(registrationByAdmin.toString());
         page.get("entries").forEach(entry -> assertThat(entry.has("eventDescription") || entry.has("ipAddress")
             || entry.has("details") || entry.has("patientId")).as(entry.toString()).isFalse());
         assertThat(page.get("totalElements").asLong()).isEqualTo(ids.size());
+        page.get("entries").forEach(entry -> {
+            if (entry.get("id").asText().equals(registrationByAdmin.toString())) {
+                // The actor is the admin, in their own role; the assigned role is the subject.
+                assertThat(entry.get("actorUserId").asText()).isEqualTo(admin.getId().toString());
+                assertThat(entry.get("roleName").asText()).endsWith("PROVIDER_ADMIN");
+                assertThat(entry.get("subjectRole").asText()).isEqualTo("PHARMACIST");
+            }
+        });
         page.get("entries").forEach(entry -> {
             boolean byImpersonation = entry.get("id").asText().equals(impersonated.getId().toString());
             assertThat(entry.get("impersonatorUserId").isNull()).as(entry.toString()).isEqualTo(!byImpersonation);
@@ -630,6 +684,21 @@ class ProviderAdminSecurityIT extends BaseIT {
             .entityType(entityType)
             .resourceId(UUID.randomUUID().toString())
             .patientId(patientId)
+            .build()).getId();
+    }
+
+    /** A role-assignment row as recordAssignmentAudit writes it: no assignment link, the target as resource. */
+    private UUID registrationRow(User registrar, UUID targetAssignmentId) {
+        return auditEventLogRepository.save(AuditEventLog.builder()
+            .user(registrar)
+            .hospitalName("Test facility")
+            .eventType(AuditEventType.ROLE_ASSIGNED)
+            .eventDescription("Assigned role")
+            .eventTimestamp(LocalDateTime.now())
+            .status(AuditStatus.SUCCESS)
+            .entityType("USER_ROLE_ASSIGNMENT")
+            .resourceId(targetAssignmentId.toString())
+            .roleName("PHARMACIST")
             .build()).getId();
     }
 

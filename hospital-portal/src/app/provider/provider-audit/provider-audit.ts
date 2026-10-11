@@ -96,8 +96,6 @@ export class ProviderAuditComponent {
         return 'PROVIDER.AUDIT.RECORD_FACILITY';
       case 'PROVIDER_STAFF':
         return 'PROVIDER.AUDIT.RECORD_STAFF';
-      case 'USER':
-        return 'PROVIDER.AUDIT.RECORD_ACCOUNT';
       case 'USER_ROLE_ASSIGNMENT':
         return 'PROVIDER.AUDIT.RECORD_ASSIGNMENT';
       default:

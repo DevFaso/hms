@@ -2,10 +2,10 @@ import { HttpContextToken, HttpErrorResponse } from '@angular/common/http';
 
 /**
  * Marks a request that carries an MFA step-up (`X-Mfa-Token`): a destructive
- * super-admin action such as suspending or archiving a facility. Its refusal
- * (401 `mfa_required…` today, 403 with a reason code after #853) is the
- * dialog's to show: the error interceptor must neither refresh the session,
- * nor sign the user out, nor redirect to the forbidden page for it.
+ * super-admin action such as suspending or archiving a facility. Its
+ * step-up refusal is the dialog's to show: the error interceptor must neither
+ * refresh the session, nor sign the user out, nor redirect to the forbidden
+ * page for it. Any other refusal of a marked request goes the normal way.
  */
 export const STEP_UP_REQUEST = new HttpContextToken<boolean>(() => false);
 
@@ -13,14 +13,44 @@ export const STEP_UP_REQUEST = new HttpContextToken<boolean>(() => false);
 export const MFA_TOKEN_HEADER = 'X-Mfa-Token';
 
 /**
+ * The hospital lifecycle actions the backend guards with an MFA step-up
+ * (`requireStepUp` in HospitalLifecycleServiceImpl): the single list the
+ * lifecycle dialogs and HospitalLifecycleService read.
+ */
+export const STEP_UP_ACTIONS: ReadonlySet<string> = new Set([
+  'suspend',
+  'archive',
+  'schedule-purge',
+]);
+
+/** Does this lifecycle action send an MFA step-up? */
+export function isStepUpAction(action: string): boolean {
+  return STEP_UP_ACTIONS.has(action);
+}
+
+/** The reason-code prefix of a step-up refusal answered 403 (hotfix #853). */
+const STEP_UP_REASON_PREFIX = 'mfa.stepup.';
+
+/**
  * Is this the server refusing the step-up itself (a missing or wrong code),
- * rather than the session having expired? A 403 on a step-up request always
- * is; a 401 is when its body names the MFA requirement.
+ * rather than the session having expired or the action being forbidden?
+ * Only:
+ * - a 401 whose body names MFA (`mfa_required: …`, today's answer), or
+ * - a 403 whose reason code starts with `mfa.stepup.` (#853's answer).
+ *
+ * Any other 403 (a hospital-scope refusal, a role refusal) is NOT one: it
+ * goes through the interceptor's normal handling and reads as "not allowed".
  */
 export function isStepUpRefusal(error: HttpErrorResponse): boolean {
-  if (error.status === 403) return true;
-  if (error.status !== 401) return false;
   const body = error.error as { message?: unknown; code?: unknown; reason?: unknown } | null;
-  const text = body && typeof body === 'object' ? [body.message, body.code, body.reason] : [body];
-  return text.some((part) => typeof part === 'string' && /mfa/i.test(part));
+  const fields = body && typeof body === 'object' ? [body.message, body.code, body.reason] : [body];
+  if (error.status === 401) {
+    return fields.some((part) => typeof part === 'string' && /mfa/i.test(part));
+  }
+  if (error.status === 403 && body && typeof body === 'object') {
+    return [body.reason, body.code].some(
+      (part) => typeof part === 'string' && part.startsWith(STEP_UP_REASON_PREFIX),
+    );
+  }
+  return false;
 }

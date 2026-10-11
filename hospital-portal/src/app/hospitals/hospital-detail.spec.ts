@@ -238,7 +238,13 @@ describe('HospitalDetailComponent (MVP-c2-frontend)', () => {
     expect(cmp.dialog()?.errorKey).toBe('HOSPITAL_LIFECYCLE.ERROR.STEP_UP_FAILED');
 
     lifecycleService.archive.and.returnValue(
-      throwError(() => new HttpErrorResponse({ status: 403, error: { message: 'Wrong code' } })),
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 403,
+            error: { reason: 'mfa.stepup.invalid-code', message: 'Wrong code' },
+          }),
+      ),
     );
     cmp.openDialog('archive');
     cmp.patchDialog('reason', 'closing down');
