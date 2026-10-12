@@ -57,6 +57,7 @@ public class MfaController {
             "MFA enrollment requires a fully authenticated session — partial mfaToken is not sufficient.";
 
     private static final String INVALID_MFA_TOKEN = "Invalid or expired MFA token.";
+    private static final String PICK_NOT_HONOURED = "auth.mfa.pickNotHonoured";
 
     private final MfaService mfaService;
     private final UserRepository userRepository;
@@ -90,8 +91,11 @@ public class MfaController {
                 .map(org.springframework.security.core.GrantedAuthority::getAuthority)
                 .filter(java.util.Objects::nonNull)
                 .toList();
+        // The held spelling, not the one typed at login: the idle gate's
+        // machine-role carve-out and the response compare exact strings.
         List<String> stillHeld = picked.get().stream()
-                .filter(role -> held.stream().anyMatch(role::equalsIgnoreCase))
+                .flatMap(role -> held.stream().filter(role::equalsIgnoreCase).limit(1))
+                .distinct()
                 .toList();
         return stillHeld.isEmpty() ? Optional.empty() : Optional.of(stillHeld);
     }
@@ -228,8 +232,15 @@ public class MfaController {
         // whose pick cannot be honoured is refused, never widened.
         Optional<List<String>> honoured = honouredPick(request.mfaToken(), username);
         if (honoured.isEmpty()) {
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .userId(user.getId())
+                    .userName(username)
+                    .eventType(AuditEventType.MFA_FAILURE)
+                    .status(AuditStatus.FAILURE)
+                    .eventDescription("MFA sign-in refused: the role picked at login is no longer held")
+                    .build());
             return ResponseEntity.status(401)
-                    .body(new MessageResponse("This sign-in can no longer be completed. Sign in again."));
+                    .body(new MessageResponse(com.example.hms.utility.MessageUtil.resolve(PICK_NOT_HONOURED)));
         }
         List<String> pickedRoles = honoured.get();
 
@@ -292,7 +303,9 @@ public class MfaController {
         // Issue the full JWT pair. A role picked at login (still held, checked
         // above) is the session's only role, as the sign-in without a
         // challenge mints it: the challenge never widens it.
-        var activeAssignments = assignmentRepository.findByUser_IdAndActiveTrue(user.getId());
+        var activeAssignments = pickedRoles.isEmpty()
+                ? assignmentRepository.findByUser_IdAndActiveTrue(user.getId())
+                : List.<com.example.hms.model.UserRoleHospitalAssignment>of();
         List<String> roles = !pickedRoles.isEmpty() ? pickedRoles : activeAssignments.stream()
                 .map(a -> a.getRole().getName())
                 .distinct()

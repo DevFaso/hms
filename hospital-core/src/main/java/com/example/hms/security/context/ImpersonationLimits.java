@@ -51,14 +51,18 @@ public class ImpersonationLimits implements HandlerInterceptor {
         boolean read = HttpMethod.GET.matches(method) || HttpMethod.HEAD.matches(method)
             || HttpMethod.OPTIONS.matches(method);
         if (!read && ImpersonationContextHolder.isImpersonating()) {
-            audit(method);
+            audit(method, request.getAttribute(org.springframework.web.servlet.HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE));
             throw new ClientSafeAccessDeniedException(MessageUtil.resolve(ACCOUNT_CHANGE_REFUSED));
         }
         return true;
     }
 
-    /** One row naming the attempt; the audit service adds the impersonator. The path is not recorded. */
-    private void audit(String method) {
+    /**
+     * One row naming the target, the attempt and the endpoint's pattern (never
+     * the raw path, which can carry ids); the audit service adds the
+     * impersonator from the request's impersonation context.
+     */
+    private void audit(String method, Object pattern) {
         AuditEventLogService service = audit.get();
         if (service == null) {
             return;
@@ -68,8 +72,11 @@ public class ImpersonationLimits implements HandlerInterceptor {
             service.logEvent(AuditEventRequestDTO.builder()
                 .eventType(AuditEventType.SECURITY_ALERT_TRIGGERED)
                 .status(AuditStatus.FAILURE)
+                .userId(acting != null && acting.getPrincipal() instanceof com.example.hms.security.HospitalUserDetails target
+                    ? target.getUserId() : null)
                 .userName(acting == null ? null : acting.getName())
-                .eventDescription("Support session refused: " + method + " on the account's sign-in or recovery details")
+                .eventDescription("Support session refused: " + method + " " + (pattern instanceof String p ? p : "account details")
+                    + " (sign-in or recovery details)")
                 .build());
         } catch (RuntimeException ex) {
             log.error("[IMPERSONATION] Failed to audit a refused account change", ex);

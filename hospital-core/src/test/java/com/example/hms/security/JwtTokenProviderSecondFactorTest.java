@@ -97,7 +97,7 @@ class JwtTokenProviderSecondFactorTest {
 
         // A token minted with a time past the max age is no proof, so a refresh chain cannot renew it.
         ReflectionTestUtils.setField(provider, "secondFactorMaxAgeSeconds", MAX_AGE);
-        Instant stale = now().minusSeconds(MAX_AGE + 60);
+        Instant stale = now().minusSeconds(MAX_AGE + 600);
         assertThat(provider.hasSecondFactor(provider.generateAccessToken(PHARMACIST, stale))).isFalse();
         assertThat(provider.hasSecondFactor(provider.generateRefreshToken(PHARMACIST, stale))).isFalse();
         // A time in the future is no proof either.
@@ -123,9 +123,23 @@ class JwtTokenProviderSecondFactorTest {
     }
 
     @Test
+    @DisplayName("a proof read as fresh a moment ago is still stamped, on a token that expires with it")
+    void edgeOfTheMaxAgeIsStampedAndExpiresAtOnce() {
+        Instant justPast = now().minusSeconds(MAX_AGE + 5);
+        String token = provider.generateAccessToken(PHARMACIST, justPast);
+        io.jsonwebtoken.Claims claims = io.jsonwebtoken.Jwts.parser()
+            .verifyWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(
+                "dev-secret-change-me-in-production-minimum-256-bits-long!!".getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+            .clockSkewSeconds(3_600)
+            .build().parseSignedClaims(token).getPayload();
+        assertThat(claims).containsKeys("amr", "otp_at");
+        assertThat(claims.getExpiration().toInstant()).isBefore(Instant.now());
+    }
+
+    @Test
     @DisplayName("a stale time is no proof, so it is not even claimed: amr stays password-only")
     void staleTimeClaimsNothing() {
-        String token = provider.generateAccessToken(PHARMACIST, now().minusSeconds(MAX_AGE + 60));
+        String token = provider.generateAccessToken(PHARMACIST, now().minusSeconds(MAX_AGE + 600));
         io.jsonwebtoken.Claims claims = io.jsonwebtoken.Jwts.parser()
             .verifyWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(
                 "dev-secret-change-me-in-production-minimum-256-bits-long!!".getBytes(java.nio.charset.StandardCharsets.UTF_8)))

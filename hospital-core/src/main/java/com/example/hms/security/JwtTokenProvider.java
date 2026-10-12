@@ -565,11 +565,25 @@ public class JwtTokenProvider {
      * already has. No proof, or one already stale, sets no deadline.
      */
     private long proofDeadlineMs(Instant at, long nowMs) {
-        if (at == null) {
+        if (!mintable(at)) {
             return Long.MAX_VALUE;
         }
-        long deadline = at.plusSeconds(secondFactorMaxAgeSeconds).toEpochMilli();
-        return deadline > nowMs ? deadline : Long.MAX_VALUE;
+        // At the very edge (a proof read as fresh a moment ago) this may be
+        // just past: the token is born expired, so its holder gets a 401 and
+        // the refresh sends them to sign in, never a pair without the proof.
+        return Math.max(at.plusSeconds(secondFactorMaxAgeSeconds).toEpochMilli(), nowMs - 1);
+    }
+
+    /**
+     * A proof the caller read as fresh may be stamped: the freshness rule
+     * with one clock-skew of grace at the old end, so a time that was fresh
+     * when {@link #secondFactorAt} read it a moment earlier is not silently
+     * dropped at mint (the token's expiry still ends with the proof).
+     */
+    private boolean mintable(Instant at) {
+        Instant now = Instant.now();
+        return at != null && !at.isAfter(now.plusSeconds(CLOCK_SKEW_SECONDS))
+            && !at.isBefore(now.minusSeconds(secondFactorMaxAgeSeconds + CLOCK_SKEW_SECONDS));
     }
 
     /** A second factor verified at {@code at} still counts: not in the future, not older than the max age. */
@@ -587,7 +601,7 @@ public class JwtTokenProvider {
     private Map<String, Object> secondFactorClaims(Instant at) {
         // No proof claimed for a time that is no proof: a stale or future one
         // would read as otp to anything that checks amr alone.
-        if (at == null || !fresh(at)) {
+        if (!mintable(at)) {
             return Map.of();
         }
         return Map.of(CLAIM_AMR, SECOND_FACTOR_AMR, CLAIM_OTP_AT, at.getEpochSecond());

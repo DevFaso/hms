@@ -906,7 +906,7 @@ public class AuthController {
             // with nothing in the portal to recover: refuse the refresh
             // instead, so the normal sign-in and challenge take over.
             if (lapsedProviderFactor(user.getId(), username, secondFactor)) {
-                tokenBlacklistService.release(refreshJti);
+                // Left spent, not released: this token can never yield a pair again.
                 auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                         .eventType(AuditEventType.TOKEN_REFRESH)
                         .eventDescription("Refresh refused — provider second factor missing or expired")

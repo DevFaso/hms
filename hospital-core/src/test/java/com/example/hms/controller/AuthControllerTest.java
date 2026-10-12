@@ -1180,8 +1180,8 @@ class AuthControllerTest {
 
         // No pair every call would refuse; the old token is given back for the normal sign-in path.
         verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), any());
-        verify(tokenBlacklistService).release("jti-old.refresh.token");
-        // The cookie can never yield a pair again: it is dropped.
+        // The token can never yield a pair again: it stays spent, and the cookie is dropped.
+        verify(tokenBlacklistService, never()).release("jti-old.refresh.token");
         verify(refreshTokenCookieService).clear(any());
         // ...and the refusal is in the audit trail, like the idle-timeout one.
         verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
