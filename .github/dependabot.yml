@@ -51,12 +51,35 @@ updates:
         patterns:
           - "@angular/cdk"
           - "@angular/material"
+      # FullCalendar 7: @fullcalendar/angular peer-requires `fullcalendar` at
+      # the EXACT same version (and `fullcalendar` pins @fullcalendar/core), so
+      # package.json pins both exactly. Ungrouped, Dependabot bumped one package
+      # of the family across a major while the rest stayed behind (#849:
+      # @fullcalendar/core to 7.x, the other four on 6.x). Same argument as
+      # the angular group: one PR for the family, every update type.
+      # temporal-polyfill rides with it: every v7 package peer-requires it.
+      fullcalendar:
+        patterns:
+          - "@fullcalendar/*"
+          - "fullcalendar"
+          - "temporal-polyfill"
+          # fullcalendar 7 pins these at its own version (and preact at a
+          # range): a lone bump of either would break the family's peer pins.
+          - "@full-ui/*"
+          - "preact"
       # Everything else, batched so a quiet week is one PR rather than twelve.
       portal-minor-and-patch:
         patterns:
           - "*"
         exclude-patterns:
           - "zone.js"
+          # the fullcalendar group's members, like zone.js above: a family
+          # bump must never be split across two PRs
+          - "@fullcalendar/*"
+          - "fullcalendar"
+          - "temporal-polyfill"
+          - "@full-ui/*"
+          - "preact"
         update-types:
           - minor
           - patch
