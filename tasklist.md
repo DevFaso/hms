@@ -4878,6 +4878,11 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   seat subqueries, twice per page (content and count). Anchor it on the facility's
   assignments (`idx_audit_assignment`) UNION the target-assignment branch, and return a
   `Slice` for "has more" instead of a counted `Page` (found in #852's round-6 review). Open.
+- **The appointment calendar keeps the hospital it opened with.** The hospital id is
+  read once in `ngOnInit` and captured by the events source, so a global-scope user who
+  switches the scope chip while on `/appointments/calendar` keeps seeing (and fetching)
+  the first hospital under the new chip. Pre-existing; read the scope at fetch time, as
+  the other scope-aware pages do (found in #855's final review). Open.
 - **The patient apps and the refresh 409 (#853): fix before their next release.** A
   refresh token is now spent atomically: of concurrent refreshes with one token, one
   wins and the rest get 409 "superseded". The portal retries (the shared cookie has
@@ -4937,6 +4942,11 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 - **CDS acknowledgement with an unknown hospital id now answers 404** (was: saved as a
   global acknowledgement). Intended since #835; confirm no client relies on the old
   behaviour. Open.
+- **Appointment form ignores the calendar's date/time query params (pre-fill
+  never implemented).** A click on an empty calendar slot opens
+  `/appointments/new?date=…&time=…` (date only from an all-day month cell),
+  but `AppointmentFormComponent` reads neither param, so the form opens blank
+  (found in #855's review; the form side was kept out of that PR). Open.
 
 ## Open clinical questions — kept open on purpose, not forgotten
 
