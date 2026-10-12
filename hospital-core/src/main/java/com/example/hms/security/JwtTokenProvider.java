@@ -136,6 +136,12 @@ public class JwtTokenProvider {
 
     @PostConstruct
     public void init() {
+        // Zero or less would make every proof stale at once: every provider
+        // user refused, every refresh sent back to sign-in, nothing logged.
+        if (secondFactorMaxAgeSeconds <= 0) {
+            throw new IllegalStateException("app.mfa.second-factor-max-age-seconds must be positive, was "
+                + secondFactorMaxAgeSeconds);
+        }
         if (StringUtils.hasText(rsaPrivateKeyPem) && StringUtils.hasText(rsaPublicKeyPem)) {
             initAsymmetric();
         } else {
@@ -487,16 +493,21 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    /** The roles picked at login that a challenge token carries; empty when none was picked or it does not parse. */
-    public List<String> mfaTokenSelectedRoles(String mfaToken) {
+    /**
+     * The roles picked at login that a challenge token carries: an empty list
+     * when none was picked, and {@link Optional#empty()} when the token does
+     * not parse (expired, tampered), so a caller refuses instead of widening
+     * the session to every role.
+     */
+    public Optional<List<String>> mfaTokenSelectedRoles(String mfaToken) {
         try {
             Object roles = jwtParser().parseSignedClaims(mfaToken).getPayload().get(MFA_SELECTED_ROLES_CLAIM);
             if (roles instanceof java.util.Collection<?> picked) {
-                return picked.stream().map(String::valueOf).toList();
+                return Optional.of(picked.stream().map(String::valueOf).toList());
             }
-            return List.of();
+            return Optional.of(List.of());
         } catch (RuntimeException unparsable) {
-            return List.of();
+            return Optional.empty();
         }
     }
 

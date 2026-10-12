@@ -137,9 +137,23 @@ class JwtTokenProviderSecondFactorTest {
     @DisplayName("the challenge token carries the role picked at login, and only when one was picked")
     void challengeCarriesThePickedRole() {
         assertThat(provider.mfaTokenSelectedRoles(provider.generateMfaToken("pharm.one", List.of("ROLE_LAB_SCIENTIST"))))
-            .containsExactly("ROLE_LAB_SCIENTIST");
-        assertThat(provider.mfaTokenSelectedRoles(provider.generateMfaToken("pharm.one"))).isEmpty();
+            .contains(List.of("ROLE_LAB_SCIENTIST"));
+        assertThat(provider.mfaTokenSelectedRoles(provider.generateMfaToken("pharm.one"))).contains(List.of());
+        // Unreadable is not "no pick": the caller refuses rather than widening to every role.
         assertThat(provider.mfaTokenSelectedRoles("not.a.token")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a max age of zero or less is refused at start-up, not discovered as a lock-out")
+    void maxAgeMustBePositive() {
+        JwtTokenProvider tokens = new JwtTokenProvider(mock(HospitalUserDetailsService.class),
+            mock(TenantRoleAssignmentAccessor.class));
+        ReflectionTestUtils.setField(tokens, "jwtSecret", "dev-secret-change-me-in-production-minimum-256-bits-long!!");
+        ReflectionTestUtils.setField(tokens, "rsaPrivateKeyPem", "");
+        ReflectionTestUtils.setField(tokens, "rsaPublicKeyPem", "");
+        ReflectionTestUtils.setField(tokens, "previousPublicKeyPem", "");
+        ReflectionTestUtils.setField(tokens, "secondFactorMaxAgeSeconds", 0L);
+        org.assertj.core.api.Assertions.assertThatThrownBy(tokens::init).isInstanceOf(IllegalStateException.class);
     }
 
     @Test

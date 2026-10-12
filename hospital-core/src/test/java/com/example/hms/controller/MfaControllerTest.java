@@ -98,6 +98,8 @@ class MfaControllerTest {
     void setUp() {
         // The user's wrong-code budget is not exhausted unless a test says so.
         when(mfaService.reserveCodeAttempt(any())).thenReturn(true);
+        // A readable challenge with no role picked at login, unless a test says so.
+        when(jwtTokenProvider.mfaTokenSelectedRoles(any())).thenReturn(Optional.of(List.of()));
 
         testUser = new User();
         testUser.setId(USER_ID);
@@ -217,7 +219,7 @@ class MfaControllerTest {
         when(jwtTokenProvider.isMfaToken("mfa-tok-pick")).thenReturn(true);
         claimable("mfa-tok-pick");
         when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-pick")).thenReturn(USERNAME);
-        when(jwtTokenProvider.mfaTokenSelectedRoles("mfa-tok-pick")).thenReturn(List.of("ROLE_LAB_SCIENTIST"));
+        when(jwtTokenProvider.mfaTokenSelectedRoles("mfa-tok-pick")).thenReturn(Optional.of(List.of("ROLE_LAB_SCIENTIST")));
         currentTotp("654321");
         when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID))
                 .thenReturn(List.of(assignment("PROVIDER_ADMIN"), assignment("LAB_SCIENTIST")));
@@ -232,6 +234,36 @@ class MfaControllerTest {
         var minted = org.mockito.ArgumentCaptor.forClass(TokenUserDescriptor.class);
         org.mockito.Mockito.verify(jwtTokenProvider).generateAccessToken(minted.capture(), notNull());
         org.assertj.core.api.Assertions.assertThat(minted.getValue().roles()).containsExactly("ROLE_LAB_SCIENTIST");
+    }
+
+    @Test
+    void verifyMfa_aRolePickedThenRevoked_isNotMinted() throws Exception {
+        when(jwtTokenProvider.isMfaToken("mfa-tok-gone")).thenReturn(true);
+        claimable("mfa-tok-gone");
+        when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-gone")).thenReturn(USERNAME);
+        when(jwtTokenProvider.mfaTokenSelectedRoles("mfa-tok-gone")).thenReturn(Optional.of(List.of("ROLE_HOSPITAL_ADMIN")));
+        currentTotp("654321");
+        when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID)).thenReturn(List.of(assignment("DOCTOR")));
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-gone\",\"code\":\"654321\"}"))
+                .andExpect(status().isUnauthorized());
+        org.mockito.Mockito.verify(jwtTokenProvider, org.mockito.Mockito.never())
+                .generateAccessToken(any(TokenUserDescriptor.class), any());
+    }
+
+    @Test
+    void verifyMfa_anUnreadableChallenge_isRefusedBeforeAnythingIsSpent() throws Exception {
+        when(jwtTokenProvider.isMfaToken("mfa-tok-late")).thenReturn(true);
+        claimable("mfa-tok-late");
+        when(jwtTokenProvider.mfaTokenSelectedRoles("mfa-tok-late")).thenReturn(Optional.empty());
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-late\",\"code\":\"654321\"}"))
+                .andExpect(status().isUnauthorized());
+        org.mockito.Mockito.verify(mfaService, org.mockito.Mockito.never()).reserveCodeAttempt(any());
     }
 
     private static com.example.hms.model.UserRoleHospitalAssignment assignment(String role) {

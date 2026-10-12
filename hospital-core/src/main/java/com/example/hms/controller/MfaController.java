@@ -69,6 +69,25 @@ public class MfaController {
     private final GlobalSessionRevocationService globalSessionRevocationService;
     private final com.example.hms.security.LoginAttemptService loginAttemptService;
 
+    /**
+     * The picked roles the user still holds: compared, like the login's own
+     * check, against the live assignments widened by the same expansion the
+     * login's authorities carry (a surgeon picking DOCTOR, for one).
+     */
+    private static List<String> stillHeld(List<String> picked,
+                                          List<com.example.hms.model.UserRoleHospitalAssignment> active) {
+        if (picked.isEmpty()) {
+            return picked;
+        }
+        java.util.Set<String> held = com.example.hms.security.RoleExpansion.expand(active.stream()
+                .map(a -> a.getRole().getCode())
+                .filter(java.util.Objects::nonNull)
+                .map(code -> code.toUpperCase(java.util.Locale.ROOT))
+                .map(code -> code.startsWith("ROLE_") ? code : "ROLE_" + code)
+                .toList());
+        return picked.stream().filter(role -> held.stream().anyMatch(role::equalsIgnoreCase)).toList();
+    }
+
     /** 401 for a caller holding only a partial mfaToken, not a full access token. */
     private ResponseEntity<Object> notFullyAuthenticated() {
         return ResponseEntity.status(401).body(new MessageResponse(NOT_FULLY_AUTHENTICATED));
@@ -192,6 +211,14 @@ public class MfaController {
                     .body(new MessageResponse("Invalid or expired MFA token."));
         }
 
+        // The role picked at login, read now, before anything is spent: a
+        // challenge that no longer parses is refused, never widened.
+        Optional<List<String>> picked = jwtTokenProvider.mfaTokenSelectedRoles(request.mfaToken());
+        if (picked.isEmpty()) {
+            return ResponseEntity.status(401)
+                    .body(new MessageResponse("Invalid or expired MFA token."));
+        }
+
         String username = jwtTokenProvider.getUsernameFromJWT(request.mfaToken());
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalStateException("User not found"));
@@ -252,11 +279,15 @@ public class MfaController {
         }
         mfaService.clearCodeAttempts(user.getId());
 
-        // Issue the full JWT pair. A role picked at login (validated there
-        // against the roles held) is the session's only role, exactly as the
-        // sign-in without a challenge mints it: the challenge never widens it.
-        List<String> pickedRoles = jwtTokenProvider.mfaTokenSelectedRoles(request.mfaToken());
+        // Issue the full JWT pair. A role picked at login is the session's
+        // only role, as the sign-in without a challenge mints it, provided it
+        // is still held: an assignment revoked since the login drops it.
         var activeAssignments = assignmentRepository.findByUser_IdAndActiveTrue(user.getId());
+        List<String> pickedRoles = stillHeld(picked.get(), activeAssignments);
+        if (!picked.get().isEmpty() && pickedRoles.isEmpty()) {
+            return ResponseEntity.status(401)
+                    .body(new MessageResponse("The role picked at sign-in is no longer held. Sign in again."));
+        }
         List<String> roles = !pickedRoles.isEmpty() ? pickedRoles : activeAssignments.stream()
                 .map(a -> a.getRole().getName())
                 .distinct()

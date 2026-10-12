@@ -14,7 +14,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ImpersonationLimitsTest {
 
-    private final ImpersonationLimits limits = new ImpersonationLimits();
+    private final com.example.hms.service.AuditEventLogService audit =
+        org.mockito.Mockito.mock(com.example.hms.service.AuditEventLogService.class);
+    private final ImpersonationLimits limits = new ImpersonationLimits(() -> audit);
 
     @AfterEach
     void tearDown() {
@@ -33,6 +35,19 @@ class ImpersonationLimitsTest {
         for (String method : new String[] {"GET", "HEAD", "OPTIONS"}) {
             assertThat(limits.preHandle(request(method), new MockHttpServletResponse(), null)).as(method).isTrue();
         }
+        // Each refused attempt is in the audit trail.
+        org.mockito.Mockito.verify(audit, org.mockito.Mockito.times(4)).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+            e.getEventType() == com.example.hms.enums.AuditEventType.SECURITY_ALERT_TRIGGERED
+                && e.getStatus() == com.example.hms.enums.AuditStatus.FAILURE));
+    }
+
+    @Test
+    @DisplayName("without an audit service (a test slice) the refusal still holds")
+    void refusesWithoutAnAuditService() {
+        ImpersonationContextHolder.set(ImpersonationContext.of(UUID.randomUUID(), "support.agent"));
+        ImpersonationLimits bare = new ImpersonationLimits(() -> null);
+        assertThatThrownBy(() -> bare.preHandle(request("POST"), new MockHttpServletResponse(), null))
+            .isInstanceOf(ClientSafeAccessDeniedException.class);
     }
 
     @Test

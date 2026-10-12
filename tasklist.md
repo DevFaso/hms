@@ -5006,6 +5006,12 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   the portal at an enrolment the same session is refused; it should say the factor is
   missing because of impersonation. And `/auth/mfa/verify` returns no hospital context
   (primaryHospitalId, hospitalIds), unlike the password-only sign-in. Open.
+- **The role picked at login is lost at the first refresh (#851 review).** The refresh
+  rebuilds roles from every active assignment, so a multi-role user's single-role session
+  (password-only, and now through the MFA challenge too) widens after one access-token
+  lifetime. Carry the pick in the refresh token, as `amr`/`otp_at` are. Also from that
+  round: `ProviderMfaGate.refuses()` re-checks the confinement `decide()` has just checked
+  (fold into the gate plumbing bullet). Open.
 - **CDS acknowledgement with an unknown hospital id now answers 404** (was: saved as a
   global acknowledgement). Intended since #835; confirm no client relies on the old
   behaviour. Open.
