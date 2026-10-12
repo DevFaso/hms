@@ -46,7 +46,8 @@ public final class SuperAdminAuthorities {
             .toList();
         AbstractAuthenticationToken rebuilt = switch (authentication) {
             case JwtAuthenticationToken jwt -> new JwtAuthenticationToken(jwt.getToken(), authorities, jwt.getName());
-            // Credentials are erased once authenticated; nothing reads them after the filter.
+            // Keep the credentials: on the legacy path they are the bearer itself,
+            // and ProviderMfaGate reads the second factor from it.
             case UsernamePasswordAuthenticationToken password -> UsernamePasswordAuthenticationToken.authenticated(
                 password.getPrincipal(), Objects.requireNonNullElse(password.getCredentials(), ""), authorities);
             default -> null;

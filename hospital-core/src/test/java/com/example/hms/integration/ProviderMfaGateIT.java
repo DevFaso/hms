@@ -275,6 +275,22 @@ class ProviderMfaGateIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("a malformed request to an MFA endpoint gets MVC's own 415, not the gate's 403")
+    void malformedMfaRequestGetsMvcsOwnAnswer() throws Exception {
+        User pharmacist = accounts.userAt("pharm", pharmacyId, "PHARMACIST");
+        idleSessionTracker.touch(pharmacist.getId());
+        String passwordOnly = jwtTokenProvider.generateAccessToken(new TokenUserDescriptor(pharmacist.getId(),
+            pharmacist.getUsername(), List.of("ROLE_PHARMACIST")));
+
+        assertThat(as(passwordOnly, csrf(post("/auth/mfa/verify-enrollment"))
+                .contentType(MediaType.TEXT_PLAIN).content("123456"))
+            .getResponse().getStatus()).isEqualTo(415);
+        // A non-exempt endpoint sent the same way is still the gate's refusal.
+        assertMfaRefusal(as(passwordOnly, csrf(post("/auth/me/change-username"))
+            .contentType(MediaType.TEXT_PLAIN).content("x")));
+    }
+
+    @Test
     @DisplayName("legacy refresh: the new tokens keep the second factor the refresh token carried; without one, a provider user is sent to sign in")
     void legacyRefreshCarriesTheProof() throws Exception {
         User pharmacist = accounts.userAt("pharm", pharmacyId, "PHARMACIST");

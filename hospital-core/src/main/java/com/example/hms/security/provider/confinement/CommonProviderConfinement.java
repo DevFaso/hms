@@ -85,7 +85,8 @@ public final class CommonProviderConfinement {
         new ConfinementRule("POST", "/auth/login", "signing in, which is how the second factor is presented"),
         new ConfinementRule("POST", "/auth/logout", "signing out"),
         new ConfinementRule("POST", "/auth/token/refresh",
-            "the rotated tokens carry exactly the factor the refresh token had, never more"),
+            "the rotated tokens carry exactly the factor the refresh token had, never more; "
+                + "without a current one the refresh is refused (401) and the user signs in again"),
         new ConfinementRule("GET", "/auth/session/bootstrap", "reports mfaEnrollmentRequired to the portal"),
         new ConfinementRule("GET", "/auth/csrf-token", "the portal's CSRF bootstrap for the MFA forms"),
         new ConfinementRule("GET", "/auth/mfa/status", "whether the account has an authenticator yet"),

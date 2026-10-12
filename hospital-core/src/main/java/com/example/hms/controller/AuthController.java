@@ -740,6 +740,10 @@ public class AuthController {
     private static final String REFRESH_INVALID_MESSAGE =
             "Refresh token is invalid or has expired. Please log in again.";
 
+    /** A provider user's refresh token without a (current) second factor: sign in, with the code. */
+    private static final String REFRESH_SECOND_FACTOR_MESSAGE =
+            "Two-step verification is required. Please sign in again with your code.";
+
     /** The HttpOnly cookie first; the body is the legacy fallback (S-01). */
     private String readRefreshToken(HttpServletRequest request, java.util.Map<String, String> body) {
         String fromCookie = refreshTokenCookieService.read(request);
@@ -908,13 +912,16 @@ public class AuthController {
                 tokenBlacklistService.release(refreshJti);
                 auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                         .eventType(AuditEventType.TOKEN_REFRESH)
-                        .eventDescription("Refresh refused — provider second factor expired")
+                        .eventDescription("Refresh refused — provider second factor missing or expired")
                         .userName(username)
                         .userId(user.getId())
                         .status(AuditStatus.FAILURE)
                         .build());
+                // The cookie can never yield a pair again: drop it, so the
+                // portal's silent refresh stops retrying and signs in instead.
+                refreshTokenCookieService.clear(response);
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(new MessageResponse(REFRESH_INVALID_MESSAGE));
+                        .body(new MessageResponse(REFRESH_SECOND_FACTOR_MESSAGE));
             }
             String newAccessToken  = jwtTokenProvider.generateAccessToken(descriptor, secondFactor);
 
@@ -1026,6 +1033,7 @@ public class AuthController {
     @ApiResponse(responseCode = "401", description = "Current password incorrect")
     public ResponseEntity<Object> changeOwnPassword(
             @Valid @RequestBody ChangePasswordRequest request) {
+        com.example.hms.security.context.ImpersonationLimits.refuseAccountChange();
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -1096,6 +1104,7 @@ public class AuthController {
     @ApiResponse(responseCode = "400", description = "Username invalid or already taken")
     public ResponseEntity<Object> changeOwnUsername(
             @Valid @RequestBody ChangeUsernameRequest request) {
+        com.example.hms.security.context.ImpersonationLimits.refuseAccountChange();
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -1254,6 +1263,7 @@ public class AuthController {
     public ResponseEntity<List<UserMfaEnrollmentDTO>> updateMfaEnrollments(
             @Valid @RequestBody List<UserMfaEnrollmentRequestDTO> payload,
             @RequestHeader(value = "X-Mfa-Token", required = false) String stepUpCode) {
+        com.example.hms.security.context.ImpersonationLimits.refuseAccountChange();
         UUID userId = resolveCurrentUserId();
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
@@ -1266,6 +1276,7 @@ public class AuthController {
     @PutMapping("/credentials/recovery")
     public ResponseEntity<List<UserRecoveryContactDTO>> updateRecoveryContacts(
             @Valid @RequestBody List<UserRecoveryContactRequestDTO> payload) {
+        com.example.hms.security.context.ImpersonationLimits.refuseAccountChange();
         UUID userId = resolveCurrentUserId();
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
@@ -1277,6 +1288,7 @@ public class AuthController {
     @PostMapping("/credentials/recovery/{contactId}/send-code")
     public ResponseEntity<java.util.Map<String, String>> sendRecoveryContactVerificationCode(
             @PathVariable UUID contactId) {
+        com.example.hms.security.context.ImpersonationLimits.refuseAccountChange();
         UUID userId = resolveCurrentUserId();
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
@@ -1289,6 +1301,7 @@ public class AuthController {
     public ResponseEntity<UserRecoveryContactDTO> verifyRecoveryContact(
             @PathVariable UUID contactId,
             @Valid @RequestBody VerifyRecoveryContactRequest request) {
+        com.example.hms.security.context.ImpersonationLimits.refuseAccountChange();
         UUID userId = resolveCurrentUserId();
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();

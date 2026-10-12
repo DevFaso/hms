@@ -1137,6 +1137,31 @@ class AuthControllerTest {
     }
 
     @Test
+    void aSupportSessionCannotChangeHowTheUserSignsInOrRecovers() throws Exception {
+        com.example.hms.security.context.ImpersonationContextHolder.set(
+                com.example.hms.security.context.ImpersonationContext.of(java.util.UUID.randomUUID(), "support.agent"));
+        try {
+            for (var request : java.util.List.of(
+                    post("/auth/me/change-username").contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"newUsername\":\"taken.over\"}"),
+                    post("/auth/me/change-password").contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"currentPassword\":\"Old#Pass2026\",\"newPassword\":\"New#Pass2026x\"}"),
+                    org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/auth/credentials/recovery")
+                            .contentType(MediaType.APPLICATION_JSON).content("[]"),
+                    org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/auth/credentials/mfa")
+                            .contentType(MediaType.APPLICATION_JSON).content("[]"),
+                    post("/auth/credentials/recovery/" + java.util.UUID.randomUUID() + "/send-code"),
+                    post("/auth/credentials/recovery/" + java.util.UUID.randomUUID() + "/verify")
+                            .contentType(MediaType.APPLICATION_JSON).content("{\"code\":\"123456\"}"))) {
+                mockMvc.perform(request).andExpect(status().isForbidden());
+            }
+        } finally {
+            com.example.hms.security.context.ImpersonationContextHolder.clear();
+        }
+        org.mockito.Mockito.verifyNoInteractions(userCredentialLifecycleService, userService);
+    }
+
+    @Test
     void refreshToken_aProviderUserWhoseSecondFactorLapsed_isSentBackToSignIn() throws Exception {
         com.example.hms.model.User pharmacist = com.example.hms.model.User.builder()
                 .username("pharm@example.com").isActive(true).build();
@@ -1156,6 +1181,8 @@ class AuthControllerTest {
         // No pair every call would refuse; the old token is given back for the normal sign-in path.
         verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), any());
         verify(tokenBlacklistService).release("jti-old.refresh.token");
+        // The cookie can never yield a pair again: it is dropped.
+        verify(refreshTokenCookieService).clear(any());
         // ...and the refusal is in the audit trail, like the idle-timeout one.
         verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
                 e.getEventType() == com.example.hms.enums.AuditEventType.TOKEN_REFRESH
