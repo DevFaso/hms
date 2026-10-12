@@ -246,7 +246,7 @@ class ProviderLifecycleIT extends BaseIT {
         entityManager.clear();
 
         assertThat(hospitalRepository.findById(id)).isEmpty();
-        assertThat(verificationRepository.findFirstByHospital_IdOrderByCreatedAtDesc(id)).isEmpty();
+        assertThat(verificationRepository.findFirstByHospital_IdOrderByCreatedAtDescIdDesc(id)).isEmpty();
     }
 
     @Test

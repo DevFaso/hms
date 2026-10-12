@@ -206,7 +206,7 @@ class ProviderTransitionConcurrencyPostgresIT {
 
         assertThat(causeOf(second)).isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
         assertThat(hospitalRepository.findById(providerId)).isEmpty();
-        assertThat(verificationRepository.findFirstByHospital_IdOrderByCreatedAtDesc(providerId)).isEmpty();
+        assertThat(verificationRepository.findFirstByHospital_IdOrderByCreatedAtDescIdDesc(providerId)).isEmpty();
     }
 
     @Test
@@ -255,7 +255,7 @@ class ProviderTransitionConcurrencyPostgresIT {
     }
 
     private ProviderVerificationStatus currentStatus() {
-        return verificationRepository.findFirstByHospital_IdOrderByCreatedAtDesc(providerId)
+        return verificationRepository.findFirstByHospital_IdOrderByCreatedAtDescIdDesc(providerId)
             .map(ProviderVerification::getStatus)
             .orElseThrow();
     }

@@ -124,10 +124,7 @@ async function runAxe(page: Page, route: string) {
     );
   }
 
-  expect(
-    summarize(blocking),
-    `serious/critical a11y violations on ${route}`,
-  ).toEqual([]);
+  expect(summarize(blocking), `serious/critical a11y violations on ${route}`).toEqual([]);
 }
 
 test.describe('a11y smoke (axe-core) — authenticated surfaces', () => {
@@ -152,6 +149,39 @@ test.describe('a11y smoke (axe-core) — authenticated surfaces', () => {
     // case axe still scans a real page. Either outcome is useful
     // signal.
     await runAxe(page, '/my-medications');
+  });
+
+  test('super-admin provider facilities have no serious/critical violations', async ({ page }) => {
+    // D5 P1-T12. Storage state carries SuperAdmin, which the route's
+    // RoleGuard admits. One submitted pharmacy so axe scans the table, the
+    // filters and the badges rather than the empty state. Registered after
+    // the shared auto-mocks, so this handler answers first.
+    await page.route('**/api/super-admin/providers?**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          content: [
+            {
+              id: '00000000-0000-0000-0000-0000000000d5',
+              facilityType: 'PHARMACY',
+              code: 'PH-A11Y',
+              name: 'Pharmacie A11y',
+              email: null,
+              active: false,
+              lifecycleState: 'SUSPENDED',
+              verificationStatus: 'SUBMITTED',
+              submittedAt: '2026-10-08T09:00:00',
+            },
+          ],
+          totalElements: 1,
+          totalPages: 1,
+          size: 20,
+          number: 0,
+        }),
+      }),
+    );
+    await runAxe(page, '/super-admin/providers');
   });
 
   // v1.0 row 11 widening (/reception, /nurse-station, /prescriptions,

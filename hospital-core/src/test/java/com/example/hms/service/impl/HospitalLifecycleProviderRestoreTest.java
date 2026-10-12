@@ -126,7 +126,7 @@ class HospitalLifecycleProviderRestoreTest {
         service().restore(hospital.getId(), null);
 
         assertThat(hospital.getLifecycleState()).isEqualTo(HospitalLifecycleState.ACTIVE);
-        verify(verificationRepository, never()).findFirstByHospital_IdOrderByCreatedAtDesc(any());
+        verify(verificationRepository, never()).findFirstByHospital_IdOrderByCreatedAtDescIdDesc(any());
     }
 
     @Test
@@ -164,7 +164,7 @@ class HospitalLifecycleProviderRestoreTest {
         ProviderVerification v = new ProviderVerification();
         v.setHospital(facility);
         v.setStatus(status);
-        when(verificationRepository.findFirstByHospital_IdOrderByCreatedAtDesc(facility.getId()))
+        when(verificationRepository.findFirstByHospital_IdOrderByCreatedAtDescIdDesc(facility.getId()))
             .thenReturn(Optional.of(v));
     }
 }

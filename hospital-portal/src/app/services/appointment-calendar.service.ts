@@ -26,9 +26,9 @@ export class AppointmentCalendarService {
   private readonly url = '/appointments/calendar';
 
   /**
-   * Hospital-scoped date-range slice. Caller is responsible for keeping
-   * the (from, to) range under 31 days — the backend rejects wider
-   * windows with 400 to keep the result set bounded.
+   * Hospital-scoped date-range slice. The (from, to) range may span at most
+   * 42 days inclusive (the six-week month grid; the backend's
+   * CALENDAR_MAX_RANGE_DAYS) — wider windows answer 400.
    */
   getRange(
     hospitalId: string,

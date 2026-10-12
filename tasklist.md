@@ -4522,11 +4522,31 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   organizations only (the existing page size). (c) Department platform links
   have no UI and no enable/disable endpoint, only create and delete.
 
-- **Angular 22.2 deprecates `@angular/animations` and
-  `@angular/platform-browser-dynamic` (2026-10-04).** Dependabot's group bump
-  (#801) skipped both, so they were brought to 22.2.0 by hand to keep `npm ci`
-  working; replacing them (`animate.enter` / `animate.leave`, and
-  `@angular/platform-browser`) is separate work.
+- **~~Angular 22.2 deprecates `@angular/animations` and
+  `@angular/platform-browser-dynamic` (2026-10-04).~~ Done (#854,
+  2026-10-10): both removed.** Dependabot's group bump skipped both, twice:
+  on #801 they were brought to 22.2.0 by hand, and on #846 they stayed at
+  22.2.0 while `@angular/core` went to 22.2.1, so `npm ci` failed with
+  ERESOLVE. Nothing referenced either one (no import in `src/`, nothing in
+  `angular.json` or the tsconfigs; `platform-browser`'s peer on animations
+  is optional), so the replacement turned out to be a removal.
+
+- **No check that the pinned Angular framework packages agree (2026-10-10).**
+  Twice (#801, #846) a Dependabot group PR left one framework `@angular/*`
+  a patch behind `@angular/core`, and it only surfaced as an ERESOLVE in
+  `npm ci`. A small script in the portal gate that fails when the
+  exact-pinned framework entries in `package.json` differ would flag it on
+  the Dependabot PR itself (the CLI line - build, cli, ssr - is a caret
+  range on its own version, see `.github/dependabot.yml`).
+
+- **The portal overrides Vite to 7.3.5 under an Angular 22 builder that
+  wants Vite 8 (2026-10-11).** `overrides.vite` was set to 7.3.5 by
+  f4f70b844 (a security pin, Angular 20 era) and never revisited; on
+  develop `@angular/build` 22.2.x pins vite 8.x, yet the tree holds one
+  vite at 7.3.5. `ng build` and Karma barely touch Vite, so CI stays green;
+  `ng serve` and HMR run the builder on the wrong major (a local `ng serve`
+  failure was seen in the #855 worktree, unconfirmed as this cause). Drop
+  the override or move it to a patched 8.x, then run `npm start`.
 
 - **Push notifications have app code and no backend (2026-10-04).** #791
   shipped dormant push registration on both apps (FCM initialised only when
@@ -4812,48 +4832,60 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   review). Open.
 - **External providers: the provider admin pages need ROLE_PROVIDER_ADMIN in the
   token** as well as the live assignment (the assignment service's scope reads
-  both), so on Keycloak they answer as unmapped until the realm has the role.
-  Same as `POST /users/admin-register` today. P1-T11 (D5 slice 4) added it to
-  `realm-export.json`; open until the operator adds it to the dev and prod
-  realms (`docs/runbooks/keycloak-realm-sync.md` § Provider MFA, step 1).
-- **External providers: the staff list's `providerAdmin` flag counts only PROVIDER_ADMIN rows at the facility**, while deactivate/activate refuse a member holding any admin role anywhere, so the portal can offer Deactivate/Activate on a member the action then answers 404; derive the flag from the same rule as the actions (found in #840's round-4 review). Open.
-- **External providers: `ProviderAdminService.updateProfile` returns the email as sent**, while storage lower-cases it at flush; return the stored value (found in #840's round-4 review). Open.
-- **External providers: `provider.type.invalid` and the provider-type set are declared three times** (`ProviderDirectoryServiceImpl`, `HospitalServiceImpl`, `ProviderOnboardingServiceImpl`); one constant each (found in #840's round-4 review). Open.
-- **External providers: `ProviderSeatResolver` reads `HospitalContextHolder` directly** instead of `ActingScopeResolver.ensureContext()`, so a request both context filters skipped sees no seat where every other reader computes the context (found in #840's round-4 review). Open.
-- **External providers: `UserAccountAccess.ADMIN_ROLES` was made public with no production caller outside the class**; only `ProviderRegistrarTest`, in the same package, reads it, so package-private does (found in #840's round-4 review). Open.
-- **External providers: the portal does not act on `mfaEnrollmentRequired` yet**
-  (D5 slice 4 added it to `/auth/session/bootstrap` and the 403
-  `mfa.enrollment.required`). P1-T13's shell must send a legacy user to MFA
-  enrolment or the challenge and a Keycloak user back through login with
-  `prompt=login` (or `max_age=0`): a silent SSO re-login answers from the
-  Keycloak cookie with the same `amr` and loops (and where OTP is first
-  configured, `amr` holds `pwd` only until the next login; a user with no OTP
-  goes through `kc_action=CONFIGURE_TOTP` first). Before the first provider is
-  verified on prod. Open.
-- **External providers: `ProviderMfaGate` re-parses the legacy bearer on every
-  confined request** (`JwtTokenProvider.secondFactorAt`, a signature check)
-  although `JwtAuthenticationFilter` already parsed it; carry the proof from
-  the filter's parse (found in #851's round-1 review). Open.
-- **External providers: `/auth/login` reads the caller's assignments once more
-  for the provider challenge** (`ProviderMfaGate.isProviderUser`) after the
-  authentication already loaded them; reuse that read (found in #851's round-1
+  both), so on Keycloak they answer as unmapped until P1-T11 adds the realm role.
+  Same as `POST /users/admin-register` today. Open until P1-T11.
+- **External providers: the facility audit trail scopes through a live assignment
+  join**, so rows whose assignment was hard-deleted vanish from it; it needs a
+  `hospital_id` snapshot on `audit_event_logs` (a migration: V183 is #853's MFA
+  hotfix, V184 #852's admin-disable marker, the Sage export plan takes V185, so
+  take the next free number when this is scheduled) (found in #852's round-1
   review). Open.
-- **Auth: the MFA challenge token authenticates as its user, and a password
-  alone can replace a hospital user's authenticator.** `JwtAuthenticationFilter`
-  does not read the `purpose` claim, so the 5-minute `mfaToken` `/auth/login`
-  returns before the TOTP step is a role-less, password-only session on every
-  endpoint that asks only `authenticated()` (the legacy MFA enrolment relies on
-  it). With it, `POST /auth/mfa/enroll` resets a verified authenticator and
-  `PUT /auth/credentials/mfa` rewrites or deletes the MFA records, so whoever
-  holds the password can enrol their own device and pass the challenge. D5
-  slice 4 (#851) holds provider users to sign-in and enrolment without the
-  factor; the hotfix #853 (`fix/mfa-challenge-token-scope`) closes the root
-  for every user: the challenge token limited to the MFA step, and replacing
-  a verified authenticator needing a full session and a step-up code (found
-  while building D5 slice 4). Open until #853 merges.
+- **Provider audit page: its 400 answers are English text.** A bad `page`/`size` on
+  `GET /provider/audit` answers "The page size must be at least 1." and similar as
+  literal English (IllegalArgumentException), not message-bundle keys: the
+  backend-composed-text layer of French completeness (found in #852's round-9
+  review). Open.
+- **Provider pages: fold leave/retry/stale-answer/404-invalidate into followFacility.**
+  The four provider pages (home, profile, staff, audit) each repeat the same
+  clear-on-leave, retry, drop-a-stale-answer and invalidate-on-404 code around
+  `followFacility` (found in #852's round-4 review). Open.
+- **~~External providers: an account has no "disabled by an administrator" flag~~ Done
+  (#852 round 6, V184 `security.users.deactivated_by_admin_at`).** An administrator's
+  disable (a real active -> inactive change, or a soft delete) is recorded; while it is
+  set neither a provider re-invite, an invitation code nor an activation link switches
+  the account back on. Limit, on purpose: no backfill, because a disable made before
+  V184 cannot be told from a revoked invitation (both clear the code). Before the prod
+  sync, list inactive provider-staff accounts that never signed in and check none was
+  disabled by an administrator.
+- **Provider staff list: one `userRoles` load per member.** `toMember`'s `manageable()`
+  check walks each member's global roles, which the batch staff queries do not fetch:
+  N+1 on every staff-page load. Fetch `user.userRoles.role` in the batch, or pass the
+  resolved roles in (found in #852's round-8 review). Open.
+- **The "disabled by an administrator" rule lives in its callers, not on `User`.**
+  V184's marker is set or read by hand in three writers (user update, soft delete,
+  restore) and four readers (two verify-email paths, assignment confirmation, the
+  provider re-invite). Any other path that calls `setActive` (an import, a Keycloak
+  sync) skips it. Move it onto the entity (`disableByAdmin()`, `enableByAdmin()`,
+  `activateFromInvitation()`) and make `setActive` private to it (found in #852's
+  round-7 review). Open.
+- **Provider audit trail query scans platform-wide `USER_ROLE_ASSIGNMENT` rows.** The
+  facility trail filters every role-assignment row of the platform through correlated
+  seat subqueries, twice per page (content and count). Anchor it on the facility's
+  assignments (`idx_audit_assignment`) UNION the target-assignment branch, and return a
+  `Slice` for "has more" instead of a counted `Page` (found in #852's round-6 review). Open.
+- **The appointment calendar keeps the hospital it opened with.** The hospital id is
+  read once in `ngOnInit` and captured by the events source, so a global-scope user who
+  switches the scope chip while on `/appointments/calendar` keeps seeing (and fetching)
+  the first hospital under the new chip. Pre-existing; read the scope at fetch time, as
+  the other scope-aware pages do (found in #855's final review). Open.
 - **CDS acknowledgement with an unknown hospital id now answers 404** (was: saved as a
   global acknowledgement). Intended since #835; confirm no client relies on the old
   behaviour. Open.
+- **Appointment form ignores the calendar's date/time query params (pre-fill
+  never implemented).** A click on an empty calendar slot opens
+  `/appointments/new?date=…&time=…` (date only from an all-day month cell),
+  but `AppointmentFormComponent` reads neither param, so the form opens blank
+  (found in #855's review; the form side was kept out of that PR). Open.
 
 ## Open clinical questions — kept open on purpose, not forgotten
 

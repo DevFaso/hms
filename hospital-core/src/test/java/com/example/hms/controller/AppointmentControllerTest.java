@@ -38,7 +38,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -678,31 +680,39 @@ class AppointmentControllerTest {
     }
 
     @Test
-    void getCalendarEvents_rangeOver31DaysInclusive_returns400() throws Exception {
-        // 2026-05-01 → 2026-06-01 = 32 days inclusive → must reject.
-        mockMvc.perform(get("/appointments/calendar")
-                .param("hospitalId", UUID.randomUUID().toString())
-                .param("from", "2026-05-01")
-                .param("to", "2026-06-01")
-                .principal(auth))
-            .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    void getCalendarEvents_31DaysInclusive_isAccepted() throws Exception {
-        // 2026-05-01 → 2026-05-31 = 31 days inclusive → must accept.
+    void getCalendarEvents_sixWeekMonthGrid_isAccepted() throws Exception {
+        // The longest view the portal has: FullCalendar's month grid is always
+        // six weeks. October 2026 runs Mon 2026-09-28 .. Sun 2026-11-08, which
+        // is 42 days inclusive (from = first cell, to = last cell).
         UUID hid = UUID.randomUUID();
         when(appointmentService.getCalendarEvents(
-            eq(hid), eq(LocalDate.of(2026, 5, 1)), eq(LocalDate.of(2026, 5, 31)),
+            eq(hid), eq(LocalDate.of(2026, 9, 28)), eq(LocalDate.of(2026, 11, 8)),
             eq(null), eq("testuser"), any(Locale.class)))
             .thenReturn(List.of());
 
         mockMvc.perform(get("/appointments/calendar")
                 .param("hospitalId", hid.toString())
-                .param("from", "2026-05-01")
-                .param("to", "2026-05-31")
+                .param("from", "2026-09-28")
+                .param("to", "2026-11-08")
                 .principal(auth))
             .andExpect(status().isOk());
+        org.junit.jupiter.api.Assertions.assertEquals(
+            AppointmentController.CALENDAR_MAX_RANGE_DAYS,
+            java.time.temporal.ChronoUnit.DAYS.between(
+                LocalDate.of(2026, 9, 28), LocalDate.of(2026, 11, 8)) + 1);
+    }
+
+    @Test
+    void getCalendarEvents_oneDayOverSixWeeks_returns400() throws Exception {
+        // 43 days inclusive: not a view the portal can ask for.
+        mockMvc.perform(get("/appointments/calendar")
+                .param("hospitalId", UUID.randomUUID().toString())
+                .param("from", "2026-09-28")
+                .param("to", "2026-11-09")
+                .principal(auth))
+            .andExpect(status().isBadRequest());
+        verify(appointmentService, never()).getCalendarEvents(
+            any(), any(), any(), any(), any(), any());
     }
 
     @Test

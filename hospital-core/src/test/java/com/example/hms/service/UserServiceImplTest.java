@@ -597,6 +597,8 @@ class UserServiceImplTest {
             // Existing user was soft-deleted by the FE compensation flow
             // (admin-register succeeded → /api/patients failed → DELETE /users/{id}).
             user.setDeleted(true);
+            // V184: the clean-up delete recorded a disable too.
+            user.setDeactivatedByAdminAt(java.time.LocalDateTime.now());
             when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(
                     "patient.doe", "existing@test.com", "+1111111111"))
                 .thenReturn(Optional.of(user));
@@ -624,6 +626,9 @@ class UserServiceImplTest {
                 .isNotInstanceOf(ConflictException.class);
 
             assertThat(user.isDeleted()).isFalse();
+            // Registering the person again undoes the delete's disable too, or
+            // their code and activation link would refuse them forever.
+            assertThat(user.getDeactivatedByAdminAt()).isNull();
             verify(userRepository).save(user);
         }
 
@@ -1081,9 +1086,45 @@ class UserServiceImplTest {
             User saved = cap.getValue();
 
             assertThat(saved.isActive()).isFalse();
+            // V184: the disable is recorded, so no re-invite or code undoes it.
+            assertThat(saved.getDeactivatedByAdminAt()).isNotNull();
             assertThat(saved.getFirstName()).isEqualTo("Test");
             assertThat(saved.getEmail()).isEqualTo("test@example.com");
             assertThat(saved.getPasswordHash()).isEqualTo("$2a$10$existingHash");
+        }
+
+        @Test
+        @DisplayName("V184: an explicit active=false on a pending invitee is a disable: their code cannot switch them on")
+        void explicitInactiveOnAPendingInvitee_isADisable() {
+            stubHappyPath();
+            user.setActive(false);
+            UpdateUserRequestDTO disable = new UpdateUserRequestDTO();
+            disable.setActive(false);
+
+            userService.updateUser(userId, disable);
+
+            // The portal's edit never sends `active`: its presence is intent.
+            assertThat(user.getDeactivatedByAdminAt()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("V184: re-enabling clears the administrator's disable; echoing active=true does not")
+        void reenableClearsTheDisable_anEchoDoesNot() {
+            stubHappyPath();
+            java.time.LocalDateTime disabledAt = java.time.LocalDateTime.of(2026, 1, 1, 9, 0);
+
+            user.setActive(true);
+            user.setDeactivatedByAdminAt(disabledAt);
+            UpdateUserRequestDTO echo = new UpdateUserRequestDTO();
+            echo.setActive(true);
+            userService.updateUser(userId, echo);
+            assertThat(user.getDeactivatedByAdminAt()).isEqualTo(disabledAt);
+
+            user.setActive(false);
+            UpdateUserRequestDTO reenable = new UpdateUserRequestDTO();
+            reenable.setActive(true);
+            userService.updateUser(userId, reenable);
+            assertThat(user.getDeactivatedByAdminAt()).isNull();
         }
 
         @Test

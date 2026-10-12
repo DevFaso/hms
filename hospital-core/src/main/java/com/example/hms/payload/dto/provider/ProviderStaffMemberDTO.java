@@ -43,6 +43,12 @@ public class ProviderStaffMemberDTO {
     /** The caller's own account. */
     private boolean self;
 
+    /** The caller may deactivate this member: decided by the same rule the deactivate endpoint applies. */
+    private boolean canDeactivate;
+
+    /** The caller may send this member a new invitation code: the activate endpoint's own rule. */
+    private boolean canReinvite;
+
     /** After {@code /activate}: where the new invitation code went. */
     private List<NotificationDeliveryStatusDTO> activationDelivery;
 }
