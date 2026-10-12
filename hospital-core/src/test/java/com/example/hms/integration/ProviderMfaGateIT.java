@@ -99,7 +99,9 @@ class ProviderMfaGateIT extends BaseIT {
     @AfterEach
     void tearDown() {
         for (UUID userId : mfaUsers) {
-            backupCodeRepository.deleteAll(backupCodeRepository.findByUserIdAndUsedFalse(userId));
+            // Current and pending codes (#853); deleteAll runs in the repository's own transaction.
+            backupCodeRepository.deleteAll(backupCodeRepository.findByUserIdAndPending(userId, false));
+            backupCodeRepository.deleteAll(backupCodeRepository.findByUserIdAndPending(userId, true));
             enrollmentRepository.deleteAll(enrollmentRepository.findByUserId(userId));
         }
         mfaUsers.clear();
@@ -230,8 +232,10 @@ class ProviderMfaGateIT extends BaseIT {
         String mfaToken = challenge.get("mfaToken").asString();
         // The challenge does not open the idle window; the portal's next calls would.
         idleSessionTracker.touch(labScientist.getId());
-        // The challenge token is password-only: enrolment, nothing else.
-        assertMfaRefusal(as(mfaToken, get("/notifications")));
+        // The challenge token is password-only: enrolment, nothing else. Since
+        // #853 it is not a session at all outside the MFA endpoints (401),
+        // which is stricter than the gate's 403.
+        assertThat(as(mfaToken, get("/notifications")).getResponse().getStatus()).isEqualTo(401);
 
         String secret = json(as(mfaToken, csrf(post("/auth/mfa/enroll")))).get("secret").asString();
         String code = new DefaultCodeGenerator(HashingAlgorithm.SHA1, 6)

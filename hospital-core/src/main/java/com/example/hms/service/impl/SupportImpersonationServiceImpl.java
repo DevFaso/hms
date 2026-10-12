@@ -126,8 +126,6 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
             throw new BusinessException("Cannot impersonate another super admin");
         }
 
-        boolean steppedUp = verifyMfaStepUp(actor.getId(), mfaToken);
-
         List<String> targetRoles = targetAssignments.stream()
             .filter(TenantRoleAssignment::active)
             .map(this::roleLabel)
@@ -138,6 +136,11 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
             throw new BusinessException(
                 "Target user has no active role assignments and cannot be impersonated");
         }
+
+        // Last, once the request is known to be runnable: the step-up may
+        // spend a backup code. Whether a code was verified decides the
+        // impersonation token's second factor (AC-13).
+        boolean steppedUp = verifyMfaStepUp(actor.getId(), mfaToken);
 
         TokenUserDescriptor descriptor = new TokenUserDescriptor(
             target.getId(), target.getUsername(), targetRoles);
@@ -293,30 +296,14 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
     }
 
     /**
-     * The actor's MFA step-up: {@code true} when a TOTP code was verified,
-     * {@code false} for the audited non-strict bypass of an unenrolled actor;
-     * throws when an enrolled actor's code is missing or wrong, or strict mode
-     * refuses an unenrolled one.
+     * The actor's MFA step-up through the shared one (MfaService#requireStepUp):
+     * a current TOTP code or an unused backup code; a refusal is 403 with a
+     * reason code, audited there. {@code true} when a code was verified,
+     * {@code false} for the audited non-strict bypass of an unenrolled actor.
      */
     private boolean verifyMfaStepUp(UUID actorId, String mfaToken) {
-        boolean enrolled;
-        try {
-            enrolled = mfaService.isMfaEnabled(actorId);
-        } catch (RuntimeException ex) {
-            log.warn("[IMPERSONATION] MFA enrollment lookup failed for actor {}: {}",
-                actorId, ex.getMessage());
-            throw new UnauthorizedException("mfa_required: enrollment lookup unavailable");
-        }
-        if (enrolled) {
-            if (mfaToken == null || mfaToken.isBlank() || !mfaService.verifyCode(actorId, mfaToken)) {
-                throw new UnauthorizedException(
-                    "mfa_required: invalid or missing X-Mfa-Token for impersonation");
-            }
+        if (mfaService.requireStepUp(actorId, mfaToken, "impersonation start", requireMfaStrict)) {
             return true;
-        }
-        if (requireMfaStrict) {
-            throw new UnauthorizedException(
-                "mfa_required: actor must enrol MFA before starting impersonation");
         }
         // Unenrolled actor — let it through but audit the bypass.
         try {

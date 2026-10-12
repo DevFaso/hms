@@ -64,22 +64,70 @@ public class GlobalSessionRevocationService {
         return cachedGlobalMinTokenIat;
     }
 
+    /**
+     * A token issued at {@code issuedAt} predates the last force-logout-all.
+     * No revocation yet, or a token without an {@code iat}, is not revoked.
+     *
+     * <p>A JWT {@code iat} has whole-second precision. {@link #revokeAll}
+     * therefore stores its cut-off rounded UP to the next whole second, and
+     * this compares strictly: every token minted in the revocation's second,
+     * before it or just after, is revoked. A kill switch errs on the safe
+     * side; a session started in that same second signs in once more.
+     */
+    public boolean revokes(java.util.Date issuedAt) {
+        Instant minIat = cachedGlobalMinTokenIat;
+        return issuedAt != null && minIat != null && !EPOCH.equals(minIat)
+            && issuedAt.toInstant().isBefore(minIat);
+    }
+
+    /**
+     * {@link #revokes} against the row itself, not the 30-second cache: for
+     * the rare paths that MINT a session (refresh), where a lagging instance
+     * must not issue a post-cut-off pair from a token the kill switch revoked.
+     */
+    public boolean revokesFresh(java.util.Date issuedAt) {
+        // Read the row WITHOUT writing it into the cache: a revokeAll on this
+        // instance may have put a newer cut-off there before its commit, and
+        // the row would carry it back. The later of the two decides.
+        Instant minIat = cachedGlobalMinTokenIat;
+        try {
+            Instant row = repository.findById(SecurityRevocation.SINGLETON_ID)
+                .map(SecurityRevocation::getGlobalMinTokenIat)
+                .orElse(null);
+            if (row != null && (minIat == null || row.isAfter(minIat))) {
+                minIat = row;
+            }
+        } catch (RuntimeException ex) {
+            log.warn("[REVOCATION] Fresh read failed, using the cached cut-off: {}", ex.getMessage());
+        }
+        return issuedAt != null && minIat != null && !EPOCH.equals(minIat)
+            && issuedAt.toInstant().isBefore(minIat);
+    }
+
+    /** The cut-off for a revocation at {@code at}: the next whole second (a JWT iat is whole seconds). */
+    static Instant cutOff(Instant at) {
+        Instant second = at.truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        return second.equals(at) ? at : second.plusSeconds(1);
+    }
+
     @Transactional
     public Instant revokeAll(UUID actorUserId, String actorUsername, String reason) {
+        // The revocation happened now; only the token cut-off rounds up.
         Instant now = Instant.now();
+        Instant minIat = cutOff(now);
         SecurityRevocation row = repository.findById(SecurityRevocation.SINGLETON_ID)
             .orElseGet(() -> {
                 SecurityRevocation seeded = new SecurityRevocation();
                 seeded.setId(SecurityRevocation.SINGLETON_ID);
                 return seeded;
             });
-        row.setGlobalMinTokenIat(now);
+        row.setGlobalMinTokenIat(minIat);
         row.setLastRevokedByUserId(actorUserId);
         row.setLastRevokedByUsername(actorUsername);
         row.setLastRevokedReason(reason);
         row.setUpdatedAt(now);
         repository.save(row);
-        cachedGlobalMinTokenIat = now;
+        cachedGlobalMinTokenIat = minIat;
         return now;
     }
 }

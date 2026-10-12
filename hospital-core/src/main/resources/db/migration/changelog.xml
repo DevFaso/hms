@@ -2692,6 +2692,27 @@
     </changeSet>
 
     <!-- =================================================================
+         V183 — MFA authenticator replacement stays pending until confirmed
+         (security hotfix PR #853). Adds security.user_mfa_enrollments
+         .pending_totp_secret (application-encrypted) and
+         security.mfa_backup_codes.pending (NOT NULL DEFAULT FALSE), so a
+         re-enrolment never disables the current authenticator: the two swap
+         when the new code is confirmed. Also (review rounds 4-6):
+         user_mfa_enrollments.last_totp_step (a TOTP code is accepted once),
+         and a partial UNIQUE index (user_id) WHERE method = 'TOTP'. ⚠ NOT
+         purely additive: before the index, duplicate TOTP rows are DELETED,
+         keeping one per user (verified, enabled, latest). V181/V182 are
+         reserved by the external-provider plan. IF NOT EXISTS throughout,
+         no DO blocks.
+         ================================================================= -->
+    <changeSet id="V183-mfa-pending-authenticator" author="hms-team" runOnChange="false">
+        <sqlFile path="V183__mfa_pending_authenticator.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
          V184 — security.users.deactivated_by_admin_at (PR #852, review
          round 6): an administrator's disable is recorded, so a provider
          admin's re-invite or an invitation code cannot switch the account

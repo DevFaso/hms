@@ -33,7 +33,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -57,6 +59,12 @@ class UserCredentialLifecycleServiceImplTest {
 
     @Mock
     private EmailService emailService;
+
+    @Mock
+    private MfaService mfaService;
+
+    @Mock
+    private AuditEventLogService auditEventLogService;
 
     /** Fixed instant: the recovery-code expiry is written and checked against the injected clock. */
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 3, 1, 10, 0);
@@ -337,6 +345,42 @@ class UserCredentialLifecycleServiceImplTest {
     }
 
     @Test
+    void upsertMfaEnrollments_neverTakesLastVerifiedAtFromTheClient_andReportsTheServerRule() {
+        UUID userId = UUID.randomUUID();
+        User user = User.builder().username("mfa-user").email("mfa@example.com").build();
+        user.setId(userId);
+        java.time.LocalDateTime verifiedAt = java.time.LocalDateTime.of(2026, 9, 1, 10, 0);
+        UserMfaEnrollment confirmedTotp = UserMfaEnrollment.builder()
+            .user(user).method(MfaMethodType.TOTP).enabled(true).verified(true)
+            .lastVerifiedAt(verifiedAt).build();
+        confirmedTotp.setId(UUID.randomUUID());
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(mfaEnrollmentRepository.findByUserId(userId)).thenReturn(List.of(confirmedTotp));
+        when(mfaEnrollmentRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UserMfaEnrollmentRequestDTO keep = new UserMfaEnrollmentRequestDTO();
+        keep.setMethod(MfaMethodType.TOTP);
+        keep.setEnabled(true);
+        keep.setLastVerifiedAt(null);
+        UserMfaEnrollmentRequestDTO forged = new UserMfaEnrollmentRequestDTO();
+        forged.setMethod(MfaMethodType.EMAIL);
+        forged.setEnabled(true);
+        forged.setLastVerifiedAt(java.time.LocalDateTime.of(2026, 1, 1, 0, 0));
+
+        var response = service.upsertMfaEnrollments(userId, List.of(keep, forged));
+
+        assertThat(confirmedTotp.getLastVerifiedAt()).isEqualTo(verifiedAt);
+        assertThat(response).filteredOn(d -> d.getMethod() == MfaMethodType.TOTP)
+            .singleElement().satisfies(d -> assertThat(d.isActive()).isTrue());
+        assertThat(response).filteredOn(d -> d.getMethod() == MfaMethodType.EMAIL)
+            .singleElement().satisfies(d -> {
+                assertThat(d.getLastVerifiedAt()).isNull();
+                assertThat(d.isActive()).isFalse();
+            });
+    }
+
+    @Test
     void upsertMfaEnrollmentsEnforcesSinglePrimaryFactor() {
         UUID userId = UUID.randomUUID();
         User user = User.builder().username("primary-user").email("primary@example.com").build();
@@ -401,6 +445,35 @@ class UserCredentialLifecycleServiceImplTest {
 
         assertThat(response).isEmpty();
         verify(mfaEnrollmentRepository).delete(existing);
+    }
+
+    @Test
+    void upsertOwnMfaEnrollments_aRefusedStepUpChangesNothing() {
+        UUID userId = UUID.randomUUID();
+        doThrow(new com.example.hms.exception.MfaStepUpRefusedException(
+                com.example.hms.exception.MfaStepUpRefusedException.Reason.REQUIRED))
+            .when(mfaService).requireStepUpToChangeAuthenticator(userId, null, null);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.upsertOwnMfaEnrollments(userId, null, null, null))
+            .isInstanceOf(com.example.hms.exception.MfaStepUpRefusedException.class);
+
+        verifyNoInteractions(mfaEnrollmentRepository);
+    }
+
+    @Test
+    void upsertOwnMfaEnrollments_runsTheUpsertOnceTheStepUpPasses() {
+        UUID userId = UUID.randomUUID();
+        User user = User.builder().username("own-user").email("own@example.com").build();
+        user.setId(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(mfaEnrollmentRepository.findByUserId(userId)).thenReturn(List.of());
+        when(mfaEnrollmentRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThat(service.upsertOwnMfaEnrollments(userId, null, null, "123456")).isEmpty();
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(mfaService, mfaEnrollmentRepository);
+        order.verify(mfaService).requireStepUpToChangeAuthenticator(userId, null, "123456");
+        order.verify(mfaEnrollmentRepository).findByUserId(userId);
     }
 
     @Test
@@ -513,5 +586,159 @@ class UserCredentialLifecycleServiceImplTest {
         UserRecoveryContact saved = persisted.get(0);
         assertThat(saved.isVerified()).isFalse();
         assertThat(saved.getVerifiedAt()).isNull();
+    }
+
+    // ── Round 4: a super-admin's change to any account's MFA needs the ACTOR's step-up ──
+
+    @Test
+    void aSuperAdminChange_needsTheActorsStepUp_andARefusalChangesNothing() {
+        UUID actorId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        User target = User.builder().username("target").email("t@example.com").build();
+        target.setId(targetId);
+        when(userRepository.findById(targetId)).thenReturn(Optional.of(target));
+        when(mfaService.requireStepUp(eq(actorId), eq("000000"), any(), eq(false)))
+            .thenThrow(new com.example.hms.exception.MfaStepUpRefusedException(
+                com.example.hms.exception.MfaStepUpRefusedException.Reason.INVALID));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                service.upsertMfaEnrollmentsAsSuperAdmin(actorId, targetId, List.of(), "000000"))
+            .isInstanceOf(com.example.hms.exception.MfaStepUpRefusedException.class);
+
+        verify(mfaEnrollmentRepository, never()).saveAll(anyList());
+        verify(mfaEnrollmentRepository, never()).delete(any());
+    }
+
+    @Test
+    void aSuperAdminChangeWithoutAnActiveFactor_inNonStrictMode_isAuditedAsABypass() {
+        UUID actorId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        User target = User.builder().username("target").email("t@example.com").build();
+        target.setId(targetId);
+        when(mfaService.requireStepUp(eq(actorId), eq(null), any(), eq(false))).thenReturn(false);
+        when(userRepository.findById(targetId)).thenReturn(Optional.of(target));
+        when(mfaEnrollmentRepository.findByUserId(targetId)).thenReturn(List.of());
+        when(mfaEnrollmentRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.upsertMfaEnrollmentsAsSuperAdmin(actorId, targetId, List.of(), null);
+
+        verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+            e.getEventType() == com.example.hms.enums.AuditEventType.SECURITY_ALERT_TRIGGERED
+                && actorId.equals(e.getUserId())));
+    }
+
+    @Test
+    void twoTotpEntries_areABadRequest_notAUniqueIndexViolation() {
+        UUID userId = UUID.randomUUID();
+        UserMfaEnrollmentRequestDTO first = new UserMfaEnrollmentRequestDTO();
+        first.setMethod(MfaMethodType.TOTP);
+        first.setChannel("a");
+        UserMfaEnrollmentRequestDTO second = new UserMfaEnrollmentRequestDTO();
+        second.setMethod(MfaMethodType.TOTP);
+        second.setChannel("b");
+        User user = User.builder().username("u").email("u@example.com").build();
+        user.setId(userId);
+        org.mockito.Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        List<UserMfaEnrollmentRequestDTO> twoTotp = List.of(first, second);
+        assertThatThrownBy(() -> service.upsertMfaEnrollments(userId, twoTotp))
+            .isInstanceOf(IllegalArgumentException.class);
+        verify(mfaEnrollmentRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    void aDisabledTotpAuthenticator_isNeverSwitchedBackOnByTheList() {
+        UUID userId = UUID.randomUUID();
+        User user = User.builder().username("mfa-user").email("mfa@example.com").build();
+        user.setId(userId);
+        UserMfaEnrollment totp = UserMfaEnrollment.builder()
+            .user(user).method(MfaMethodType.TOTP).verified(true).enabled(false).build();
+        totp.setId(UUID.randomUUID());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(mfaEnrollmentRepository.findByUserId(userId)).thenReturn(List.of(totp));
+        when(mfaEnrollmentRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        UserMfaEnrollmentRequestDTO request = new UserMfaEnrollmentRequestDTO();
+        request.setMethod(MfaMethodType.TOTP);
+        request.setEnabled(true);
+
+        service.upsertMfaEnrollments(userId, List.of(request));
+
+        // Only confirming a code turns it on: no old secret revived without one.
+        assertThat(totp.isEnabled()).isFalse();
+    }
+
+    @Test
+    void aTotpRowWithAChangedChannel_isUpdatedInPlace_neverInsertedBesideTheOld() {
+        UUID userId = UUID.randomUUID();
+        User user = User.builder().username("mfa-user").email("mfa@example.com").build();
+        user.setId(userId);
+        UserMfaEnrollment totp = UserMfaEnrollment.builder()
+            .user(user).method(MfaMethodType.TOTP).channel("old-device").enabled(true).build();
+        totp.setId(UUID.randomUUID());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(mfaEnrollmentRepository.findByUserId(userId)).thenReturn(List.of(totp));
+        when(mfaEnrollmentRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UserMfaEnrollmentRequestDTO request = new UserMfaEnrollmentRequestDTO();
+        request.setMethod(MfaMethodType.TOTP);
+        request.setChannel("new-device");
+        request.setEnabled(true);
+
+        var response = service.upsertMfaEnrollments(userId, List.of(request));
+
+        // One TOTP row per user (V183's unique index): the same row, renamed.
+        assertThat(response).hasSize(1);
+        assertThat(totp.getChannel()).isEqualTo("new-device");
+        verify(mfaEnrollmentRepository, never()).delete(any());
+    }
+
+    @Test
+    void anUnknownTarget_orTwoTotpEntries_spendNoStepUp() {
+        // The step-up commits on its own (a backup code is spent): a request
+        // that fails anyway must fail before it.
+        UUID actorId = UUID.randomUUID();
+        UUID missing = UUID.randomUUID();
+        when(userRepository.findById(missing)).thenReturn(Optional.empty());
+
+        List<UserMfaEnrollmentRequestDTO> none = List.of();
+        assertThatThrownBy(() -> service.upsertMfaEnrollmentsAsSuperAdmin(actorId, missing, none, "12345678"))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+
+        UUID targetId = UUID.randomUUID();
+        User target = User.builder().username("target").email("t@example.com").build();
+        target.setId(targetId);
+        when(userRepository.findById(targetId)).thenReturn(Optional.of(target));
+        UserMfaEnrollmentRequestDTO first = new UserMfaEnrollmentRequestDTO();
+        first.setMethod(MfaMethodType.TOTP);
+        first.setChannel("a");
+        UserMfaEnrollmentRequestDTO second = new UserMfaEnrollmentRequestDTO();
+        second.setMethod(MfaMethodType.TOTP);
+        second.setChannel("b");
+
+        List<UserMfaEnrollmentRequestDTO> twoTotp = List.of(first, second);
+        assertThatThrownBy(() -> service.upsertMfaEnrollmentsAsSuperAdmin(actorId, targetId, twoTotp, "12345678"))
+            .isInstanceOf(IllegalArgumentException.class);
+
+        verify(mfaService, never()).requireStepUp(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
+    void anEntryListedTwice_isABadRequest_beforeAnyStepUp() {
+        UUID actorId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        User target = User.builder().username("target").email("t@example.com").build();
+        target.setId(targetId);
+        when(userRepository.findById(targetId)).thenReturn(Optional.of(target));
+        UserMfaEnrollmentRequestDTO sms = new UserMfaEnrollmentRequestDTO();
+        sms.setMethod(MfaMethodType.SMS);
+        sms.setChannel("+22670000000");
+        UserMfaEnrollmentRequestDTO same = new UserMfaEnrollmentRequestDTO();
+        same.setMethod(MfaMethodType.SMS);
+        same.setChannel(" +22670000000 ");
+        List<UserMfaEnrollmentRequestDTO> twice = List.of(sms, same);
+
+        assertThatThrownBy(() -> service.upsertMfaEnrollmentsAsSuperAdmin(actorId, targetId, twice, "12345678"))
+            .isInstanceOf(IllegalArgumentException.class);
+        verify(mfaService, never()).requireStepUp(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 }

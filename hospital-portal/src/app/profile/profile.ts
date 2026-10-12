@@ -11,7 +11,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
-import { MfaService, MfaEnrollmentResponse } from '../auth/mfa.service';
+import { MFA_STEP_UP_MESSAGES, MfaService, MfaEnrollmentResponse } from '../auth/mfa.service';
 import { OidcAuthService } from '../auth/oidc-auth.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -243,24 +243,76 @@ export class ProfileComponent implements OnInit {
   }
 
   /* ── Inline MFA Enrollment ── */
-  mfaStep = signal<'idle' | 'qr' | 'verify' | 'backup'>('idle');
+  mfaStep = signal<'idle' | 'stepup' | 'qr' | 'verify' | 'backup'>('idle');
   mfaLoading = signal(false);
   mfaError = signal('');
   mfaEnrollment = signal<MfaEnrollmentResponse | null>(null);
   mfaTotpCode = '';
+  /** Replacing the authenticator: a current code from it, or an unused backup code. */
+  mfaStepUpCode = '';
+  /** The flow in progress replaces an active authenticator, which works until it is confirmed. */
+  mfaReplacing = signal(false);
+
+  /**
+   * An authenticator app the server counts as active: it can be replaced
+   * (with the step-up), not set up again. The server decides; the portal does
+   * not re-derive the rule from the other fields.
+   */
+  hasActiveTotp(): boolean {
+    return (this.credentials()?.mfaEnrollments ?? []).some(
+      (m) => m.method === 'TOTP' && m.active === true,
+    );
+  }
+
+  startMfaReplacement(): void {
+    this.mfaStepUpCode = '';
+    this.mfaError.set('');
+    this.mfaReplacing.set(true);
+    this.mfaStep.set('stepup');
+  }
+
+  submitMfaStepUp(): void {
+    const code = this.mfaStepUpCode.trim();
+    if (!code) {
+      this.mfaError.set(this.translate.instant('PROFILE.MFA_STEPUP_REQUIRED'));
+      return;
+    }
+    this.requestEnrollment(code);
+  }
+
+  cancelMfaReplacement(): void {
+    this.finishMfaEnrollment();
+  }
 
   startMfaEnrollment(): void {
+    this.mfaReplacing.set(false);
+    this.requestEnrollment();
+  }
+
+  private requestEnrollment(stepUpCode?: string): void {
     this.mfaLoading.set(true);
     this.mfaError.set('');
-    this.mfaService.enroll().subscribe({
+    this.mfaService.enroll(stepUpCode).subscribe({
       next: (res) => {
+        this.mfaStepUpCode = '';
         this.mfaEnrollment.set(res);
         this.mfaStep.set('qr');
         this.mfaLoading.set(false);
       },
       error: (err) => {
+        const code = err?.error?.code as string | undefined;
+        const refusal = MFA_STEP_UP_MESSAGES[code as string];
+        // The page thought there was no active authenticator (stale data:
+        // one was confirmed in another tab), but the server asks for the
+        // step-up: show the code field instead of a dead "Set up" button.
+        if (code === 'mfa.stepup.required' && this.mfaStep() !== 'stepup') {
+          this.mfaReplacing.set(true);
+          this.mfaStep.set('stepup');
+        }
         this.mfaError.set(
-          err?.error?.message ?? this.translate.instant('PROFILE.MFA_ENROLL_FAILED'),
+          refusal
+            ? this.translate.instant(refusal)
+            : (err?.error?.message ?? this.translate.instant('PROFILE.MFA_ENROLL_FAILED')),
         );
         this.mfaLoading.set(false);
       },
@@ -297,6 +349,8 @@ export class ProfileComponent implements OnInit {
     this.mfaStep.set('idle');
     this.mfaEnrollment.set(null);
     this.mfaTotpCode = '';
+    this.mfaStepUpCode = '';
+    this.mfaReplacing.set(false);
     this.mfaError.set('');
   }
 

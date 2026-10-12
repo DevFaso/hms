@@ -181,6 +181,26 @@ class JwtAuthenticationFilterTest {
         assertThat(response.getStatus()).isEqualTo(SC_UNAUTHORIZED);
     }
 
+    @Test
+    void shouldRejectATokenIssuedBeforeTheLastForceLogoutAll_byTheSharedRule() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRequestURI(API_PATIENTS);
+        request.addHeader(AUTH_HEADER, BEARER_PREFIX + GHOST_TOKEN);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+        java.util.Date issuedAt = new java.util.Date(System.currentTimeMillis() - 60_000L);
+
+        when(tokenProvider.validateToken(GHOST_TOKEN)).thenReturn(true);
+        when(tokenProvider.getUsernameFromJWT(GHOST_TOKEN)).thenReturn("user1");
+        when(tokenProvider.getIssuedAt(GHOST_TOKEN)).thenReturn(issuedAt);
+        when(globalSessionRevocationService.revokes(issuedAt)).thenReturn(true);
+
+        filter.doFilter(request, response, chain);
+
+        verify(chain, never()).doFilter(any(), any());
+        assertThat(response.getStatus()).isEqualTo(SC_UNAUTHORIZED);
+    }
+
     @AfterEach
     void clearSecurityContext() {
         // The DisabledException branch must clear the context — assert the

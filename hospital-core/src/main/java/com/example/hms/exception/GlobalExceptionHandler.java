@@ -144,6 +144,18 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * A token that was valid a moment earlier in the same request and expired
+     * (or failed to parse) on a later read: "sign in again", never a 500.
+     */
+    @ExceptionHandler(io.jsonwebtoken.JwtException.class)
+    public ResponseEntity<Object> handleJwt(io.jsonwebtoken.JwtException ex, WebRequest request) {
+        if (log.isWarnEnabled()) {
+            log.warn("Token no longer valid at path {}", request.getDescription(false));
+        }
+        return buildErrorResponse(HttpStatus.UNAUTHORIZED, "Session expired. Please log in again.", request);
+    }
+
+    /**
      * {@link UnauthorizedException} carries {@code @ResponseStatus(UNAUTHORIZED)},
      * but a {@code @ResponseStatus} only applies when no handler claims the
      * exception — and {@link #handleRuntimeException} claims every
@@ -419,6 +431,20 @@ public class GlobalExceptionHandler {
         log.info("Provider request without a second factor refused ({})", MfaEnrollmentRequiredException.CODE);
         Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN, ex.getMessage(), request);
         body.put("code", MfaEnrollmentRequiredException.CODE);
+        return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
+    }
+
+    /**
+     * A refused MFA step-up. 403 with the reason code, not 401: the session is
+     * fine, so the portal shows why instead of signing the user out.
+     */
+    @ExceptionHandler(MfaStepUpRefusedException.class)
+    public ResponseEntity<Object> handleMfaStepUpRefused(MfaStepUpRefusedException ex, WebRequest request) {
+        if (log.isWarnEnabled()) {
+            log.warn("MFA step-up refused ({}) at path {}", ex.getCode(), request.getDescription(false));
+        }
+        Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+        body.put("code", ex.getCode());
         return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
     }
 
