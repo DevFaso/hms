@@ -741,6 +741,24 @@ public class AuthController {
             "Refresh token is invalid or has expired. Please log in again.";
 
     /** Another tab rotated this refresh token a moment ago: no tokens, retry with the new cookie. */
+    /** The HttpOnly cookie first; the body is the legacy fallback (S-01). */
+    private String readRefreshToken(HttpServletRequest request, java.util.Map<String, String> body) {
+        String fromCookie = refreshTokenCookieService.read(request);
+        if (fromCookie != null) {
+            return fromCookie;
+        }
+        return body != null ? body.get("refreshToken") : null;
+    }
+
+    /** A provider user whose refresh token carries no (or an expired) second factor. */
+    private boolean lapsedProviderFactor(java.util.UUID userId, String username, java.time.Instant secondFactor) {
+        if (secondFactor != null) {
+            return false;
+        }
+        ProviderMfaGate gate = providerMfaGate.getIfAvailable();
+        return gate != null && gate.isProviderUser(userId, username);
+    }
+
     private ResponseEntity<Object> refreshSuperseded(String jti) {
         // WARN, like a replay: a sibling tab looks exactly like a stolen copy
         // replayed inside the grace, and theft alerting must still see it.
@@ -787,10 +805,7 @@ public class AuthController {
 
         // S-01: prefer the HttpOnly refresh cookie over a body-borne refresh token.
         // Body-based refresh remains supported as a legacy fallback during rollout.
-        String refreshToken = refreshTokenCookieService.read(request);
-        if (refreshToken == null) {
-            refreshToken = body != null ? body.get("refreshToken") : null;
-        }
+        String refreshToken = readRefreshToken(request, body);
         if (refreshToken == null || refreshToken.isBlank()) {
             log.warn("🔄 [REFRESH] Missing refresh token (cookie + body both empty)");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -889,8 +904,7 @@ public class AuthController {
             // would get a pair every call refuses (403 mfa.enrollment.required)
             // with nothing in the portal to recover: refuse the refresh
             // instead, so the normal sign-in and challenge take over.
-            ProviderMfaGate gate = providerMfaGate.getIfAvailable();
-            if (secondFactor == null && gate != null && gate.isProviderUser(user.getId(), username)) {
+            if (lapsedProviderFactor(user.getId(), username, secondFactor)) {
                 tokenBlacklistService.release(refreshJti);
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(new MessageResponse(REFRESH_INVALID_MESSAGE));
