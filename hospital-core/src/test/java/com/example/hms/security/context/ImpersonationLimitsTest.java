@@ -29,7 +29,9 @@ class ImpersonationLimitsTest {
         ImpersonationContextHolder.set(ImpersonationContext.of(UUID.randomUUID(), "support.agent"));
 
         for (String method : new String[] {"POST", "PUT", "PATCH", "DELETE"}) {
-            assertThatThrownBy(() -> limits.preHandle(request(method), new MockHttpServletResponse(), null))
+            MockHttpServletRequest write = request(method);
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            assertThatThrownBy(() -> limits.preHandle(write, response, null))
                 .as(method).isInstanceOf(ClientSafeAccessDeniedException.class);
         }
         for (String method : new String[] {"GET", "HEAD", "OPTIONS"}) {
@@ -46,7 +48,9 @@ class ImpersonationLimitsTest {
     void refusesWithoutAnAuditService() {
         ImpersonationContextHolder.set(ImpersonationContext.of(UUID.randomUUID(), "support.agent"));
         ImpersonationLimits bare = new ImpersonationLimits(() -> null);
-        assertThatThrownBy(() -> bare.preHandle(request("POST"), new MockHttpServletResponse(), null))
+        MockHttpServletRequest write = request("POST");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        assertThatThrownBy(() -> bare.preHandle(write, response, null))
             .isInstanceOf(ClientSafeAccessDeniedException.class);
     }
 

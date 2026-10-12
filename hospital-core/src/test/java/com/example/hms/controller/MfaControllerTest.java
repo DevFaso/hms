@@ -32,6 +32,8 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.notNull;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -96,8 +98,8 @@ class MfaControllerTest {
     /** The user currently holds exactly these authorities (the login's source). */
     private void holds(String... authorities) {
         com.example.hms.security.HospitalUserDetails details =
-                org.mockito.Mockito.mock(com.example.hms.security.HospitalUserDetails.class);
-        org.mockito.Mockito.doReturn(AuthorityUtils.createAuthorityList(authorities)).when(details).getAuthorities();
+                mock(com.example.hms.security.HospitalUserDetails.class);
+        doReturn(AuthorityUtils.createAuthorityList(authorities)).when(details).getAuthorities();
         when(userDetailsService.loadUserByUsername(USERNAME)).thenReturn(details);
     }
 
@@ -222,7 +224,7 @@ class MfaControllerTest {
                 .andExpect(jsonPath("$.accessToken").value("access-jwt"))
                 .andExpect(jsonPath("$.refreshToken").value("refresh-jwt"));
         // The sign-in is complete: the password-failure count is cleared, as without a challenge.
-        org.mockito.Mockito.verify(loginAttemptService).resetAttempts(USER_ID);
+        verify(loginAttemptService).resetAttempts(USER_ID);
     }
 
     @Test
@@ -244,7 +246,7 @@ class MfaControllerTest {
                 .andExpect(status().isOk());
 
         var minted = org.mockito.ArgumentCaptor.forClass(TokenUserDescriptor.class);
-        org.mockito.Mockito.verify(jwtTokenProvider).generateAccessToken(minted.capture(), notNull());
+        verify(jwtTokenProvider).generateAccessToken(minted.capture(), notNull());
         org.assertj.core.api.Assertions.assertThat(minted.getValue().roles()).containsExactly("ROLE_LAB_SCIENTIST");
     }
 
@@ -260,24 +262,25 @@ class MfaControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mfaToken\":\"mfa-tok-gone\",\"code\":\"654321\"}"))
                 .andExpect(status().isUnauthorized());
-        org.mockito.Mockito.verify(jwtTokenProvider, org.mockito.Mockito.never())
+        verify(jwtTokenProvider, never())
                 .generateAccessToken(any(TokenUserDescriptor.class), any());
         // Refused before anything was reserved or spent: the code stays usable after a fresh sign-in.
-        org.mockito.Mockito.verify(mfaService, org.mockito.Mockito.never()).reserveCodeAttempt(any());
-        org.mockito.Mockito.verify(tokenBlacklistService, org.mockito.Mockito.never()).claim(any(), org.mockito.ArgumentMatchers.anyLong());
+        verify(mfaService, never()).reserveCodeAttempt(any());
+        verify(tokenBlacklistService, never()).claim(any(), org.mockito.ArgumentMatchers.anyLong());
     }
 
     @Test
     void verifyMfa_anUnreadableChallenge_isRefusedBeforeAnythingIsSpent() throws Exception {
         when(jwtTokenProvider.isMfaToken("mfa-tok-late")).thenReturn(true);
         claimable("mfa-tok-late");
+        when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-late")).thenReturn(USERNAME);
         when(jwtTokenProvider.mfaTokenSelectedRoles("mfa-tok-late")).thenReturn(Optional.empty());
 
         mockMvc.perform(post("/auth/mfa/verify")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mfaToken\":\"mfa-tok-late\",\"code\":\"654321\"}"))
                 .andExpect(status().isUnauthorized());
-        org.mockito.Mockito.verify(mfaService, org.mockito.Mockito.never()).reserveCodeAttempt(any());
+        verify(mfaService, never()).reserveCodeAttempt(any());
     }
 
     private static com.example.hms.model.UserRoleHospitalAssignment assignment(String role) {

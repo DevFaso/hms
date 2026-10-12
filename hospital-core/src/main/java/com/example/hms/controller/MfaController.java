@@ -56,6 +56,8 @@ public class MfaController {
     private static final String NOT_FULLY_AUTHENTICATED =
             "MFA enrollment requires a fully authenticated session — partial mfaToken is not sufficient.";
 
+    private static final String INVALID_MFA_TOKEN = "Invalid or expired MFA token.";
+
     private final MfaService mfaService;
     private final UserRepository userRepository;
     private final AuditEventLogService auditEventLogService;
@@ -72,19 +74,26 @@ public class MfaController {
     private final com.example.hms.security.HospitalUserDetailsService userDetailsService;
 
     /**
-     * The picked roles the user still holds, read from the same source the
-     * login offered them from (assignments and legacy global roles alike),
-     * so a pick that worked without a challenge also works with one.
+     * The roles the challenge picked at login that the user still holds: an
+     * empty list when none was picked, and {@link Optional#empty()} when the
+     * pick cannot be honoured (the token no longer parses, or no picked role
+     * is still held). Held roles are read from the same source the login
+     * offered them from (assignments and legacy global roles alike), so a
+     * pick that worked without a challenge also works with one.
      */
-    private List<String> stillHeld(List<String> picked, String username) {
-        if (picked.isEmpty()) {
+    private Optional<List<String>> honouredPick(String mfaToken, String username) {
+        Optional<List<String>> picked = jwtTokenProvider.mfaTokenSelectedRoles(mfaToken);
+        if (picked.isEmpty() || picked.get().isEmpty()) {
             return picked;
         }
         List<String> held = userDetailsService.loadUserByUsername(username).getAuthorities().stream()
                 .map(org.springframework.security.core.GrantedAuthority::getAuthority)
                 .filter(java.util.Objects::nonNull)
                 .toList();
-        return picked.stream().filter(role -> held.stream().anyMatch(role::equalsIgnoreCase)).toList();
+        List<String> stillHeld = picked.get().stream()
+                .filter(role -> held.stream().anyMatch(role::equalsIgnoreCase))
+                .toList();
+        return stillHeld.isEmpty() ? Optional.empty() : Optional.of(stillHeld);
     }
 
     /** 401 for a caller holding only a partial mfaToken, not a full access token. */
@@ -207,28 +216,22 @@ public class MfaController {
         // Validate the mfaToken
         if (!jwtTokenProvider.isMfaToken(request.mfaToken()) || isSpentOrRevoked(request.mfaToken())) {
             return ResponseEntity.status(401)
-                    .body(new MessageResponse("Invalid or expired MFA token."));
-        }
-
-        // The role picked at login, read now, before anything is spent: a
-        // challenge that no longer parses is refused, never widened.
-        Optional<List<String>> picked = jwtTokenProvider.mfaTokenSelectedRoles(request.mfaToken());
-        if (picked.isEmpty()) {
-            return ResponseEntity.status(401)
-                    .body(new MessageResponse("Invalid or expired MFA token."));
+                    .body(new MessageResponse(INVALID_MFA_TOKEN));
         }
 
         String username = jwtTokenProvider.getUsernameFromJWT(request.mfaToken());
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalStateException("User not found"));
 
-        // A role picked at login must still be held, checked now, before any
-        // code is reserved, checked or spent: a refusal costs the user nothing.
-        List<String> pickedRoles = stillHeld(picked.get(), username);
-        if (!picked.get().isEmpty() && pickedRoles.isEmpty()) {
+        // The role picked at login, checked now, before any code is reserved,
+        // checked or spent: a refusal costs the user nothing, and a challenge
+        // whose pick cannot be honoured is refused, never widened.
+        Optional<List<String>> honoured = honouredPick(request.mfaToken(), username);
+        if (honoured.isEmpty()) {
             return ResponseEntity.status(401)
-                    .body(new MessageResponse("The role picked at sign-in is no longer held. Sign in again."));
+                    .body(new MessageResponse("This sign-in can no longer be completed. Sign in again."));
         }
+        List<String> pickedRoles = honoured.get();
 
         // The per-user budget of wrong LOGIN codes (its own, never the
         // step-ups': see MfaService), reserved BEFORE the code is checked, so
@@ -272,7 +275,7 @@ public class MfaController {
         // and gets a session; the other spends nothing.
         if (!claim(request.mfaToken())) {
             return ResponseEntity.status(401)
-                    .body(new MessageResponse("Invalid or expired MFA token."));
+                    .body(new MessageResponse(INVALID_MFA_TOKEN));
         }
         boolean spent = totp
                 ? mfaService.claimTotpStep(user.getId(), totpStep.getAsLong())
