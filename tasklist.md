@@ -4974,6 +4974,20 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   for every user: the challenge token limited to the MFA step, and replacing
   a verified authenticator needing a full session and a step-up code (found
   while building D5 slice 4). Open until #853 merges.
+- **Provider MFA on the Keycloak path: two gaps to close before the Keycloak cutover (#851).**
+  (a) The realm forces OTP only for `ROLE_PROVIDER_ADMIN`, but the backend gate refuses
+  every confined provider user without `otp` in `amr`: a pharmacist or lab user created
+  on Keycloak without the CONFIGURE_TOTP required action is locked out. Require OTP for
+  every provider role in the realm flow. (b) On that path the gate accepts any `otp` in
+  `amr` with no age check, so the 48 h rule rests on hand-applied realm settings; check
+  `auth_time` against `app.mfa.second-factor-max-age-seconds` in the gate (found in #851's
+  review). Open. Not live: prod runs the legacy path.
+- **Provider MFA gate plumbing.** `ProviderMfaGate.refuse()` copies
+  `ProviderConfinementPolicy.refuse()` (resolver lookup, fallback sendError), and
+  `MfaEnrollmentRequiredException` re-creates `ClientSafeAccessDeniedException`; and for an
+  exempt path the confinement filter resolves the handler twice. Share one helper and
+  check the exempt rules on the pattern `allows()` already resolved (found in #851's
+  review). Open.
 - **CDS acknowledgement with an unknown hospital id now answers 404** (was: saved as a
   global acknowledgement). Intended since #835; confirm no client relies on the old
   behaviour. Open.

@@ -30,7 +30,9 @@ public class MfaStepUpRefusedException extends RuntimeException {
         /** Too many wrong codes: the step-up is locked for a while. */
         LOCKED("mfa.stepup.locked"),
         /** A current code, but one already accepted (a sign-in, an earlier step-up): wait for the next. */
-        REUSED("mfa.stepup.reused");
+        REUSED("mfa.stepup.reused"),
+        /** Support acting as the user: never binds or changes the user's own authenticator. */
+        IMPERSONATION("mfa.stepup.impersonation");
 
         private final String code;
 

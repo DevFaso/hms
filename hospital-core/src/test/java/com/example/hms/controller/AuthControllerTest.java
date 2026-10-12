@@ -86,6 +86,7 @@ class AuthControllerTest {
     @MockitoBean private WsTicketService wsTicketService;
     @MockitoBean private RefreshTokenCookieService refreshTokenCookieService;
     @MockitoBean private AuthBootstrapService authBootstrapService;
+    @MockitoBean private com.example.hms.security.provider.ProviderMfaGate providerMfaGate;
 
     /**
      * Spring Security 7's DaoAuthenticationProvider adds a
@@ -1133,5 +1134,27 @@ class AuthControllerTest {
         assertThat(user.isActive()).isFalse();
         verify(loginAttemptService, never()).resetAttempts(any());
         verify(assignmentRepository, never()).findByUserId(any());
+    }
+
+    @Test
+    void refreshToken_aProviderUserWhoseSecondFactorLapsed_isSentBackToSignIn() throws Exception {
+        com.example.hms.model.User pharmacist = com.example.hms.model.User.builder()
+                .username("pharm@example.com").isActive(true).build();
+        org.springframework.test.util.ReflectionTestUtils.setField(pharmacist, "id", java.util.UUID.randomUUID());
+        when(jwtTokenProvider.isRefreshToken("old.refresh.token")).thenReturn(true);
+        claimableRefresh("old.refresh.token");
+        when(jwtTokenProvider.getUsernameFromJWT("old.refresh.token")).thenReturn("pharm@example.com");
+        when(userRepository.findByUsername("pharm@example.com")).thenReturn(java.util.Optional.of(pharmacist));
+        when(jwtTokenProvider.secondFactorAt("old.refresh.token")).thenReturn(null);
+        when(providerMfaGate.isProviderUser(pharmacist.getId(), "pharm@example.com")).thenReturn(true);
+
+        mockMvc.perform(post("/auth/token/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"old.refresh.token\"}"))
+                .andExpect(status().isUnauthorized());
+
+        // No pair every call would refuse; the old token is given back for the normal sign-in path.
+        verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), any());
+        verify(tokenBlacklistService).release("jti-old.refresh.token");
     }
 }

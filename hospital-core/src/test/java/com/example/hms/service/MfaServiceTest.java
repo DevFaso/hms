@@ -761,4 +761,21 @@ class MfaServiceTest {
         assertThat(mfaService.verifyEnrollment(userId, "000000", fullSession())).isFalse();
         verify(enrollmentRepository, never()).save(any());
     }
+
+    @Test
+    void anImpersonationSession_neverEnrolsOrChangesTheUsersAuthenticator() {
+        com.example.hms.security.context.ImpersonationContextHolder.set(
+                com.example.hms.security.context.ImpersonationContext.of(UUID.randomUUID(), "support"));
+        try {
+            refusedWith(MfaStepUpRefusedException.Reason.IMPERSONATION,
+                    () -> mfaService.enrollTotp(testUser, fullSession(), null));
+            refusedWith(MfaStepUpRefusedException.Reason.IMPERSONATION,
+                    () -> mfaService.verifyEnrollment(userId, "123456", fullSession()));
+            refusedWith(MfaStepUpRefusedException.Reason.IMPERSONATION,
+                    () -> mfaService.requireStepUpToChangeAuthenticator(userId, fullSession(), null));
+            verify(enrollmentRepository, never()).save(any());
+        } finally {
+            com.example.hms.security.context.ImpersonationContextHolder.clear();
+        }
+    }
 }

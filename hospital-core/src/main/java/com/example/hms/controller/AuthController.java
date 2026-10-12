@@ -885,6 +885,16 @@ public class AuthController {
             // factor on, with the time it was verified, until that is older than
             // the max age (AC-13); a password-only one never gains it.
             java.time.Instant secondFactor = jwtTokenProvider.secondFactorAt(refreshToken);
+            // A provider user whose factor has lapsed (older than the max age)
+            // would get a pair every call refuses (403 mfa.enrollment.required)
+            // with nothing in the portal to recover: refuse the refresh
+            // instead, so the normal sign-in and challenge take over.
+            ProviderMfaGate gate = providerMfaGate.getIfAvailable();
+            if (secondFactor == null && gate != null && gate.isProviderUser(user.getId(), username)) {
+                tokenBlacklistService.release(refreshJti);
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(new MessageResponse(REFRESH_INVALID_MESSAGE));
+            }
             String newAccessToken  = jwtTokenProvider.generateAccessToken(descriptor, secondFactor);
 
             // Rotate the refresh token so each use yields a fresh one

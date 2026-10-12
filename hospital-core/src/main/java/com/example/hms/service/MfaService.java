@@ -126,6 +126,7 @@ public class MfaService {
     @Transactional
     public MfaEnrollmentResult enrollTotp(User user, Authentication caller, String stepUpCode) {
         UUID userId = user.getId();
+        refuseImpersonation(userId, caller);
         Optional<UserMfaEnrollment> existing =
                 enrollmentRepository.lockByUserIdAndMethod(userId, MfaMethodType.TOTP);
         boolean replacing = existing.filter(MfaService::isActive).isPresent();
@@ -191,6 +192,7 @@ public class MfaService {
      */
     @Transactional
     public boolean verifyEnrollment(UUID userId, String code, Authentication caller) {
+        refuseImpersonation(userId, caller);
         Optional<UserMfaEnrollment> opt =
                 enrollmentRepository.lockByUserIdAndMethod(userId, MfaMethodType.TOTP);
 
@@ -313,6 +315,7 @@ public class MfaService {
      */
     @Transactional
     public void requireStepUpToChangeAuthenticator(UUID userId, Authentication caller, String stepUpCode) {
+        refuseImpersonation(userId, caller);
         Optional<UserMfaEnrollment> enrollment =
                 enrollmentRepository.lockByUserIdAndMethod(userId, MfaMethodType.TOTP);
         if (enrollment.filter(MfaService::isActive).isPresent()) {
@@ -399,6 +402,17 @@ public class MfaService {
         return attemptStore.remainingLockMs(throttleKey) <= 0
                 && attemptStore.recordFailure(throttleKey, STEP_UP_MAX_FAILURES, STEP_UP_WINDOW_MS,
                         STEP_UP_LOCK_MS) <= STEP_UP_MAX_FAILURES;
+    }
+
+    /**
+     * Support impersonating a user acts AS that user, but must never enrol,
+     * confirm or change that user's authenticator: it would bind the user's
+     * account to the support person's device.
+     */
+    private void refuseImpersonation(UUID userId, Authentication caller) {
+        if (com.example.hms.security.context.ImpersonationContextHolder.isImpersonating()) {
+            throw refused(userId, caller, ACTION_REPLACE, MfaStepUpRefusedException.Reason.IMPERSONATION);
+        }
     }
 
     /** Audits the refusal (never the code) and returns the exception to throw. */
