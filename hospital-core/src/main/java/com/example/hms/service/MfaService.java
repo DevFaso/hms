@@ -55,6 +55,7 @@ public class MfaService {
     private static final int BACKUP_CODE_LENGTH = 8;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final String ACTION_REPLACE = "authenticator replacement";
+    private static final String ACTION_SET_UP = "authenticator set-up or change";
 
     /**
      * Wrong second-factor codes per user before a short lockout, kept in the
@@ -411,7 +412,7 @@ public class MfaService {
      */
     private void refuseImpersonation(UUID userId, Authentication caller) {
         if (com.example.hms.security.context.ImpersonationContextHolder.isImpersonating()) {
-            throw refused(userId, caller, ACTION_REPLACE, MfaStepUpRefusedException.Reason.IMPERSONATION);
+            throw refused(userId, caller, ACTION_SET_UP, MfaStepUpRefusedException.Reason.IMPERSONATION);
         }
     }
 

@@ -310,7 +310,8 @@ public class JwtTokenProvider {
 
         log.debug("✅ Roles for token: {}", roles);
         Date now = new Date();
-        Date expiryDate = new Date(now.getTime() + accessTokenExpirationMs);
+        Date expiryDate = new Date(Math.min(now.getTime() + accessTokenExpirationMs,
+            proofDeadlineMs(secondFactorAt, now.getTime())));
         Map<String, Object> claims = buildTenantClaims(userId, roles);
         claims.put(ROLES_CLAIM, roles);
         if (userId != null) {
@@ -515,6 +516,20 @@ public class JwtTokenProvider {
         } catch (RuntimeException unparsable) {
             return null;
         }
+    }
+
+    /**
+     * When the proof verified at {@code at} stops counting, so an access token
+     * carrying it expires with it: past the max age its holder gets a 401 and
+     * refreshes or signs in again, never a 403 "set up MFA" for a factor it
+     * already has. No proof, or one already stale, sets no deadline.
+     */
+    private long proofDeadlineMs(Instant at, long nowMs) {
+        if (at == null) {
+            return Long.MAX_VALUE;
+        }
+        long deadline = at.plusSeconds(secondFactorMaxAgeSeconds).toEpochMilli();
+        return deadline > nowMs ? deadline : Long.MAX_VALUE;
     }
 
     /** A second factor verified at {@code at} still counts: not in the future, not older than the max age. */

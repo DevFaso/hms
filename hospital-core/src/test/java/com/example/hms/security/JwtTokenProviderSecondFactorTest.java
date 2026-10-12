@@ -106,6 +106,23 @@ class JwtTokenProviderSecondFactorTest {
     }
 
     @Test
+    @DisplayName("an access token carrying the proof expires with it, so its holder gets a 401, not a 403")
+    void accessTokenExpiresWithItsProof() {
+        Instant almostStale = now().minusSeconds(MAX_AGE - 120);
+        long expiresInMs = provider.getExpiration(provider.generateAccessToken(PHARMACIST, almostStale)).getTime()
+            - System.currentTimeMillis();
+        assertThat(expiresInMs).isBetween(60_000L, 121_000L);
+
+        // A fresh proof, or none, keeps the normal 15 minutes.
+        long fresh = provider.getExpiration(provider.generateAccessToken(PHARMACIST, now())).getTime()
+            - System.currentTimeMillis();
+        long none = provider.getExpiration(provider.generateAccessToken(PHARMACIST, (Instant) null)).getTime()
+            - System.currentTimeMillis();
+        assertThat(fresh).isBetween(890_000L, 900_000L);
+        assertThat(none).isBetween(890_000L, 900_000L);
+    }
+
+    @Test
     @DisplayName("an impersonation token carries the proof only after the super admin's TOTP step-up")
     void impersonationTokenCarriesTheStepUp() {
         UUID actor = UUID.randomUUID();

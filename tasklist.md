@@ -4987,7 +4987,12 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   `MfaEnrollmentRequiredException` re-creates `ClientSafeAccessDeniedException`; and for an
   exempt path the confinement filter resolves the handler twice. Share one helper and
   check the exempt rules on the pattern `allows()` already resolved (found in #851's
-  review). Open.
+  review). Also from #851's final review: "is this a provider user" is computed three
+  times (`ProviderMfaGate.isProviderUser`, `AuthBootstrapServiceImpl`'s `providerUser`
+  flag, and the confinement filter's context), so the login challenge and the bootstrap
+  flags can drift if the rule changes; and every refresh without a second factor runs a
+  second assignment query (`isProviderUser`) after `findByUser` already loaded the rows.
+  One rule, computed once per request from the rows in hand. Open.
 - **CDS acknowledgement with an unknown hospital id now answers 404** (was: saved as a
   global acknowledgement). Intended since #835; confirm no client relies on the old
   behaviour. Open.

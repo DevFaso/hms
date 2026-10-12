@@ -740,7 +740,6 @@ public class AuthController {
     private static final String REFRESH_INVALID_MESSAGE =
             "Refresh token is invalid or has expired. Please log in again.";
 
-    /** Another tab rotated this refresh token a moment ago: no tokens, retry with the new cookie. */
     /** The HttpOnly cookie first; the body is the legacy fallback (S-01). */
     private String readRefreshToken(HttpServletRequest request, java.util.Map<String, String> body) {
         String fromCookie = refreshTokenCookieService.read(request);
@@ -759,6 +758,7 @@ public class AuthController {
         return gate != null && gate.isProviderUser(userId, username);
     }
 
+    /** Another tab rotated this refresh token a moment ago: no tokens, retry with the new cookie. */
     private ResponseEntity<Object> refreshSuperseded(String jti) {
         // WARN, like a replay: a sibling tab looks exactly like a stolen copy
         // replayed inside the grace, and theft alerting must still see it.
@@ -906,6 +906,13 @@ public class AuthController {
             // instead, so the normal sign-in and challenge take over.
             if (lapsedProviderFactor(user.getId(), username, secondFactor)) {
                 tokenBlacklistService.release(refreshJti);
+                auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                        .eventType(AuditEventType.TOKEN_REFRESH)
+                        .eventDescription("Refresh refused — provider second factor expired")
+                        .userName(username)
+                        .userId(user.getId())
+                        .status(AuditStatus.FAILURE)
+                        .build());
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(new MessageResponse(REFRESH_INVALID_MESSAGE));
             }
