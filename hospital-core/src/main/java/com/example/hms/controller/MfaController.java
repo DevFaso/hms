@@ -95,8 +95,9 @@ public class MfaController {
     }
 
     /**
-     * The roles the challenge picked at login that the user still holds: an
-     * empty list when none was picked, and {@link Optional#empty()} when the
+     * The roles the challenge carries from the login that the user still
+     * holds: an empty list for an older challenge that carries none (the
+     * session then takes the active assignments), and {@link Optional#empty()} when the
      * pick cannot be honoured (the token no longer parses, or no picked role
      * is still held). Held roles are read from the same source the login
      * offered them from (assignments and legacy global roles alike), so a
@@ -107,10 +108,14 @@ public class MfaController {
         if (picked.isEmpty() || picked.get().isEmpty()) {
             return picked;
         }
-        List<String> held = userDetailsService.loadUserByUsername(username).getAuthorities().stream()
-                .map(org.springframework.security.core.GrantedAuthority::getAuthority)
-                .filter(java.util.Objects::nonNull)
-                .toList();
+        // Widened exactly as the login's authorities were (the provider's
+        // authorities mapper): a super-admin's inherited roles, a surgeon's
+        // DOCTOR. Without it those picks would read as no longer held.
+        java.util.Set<String> held = com.example.hms.security.RoleExpansion.expand(
+                userDetailsService.loadUserByUsername(username).getAuthorities().stream()
+                        .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                        .filter(java.util.Objects::nonNull)
+                        .toList());
         // The held spelling, not the one typed at login: the idle gate's
         // machine-role carve-out and the response compare exact strings.
         List<String> stillHeld = picked.get().stream()

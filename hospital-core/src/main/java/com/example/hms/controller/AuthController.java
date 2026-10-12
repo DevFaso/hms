@@ -344,9 +344,10 @@ public class AuthController {
             if (mfaService != null
                     && (isMfaRequiredForUser(effectiveRoles) || isProviderUserChallenged(user.getId(), user.getUsername()))) {
                 boolean mfaEnabled = mfaService.isMfaEnabled(user.getId());
-                // The role picked at login (if any) rides the challenge to the session it opens.
-                String mfaToken = jwtTokenProvider.generateMfaToken(user.getUsername(),
-                        effectiveRoles.size() < allRoles.size() ? effectiveRoles : null);
+                // The roles this sign-in would mint (the one picked, or the
+                // single one held) ride the challenge to the session it opens,
+                // so the code changes nothing about which roles it carries.
+                String mfaToken = jwtTokenProvider.generateMfaToken(user.getUsername(), effectiveRoles);
 
                 auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                         .eventType(AuditEventType.MFA_CHALLENGE)

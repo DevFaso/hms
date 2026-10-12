@@ -4981,7 +4981,12 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   every provider role in the realm flow. (b) On that path the gate accepts any `otp` in
   `amr` with no age check, so the 48 h rule rests on hand-applied realm settings; check
   `auth_time` against `app.mfa.second-factor-max-age-seconds` in the gate (found in #851's
-  review). Open. Not live: prod runs the legacy path.
+  review). (c) A provider user signed in with a password only (the login where OTP is
+  first configured) gets 403 `mfa.enrollment.required` on the shell's start-up reads
+  (`/feature-flags`, `/me/assignments`, `/me/dashboard-config`) before the portal reads
+  the bootstrap flag; exempt them or have the portal read the bootstrap first. Open. Not
+  live: prod runs the legacy path, where a provider user never holds a password-only
+  session.
 - **Provider MFA gate plumbing.** `ProviderMfaGate.refuse()` copies
   `ProviderConfinementPolicy.refuse()` (resolver lookup, fallback sendError), and
   `MfaEnrollmentRequiredException` re-creates `ClientSafeAccessDeniedException`; and for an
@@ -5005,7 +5010,9 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   that was not stepped up reports `mfaEnrollmentRequired` for a provider target, pointing
   the portal at an enrolment the same session is refused; it should say the factor is
   missing because of impersonation. And `/auth/mfa/verify` returns no hospital context
-  (primaryHospitalId, hospitalIds), unlike the password-only sign-in. Open.
+  (primaryHospitalId, hospitalIds), unlike the password-only sign-in. Likewise a patient's
+  own email and phone through `PUT /me/patient/profile` stay open to a support session.
+  Open.
 - **The role picked at login is lost at the first refresh (#851 review).** The refresh
   rebuilds roles from every active assignment, so a multi-role user's single-role session
   (password-only, and now through the MFA challenge too) widens after one access-token

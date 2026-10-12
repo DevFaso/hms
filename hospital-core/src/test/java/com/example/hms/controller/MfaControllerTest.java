@@ -251,6 +251,28 @@ class MfaControllerTest {
     }
 
     @Test
+    void verifyMfa_honoursARoleTheLoginOfferedThroughExpansion() throws Exception {
+        when(jwtTokenProvider.isMfaToken("mfa-tok-sa")).thenReturn(true);
+        claimable("mfa-tok-sa");
+        when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-sa")).thenReturn(USERNAME);
+        when(jwtTokenProvider.mfaTokenSelectedRoles("mfa-tok-sa")).thenReturn(Optional.of(List.of("ROLE_HOSPITAL_ADMIN")));
+        // Stored: super-admin only. The login offered HOSPITAL_ADMIN through RoleExpansion.
+        holds("ROLE_SUPER_ADMIN");
+        currentTotp("654321");
+        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class), notNull())).thenReturn("access-jwt");
+        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class), notNull())).thenReturn("refresh-jwt");
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-sa\",\"code\":\"654321\"}"))
+                .andExpect(status().isOk());
+
+        var minted = org.mockito.ArgumentCaptor.forClass(TokenUserDescriptor.class);
+        verify(jwtTokenProvider).generateAccessToken(minted.capture(), notNull());
+        org.assertj.core.api.Assertions.assertThat(minted.getValue().roles()).containsExactly("ROLE_HOSPITAL_ADMIN");
+    }
+
+    @Test
     void verifyMfa_aRolePickedThenRevoked_isNotMinted() throws Exception {
         when(jwtTokenProvider.isMfaToken("mfa-tok-gone")).thenReturn(true);
         claimable("mfa-tok-gone");
