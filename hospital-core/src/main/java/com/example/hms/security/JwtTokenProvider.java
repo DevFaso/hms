@@ -85,6 +85,9 @@ public class JwtTokenProvider {
     @Value("${app.mfa.second-factor-max-age-seconds:172800}")
     private long secondFactorMaxAgeSeconds = 172_800L;
 
+    /** The roles a user picked at login, carried by the MFA challenge token to the session it opens. */
+    static final String MFA_SELECTED_ROLES_CLAIM = "sel_roles";
+
     private final HospitalUserDetailsService userDetailsService;
     private final TenantRoleAssignmentAccessor tenantRoleAssignmentAccessor;
 
@@ -458,17 +461,43 @@ public class JwtTokenProvider {
      * This token is NOT a full access token — it only authorises the MFA verification step.
      */
     public String generateMfaToken(String username) {
+        return generateMfaToken(username, null);
+    }
+
+    /**
+     * {@link #generateMfaToken(String)} for a user who picked a role at login:
+     * the challenge carries it, so the session minted after the code holds
+     * that role only, as a sign-in without the challenge would.
+     */
+    public String generateMfaToken(String username, List<String> selectedRoles) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + 300_000); // 5 minutes
 
-        return Jwts.builder()
+        var builder = Jwts.builder()
                 .id(UUID.randomUUID().toString())
                 .subject(username)
-                .claim(MfaChallengeScope.PURPOSE_CLAIM, MfaChallengeScope.PURPOSE)
+                .claim(MfaChallengeScope.PURPOSE_CLAIM, MfaChallengeScope.PURPOSE);
+        if (selectedRoles != null && !selectedRoles.isEmpty()) {
+            builder.claim(MFA_SELECTED_ROLES_CLAIM, List.copyOf(selectedRoles));
+        }
+        return builder
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(signingKey)
                 .compact();
+    }
+
+    /** The roles picked at login that a challenge token carries; empty when none was picked or it does not parse. */
+    public List<String> mfaTokenSelectedRoles(String mfaToken) {
+        try {
+            Object roles = jwtParser().parseSignedClaims(mfaToken).getPayload().get(MFA_SELECTED_ROLES_CLAIM);
+            if (roles instanceof java.util.Collection<?> picked) {
+                return picked.stream().map(String::valueOf).toList();
+            }
+            return List.of();
+        } catch (RuntimeException unparsable) {
+            return List.of();
+        }
     }
 
     /**
@@ -541,11 +570,13 @@ public class JwtTokenProvider {
 
     /**
      * The claims a token carries for a second factor verified at {@code at}
-     * ({@code null}: none). Its age is checked where it is read
-     * ({@link #secondFactorAt}), so an old time stamped here is no proof.
+     * ({@code null}: none). Its age is checked here and again where it is read
+     * ({@link #secondFactorAt}), which is what ages a long-lived token out.
      */
     private Map<String, Object> secondFactorClaims(Instant at) {
-        if (at == null) {
+        // No proof claimed for a time that is no proof: a stale or future one
+        // would read as otp to anything that checks amr alone.
+        if (at == null || !fresh(at)) {
             return Map.of();
         }
         return Map.of(CLAIM_AMR, SECOND_FACTOR_AMR, CLAIM_OTP_AT, at.getEpochSecond());

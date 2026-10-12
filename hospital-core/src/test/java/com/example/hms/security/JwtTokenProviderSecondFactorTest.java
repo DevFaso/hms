@@ -123,6 +123,26 @@ class JwtTokenProviderSecondFactorTest {
     }
 
     @Test
+    @DisplayName("a stale time is no proof, so it is not even claimed: amr stays password-only")
+    void staleTimeClaimsNothing() {
+        String token = provider.generateAccessToken(PHARMACIST, now().minusSeconds(MAX_AGE + 60));
+        io.jsonwebtoken.Claims claims = io.jsonwebtoken.Jwts.parser()
+            .verifyWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(
+                "dev-secret-change-me-in-production-minimum-256-bits-long!!".getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+            .build().parseSignedClaims(token).getPayload();
+        assertThat(claims).doesNotContainKeys("amr", "otp_at");
+    }
+
+    @Test
+    @DisplayName("the challenge token carries the role picked at login, and only when one was picked")
+    void challengeCarriesThePickedRole() {
+        assertThat(provider.mfaTokenSelectedRoles(provider.generateMfaToken("pharm.one", List.of("ROLE_LAB_SCIENTIST"))))
+            .containsExactly("ROLE_LAB_SCIENTIST");
+        assertThat(provider.mfaTokenSelectedRoles(provider.generateMfaToken("pharm.one"))).isEmpty();
+        assertThat(provider.mfaTokenSelectedRoles("not.a.token")).isEmpty();
+    }
+
+    @Test
     @DisplayName("an impersonation token carries the proof only after the super admin's TOTP step-up")
     void impersonationTokenCarriesTheStepUp() {
         UUID actor = UUID.randomUUID();

@@ -26,6 +26,7 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.JwtTokenProvider;
 import com.example.hms.security.LoginAttemptService;
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.service.PasswordHistoryService;
 import com.example.hms.security.provider.ProviderMfaGate;
 import com.example.hms.service.MfaService;
@@ -340,7 +341,9 @@ public class AuthController {
             if (mfaService != null
                     && (isMfaRequiredForUser(effectiveRoles) || isProviderUserChallenged(user.getId(), user.getUsername()))) {
                 boolean mfaEnabled = mfaService.isMfaEnabled(user.getId());
-                String mfaToken = jwtTokenProvider.generateMfaToken(user.getUsername());
+                // The role picked at login (if any) rides the challenge to the session it opens.
+                String mfaToken = jwtTokenProvider.generateMfaToken(user.getUsername(),
+                        effectiveRoles.size() < allRoles.size() ? effectiveRoles : null);
 
                 auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                         .eventType(AuditEventType.MFA_CHALLENGE)
@@ -360,7 +363,6 @@ public class AuthController {
                         .mfaToken(mfaToken)
                         .username(user.getUsername())
                         .build();
-                // Store selected role in mfa token for later use after verification
                 return ResponseEntity.ok(body);
             }
 
@@ -741,8 +743,7 @@ public class AuthController {
             "Refresh token is invalid or has expired. Please log in again.";
 
     /** A provider user's refresh token without a (current) second factor: sign in, with the code. */
-    private static final String REFRESH_SECOND_FACTOR_MESSAGE =
-            "Two-step verification is required. Please sign in again with your code.";
+    private static final String REFRESH_SECOND_FACTOR_KEY = "auth.refresh.secondFactorRequired";
 
     /** The HttpOnly cookie first; the body is the legacy fallback (S-01). */
     private String readRefreshToken(HttpServletRequest request, java.util.Map<String, String> body) {
@@ -917,7 +918,7 @@ public class AuthController {
                 // portal's silent refresh stops retrying and signs in instead.
                 refreshTokenCookieService.clear(response);
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(new MessageResponse(REFRESH_SECOND_FACTOR_MESSAGE));
+                        .body(new MessageResponse(MessageUtil.resolve(REFRESH_SECOND_FACTOR_KEY)));
             }
             String newAccessToken  = jwtTokenProvider.generateAccessToken(descriptor, secondFactor);
 

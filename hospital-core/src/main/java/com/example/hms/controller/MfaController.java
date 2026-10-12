@@ -67,6 +67,7 @@ public class MfaController {
     /** The challenge token is single-use: a spent or force-logged-out one is refused at verify. */
     private final TokenBlacklistService tokenBlacklistService;
     private final GlobalSessionRevocationService globalSessionRevocationService;
+    private final com.example.hms.security.LoginAttemptService loginAttemptService;
 
     /** 401 for a caller holding only a partial mfaToken, not a full access token. */
     private ResponseEntity<Object> notFullyAuthenticated() {
@@ -251,9 +252,12 @@ public class MfaController {
         }
         mfaService.clearCodeAttempts(user.getId());
 
-        // Issue the full JWT pair
+        // Issue the full JWT pair. A role picked at login (validated there
+        // against the roles held) is the session's only role, exactly as the
+        // sign-in without a challenge mints it: the challenge never widens it.
+        List<String> pickedRoles = jwtTokenProvider.mfaTokenSelectedRoles(request.mfaToken());
         var activeAssignments = assignmentRepository.findByUser_IdAndActiveTrue(user.getId());
-        List<String> roles = activeAssignments.stream()
+        List<String> roles = !pickedRoles.isEmpty() ? pickedRoles : activeAssignments.stream()
                 .map(a -> a.getRole().getName())
                 .distinct()
                 .toList();
@@ -266,7 +270,7 @@ public class MfaController {
         // through this path would be misclassified as human and pinned in
         // Redis. Use `Role.code`, which is uppercased on persist (Role.java)
         // and mirrors the AuthController#refreshToken pattern (line ~617).
-        List<String> roleCodes = activeAssignments.stream()
+        List<String> roleCodes = !pickedRoles.isEmpty() ? pickedRoles : activeAssignments.stream()
                 .map(a -> a.getRole().getCode())
                 .distinct()
                 .toList();
@@ -280,6 +284,10 @@ public class MfaController {
         String refreshToken = jwtTokenProvider.generateRefreshToken(descriptor, verifiedAt);
 
         userCredentialLifecycleService.recordSuccessfulLogin(user.getId());
+        // The sign-in is complete only now: clear the password-failure count
+        // here, as the password-only sign-in does, or a challenged user stays
+        // one typo from the lockout.
+        loginAttemptService.resetAttempts(user.getId());
 
         AuditEventType eventType = usedBackup ? AuditEventType.MFA_BACKUP_USED : AuditEventType.MFA_VERIFIED;
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()

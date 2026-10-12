@@ -87,6 +87,9 @@ class MfaControllerTest {
     @MockitoBean
     private com.example.hms.security.GlobalSessionRevocationService globalSessionRevocationService;
 
+    @MockitoBean
+    private com.example.hms.security.LoginAttemptService loginAttemptService;
+
     private static final UUID USER_ID = UUID.randomUUID();
     private static final String USERNAME = "doctor@hms.com";
     private User testUser;
@@ -205,6 +208,40 @@ class MfaControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").value("access-jwt"))
                 .andExpect(jsonPath("$.refreshToken").value("refresh-jwt"));
+        // The sign-in is complete: the password-failure count is cleared, as without a challenge.
+        org.mockito.Mockito.verify(loginAttemptService).resetAttempts(USER_ID);
+    }
+
+    @Test
+    void verifyMfa_keepsTheRolePickedAtLogin() throws Exception {
+        when(jwtTokenProvider.isMfaToken("mfa-tok-pick")).thenReturn(true);
+        claimable("mfa-tok-pick");
+        when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-pick")).thenReturn(USERNAME);
+        when(jwtTokenProvider.mfaTokenSelectedRoles("mfa-tok-pick")).thenReturn(List.of("ROLE_LAB_SCIENTIST"));
+        currentTotp("654321");
+        when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID))
+                .thenReturn(List.of(assignment("PROVIDER_ADMIN"), assignment("LAB_SCIENTIST")));
+        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class), notNull())).thenReturn("access-jwt");
+        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class), notNull())).thenReturn("refresh-jwt");
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-pick\",\"code\":\"654321\"}"))
+                .andExpect(status().isOk());
+
+        var minted = org.mockito.ArgumentCaptor.forClass(TokenUserDescriptor.class);
+        org.mockito.Mockito.verify(jwtTokenProvider).generateAccessToken(minted.capture(), notNull());
+        org.assertj.core.api.Assertions.assertThat(minted.getValue().roles()).containsExactly("ROLE_LAB_SCIENTIST");
+    }
+
+    private static com.example.hms.model.UserRoleHospitalAssignment assignment(String role) {
+        com.example.hms.model.Role r = new com.example.hms.model.Role();
+        r.setCode(role);
+        r.setName(role);
+        com.example.hms.model.UserRoleHospitalAssignment a = new com.example.hms.model.UserRoleHospitalAssignment();
+        a.setRole(r);
+        a.setActive(true);
+        return a;
     }
 
     @Test

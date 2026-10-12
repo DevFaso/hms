@@ -4997,6 +4997,15 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   `MfaChallengeScope.ENROLMENT_PATHS`) with no test tying them; and an open `/ws-chat`
   STOMP session is never re-checked once the second factor lapses (true of token expiry
   in general, not only of MFA). Open.
+- **Support sessions: account details outside `/auth/me/**` (#851 review).** The
+  impersonation path rule covers the sign-in and recovery endpoints, but a user's own
+  phone is changed through `PUT /users/{id}` (self-edit), and that phone receives
+  username-reminder SMS. Refuse the phone (and any other contact field) in the self-edit
+  branch under impersonation. Also: a session bootstrap under a super-admin impersonation
+  that was not stepped up reports `mfaEnrollmentRequired` for a provider target, pointing
+  the portal at an enrolment the same session is refused; it should say the factor is
+  missing because of impersonation. And `/auth/mfa/verify` returns no hospital context
+  (primaryHospitalId, hospitalIds), unlike the password-only sign-in. Open.
 - **CDS acknowledgement with an unknown hospital id now answers 404** (was: saved as a
   global acknowledgement). Intended since #835; confirm no client relies on the old
   behaviour. Open.
