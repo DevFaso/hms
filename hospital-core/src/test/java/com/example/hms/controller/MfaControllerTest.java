@@ -90,6 +90,17 @@ class MfaControllerTest {
     @MockitoBean
     private com.example.hms.security.LoginAttemptService loginAttemptService;
 
+    @MockitoBean
+    private com.example.hms.security.HospitalUserDetailsService userDetailsService;
+
+    /** The user currently holds exactly these authorities (the login's source). */
+    private void holds(String... authorities) {
+        com.example.hms.security.HospitalUserDetails details =
+                org.mockito.Mockito.mock(com.example.hms.security.HospitalUserDetails.class);
+        org.mockito.Mockito.doReturn(AuthorityUtils.createAuthorityList(authorities)).when(details).getAuthorities();
+        when(userDetailsService.loadUserByUsername(USERNAME)).thenReturn(details);
+    }
+
     private static final UUID USER_ID = UUID.randomUUID();
     private static final String USERNAME = "doctor@hms.com";
     private User testUser;
@@ -220,6 +231,7 @@ class MfaControllerTest {
         claimable("mfa-tok-pick");
         when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-pick")).thenReturn(USERNAME);
         when(jwtTokenProvider.mfaTokenSelectedRoles("mfa-tok-pick")).thenReturn(Optional.of(List.of("ROLE_LAB_SCIENTIST")));
+        holds("ROLE_PROVIDER_ADMIN", "ROLE_LAB_SCIENTIST");
         currentTotp("654321");
         when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID))
                 .thenReturn(List.of(assignment("PROVIDER_ADMIN"), assignment("LAB_SCIENTIST")));
@@ -242,8 +254,7 @@ class MfaControllerTest {
         claimable("mfa-tok-gone");
         when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-gone")).thenReturn(USERNAME);
         when(jwtTokenProvider.mfaTokenSelectedRoles("mfa-tok-gone")).thenReturn(Optional.of(List.of("ROLE_HOSPITAL_ADMIN")));
-        currentTotp("654321");
-        when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID)).thenReturn(List.of(assignment("DOCTOR")));
+        holds("ROLE_DOCTOR");
 
         mockMvc.perform(post("/auth/mfa/verify")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -251,6 +262,9 @@ class MfaControllerTest {
                 .andExpect(status().isUnauthorized());
         org.mockito.Mockito.verify(jwtTokenProvider, org.mockito.Mockito.never())
                 .generateAccessToken(any(TokenUserDescriptor.class), any());
+        // Refused before anything was reserved or spent: the code stays usable after a fresh sign-in.
+        org.mockito.Mockito.verify(mfaService, org.mockito.Mockito.never()).reserveCodeAttempt(any());
+        org.mockito.Mockito.verify(tokenBlacklistService, org.mockito.Mockito.never()).claim(any(), org.mockito.ArgumentMatchers.anyLong());
     }
 
     @Test

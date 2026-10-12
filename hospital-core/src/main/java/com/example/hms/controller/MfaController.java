@@ -68,23 +68,22 @@ public class MfaController {
     private final TokenBlacklistService tokenBlacklistService;
     private final GlobalSessionRevocationService globalSessionRevocationService;
     private final com.example.hms.security.LoginAttemptService loginAttemptService;
+    /** The source the login offered roles from, so a picked role is re-checked against the same list. */
+    private final com.example.hms.security.HospitalUserDetailsService userDetailsService;
 
     /**
-     * The picked roles the user still holds: compared, like the login's own
-     * check, against the live assignments widened by the same expansion the
-     * login's authorities carry (a surgeon picking DOCTOR, for one).
+     * The picked roles the user still holds, read from the same source the
+     * login offered them from (assignments and legacy global roles alike),
+     * so a pick that worked without a challenge also works with one.
      */
-    private static List<String> stillHeld(List<String> picked,
-                                          List<com.example.hms.model.UserRoleHospitalAssignment> active) {
+    private List<String> stillHeld(List<String> picked, String username) {
         if (picked.isEmpty()) {
             return picked;
         }
-        java.util.Set<String> held = com.example.hms.security.RoleExpansion.expand(active.stream()
-                .map(a -> a.getRole().getCode())
+        List<String> held = userDetailsService.loadUserByUsername(username).getAuthorities().stream()
+                .map(org.springframework.security.core.GrantedAuthority::getAuthority)
                 .filter(java.util.Objects::nonNull)
-                .map(code -> code.toUpperCase(java.util.Locale.ROOT))
-                .map(code -> code.startsWith("ROLE_") ? code : "ROLE_" + code)
-                .toList());
+                .toList();
         return picked.stream().filter(role -> held.stream().anyMatch(role::equalsIgnoreCase)).toList();
     }
 
@@ -223,6 +222,14 @@ public class MfaController {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalStateException("User not found"));
 
+        // A role picked at login must still be held, checked now, before any
+        // code is reserved, checked or spent: a refusal costs the user nothing.
+        List<String> pickedRoles = stillHeld(picked.get(), username);
+        if (!picked.get().isEmpty() && pickedRoles.isEmpty()) {
+            return ResponseEntity.status(401)
+                    .body(new MessageResponse("The role picked at sign-in is no longer held. Sign in again."));
+        }
+
         // The per-user budget of wrong LOGIN codes (its own, never the
         // step-ups': see MfaService), reserved BEFORE the code is checked, so
         // neither rotating IPs nor parallel requests buy more guesses.
@@ -279,15 +286,10 @@ public class MfaController {
         }
         mfaService.clearCodeAttempts(user.getId());
 
-        // Issue the full JWT pair. A role picked at login is the session's
-        // only role, as the sign-in without a challenge mints it, provided it
-        // is still held: an assignment revoked since the login drops it.
+        // Issue the full JWT pair. A role picked at login (still held, checked
+        // above) is the session's only role, as the sign-in without a
+        // challenge mints it: the challenge never widens it.
         var activeAssignments = assignmentRepository.findByUser_IdAndActiveTrue(user.getId());
-        List<String> pickedRoles = stillHeld(picked.get(), activeAssignments);
-        if (!picked.get().isEmpty() && pickedRoles.isEmpty()) {
-            return ResponseEntity.status(401)
-                    .body(new MessageResponse("The role picked at sign-in is no longer held. Sign in again."));
-        }
         List<String> roles = !pickedRoles.isEmpty() ? pickedRoles : activeAssignments.stream()
                 .map(a -> a.getRole().getName())
                 .distinct()
