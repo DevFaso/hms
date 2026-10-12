@@ -63,7 +63,8 @@ class ImpersonationLimitsTest {
     @Test
     @DisplayName("the rule covers the sign-in and recovery paths, including ones added later under them")
     void coversTheAccountPaths() {
-        assertThat(ImpersonationLimits.ACCOUNT_PATHS).containsExactly("/auth/me/**", "/auth/credentials/**");
+        assertThat(ImpersonationLimits.ACCOUNT_PATHS)
+            .containsExactly("/auth/me/**", "/auth/credentials/**", "/auth/verify-password");
     }
 
     private static MockHttpServletRequest request(String method) {

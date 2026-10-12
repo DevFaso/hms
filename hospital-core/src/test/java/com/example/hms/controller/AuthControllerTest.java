@@ -1158,7 +1158,7 @@ class AuthControllerTest {
         } finally {
             com.example.hms.security.context.ImpersonationContextHolder.clear();
         }
-        org.mockito.Mockito.verifyNoInteractions(userCredentialLifecycleService, userService);
+        org.mockito.Mockito.verifyNoInteractions(userCredentialLifecycleService, userService, authenticationManager);
     }
 
     @Test

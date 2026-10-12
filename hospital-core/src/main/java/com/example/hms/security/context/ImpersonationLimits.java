@@ -35,8 +35,13 @@ public class ImpersonationLimits implements HandlerInterceptor {
     /** Bundle key of the refusal; the message names what the caller is (a support session), nothing else. */
     public static final String ACCOUNT_CHANGE_REFUSED = "auth.impersonation.accountChange";
 
-    /** The caller's own sign-in and recovery details. */
-    public static final List<String> ACCOUNT_PATHS = List.of("/auth/me/**", "/auth/credentials/**");
+    /**
+     * The caller's own sign-in and recovery details, and the password check
+     * (the lock screen's), which would otherwise let a support session test
+     * guesses at the user's password with no lockout.
+     */
+    public static final List<String> ACCOUNT_PATHS =
+        List.of("/auth/me/**", "/auth/credentials/**", "/auth/verify-password");
 
     /** The audit service, when the context has one (a {@code @WebMvcTest} slice may not). */
     private final Supplier<AuditEventLogService> audit;
