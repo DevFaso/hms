@@ -20,8 +20,16 @@
  * before.
  */
 
+import {
+  FacilityType,
+  ProviderFacilityType,
+  isProviderFacilityType,
+} from '../services/provider.model';
+
 /** Group ids, in the order they render. */
 export const NAV_GROUP_IDS = [
+  // Provider facility (a private pharmacy or laboratory)
+  'FACILITY',
   // Staff
   'MY_DAY',
   'PATIENTS_FLOW',
@@ -158,6 +166,13 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
   '/super-admin/emergency': 'PLATFORM',
   '/super-admin/subscriptions': 'PLATFORM',
   '/super-admin/data-residency': 'PLATFORM',
+  '/super-admin/providers': 'PLATFORM',
+
+  // ── FACILITY (provider shell) ────────────────────────────────────────
+  '/provider': 'FACILITY',
+  '/provider/profile': 'FACILITY',
+  '/provider/staff': 'FACILITY',
+  '/provider/audit': 'FACILITY',
 
   // ── Patient portal ───────────────────────────────────────────────────
   '/my-appointments': 'MY_CARE',
@@ -191,4 +206,69 @@ export function navGroupTranslationKey(id: NavGroupId): string {
 /** The group a route renders under, falling back rather than hiding it. */
 export function navGroupForRoute(route: string): NavGroupId {
   return NAV_GROUP_BY_ROUTE[route] ?? OTHER_GROUP;
+}
+
+/**
+ * The provider shell's navigation (provider plan AC-12, §6.6): a user acting
+ * at a private pharmacy or laboratory sees these entries and nothing else.
+ *
+ * <p>This is the facility-type filter: an entry shows only for the facility
+ * types it names, and an admin-only entry only to the facility's
+ * PROVIDER_ADMIN. P2 adds the pharmacy offers and the laboratory pages here,
+ * each naming its own type. UX only: the backend confines every provider
+ * request to its allow-list whatever the nav shows.
+ */
+export interface ProviderNavEntry {
+  icon: string;
+  label: string;
+  translationKey: string;
+  route: string;
+  facilityTypes: ProviderFacilityType[];
+  adminOnly: boolean;
+}
+
+export const PROVIDER_NAV: readonly ProviderNavEntry[] = [
+  {
+    icon: 'storefront',
+    label: 'Home',
+    translationKey: 'NAV.PROVIDER_HOME',
+    route: '/provider',
+    facilityTypes: ['PHARMACY', 'LABORATORY'],
+    adminOnly: false,
+  },
+  {
+    icon: 'badge',
+    label: 'Profile',
+    translationKey: 'NAV.PROVIDER_PROFILE',
+    route: '/provider/profile',
+    facilityTypes: ['PHARMACY', 'LABORATORY'],
+    adminOnly: false,
+  },
+  {
+    icon: 'group',
+    label: 'Staff',
+    translationKey: 'NAV.PROVIDER_STAFF',
+    route: '/provider/staff',
+    facilityTypes: ['PHARMACY', 'LABORATORY'],
+    adminOnly: true,
+  },
+  {
+    icon: 'history',
+    label: 'Audit trail',
+    translationKey: 'NAV.PROVIDER_AUDIT',
+    route: '/provider/audit',
+    facilityTypes: ['PHARMACY', 'LABORATORY'],
+    adminOnly: true,
+  },
+];
+
+/** The provider nav entries a facility of this type shows to this user. */
+export function providerNavEntries(
+  facilityType: FacilityType | null | undefined,
+  providerAdmin: boolean,
+): ProviderNavEntry[] {
+  if (!isProviderFacilityType(facilityType)) return [];
+  return PROVIDER_NAV.filter(
+    (entry) => entry.facilityTypes.includes(facilityType) && (providerAdmin || !entry.adminOnly),
+  );
 }

@@ -704,6 +704,26 @@ export class EnumLabelService implements OnDestroy {
       VITALS: 'Vitals',
     },
 
+    /* ── Provider facilities (D5) ─────────────────────────── */
+    facilityType: {
+      HOSPITAL: 'Hospital',
+      PHARMACY: 'Pharmacy',
+      LABORATORY: 'Laboratory',
+    },
+    hospitalLifecycleState: {
+      ACTIVE: 'Active',
+      SUSPENDED: 'Suspended',
+      ARCHIVED: 'Archived',
+      PENDING_PURGE: 'Purge scheduled',
+      PURGED: 'Purged',
+    },
+    providerVerificationStatus: {
+      SUBMITTED: 'Submitted',
+      VERIFIED: 'Verified',
+      REJECTED: 'Rejected',
+      REVOKED: 'Revoked',
+    },
+
     /* ── Organization types ────────────────────────────────── */
     organizationType: {
       ACADEMIC_CENTER: 'Academic Center',

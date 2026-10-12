@@ -6,6 +6,7 @@ import com.example.hms.payload.dto.provider.ProviderCreateRequestDTO;
 import com.example.hms.payload.dto.provider.ProviderDecisionRequestDTO;
 import com.example.hms.payload.dto.provider.ProviderResponseDTO;
 import com.example.hms.payload.dto.provider.ProviderResubmitRequestDTO;
+import com.example.hms.payload.dto.provider.ProviderVerificationHistoryEntryDTO;
 import com.example.hms.payload.dto.provider.ProviderVerifyRequestDTO;
 import com.example.hms.service.provider.ProviderOnboardingService;
 import org.junit.jupiter.api.DisplayName;
@@ -48,7 +49,7 @@ class SuperAdminProviderControllerTest {
         List<Method> handlers = Arrays.stream(SuperAdminProviderController.class.getDeclaredMethods())
             .filter(m -> m.isAnnotationPresent(GetMapping.class) || m.isAnnotationPresent(PostMapping.class))
             .toList();
-        assertThat(handlers).hasSize(7).allSatisfy(m -> assertThat(m.getAnnotation(PreAuthorize.class).value())
+        assertThat(handlers).hasSize(8).allSatisfy(m -> assertThat(m.getAnnotation(PreAuthorize.class).value())
             .isEqualTo("hasAuthority('ROLE_SUPER_ADMIN')"));
     }
 
@@ -80,6 +81,9 @@ class SuperAdminProviderControllerTest {
         assertThat(controller.list(FacilityType.PHARMACY, ProviderVerificationStatus.SUBMITTED, pageable).getBody())
             .isSameAs(page);
         assertThat(controller.get(id).getBody()).isSameAs(dto);
+        List<ProviderVerificationHistoryEntryDTO> history = List.of(new ProviderVerificationHistoryEntryDTO());
+        when(service.history(id)).thenReturn(history);
+        assertThat(controller.history(id).getBody()).isSameAs(history);
         assertThat(controller.verify(id, verify).getBody()).isSameAs(dto);
         assertThat(controller.reject(id, decision).getBody()).isSameAs(dto);
         assertThat(controller.revoke(id, decision).getBody()).isSameAs(dto);

@@ -234,6 +234,8 @@
     "src/app/super-admin/integration-health/integration-health.html::chip.status",
     "src/app/super-admin/integration-health/integration-health.html::row.serviceType",
     "src/app/super-admin/integration-messages/integration-messages.html::row.messageType",
+    "src/app/super-admin/providers/provider-detail/provider-detail.html::p.decisionReason",
+    "src/app/super-admin/providers/provider-detail/provider-detail.html::row.decisionReason",
     "src/app/super-admin/super-admin.html::event.entityType",
     "src/app/transfusion/transfusion.html::u.source",
     "src/app/users/user-list.html::user.profileType"

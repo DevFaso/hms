@@ -2,6 +2,7 @@ package com.example.hms.repository;
 
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.model.AuditEventLog;
+import com.example.hms.payload.dto.provider.ProviderAuditEntryDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -19,6 +20,19 @@ import java.util.UUID;
 @Repository
 public interface AuditEventLogRepository
     extends JpaRepository<AuditEventLog, UUID>, JpaSpecificationExecutor<AuditEventLog> {
+
+    /** The FROM/WHERE of {@link #findProviderFacilityTrail}, shared by its page and count queries. */
+    String FACILITY_TRAIL_WHERE = "FROM AuditEventLog a LEFT JOIN a.assignment asg "
+        + "WHERE a.entityType IN :entityTypes "
+        + "AND a.patientId IS NULL "
+        + "AND (a.roleName IS NULL OR UPPER(a.roleName) NOT IN ('PATIENT', 'ROLE_PATIENT')) "
+        + "AND a.user.id IN (SELECT seat.user.id FROM UserRoleHospitalAssignment seat "
+        + "  WHERE seat.hospital.id = :facilityId "
+        + "  AND UPPER(seat.role.code) NOT IN ('PATIENT', 'ROLE_PATIENT')) "
+        + "AND (asg.hospital.id = :facilityId "
+        + "  OR (a.entityType = 'USER_ROLE_ASSIGNMENT' AND a.resourceId IN ("
+        + "    SELECT CAST(target.id AS String) FROM UserRoleHospitalAssignment target "
+        + "    WHERE target.hospital.id = :facilityId))) ";
 
     Page<AuditEventLog> findByUserId(UUID userId, Pageable pageable);
 
@@ -192,6 +206,66 @@ public interface AuditEventLogRepository
                                                        @Param("eventTypes") Collection<AuditEventType> eventTypes,
                                                        @Param("fromDate") LocalDateTime fromDate,
                                                        @Param("toDate") LocalDateTime toDate);
+
+    /**
+     * A provider facility's OWN audit trail (provider plan §3.1,
+     * {@code GET /provider/audit}), newest first.
+     *
+     * <p>A row is shown when:
+     * <ul>
+     *   <li>it is ANCHORED at the facility: its assignment is there (a write
+     *       the interceptor recorded at the facility, a holder confirming their
+     *       own invitation), or it records a role assignment whose target
+     *       ({@code target_resource_id}) is an assignment there (a registration
+     *       at the facility: the audit service unlinks the registrar's row from
+     *       an assignment that is not theirs, so the target is the anchor);</li>
+     *   <li>its ACTOR holds a seat at the facility (any assignment of theirs
+     *       there): the facility's own staff and admin. A super-admin or a
+     *       support user with no seat there is never shown as a facility
+     *       actor, so their rows are excluded;</li>
+     *   <li>its entity type is in the {@code entityTypes} ALLOWLIST (facility
+     *       administration only: nothing clinical written at the facility can
+     *       ever appear), it names no patient, and it is not about the PATIENT
+     *       role.</li>
+     * </ul>
+     *
+     * <p>The projection carries ids and codes only (plan §6.9): no
+     * description, no details, no IP address. The role shown is the ACTOR's
+     * own STAFF role at the facility: never PATIENT (defence in depth: the
+     * facility guard refuses a PATIENT seat at a provider facility, but a row
+     * that names one must still never show it), and PROVIDER_ADMIN
+     * first when they hold it, otherwise the lowest other code, so an admin
+     * who also dispenses is shown acting as the admin. The role a
+     * role-assignment row assigned is its subject, a separate field.
+     * Under impersonation the row's actor is the impersonated member; the
+     * impersonator columns say who really acted (platform support).
+     *
+     * @param entityTypes the allowed entity types, exactly as the producers write them (upper-case)
+     */
+    @Query(value = "SELECT new com.example.hms.payload.dto.provider.ProviderAuditEntryDTO("
+           + "a.id, a.eventTimestamp, a.eventType, a.status, a.user.id, a.userName, "
+           + "COALESCE("
+           + "CASE WHEN a.entityType <> 'USER_ROLE_ASSIGNMENT' THEN a.roleName ELSE NULL END, "
+           + "(SELECT MIN(adminSeat.role.code) FROM UserRoleHospitalAssignment adminSeat "
+           + "  WHERE adminSeat.user.id = a.user.id AND adminSeat.hospital.id = :facilityId "
+           + "  AND adminSeat.active = true "
+           + "  AND UPPER(adminSeat.role.code) IN ('PROVIDER_ADMIN', 'ROLE_PROVIDER_ADMIN')), "
+           + "(SELECT MIN(seatRole.role.code) FROM UserRoleHospitalAssignment seatRole "
+           + "  WHERE seatRole.user.id = a.user.id AND seatRole.hospital.id = :facilityId "
+           + "  AND seatRole.active = true "
+           + "  AND UPPER(seatRole.role.code) NOT IN ('PATIENT', 'ROLE_PATIENT')), "
+           + "(SELECT MIN(anySeat.role.code) FROM UserRoleHospitalAssignment anySeat "
+           + "  WHERE anySeat.user.id = a.user.id AND anySeat.hospital.id = :facilityId "
+           + "  AND UPPER(anySeat.role.code) NOT IN ('PATIENT', 'ROLE_PATIENT'))), "
+           + "a.entityType, a.resourceId, "
+           + "CASE WHEN a.entityType = 'USER_ROLE_ASSIGNMENT' THEN a.roleName ELSE NULL END, "
+           + "a.impersonatorUserId, a.impersonatorUsername) "
+           + FACILITY_TRAIL_WHERE
+           + "ORDER BY a.eventTimestamp DESC, a.id DESC",
+        countQuery = "SELECT COUNT(a) " + FACILITY_TRAIL_WHERE)
+    Page<ProviderAuditEntryDTO> findProviderFacilityTrail(@Param("facilityId") UUID facilityId,
+                                                          @Param("entityTypes") Collection<String> entityTypes,
+                                                          Pageable pageable);
 
     /** Counterpart of {@link #findByDateRangeAndEventTypeIn} — everything not in the set. */
     @Query("SELECT DISTINCT a FROM AuditEventLog a WHERE " +

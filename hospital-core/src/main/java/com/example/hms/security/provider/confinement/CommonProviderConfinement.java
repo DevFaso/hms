@@ -62,7 +62,10 @@ public final class CommonProviderConfinement {
         new ConfinementRule("POST", "/provider/staff/{userId}/activate",
             "re-invites a staff member at the caller's OWN facility through a new code (P1-T5); never switches a row on"),
         new ConfinementRule("GET", "/provider/settings",
-            "the shell's facility type and provider flags (P1-T9); no tenant or patient data"));
+            "the shell's facility type and provider flags (P1-T9); no tenant or patient data"),
+        new ConfinementRule("GET", "/provider/audit",
+            "the facility's OWN audit trail (plan section 3.1); its PROVIDER_ADMIN only, live;"
+                + " ids and codes, never a row about a patient"));
 
     /**
      * Paths served outside Spring MVC's request mappings, matched on the path
