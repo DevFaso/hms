@@ -313,13 +313,16 @@ public class AuthController {
             // Determine the effective role list for token generation
             List<String> effectiveRoles;
             if (loginRequest.getSelectedRole() != null && !loginRequest.getSelectedRole().isBlank()) {
-                String selected = loginRequest.getSelectedRole().trim();
-                // Validate the user actually holds this role
-                if (allRoles.stream().noneMatch(r -> r.equalsIgnoreCase(selected))) {
+                String typed = loginRequest.getSelectedRole().trim();
+                // Validate the user actually holds this role, and use the held
+                // spelling: the MFA required-roles check and the token compare
+                // exact strings, so "Role_Doctor" must not skip the challenge.
+                String selected = allRoles.stream().filter(r -> r.equalsIgnoreCase(typed)).findFirst().orElse(null);
+                if (selected == null) {
                     log.warn("🔐 [LOGIN] User '{}' tried to select role '{}' but holds only {}",
-                            loginRequest.getUsername(), selected, allRoles);
+                            loginRequest.getUsername(), typed, allRoles);
                     return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                            .body(new MessageResponse("You do not hold the role: " + selected));
+                            .body(new MessageResponse("You do not hold the role: " + typed));
                 }
                 effectiveRoles = List.of(selected);
             } else {

@@ -315,13 +315,6 @@ public class MfaController {
         // Issue the full JWT pair. A role picked at login (still held, checked
         // above) is the session's only role, as the sign-in without a
         // challenge mints it: the challenge never widens it.
-        var activeAssignments = pickedRoles.isEmpty()
-                ? assignmentRepository.findByUser_IdAndActiveTrue(user.getId())
-                : List.<com.example.hms.model.UserRoleHospitalAssignment>of();
-        List<String> roles = !pickedRoles.isEmpty() ? pickedRoles : activeAssignments.stream()
-                .map(a -> a.getRole().getName())
-                .distinct()
-                .toList();
         // Authority strings for the idle-gate touch must be Spring Security
         // canonical form (ROLE_*). `Role.name` is not guaranteed to carry the
         // ROLE_ prefix (per the entity Javadoc, examples include both
@@ -331,10 +324,17 @@ public class MfaController {
         // through this path would be misclassified as human and pinned in
         // Redis. Use `Role.code`, which is uppercased on persist (Role.java)
         // and mirrors the AuthController#refreshToken pattern (line ~617).
-        List<String> roleCodes = !pickedRoles.isEmpty() ? pickedRoles : activeAssignments.stream()
-                .map(a -> a.getRole().getCode())
-                .distinct()
-                .toList();
+        List<String> roles;
+        List<String> roleCodes;
+        if (pickedRoles.isEmpty()) {
+            var activeAssignments = assignmentRepository.findByUser_IdAndActiveTrue(user.getId());
+            roles = activeAssignments.stream().map(a -> a.getRole().getName()).distinct().toList();
+            roleCodes = activeAssignments.stream().map(a -> a.getRole().getCode()).distinct().toList();
+        } else {
+            // Held spellings (honouredPick), already canonical ROLE_* authorities.
+            roles = pickedRoles;
+            roleCodes = pickedRoles;
+        }
 
         var descriptor = new TokenUserDescriptor(user.getId(), username, roles);
         // A verified TOTP or backup code: both tokens carry amr [pwd, otp], the

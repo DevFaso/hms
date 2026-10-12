@@ -5011,7 +5011,12 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   (password-only, and now through the MFA challenge too) widens after one access-token
   lifetime. Carry the pick in the refresh token, as `amr`/`otp_at` are. Also from that
   round: `ProviderMfaGate.refuses()` re-checks the confinement `decide()` has just checked
-  (fold into the gate plumbing bullet). Open.
+  (fold into the gate plumbing bullet). Later rounds: the access-token cap at the proof's
+  end applies to every TOTP user, so a hospital MFA user's tokens shrink in the last 15
+  minutes before 48 h (a few extra refreshes, harmless; cap only provider users if it
+  matters); `/auth/mfa/verify` refuses a revoked pick before reserving an attempt, so a
+  replayed challenge writes one audit row per call (throttle or audit once per jti); and
+  one verify parses the challenge token about five times (parse once). Open.
 - **CDS acknowledgement with an unknown hospital id now answers 404** (was: saved as a
   global acknowledgement). Intended since #835; confirm no client relies on the old
   behaviour. Open.

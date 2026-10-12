@@ -235,6 +235,21 @@ class MfaChallengeTokenScopeIT extends BaseIT {
     // ── What it still does ──
 
     @Test
+    @DisplayName("a role picked in another letter case is still the MFA-required role: challenged, no tokens")
+    void aRoleTypedInAnotherCaseIsStillChallenged() throws Exception {
+        MvcResult login = mockMvc.perform(post("/auth/login").with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                    "username", enrolled.getUsername(), "password", PASSWORD,
+                    "selectedRole", ROLE.toLowerCase(java.util.Locale.ROOT)))))
+            .andReturn();
+        assertThat(login.getResponse().getStatus()).isEqualTo(200);
+        JsonNode body = body(login);
+        assertThat(body.get("mfaRequired").asBoolean()).isTrue();
+        assertThat(body.hasNonNull("accessToken")).isFalse();
+    }
+
+    @Test
     @DisplayName("the challenge token still completes the MFA step, and the session it yields works")
     void challengeStillCompletesVerify() throws Exception {
         String access = fullSession(enrolled, enrolledSecret);
