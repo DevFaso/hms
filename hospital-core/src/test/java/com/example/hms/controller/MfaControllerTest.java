@@ -279,7 +279,9 @@ class MfaControllerTest {
         mockMvc.perform(post("/auth/mfa/verify")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mfaToken\":\"mfa-tok-late\",\"code\":\"654321\"}"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                // an expired challenge is not reported as a revoked role
+                .andExpect(jsonPath("$.message").value("Invalid or expired MFA token."));
         verify(mfaService, never()).reserveCodeAttempt(any());
     }
 

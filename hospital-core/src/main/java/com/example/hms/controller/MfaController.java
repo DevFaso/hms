@@ -75,6 +75,26 @@ public class MfaController {
     private final com.example.hms.security.HospitalUserDetailsService userDetailsService;
 
     /**
+     * Why {@link #honouredPick} refused, told apart: a challenge that no longer
+     * parses (expired meanwhile) is the usual invalid-token 401; a pick no
+     * longer held is said so, and audited.
+     */
+    private ResponseEntity<Object> pickRefusal(String mfaToken, User user) {
+        if (jwtTokenProvider.mfaTokenSelectedRoles(mfaToken).isEmpty()) {
+            return ResponseEntity.status(401).body(new MessageResponse(INVALID_MFA_TOKEN));
+        }
+        auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .userId(user.getId())
+                .userName(user.getUsername())
+                .eventType(AuditEventType.MFA_FAILURE)
+                .status(AuditStatus.FAILURE)
+                .eventDescription("MFA sign-in refused: the role picked at login is no longer held")
+                .build());
+        return ResponseEntity.status(401)
+                .body(new MessageResponse(com.example.hms.utility.MessageUtil.resolve(PICK_NOT_HONOURED)));
+    }
+
+    /**
      * The roles the challenge picked at login that the user still holds: an
      * empty list when none was picked, and {@link Optional#empty()} when the
      * pick cannot be honoured (the token no longer parses, or no picked role
@@ -232,15 +252,7 @@ public class MfaController {
         // whose pick cannot be honoured is refused, never widened.
         Optional<List<String>> honoured = honouredPick(request.mfaToken(), username);
         if (honoured.isEmpty()) {
-            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                    .userId(user.getId())
-                    .userName(username)
-                    .eventType(AuditEventType.MFA_FAILURE)
-                    .status(AuditStatus.FAILURE)
-                    .eventDescription("MFA sign-in refused: the role picked at login is no longer held")
-                    .build());
-            return ResponseEntity.status(401)
-                    .body(new MessageResponse(com.example.hms.utility.MessageUtil.resolve(PICK_NOT_HONOURED)));
+            return pickRefusal(request.mfaToken(), user);
         }
         List<String> pickedRoles = honoured.get();
 
