@@ -1151,6 +1151,8 @@ class AuthControllerTest {
                     org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/auth/credentials/mfa")
                             .contentType(MediaType.APPLICATION_JSON).content("[]"),
                     post("/auth/credentials/recovery/" + java.util.UUID.randomUUID() + "/send-code"),
+                    post("/auth/verify-password").contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"username\":\"target\",\"password\":\"guess\"}"),
                     post("/auth/credentials/recovery/" + java.util.UUID.randomUUID() + "/verify")
                             .contentType(MediaType.APPLICATION_JSON).content("{\"code\":\"123456\"}"))) {
                 mockMvc.perform(request).andExpect(status().isForbidden());
