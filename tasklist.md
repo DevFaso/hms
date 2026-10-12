@@ -4878,6 +4878,41 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   switches the scope chip while on `/appointments/calendar` keeps seeing (and fetching)
   the first hospital under the new chip. Pre-existing; read the scope at fetch time, as
   the other scope-aware pages do (found in #855's final review). Open.
+- **External providers: the staff list's `providerAdmin` flag counts only PROVIDER_ADMIN rows at the facility**, while deactivate/activate refuse a member holding any admin role anywhere, so the portal can offer Deactivate/Activate on a member the action then answers 404; derive the flag from the same rule as the actions (found in #840's round-4 review). Open.
+- **External providers: `ProviderAdminService.updateProfile` returns the email as sent**, while storage lower-cases it at flush; return the stored value (found in #840's round-4 review). Open.
+- **External providers: `provider.type.invalid` and the provider-type set are declared three times** (`ProviderDirectoryServiceImpl`, `HospitalServiceImpl`, `ProviderOnboardingServiceImpl`); one constant each (found in #840's round-4 review). Open.
+- **External providers: `ProviderSeatResolver` reads `HospitalContextHolder` directly** instead of `ActingScopeResolver.ensureContext()`, so a request both context filters skipped sees no seat where every other reader computes the context (found in #840's round-4 review). Open.
+- **External providers: `UserAccountAccess.ADMIN_ROLES` was made public with no production caller outside the class**; only `ProviderRegistrarTest`, in the same package, reads it, so package-private does (found in #840's round-4 review). Open.
+- **External providers: the portal does not act on `mfaEnrollmentRequired` yet**
+  (D5 slice 4 added it to `/auth/session/bootstrap` and the 403
+  `mfa.enrollment.required`). P1-T13's shell must send a legacy user to MFA
+  enrolment or the challenge and a Keycloak user back through login with
+  `prompt=login` (or `max_age=0`): a silent SSO re-login answers from the
+  Keycloak cookie with the same `amr` and loops (and where OTP is first
+  configured, `amr` holds `pwd` only until the next login; a user with no OTP
+  goes through `kc_action=CONFIGURE_TOTP` first). Before the first provider is
+  verified on prod. Open.
+- **External providers: `ProviderMfaGate` re-parses the legacy bearer on every
+  confined request** (`JwtTokenProvider.secondFactorAt`, a signature check)
+  although `JwtAuthenticationFilter` already parsed it; carry the proof from
+  the filter's parse (found in #851's round-1 review). Open.
+- **External providers: `/auth/login` reads the caller's assignments once more
+  for the provider challenge** (`ProviderMfaGate.isProviderUser`) after the
+  authentication already loaded them; reuse that read (found in #851's round-1
+  review). Open.
+- **Auth: the MFA challenge token authenticates as its user, and a password
+  alone can replace a hospital user's authenticator.** `JwtAuthenticationFilter`
+  does not read the `purpose` claim, so the 5-minute `mfaToken` `/auth/login`
+  returns before the TOTP step is a role-less, password-only session on every
+  endpoint that asks only `authenticated()` (the legacy MFA enrolment relies on
+  it). With it, `POST /auth/mfa/enroll` resets a verified authenticator and
+  `PUT /auth/credentials/mfa` rewrites or deletes the MFA records, so whoever
+  holds the password can enrol their own device and pass the challenge. D5
+  slice 4 (#851) holds provider users to sign-in and enrolment without the
+  factor; the hotfix #853 (`fix/mfa-challenge-token-scope`) closes the root
+  for every user: the challenge token limited to the MFA step, and replacing
+  a verified authenticator needing a full session and a step-up code (found
+  while building D5 slice 4). Open until #853 merges.
 - **CDS acknowledgement with an unknown hospital id now answers 404** (was: saved as a
   global acknowledgement). Intended since #835; confirm no client relies on the old
   behaviour. Open.
