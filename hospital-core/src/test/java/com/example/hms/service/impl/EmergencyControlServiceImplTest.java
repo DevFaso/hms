@@ -1,6 +1,6 @@
 package com.example.hms.service.impl;
 
-import com.example.hms.exception.UnauthorizedException;
+import com.example.hms.exception.MfaStepUpRefusedException;
 import com.example.hms.model.User;
 import com.example.hms.model.UserMfaEnrollment;
 import com.example.hms.payload.dto.AuditEventLogResponseDTO;
@@ -22,8 +22,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import com.example.hms.enums.AuditEventType;
-import com.example.hms.enums.AuditStatus;
 import org.mockito.ArgumentCaptor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -100,9 +98,14 @@ class EmergencyControlServiceImplTest {
         actor.setUsername("super.alice");
         when(userRepository.findByUsername("super.alice")).thenReturn(Optional.of(actor));
 
-        // Default MFA stubs: enrolled, valid token. Individual tests override.
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(true);
-        when(mfaService.verifyCode(eq(actorId), anyString())).thenReturn(true);
+        // Default: the shared step-up verifies. Individual tests override; its
+        // own branches (code, backup code, strict, lookup failure, no actor)
+        // are covered by MfaServiceTest.
+        when(mfaService.requireStepUp(eq(actorId), anyString(), anyString(), org.mockito.ArgumentMatchers.anyBoolean()))
+            .thenReturn(true);
+        when(mfaService.requireStepUp(org.mockito.ArgumentMatchers.isNull(), any(), anyString(),
+                org.mockito.ArgumentMatchers.anyBoolean()))
+            .thenThrow(new MfaStepUpRefusedException(MfaStepUpRefusedException.Reason.REQUIRED));
 
         when(revocationService.revokeAll(any(), any(), any())).thenReturn(Instant.now());
         when(featureFlagService.upsertOverride(anyString(), eq(false), anyString(),
@@ -135,48 +138,36 @@ class EmergencyControlServiceImplTest {
     }
 
     @Test
-    @DisplayName("forceLogoutAll rejects when actor is enrolled but token is missing")
+    @DisplayName("forceLogoutAll stops when the shared step-up refuses (403 reason, audited by MfaService)")
     void forceLogoutAllRejectsMissingToken() {
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(true);
+        when(mfaService.requireStepUp(actorId, null, "emergency force-logout-all", false))
+            .thenThrow(new MfaStepUpRefusedException(MfaStepUpRefusedException.Reason.REQUIRED));
 
         EmergencyForceLogoutRequestDTO req = EmergencyForceLogoutRequestDTO.builder().reason("x").build();
 
         assertThatThrownBy(() -> service.forceLogoutAll(req, null))
-            .isInstanceOf(UnauthorizedException.class)
-            .hasMessageContaining("mfa_required");
+            .isInstanceOfSatisfying(MfaStepUpRefusedException.class,
+                ex -> assertThat(ex.getCode()).isEqualTo("mfa.stepup.required"));
         verify(revocationService, never()).revokeAll(any(), any(), any());
-
-        // The rejection itself is audited — a missing code on a platform-wide
-        // control must leave a trace (it left none before 2026-09-05).
-        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
-        verify(auditEventLogService).logEvent(audit.capture());
-        assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.MFA_FAILURE);
-        assertThat(audit.getValue().getStatus()).isEqualTo(AuditStatus.FAILURE);
-        assertThat(audit.getValue().getEventDescription())
-            .contains("force-logout-all").contains("REJECTED").contains("no X-Mfa-Token supplied");
     }
 
     @Test
-    @DisplayName("forceLogoutAll rejects when actor is enrolled but token is invalid")
+    @DisplayName("forceLogoutAll stops on a code the shared step-up does not accept")
     void forceLogoutAllRejectsBadToken() {
-        when(mfaService.verifyCode(actorId, "bad")).thenReturn(false);
+        when(mfaService.requireStepUp(actorId, "bad", "emergency force-logout-all", false))
+            .thenThrow(new MfaStepUpRefusedException(MfaStepUpRefusedException.Reason.INVALID));
 
         EmergencyForceLogoutRequestDTO req = EmergencyForceLogoutRequestDTO.builder().reason("x").build();
 
         assertThatThrownBy(() -> service.forceLogoutAll(req, "bad"))
-            .isInstanceOf(UnauthorizedException.class);
-
-        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
-        verify(auditEventLogService).logEvent(audit.capture());
-        assertThat(audit.getValue().getStatus()).isEqualTo(AuditStatus.FAILURE);
-        assertThat(audit.getValue().getEventDescription()).contains("X-Mfa-Token did not verify");
+            .isInstanceOf(MfaStepUpRefusedException.class);
         verify(revocationService, never()).revokeAll(any(), any(), any());
     }
 
     @Test
     @DisplayName("forceLogoutAll passes through with audit when actor not enrolled (non-strict mode)")
     void forceLogoutAllUnenrolledNonStrict() {
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(false);
+        when(mfaService.requireStepUp(actorId, null, "emergency force-logout-all", false)).thenReturn(false);
 
         EmergencyForceLogoutRequestDTO req = EmergencyForceLogoutRequestDTO.builder().reason("x").build();
 
@@ -188,27 +179,17 @@ class EmergencyControlServiceImplTest {
     }
 
     @Test
-    @DisplayName("forceLogoutAll rejects unenrolled actor in strict mode")
+    @DisplayName("forceLogoutAll hands strict mode to the shared step-up")
     void forceLogoutAllUnenrolledStrict() {
         ReflectionTestUtils.setField(service, "requireMfaStrict", true);
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(false);
+        when(mfaService.requireStepUp(actorId, null, "emergency force-logout-all", true))
+            .thenThrow(new MfaStepUpRefusedException(MfaStepUpRefusedException.Reason.NOT_ENROLLED));
 
         EmergencyForceLogoutRequestDTO req = EmergencyForceLogoutRequestDTO.builder().reason("x").build();
 
         assertThatThrownBy(() -> service.forceLogoutAll(req, null))
-            .isInstanceOf(UnauthorizedException.class);
-    }
-
-    @Test
-    @DisplayName("forceLogoutAll wraps an MFA-lookup exception as UnauthorizedException")
-    void forceLogoutAllMfaLookupBlowsUp() {
-        when(mfaService.isMfaEnabled(actorId)).thenThrow(new RuntimeException("db down"));
-
-        EmergencyForceLogoutRequestDTO req = EmergencyForceLogoutRequestDTO.builder().reason("x").build();
-
-        assertThatThrownBy(() -> service.forceLogoutAll(req, "123"))
-            .isInstanceOf(UnauthorizedException.class)
-            .hasMessageContaining("enrollment lookup unavailable");
+            .isInstanceOf(MfaStepUpRefusedException.class);
+        verify(revocationService, never()).revokeAll(any(), any(), any());
     }
 
     @Test
@@ -219,8 +200,8 @@ class EmergencyControlServiceImplTest {
         EmergencyForceLogoutRequestDTO req = EmergencyForceLogoutRequestDTO.builder().reason("x").build();
 
         assertThatThrownBy(() -> service.forceLogoutAll(req, "123"))
-            .isInstanceOf(UnauthorizedException.class)
-            .hasMessageContaining("missing super-admin actor");
+            .isInstanceOf(MfaStepUpRefusedException.class);
+        verify(revocationService, never()).revokeAll(any(), any(), any());
     }
 
     @Test
@@ -295,6 +276,8 @@ class EmergencyControlServiceImplTest {
         verify(mfaEnrollmentRepository, never()).findAll();
         verify(mfaEnrollmentRepository, never()).deleteAll(any());
         verify(mfaBackupCodeRepository, never()).deleteAllByUserId(any());
+        // Refused before the step-up, which would otherwise spend a backup code.
+        verify(mfaService, never()).requireStepUp(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     @Test
@@ -401,7 +384,6 @@ class EmergencyControlServiceImplTest {
             .flagKey("a.b").reason("test").build();
 
         assertThatThrownBy(() -> service.killFeature(req, "123"))
-            .isInstanceOf(UnauthorizedException.class)
-            .hasMessageContaining("missing super-admin actor");
+            .isInstanceOf(MfaStepUpRefusedException.class);
     }
 }

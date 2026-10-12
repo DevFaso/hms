@@ -105,6 +105,8 @@ public class AuthController {
     private final UserService userService;
     private final UserCredentialLifecycleService userCredentialLifecycleService;
     private final TokenBlacklistService tokenBlacklistService;
+    /** Force-logout-all: a refresh token issued before it mints nothing (the filter's own rule). */
+    private final com.example.hms.security.GlobalSessionRevocationService globalSessionRevocationService;
     private final com.example.hms.security.IdleSessionGate idleSessionGate;
     private final com.example.hms.security.ImpersonationSessionTracker impersonationSessionTracker;
     private final LoginAttemptService loginAttemptService;
@@ -140,6 +142,7 @@ public class AuthController {
             AuthNotificationFacade authNotification,
             UserCredentialLifecycleService userCredentialLifecycleService,
             TokenBlacklistService tokenBlacklistService,
+            com.example.hms.security.GlobalSessionRevocationService globalSessionRevocationService,
             com.example.hms.security.IdleSessionGate idleSessionGate,
             com.example.hms.security.ImpersonationSessionTracker impersonationSessionTracker,
             LoginAttemptService loginAttemptService,
@@ -158,6 +161,7 @@ public class AuthController {
         this.authNotification = authNotification;
         this.userCredentialLifecycleService = userCredentialLifecycleService;
         this.tokenBlacklistService = tokenBlacklistService;
+        this.globalSessionRevocationService = globalSessionRevocationService;
         this.idleSessionGate = idleSessionGate;
         this.impersonationSessionTracker = impersonationSessionTracker;
         this.loginAttemptService = loginAttemptService;
@@ -665,6 +669,73 @@ public class AuthController {
     }
 
     /**
+     * Why this token may not mint a session, or {@code null} when it may
+     * go on: not a refresh token, issued before a force-logout-all, or
+     * already spent (superseded by a sibling tab: 409; replayed: 401).
+     */
+    private ResponseEntity<Object> refreshRefusal(String refreshToken) {
+        // A refresh token, and nothing else the same key signs: the MFA
+        // challenge token would mint a session past MFA, an impersonation
+        // token an ordinary session that outlives the impersonation, and an
+        // access token a session that never ends.
+        if (!jwtTokenProvider.isRefreshToken(refreshToken)) {
+            log.warn("🔄 [REFRESH] Invalid or expired refresh token");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse(REFRESH_INVALID_MESSAGE));
+        }
+
+        // Force-logout-all revokes refresh tokens too: one issued before it
+        // must not mint a new session (GlobalSessionRevocationService#revokes,
+        // the rule the filter applies to access tokens).
+        // The fresh read, not the 30-second cache: an instance that has not
+        // caught up would otherwise mint a post-cut-off pair from a revoked
+        // token, which then outlives the kill switch. Refresh is rare.
+        if (globalSessionRevocationService.revokesFresh(jwtTokenProvider.getIssuedAt(refreshToken))) {
+            log.warn("🔄 [REFRESH] Refused — refresh token predates the last force-logout-all");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse(REFRESH_INVALID_MESSAGE));
+        }
+
+        // Replay detection: an already-used refresh token is refused here; the
+        // atomic claim below settles a race between two concurrent uses. Used
+        // a moment ago by another tab of the same browser: superseded (409),
+        // not replayed, so that tab retries with the rotated cookie instead
+        // of signing every tab out.
+        String refreshJti = jwtTokenProvider.getJtiFromToken(refreshToken);
+        if (refreshJti != null && tokenBlacklistService.isBlacklisted(refreshJti)) {
+            if (tokenBlacklistService.wasRecentlyRotated(refreshJti)) {
+                return refreshSuperseded(refreshJti);
+            }
+            log.warn("🔄 [REFRESH] Replay detected — refresh token jti={} already used", refreshJti);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse("Refresh token has already been used. Please log in again."));
+        }
+        return null;
+    }
+
+    /**
+     * How long after a rotation another use of the old refresh token counts as
+     * a sibling tab that lost the race (409, retry) rather than a replay (401).
+     */
+    static final long REFRESH_ROTATION_GRACE_MS = 30_000L;
+
+    /** The 409: a readable sentence (clients show it); the status is what a client acts on. */
+    private static final String REFRESH_SUPERSEDED_MESSAGE =
+            "This session was just refreshed by another tab or request. Retry with the latest token.";
+
+    private static final String REFRESH_INVALID_MESSAGE =
+            "Refresh token is invalid or has expired. Please log in again.";
+
+    /** Another tab rotated this refresh token a moment ago: no tokens, retry with the new cookie. */
+    private ResponseEntity<Object> refreshSuperseded(String jti) {
+        // WARN, like a replay: a sibling tab looks exactly like a stolen copy
+        // replayed inside the grace, and theft alerting must still see it.
+        log.warn("🔄 [REFRESH] Superseded (or a replay within the grace) — refresh token jti={} was just rotated", jti);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new MessageResponse(REFRESH_SUPERSEDED_MESSAGE));
+    }
+
+    /**
      * Silent token refresh.
      *
      * <p>Accepts a still-valid refresh token and issues a new short-lived access token.
@@ -674,7 +745,8 @@ public class AuthController {
      *
      * <p>Security rationale: the refresh token is signed with the same HMAC-SHA secret and
      * carries its own {@code exp} claim, so a tampered or expired refresh token is rejected
-     * by {@link JwtTokenProvider#validateToken}.
+     * by {@link JwtTokenProvider#isRefreshToken}, which also refuses every other token the
+     * same key signs (access, impersonation, MFA challenge).
      */
     @WriteAudited(skip = true, reason = "emits LOGOUT / TOKEN_REFRESH itself, or is a check that mutates nothing")
     @PostMapping("/token/refresh")
@@ -683,6 +755,7 @@ public class AuthController {
         description = "Exchange a valid refresh token for a new access token + rotated refresh token.")
     @ApiResponse(responseCode = "200", description = "Tokens refreshed")
     @ApiResponse(responseCode = "401", description = "Refresh token missing, invalid, or expired")
+    @ApiResponse(responseCode = "409", description = "Superseded: another tab just rotated this refresh token; retry")
     public ResponseEntity<Object> refreshToken(
             @RequestBody(required = false) java.util.Map<String, String> body,
             HttpServletRequest request,
@@ -710,19 +783,11 @@ public class AuthController {
                     .body(new MessageResponse("Refresh token is required."));
         }
 
-        if (!jwtTokenProvider.validateToken(refreshToken)) {
-            log.warn("🔄 [REFRESH] Invalid or expired refresh token");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("Refresh token is invalid or has expired. Please log in again."));
+        ResponseEntity<Object> refusal = refreshRefusal(refreshToken);
+        if (refusal != null) {
+            return refusal;
         }
-
-        // Replay detection: reject already-used refresh tokens
         String refreshJti = jwtTokenProvider.getJtiFromToken(refreshToken);
-        if (refreshJti != null && tokenBlacklistService.isBlacklisted(refreshJti)) {
-            log.warn("🔄 [REFRESH] Replay detected — refresh token jti={} already used", refreshJti);
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("Refresh token has already been used. Please log in again."));
-        }
 
         String username = jwtTokenProvider.getUsernameFromJWT(refreshToken);
         var user = userRepository.findByUsername(username).orElse(null);
@@ -779,66 +844,85 @@ public class AuthController {
                         "Session timed out due to inactivity. Please log in again."));
         }
 
-        var descriptor = new com.example.hms.security.TokenUserDescriptor(user.getId(), username, roles);
-        String newAccessToken  = jwtTokenProvider.generateAccessToken(descriptor);
-
-        // Rotate the refresh token so each use yields a fresh one
-        var refreshAuth = new UsernamePasswordAuthenticationToken(
-                new com.example.hms.security.CustomUserDetails(user,
-                        roles.stream()
-                             .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
-                             .collect(java.util.stream.Collectors.toSet())),
-                null,
-                roles.stream()
-                     .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
-                     .toList());
-        String newRefreshToken = jwtTokenProvider.generateRefreshToken(refreshAuth);
-
-        // Blacklist the old refresh token to prevent replay
-        if (refreshJti != null) {
-            long oldRefreshExp = jwtTokenProvider.getExpiration(refreshToken).getTime();
-            tokenBlacklistService.blacklist(refreshJti, oldRefreshExp);
-            log.debug("🔄 [REFRESH] Blacklisted old refresh token jti={}", refreshJti);
+        // Spend the refresh token atomically BEFORE minting: of two concurrent
+        // refreshes with one token, exactly one gets a new pair. The other is
+        // superseded (409): it gets no tokens and retries with the cookie the
+        // winner rotated, so two tabs refreshing at once stay signed in.
+        if (refreshJti == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse(REFRESH_INVALID_MESSAGE));
+        }
+        // Rotated is recorded BEFORE the token is spent: a sibling tab that
+        // sees it spent always sees it rotated too, so it is told
+        // "superseded" (409, retry), never "replayed" (401, sign out). Marking
+        // a token we then fail to claim is harmless: it only turns another
+        // use within the grace from 401 into 409, and issues nothing.
+        tokenBlacklistService.markRotated(refreshJti, REFRESH_ROTATION_GRACE_MS);
+        if (!tokenBlacklistService.claim(refreshJti, jwtTokenProvider.getExpiration(refreshToken).getTime())) {
+            return refreshSuperseded(refreshJti);
         }
 
-        // ── Idle session timeout — touch on successful refresh ──────────
-        // Only after the rotation has succeeded; touching pre-rotation
-        // would extend the window even if rotation failed downstream.
-        idleSessionGate.touchIfHuman(user.getId(), refreshAuthorities);
+        // Claimed and marked rotated above: if anything below fails before
+        // the new pair is out, give the old token back, or the session is
+        // stranded (every retry would read "superseded" until it expires).
+        try {
+            var descriptor = new com.example.hms.security.TokenUserDescriptor(user.getId(), username, roles);
+            String newAccessToken  = jwtTokenProvider.generateAccessToken(descriptor);
 
-        long nowMs      = System.currentTimeMillis();
-        long accessExp  = jwtTokenProvider.getExpiration(newAccessToken).getTime();
-        long refreshExp = jwtTokenProvider.getExpiration(newRefreshToken).getTime();
+            // Rotate the refresh token so each use yields a fresh one
+            var refreshAuth = new UsernamePasswordAuthenticationToken(
+                    new com.example.hms.security.CustomUserDetails(user,
+                            roles.stream()
+                                 .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
+                                 .collect(java.util.stream.Collectors.toSet())),
+                    null,
+                    roles.stream()
+                         .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
+                         .toList());
+            String newRefreshToken = jwtTokenProvider.generateRefreshToken(refreshAuth);
 
-        log.info("🔄 [REFRESH] Tokens rotated for user='{}'", username);
+            // ── Idle session timeout — touch on successful refresh ──────────
+            // Only after the rotation has succeeded; touching pre-rotation
+            // would extend the window even if rotation failed downstream.
+            idleSessionGate.touchIfHuman(user.getId(), refreshAuthorities);
 
-        auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                .eventType(AuditEventType.TOKEN_REFRESH)
-                .eventDescription("Token pair rotated (old refresh jti=" + refreshJti + ")")
-                .userName(username)
-                .userId(user.getId())
-                .status(AuditStatus.SUCCESS)
-                .build());
+            long nowMs      = System.currentTimeMillis();
+            long accessExp  = jwtTokenProvider.getExpiration(newAccessToken).getTime();
+            long refreshExp = jwtTokenProvider.getExpiration(newRefreshToken).getTime();
 
-        // Include fresh hospital context so the frontend can re-hydrate
-        var hospitalContext = resolveHospitalContext(user.getId());
+            log.info("🔄 [REFRESH] Tokens rotated for user='{}'", username);
 
-        // S-01: rotate the HttpOnly refresh-token cookie
-        writeRefreshCookie(response, newRefreshToken);
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.TOKEN_REFRESH)
+                    .eventDescription("Token pair rotated (old refresh jti=" + refreshJti + ")")
+                    .userName(username)
+                    .userId(user.getId())
+                    .status(AuditStatus.SUCCESS)
+                    .build());
 
-        return ResponseEntity.ok(JwtResponse.builder()
-                .accessToken(newAccessToken)
-                .refreshToken(newRefreshToken)
-                .issuedAt(nowMs)
-                .accessTokenExpiresAt(accessExp)
-                .refreshTokenExpiresAt(refreshExp)
-                .id(user.getId())
-                .username(user.getUsername())
-                .roles(roles)
-                .primaryHospitalId(hospitalContext.primaryHospitalId())
-                .primaryHospitalName(hospitalContext.primaryHospitalName())
-                .hospitalIds(hospitalContext.hospitalIds())
-                .build());
+            // Include fresh hospital context so the frontend can re-hydrate
+            var hospitalContext = resolveHospitalContext(user.getId());
+
+            // S-01: rotate the HttpOnly refresh-token cookie
+            writeRefreshCookie(response, newRefreshToken);
+
+            return ResponseEntity.ok(JwtResponse.builder()
+                    .accessToken(newAccessToken)
+                    .refreshToken(newRefreshToken)
+                    .issuedAt(nowMs)
+                    .accessTokenExpiresAt(accessExp)
+                    .refreshTokenExpiresAt(refreshExp)
+                    .id(user.getId())
+                    .username(user.getUsername())
+                    .roles(roles)
+                    .primaryHospitalId(hospitalContext.primaryHospitalId())
+                    .primaryHospitalName(hospitalContext.primaryHospitalName())
+                    .hospitalIds(hospitalContext.hospitalIds())
+                    .build());
+        } catch (RuntimeException mintFailed) {
+            tokenBlacklistService.release(refreshJti);
+            throw mintFailed;
+        }
     }
 
     /**
@@ -1111,14 +1195,22 @@ public class AuthController {
         return ResponseEntity.ok(dto);
     }
 
+    /**
+     * Rewrites the caller's MFA records, which can disable or delete a verified
+     * authenticator: while one is active, that takes the step-up in
+     * {@code X-Mfa-Token} (a current code or an unused backup code; 403 with a
+     * reason code otherwise), checked in the same transaction as the change.
+     */
     @PutMapping("/credentials/mfa")
     public ResponseEntity<List<UserMfaEnrollmentDTO>> updateMfaEnrollments(
-            @Valid @RequestBody List<UserMfaEnrollmentRequestDTO> payload) {
+            @Valid @RequestBody List<UserMfaEnrollmentRequestDTO> payload,
+            @RequestHeader(value = "X-Mfa-Token", required = false) String stepUpCode) {
         UUID userId = resolveCurrentUserId();
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        List<UserMfaEnrollmentDTO> response = userCredentialLifecycleService.upsertMfaEnrollments(userId, payload);
+        List<UserMfaEnrollmentDTO> response = userCredentialLifecycleService.upsertOwnMfaEnrollments(
+                userId, payload, SecurityContextHolder.getContext().getAuthentication(), stepUpCode);
         return ResponseEntity.ok(response);
     }
 

@@ -2240,6 +2240,11 @@ split out of #781; #785 the unguarded `/patients-v2` surface removed and #786
 CDS Hooks held to clinicians and a readable chart, both from #783's
 out-of-scope list; #787 the imaging-order writes held to the acting hospital,
 from #778's D13. Each source bullet below says what it left.
+- **~~TOTP codes have no replay protection within the ±30 s window.~~ Done (#853,
+  round 4, V183 `last_totp_step`).** A code is accepted once, by a conditional
+  update that claims its time-step, at login and at every step-up. One deliberate
+  exception: the code that confirms an enrolment is not claimed, so the sign-in
+  the portal sends the user to next accepts it once.
 - **~~Patient-admitting reads by patient id with no ownership check.~~
   Closed by #783** (2026-09-27): on the 13 reads its sweep found, a
   patient-only caller reads only their own rows and another patient's id
@@ -4878,6 +4883,62 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   switches the scope chip while on `/appointments/calendar` keeps seeing (and fetching)
   the first hospital under the new chip. Pre-existing; read the scope at fetch time, as
   the other scope-aware pages do (found in #855's final review). Open.
+- **The patient apps and the refresh 409 (#853): fix before their next release.** A
+  refresh token is now spent atomically: of concurrent refreshes with one token, one
+  wins and the rest get 409 "superseded". The portal retries (the shared cookie has
+  rotated); the apps do not. iOS fires concurrent refreshes and surfaces the 409 as a
+  request error; Android refreshes under a mutex but clears the tokens (signs out) on
+  any non-2xx, so a 409 would sign the patient out. Both: single-flight the refresh,
+  and on 409 retry the original request with the token the winner stored. Both apps
+  are with testers only today (found in #853's round-8 review). Open.
+- **One refresh parses the same JWT 6-7 times.** `isRefreshToken`, `getIssuedAt`,
+  `getJtiFromToken`, `getUsernameFromJWT`, `getExpiration` each verify the signature
+  again; the MFA verify does the same. Parse once and read the claims (found in #853's
+  round-8 review). Open.
+- **Per-user MFA lockouts can be used to lock the real user out (#853, accepted).** The
+  login code budget and the step-up budget are per user (5 wrong codes, 15 minutes), so
+  someone holding only the password can lock the user's MFA sign-in, and someone holding
+  a stolen session can lock their step-ups (the emergency controls included). That is
+  the price of brute-force resistance. Mitigations to weigh: key the budget per user AND
+  source, a super-admin unlock, a backup code bypassing the lock (found in #853's
+  round-9 review). Open.
+- **MFA login: a code read before an authenticator swap can still be claimed after it.**
+  `verifyMfa` reads the current secret, then claims the step by (user, method, step); a
+  replacement confirmed in between resets the step, so an old-authenticator code can
+  sign in once in that window. Narrow (password + an old code + a concurrent confirm);
+  close it by claiming against the secret version (found in #853's round-9 review). Open.
+- **Concurrent first MFA enrolments: the loser gets a generic error.** V183's unique
+  index refuses the second insert (no corruption any more); answer it as 409 "already
+  started" instead (found in #853's round-9 review). Open.
+- **MFA: BCrypt work inside a transaction.** `enrollTotp` holds the user's MFA row lock
+  while it hashes 10 backup codes and renders the QR (about a second, blocking that user's
+  sign-in claim), and a backup-code check BCrypt-scans up to 10 hashes inside a
+  transaction (a pooled connection held for the scan). Hash and render before locking;
+  load the hashes, then match outside the transaction (found in #853's round-10
+  review). Open.
+- **The portal's 409 refresh retries draw on the per-IP refresh rate limit.** Up to 4
+  retries per losing tab, against 30 refreshes per minute per IP: staff behind one NAT
+  can exhaust it, and a 429 there ends in sign-out. Exempt a superseded retry, or key
+  the refresh bucket per user (found in #853's round-10 review). Open.
+- **Legacy refresh tokens are recognised by claim shape with no end date.** Bound
+  `TokenUse.isLegacyRefreshShape` by an `iat` before the #853 deploy, or remove it one
+  refresh lifetime after, so a future minimal token type can never pass as a refresh
+  token (found in #853's round-10 review). Open.
+- **MFA step-up holds a second pooled connection.** `requireStepUp` runs in its own
+  transaction (REQUIRES_NEW, so a caller's long transaction never locks the actor's MFA
+  row), but its callers (lifecycle, emergency controls, the super-admin MFA endpoint)
+  already hold a connection and often a row lock: each concurrent request needs two, three
+  on a refused code (the audit). On a small Hikari pool, enough concurrent step-ups block
+  until the connection timeout. Check the prod pool size against the concurrency of these
+  super-admin endpoints, or run the step-up before the caller opens its transaction
+  (found in #853's round-7 review). Open.
+- **MFA step-up: the non-strict bypass audit belongs inside `MfaService.requireStepUp`.**
+  Its five callers (emergency controls, hospital and organization lifecycle, support
+  impersonation, the super-admin MFA endpoint) each carry their own copy of the
+  "audit the bypass as SECURITY_ALERT_TRIGGERED" block, with slightly different fields;
+  a new caller that forgets it lets an unenrolled actor through with no forensic row.
+  Move it next to the refusal audit and return the outcome (found in #853's round-5
+  review). Open.
 - **CDS acknowledgement with an unknown hospital id now answers 404** (was: saved as a
   global acknowledgement). Intended since #835; confirm no client relies on the old
   behaviour. Open.

@@ -6052,7 +6052,19 @@
     "VERIFICATION_SEND_FAILED": "Failed to send verification code.",
     "VERIFIED": "Verified",
     "VERIFY": "Verify",
-    "VIEW_DETAILS": "View Details"
+    "VIEW_DETAILS": "View Details",
+    "MFA_REPLACE": "Replace authenticator",
+    "MFA_REPLACE_INTRO": "To replace your authenticator app, enter a current code from it, or one of your unused backup codes.",
+    "MFA_REPLACE_CONTINUE": "Continue",
+    "MFA_REPLACE_PENDING": "Your current authenticator keeps working until you confirm a code from the new one.",
+    "MFA_STEPUP_LABEL": "Current code or backup code",
+    "MFA_STEPUP_PLACEHOLDER": "Code or backup code",
+    "MFA_STEPUP_REQUIRED": "Enter a current code from your authenticator app, or an unused backup code.",
+    "MFA_STEPUP_INVALID": "That code was not accepted. Enter a current code from your authenticator app, or an unused backup code.",
+    "MFA_STEPUP_CHALLENGE": "Sign in completely, including the verification code, before replacing your authenticator.",
+    "MFA_STEPUP_LOCKED": "Too many wrong codes. Wait a few minutes, then try again with a current code or an unused backup code.",
+    "MFA_STEPUP_REUSED": "That code was already used. Wait for the next code from your authenticator app, or use an unused backup code.",
+    "MFA_SET_UP": "Set up an authenticator app"
   },
   "RECEPTION": {
     "ACCEPT_OFFER": "Accept",
@@ -10097,7 +10109,9 @@
     "CHALLENGE_VERIFY_FAILED": "Verification failed.",
     "CHALLENGE_WRONG_CODE": "Invalid code. Please try again.",
     "ENROLL_START_FAILED": "Failed to start enrollment.",
-    "ENROLL_WRONG_CODE": "Invalid code. Please try again."
+    "ENROLL_WRONG_CODE": "Invalid code. Please try again.",
+    "ENROLL_ALREADY_ACTIVE": "This account already has an active authenticator. Sign in again and enter a code from it.",
+    "BACK_TO_SIGN_IN": "Back to sign-in"
   },
   "LAB_OPS": {
     "AGING": "Aging (>24h)",

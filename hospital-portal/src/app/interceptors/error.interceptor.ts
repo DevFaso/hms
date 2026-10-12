@@ -13,10 +13,13 @@ import {
   EMPTY,
   Observable,
   catchError,
+  defer,
   filter,
+  retry,
   switchMap,
   take,
   throwError,
+  timer,
 } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -108,6 +111,21 @@ function refusedHospitalId(error: HttpErrorResponse): string | null {
     : null;
 }
 
+/**
+ * A refused MFA step-up (X-Mfa-Token): 403 with a code under `mfa.stepup.`.
+ * The session is fine, so this is neither a sign-out nor a forbidden page:
+ * the page that asked for the code shows why it was refused.
+ */
+export function mfaStepUpRefusal(error: HttpErrorResponse): string | null {
+  const body = error.error as { code?: unknown } | null;
+  return body &&
+    typeof body === 'object' &&
+    typeof body.code === 'string' &&
+    body.code.startsWith('mfa.stepup.')
+    ? body.code
+    : null;
+}
+
 function hospitalScopeRefusal(error: HttpErrorResponse): string | null {
   const body = error.error as { code?: unknown; reason?: unknown } | null;
   if (body && typeof body === 'object' && body.code === HOSPITAL_SCOPE_REFUSED) {
@@ -151,6 +169,32 @@ function rebootstrapScope(sessionScope: SessionScopeService): void {
 let isRefreshing = false;
 const refreshDone$ = new BehaviorSubject<string | null>(null);
 
+/**
+ * A 409 from the refresh means another tab of this browser rotated the shared
+ * refresh cookie a moment earlier ("superseded"). The browser now holds the
+ * rotated cookie, so asking again shortly after succeeds: retry instead of
+ * signing out, which would also revoke the other tab's fresh session.
+ */
+export const REFRESH_SUPERSEDED_RETRIES = 4;
+/** Backs off 600, 1200, 1800, 2400 ms: about 6 s for the winning tab's cookie to land on a slow link. */
+export const REFRESH_SUPERSEDED_DELAY_MS = 600;
+
+export function refreshWithSupersededRetry(
+  auth: AuthService,
+): Observable<{ accessToken: string; refreshToken: string }> {
+  // defer: each retry builds the request again, so a body-borne (legacy)
+  // refresh token is re-read after the other tab stored the rotated one.
+  return defer(() => auth.refreshTokenRequest()).pipe(
+    retry({
+      count: REFRESH_SUPERSEDED_RETRIES,
+      delay: (err: unknown, attempt: number) =>
+        err instanceof HttpErrorResponse && err.status === 409
+          ? timer(REFRESH_SUPERSEDED_DELAY_MS * attempt)
+          : throwError(() => err),
+    }),
+  );
+}
+
 function cloneWithToken(req: HttpRequest<unknown>, token: string): HttpRequest<unknown> {
   return req.clone({ setHeaders: { Authorization: `Bearer ${token}` } });
 }
@@ -167,7 +211,7 @@ function tryRefreshAndRetry(
     isRefreshing = true;
     refreshDone$.next(null); // reset before the call
 
-    return auth.refreshTokenRequest().pipe(
+    return refreshWithSupersededRetry(auth).pipe(
       switchMap((tokens) => {
         isRefreshing = false;
         auth.setToken(tokens.accessToken);
@@ -274,6 +318,8 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         // why their save failed.
         const body = error.error as { message?: string } | null;
         downtime.markReadOnly(body?.message ?? null);
+      } else if (error.status === 403 && mfaStepUpRefusal(error) !== null) {
+        // A refused MFA step-up: rethrown to the page, no redirect.
       } else if (error.status === 403 && hospitalScopeRefusal(error) !== null) {
         // A refused hospital scope is the page's to report, not a forbidden
         // page; a stale chip is corrected by re-reading the scope.

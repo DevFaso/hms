@@ -6052,7 +6052,19 @@
     "VERIFICATION_SEND_FAILED": "Error al enviar el código de verificación.",
     "VERIFIED": "Verificado",
     "VERIFY": "Verificar",
-    "VIEW_DETAILS": "Ver detalles"
+    "VIEW_DETAILS": "Ver detalles",
+    "MFA_REPLACE": "Sustituir el autenticador",
+    "MFA_REPLACE_INTRO": "Para sustituir su aplicación de autenticación, introduzca un código actual de ella, o uno de sus códigos de respaldo sin usar.",
+    "MFA_REPLACE_CONTINUE": "Continuar",
+    "MFA_REPLACE_PENDING": "Su autenticador actual sigue funcionando hasta que confirme un código del nuevo.",
+    "MFA_STEPUP_LABEL": "Código actual o código de respaldo",
+    "MFA_STEPUP_PLACEHOLDER": "Código o código de respaldo",
+    "MFA_STEPUP_REQUIRED": "Introduzca un código actual de su aplicación de autenticación, o un código de respaldo sin usar.",
+    "MFA_STEPUP_INVALID": "No se aceptó ese código. Introduzca un código actual de su aplicación de autenticación, o un código de respaldo sin usar.",
+    "MFA_STEPUP_CHALLENGE": "Complete el inicio de sesión, incluido el código de verificación, antes de sustituir su autenticador.",
+    "MFA_STEPUP_LOCKED": "Demasiados códigos incorrectos. Espere unos minutos y vuelva a intentarlo con un código actual o un código de respaldo sin usar.",
+    "MFA_STEPUP_REUSED": "Ese código ya se utilizó. Espere el siguiente código de su aplicación de autenticación o use un código de respaldo sin usar.",
+    "MFA_SET_UP": "Configurar una aplicación de autenticación"
   },
   "RECEPTION": {
     "ACCEPT_OFFER": "Aceptar",
@@ -10097,7 +10109,9 @@
     "CHALLENGE_VERIFY_FAILED": "Error de verificación.",
     "CHALLENGE_WRONG_CODE": "Código incorrecto. Inténtelo de nuevo.",
     "ENROLL_START_FAILED": "No se pudo iniciar la configuración.",
-    "ENROLL_WRONG_CODE": "Código incorrecto. Inténtelo de nuevo."
+    "ENROLL_WRONG_CODE": "Código incorrecto. Inténtelo de nuevo.",
+    "ENROLL_ALREADY_ACTIVE": "Esta cuenta ya tiene un autenticador activo. Vuelva a iniciar sesión e introduzca un código de él.",
+    "BACK_TO_SIGN_IN": "Volver al inicio de sesión"
   },
   "LAB_OPS": {
     "AGING": "Antigüedad (>24h)",

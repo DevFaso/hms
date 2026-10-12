@@ -126,8 +126,6 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
             throw new BusinessException("Cannot impersonate another super admin");
         }
 
-        verifyMfaStepUp(actor.getId(), mfaToken);
-
         List<String> targetRoles = targetAssignments.stream()
             .filter(TenantRoleAssignment::active)
             .map(this::roleLabel)
@@ -138,6 +136,10 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
             throw new BusinessException(
                 "Target user has no active role assignments and cannot be impersonated");
         }
+
+        // Last, once the request is known to be runnable: the step-up may
+        // spend a backup code.
+        verifyMfaStepUp(actor.getId(), mfaToken);
 
         TokenUserDescriptor descriptor = new TokenUserDescriptor(
             target.getId(), target.getUsername(), targetRoles);
@@ -290,24 +292,11 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
     }
 
     private void verifyMfaStepUp(UUID actorId, String mfaToken) {
-        boolean enrolled;
-        try {
-            enrolled = mfaService.isMfaEnabled(actorId);
-        } catch (RuntimeException ex) {
-            log.warn("[IMPERSONATION] MFA enrollment lookup failed for actor {}: {}",
-                actorId, ex.getMessage());
-            throw new UnauthorizedException("mfa_required: enrollment lookup unavailable");
-        }
-        if (enrolled) {
-            if (mfaToken == null || mfaToken.isBlank() || !mfaService.verifyCode(actorId, mfaToken)) {
-                throw new UnauthorizedException(
-                    "mfa_required: invalid or missing X-Mfa-Token for impersonation");
-            }
+        // The shared step-up (MfaService#requireStepUp): a current TOTP code or
+        // an unused backup code; a refusal is 403 with a reason code, audited
+        // there. Only the non-strict bypass of an unenrolled actor comes back.
+        if (mfaService.requireStepUp(actorId, mfaToken, "impersonation start", requireMfaStrict)) {
             return;
-        }
-        if (requireMfaStrict) {
-            throw new UnauthorizedException(
-                "mfa_required: actor must enrol MFA before starting impersonation");
         }
         // Unenrolled actor — let it through but audit the bypass.
         try {

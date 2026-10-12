@@ -15,7 +15,6 @@ import com.example.hms.repository.UserMfaEnrollmentRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.exception.BusinessException;
-import com.example.hms.exception.UnauthorizedException;
 import com.example.hms.security.GlobalSessionRevocationService;
 import com.example.hms.security.SecurityUtils;
 import com.example.hms.service.AuditEventLogService;
@@ -118,15 +117,18 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
     @Transactional
     public EmergencyActionResponseDTO forceMfaReenrol(EmergencyForceMfaRequestDTO request, String mfaToken) {
         String actorUsername = SecurityUtils.getCurrentUsername();
-        verifyMfaStepUp(currentUserId(), mfaToken, "force-mfa-reenrol");
         List<UUID> targets = request.getUserIds();
-        if (targets == null || targets.isEmpty()) {
-            if (!Boolean.TRUE.equals(request.getResetAll())) {
-                throw new BusinessException(
-                    "Refusing a platform-wide MFA reset: no userIds were given and resetAll is not true. "
-                        + "Name the users, or set resetAll=true to reset every enrolled user"
-                        + (request.getHospitalId() != null ? " at the given hospital." : " on the platform."));
-            }
+        boolean everyone = targets == null || targets.isEmpty();
+        // Refuse a request that cannot run BEFORE the step-up, which would
+        // otherwise spend a backup code on it.
+        if (everyone && !Boolean.TRUE.equals(request.getResetAll())) {
+            throw new BusinessException(
+                "Refusing a platform-wide MFA reset: no userIds were given and resetAll is not true. "
+                    + "Name the users, or set resetAll=true to reset every enrolled user"
+                    + (request.getHospitalId() != null ? " at the given hospital." : " on the platform."));
+        }
+        verifyMfaStepUp(currentUserId(), mfaToken, "force-mfa-reenrol");
+        if (everyone) {
             // Fall back to every user with an active enrolment row.
             // UserMfaEnrollment exposes the user via the JPA association — there
             // is no flat `userId` field on the entity, so navigate through getUser().
@@ -243,41 +245,21 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
      * (X-Mfa-Token header) before they take effect, mirroring the same
      * pattern MVP-2 tenant lifecycle and MVP-4 impersonation start use.
      * Behaviour:
-     *   - Actor enrolled in MFA → token must verify; missing / invalid
-     *     token rejects with UnauthorizedException.
+     *   - Actor enrolled in MFA → a current TOTP code or an unused backup
+     *     code must verify; otherwise 403 with a reason code
+     *     (MfaStepUpRefusedException, audited by MfaService).
      *   - Actor not enrolled, strict mode on → reject (must enrol first).
      *   - Actor not enrolled, strict mode off → allow but emit a
      *     SECURITY_ALERT_TRIGGERED audit row recording the bypass, so the
      *     forensic trail survives.
      */
     private void verifyMfaStepUp(UUID actorId, String mfaToken, String action) {
-        if (actorId == null) {
-            throw new UnauthorizedException("emergency_unauth: missing super-admin actor for " + action);
-        }
-        boolean enrolled;
-        try {
-            enrolled = mfaService.isMfaEnabled(actorId);
-        } catch (RuntimeException ex) {
-            log.warn("[EMERGENCY] MFA enrollment lookup failed for actor {}: {}", actorId, ex.getMessage());
-            throw new UnauthorizedException("mfa_required: enrollment lookup unavailable");
-        }
-        if (enrolled) {
-            if (mfaToken == null || mfaToken.isBlank() || !mfaService.verifyCode(actorId, mfaToken)) {
-                // A rejected step-up on an emergency control is exactly what a
-                // security review wants to see: a wrong code here is either a
-                // typo or someone guessing at a platform-wide kill switch. The
-                // audit service writes in REQUIRES_NEW, so the row survives the
-                // rollback the exception below triggers.
-                auditStepUpRejected(actorId, action, mfaToken == null || mfaToken.isBlank()
-                    ? "no X-Mfa-Token supplied" : "X-Mfa-Token did not verify");
-                throw new UnauthorizedException(
-                    "mfa_required: invalid or missing X-Mfa-Token for emergency " + action);
-            }
+        // The shared step-up (MfaService#requireStepUp): a current TOTP code or an
+        // unused backup code. A refusal answers 403 with a reason code and is
+        // audited there; only the non-strict bypass of an unenrolled actor
+        // comes back here, to be audited below.
+        if (mfaService.requireStepUp(actorId, mfaToken, "emergency " + action, requireMfaStrict)) {
             return;
-        }
-        if (requireMfaStrict) {
-            throw new UnauthorizedException(
-                "mfa_required: actor must enrol MFA before triggering emergency " + action);
         }
         // Unenrolled actor — let it through but audit the bypass.
         try {
@@ -291,20 +273,6 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
                 .build());
         } catch (RuntimeException ex) {
             log.error("[EMERGENCY] Failed to audit MFA-bypass event", ex);
-        }
-    }
-
-    private void auditStepUpRejected(UUID actorId, String action, String why) {
-        try {
-            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                .userId(actorId)
-                .userName(SecurityUtils.getCurrentUsername())
-                .eventType(AuditEventType.MFA_FAILURE)
-                .eventDescription("Emergency " + action + " REJECTED: MFA step-up failed (" + why + ").")
-                .status(AuditStatus.FAILURE)
-                .build());
-        } catch (RuntimeException ex) {
-            log.error("[EMERGENCY] Failed to audit rejected MFA step-up for {}", action, ex);
         }
     }
 

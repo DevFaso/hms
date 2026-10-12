@@ -13,6 +13,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -363,6 +364,7 @@ public class JwtTokenProvider {
         Date expiryDate = new Date(now.getTime() + refreshTokenExpirationMs);
 
         return Jwts.builder()
+            .claim(TokenUse.CLAIM, TokenUse.REFRESH)
             .id(UUID.randomUUID().toString())
             .subject(userDetails.getUsername())
             .claim(ROLES_CLAIM, roles)
@@ -388,6 +390,7 @@ public class JwtTokenProvider {
         Date expiryDate = new Date(now.getTime() + refreshTokenExpirationMs);
 
         return Jwts.builder()
+            .claim(TokenUse.CLAIM, TokenUse.REFRESH)
             .id(UUID.randomUUID().toString())
             .subject(descriptor.username())
             .claim(ROLES_CLAIM, roles)
@@ -408,7 +411,7 @@ public class JwtTokenProvider {
         return Jwts.builder()
                 .id(UUID.randomUUID().toString())
                 .subject(username)
-                .claim("purpose", "mfa_challenge")
+                .claim(MfaChallengeScope.PURPOSE_CLAIM, MfaChallengeScope.PURPOSE)
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(signingKey)
@@ -423,7 +426,7 @@ public class JwtTokenProvider {
             Claims claims = jwtParser()
                     .parseSignedClaims(token)
                     .getPayload();
-            return "mfa_challenge".equals(claims.get("purpose", String.class));
+            return MfaChallengeScope.PURPOSE.equals(claims.get(MfaChallengeScope.PURPOSE_CLAIM, String.class));
         } catch (Exception e) {
             return false;
         }
@@ -561,6 +564,11 @@ public class JwtTokenProvider {
 
     public Authentication getAuthenticationFromJwt(String token) {
         Claims claims = parseClaimsWithRotation(token);
+        // A refresh token is no access token: it lives for days, so as a
+        // bearer it would outlast every access-token expiry.
+        if (TokenUse.isRefreshShaped(claims)) {
+            throw new BadCredentialsException("A refresh token is not an access token.");
+        }
 
         String username = claims.getSubject();
 
@@ -581,6 +589,12 @@ public class JwtTokenProvider {
         List<SimpleGrantedAuthority> authorities = RoleExpansion.expand(normalizedRoles).stream()
             .map(SimpleGrantedAuthority::new)
             .toList();
+        // The MFA challenge token proves the password only. It holds one
+        // marker authority and no role, whatever else it claims, so the
+        // filter can confine it to the MFA step (MfaChallengeScope).
+        if (MfaChallengeScope.PURPOSE.equals(claims.get(MfaChallengeScope.PURPOSE_CLAIM))) {
+            authorities = List.of(new SimpleGrantedAuthority(MfaChallengeScope.AUTHORITY));
+        }
 
         HospitalUserDetails userDetails = userDetailsService.loadUserByUsername(username);
 
@@ -619,6 +633,28 @@ public class JwtTokenProvider {
             return true;
         } catch (JwtException | IllegalArgumentException ex) {
             log.error("❌ JWT validation error: {}", ex.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * The token is a refresh token this issuer minted: signed, unexpired and
+     * marked {@code token_use=refresh}, or of the exact shape a refresh token
+     * had before the mark ({@link TokenUse#isLegacyRefreshShape}), up to its
+     * own expiry, so the deploy signs nobody out. Only tokens minted before the
+     * mark have that shape (rotation always issues the marked one), they all
+     * expire within the refresh lifetime, and forging one needs the signing
+     * key. An access, impersonation or MFA challenge token is never one,
+     * though the same key signs it.
+     */
+    public boolean isRefreshToken(String token) {
+        if (!StringUtils.hasText(token)) {
+            return false;
+        }
+        try {
+            Claims claims = jwtParser().parseSignedClaims(token).getPayload();
+            return TokenUse.isMarkedRefresh(claims) || TokenUse.isLegacyRefreshShape(claims);
+        } catch (JwtException | IllegalArgumentException ex) {
             return false;
         }
     }

@@ -6052,7 +6052,19 @@
     "VERIFICATION_SEND_FAILED": "Échec de l'envoi du code de vérification.",
     "VERIFIED": "Vérifié",
     "VERIFY": "Vérifier",
-    "VIEW_DETAILS": "Voir les détails"
+    "VIEW_DETAILS": "Voir les détails",
+    "MFA_REPLACE": "Remplacer l'authentificateur",
+    "MFA_REPLACE_INTRO": "Pour remplacer votre application d'authentification, saisissez un code actuel de cette application, ou l'un de vos codes de secours inutilisés.",
+    "MFA_REPLACE_CONTINUE": "Continuer",
+    "MFA_REPLACE_PENDING": "Votre authentificateur actuel reste valable jusqu'à ce que vous confirmiez un code du nouveau.",
+    "MFA_STEPUP_LABEL": "Code actuel ou code de secours",
+    "MFA_STEPUP_PLACEHOLDER": "Code ou code de secours",
+    "MFA_STEPUP_REQUIRED": "Saisissez un code actuel de votre application d'authentification, ou un code de secours inutilisé.",
+    "MFA_STEPUP_INVALID": "Ce code n'a pas été accepté. Saisissez un code actuel de votre application d'authentification, ou un code de secours inutilisé.",
+    "MFA_STEPUP_CHALLENGE": "Terminez la connexion, y compris le code de vérification, avant de remplacer votre authentificateur.",
+    "MFA_STEPUP_LOCKED": "Trop de codes erronés. Patientez quelques minutes, puis réessayez avec un code actuel ou un code de secours inutilisé.",
+    "MFA_STEPUP_REUSED": "Ce code a déjà été utilisé. Attendez le code suivant de votre application d'authentification, ou utilisez un code de secours inutilisé.",
+    "MFA_SET_UP": "Configurer une application d'authentification"
   },
   "RECEPTION": {
     "ACCEPT_OFFER": "Accepter",
@@ -10097,7 +10109,9 @@
     "CHALLENGE_VERIFY_FAILED": "Échec de la vérification.",
     "CHALLENGE_WRONG_CODE": "Code incorrect. Veuillez réessayer.",
     "ENROLL_START_FAILED": "Impossible de démarrer la configuration.",
-    "ENROLL_WRONG_CODE": "Code incorrect. Veuillez réessayer."
+    "ENROLL_WRONG_CODE": "Code incorrect. Veuillez réessayer.",
+    "ENROLL_ALREADY_ACTIVE": "Ce compte a déjà un authentificateur actif. Reconnectez-vous et saisissez un code de cet authentificateur.",
+    "BACK_TO_SIGN_IN": "Retour à la connexion"
   },
   "LAB_OPS": {
     "AGING": "Ancienneté (>24h)",
