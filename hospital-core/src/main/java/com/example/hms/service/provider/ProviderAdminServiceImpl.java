@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -105,14 +106,30 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
     @Override
     @Transactional(readOnly = true)
     public Optional<List<ProviderStaffMemberDTO>> listStaff() {
-        return seatResolver.currentAdmin().map(seat -> staffRowsByUser(seat.facility().getId()).values().stream()
-            .map(rows -> toMember(rows, seat))
+        return seatResolver.currentAdmin().map(this::staffOf);
+    }
+
+    /** The facility's staff, each with what this admin may do to them. */
+    private List<ProviderStaffMemberDTO> staffOf(ProviderSeat seat) {
+        Map<UUID, List<UserRoleHospitalAssignment>> rowsHere = staffRowsByUser(seat.facility().getId());
+        // Every member's rows everywhere, in ONE query: the admin-role rule
+        // behind canDeactivate / canReinvite needs them, never one read per member.
+        Map<UUID, List<UserRoleHospitalAssignment>> everyRowByUser = new HashMap<>();
+        if (!rowsHere.isEmpty()) {
+            for (UserRoleHospitalAssignment row : assignmentRepository.findByUserIdIn(rowsHere.keySet())) {
+                if (row.getUser() != null && row.getUser().getId() != null) {
+                    everyRowByUser.computeIfAbsent(row.getUser().getId(), id -> new ArrayList<>()).add(row);
+                }
+            }
+        }
+        return rowsHere.entrySet().stream()
+            .map(entry -> toMember(entry.getValue(), seat, everyRowByUser.getOrDefault(entry.getKey(), List.of())))
             .flatMap(Optional::stream)
             .sorted(Comparator
                 .comparing((ProviderStaffMemberDTO m) -> lower(m.getLastName()))
                 .thenComparing(m -> lower(m.getFirstName()))
                 .thenComparing(m -> lower(m.getUsername())))
-            .toList());
+            .toList();
     }
 
     @Override
@@ -123,16 +140,19 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
         }
         ProviderSeat seat = found.get();
         UUID memberId = parseId(userId);
-        Optional<List<UserRoleHospitalAssignment>> rows = manageableRows(seat, memberId);
-        if (rows.isEmpty()) {
+        Optional<MemberRows> rows = manageableRows(seat, memberId);
+        // canDeactivate's rule: nothing active or invited here is nothing to
+        // retire, answered like any refusal (no 200, no audit row for a no-op).
+        if (rows.isEmpty() || !hasSomethingToRetire(rows.get().here())) {
             return Optional.empty();
         }
         // One scope read for the member's rows, all checked before any changes.
-        assignmentService.deactivateProviderStaffAssignments(idsOf(rows.get()));
+        assignmentService.deactivateProviderStaffAssignments(idsOf(rows.get().here()));
         log.info("[PROVIDER-ADMIN] Staff {} deactivated at facility {} by user {}",
             memberId, seat.facility().getId(), seat.userId());
-        // The rows just changed (the same managed instances), never a second read.
-        return toMember(rows.get(), seat);
+        // The rows just changed (the same managed instances, read once in
+        // manageableRows), never a second read.
+        return toMember(rows.get().here(), seat, rows.get().everyRow());
     }
 
     @Override
@@ -143,14 +163,19 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
         }
         ProviderSeat seat = found.get();
         UUID memberId = parseId(userId);
-        Optional<List<UserRoleHospitalAssignment>> rows = manageableRows(seat, memberId);
+        Optional<MemberRows> rows = manageableRows(seat, memberId);
         // A disabled account stays disabled: entering the new code would
         // switch it back on (and clear its lockout), and only a super-admin
-        // re-enables an account.
-        if (rows.isEmpty() || !rows.get().get(0).getUser().isActive()) {
+        // re-enables an account. An account that was never activated is
+        // another matter: every admin-registered account starts inactive
+        // (Option A) and the code IS its activation, so it may be re-invited.
+        // canReinvite's rule: an account that may be re-invited AND a row that
+        // is not active. All active is a no-op: refused (no 200, no audit row).
+        if (rows.isEmpty() || !mayReinvite(rows.get().here().get(0).getUser())
+                || rows.get().here().stream().noneMatch(row -> Boolean.FALSE.equals(row.getActive()))) {
             return Optional.empty();
         }
-        List<UUID> inactive = rows.get().stream()
+        List<UUID> inactive = rows.get().here().stream()
             .filter(row -> !Boolean.TRUE.equals(row.getActive()))
             .map(UserRoleHospitalAssignment::getId)
             .toList();
@@ -159,7 +184,8 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
         }
         log.info("[PROVIDER-ADMIN] Staff {} re-invited at facility {} ({} assignment(s)) by user {}",
             memberId, seat.facility().getId(), inactive.size(), seat.userId());
-        return toMember(rows.get(), seat);
+        // The rows read once in manageableRows, never a second read.
+        return toMember(rows.get().here(), seat, rows.get().everyRow());
     }
 
     @Override
@@ -185,7 +211,7 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
      * the platform, never by a peer. Decided before anything changes, so such
      * a member gets the unmapped answer and nothing is touched.
      */
-    private Optional<List<UserRoleHospitalAssignment>> manageableRows(ProviderSeat seat, UUID userId) {
+    private Optional<MemberRows> manageableRows(ProviderSeat seat, UUID userId) {
         if (userId == null || userId.equals(seat.userId())) {
             return Optional.empty();
         }
@@ -194,14 +220,75 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
             .filter(row -> row.getHospital() != null && seat.facility().getId().equals(row.getHospital().getId()))
             .filter(row -> !PATIENT.equals(UserAccountAccess.roleCode(row.getRole())))
             .toList();
-        if (here.isEmpty()) {
+        if (here.isEmpty() || !manageable(seat, here.get(0).getUser(), everyRow)) {
             return Optional.empty();
         }
-        User member = here.get(0).getUser();
-        if (member == null || member.isDeleted() || UserAccountAccess.holdsAdminRole(member, everyRow)) {
-            return Optional.empty();
+        return Optional.of(new MemberRows(here, everyRow));
+    }
+
+    /**
+     * A member's staff rows at the caller's facility, and every row they hold
+     * anywhere (the admin-role rule reads those), from the one read.
+     */
+    private record MemberRows(List<UserRoleHospitalAssignment> here, List<UserRoleHospitalAssignment> everyRow) {
+    }
+
+    /**
+     * May this account receive a new invitation code? An enabled account, or
+     * one that was NEVER activated: under Option A every admin-registered
+     * account starts inactive and entering the code is what activates it.
+     *
+     * <p>"Never activated" means it never signed in, on either path: no
+     * {@code lastLoginAt} (the legacy login and the MFA verify stamp it) and
+     * no {@code lastOidcLoginAt} (the Keycloak session bootstrap stamps it).
+     * Those are the only sign-in stamps an account carries. The assignments'
+     * {@code confirmationVerifiedAt} is NOT used: re-issuing or restarting an
+     * invitation clears it, so it cannot tell "never used" from "disabled
+     * after use". An account that signed in once and is inactive now was
+     * disabled, and only a super-admin re-enables it: a peer admin's re-invite
+     * would undo that.
+     *
+     * <p>And never an account an administrator switched off
+     * ({@code deactivatedByAdminAt}, V184), signed in or not: a disable before
+     * the first sign-in would otherwise read as a pending invitation.
+     */
+    static boolean mayReinvite(User member) {
+        if (member == null || member.getDeactivatedByAdminAt() != null) {
+            return false;
         }
-        return Optional.of(here);
+        if (member.isActive()) {
+            return true;
+        }
+        return member.getLastLoginAt() == null && member.getLastOidcLoginAt() == null;
+    }
+
+    /**
+     * A row deactivate would change: retire()'s own rule (active, any code
+     * still on it, or a temporary password). A row left inactive with a live
+     * code can still switch the account on, so it is something to retire.
+     */
+    private static boolean hasSomethingToRetire(List<UserRoleHospitalAssignment> rows) {
+        return rows.stream().anyMatch(row -> !Boolean.FALSE.equals(row.getActive())
+            || row.getConfirmationCode() != null || row.getTempPlainPassword() != null);
+    }
+
+    private static boolean isPendingInvitation(UserRoleHospitalAssignment row) {
+        return !Boolean.TRUE.equals(row.getActive())
+            && row.getConfirmationCode() != null && row.getConfirmationVerifiedAt() == null;
+    }
+
+    /**
+     * The one rule of who an admin may change here (deactivate, re-invite):
+     * not the caller, not a deleted account, and nobody holding an admin role
+     * anywhere, active or not, by assignment or by global role. The staff
+     * list's {@code canDeactivate} / {@code canReinvite} come from this same
+     * method, so the portal never offers what the server refuses.
+     */
+    private static boolean manageable(ProviderSeat seat, User member, List<UserRoleHospitalAssignment> everyRow) {
+        return member != null
+            && !member.isDeleted()
+            && !Objects.equals(member.getId(), seat.userId())
+            && !UserAccountAccess.holdsAdminRole(member, everyRow);
     }
 
     private static List<UUID> idsOf(List<UserRoleHospitalAssignment> rows) {
@@ -223,14 +310,17 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
     }
 
     /** One member from their rows here; empty when there are none (never an all-null member). */
-    private static Optional<ProviderStaffMemberDTO> toMember(List<UserRoleHospitalAssignment> rows, ProviderSeat seat) {
+    private static Optional<ProviderStaffMemberDTO> toMember(List<UserRoleHospitalAssignment> rows, ProviderSeat seat,
+                                                             List<UserRoleHospitalAssignment> everyRow) {
         User holder = rows.isEmpty() ? null : rows.get(0).getUser();
         if (holder == null) {
             return Optional.empty();
         }
+        boolean manageable = manageable(seat, holder, everyRow);
         TreeSet<String> roles = new TreeSet<>();
         boolean active = false;
         boolean pending = false;
+        boolean anyInactive = false;
         for (UserRoleHospitalAssignment row : rows) {
             String role = UserAccountAccess.roleCode(row.getRole());
             if (!role.isEmpty()) {
@@ -238,7 +328,8 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
             }
             boolean rowActive = Boolean.TRUE.equals(row.getActive());
             active |= rowActive;
-            pending |= !rowActive && row.getConfirmationCode() != null && row.getConfirmationVerifiedAt() == null;
+            anyInactive |= Boolean.FALSE.equals(row.getActive());
+            pending |= isPendingInvitation(row);
         }
         return Optional.of(ProviderStaffMemberDTO.builder()
             .userId(holder.getId())
@@ -251,6 +342,11 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
             .invitationPending(pending)
             .providerAdmin(roles.contains(RoleFacilityCompatibility.PROVIDER_ADMIN))
             .self(Objects.equals(holder.getId(), seat.userId()))
+            // The server's own rules (manageable, and activateStaff's): a
+            // deactivate retires what is active or invited; a re-invite needs
+            // an account that may be re-invited and a row that is not active.
+            .canDeactivate(manageable && hasSomethingToRetire(rows))
+            .canReinvite(manageable && mayReinvite(holder) && anyInactive)
             .build());
     }
 
@@ -267,9 +363,9 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
         // The current state of the evidence (SUBMITTED during a resubmission,
         // REVOKED...), but the identity only as the platform VERIFIED it:
         // never a submitted, rejected or revoked one. None verified: no identity.
-        verificationRepository.findFirstByHospital_IdOrderByCreatedAtDesc(facility.getId())
+        verificationRepository.findFirstByHospital_IdOrderByCreatedAtDescIdDesc(facility.getId())
             .ifPresent(latest -> dto.verificationStatus(latest.getStatus()));
-        verificationRepository.findFirstByHospital_IdAndStatusOrderByCreatedAtDesc(facility.getId(),
+        verificationRepository.findFirstByHospital_IdAndStatusOrderByCreatedAtDescIdDesc(facility.getId(),
                 ProviderVerificationStatus.VERIFIED)
             .ifPresent(verified -> applyVerifiedIdentity(dto, facility, verified));
         return dto.build();

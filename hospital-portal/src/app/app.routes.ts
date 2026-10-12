@@ -5,6 +5,7 @@ import { LoginRedirectGuard } from './auth/login-redirect.guard';
 import { RoleGuard } from './auth/role.guard';
 import { SuperAdminRedirectGuard } from './auth/super-admin-redirect.guard';
 import { superAdminPathRewriteGuard } from './auth/super-admin-path-rewrite.guard';
+import { FacilityTypeGuard, ProviderHomeRedirectGuard } from './auth/facility-type.guard';
 import { AppointmentLinkGuard } from './patient-portal/my-appointments/appointment-link.guard';
 
 export const routes: Routes = [
@@ -61,7 +62,8 @@ export const routes: Routes = [
     children: [
       {
         path: 'dashboard',
-        canActivate: [SuperAdminRedirectGuard],
+        // A provider user (private pharmacy or laboratory) lands on /provider.
+        canActivate: [SuperAdminRedirectGuard, ProviderHomeRedirectGuard],
         loadComponent: () => import('./dashboard/dashboard').then((m) => m.DashboardComponent),
       },
 
@@ -1478,6 +1480,82 @@ export const routes: Routes = [
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_SUPER_ADMIN'] },
         loadComponent: () => import('./super-admin/super-admin').then((m) => m.SuperAdminComponent),
+      },
+
+      // Super-Admin provider facilities: private pharmacies and laboratories
+      // (provider plan P1-T12). Mirrors SuperAdminProviderController's
+      // hasAuthority('ROLE_SUPER_ADMIN'); 'new' precedes ':id'.
+      {
+        path: 'super-admin/providers',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/providers/provider-list/provider-list').then(
+            (m) => m.ProviderListComponent,
+          ),
+      },
+      {
+        path: 'super-admin/providers/new',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/providers/provider-form/provider-form').then(
+            (m) => m.ProviderFormComponent,
+          ),
+      },
+      {
+        path: 'super-admin/providers/:id',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/providers/provider-detail/provider-detail').then(
+            (m) => m.ProviderDetailComponent,
+          ),
+      },
+      {
+        path: 'super-admin/providers/:id/resubmit',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/providers/provider-form/provider-form').then(
+            (m) => m.ProviderFormComponent,
+          ),
+      },
+
+      // Provider shell (provider plan P1-T13, AC-12). The backend admits
+      // /provider/** from live assignments at the facility, never from a
+      // token role, so FacilityTypeGuard asks GET /provider/settings the same
+      // question instead of RoleGuard: staff and audit are the facility
+      // PROVIDER_ADMIN's only.
+      {
+        path: 'provider',
+        canActivate: [FacilityTypeGuard],
+        data: { facilityTypes: ['PHARMACY', 'LABORATORY'] },
+        loadComponent: () =>
+          import('./provider/provider-home/provider-home').then((m) => m.ProviderHomeComponent),
+      },
+      {
+        path: 'provider/profile',
+        canActivate: [FacilityTypeGuard],
+        data: { facilityTypes: ['PHARMACY', 'LABORATORY'] },
+        loadComponent: () =>
+          import('./provider/provider-profile/provider-profile').then(
+            (m) => m.ProviderProfileComponent,
+          ),
+      },
+      {
+        path: 'provider/staff',
+        canActivate: [FacilityTypeGuard],
+        data: { facilityTypes: ['PHARMACY', 'LABORATORY'], providerAdmin: true },
+        loadComponent: () =>
+          import('./provider/provider-staff/provider-staff').then((m) => m.ProviderStaffComponent),
+      },
+      {
+        path: 'provider/audit',
+        canActivate: [FacilityTypeGuard],
+        data: { facilityTypes: ['PHARMACY', 'LABORATORY'], providerAdmin: true },
+        loadComponent: () =>
+          import('./provider/provider-audit/provider-audit').then((m) => m.ProviderAuditComponent),
       },
 
       // Super-Admin Integration Health Console (MVP-3 — see docs/super-admin-gaps.md)

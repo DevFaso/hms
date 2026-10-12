@@ -1,0 +1,136 @@
+<div class="modal-backdrop" tabindex="-1" (click)="close()" (keydown.escape)="close()">
+  <div
+    class="modal modal-lg"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="provider-register-title"
+    tabindex="-1"
+    (click)="$event.stopPropagation()"
+    (keydown.escape)="close()"
+  >
+    <div class="modal-header">
+      <h2 id="provider-register-title">{{ titleKey() | translate }}</h2>
+      <button
+        type="button"
+        class="modal-close"
+        [attr.aria-label]="'PROVIDER.COMMON.CLOSE' | translate"
+        (click)="close()"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      @if (facilityName(); as name) {
+        <p class="register-at">{{ 'PROVIDER.REGISTER.AT' | translate: { name: name } }}</p>
+      }
+      <p class="register-help">{{ 'PROVIDER.REGISTER.HELP' | translate }}</p>
+
+      <div class="form-row">
+        <div class="field">
+          <label for="register-first-name">{{ 'PROVIDER.REGISTER.FIRST_NAME' | translate }}</label>
+          <input
+            id="register-first-name"
+            type="text"
+            required
+            autocomplete="off"
+            [ngModel]="firstName()"
+            (ngModelChange)="firstName.set($event)"
+          />
+        </div>
+        <div class="field">
+          <label for="register-last-name">{{ 'PROVIDER.REGISTER.LAST_NAME' | translate }}</label>
+          <input
+            id="register-last-name"
+            type="text"
+            required
+            autocomplete="off"
+            [ngModel]="lastName()"
+            (ngModelChange)="lastName.set($event)"
+          />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label for="register-username">{{ 'PROVIDER.REGISTER.USERNAME' | translate }}</label>
+          <input
+            id="register-username"
+            type="text"
+            required
+            autocomplete="off"
+            [ngModel]="username()"
+            (ngModelChange)="username.set($event)"
+          />
+        </div>
+        <div class="field">
+          <label for="register-role">{{ 'PROVIDER.REGISTER.ROLE' | translate }}</label>
+          <select id="register-role" required [ngModel]="role()" (ngModelChange)="role.set($event)">
+            @for (option of roles(); track option) {
+              <option [value]="option">{{ option | roleLabel }}</option>
+            }
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label for="register-email">{{ 'PROVIDER.REGISTER.EMAIL' | translate }}</label>
+          <input
+            id="register-email"
+            type="email"
+            required
+            autocomplete="off"
+            [ngModel]="email()"
+            (ngModelChange)="email.set($event)"
+          />
+        </div>
+        <div class="field">
+          <label for="register-phone">{{ 'PROVIDER.REGISTER.PHONE' | translate }}</label>
+          <input
+            id="register-phone"
+            type="tel"
+            required
+            autocomplete="off"
+            [ngModel]="phoneNumber()"
+            (ngModelChange)="phoneNumber.set($event)"
+          />
+        </div>
+      </div>
+      @if (needsLicence()) {
+        <div class="field">
+          <label for="register-licence">{{ 'PROVIDER.REGISTER.LICENCE' | translate }}</label>
+          <input
+            id="register-licence"
+            type="text"
+            required
+            autocomplete="off"
+            [ngModel]="licenseNumber()"
+            (ngModelChange)="licenseNumber.set($event)"
+          />
+        </div>
+      }
+
+      @if (errorKey(); as key) {
+        <div class="form-error" role="alert" data-test="register-error">
+          {{ errorText() ?? (key | translate) }}
+        </div>
+      }
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" [disabled]="saving()" (click)="close()">
+        {{ 'PROVIDER.COMMON.CANCEL' | translate }}
+      </button>
+      <button
+        type="button"
+        class="btn-primary"
+        data-test="register-submit"
+        [disabled]="saving()"
+        (click)="submit()"
+      >
+        @if (saving()) {
+          {{ 'PROVIDER.COMMON.SAVING' | translate }}
+        } @else {
+          {{ 'PROVIDER.REGISTER.SUBMIT' | translate }}
+        }
+      </button>
+    </div>
+  </div>
+</div>

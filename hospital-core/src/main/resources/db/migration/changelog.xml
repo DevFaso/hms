@@ -2691,4 +2691,19 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V184 — security.users.deactivated_by_admin_at (PR #852, review
+         round 6): an administrator's disable is recorded, so a provider
+         admin's re-invite or an invitation code cannot switch the account
+         back on. Additive, idempotent, no DO blocks. No backfill on
+         purpose: a pre-V184 disable cannot be told from a revoked invite.
+         (V181/V182 reserved for P2-PH/P2-LAB; V183 = MFA hotfix #853.)
+         ================================================================= -->
+    <changeSet id="V184-user-deactivated-by-admin" author="hms-team" runOnChange="false">
+        <sqlFile path="V184__user_deactivated_by_admin.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

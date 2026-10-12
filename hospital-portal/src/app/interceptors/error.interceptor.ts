@@ -23,6 +23,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { SessionScopeService } from '../core/session-scope.service';
 import { ImpersonationService } from '../services/impersonation.service';
 import { DowntimeService } from '../services/downtime.service';
+import { STEP_UP_REQUEST, isStepUpRefusal } from '../services/step-up';
 
 const SILENT_403_PATTERNS = [
   /\/hospitals(\?|$|\/$)/,
@@ -218,6 +219,12 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
+      // A refused MFA step-up is the dialog's to report: never a refresh, a
+      // sign-out or the forbidden page (an MFA-enrolled super-admin used to be
+      // signed out by suspending a facility without a code).
+      if (req.context.get(STEP_UP_REQUEST) && isStepUpRefusal(error)) {
+        return throwError(() => error);
+      }
       if (error.status === 401) {
         // AuthService.logout() fires POST /auth/logout while it signs out.
         // Its 401 (an already-expired bearer) must not start a refresh, which
