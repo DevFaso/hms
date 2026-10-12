@@ -4984,7 +4984,11 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   review). (c) A provider user signed in with a password only (the login where OTP is
   first configured) gets 403 `mfa.enrollment.required` on the shell's start-up reads
   (`/feature-flags`, `/me/assignments`, `/me/dashboard-config`) before the portal reads
-  the bootstrap flag; exempt them or have the portal read the bootstrap first. Open. Not
+  the bootstrap flag; exempt them or have the portal read the bootstrap first. (d) The
+  MFA-enrolment exemptions apply to Keycloak sessions too, so a password-only Keycloak
+  provider following the 403 ("set it up first") enrols a legacy TOTP that never reaches
+  its `amr`: a dead end with orphan rows. Exempt enrolment on the legacy path only, or
+  word the Keycloak refusal as "sign in again with your code". Open. Not
   live: prod runs the legacy path, where a provider user never holds a password-only
   session.
 - **Provider MFA gate plumbing.** `ProviderMfaGate.refuse()` copies
@@ -5023,7 +5027,9 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   minutes before 48 h (a few extra refreshes, harmless; cap only provider users if it
   matters); `/auth/mfa/verify` refuses a revoked pick before reserving an attempt, so a
   replayed challenge writes one audit row per call (throttle or audit once per jti); and
-  one verify parses the challenge token about five times (parse once). Open.
+  one verify parses the challenge token about five times (parse once); and the pick
+  check reloads the user's details (several queries) right after the user was loaded.
+  Open.
 - **CDS acknowledgement with an unknown hospital id now answers 404** (was: saved as a
   global acknowledgement). Intended since #835; confirm no client relies on the old
   behaviour. Open.
