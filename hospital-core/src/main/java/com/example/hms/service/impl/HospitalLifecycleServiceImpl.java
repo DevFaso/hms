@@ -247,7 +247,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
             return false;
         }
         return providerVerificationRepository
-            .findFirstByHospital_IdOrderByCreatedAtDesc(hospital.getId())
+            .findFirstByHospital_IdOrderByCreatedAtDescIdDesc(hospital.getId())
             .map(v -> v.getStatus() != ProviderVerificationStatus.VERIFIED)
             .orElse(true);
     }

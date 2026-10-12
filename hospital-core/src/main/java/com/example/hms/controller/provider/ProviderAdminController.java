@@ -1,5 +1,6 @@
 package com.example.hms.controller.provider;
 
+import com.example.hms.payload.dto.provider.ProviderAuditPageDTO;
 import com.example.hms.payload.dto.provider.ProviderProfileDTO;
 import com.example.hms.payload.dto.provider.ProviderProfileUpdateDTO;
 import com.example.hms.payload.dto.provider.ProviderSettingsDTO;
@@ -7,6 +8,7 @@ import com.example.hms.payload.dto.provider.ProviderStaffMemberDTO;
 import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.security.provider.ProviderConfinementPolicy;
 import com.example.hms.service.provider.ProviderAdminService;
+import com.example.hms.service.provider.ProviderAuditTrailService;
 import com.example.hms.utility.ActivationDeliveryTracker;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -23,6 +25,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -30,9 +33,10 @@ import java.util.List;
 
 /**
  * A provider facility (a private pharmacy or laboratory) administering itself
- * (provider plan US-2, AC-6, §6.5): its profile, its staff, and the settings
- * its portal shell reads. Registering a new staff member stays
- * {@code POST /users/admin-register} (the provider registrar path).
+ * (provider plan US-2, AC-6, §6.5): its profile, its staff, its own audit
+ * trail (§3.1), and the settings its portal shell reads. Registering a new
+ * staff member stays {@code POST /users/admin-register} (the provider
+ * registrar path).
  *
  * <p>Who may call is decided from the caller's LIVE assignments at the
  * facility the request acts at ({@code ProviderSeatResolver}), never from
@@ -62,6 +66,7 @@ public class ProviderAdminController {
     private static final String AUTHENTICATED = "isAuthenticated()";
 
     private final ProviderAdminService providerAdminService;
+    private final ProviderAuditTrailService providerAuditTrailService;
 
     @GetMapping("/profile")
     @PreAuthorize(AUTHENTICATED)
@@ -131,6 +136,21 @@ public class ProviderAdminController {
         } finally {
             ActivationDeliveryTracker.close();
         }
+    }
+
+    @GetMapping("/audit")
+    @PreAuthorize(AUTHENTICATED)
+    @Operation(summary = "PROVIDER_ADMIN: the facility's own audit trail, newest first (ids and codes, no patient rows)",
+        description = "page is zero-based; size defaults to 20 and is capped at 100. Both are read only once "
+            + "the caller is known to be the facility's admin.",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<ProviderAuditPageDTO> auditTrail(
+            @RequestParam(name = "page", required = false) String page,
+            @RequestParam(name = "size", required = false) String size,
+            HttpServletRequest request) throws NoResourceFoundException {
+        // Raw strings: a malformed value binds anyway, and is parsed after the seat check.
+        return ResponseEntity.ok(providerAuditTrailService.trail(page, size)
+            .orElseThrow(() -> ProviderConfinementPolicy.unmapped(request)));
     }
 
     @GetMapping("/settings")

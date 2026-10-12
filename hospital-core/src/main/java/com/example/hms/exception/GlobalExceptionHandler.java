@@ -149,7 +149,9 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(io.jsonwebtoken.JwtException.class)
     public ResponseEntity<Object> handleJwt(io.jsonwebtoken.JwtException ex, WebRequest request) {
-        log.warn("Token no longer valid at path {}", request.getDescription(false));
+        if (log.isWarnEnabled()) {
+            log.warn("Token no longer valid at path {}", request.getDescription(false));
+        }
         return buildErrorResponse(HttpStatus.UNAUTHORIZED, "Session expired. Please log in again.", request);
     }
 

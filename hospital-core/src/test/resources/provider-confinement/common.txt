@@ -19,6 +19,7 @@ GET /me/assignments
 GET /me/dashboard-config
 GET /notifications
 GET /notifications/preferences
+GET /provider/audit
 GET /provider/profile
 GET /provider/settings
 GET /provider/staff

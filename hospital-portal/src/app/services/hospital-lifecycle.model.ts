@@ -3,7 +3,7 @@
  * `HospitalLifecycleState` enum.
  */
 export type HospitalLifecycleState =
-  'ACTIVE' | 'SUSPENDED' | 'ARCHIVED' | 'PURGE_SCHEDULED' | 'PURGED';
+  'ACTIVE' | 'SUSPENDED' | 'ARCHIVED' | 'PENDING_PURGE' | 'PURGED';
 
 /**
  * MVP-c batch — lifecycle snapshot for a hospital. Mirrors the
@@ -28,7 +28,13 @@ export interface HospitalLifecycleReason {
   reason: string;
 }
 
+/**
+ * The backend's TenantLifecycleActionRequestDTO: the date travels as
+ * `purgeScheduledFor`, an ISO instant. Any other name is silently ignored and
+ * the server falls back to its 30-day default.
+ */
 export interface HospitalLifecyclePurgeSchedule {
-  scheduledFor: string;
+  /** Omitted: the server applies its 30-day default. */
+  purgeScheduledFor?: string;
   reason: string;
 }

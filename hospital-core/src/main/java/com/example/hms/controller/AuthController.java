@@ -79,6 +79,7 @@ import java.util.UUID;
 @Slf4j
 public class AuthController {
 
+    private static final String EMAIL_VERIFICATION_FAILED = "Email verification failed.";
     private static final String BEARER_PREFIX = "Bearer ";
 
     /**
@@ -475,14 +476,21 @@ public class AuthController {
         var userOpt = userRepository.findByEmail(dto.getEmail());
         if (userOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new EmailVerificationResponseDTO("Email verification failed.", false));
+                    .body(new EmailVerificationResponseDTO(EMAIL_VERIFICATION_FAILED, false));
         }
         var user = userOpt.get();
         if (!java.util.Objects.equals(dto.getToken(), user.getActivationToken())
                 || user.getActivationTokenExpiresAt() == null
                 || user.getActivationTokenExpiresAt().isBefore(LocalDateTime.now())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new EmailVerificationResponseDTO("Email verification failed.", false));
+                    .body(new EmailVerificationResponseDTO(EMAIL_VERIFICATION_FAILED, false));
+        }
+
+        // An account an administrator switched off (V184) is not verified
+        // from below: no activation, no lockout reset, no assignment change.
+        if (user.getDeactivatedByAdminAt() != null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new EmailVerificationResponseDTO(EMAIL_VERIFICATION_FAILED, false));
         }
 
         // 1. Activate the user account

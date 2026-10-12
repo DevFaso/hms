@@ -282,4 +282,32 @@ class HospitalLifecycleServiceImplTest {
         HospitalLifecycleResponseDTO result = service.schedulePurge(hospitalId, withReason("retention"), null);
         assertThat(result.getPurgeScheduledFor()).isEqualTo(NOW.plus(30, ChronoUnit.DAYS));
     }
+
+    @Test
+    void anExplicitPurgeDateIsHonoured_notReplacedByTheDefault() {
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
+        service.archive(hospitalId, withReason("offboarded"), null);
+        Instant picked = NOW.plus(90, ChronoUnit.DAYS);
+
+        HospitalLifecycleResponseDTO result = service.schedulePurge(hospitalId,
+            TenantLifecycleActionRequestDTO.builder().reason("retention").purgeScheduledFor(picked).build(), null);
+
+        assertThat(result.getPurgeScheduledFor()).isEqualTo(picked);
+    }
+
+    @Test
+    void thePortalsPurgeBody_bindsToPurgeScheduledFor() throws Exception {
+        // The hospital dialog once sent `scheduledFor`, which Jackson ignored:
+        // the picked day was dropped and the 30-day default used.
+        var mapper = tools.jackson.databind.json.JsonMapper.builder()
+            .disable(tools.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+            .build();
+
+        TenantLifecycleActionRequestDTO bound = mapper.readValue(
+            "{\"reason\":\"retention\",\"purgeScheduledFor\":\"2099-06-01T00:00:00Z\"}",
+            TenantLifecycleActionRequestDTO.class);
+
+        assertThat(bound.getPurgeScheduledFor()).isEqualTo(Instant.parse("2099-06-01T00:00:00Z"));
+    }
 }

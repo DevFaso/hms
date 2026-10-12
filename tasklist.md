@@ -4839,6 +4839,45 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   token** as well as the live assignment (the assignment service's scope reads
   both), so on Keycloak they answer as unmapped until P1-T11 adds the realm role.
   Same as `POST /users/admin-register` today. Open until P1-T11.
+- **External providers: the facility audit trail scopes through a live assignment
+  join**, so rows whose assignment was hard-deleted vanish from it; it needs a
+  `hospital_id` snapshot on `audit_event_logs` (a migration: V183 is #853's MFA
+  hotfix, V184 #852's admin-disable marker, the Sage export plan takes V185, so
+  take the next free number when this is scheduled) (found in #852's round-1
+  review). Open.
+- **Provider audit page: its 400 answers are English text.** A bad `page`/`size` on
+  `GET /provider/audit` answers "The page size must be at least 1." and similar as
+  literal English (IllegalArgumentException), not message-bundle keys: the
+  backend-composed-text layer of French completeness (found in #852's round-9
+  review). Open.
+- **Provider pages: fold leave/retry/stale-answer/404-invalidate into followFacility.**
+  The four provider pages (home, profile, staff, audit) each repeat the same
+  clear-on-leave, retry, drop-a-stale-answer and invalidate-on-404 code around
+  `followFacility` (found in #852's round-4 review). Open.
+- **~~External providers: an account has no "disabled by an administrator" flag~~ Done
+  (#852 round 6, V184 `security.users.deactivated_by_admin_at`).** An administrator's
+  disable (a real active -> inactive change, or a soft delete) is recorded; while it is
+  set neither a provider re-invite, an invitation code nor an activation link switches
+  the account back on. Limit, on purpose: no backfill, because a disable made before
+  V184 cannot be told from a revoked invitation (both clear the code). Before the prod
+  sync, list inactive provider-staff accounts that never signed in and check none was
+  disabled by an administrator.
+- **Provider staff list: one `userRoles` load per member.** `toMember`'s `manageable()`
+  check walks each member's global roles, which the batch staff queries do not fetch:
+  N+1 on every staff-page load. Fetch `user.userRoles.role` in the batch, or pass the
+  resolved roles in (found in #852's round-8 review). Open.
+- **The "disabled by an administrator" rule lives in its callers, not on `User`.**
+  V184's marker is set or read by hand in three writers (user update, soft delete,
+  restore) and four readers (two verify-email paths, assignment confirmation, the
+  provider re-invite). Any other path that calls `setActive` (an import, a Keycloak
+  sync) skips it. Move it onto the entity (`disableByAdmin()`, `enableByAdmin()`,
+  `activateFromInvitation()`) and make `setActive` private to it (found in #852's
+  round-7 review). Open.
+- **Provider audit trail query scans platform-wide `USER_ROLE_ASSIGNMENT` rows.** The
+  facility trail filters every role-assignment row of the platform through correlated
+  seat subqueries, twice per page (content and count). Anchor it on the facility's
+  assignments (`idx_audit_assignment`) UNION the target-assignment branch, and return a
+  `Slice` for "has more" instead of a counted `Page` (found in #852's round-6 review). Open.
 - **The patient apps and the refresh 409 (#853): fix before their next release.** A
   refresh token is now spent atomically: of concurrent refreshes with one token, one
   wins and the rest get 409 "superseded". The portal retries (the shared cookie has

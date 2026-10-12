@@ -33,7 +33,14 @@ import { EmergencyBroadcastService } from '../services/emergency-broadcast.servi
 import { DowntimeBannerComponent } from '../downtime/downtime-banner';
 import { DowntimeService } from '../services/downtime.service';
 import { NavOrderService } from './nav-order.service';
-import { NAV_GROUP_IDS, navGroupForRoute, navGroupTranslationKey } from './nav-groups';
+import {
+  NAV_GROUP_IDS,
+  PROVIDER_NAV,
+  navGroupForRoute,
+  navGroupTranslationKey,
+  providerNavEntries,
+} from './nav-groups';
+import { ProviderContextService } from '../core/provider-context.service';
 import { SkipLinkComponent } from '../shared/a11y/skip-link.component';
 import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
 import { HospitalScopeGateService } from '../core/hospital-scope-gate.service';
@@ -98,6 +105,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly impersonation = inject(ImpersonationService);
   private readonly emergencyBroadcast = inject(EmergencyBroadcastService);
   private readonly downtime = inject(DowntimeService);
+  /** Whether this session acts at a provider facility (provider plan AC-12). */
+  private readonly providerContext = inject(ProviderContextService);
   readonly translate = inject(TranslateService);
   private notifSub?: Subscription;
   private readCountSub?: Subscription;
@@ -262,6 +271,31 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       // ARRIVE, not places you go, and they live in the topbar where the
       // badge is visible from every page. /chat and /my-notifications still
       // route — the topbar links to them.
+    }
+
+    // A user acting at a provider facility (a private pharmacy or laboratory)
+    // sees the provider shell only: the hospital pages would all answer 404
+    // there (the backend confines provider users to their allow-list).
+    const provider = this.providerContext.settings();
+    if (provider) {
+      return providerNavEntries(provider.facilityType, provider.providerAdmin).map((entry) => ({
+        icon: entry.icon,
+        label: entry.label,
+        translationKey: entry.translationKey,
+        route: entry.route,
+      }));
+    }
+    // A provider user whose settings are being asked again or failed for now
+    // (pending, error): the provider home only, never the hospital nav,
+    // every entry of which would 404 under provider confinement.
+    const status = this.providerContext.status();
+    if (this.roleContext.providerUser() && (status === 'pending' || status === 'error')) {
+      return PROVIDER_NAV.filter((entry) => entry.route === '/provider').map((entry) => ({
+        icon: entry.icon,
+        label: entry.label,
+        translationKey: entry.translationKey,
+        route: entry.route,
+      }));
     }
 
     // MVP-5: when the active role is super admin, the side-nav drops the
@@ -1415,6 +1449,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       translationKey: 'NAV.DATA_RESIDENCY',
       route: '/super-admin/data-residency',
     });
+    // Private pharmacies and laboratories: onboarding and verification (D5).
+    items.push({
+      icon: 'storefront',
+      label: 'Provider Facilities',
+      translationKey: 'NAV.PROVIDERS',
+      route: '/super-admin/providers',
+    });
   }
 
   /**
@@ -1428,6 +1469,17 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private broadcastOpened = false;
 
   constructor() {
+    // Ask whether this session acts at a provider facility, again whenever
+    // the scope changes or the session bootstrap resolves: the server answers
+    // for the facility the request acts at. The nav switches to the provider
+    // shell when it says so.
+    effect(() => {
+      this.roleContext.effectiveHospitalIdForRequest();
+      this.roleContext.sessionResolved();
+      this.roleContext.providerUser();
+      untracked(() => this.providerContext.load().subscribe({ error: () => undefined }));
+    });
+
     effect(() => {
       const base = this.baseNavItems();
       const saved = this.navOrder.load();

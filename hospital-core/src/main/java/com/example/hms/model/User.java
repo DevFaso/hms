@@ -71,6 +71,17 @@ public class User extends BaseEntity {
     @Column(name = "is_deleted", nullable = false)
     private boolean isDeleted = false;
 
+    /**
+     * When an administrator switched this account off (V184): user update
+     * with active=false, or a soft delete. Cleared only by an administrator
+     * turning it back on. While set, a provider admin cannot re-invite the
+     * account and an invitation code cannot activate it, so a disable is
+     * never undone from below. {@code null}: never disabled by an admin
+     * (an inactive account is then simply not activated yet).
+     */
+    @Column(name = "deactivated_by_admin_at")
+    private LocalDateTime deactivatedByAdminAt;
+
     private LocalDateTime lastLoginAt;
 
     @Column(name = "activation_token", unique = true, length = 100)
