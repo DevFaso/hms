@@ -6064,6 +6064,7 @@
     "MFA_STEPUP_CHALLENGE": "Terminez la connexion, y compris le code de vérification, avant de remplacer votre authentificateur.",
     "MFA_STEPUP_LOCKED": "Trop de codes erronés. Patientez quelques minutes, puis réessayez avec un code actuel ou un code de secours inutilisé.",
     "MFA_STEPUP_REUSED": "Ce code a déjà été utilisé. Attendez le code suivant de votre application d'authentification, ou utilisez un code de secours inutilisé.",
+    "MFA_STEPUP_IMPERSONATION": "Une session de support ne peut pas configurer ni modifier l'authentificateur de ce compte. Le titulaire du compte doit le faire lui-même.",
     "MFA_SET_UP": "Configurer une application d'authentification"
   },
   "RECEPTION": {

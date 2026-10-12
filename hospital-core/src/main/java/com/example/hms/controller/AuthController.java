@@ -755,11 +755,7 @@ public class AuthController {
 
     /** A provider user whose refresh token carries no (or an expired) second factor. */
     private boolean lapsedProviderFactor(java.util.UUID userId, String username, java.time.Instant secondFactor) {
-        if (secondFactor != null) {
-            return false;
-        }
-        ProviderMfaGate gate = providerMfaGate.getIfAvailable();
-        return gate != null && gate.isProviderUser(userId, username);
+        return secondFactor == null && isProviderUserChallenged(userId, username);
     }
 
     /** Another tab rotated this refresh token a moment ago: no tokens, retry with the new cookie. */
@@ -1033,7 +1029,6 @@ public class AuthController {
     @ApiResponse(responseCode = "401", description = "Current password incorrect")
     public ResponseEntity<Object> changeOwnPassword(
             @Valid @RequestBody ChangePasswordRequest request) {
-        com.example.hms.security.context.ImpersonationLimits.refuseAccountChange();
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -1104,7 +1099,6 @@ public class AuthController {
     @ApiResponse(responseCode = "400", description = "Username invalid or already taken")
     public ResponseEntity<Object> changeOwnUsername(
             @Valid @RequestBody ChangeUsernameRequest request) {
-        com.example.hms.security.context.ImpersonationLimits.refuseAccountChange();
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -1263,7 +1257,6 @@ public class AuthController {
     public ResponseEntity<List<UserMfaEnrollmentDTO>> updateMfaEnrollments(
             @Valid @RequestBody List<UserMfaEnrollmentRequestDTO> payload,
             @RequestHeader(value = "X-Mfa-Token", required = false) String stepUpCode) {
-        com.example.hms.security.context.ImpersonationLimits.refuseAccountChange();
         UUID userId = resolveCurrentUserId();
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
@@ -1276,7 +1269,6 @@ public class AuthController {
     @PutMapping("/credentials/recovery")
     public ResponseEntity<List<UserRecoveryContactDTO>> updateRecoveryContacts(
             @Valid @RequestBody List<UserRecoveryContactRequestDTO> payload) {
-        com.example.hms.security.context.ImpersonationLimits.refuseAccountChange();
         UUID userId = resolveCurrentUserId();
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
@@ -1288,7 +1280,6 @@ public class AuthController {
     @PostMapping("/credentials/recovery/{contactId}/send-code")
     public ResponseEntity<java.util.Map<String, String>> sendRecoveryContactVerificationCode(
             @PathVariable UUID contactId) {
-        com.example.hms.security.context.ImpersonationLimits.refuseAccountChange();
         UUID userId = resolveCurrentUserId();
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
@@ -1301,7 +1292,6 @@ public class AuthController {
     public ResponseEntity<UserRecoveryContactDTO> verifyRecoveryContact(
             @PathVariable UUID contactId,
             @Valid @RequestBody VerifyRecoveryContactRequest request) {
-        com.example.hms.security.context.ImpersonationLimits.refuseAccountChange();
         UUID userId = resolveCurrentUserId();
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();

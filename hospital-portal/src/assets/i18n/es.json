@@ -6064,6 +6064,7 @@
     "MFA_STEPUP_CHALLENGE": "Complete el inicio de sesión, incluido el código de verificación, antes de sustituir su autenticador.",
     "MFA_STEPUP_LOCKED": "Demasiados códigos incorrectos. Espere unos minutos y vuelva a intentarlo con un código actual o un código de respaldo sin usar.",
     "MFA_STEPUP_REUSED": "Ese código ya se utilizó. Espere el siguiente código de su aplicación de autenticación o use un código de respaldo sin usar.",
+    "MFA_STEPUP_IMPERSONATION": "Una sesión de soporte no puede configurar ni cambiar el autenticador de esta cuenta. El titular de la cuenta debe hacerlo personalmente.",
     "MFA_SET_UP": "Configurar una aplicación de autenticación"
   },
   "RECEPTION": {

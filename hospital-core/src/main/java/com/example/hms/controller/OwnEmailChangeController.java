@@ -59,7 +59,6 @@ public class OwnEmailChangeController {
     @ApiResponse(responseCode = "400", description = "Current password incorrect, endpoint locked, too many "
         + "requests, address invalid or unchanged, or a single sign-on session")
     public ResponseEntity<Object> request(@RequestBody ChangeEmailRequest request) {
-        com.example.hms.security.context.ImpersonationLimits.refuseAccountChange();
         Optional<UUID> userId = selfServiceUserId();
         if (userId.isEmpty()) {
             return notAuthenticated();
@@ -85,7 +84,6 @@ public class OwnEmailChangeController {
     @ApiResponse(responseCode = "410", description = "No change is waiting: never requested, expired, or "
         + "cancelled by too many wrong codes")
     public ResponseEntity<Object> confirm(@RequestBody ConfirmEmailChangeRequest request) {
-        com.example.hms.security.context.ImpersonationLimits.refuseAccountChange();
         Optional<UUID> userId = selfServiceUserId();
         if (userId.isEmpty()) {
             return notAuthenticated();

@@ -4992,7 +4992,11 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   flag, and the confinement filter's context), so the login challenge and the bootstrap
   flags can drift if the rule changes; and every refresh without a second factor runs a
   second assignment query (`isProviderUser`) after `findByUser` already loaded the rows.
-  One rule, computed once per request from the rows in hand. Open.
+  One rule, computed once per request from the rows in hand. Also: the sign-in exemptions
+  for the MFA enrolment endpoints are listed twice (`SECOND_FACTOR_EXEMPT_RULES` and
+  `MfaChallengeScope.ENROLMENT_PATHS`) with no test tying them; and an open `/ws-chat`
+  STOMP session is never re-checked once the second factor lapses (true of token expiry
+  in general, not only of MFA). Open.
 - **CDS acknowledgement with an unknown hospital id now answers 404** (was: saved as a
   global acknowledgement). Intended since #835; confirm no client relies on the old
   behaviour. Open.
