@@ -6064,6 +6064,7 @@
     "MFA_STEPUP_CHALLENGE": "Sign in completely, including the verification code, before replacing your authenticator.",
     "MFA_STEPUP_LOCKED": "Too many wrong codes. Wait a few minutes, then try again with a current code or an unused backup code.",
     "MFA_STEPUP_REUSED": "That code was already used. Wait for the next code from your authenticator app, or use an unused backup code.",
+    "MFA_STEPUP_IMPERSONATION": "A support session cannot set up or change the authenticator of this account. The account holder must do it themselves.",
     "MFA_SET_UP": "Set up an authenticator app"
   },
   "RECEPTION": {

@@ -31,6 +31,9 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.notNull;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -86,6 +89,20 @@ class MfaControllerTest {
     @MockitoBean
     private com.example.hms.security.GlobalSessionRevocationService globalSessionRevocationService;
 
+    @MockitoBean
+    private com.example.hms.security.LoginAttemptService loginAttemptService;
+
+    @MockitoBean
+    private com.example.hms.security.HospitalUserDetailsService userDetailsService;
+
+    /** The user currently holds exactly these authorities (the login's source). */
+    private void holds(String... authorities) {
+        com.example.hms.security.HospitalUserDetails details =
+                mock(com.example.hms.security.HospitalUserDetails.class);
+        doReturn(AuthorityUtils.createAuthorityList(authorities)).when(details).getAuthorities();
+        when(userDetailsService.loadUserByUsername(USERNAME)).thenReturn(details);
+    }
+
     private static final UUID USER_ID = UUID.randomUUID();
     private static final String USERNAME = "doctor@hms.com";
     private User testUser;
@@ -94,6 +111,8 @@ class MfaControllerTest {
     void setUp() {
         // The user's wrong-code budget is not exhausted unless a test says so.
         when(mfaService.reserveCodeAttempt(any())).thenReturn(true);
+        // A readable challenge with no role picked at login, unless a test says so.
+        when(jwtTokenProvider.mfaTokenSelectedRoles(any())).thenReturn(Optional.of(List.of()));
 
         testUser = new User();
         testUser.setId(USER_ID);
@@ -193,8 +212,9 @@ class MfaControllerTest {
         when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
         currentTotp("654321");
         when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID)).thenReturn(List.of());
-        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class))).thenReturn("access-jwt");
-        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class))).thenReturn("refresh-jwt");
+        // The tokens minted after a verified code carry the second factor (AC-13).
+        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class), notNull())).thenReturn("access-jwt");
+        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class), notNull())).thenReturn("refresh-jwt");
         when(jwtTokenProvider.resolvePreferredRole(any())).thenReturn("ROLE_DOCTOR");
 
         mockMvc.perform(post("/auth/mfa/verify")
@@ -203,6 +223,98 @@ class MfaControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").value("access-jwt"))
                 .andExpect(jsonPath("$.refreshToken").value("refresh-jwt"));
+        // The sign-in is complete: the password-failure count is cleared, as without a challenge.
+        verify(loginAttemptService).resetAttempts(USER_ID);
+    }
+
+    @Test
+    void verifyMfa_keepsTheRolePickedAtLogin() throws Exception {
+        when(jwtTokenProvider.isMfaToken("mfa-tok-pick")).thenReturn(true);
+        claimable("mfa-tok-pick");
+        when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-pick")).thenReturn(USERNAME);
+        when(jwtTokenProvider.mfaTokenSelectedRoles("mfa-tok-pick")).thenReturn(Optional.of(List.of("ROLE_LAB_SCIENTIST")));
+        holds("ROLE_PROVIDER_ADMIN", "ROLE_LAB_SCIENTIST");
+        currentTotp("654321");
+        when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID))
+                .thenReturn(List.of(assignment("PROVIDER_ADMIN"), assignment("LAB_SCIENTIST")));
+        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class), notNull())).thenReturn("access-jwt");
+        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class), notNull())).thenReturn("refresh-jwt");
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-pick\",\"code\":\"654321\"}"))
+                .andExpect(status().isOk());
+
+        var minted = org.mockito.ArgumentCaptor.forClass(TokenUserDescriptor.class);
+        verify(jwtTokenProvider).generateAccessToken(minted.capture(), notNull());
+        org.assertj.core.api.Assertions.assertThat(minted.getValue().roles()).containsExactly("ROLE_LAB_SCIENTIST");
+    }
+
+    @Test
+    void verifyMfa_honoursARoleTheLoginOfferedThroughExpansion() throws Exception {
+        when(jwtTokenProvider.isMfaToken("mfa-tok-sa")).thenReturn(true);
+        claimable("mfa-tok-sa");
+        when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-sa")).thenReturn(USERNAME);
+        when(jwtTokenProvider.mfaTokenSelectedRoles("mfa-tok-sa")).thenReturn(Optional.of(List.of("ROLE_HOSPITAL_ADMIN")));
+        // Stored: super-admin only. The login offered HOSPITAL_ADMIN through RoleExpansion.
+        holds("ROLE_SUPER_ADMIN");
+        currentTotp("654321");
+        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class), notNull())).thenReturn("access-jwt");
+        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class), notNull())).thenReturn("refresh-jwt");
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-sa\",\"code\":\"654321\"}"))
+                .andExpect(status().isOk());
+
+        var minted = org.mockito.ArgumentCaptor.forClass(TokenUserDescriptor.class);
+        verify(jwtTokenProvider).generateAccessToken(minted.capture(), notNull());
+        org.assertj.core.api.Assertions.assertThat(minted.getValue().roles()).containsExactly("ROLE_HOSPITAL_ADMIN");
+    }
+
+    @Test
+    void verifyMfa_aRolePickedThenRevoked_isNotMinted() throws Exception {
+        when(jwtTokenProvider.isMfaToken("mfa-tok-gone")).thenReturn(true);
+        claimable("mfa-tok-gone");
+        when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-gone")).thenReturn(USERNAME);
+        when(jwtTokenProvider.mfaTokenSelectedRoles("mfa-tok-gone")).thenReturn(Optional.of(List.of("ROLE_HOSPITAL_ADMIN")));
+        holds("ROLE_DOCTOR");
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-gone\",\"code\":\"654321\"}"))
+                .andExpect(status().isUnauthorized());
+        verify(jwtTokenProvider, never())
+                .generateAccessToken(any(TokenUserDescriptor.class), any());
+        // Refused before anything was reserved or spent: the code stays usable after a fresh sign-in.
+        verify(mfaService, never()).reserveCodeAttempt(any());
+        verify(tokenBlacklistService, never()).claim(any(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void verifyMfa_anUnreadableChallenge_isRefusedBeforeAnythingIsSpent() throws Exception {
+        when(jwtTokenProvider.isMfaToken("mfa-tok-late")).thenReturn(true);
+        claimable("mfa-tok-late");
+        when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-late")).thenReturn(USERNAME);
+        when(jwtTokenProvider.mfaTokenSelectedRoles("mfa-tok-late")).thenReturn(Optional.empty());
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-late\",\"code\":\"654321\"}"))
+                .andExpect(status().isUnauthorized())
+                // an expired challenge is not reported as a revoked role
+                .andExpect(jsonPath("$.message").value("Invalid or expired MFA token."));
+        verify(mfaService, never()).reserveCodeAttempt(any());
+    }
+
+    private static com.example.hms.model.UserRoleHospitalAssignment assignment(String role) {
+        com.example.hms.model.Role r = new com.example.hms.model.Role();
+        r.setCode(role);
+        r.setName(role);
+        com.example.hms.model.UserRoleHospitalAssignment a = new com.example.hms.model.UserRoleHospitalAssignment();
+        a.setRole(r);
+        a.setActive(true);
+        return a;
     }
 
     @Test
@@ -238,8 +350,9 @@ class MfaControllerTest {
         when(mfaService.matchingBackupCode(USER_ID, "BACKUP01")).thenReturn(Optional.of(backupId));
         when(mfaService.spendBackupCode(backupId)).thenReturn(true);
         when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID)).thenReturn(List.of());
-        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class))).thenReturn("access-jwt");
-        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class))).thenReturn("refresh-jwt");
+        // The tokens minted after a verified code carry the second factor (AC-13).
+        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class), notNull())).thenReturn("access-jwt");
+        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class), notNull())).thenReturn("refresh-jwt");
         when(jwtTokenProvider.resolvePreferredRole(any())).thenReturn("ROLE_DOCTOR");
 
         mockMvc.perform(post("/auth/mfa/verify")

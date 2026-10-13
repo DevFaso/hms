@@ -3,6 +3,7 @@ package com.example.hms.security.provider;
 import com.example.hms.enums.FacilityType;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.ApiKeyAuthenticationFilter;
+import com.example.hms.security.JwtTokenProvider;
 import com.example.hms.security.HospitalScopeResponses;
 import com.example.hms.security.audit.CrossTenantReadAudit;
 import com.example.hms.security.auth.TenantRoleAssignmentAccessor;
@@ -26,6 +27,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -35,6 +38,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.support.StaticWebApplicationContext;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 import org.springframework.web.servlet.HandlerMapping;
+import org.springframework.web.servlet.LocaleResolver;
 import org.springframework.web.servlet.ModelAndView;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -120,6 +124,21 @@ class ProviderFacilityConfinementFilterTest {
         String updateUser(@PathVariable String id) {
             return id;
         }
+
+        @GetMapping("/auth/session/bootstrap")
+        String bootstrap() {
+            return "session";
+        }
+
+        @PostMapping("/auth/ws-ticket")
+        String wsTicket() {
+            return "ticket";
+        }
+
+        @PutMapping("/auth/credentials/mfa")
+        String mfaRecords() {
+            return "records";
+        }
     }
 
     @AfterEach
@@ -168,15 +187,46 @@ class ProviderFacilityConfinementFilterTest {
             assignmentRepository, auditProvider);
     }
 
-    @SuppressWarnings("unchecked")
+    /**
+     * The filter with a gate that sees a second factor on every request, so
+     * the confinement tests see the allow-list itself; the MFA tests below
+     * pass a real gate.
+     */
     private ProviderFacilityConfinementFilter filter(ProviderConfinementPolicy policy) {
+        ProviderMfaGate admitting = mock(ProviderMfaGate.class);
+        when(admitting.refuses(any(), any())).thenReturn(false);
+        return filter(policy, admitting);
+    }
+
+    @SuppressWarnings("unchecked")
+    private ProviderFacilityConfinementFilter filter(ProviderConfinementPolicy policy, ProviderMfaGate mfaGate) {
         ObjectProvider<ProviderConfinementPolicy> p = mock(ObjectProvider.class);
         when(p.getIfAvailable()).thenReturn(policy);
         ObjectProvider<ProviderCallerResolver> r = mock(ObjectProvider.class);
         when(r.getIfAvailable()).thenReturn(callerResolver);
         ObjectProvider<ActingScopeResolver> s = mock(ObjectProvider.class);
         when(s.getIfAvailable()).thenReturn(scopeResolver);
-        return new ProviderFacilityConfinementFilter(p, r, s);
+        ObjectProvider<ProviderMfaGate> g = mock(ObjectProvider.class);
+        when(g.getIfAvailable()).thenReturn(mfaGate);
+        return new ProviderFacilityConfinementFilter(p, r, s, g);
+    }
+
+    /** The real gate over mocked collaborators: no exception resolver, so its refusal is a bare 403. */
+    @SuppressWarnings("unchecked")
+    private ProviderMfaGate realGate(JwtTokenProvider tokens) {
+        ObjectProvider<JwtTokenProvider> t = mock(ObjectProvider.class);
+        when(t.getIfAvailable()).thenReturn(tokens);
+        ObjectProvider<LocaleResolver> l = mock(ObjectProvider.class);
+        ObjectProvider<HandlerExceptionResolver> r = mock(ObjectProvider.class);
+        return new ProviderMfaGate(mock(TenantRoleAssignmentAccessor.class), t, l, r);
+    }
+
+    private static Authentication keycloakToken(List<String> amr) {
+        Jwt.Builder jwt = Jwt.withTokenValue("kc").header("alg", "RS256").subject("sub");
+        if (amr != null) {
+            jwt.claim("amr", amr);
+        }
+        return new JwtAuthenticationToken(jwt.build(), List.of(new SimpleGrantedAuthority("ROLE_PHARMACIST")));
     }
 
     private HospitalContext context(Set<UUID> permitted, Set<FacilityType> providerTypes, Set<String> roles,
@@ -215,6 +265,93 @@ class ProviderFacilityConfinementFilterTest {
 
     private static Authentication user(String name) {
         return new UsernamePasswordAuthenticationToken(name, null, List.of(new SimpleGrantedAuthority("ROLE_PHARMACIST")));
+    }
+
+    @Test
+    @DisplayName("MFA: without a second factor a provider gets the same 403 for an allowed, a refused and an unmapped path")
+    void mfaRefusesEveryNonAuthRequestAlike() throws Exception {
+        ProviderFacilityConfinementFilter filter = filter(policy(mapping(), resolver), realGate(mock(JwtTokenProvider.class)));
+        authenticated(keycloakToken(List.of("pwd")));
+
+        for (MockHttpServletRequest request : List.of(
+                get("/notifications"),                 // on the allow-list
+                get("/patients/search"),               // refused by it
+                get("/nothing/here/at/all"),           // no handler
+                get("/auth/7/detail"),                 // looks like /auth, dispatches to the catch-all
+                request("POST", "/auth/ws-ticket"),    // under /auth, but opens the STOMP channel
+                request("PUT", "/auth/credentials/mfa"))) { // under /auth, but changes the MFA records
+            actAs(pharmacist(false));
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            filter.doFilter(request, response, chain);
+
+            assertThat(response.getStatus()).as(request.getMethod() + " " + request.getRequestURI()).isEqualTo(403);
+        }
+        verify(chain, never()).doFilter(any(), any());
+        // The unmapped-path refusal never ran: the MFA answer comes first.
+        verify(resolver, never()).resolveException(any(), any(), any(), any(NoResourceFoundException.class));
+    }
+
+    @Test
+    @DisplayName("MFA: sign-in and enrolment handlers under /auth stay reachable without a second factor")
+    void mfaLetsSignInThrough() throws Exception {
+        authenticated(keycloakToken(null));
+        actAs(pharmacist(false));
+
+        filter(policy(mapping(), resolver), realGate(mock(JwtTokenProvider.class)))
+            .doFilter(get("/auth/session/bootstrap"), new MockHttpServletResponse(), chain);
+
+        verify(chain).doFilter(any(), any());
+    }
+
+    @Test
+    @DisplayName("MFA: with otp in amr (Keycloak) or the issuer's proof (legacy), the allow-list decides as before")
+    void secondFactorGoesOnToTheAllowList() throws Exception {
+        JwtTokenProvider tokens = mock(JwtTokenProvider.class);
+        when(tokens.hasSecondFactor("legacy.after.totp")).thenReturn(true);
+        when(resolver.resolveException(any(), any(), isNull(), any())).thenReturn(new ModelAndView());
+        ProviderFacilityConfinementFilter filter = filter(policy(mapping(), resolver), realGate(tokens));
+
+        for (Authentication proved : List.of(keycloakToken(List.of("pwd", "otp")),
+                new UsernamePasswordAuthenticationToken("pharm", "legacy.after.totp", List.of()))) {
+            authenticated(proved);
+            actAs(pharmacist(false));
+            filter.doFilter(get("/notifications"), new MockHttpServletResponse(), chain);
+            actAs(pharmacist(false));
+            filter.doFilter(get("/patients/search"), new MockHttpServletResponse(), chain);
+        }
+
+        verify(chain, times(2)).doFilter(any(), any());
+        verify(resolver, times(2)).resolveException(any(), any(), isNull(), any(NoResourceFoundException.class));
+    }
+
+    @Test
+    @DisplayName("MFA: a legacy password-only token is refused like a Keycloak token without otp")
+    void legacyPasswordOnlyIsRefused() throws Exception {
+        JwtTokenProvider tokens = mock(JwtTokenProvider.class);
+        when(tokens.hasSecondFactor("legacy.password.only")).thenReturn(false);
+        authenticated(new UsernamePasswordAuthenticationToken("pharm", "legacy.password.only", List.of()));
+        actAs(pharmacist(false));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter(policy(mapping(), resolver), realGate(tokens)).doFilter(get("/notifications"), response, chain);
+
+        verify(chain, never()).doFilter(any(), any());
+        assertThat(response.getStatus()).isEqualTo(403);
+    }
+
+    @Test
+    @DisplayName("MFA: a hospital user and a verified super-admin are never asked")
+    void mfaNeverAsksTheUnconfined() throws Exception {
+        authenticated(keycloakToken(null));
+        ProviderFacilityConfinementFilter filter = filter(policy(mapping(), resolver), realGate(mock(JwtTokenProvider.class)));
+
+        actAs(context(Set.of(hospitalId), Set.of(), Set.of("ROLE_DOCTOR"), false));
+        filter.doFilter(get("/patients/search"), new MockHttpServletResponse(), chain);
+        actAs(context(Set.of(pharmacyId), PHARMACY, Set.of("ROLE_SUPER_ADMIN"), true));
+        filter.doFilter(get("/patients/search"), new MockHttpServletResponse(), chain);
+
+        verify(chain, times(2)).doFilter(any(), any());
     }
 
     @Test

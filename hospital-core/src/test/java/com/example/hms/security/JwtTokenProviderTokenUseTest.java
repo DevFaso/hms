@@ -82,7 +82,7 @@ class JwtTokenProviderTokenUseTest {
     void otherTokensAreNotRefreshTokens() {
         String access = provider.generateAccessToken(descriptor());
         String impersonation = provider.generateImpersonationAccessToken(
-            descriptor(), UUID.randomUUID(), "super.admin", 1_800_000L);
+            descriptor(), UUID.randomUUID(), "super.admin", 1_800_000L, null);
         String challenge = provider.generateMfaToken(USERNAME);
 
         assertThat(provider.validateToken(access)).isTrue();
@@ -163,7 +163,7 @@ class JwtTokenProviderTokenUseTest {
     void accessTokenIsNeverTheLegacyShape() {
         assertThat(provider.isRefreshToken(provider.generateAccessToken(descriptor()))).isFalse();
         assertThat(provider.isRefreshToken(provider.generateImpersonationAccessToken(
-            descriptor(), UUID.randomUUID(), "super.admin", 1_800_000L))).isFalse();
+            descriptor(), UUID.randomUUID(), "super.admin", 1_800_000L, null))).isFalse();
         assertThat(provider.isRefreshToken(provider.generateMfaToken(USERNAME))).isFalse();
     }
 

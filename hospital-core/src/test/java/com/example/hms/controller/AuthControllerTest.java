@@ -86,6 +86,7 @@ class AuthControllerTest {
     @MockitoBean private WsTicketService wsTicketService;
     @MockitoBean private RefreshTokenCookieService refreshTokenCookieService;
     @MockitoBean private AuthBootstrapService authBootstrapService;
+    @MockitoBean private com.example.hms.security.provider.ProviderMfaGate providerMfaGate;
 
     /**
      * Spring Security 7's DaoAuthenticationProvider adds a
@@ -771,11 +772,13 @@ class AuthControllerTest {
                 .thenReturn(java.util.List.of(assignment));
         when(jwtTokenProvider.generateAccessToken(
                 org.mockito.ArgumentMatchers.any(
-                        com.example.hms.security.TokenUserDescriptor.class)))
+                        com.example.hms.security.TokenUserDescriptor.class),
+                org.mockito.ArgumentMatchers.isNull()))
                 .thenReturn("new.access.token");
         when(jwtTokenProvider.generateRefreshToken(
                 org.mockito.ArgumentMatchers.any(
-                        org.springframework.security.authentication.UsernamePasswordAuthenticationToken.class)))
+                        org.springframework.security.authentication.UsernamePasswordAuthenticationToken.class),
+                org.mockito.ArgumentMatchers.isNull()))
                 .thenReturn("new.refresh.token");
         when(jwtTokenProvider.getExpiration("new.access.token"))
                 .thenReturn(new java.util.Date(accessExp));
@@ -867,10 +870,11 @@ class AuthControllerTest {
         claimableRefresh("old.refresh.token");
         when(jwtTokenProvider.getUsernameFromJWT("old.refresh.token")).thenReturn("doctor@example.com");
         when(userRepository.findByUsername("doctor@example.com")).thenReturn(java.util.Optional.of(activeUser));
-        when(jwtTokenProvider.generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class)))
+        // The refresh mints with the second-factor instant (#851): the two-argument forms.
+        when(jwtTokenProvider.generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), any()))
                 .thenReturn("new.access.token");
         when(jwtTokenProvider.generateRefreshToken(any(
-                org.springframework.security.authentication.UsernamePasswordAuthenticationToken.class)))
+                org.springframework.security.authentication.UsernamePasswordAuthenticationToken.class), any()))
                 .thenReturn("new.refresh.token");
         when(jwtTokenProvider.getExpiration("new.access.token"))
                 .thenReturn(new java.util.Date(System.currentTimeMillis() + 60_000L));
@@ -893,7 +897,7 @@ class AuthControllerTest {
         claimableRefresh("old.refresh.token");
         when(jwtTokenProvider.getUsernameFromJWT("old.refresh.token")).thenReturn("doctor@example.com");
         when(userRepository.findByUsername("doctor@example.com")).thenReturn(java.util.Optional.of(activeUser));
-        when(jwtTokenProvider.generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class)))
+        when(jwtTokenProvider.generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), any()))
                 .thenThrow(new IllegalStateException("transient"));
 
         try {
@@ -969,11 +973,13 @@ class AuthControllerTest {
                 .thenReturn(java.util.List.of(assignment));
         when(jwtTokenProvider.generateAccessToken(
                 org.mockito.ArgumentMatchers.any(
-                        com.example.hms.security.TokenUserDescriptor.class)))
+                        com.example.hms.security.TokenUserDescriptor.class),
+                org.mockito.ArgumentMatchers.isNull()))
                 .thenReturn("new.access.token");
         when(jwtTokenProvider.generateRefreshToken(
                 org.mockito.ArgumentMatchers.any(
-                        org.springframework.security.authentication.UsernamePasswordAuthenticationToken.class)))
+                        org.springframework.security.authentication.UsernamePasswordAuthenticationToken.class),
+                org.mockito.ArgumentMatchers.isNull()))
                 .thenReturn("new.refresh.token");
         when(jwtTokenProvider.getExpiration("new.access.token"))
                 .thenReturn(new java.util.Date(nowMs + 86_400_000L));
@@ -1128,5 +1134,61 @@ class AuthControllerTest {
         assertThat(user.isActive()).isFalse();
         verify(loginAttemptService, never()).resetAttempts(any());
         verify(assignmentRepository, never()).findByUserId(any());
+    }
+
+    @Test
+    void aSupportSessionCannotChangeHowTheUserSignsInOrRecovers() throws Exception {
+        com.example.hms.security.context.ImpersonationContextHolder.set(
+                com.example.hms.security.context.ImpersonationContext.of(java.util.UUID.randomUUID(), "support.agent"));
+        try {
+            for (var request : java.util.List.of(
+                    post("/auth/me/change-username").contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"newUsername\":\"taken.over\"}"),
+                    post("/auth/me/change-password").contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"currentPassword\":\"Old#Pass2026\",\"newPassword\":\"New#Pass2026x\"}"),
+                    org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/auth/credentials/recovery")
+                            .contentType(MediaType.APPLICATION_JSON).content("[]"),
+                    org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/auth/credentials/mfa")
+                            .contentType(MediaType.APPLICATION_JSON).content("[]"),
+                    post("/auth/credentials/recovery/" + java.util.UUID.randomUUID() + "/send-code"),
+                    post("/auth/verify-password").contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"username\":\"target\",\"password\":\"guess\"}"),
+                    post("/auth/credentials/recovery/" + java.util.UUID.randomUUID() + "/verify")
+                            .contentType(MediaType.APPLICATION_JSON).content("{\"code\":\"123456\"}"))) {
+                mockMvc.perform(request).andExpect(status().isForbidden());
+            }
+        } finally {
+            com.example.hms.security.context.ImpersonationContextHolder.clear();
+        }
+        org.mockito.Mockito.verifyNoInteractions(userCredentialLifecycleService, userService, authenticationManager);
+    }
+
+    @Test
+    void refreshToken_aProviderUserWhoseSecondFactorLapsed_isSentBackToSignIn() throws Exception {
+        com.example.hms.model.User pharmacist = com.example.hms.model.User.builder()
+                .username("pharm@example.com").isActive(true).build();
+        org.springframework.test.util.ReflectionTestUtils.setField(pharmacist, "id", java.util.UUID.randomUUID());
+        when(jwtTokenProvider.isRefreshToken("old.refresh.token")).thenReturn(true);
+        claimableRefresh("old.refresh.token");
+        when(jwtTokenProvider.getUsernameFromJWT("old.refresh.token")).thenReturn("pharm@example.com");
+        when(userRepository.findByUsername("pharm@example.com")).thenReturn(java.util.Optional.of(pharmacist));
+        when(jwtTokenProvider.secondFactorAt("old.refresh.token")).thenReturn(null);
+        when(providerMfaGate.isProviderUser(pharmacist.getId(), "pharm@example.com")).thenReturn(true);
+
+        mockMvc.perform(post("/auth/token/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"old.refresh.token\"}"))
+                .andExpect(status().isUnauthorized());
+
+        // No pair every call would refuse; the old token is given back for the normal sign-in path.
+        verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), any());
+        // The token can never yield a pair again: it stays spent, and the cookie is dropped.
+        verify(tokenBlacklistService, never()).release("jti-old.refresh.token");
+        verify(refreshTokenCookieService).clear(any());
+        // ...and the refusal is in the audit trail, like the idle-timeout one.
+        verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+                e.getEventType() == com.example.hms.enums.AuditEventType.TOKEN_REFRESH
+                        && e.getStatus() == com.example.hms.enums.AuditStatus.FAILURE
+                        && pharmacist.getId().equals(e.getUserId())));
     }
 }

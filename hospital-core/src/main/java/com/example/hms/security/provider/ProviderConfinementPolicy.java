@@ -206,6 +206,34 @@ public class ProviderConfinementPolicy implements SmartInitializingSingleton {
     }
 
     /**
+     * May a confined caller WITHOUT a second factor reach the handler this
+     * request dispatches to (AC-13)? Only a sign-in or MFA enrolment handler,
+     * decided on the handler Spring MVC itself would pick, never on the raw
+     * path, so a path that only starts like {@code /auth} cannot land on
+     * another handler. Anything that does not dispatch to such a handler (no
+     * handler, a wrong method or media type, no handler mapping) is not
+     * exempt. The request is left exactly as it was found.
+     */
+    public boolean exemptFromSecondFactor(HttpServletRequest request) {
+        RequestMappingHandlerMapping mapping = handlerMappingProvider.getIfAvailable();
+        if (mapping == null) {
+            return false;
+        }
+        Map<String, Object> before = attributes(request);
+        try {
+            ServletRequestPathUtils.parseAndCache(request);
+            HandlerExecutionChain chain = mapping.getHandler(request);
+            Object pattern = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+            return chain != null && pattern instanceof String matched
+                && ProviderConfinement.exemptFromSecondFactor(request.getMethod(), matched);
+        } catch (Exception noHandler) {
+            return false;
+        } finally {
+            restore(request, before);
+        }
+    }
+
+    /**
      * Answer exactly as an unmapped path: the exception Spring MVC raises for
      * one, through the same resolvers. The log names neither the caller nor
      * anything about a patient.

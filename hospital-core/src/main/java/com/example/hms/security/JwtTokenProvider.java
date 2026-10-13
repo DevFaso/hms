@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.Collections;
+import java.time.Instant;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -47,6 +48,10 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static com.example.hms.config.SecurityConstants.AMR_OTP;
+import static com.example.hms.config.SecurityConstants.AMR_PASSWORD;
+import static com.example.hms.config.SecurityConstants.CLAIM_AMR;
+import static com.example.hms.config.SecurityConstants.CLAIM_OTP_AT;
 import static com.example.hms.config.SecurityConstants.CLAIM_IMPERSONATOR_USERNAME;
 import static com.example.hms.config.SecurityConstants.CLAIM_IMPERSONATOR_USER_ID;
 import static com.example.hms.config.SecurityConstants.CLAIM_IS_HOSPITAL_ADMIN;
@@ -68,6 +73,20 @@ public class JwtTokenProvider {
 
     private static final String ROLES_CLAIM = "roles";
     private static final String ROLE_PREFIX = "ROLE_";
+    /** What a token minted after a verified TOTP code asserts (RFC 8176): a password, then a one-time password. */
+    private static final List<String> SECOND_FACTOR_AMR = List.of(AMR_PASSWORD, AMR_OTP);
+    private static final long CLOCK_SKEW_SECONDS = 60;
+
+    /**
+     * How long a verified TOTP code counts for a legacy session (AC-13): 48 h,
+     * the realm's SSO max lifespan and its Authenticator Reference max age, so
+     * both auth paths re-challenge on the same clock.
+     */
+    @Value("${app.mfa.second-factor-max-age-seconds:172800}")
+    private long secondFactorMaxAgeSeconds = 172_800L;
+
+    /** The roles a user picked at login, carried by the MFA challenge token to the session it opens. */
+    static final String MFA_SELECTED_ROLES_CLAIM = "sel_roles";
 
     private final HospitalUserDetailsService userDetailsService;
     private final TenantRoleAssignmentAccessor tenantRoleAssignmentAccessor;
@@ -117,6 +136,12 @@ public class JwtTokenProvider {
 
     @PostConstruct
     public void init() {
+        // Zero or less would make every proof stale at once: every provider
+        // user refused, every refresh sent back to sign-in, nothing logged.
+        if (secondFactorMaxAgeSeconds <= 0) {
+            throw new IllegalStateException("app.mfa.second-factor-max-age-seconds must be positive, was "
+                + secondFactorMaxAgeSeconds);
+        }
         if (StringUtils.hasText(rsaPrivateKeyPem) && StringUtils.hasText(rsaPublicKeyPem)) {
             initAsymmetric();
         } else {
@@ -268,6 +293,18 @@ public class JwtTokenProvider {
     }
 
     public String generateAccessToken(TokenUserDescriptor descriptor) {
+        return generateAccessToken(descriptor, null);
+    }
+
+    /**
+     * An access token for the descriptor. {@code secondFactorAt} is when a TOTP
+     * code was verified for this session ({@code null}: never): while it is
+     * within {@link #secondFactorMaxAgeSeconds} the token is stamped
+     * {@code amr: ["pwd", "otp"]} and {@code otp_at} (provider plan AC-13).
+     * Only a caller that has just verified a code, or that carries the time a
+     * refresh token was minted with, may pass a time.
+     */
+    public String generateAccessToken(TokenUserDescriptor descriptor, Instant secondFactorAt) {
         Objects.requireNonNull(descriptor, "descriptor is required");
         UUID userId = descriptor.userId();
 
@@ -282,12 +319,14 @@ public class JwtTokenProvider {
 
         log.debug("✅ Roles for token: {}", roles);
         Date now = new Date();
-        Date expiryDate = new Date(now.getTime() + accessTokenExpirationMs);
+        Date expiryDate = new Date(Math.min(now.getTime() + accessTokenExpirationMs,
+            proofDeadlineMs(secondFactorAt, now.getTime())));
         Map<String, Object> claims = buildTenantClaims(userId, roles);
         claims.put(ROLES_CLAIM, roles);
         if (userId != null) {
             claims.put("uid", userId.toString());
         }
+        claims.putAll(secondFactorClaims(secondFactorAt));
         return Jwts.builder()
             .id(UUID.randomUUID().toString())
             .subject(descriptor.username())
@@ -313,11 +352,17 @@ public class JwtTokenProvider {
      * <p>No refresh token is issued; when the {@code ttlMillis} expire the
      * super admin must call {@code start} again. This caps the blast radius
      * of a leaked impersonation token at the chosen TTL (30 min default).
+     *
+     * <p>{@code secondFactorAt}: when the super admin's start was stepped up
+     * with a verified TOTP code, so the token carries {@code amr: ["pwd", "otp"]}
+     * and the provider MFA gate admits it when the target is a provider user
+     * (AC-13). An unenrolled actor's non-strict bypass passes {@code null}.
      */
     public String generateImpersonationAccessToken(TokenUserDescriptor target,
                                                     UUID impersonatorUserId,
                                                     String impersonatorUsername,
-                                                    long ttlMillis) {
+                                                    long ttlMillis,
+                                                    Instant secondFactorAt) {
         Objects.requireNonNull(target, "target descriptor is required");
         Objects.requireNonNull(target.username(), "target username is required");
         Objects.requireNonNull(impersonatorUserId, "impersonatorUserId is required");
@@ -342,6 +387,7 @@ public class JwtTokenProvider {
         }
         claims.put(CLAIM_IMPERSONATOR_USER_ID, impersonatorUserId.toString());
         claims.put(CLAIM_IMPERSONATOR_USERNAME, impersonatorUsername);
+        claims.putAll(secondFactorClaims(secondFactorAt));
 
         return Jwts.builder()
             .id(UUID.randomUUID().toString())
@@ -354,6 +400,15 @@ public class JwtTokenProvider {
     }
 
     public String generateRefreshToken(Authentication authentication) {
+        return generateRefreshToken(authentication, null);
+    }
+
+    /**
+     * A refresh token for the authenticated user; {@code secondFactorAt} carries
+     * the proof and its time (see {@link #generateAccessToken(TokenUserDescriptor, Instant)})
+     * so the access tokens it later mints keep it until it is too old.
+     */
+    public String generateRefreshToken(Authentication authentication, Instant secondFactorAt) {
         HospitalUserDetails userDetails = (HospitalUserDetails) authentication.getPrincipal();
 
         List<String> roles = userDetails.getAuthorities().stream()
@@ -368,6 +423,7 @@ public class JwtTokenProvider {
             .id(UUID.randomUUID().toString())
             .subject(userDetails.getUsername())
             .claim(ROLES_CLAIM, roles)
+            .claims(secondFactorClaims(secondFactorAt))
             .issuedAt(now)
             .expiration(expiryDate)
             .signWith(signingKey)
@@ -380,6 +436,11 @@ public class JwtTokenProvider {
      * contains only the chosen role.
      */
     public String generateRefreshToken(TokenUserDescriptor descriptor) {
+        return generateRefreshToken(descriptor, null);
+    }
+
+    /** {@link #generateRefreshToken(TokenUserDescriptor)}, carrying the second factor verified at {@code secondFactorAt}. */
+    public String generateRefreshToken(TokenUserDescriptor descriptor, Instant secondFactorAt) {
         Objects.requireNonNull(descriptor, "descriptor is required");
 
         List<String> roles = descriptor.roles() != null
@@ -394,6 +455,7 @@ public class JwtTokenProvider {
             .id(UUID.randomUUID().toString())
             .subject(descriptor.username())
             .claim(ROLES_CLAIM, roles)
+            .claims(secondFactorClaims(secondFactorAt))
             .issuedAt(now)
             .expiration(expiryDate)
             .signWith(signingKey)
@@ -405,17 +467,48 @@ public class JwtTokenProvider {
      * This token is NOT a full access token — it only authorises the MFA verification step.
      */
     public String generateMfaToken(String username) {
+        return generateMfaToken(username, null);
+    }
+
+    /**
+     * {@link #generateMfaToken(String)} for a user who picked a role at login:
+     * the challenge carries it, so the session minted after the code holds
+     * that role only, as a sign-in without the challenge would.
+     */
+    public String generateMfaToken(String username, List<String> selectedRoles) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + 300_000); // 5 minutes
 
-        return Jwts.builder()
+        var builder = Jwts.builder()
                 .id(UUID.randomUUID().toString())
                 .subject(username)
-                .claim(MfaChallengeScope.PURPOSE_CLAIM, MfaChallengeScope.PURPOSE)
+                .claim(MfaChallengeScope.PURPOSE_CLAIM, MfaChallengeScope.PURPOSE);
+        if (selectedRoles != null && !selectedRoles.isEmpty()) {
+            builder.claim(MFA_SELECTED_ROLES_CLAIM, List.copyOf(selectedRoles));
+        }
+        return builder
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(signingKey)
                 .compact();
+    }
+
+    /**
+     * The roles picked at login that a challenge token carries: an empty list
+     * when none was picked, and {@link Optional#empty()} when the token does
+     * not parse (expired, tampered), so a caller refuses instead of widening
+     * the session to every role.
+     */
+    public Optional<List<String>> mfaTokenSelectedRoles(String mfaToken) {
+        try {
+            Object roles = jwtParser().parseSignedClaims(mfaToken).getPayload().get(MFA_SELECTED_ROLES_CLAIM);
+            if (roles instanceof java.util.Collection<?> picked) {
+                return Optional.of(picked.stream().map(String::valueOf).toList());
+            }
+            return Optional.of(List.of());
+        } catch (RuntimeException unparsable) {
+            return Optional.empty();
+        }
     }
 
     /**
@@ -430,6 +523,102 @@ public class JwtTokenProvider {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /**
+     * The token is one this issuer minted after a verified second factor that
+     * is still fresh enough: {@link #secondFactorAt} is not {@code null}.
+     */
+    public boolean hasSecondFactor(String token) {
+        return secondFactorAt(token) != null;
+    }
+
+    /**
+     * When the token's second factor was verified, or {@code null}: its
+     * {@code amr} holds {@code otp} AND its {@code otp_at} is within
+     * {@link #secondFactorMaxAgeSeconds} (the same 48 h Keycloak's Authenticator
+     * Reference max age uses), so a refresh chain cannot carry one TOTP code
+     * forever: past the max age the gate challenges again (provider plan
+     * AC-13). A token that fails to parse, the MFA challenge token and a
+     * password-only token answer {@code null}.
+     */
+    public Instant secondFactorAt(String token) {
+        if (!StringUtils.hasText(token)) {
+            return null;
+        }
+        try {
+            Claims claims = parseClaimsWithRotation(token);
+            if (!amrHoldsOtp(claims.get(CLAIM_AMR)) || !(claims.get(CLAIM_OTP_AT) instanceof Number seconds)) {
+                return null;
+            }
+            Instant at = Instant.ofEpochSecond(seconds.longValue());
+            return fresh(at) ? at : null;
+        } catch (RuntimeException unparsable) {
+            return null;
+        }
+    }
+
+    /**
+     * When the proof verified at {@code at} stops counting, so an access token
+     * carrying it expires with it: past the max age its holder gets a 401 and
+     * refreshes or signs in again, never a 403 "set up MFA" for a factor it
+     * already has. No proof, or one already stale, sets no deadline.
+     */
+    private long proofDeadlineMs(Instant at, long nowMs) {
+        if (!mintable(at)) {
+            return Long.MAX_VALUE;
+        }
+        // At the very edge (a proof read as fresh a moment ago) this may be
+        // just past: the token is born expired, so its holder gets a 401 and
+        // the refresh sends them to sign in, never a pair without the proof.
+        return Math.max(at.plusSeconds(secondFactorMaxAgeSeconds).toEpochMilli(), nowMs - 1);
+    }
+
+    /**
+     * A proof the caller read as fresh may be stamped: the freshness rule
+     * with one clock-skew of grace at the old end, so a time that was fresh
+     * when {@link #secondFactorAt} read it a moment earlier is not silently
+     * dropped at mint (the token's expiry still ends with the proof).
+     */
+    private boolean mintable(Instant at) {
+        Instant now = Instant.now();
+        return at != null && !at.isAfter(now.plusSeconds(CLOCK_SKEW_SECONDS))
+            && !at.isBefore(now.minusSeconds(secondFactorMaxAgeSeconds + CLOCK_SKEW_SECONDS));
+    }
+
+    /** A second factor verified at {@code at} still counts: not in the future, not older than the max age. */
+    private boolean fresh(Instant at) {
+        Instant now = Instant.now();
+        return at != null && !at.isAfter(now.plusSeconds(CLOCK_SKEW_SECONDS))
+            && !at.isBefore(now.minusSeconds(secondFactorMaxAgeSeconds));
+    }
+
+    /**
+     * The claims a token carries for a second factor verified at {@code at}
+     * ({@code null}: none). Its age is checked here and again where it is read
+     * ({@link #secondFactorAt}), which is what ages a long-lived token out.
+     */
+    private Map<String, Object> secondFactorClaims(Instant at) {
+        // No proof claimed for a time that is no proof: a stale or future one
+        // would read as otp to anything that checks amr alone.
+        if (!mintable(at)) {
+            return Map.of();
+        }
+        return Map.of(CLAIM_AMR, SECOND_FACTOR_AMR, CLAIM_OTP_AT, at.getEpochSecond());
+    }
+
+    /**
+     * An {@code amr} claim value (a JSON array, or a lone string) holds
+     * {@code otp}. The Keycloak path reads its claim with the same rule.
+     */
+    public static boolean amrHoldsOtp(Object amr) {
+        if (amr instanceof String single) {
+            return AMR_OTP.equals(single);
+        }
+        if (amr instanceof Collection<?> values) {
+            return values.contains(AMR_OTP);
+        }
+        return false;
     }
 
     /**

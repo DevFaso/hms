@@ -420,6 +420,21 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * A provider user without a second factor (provider plan AC-13). 403 with
+     * the code the portal turns into MFA enrolment or the challenge. The
+     * message is already localised; the log carries the path only.
+     */
+    @ExceptionHandler(MfaEnrollmentRequiredException.class)
+    public ResponseEntity<Object> handleMfaEnrollmentRequired(MfaEnrollmentRequiredException ex,
+                                                              WebRequest request) {
+        // Neither the caller nor the path (it can carry a patient id): the code only.
+        log.debug("Provider request without a second factor refused ({})", MfaEnrollmentRequiredException.CODE);
+        Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+        body.put("code", MfaEnrollmentRequiredException.CODE);
+        return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
+    }
+
+    /**
      * A refused MFA step-up. 403 with the reason code, not 401: the session is
      * fine, so the portal shows why instead of signing the user out.
      */

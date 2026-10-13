@@ -68,6 +68,16 @@ class SuperAdminAuthoritiesTest {
     }
 
     @Test
+    @DisplayName("the rebuilt password-path token keeps the bearer: ProviderMfaGate reads the second factor from it")
+    void keepsTheBearerAsCredentials() {
+        UsernamePasswordAuthenticationToken token = UsernamePasswordAuthenticationToken.authenticated(
+            "principal", "the.bearer.jwt", authorities(EXPANDED_SUPER_ADMIN));
+        HospitalContext demoted = HospitalContext.builder().assignedRoles(Set.of("ROLE_PHARMACIST")).build();
+
+        assertThat(SuperAdminAuthorities.reconcile(token, demoted).getCredentials()).isEqualTo("the.bearer.jwt");
+    }
+
+    @Test
     @DisplayName("the adapter returns the same token when nothing changes, or when it cannot rebuild the type")
     void sameTokenWhenUnchanged() {
         UsernamePasswordAuthenticationToken doctor = UsernamePasswordAuthenticationToken.authenticated(

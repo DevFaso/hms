@@ -18,6 +18,7 @@ export const MFA_STEP_UP_MESSAGES: Readonly<Record<string, string>> = {
   'mfa.stepup.challenge': 'PROFILE.MFA_STEPUP_CHALLENGE',
   'mfa.stepup.locked': 'PROFILE.MFA_STEPUP_LOCKED',
   'mfa.stepup.reused': 'PROFILE.MFA_STEPUP_REUSED',
+  'mfa.stepup.impersonation': 'PROFILE.MFA_STEPUP_IMPERSONATION',
 };
 
 export interface MfaStatusResponse {

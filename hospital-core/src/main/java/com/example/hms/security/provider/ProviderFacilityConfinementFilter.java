@@ -32,6 +32,13 @@ import java.util.Optional;
  * allows for that facility's type; anything else answers 404, exactly like an
  * unmapped path. Never flag-gated.
  *
+ * <p><b>MFA (AC-13).</b> Before the allow-list, a confined caller whose
+ * authentication carries no second factor ({@link ProviderMfaGate}) reaches
+ * only the sign-in and MFA enrolment handlers under {@code /auth}; every other
+ * request answers 403 {@code mfa.enrollment.required}, the same answer for an
+ * allowed, a refused and an unmapped path, so it discloses nothing. A hospital
+ * user and a verified super-admin are never confined, so never asked.
+ *
  * <p>Runs inside the security chain after BOTH context filters (the legacy
  * {@code JwtAuthenticationFilter} and {@code KeycloakHospitalContextFilter},
  * which set the live context, the lifecycle gate and the {@code X-Hospital-Id}
@@ -60,13 +67,16 @@ public class ProviderFacilityConfinementFilter extends OncePerRequestFilter {
     private final ObjectProvider<ProviderConfinementPolicy> policyProvider;
     private final ObjectProvider<ProviderCallerResolver> callerResolverProvider;
     private final ObjectProvider<ActingScopeResolver> scopeResolverProvider;
+    private final ObjectProvider<ProviderMfaGate> mfaGateProvider;
 
     public ProviderFacilityConfinementFilter(ObjectProvider<ProviderConfinementPolicy> policyProvider,
                                              ObjectProvider<ProviderCallerResolver> callerResolverProvider,
-                                             ObjectProvider<ActingScopeResolver> scopeResolverProvider) {
+                                             ObjectProvider<ActingScopeResolver> scopeResolverProvider,
+                                             ObjectProvider<ProviderMfaGate> mfaGateProvider) {
         this.policyProvider = policyProvider;
         this.callerResolverProvider = callerResolverProvider;
         this.scopeResolverProvider = scopeResolverProvider;
+        this.mfaGateProvider = mfaGateProvider;
     }
 
     @Override
@@ -128,10 +138,22 @@ public class ProviderFacilityConfinementFilter extends OncePerRequestFilter {
         }
     }
 
-    private static void decide(ProviderConfinementPolicy policy, HospitalContext context, HttpServletRequest request,
-                               HttpServletResponse response, FilterChain filterChain)
+    private void decide(ProviderConfinementPolicy policy, HospitalContext context, HttpServletRequest request,
+                        HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        if (!ProviderConfinementPolicy.isConfined(context) || policy.allows(request, context)) {
+        if (!ProviderConfinementPolicy.isConfined(context)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+        // AC-13 first: without a second factor, only sign-in and MFA enrolment.
+        ProviderMfaGate mfaGate = mfaGateProvider.getIfAvailable();
+        if (mfaGate != null
+            && mfaGate.refuses(context, SecurityContextHolder.getContext().getAuthentication())
+            && !policy.exemptFromSecondFactor(request)) {
+            mfaGate.refuse(request, response);
+            return;
+        }
+        if (policy.allows(request, context)) {
             filterChain.doFilter(request, response);
             return;
         }

@@ -89,6 +89,9 @@ class ProviderConfinementCoverageTest {
         entries.addAll(PharmacyConfinement.RULES);
         entries.addAll(LaboratoryConfinement.RULES);
         entries.addAll(CommonProviderConfinement.WHOLESALE_EXCLUSIONS);
+        // The handlers a provider user reaches without a second factor (AC-13):
+        // a dangling one would lock every provider user out of sign-in.
+        entries.addAll(CommonProviderConfinement.SECOND_FACTOR_EXEMPT_RULES);
         for (ConfinementRule entry : entries) {
             assertThat(mapped).as("allow-list entry with no handler").contains(entry.method() + " " + entry.pattern());
             assertThat(entry.reason()).as("%s %s", entry.method(), entry.pattern()).isNotBlank();

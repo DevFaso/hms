@@ -370,7 +370,7 @@ on startup.
 ### 1.2 Realm + ops
 - [keycloak/realm-export.json](../keycloak/realm-export.json) declares
   `hms-backend`, `hms-portal`, `hms-patient-android`, `hms-patient-ios`,
-  **26 realm roles**, and the `hms-claims` scope (with `hospital_id` +
+  **27 realm roles** (26 until #851 added `ROLE_PROVIDER_ADMIN`), and the `hms-claims` scope (with `hospital_id` +
   `role_assignments` protocol mappers).
 - [scripts/keycloak-migration/](../scripts/keycloak-migration/) — TS migration
   with `MIGRATION_DRY_RUN`, idempotent rerun, role resolution, orphan tracking
