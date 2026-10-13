@@ -4,7 +4,7 @@ import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { AuthService } from '../auth/auth.service';
-import { MfaService } from '../auth/mfa.service';
+import { MFA_STEP_UP_MESSAGES, MfaService } from '../auth/mfa.service';
 
 /**
  * T-32: MFA Enrollment page.
@@ -30,6 +30,11 @@ export class MfaEnrollComponent {
 
   loading = signal(false);
   error = signal('');
+  /**
+   * The server refused the enrolment as a step-up (403 mfa.stepup.*): this
+   * sign-in cannot enrol here, so the page offers the way back to sign-in.
+   */
+  stepUpRefused = signal(false);
 
   secret = '';
   otpauthUri = '';
@@ -65,7 +70,7 @@ export class MfaEnrollComponent {
         this.loading.set(false);
       },
       error: (err) => {
-        this.error.set(err?.error?.message ?? this.translate.instant('MFA.ENROLL_START_FAILED'));
+        this.showError(err, 'MFA.ENROLL_START_FAILED');
         this.loading.set(false);
       },
     });
@@ -88,10 +93,31 @@ export class MfaEnrollComponent {
         this.loading.set(false);
       },
       error: (err) => {
-        this.error.set(err?.error?.message ?? this.translate.instant('MFA.ENROLL_WRONG_CODE'));
+        this.showError(err, 'MFA.ENROLL_WRONG_CODE');
         this.loading.set(false);
       },
     });
+  }
+
+  /**
+   * A refused step-up gets a translated message and the way back to sign-in,
+   * never the server's text; anything else keeps the page's own fallback.
+   */
+  private showError(
+    err: { error?: { code?: string; message?: string } } | null,
+    fallbackKey: string,
+  ): void {
+    const code = err?.error?.code;
+    if (typeof code === 'string' && code.startsWith('mfa.stepup.')) {
+      const key =
+        code === 'mfa.stepup.challenge'
+          ? 'MFA.ENROLL_ALREADY_ACTIVE'
+          : (MFA_STEP_UP_MESSAGES[code] ?? fallbackKey);
+      this.error.set(this.translate.instant(key));
+      this.stepUpRefused.set(true);
+      return;
+    }
+    this.error.set(err?.error?.message ?? this.translate.instant(fallbackKey));
   }
 
   finish(): void {

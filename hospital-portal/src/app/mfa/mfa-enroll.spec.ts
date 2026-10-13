@@ -76,6 +76,8 @@ describe('MfaEnrollComponent', () => {
         ENROLL_INVALID_CODE: 'Saisissez un code à 6 chiffres.',
         ENROLL_WRONG_CODE: 'Code incorrect.',
         ENROLL_BACKUP_TITLE: 'Codes de secours',
+        ENROLL_ALREADY_ACTIVE: 'Ce compte a déjà un authentificateur actif.',
+        BACK_TO_SIGN_IN: 'Retour à la connexion',
       },
     });
   });
@@ -122,6 +124,31 @@ describe('MfaEnrollComponent', () => {
     click('.step-content .btn-primary');
     expect(text('[role="alert"]')).toBe('Impossible de démarrer.');
     expect(host().querySelector('.qr-container')).toBeNull();
+  });
+
+  it('a refused step-up shows a translated message, never the server text, and the way back to sign-in', () => {
+    mfa.enroll.and.returnValue(
+      throwError(() => ({
+        status: 403,
+        error: { code: 'mfa.stepup.challenge', message: 'server text, not for this page' },
+      })),
+    );
+    create('mfa-1');
+    click('.step-content .btn-primary');
+
+    expect(text('[role="alert"]')).toBe('Ce compte a déjà un authentificateur actif.');
+    expect(host().textContent).not.toContain('server text');
+    click('.back-to-sign-in');
+    expect(auth.logout).toHaveBeenCalled();
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/login');
+  });
+
+  it('an ordinary failure offers no sign-in detour', () => {
+    mfa.enroll.and.returnValue(throwError(() => ({ status: 500 })));
+    create('mfa-1');
+    click('.step-content .btn-primary');
+
+    expect(host().querySelector('.back-to-sign-in')).toBeNull();
   });
 
   it('refuses a short code on screen without calling the server', () => {

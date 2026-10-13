@@ -11,6 +11,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -20,8 +21,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.time.Instant;
-import java.util.Date;
 import java.util.Deque;
 import java.util.List;
 import java.util.Set;
@@ -157,16 +156,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * call already guarded structural validity).
      */
     private boolean isRevokedByGlobalIat(String jwt) {
-        Instant minIat = globalSessionRevocationService.getGlobalMinTokenIat();
-        if (minIat == null || minIat.equals(Instant.EPOCH)) {
-            return false;
-        }
+        // The one rule, shared with the MFA challenge and refresh paths.
         try {
-            Date issuedAt = tokenProvider.getIssuedAt(jwt);
-            if (issuedAt == null) {
-                return false;
-            }
-            return issuedAt.toInstant().isBefore(minIat);
+            return globalSessionRevocationService.revokes(tokenProvider.getIssuedAt(jwt));
         } catch (RuntimeException ex) {
             return false;
         }
@@ -241,6 +233,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         HospitalContext context = HospitalContextHolder.getContextOrEmpty();
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
+        // ── MFA challenge token (MfaChallengeScope) ─────────────────────
+        // It proves the password and nothing more, so outside the MFA step
+        // it is no authentication at all: the request goes on as if no token
+        // had been sent, and an endpoint that needs a caller answers 401.
+        boolean challenge = MfaChallengeScope.isChallengeSession(authentication);
+        if (challenge && leaveChallengeAnonymous(request, path)) {
+            return true;
+        }
+
         // ── Idle session timeout gate (v1.0 row 7) ───────────────────────
         // Reject requests where the user has gone idle past the configured
         // window. Service-to-server clients (FHIR / HL7 / CDS / DHIS2 /
@@ -248,7 +249,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // Sits AFTER applyAuthentication so we have a stable userId UUID,
         // and BEFORE the tenant-lifecycle gate so an idle clinician sees
         // an idle 401 (not a 423 tenant-blocked) when both apply.
-        if (idleSessionGate.shouldReject(context.getPrincipalUserId(),
+        // The challenge is no session either: its token lives five minutes
+        // and the login that minted it touched no idle window, so it is
+        // neither held to one nor allowed to extend one.
+        if (!challenge && idleSessionGate.shouldReject(context.getPrincipalUserId(),
             authentication == null ? null : authentication.getAuthorities())) {
             log.warn("[JWT] Refusing request on path={} — user has been idle past the configured window", path);
             SecurityContextHolder.clearContext();
@@ -285,8 +289,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         // Touch the idle window only after every other gate has passed —
         // a rejected request must not extend the user's session.
-        idleSessionGate.touchIfHuman(context.getPrincipalUserId(),
-            authentication == null ? null : authentication.getAuthorities());
+        if (!challenge) {
+            idleSessionGate.touchIfHuman(context.getPrincipalUserId(),
+                authentication == null ? null : authentication.getAuthorities());
+        }
+        return true;
+    }
+
+    /**
+     * A challenge session outside the MFA step ({@link MfaChallengeScope#admits})
+     * is dropped, and the request goes on unauthenticated. Returns whether it
+     * was dropped.
+     */
+    private boolean leaveChallengeAnonymous(HttpServletRequest request, String path) {
+        if (MfaChallengeScope.admits(request)) {
+            return false;
+        }
+        log.debug("[JWT] MFA challenge token outside the MFA step on path={}; request left anonymous", path);
+        SecurityContextHolder.clearContext();
+        HospitalContextHolder.clear();
+        ImpersonationContextHolder.clear();
         return true;
     }
 
@@ -336,6 +358,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // (the message is already generic; the subject is PII). Operators who
             // need to investigate can correlate via the JTI from the request log.
             log.warn("[JWT] Rejecting token for a disabled/unverified principal.");
+            SecurityContextHolder.clearContext();
+            HospitalContextHolder.clear();
+            ImpersonationContextHolder.clear();
+            return false;
+        } catch (BadCredentialsException notAnAccessToken) {
+            // A refresh token presented as a bearer (TokenUse): 401, it is no session.
+            log.warn("[JWT] Rejecting a refresh token presented as an access token.");
             SecurityContextHolder.clearContext();
             HospitalContextHolder.clear();
             ImpersonationContextHolder.clear();

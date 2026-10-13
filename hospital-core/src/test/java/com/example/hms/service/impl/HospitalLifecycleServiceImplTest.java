@@ -201,39 +201,27 @@ class HospitalLifecycleServiceImplTest {
             .satisfies(e -> assertThat(e.getMessageKey()).isEqualTo("hospital.notFound"));
     }
 
-    // ── MFA step-up branches (mirrors OrganizationLifecycleServiceImplTest) ──
+    // ── MFA step-up (the shared MfaService#requireStepUp; its branches are in MfaServiceTest) ──
 
     @Test
-    void enrolledActorWithoutTokenIsRejected() {
+    void refusedStepUpStopsTheTransition() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
         when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(true);
+        when(mfaService.requireStepUp(actorId, "000000", "hospital suspend", false))
+            .thenThrow(new com.example.hms.exception.MfaStepUpRefusedException(
+                com.example.hms.exception.MfaStepUpRefusedException.Reason.INVALID));
 
-        assertThatThrownBy(() -> service.suspend(hospitalId, withReason("ops"), null))
-            .isInstanceOf(com.example.hms.exception.UnauthorizedException.class)
-            .hasMessageContaining("mfa_required");
+        assertThatThrownBy(() -> service.suspend(hospitalId, withReason("ops"), "000000"))
+            .isInstanceOf(com.example.hms.exception.MfaStepUpRefusedException.class);
         verify(hospitalRepository, never()).save(any());
     }
 
     @Test
-    void enrolledActorWithInvalidCodeIsRejected() {
-        ReflectionTestUtils.setField(service, "requireMfa", true);
-        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(true);
-        when(mfaService.verifyCode(actorId, "000000")).thenReturn(false);
-
-        assertThatThrownBy(() -> service.suspend(hospitalId, withReason("ops"), "000000"))
-            .isInstanceOf(com.example.hms.exception.UnauthorizedException.class)
-            .hasMessageContaining("invalid or missing");
-    }
-
-    @Test
-    void enrolledActorWithValidCodePassesAndPersists() {
+    void verifiedStepUpPassesAndPersists() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
         when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(true);
-        when(mfaService.verifyCode(actorId, "123456")).thenReturn(true);
+        when(mfaService.requireStepUp(actorId, "123456", "hospital suspend", false)).thenReturn(true);
 
         service.suspend(hospitalId, withReason("ops"), "123456");
         assertThat(hospital.getLifecycleState()).isEqualTo(HospitalLifecycleState.SUSPENDED);
@@ -245,7 +233,7 @@ class HospitalLifecycleServiceImplTest {
         ReflectionTestUtils.setField(service, "requireMfaStrict", false);
         when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(false);
+        when(mfaService.requireStepUp(actorId, null, "hospital suspend", false)).thenReturn(false);
 
         service.suspend(hospitalId, withReason("ops"), null);
 
@@ -256,27 +244,31 @@ class HospitalLifecycleServiceImplTest {
     }
 
     @Test
-    void unenrolledActorInStrictModeIsRejected() {
+    void strictModeIsPassedToTheSharedStepUp() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
         ReflectionTestUtils.setField(service, "requireMfaStrict", true);
         when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(false);
+        when(mfaService.requireStepUp(actorId, null, "hospital suspend", true))
+            .thenThrow(new com.example.hms.exception.MfaStepUpRefusedException(
+                com.example.hms.exception.MfaStepUpRefusedException.Reason.NOT_ENROLLED));
 
         assertThatThrownBy(() -> service.suspend(hospitalId, withReason("ops"), null))
-            .isInstanceOf(com.example.hms.exception.UnauthorizedException.class)
-            .hasMessageContaining("must enrol MFA");
+            .isInstanceOf(com.example.hms.exception.MfaStepUpRefusedException.class);
         verify(hospitalRepository, never()).save(any());
     }
 
     @Test
-    void mfaEnrollmentLookupFailureFailsClosed() {
+    void schedulePurgeInThePast_isRefusedBeforeTheStepUpCanSpendACode() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
+        hospital.setLifecycleState(HospitalLifecycleState.ARCHIVED);
         when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
-        when(mfaService.isMfaEnabled(actorId)).thenThrow(new RuntimeException("MFA service down"));
+        TenantLifecycleActionRequestDTO req = TenantLifecycleActionRequestDTO.builder()
+            .reason("oops").purgeScheduledFor(NOW.minus(1, java.time.temporal.ChronoUnit.DAYS)).build();
 
-        assertThatThrownBy(() -> service.suspend(hospitalId, withReason("ops"), "123456"))
-            .isInstanceOf(com.example.hms.exception.UnauthorizedException.class)
-            .hasMessageContaining("enrollment lookup unavailable");
+        assertThatThrownBy(() -> service.schedulePurge(hospitalId, req, "12345678"))
+            .isInstanceOf(com.example.hms.exception.BusinessRuleException.class)
+            .hasMessageContaining("past");
+        verify(mfaService, never()).requireStepUp(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     @Test
@@ -289,5 +281,33 @@ class HospitalLifecycleServiceImplTest {
 
         HospitalLifecycleResponseDTO result = service.schedulePurge(hospitalId, withReason("retention"), null);
         assertThat(result.getPurgeScheduledFor()).isEqualTo(NOW.plus(30, ChronoUnit.DAYS));
+    }
+
+    @Test
+    void anExplicitPurgeDateIsHonoured_notReplacedByTheDefault() {
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
+        service.archive(hospitalId, withReason("offboarded"), null);
+        Instant picked = NOW.plus(90, ChronoUnit.DAYS);
+
+        HospitalLifecycleResponseDTO result = service.schedulePurge(hospitalId,
+            TenantLifecycleActionRequestDTO.builder().reason("retention").purgeScheduledFor(picked).build(), null);
+
+        assertThat(result.getPurgeScheduledFor()).isEqualTo(picked);
+    }
+
+    @Test
+    void thePortalsPurgeBody_bindsToPurgeScheduledFor() throws Exception {
+        // The hospital dialog once sent `scheduledFor`, which Jackson ignored:
+        // the picked day was dropped and the 30-day default used.
+        var mapper = tools.jackson.databind.json.JsonMapper.builder()
+            .disable(tools.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+            .build();
+
+        TenantLifecycleActionRequestDTO bound = mapper.readValue(
+            "{\"reason\":\"retention\",\"purgeScheduledFor\":\"2099-06-01T00:00:00Z\"}",
+            TenantLifecycleActionRequestDTO.class);
+
+        assertThat(bound.getPurgeScheduledFor()).isEqualTo(Instant.parse("2099-06-01T00:00:00Z"));
     }
 }

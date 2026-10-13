@@ -30,14 +30,60 @@ public class InMemoryTokenBlacklistService implements TokenBlacklistService {
 
     /** jti → expiration epoch-millis */
     private final Map<String, Long> blacklistedTokens = new ConcurrentHashMap<>();
+    /** jti → end of its rotation grace, epoch-millis */
+    private final Map<String, Long> recentlyRotated = new ConcurrentHashMap<>();
+    /** jtis whose entry a claim wrote and no revocation has overwritten since. */
+    private final java.util.Set<String> claimedOnly = ConcurrentHashMap.newKeySet();
 
     @Override
-    public void blacklist(String jti, long expirationMs) {
+    public synchronized void blacklist(String jti, long expirationMs) {
         if (jti == null || jti.isBlank()) {
             return;
         }
         blacklistedTokens.put(jti, expirationMs);
+        claimedOnly.remove(jti);
         log.debug("[BLACKLIST] Token jti={} blacklisted until {}", jti, expirationMs);
+    }
+
+    /** Atomic within this JVM only: a multi-instance deployment needs the Redis store. */
+    @Override
+    public synchronized boolean claim(String jti, long expirationMs) {
+        if (jti == null || jti.isBlank() || expirationMs <= System.currentTimeMillis()) {
+            return false;
+        }
+        if (blacklistedTokens.putIfAbsent(jti, expirationMs) != null) {
+            return false;
+        }
+        claimedOnly.add(jti);
+        return true;
+    }
+
+    @Override
+    public void markRotated(String jti, long graceMs) {
+        if (jti == null || jti.isBlank() || graceMs <= 0) {
+            return;
+        }
+        recentlyRotated.put(jti, System.currentTimeMillis() + graceMs);
+    }
+
+    @Override
+    public synchronized void release(String jti) {
+        if (jti == null || jti.isBlank()) {
+            return;
+        }
+        if (claimedOnly.remove(jti)) {
+            blacklistedTokens.remove(jti);
+        }
+        recentlyRotated.remove(jti);
+    }
+
+    @Override
+    public boolean wasRecentlyRotated(String jti) {
+        if (jti == null || jti.isBlank()) {
+            return false;
+        }
+        Long until = recentlyRotated.get(jti);
+        return until != null && until > System.currentTimeMillis();
     }
 
     @Override
@@ -57,6 +103,8 @@ public class InMemoryTokenBlacklistService implements TokenBlacklistService {
         long now = System.currentTimeMillis();
         int before = blacklistedTokens.size();
         blacklistedTokens.entrySet().removeIf(e -> e.getValue() <= now);
+        recentlyRotated.entrySet().removeIf(e -> e.getValue() <= now);
+        claimedOnly.removeIf(jti -> !blacklistedTokens.containsKey(jti));
         int evicted = before - blacklistedTokens.size();
         if (evicted > 0) {
             log.info("[BLACKLIST] Evicted {} expired entries, {} remaining", evicted, blacklistedTokens.size());

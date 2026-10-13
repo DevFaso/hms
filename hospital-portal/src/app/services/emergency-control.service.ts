@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
 import {
@@ -9,6 +9,7 @@ import {
   EmergencyForceMfaRequest,
   EmergencyKillFeatureRequest,
 } from './emergency-control.model';
+import { stepUpRequestOptions } from './step-up';
 
 const BASE = '/api/super-admin/emergency';
 
@@ -25,39 +26,43 @@ export class EmergencyControlService {
     body: EmergencyForceLogoutRequest,
     mfaToken: string,
   ): Observable<EmergencyActionResponse> {
-    return this.http.post<EmergencyActionResponse>(`${BASE}/force-logout-all`, body, {
-      headers: this.mfaHeaders(mfaToken),
-    });
+    return this.http.post<EmergencyActionResponse>(
+      `${BASE}/force-logout-all`,
+      body,
+      stepUpRequestOptions(mfaToken),
+    );
   }
 
   killFeature(
     body: EmergencyKillFeatureRequest,
     mfaToken: string,
   ): Observable<EmergencyActionResponse> {
-    return this.http.post<EmergencyActionResponse>(`${BASE}/kill-feature`, body, {
-      headers: this.mfaHeaders(mfaToken),
-    });
+    return this.http.post<EmergencyActionResponse>(
+      `${BASE}/kill-feature`,
+      body,
+      stepUpRequestOptions(mfaToken),
+    );
   }
 
   forceMfaReenrol(
     body: EmergencyForceMfaRequest,
     mfaToken: string,
   ): Observable<EmergencyActionResponse> {
-    return this.http.post<EmergencyActionResponse>(`${BASE}/force-mfa-reenrol`, body, {
-      headers: this.mfaHeaders(mfaToken),
-    });
+    return this.http.post<EmergencyActionResponse>(
+      `${BASE}/force-mfa-reenrol`,
+      body,
+      stepUpRequestOptions(mfaToken),
+    );
   }
 
   broadcast(
     body: EmergencyBroadcastRequest,
     mfaToken: string,
   ): Observable<EmergencyActionResponse> {
-    return this.http.post<EmergencyActionResponse>(`${BASE}/broadcast`, body, {
-      headers: this.mfaHeaders(mfaToken),
-    });
-  }
-
-  private mfaHeaders(mfaToken: string): HttpHeaders {
-    return new HttpHeaders({ 'X-Mfa-Token': mfaToken });
+    return this.http.post<EmergencyActionResponse>(
+      `${BASE}/broadcast`,
+      body,
+      stepUpRequestOptions(mfaToken),
+    );
   }
 }

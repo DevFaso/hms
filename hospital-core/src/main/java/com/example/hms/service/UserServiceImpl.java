@@ -58,6 +58,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -480,6 +481,11 @@ public class UserServiceImpl implements UserService {
         log.info("♻️ Re-registering soft-deleted user {} ({}); restoring account.",
                 user.getId(), user.getUsername());
         user.setDeleted(false);
+        // Registering the person again undoes the delete, the disable it
+        // recorded included (V184): otherwise a patient re-registered after
+        // a failed first attempt (the registrar's clean-up delete) could
+        // never activate.
+        user.setDeactivatedByAdminAt(null);
         userRepository.save(user);
 
         for (Staff staff : staffRepository.findByUserId(user.getId())) {
@@ -1034,6 +1040,8 @@ public class UserServiceImpl implements UserService {
 
         user.setDeleted(true);
         user.setActive(false);
+        // An administrator's disable: no invitation code or provider re-invite undoes it.
+        user.setDeactivatedByAdminAt(LocalDateTime.now(ZoneId.systemDefault()));
         userRepository.save(user);
         assignmentService.deleteAllAssignmentsForUser(id);
 
@@ -1067,6 +1075,7 @@ public class UserServiceImpl implements UserService {
 
         user.setDeleted(false);
         user.setActive(true);
+        user.setDeactivatedByAdminAt(null);
         userRepository.save(user);
         // A lockout collected while the account was switched off must not
         // survive it being switched on. After commit: a rollback must not
@@ -1155,9 +1164,7 @@ public class UserServiceImpl implements UserService {
             user.setPhoneNumber(dto.getPhoneNumber());
         }
         if (dto.getActive() != null) {
-            reactivated = Boolean.TRUE.equals(dto.getActive())
-                    && !Boolean.TRUE.equals(user.isActive());
-            user.setActive(dto.getActive());
+            reactivated = applyActive(user, dto.getActive());
         }
 
         // Reactivation clears the login lockout, so the holder is not refused
@@ -1320,6 +1327,26 @@ public class UserServiceImpl implements UserService {
         return new ResourceNotFoundException(USER_NOT_FOUND_KEY, id);
     }
 
+    /**
+     * Sets the account's active flag from an administrator's update and
+     * keeps V184's marker in step. An explicit active=false is an
+     * administrator's disable, also on a pending invitee (whose emailed code
+     * would otherwise switch the account on): the portal's user edit never
+     * sends `active`, so its presence is intent, not an echo. The marker is
+     * cleared only on a real re-enable; an echoed active=true on a live
+     * account changes nothing. Returns whether the account was re-enabled.
+     */
+    private static boolean applyActive(User user, Boolean active) {
+        boolean reactivated = Boolean.TRUE.equals(active) && !Boolean.TRUE.equals(user.isActive());
+        user.setActive(active);
+        if (Boolean.FALSE.equals(active) && user.getDeactivatedByAdminAt() == null) {
+            user.setDeactivatedByAdminAt(LocalDateTime.now(ZoneId.systemDefault()));
+        } else if (reactivated) {
+            user.setDeactivatedByAdminAt(null);
+        }
+        return reactivated;
+    }
+
     /** True when the string is non-null and non-blank. */
     private static boolean hasText(String value) {
         return value != null && !value.isBlank();
@@ -1341,6 +1368,13 @@ public class UserServiceImpl implements UserService {
                 || user.getActivationTokenExpiresAt() == null
                 || user.getActivationTokenExpiresAt().isBefore(LocalDateTime.now())) {
             log.warn("⚠️ Invalid or expired activation token for: {}", email);
+            return false;
+        }
+
+        // An account an administrator switched off stays off (V184): only an
+        // administrator re-enables it, never an activation link.
+        if (user.getDeactivatedByAdminAt() != null) {
+            log.warn("⚠️ Activation refused for user {}: disabled by an administrator", user.getId());
             return false;
         }
 

@@ -112,6 +112,19 @@ public final class ProviderConfinement {
             || underAny(pathWithinApplication, CommonProviderConfinement.NON_MVC_PREFIXES);
     }
 
+    /**
+     * A provider user without a second factor may reach this handler (AC-13):
+     * it is one of {@link CommonProviderConfinement#SECOND_FACTOR_EXEMPT_RULES},
+     * method and exact pattern. Matched on the handler's pattern, never on the
+     * raw path.
+     */
+    public static boolean exemptFromSecondFactor(String method, String handlerPattern) {
+        if (method == null || handlerPattern == null) {
+            return false;
+        }
+        return anyMatches(CommonProviderConfinement.SECOND_FACTOR_EXEMPT_RULES, normalise(method), handlerPattern);
+    }
+
     /** The facility-specific list of one provider type; a hospital has none. */
     public static List<ConfinementRule> rulesFor(FacilityType type) {
         if (type == FacilityType.PHARMACY) {

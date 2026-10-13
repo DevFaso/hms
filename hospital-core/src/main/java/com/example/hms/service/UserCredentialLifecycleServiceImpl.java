@@ -1,9 +1,13 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditStatus;
+import com.example.hms.enums.MfaMethodType;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.User;
 import com.example.hms.model.UserMfaEnrollment;
 import com.example.hms.model.UserRecoveryContact;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.credential.UserCredentialHealthDTO;
 import com.example.hms.payload.dto.credential.UserMfaEnrollmentDTO;
 import com.example.hms.payload.dto.credential.UserMfaEnrollmentRequestDTO;
@@ -15,6 +19,8 @@ import com.example.hms.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -47,6 +53,11 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
     private final UserRecoveryContactRepository recoveryContactRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+    private final MfaService mfaService;
+    private final AuditEventLogService auditEventLogService;
+    /** The same switch as the other super-admin step-ups (emergency controls, impersonation). */
+    @Value("${hms.support-impersonation.require-mfa-strict:false}")
+    private boolean requireMfaStrict;
     /**
      * Writes the recovery-code expiry and reads it back on verify; also stamps
      * {@code lastLoginAt}/{@code verifiedAt}, which nothing compares in time.
@@ -105,7 +116,71 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
 
     @Override
     @Transactional
-    public List<UserMfaEnrollmentDTO> upsertMfaEnrollments(UUID userId, List<UserMfaEnrollmentRequestDTO> payload) {
+    public List<UserMfaEnrollmentDTO> upsertMfaEnrollmentsAsSuperAdmin(UUID actorId, UUID userId,
+                                                                       List<UserMfaEnrollmentRequestDTO> payload,
+                                                                       String stepUpCode) {
+        // Validate first: the step-up commits on its own (a backup code is
+        // spent), so a request that would fail anyway must fail before it.
+        resolveUser(userId);
+        requireAtMostOneTotp(payload);
+        if (!mfaService.requireStepUp(actorId, stepUpCode, "MFA enrolment change", requireMfaStrict)) {
+            auditMfaChangeBypass(actorId, userId);
+        }
+        return upsertMfaEnrollments(userId, payload);
+    }
+
+    /**
+     * Only confirming a code turns a TOTP authenticator on
+     * (MfaService#verifyEnrollment): this list may switch one off, never back
+     * on, or it would revive a secret nobody has shown a code from since, as
+     * the login factor, with no code at all.
+     */
+    private static boolean mayEnable(UserMfaEnrollmentRequestDTO dto, UserMfaEnrollment enrollment) {
+        return dto.isEnabled()
+            && (dto.getMethod() != MfaMethodType.TOTP || enrollment.getId() == null || enrollment.isEnabled());
+    }
+
+    /**
+     * One TOTP row per user (V183), and no entry listed twice (same method and
+     * channel): a bad request, checked before any step-up spends a code, never
+     * a unique-index violation or a map collision after it.
+     */
+    private void requireAtMostOneTotp(List<UserMfaEnrollmentRequestDTO> payload) {
+        if (payload == null) {
+            return;
+        }
+        if (payload.stream().filter(dto -> dto != null && dto.getMethod() == MfaMethodType.TOTP).count() > 1) {
+            throw new IllegalArgumentException("At most one TOTP authenticator can be listed.");
+        }
+        Set<String> keys = new java.util.HashSet<>();
+        for (UserMfaEnrollmentRequestDTO dto : payload) {
+            if (dto != null && dto.getMethod() != null && !keys.add(mfaKey(dto))) {
+                throw new IllegalArgumentException("An MFA method and channel can be listed only once.");
+            }
+        }
+    }
+
+    private void auditMfaChangeBypass(UUID actorId, UUID userId) {
+        try {
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .userId(actorId)
+                .eventType(AuditEventType.SECURITY_ALERT_TRIGGERED)
+                .status(AuditStatus.SUCCESS)
+                .resourceId(userId == null ? null : userId.toString())
+                .eventDescription("MFA enrolment change performed without MFA step-up "
+                    + "(actor not enrolled, non-strict mode).")
+                .build());
+        } catch (RuntimeException ex) {
+            log.error("[MFA] Failed to audit an MFA-change bypass by actor={}", actorId, ex);
+        }
+    }
+
+    /**
+     * The write itself, behind both guarded entry points: never exposed on the
+     * interface, so no caller reaches it without a step-up.
+     */
+    @Transactional
+    List<UserMfaEnrollmentDTO> upsertMfaEnrollments(UUID userId, List<UserMfaEnrollmentRequestDTO> payload) {
         User user = resolveUser(userId);
 
         List<UserMfaEnrollment> existing = mfaEnrollmentRepository.findByUserId(userId);
@@ -116,6 +191,8 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
             .filter(Objects::nonNull)
             .map(this::mfaKey)
             .collect(Collectors.toSet());
+
+        requireAtMostOneTotp(payload);
 
         List<UserMfaEnrollment> toPersist = new ArrayList<>();
         if (payload != null) {
@@ -128,10 +205,11 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
                 enrollment.setUser(user);
                 enrollment.setMethod(dto.getMethod());
                 enrollment.setChannel(normalize(dto.getChannel()));
-                enrollment.setEnabled(dto.isEnabled());
+                enrollment.setEnabled(mayEnable(dto, enrollment));
                 enrollment.setPrimaryFactor(dto.isPrimaryFactor());
                 enrollment.setEnrolledAt(dto.getEnrolledAt());
-                enrollment.setLastVerifiedAt(dto.getLastVerifiedAt());
+                // Never from the client: lastVerifiedAt (like verified) records
+                // a code that verified. An existing row keeps its own.
                 toPersist.add(enrollment);
             }
         }
@@ -149,6 +227,14 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
         }
 
         return saved.stream().map(this::toDto).toList();
+    }
+
+    @Override
+    @Transactional
+    public List<UserMfaEnrollmentDTO> upsertOwnMfaEnrollments(UUID userId, List<UserMfaEnrollmentRequestDTO> payload,
+                                                              Authentication caller, String stepUpCode) {
+        mfaService.requireStepUpToChangeAuthenticator(userId, caller, stepUpCode);
+        return upsertMfaEnrollments(userId, payload);
     }
 
     @Override
@@ -349,12 +435,21 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
         return trimmed.isEmpty() ? null : trimmed;
     }
 
+    /**
+     * A user has at most one TOTP row (V183's partial unique index), so TOTP is
+     * keyed by method alone: a changed channel updates that row instead of
+     * inserting a second one before the old is deleted.
+     */
     private String mfaKey(UserMfaEnrollment enrollment) {
-        return key(enrollment.getMethod(), enrollment.getChannel());
+        return mfaKey(enrollment.getMethod(), enrollment.getChannel());
     }
 
     private String mfaKey(UserMfaEnrollmentRequestDTO dto) {
-        return key(dto.getMethod(), dto.getChannel());
+        return mfaKey(dto.getMethod(), dto.getChannel());
+    }
+
+    private String mfaKey(MfaMethodType method, String channel) {
+        return key(method, method == MfaMethodType.TOTP ? null : channel);
     }
 
     private String recoveryKey(UserRecoveryContact contact) {
@@ -379,6 +474,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
             .primaryFactor(enrollment.isPrimaryFactor())
             .enrolledAt(enrollment.getEnrolledAt())
             .lastVerifiedAt(enrollment.getLastVerifiedAt())
+            .active(MfaService.isActive(enrollment))
             .build();
     }
 

@@ -180,6 +180,41 @@ class ProviderRegistrarTest {
             .isEqualTo(pharmacy.getId());
     }
 
+    @Test
+    @DisplayName("the provider staff scope: its own facility's staff rows, never an admin's row or another facility's")
+    void providerStaffScopeCoversOwnFacilityStaff() {
+        signInAsProviderAdminOf(pharmacy);
+
+        UserAccountAccess.AssignmentScope scope = access.providerStaffScope();
+
+        assertThat(scope.everywhere()).isFalse();
+        assertThat(scope.mayChange(assignment("ROLE_PHARMACIST", pharmacy, true))).isTrue();
+        assertThat(scope.mayChange(assignment("ROLE_PROVIDER_ADMIN", pharmacy, true))).isFalse();
+        assertThat(scope.covers(assignment("ROLE_PHARMACIST", otherPharmacy, true))).isFalse();
+        assertThat(scope.covers(assignment("ROLE_DOCTOR", hospital, true))).isFalse();
+    }
+
+    @Test
+    @DisplayName("the GENERAL assignment scope gives a provider admin nothing, not even its own facility's staff rows")
+    void generalAssignmentScopeExcludesProviderAdmins() {
+        signInAsProviderAdminOf(pharmacy);
+
+        UserAccountAccess.AssignmentScope scope = access.assignmentScope();
+
+        assertThat(scope.everywhere()).isFalse();
+        assertThat(scope.hospitalIds()).isEmpty();
+        assertThat(scope.covers(assignment("ROLE_PHARMACIST", pharmacy, true))).isFalse();
+    }
+
+    @Test
+    @DisplayName("the authority alone gives no provider staff scope: the PROVIDER_ADMIN assignment must be live")
+    void providerStaffScopeNeedsTheLiveAssignment() {
+        signIn("ROLE_PROVIDER_ADMIN");
+        callerHolds(assignment("ROLE_PROVIDER_ADMIN", pharmacy, false));
+
+        assertThat(access.providerStaffScope().covers(assignment("ROLE_PHARMACIST", pharmacy, true))).isFalse();
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private void assertGrantRefused(Set<String> roles) {

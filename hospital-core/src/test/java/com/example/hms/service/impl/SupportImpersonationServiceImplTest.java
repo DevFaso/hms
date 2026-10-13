@@ -2,7 +2,7 @@ package com.example.hms.service.impl;
 
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.exception.BusinessException;
-import com.example.hms.exception.UnauthorizedException;
+import com.example.hms.exception.MfaStepUpRefusedException;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.superadmin.ImpersonationActiveResponseDTO;
@@ -36,6 +36,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.notNull;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -91,7 +93,7 @@ class SupportImpersonationServiceImplTest {
         when(tenantRoleAssignmentAccessor.findAssignmentsForUser(targetId))
             .thenReturn(List.of(assignment("NURSE", "Nurse", true)));
         when(tokenProvider.generateImpersonationAccessToken(any(TokenUserDescriptor.class),
-            eq(actorId), eq("super.admin"), anyLong())).thenReturn("impersonation.jwt");
+            eq(actorId), eq("super.admin"), anyLong(), any())).thenReturn("impersonation.jwt");
         when(tokenProvider.getJtiFromToken("impersonation.jwt")).thenReturn("imp-jti");
         when(tokenProvider.getJtiFromToken("original.super-admin.jwt")).thenReturn("orig-jti");
         when(tokenProvider.getExpiration("original.super-admin.jwt"))
@@ -109,8 +111,7 @@ class SupportImpersonationServiceImplTest {
     @Test
     @DisplayName("happy path: mints a token and emits IMPERSONATION_STARTED")
     void startMintsTokenAndAudits() {
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(true);
-        when(mfaService.verifyCode(actorId, "123456")).thenReturn(true);
+        when(mfaService.requireStepUp(actorId, "123456", "impersonation start", false)).thenReturn(true);
 
         ImpersonationStartResponseDTO response = service.start(
             ImpersonationStartRequestDTO.builder()
@@ -135,6 +136,27 @@ class SupportImpersonationServiceImplTest {
         verify(tokenBlacklistService, times(1)).blacklist(eq("orig-jti"), anyLong());
         // Closes Copilot review #4: tracker registered so refresh is now blocked.
         assertThat(sessionTracker.hasActive(actorId)).isTrue();
+        // The verified TOTP step-up is the second factor the token carries (AC-13).
+        verify(tokenProvider).generateImpersonationAccessToken(any(TokenUserDescriptor.class),
+            eq(actorId), eq("super.admin"), anyLong(), notNull());
+    }
+
+    @Test
+    @DisplayName("a target with no active role is refused before the step-up can spend a backup code")
+    void targetWithoutRolesRefusedBeforeTheStepUp() {
+        when(tenantRoleAssignmentAccessor.findAssignmentsForUser(targetId))
+            .thenReturn(List.of(assignment("NURSE", "Nurse", false)));
+
+        assertThatThrownBy(() -> service.start(
+            ImpersonationStartRequestDTO.builder()
+                .targetUserId(targetId)
+                .reason("debug")
+                .build(),
+            "12345678",
+            "original.super-admin.jwt"))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("no active role");
+        verify(mfaService, never()).requireStepUp(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     @Test
@@ -153,7 +175,7 @@ class SupportImpersonationServiceImplTest {
             "original.super-admin.jwt"))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("Cannot impersonate yourself");
-        verify(tokenProvider, never()).generateImpersonationAccessToken(any(), any(), any(), anyLong());
+        verify(tokenProvider, never()).generateImpersonationAccessToken(any(), any(), any(), anyLong(), any());
     }
 
     @Test
@@ -171,7 +193,7 @@ class SupportImpersonationServiceImplTest {
             "original.super-admin.jwt"))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("Cannot impersonate another super admin");
-        verify(tokenProvider, never()).generateImpersonationAccessToken(any(), any(), any(), anyLong());
+        verify(tokenProvider, never()).generateImpersonationAccessToken(any(), any(), any(), anyLong(), any());
     }
 
     @Test
@@ -192,9 +214,10 @@ class SupportImpersonationServiceImplTest {
     }
 
     @Test
-    @DisplayName("MFA required when enrolled — missing X-Mfa-Token rejects")
+    @DisplayName("MFA required when enrolled — the shared step-up refuses (403 + reason), nothing is minted")
     void mfaRequiredWhenEnrolled() {
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(true);
+        when(mfaService.requireStepUp(actorId, null, "impersonation start", false))
+            .thenThrow(new MfaStepUpRefusedException(MfaStepUpRefusedException.Reason.REQUIRED));
 
         assertThatThrownBy(() -> service.start(
             ImpersonationStartRequestDTO.builder()
@@ -203,15 +226,16 @@ class SupportImpersonationServiceImplTest {
                 .build(),
             null,
             "original.super-admin.jwt"))
-            .isInstanceOf(UnauthorizedException.class)
-            .hasMessageContaining("mfa_required");
-        verify(tokenProvider, never()).generateImpersonationAccessToken(any(), any(), any(), anyLong());
+            .isInstanceOfSatisfying(MfaStepUpRefusedException.class,
+                ex -> assertThat(ex.getCode()).isEqualTo("mfa.stepup.required"));
+        // #851's five-argument form (the second-factor instant).
+        verify(tokenProvider, never()).generateImpersonationAccessToken(any(), any(), any(), anyLong(), any());
     }
 
     @Test
     @DisplayName("non-strict mode: unenrolled actor passes through but MFA-bypass is audited")
     void unenrolledNonStrictAuditsBypass() {
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(false);
+        when(mfaService.requireStepUp(actorId, null, "impersonation start", false)).thenReturn(false);
 
         service.start(
             ImpersonationStartRequestDTO.builder()
@@ -229,6 +253,9 @@ class SupportImpersonationServiceImplTest {
             .containsExactlyInAnyOrder(
                 AuditEventType.SECURITY_ALERT_TRIGGERED,
                 AuditEventType.IMPERSONATION_STARTED);
+        // No step-up, so no second factor on the token (AC-13).
+        verify(tokenProvider).generateImpersonationAccessToken(any(TokenUserDescriptor.class),
+            eq(actorId), eq("super.admin"), anyLong(), isNull());
     }
 
     @Test
@@ -282,7 +309,7 @@ class SupportImpersonationServiceImplTest {
     @Test
     @DisplayName("start() rejects when actor already has an active session in the cross-process tracker")
     void startRejectsWhenTrackerHasActive() {
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(false);
+        when(mfaService.requireStepUp(actorId, null, "impersonation start", false)).thenReturn(false);
         // First start succeeds.
         service.start(
             ImpersonationStartRequestDTO.builder()
@@ -313,7 +340,7 @@ class SupportImpersonationServiceImplTest {
     @Test
     @DisplayName("start() with null bearer skips blacklist gracefully (test-call path)")
     void startSwallowsNullBearer() {
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(false);
+        when(mfaService.requireStepUp(actorId, null, "impersonation start", false)).thenReturn(false);
 
         service.start(
             ImpersonationStartRequestDTO.builder()
@@ -330,7 +357,7 @@ class SupportImpersonationServiceImplTest {
     @Test
     @DisplayName("start() blacklist failure is swallowed — boundary action still succeeds")
     void startBlacklistFailureSwallowed() {
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(false);
+        when(mfaService.requireStepUp(actorId, null, "impersonation start", false)).thenReturn(false);
         when(tokenProvider.getJtiFromToken("original.super-admin.jwt"))
             .thenThrow(new RuntimeException("token corrupt"));
 

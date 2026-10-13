@@ -10,17 +10,36 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
  * Provider onboarding evidence (V180). A plain {@link JpaRepository}: the
- * table is platform data, read and written by a verified super-admin only.
+ * table is platform data, written by a verified super-admin only, and read
+ * by the provider directory (verified facilities only) and by a provider's
+ * own profile page.
  */
 public interface ProviderVerificationRepository extends JpaRepository<ProviderVerification, UUID> {
 
-    /** The facility's latest verification, whatever its status. */
-    Optional<ProviderVerification> findFirstByHospital_IdOrderByCreatedAtDesc(UUID hospitalId);
+    /**
+     * The facility's latest verification in this status: with VERIFIED, the
+     * identity the platform verified (V180's partial unique index allows at
+     * most one SUBMITTED-or-VERIFIED row per facility).
+     */
+    Optional<ProviderVerification> findFirstByHospital_IdAndStatusOrderByCreatedAtDescIdDesc(
+        UUID hospitalId, ProviderVerificationStatus status);
+
+    /**
+     * The facility's latest verification, whatever its status: the head of
+     * {@link #findByHospital_IdOrderByCreatedAtDescIdDesc} (same order, the id
+     * breaking a tie on {@code created_at}), so the current verification and
+     * the first history row are always the same row.
+     */
+    Optional<ProviderVerification> findFirstByHospital_IdOrderByCreatedAtDescIdDesc(UUID hospitalId);
+
+    /** Every verification of the facility, newest first (then by id): the super-admin's verification history. */
+    List<ProviderVerification> findByHospital_IdOrderByCreatedAtDescIdDesc(UUID hospitalId);
 
     /** Does the facility hold a verification in this status? The lifecycle restore guard (AC-4). */
     boolean existsByHospital_IdAndStatus(UUID hospitalId, ProviderVerificationStatus status);
@@ -64,7 +83,9 @@ public interface ProviderVerificationRepository extends JpaRepository<ProviderVe
           AND (:status IS NULL OR v.status = :status)
           AND NOT EXISTS (
               SELECT 1 FROM ProviderVerification newer
-              WHERE newer.hospital = v.hospital AND newer.createdAt > v.createdAt)
+              WHERE newer.hospital = v.hospital
+                AND (newer.createdAt > v.createdAt
+                     OR (newer.createdAt = v.createdAt AND newer.id > v.id)))
         ORDER BY v.createdAt DESC, v.id DESC
         """,
         countQuery = """
@@ -73,9 +94,32 @@ public interface ProviderVerificationRepository extends JpaRepository<ProviderVe
           AND (:status IS NULL OR v.status = :status)
           AND NOT EXISTS (
               SELECT 1 FROM ProviderVerification newer
-              WHERE newer.hospital = v.hospital AND newer.createdAt > v.createdAt)
+              WHERE newer.hospital = v.hospital
+                AND (newer.createdAt > v.createdAt
+                     OR (newer.createdAt = v.createdAt AND newer.id > v.id)))
         """)
     Page<ProviderVerification> findLatestByFacilityTypes(@Param("types") Collection<FacilityType> types,
                                                          @Param("status") ProviderVerificationStatus status,
                                                          Pageable pageable);
+
+    /**
+     * The provider directory (plan §6.5, AC-14): facilities of these types
+     * whose CURRENT verification is VERIFIED and that are active and ACTIVE in
+     * their lifecycle, optionally narrowed to a name pattern (already lower-case,
+     * LIKE-escaped with a backslash, wrapped in {@code %}). V180's partial
+     * unique index keeps at most one SUBMITTED-or-VERIFIED row per facility,
+     * so a VERIFIED row is the current one. Ordered by name, then id.
+     */
+    @Query("""
+        SELECT v FROM ProviderVerification v JOIN FETCH v.hospital h
+        WHERE v.status = com.example.hms.enums.ProviderVerificationStatus.VERIFIED
+          AND h.facilityType IN :types
+          AND h.active = TRUE
+          AND h.lifecycleState = com.example.hms.enums.HospitalLifecycleState.ACTIVE
+          AND (:namePattern IS NULL OR LOWER(CAST(h.name AS string)) LIKE :namePattern ESCAPE '\\')
+        ORDER BY LOWER(CAST(h.name AS string)), h.id
+        """)
+    List<ProviderVerification> findDirectory(@Param("types") Collection<FacilityType> types,
+                                             @Param("namePattern") String namePattern,
+                                             Pageable pageable);
 }

@@ -266,9 +266,9 @@ class ProviderConfinementSecurityIT extends BaseIT {
     /**
      * Everything a client sees of a 404, with the request path taken out: the
      * status, the body, the error message the container would render and the
-     * content type.
+     * content type. Shared with {@code ProviderAdminSecurityIT}.
      */
-    private static String refusalShape(MvcResult result) throws Exception {
+    static String refusalShape(MvcResult result) throws Exception {
         String path = result.getRequest().getRequestURI();
         String bare = path.startsWith("/api") ? path.substring(4) : path;
         String message = result.getResponse().getErrorMessage();
@@ -287,9 +287,19 @@ class ProviderConfinementSecurityIT extends BaseIT {
         return token(user.getUsername(), user.getId(), realmRoles);
     }
 
-    private static String token(String username, UUID appUserId, String... realmRoles) {
+    /**
+     * A Keycloak-shaped token whose {@code amr} says a password and an OTP
+     * were used: the provider MFA gate (AC-13) admits it, so these tests see
+     * the confinement itself. {@code ProviderMfaGateIT} covers the gate.
+     */
+    static String token(String username, UUID appUserId, String... realmRoles) {
+        return token(username, appUserId, List.of("pwd", "otp"), realmRoles);
+    }
+
+    /** As above, with the given {@code amr} claim ({@code null}: no claim at all). */
+    static String token(String username, UUID appUserId, List<String> amr, String... realmRoles) {
         Instant now = Instant.now();
-        JWTClaimsSet claims = new JWTClaimsSet.Builder()
+        JWTClaimsSet.Builder builder = new JWTClaimsSet.Builder()
             .jwtID(UUID.randomUUID().toString())
             .issuer(OidcResourceServerIntegrationTest.TEST_ISSUER)
             .subject(UUID.randomUUID().toString())
@@ -301,8 +311,11 @@ class ProviderConfinementSecurityIT extends BaseIT {
             .claim("typ", "Bearer")
             .claim("azp", "hms-portal")
             .claim("appUserId", appUserId.toString())
-            .claim("realm_access", Map.of("roles", List.of(realmRoles)))
-            .build();
+            .claim("realm_access", Map.of("roles", List.of(realmRoles)));
+        if (amr != null) {
+            builder.claim("amr", amr);
+        }
+        JWTClaimsSet claims = builder.build();
         SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).keyID("confinement-test").build(), claims);
         try {
             jwt.sign(new RSASSASigner(KEYS.getPrivate()));

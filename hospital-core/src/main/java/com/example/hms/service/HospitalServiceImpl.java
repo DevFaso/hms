@@ -1,6 +1,8 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.enums.ProviderVerificationStatus;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.repository.provider.ProviderVerificationRepository;
 import com.example.hms.utility.MessageUtil;
@@ -40,6 +42,9 @@ import java.util.UUID;
 @Service
 public class HospitalServiceImpl implements HospitalService {
 
+    /** The directory's message for an unknown provider type, reused for the list's super-admin filter. */
+    static final String MSG_PROVIDER_TYPE_INVALID = "provider.type.invalid";
+
     private static final String HOSPITAL_NOT_FOUND = "hospital.notFound";
 
     private final HospitalRepository hospitalRepository;
@@ -70,13 +75,19 @@ public class HospitalServiceImpl implements HospitalService {
                                                      Boolean unassignedOnly,
                                                      String city,
                                                      String state,
+                                                     String facilityType,
                                                      Locale locale) {
+        FacilityType type = listFacilityType(facilityType);
+        boolean providerList = type != FacilityType.HOSPITAL;
         UUID organizationFilter = Boolean.TRUE.equals(unassignedOnly) ? null : organizationId;
         Boolean unassignedFilter = Boolean.TRUE.equals(unassignedOnly) ? Boolean.TRUE : null;
         String normalizedCity = normalizeQuery(city);
         String normalizedState = normalizeQuery(state);
 
-        List<Hospital> hospitals = hospitalRepository.findAllForFilters(organizationFilter, unassignedFilter, normalizedCity, normalizedState);
+        List<Hospital> hospitals = providerList
+            ? hospitalRepository.findAllForFiltersByFacilityType(type, organizationFilter, unassignedFilter,
+                normalizedCity, normalizedState)
+            : hospitalRepository.findAllForFilters(organizationFilter, unassignedFilter, normalizedCity, normalizedState);
         if (hospitals == null || hospitals.isEmpty()) {
             return List.of();
         }
@@ -90,6 +101,28 @@ public class HospitalServiceImpl implements HospitalService {
                 .filter(java.util.Objects::nonNull)
                 .map(hospitalMapper::toHospitalDTO)
                 .toList();
+    }
+
+    /**
+     * AC-11: the list is clinical unless a verified super-admin names a
+     * provider type. Who first, then what: anyone else naming any type but
+     * HOSPITAL (an unknown one included) gets the same 403, before the value
+     * is parsed and before any read; only a super-admin's unknown type is a
+     * 400 ({@code provider.type.invalid}, case-insensitive parse shared with
+     * the directory).
+     */
+    private FacilityType listFacilityType(String raw) {
+        if (raw == null || raw.isBlank() || FacilityType.HOSPITAL.name().equalsIgnoreCase(raw.trim())) {
+            return FacilityType.HOSPITAL;
+        }
+        if (!roleValidator.isSuperAdminFromJwtClaim()) {
+            throw new AccessDeniedException("Access denied");
+        }
+        try {
+            return FacilityType.fromParameter(raw);
+        } catch (IllegalArgumentException unknown) {
+            throw new BusinessException(MSG_PROVIDER_TYPE_INVALID);
+        }
     }
 
     @Override

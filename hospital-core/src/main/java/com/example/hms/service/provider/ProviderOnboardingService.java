@@ -5,11 +5,13 @@ import com.example.hms.enums.ProviderVerificationStatus;
 import com.example.hms.payload.dto.provider.ProviderCreateRequestDTO;
 import com.example.hms.payload.dto.provider.ProviderDecisionRequestDTO;
 import com.example.hms.payload.dto.provider.ProviderResubmitRequestDTO;
+import com.example.hms.payload.dto.provider.ProviderVerificationHistoryEntryDTO;
 import com.example.hms.payload.dto.provider.ProviderResponseDTO;
 import com.example.hms.payload.dto.provider.ProviderVerifyRequestDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -38,6 +40,13 @@ public interface ProviderOnboardingService {
 
     /** One provider facility; an id that is not a provider answers as an unknown one. */
     ProviderResponseDTO get(UUID providerId);
+
+    /**
+     * Every verification of one provider facility, newest first: each
+     * submission of evidence and the decision taken on it. An id that is not a
+     * provider answers as an unknown one.
+     */
+    List<ProviderVerificationHistoryEntryDTO> history(UUID providerId);
 
     /** AC-2, AC-3: both consistency confirmations, no duplicate business; the facility becomes ACTIVE. */
     ProviderResponseDTO verify(UUID providerId, ProviderVerifyRequestDTO request);

@@ -9,6 +9,7 @@ import com.example.hms.security.oidc.KeycloakJwtAuthenticationConverter;
 import com.example.hms.security.provider.ProviderCallerResolver;
 import com.example.hms.security.provider.ProviderConfinementPolicy;
 import com.example.hms.security.provider.ProviderFacilityConfinementFilter;
+import com.example.hms.security.provider.ProviderMfaGate;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -265,6 +266,8 @@ public class SecurityConfig {
     private final ObjectProvider<ProviderConfinementPolicy> providerConfinementPolicyProvider;
     private final ObjectProvider<ProviderCallerResolver> providerCallerResolverProvider;
     private final ObjectProvider<ActingScopeResolver> actingScopeResolverProvider;
+    /** The provider MFA gate (AC-13), carried by the confinement filter; same slice reason. */
+    private final ObjectProvider<ProviderMfaGate> providerMfaGateProvider;
 
     @Value("${app.cors.allowed-origins:http://localhost:4200}")
     private String allowedOrigins;
@@ -652,6 +655,19 @@ public class SecurityConfig {
                 .requestMatchers("/super-admin/providers", "/super-admin/providers/**")
                 .hasAuthority(ROLE_SUPER_ADMIN)
 
+                // The provider directory (D5, plan section 6.5): the same list as
+                // ProviderDirectoryController's annotation; the service then
+                // requires a hospital acting scope and the role held there, live.
+                .requestMatchers(HttpMethod.GET, "/provider-directory")
+                .hasAnyAuthority(SecurityConstants.authorities(SecurityConstants.PROVIDER_DIRECTORY_AUTHORITIES))
+
+                // A provider facility's own pages (D5, plan section 6.5): any
+                // authenticated caller reaches the handler, which decides from
+                // the caller's LIVE assignments at the facility and answers
+                // everyone else exactly as an unmapped path. A role matcher
+                // here would answer a hospital user 403, telling them it exists.
+                .requestMatchers("/provider/**").authenticated()
+
                 // Organizations and security management
                 .requestMatchers("/organizations/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
@@ -952,7 +968,7 @@ public class SecurityConfig {
         // path's 404 for a hospital endpoint, never a URL matcher's 403.
         http.addFilterBefore(
             new ProviderFacilityConfinementFilter(providerConfinementPolicyProvider,
-                providerCallerResolverProvider, actingScopeResolverProvider),
+                providerCallerResolverProvider, actingScopeResolverProvider, providerMfaGateProvider),
             AuthorizationFilter.class);
 
         // ── Hardened HTTP response headers ──────────────────────────────────

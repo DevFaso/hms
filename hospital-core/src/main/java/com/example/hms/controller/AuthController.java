@@ -26,7 +26,9 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.JwtTokenProvider;
 import com.example.hms.security.LoginAttemptService;
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.service.PasswordHistoryService;
+import com.example.hms.security.provider.ProviderMfaGate;
 import com.example.hms.service.MfaService;
 import com.example.hms.security.WsTicketService;
 import com.example.hms.security.RefreshTokenCookieService;
@@ -46,6 +48,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
@@ -79,6 +82,7 @@ import java.util.UUID;
 @Slf4j
 public class AuthController {
 
+    private static final String EMAIL_VERIFICATION_FAILED = "Email verification failed.";
     private static final String BEARER_PREFIX = "Bearer ";
 
     /**
@@ -104,6 +108,8 @@ public class AuthController {
     private final UserService userService;
     private final UserCredentialLifecycleService userCredentialLifecycleService;
     private final TokenBlacklistService tokenBlacklistService;
+    /** Force-logout-all: a refresh token issued before it mints nothing (the filter's own rule). */
+    private final com.example.hms.security.GlobalSessionRevocationService globalSessionRevocationService;
     private final com.example.hms.security.IdleSessionGate idleSessionGate;
     private final com.example.hms.security.ImpersonationSessionTracker impersonationSessionTracker;
     private final LoginAttemptService loginAttemptService;
@@ -129,6 +135,12 @@ public class AuthController {
      * comments on {@link AuthControllerProperties}.</p>
      */
     private final AuthControllerProperties authProps;
+    /**
+     * The provider MFA gate (provider plan AC-13). Through an
+     * {@link ObjectProvider}: a {@code @WebMvcTest} slice has no such bean,
+     * and its absence leaves login, refresh and the bootstrap as they were.
+     */
+    private final ObjectProvider<ProviderMfaGate> providerMfaGate;
 
     public AuthController(UserRepository userRepository,
             UserRoleHospitalAssignmentRepository assignmentRepository,
@@ -139,6 +151,7 @@ public class AuthController {
             AuthNotificationFacade authNotification,
             UserCredentialLifecycleService userCredentialLifecycleService,
             TokenBlacklistService tokenBlacklistService,
+            com.example.hms.security.GlobalSessionRevocationService globalSessionRevocationService,
             com.example.hms.security.IdleSessionGate idleSessionGate,
             com.example.hms.security.ImpersonationSessionTracker impersonationSessionTracker,
             LoginAttemptService loginAttemptService,
@@ -147,7 +160,8 @@ public class AuthController {
             MfaService mfaService,
             WsTicketService wsTicketService,
             RefreshTokenCookieService refreshTokenCookieService,
-            AuthControllerProperties authProps) {
+            AuthControllerProperties authProps,
+            ObjectProvider<ProviderMfaGate> providerMfaGate) {
         this.userRepository = userRepository;
         this.assignmentRepository = assignmentRepository;
         this.authBootstrapService = authBootstrapService;
@@ -157,6 +171,7 @@ public class AuthController {
         this.authNotification = authNotification;
         this.userCredentialLifecycleService = userCredentialLifecycleService;
         this.tokenBlacklistService = tokenBlacklistService;
+        this.globalSessionRevocationService = globalSessionRevocationService;
         this.idleSessionGate = idleSessionGate;
         this.impersonationSessionTracker = impersonationSessionTracker;
         this.loginAttemptService = loginAttemptService;
@@ -166,6 +181,7 @@ public class AuthController {
         this.wsTicketService = wsTicketService;
         this.refreshTokenCookieService = refreshTokenCookieService;
         this.authProps = authProps;
+        this.providerMfaGate = providerMfaGate;
 
         // KC-5 cutover signal: surface the gate state in the startup log so the
         // ops on-call running the cutover runbook can confirm the flip took
@@ -297,13 +313,16 @@ public class AuthController {
             // Determine the effective role list for token generation
             List<String> effectiveRoles;
             if (loginRequest.getSelectedRole() != null && !loginRequest.getSelectedRole().isBlank()) {
-                String selected = loginRequest.getSelectedRole().trim();
-                // Validate the user actually holds this role
-                if (allRoles.stream().noneMatch(r -> r.equalsIgnoreCase(selected))) {
+                String typed = loginRequest.getSelectedRole().trim();
+                // Validate the user actually holds this role, and use the held
+                // spelling: the MFA required-roles check and the token compare
+                // exact strings, so "Role_Doctor" must not skip the challenge.
+                String selected = allRoles.stream().filter(r -> r.equalsIgnoreCase(typed)).findFirst().orElse(null);
+                if (selected == null) {
                     log.warn("🔐 [LOGIN] User '{}' tried to select role '{}' but holds only {}",
-                            loginRequest.getUsername(), selected, allRoles);
+                            loginRequest.getUsername(), typed, allRoles);
                     return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                            .body(new MessageResponse("You do not hold the role: " + selected));
+                            .body(new MessageResponse("You do not hold the role: " + typed));
                 }
                 effectiveRoles = List.of(selected);
             } else {
@@ -319,9 +338,16 @@ public class AuthController {
                     user.getId(), user.getUsername(), effectiveRoles);
 
             // ── MFA challenge gate (T-28) ──
-            if (mfaService != null && isMfaRequiredForUser(effectiveRoles)) {
+            // A provider user (a live assignment at a pharmacy or laboratory)
+            // is challenged whatever the role list says (AC-13): the token the
+            // challenge mints is the only one the provider MFA gate accepts.
+            if (mfaService != null
+                    && (isMfaRequiredForUser(effectiveRoles) || isProviderUserChallenged(user.getId(), user.getUsername()))) {
                 boolean mfaEnabled = mfaService.isMfaEnabled(user.getId());
-                String mfaToken = jwtTokenProvider.generateMfaToken(user.getUsername());
+                // The roles this sign-in would mint (the one picked, or the
+                // single one held) ride the challenge to the session it opens,
+                // so the code changes nothing about which roles it carries.
+                String mfaToken = jwtTokenProvider.generateMfaToken(user.getUsername(), effectiveRoles);
 
                 auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                         .eventType(AuditEventType.MFA_CHALLENGE)
@@ -341,7 +367,6 @@ public class AuthController {
                         .mfaToken(mfaToken)
                         .username(user.getUsername())
                         .build();
-                // Store selected role in mfa token for later use after verification
                 return ResponseEntity.ok(body);
             }
 
@@ -471,14 +496,21 @@ public class AuthController {
         var userOpt = userRepository.findByEmail(dto.getEmail());
         if (userOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new EmailVerificationResponseDTO("Email verification failed.", false));
+                    .body(new EmailVerificationResponseDTO(EMAIL_VERIFICATION_FAILED, false));
         }
         var user = userOpt.get();
         if (!java.util.Objects.equals(dto.getToken(), user.getActivationToken())
                 || user.getActivationTokenExpiresAt() == null
                 || user.getActivationTokenExpiresAt().isBefore(LocalDateTime.now())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new EmailVerificationResponseDTO("Email verification failed.", false));
+                    .body(new EmailVerificationResponseDTO(EMAIL_VERIFICATION_FAILED, false));
+        }
+
+        // An account an administrator switched off (V184) is not verified
+        // from below: no activation, no lockout reset, no assignment change.
+        if (user.getDeactivatedByAdminAt() != null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new EmailVerificationResponseDTO(EMAIL_VERIFICATION_FAILED, false));
         }
 
         // 1. Activate the user account
@@ -657,6 +689,90 @@ public class AuthController {
     }
 
     /**
+     * Why this token may not mint a session, or {@code null} when it may
+     * go on: not a refresh token, issued before a force-logout-all, or
+     * already spent (superseded by a sibling tab: 409; replayed: 401).
+     */
+    private ResponseEntity<Object> refreshRefusal(String refreshToken) {
+        // A refresh token, and nothing else the same key signs: the MFA
+        // challenge token would mint a session past MFA, an impersonation
+        // token an ordinary session that outlives the impersonation, and an
+        // access token a session that never ends.
+        if (!jwtTokenProvider.isRefreshToken(refreshToken)) {
+            log.warn("🔄 [REFRESH] Invalid or expired refresh token");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse(REFRESH_INVALID_MESSAGE));
+        }
+
+        // Force-logout-all revokes refresh tokens too: one issued before it
+        // must not mint a new session (GlobalSessionRevocationService#revokes,
+        // the rule the filter applies to access tokens).
+        // The fresh read, not the 30-second cache: an instance that has not
+        // caught up would otherwise mint a post-cut-off pair from a revoked
+        // token, which then outlives the kill switch. Refresh is rare.
+        if (globalSessionRevocationService.revokesFresh(jwtTokenProvider.getIssuedAt(refreshToken))) {
+            log.warn("🔄 [REFRESH] Refused — refresh token predates the last force-logout-all");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse(REFRESH_INVALID_MESSAGE));
+        }
+
+        // Replay detection: an already-used refresh token is refused here; the
+        // atomic claim below settles a race between two concurrent uses. Used
+        // a moment ago by another tab of the same browser: superseded (409),
+        // not replayed, so that tab retries with the rotated cookie instead
+        // of signing every tab out.
+        String refreshJti = jwtTokenProvider.getJtiFromToken(refreshToken);
+        if (refreshJti != null && tokenBlacklistService.isBlacklisted(refreshJti)) {
+            if (tokenBlacklistService.wasRecentlyRotated(refreshJti)) {
+                return refreshSuperseded(refreshJti);
+            }
+            log.warn("🔄 [REFRESH] Replay detected — refresh token jti={} already used", refreshJti);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse("Refresh token has already been used. Please log in again."));
+        }
+        return null;
+    }
+
+    /**
+     * How long after a rotation another use of the old refresh token counts as
+     * a sibling tab that lost the race (409, retry) rather than a replay (401).
+     */
+    static final long REFRESH_ROTATION_GRACE_MS = 30_000L;
+
+    /** The 409: a readable sentence (clients show it); the status is what a client acts on. */
+    private static final String REFRESH_SUPERSEDED_MESSAGE =
+            "This session was just refreshed by another tab or request. Retry with the latest token.";
+
+    private static final String REFRESH_INVALID_MESSAGE =
+            "Refresh token is invalid or has expired. Please log in again.";
+
+    /** A provider user's refresh token without a (current) second factor: sign in, with the code. */
+    private static final String REFRESH_SECOND_FACTOR_KEY = "auth.refresh.secondFactorRequired";
+
+    /** The HttpOnly cookie first; the body is the legacy fallback (S-01). */
+    private String readRefreshToken(HttpServletRequest request, java.util.Map<String, String> body) {
+        String fromCookie = refreshTokenCookieService.read(request);
+        if (fromCookie != null) {
+            return fromCookie;
+        }
+        return body != null ? body.get("refreshToken") : null;
+    }
+
+    /** A provider user whose refresh token carries no (or an expired) second factor. */
+    private boolean lapsedProviderFactor(java.util.UUID userId, String username, java.time.Instant secondFactor) {
+        return secondFactor == null && isProviderUserChallenged(userId, username);
+    }
+
+    /** Another tab rotated this refresh token a moment ago: no tokens, retry with the new cookie. */
+    private ResponseEntity<Object> refreshSuperseded(String jti) {
+        // WARN, like a replay: a sibling tab looks exactly like a stolen copy
+        // replayed inside the grace, and theft alerting must still see it.
+        log.warn("🔄 [REFRESH] Superseded (or a replay within the grace) — refresh token jti={} was just rotated", jti);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new MessageResponse(REFRESH_SUPERSEDED_MESSAGE));
+    }
+
+    /**
      * Silent token refresh.
      *
      * <p>Accepts a still-valid refresh token and issues a new short-lived access token.
@@ -666,7 +782,8 @@ public class AuthController {
      *
      * <p>Security rationale: the refresh token is signed with the same HMAC-SHA secret and
      * carries its own {@code exp} claim, so a tampered or expired refresh token is rejected
-     * by {@link JwtTokenProvider#validateToken}.
+     * by {@link JwtTokenProvider#isRefreshToken}, which also refuses every other token the
+     * same key signs (access, impersonation, MFA challenge).
      */
     @WriteAudited(skip = true, reason = "emits LOGOUT / TOKEN_REFRESH itself, or is a check that mutates nothing")
     @PostMapping("/token/refresh")
@@ -675,6 +792,7 @@ public class AuthController {
         description = "Exchange a valid refresh token for a new access token + rotated refresh token.")
     @ApiResponse(responseCode = "200", description = "Tokens refreshed")
     @ApiResponse(responseCode = "401", description = "Refresh token missing, invalid, or expired")
+    @ApiResponse(responseCode = "409", description = "Superseded: another tab just rotated this refresh token; retry")
     public ResponseEntity<Object> refreshToken(
             @RequestBody(required = false) java.util.Map<String, String> body,
             HttpServletRequest request,
@@ -692,29 +810,18 @@ public class AuthController {
 
         // S-01: prefer the HttpOnly refresh cookie over a body-borne refresh token.
         // Body-based refresh remains supported as a legacy fallback during rollout.
-        String refreshToken = refreshTokenCookieService.read(request);
-        if (refreshToken == null) {
-            refreshToken = body != null ? body.get("refreshToken") : null;
-        }
+        String refreshToken = readRefreshToken(request, body);
         if (refreshToken == null || refreshToken.isBlank()) {
             log.warn("🔄 [REFRESH] Missing refresh token (cookie + body both empty)");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse("Refresh token is required."));
         }
 
-        if (!jwtTokenProvider.validateToken(refreshToken)) {
-            log.warn("🔄 [REFRESH] Invalid or expired refresh token");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("Refresh token is invalid or has expired. Please log in again."));
+        ResponseEntity<Object> refusal = refreshRefusal(refreshToken);
+        if (refusal != null) {
+            return refusal;
         }
-
-        // Replay detection: reject already-used refresh tokens
         String refreshJti = jwtTokenProvider.getJtiFromToken(refreshToken);
-        if (refreshJti != null && tokenBlacklistService.isBlacklisted(refreshJti)) {
-            log.warn("🔄 [REFRESH] Replay detected — refresh token jti={} already used", refreshJti);
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("Refresh token has already been used. Please log in again."));
-        }
 
         String username = jwtTokenProvider.getUsernameFromJWT(refreshToken);
         var user = userRepository.findByUsername(username).orElse(null);
@@ -771,66 +878,108 @@ public class AuthController {
                         "Session timed out due to inactivity. Please log in again."));
         }
 
-        var descriptor = new com.example.hms.security.TokenUserDescriptor(user.getId(), username, roles);
-        String newAccessToken  = jwtTokenProvider.generateAccessToken(descriptor);
-
-        // Rotate the refresh token so each use yields a fresh one
-        var refreshAuth = new UsernamePasswordAuthenticationToken(
-                new com.example.hms.security.CustomUserDetails(user,
-                        roles.stream()
-                             .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
-                             .collect(java.util.stream.Collectors.toSet())),
-                null,
-                roles.stream()
-                     .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
-                     .toList());
-        String newRefreshToken = jwtTokenProvider.generateRefreshToken(refreshAuth);
-
-        // Blacklist the old refresh token to prevent replay
-        if (refreshJti != null) {
-            long oldRefreshExp = jwtTokenProvider.getExpiration(refreshToken).getTime();
-            tokenBlacklistService.blacklist(refreshJti, oldRefreshExp);
-            log.debug("🔄 [REFRESH] Blacklisted old refresh token jti={}", refreshJti);
+        // Spend the refresh token atomically BEFORE minting: of two concurrent
+        // refreshes with one token, exactly one gets a new pair. The other is
+        // superseded (409): it gets no tokens and retries with the cookie the
+        // winner rotated, so two tabs refreshing at once stay signed in.
+        if (refreshJti == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse(REFRESH_INVALID_MESSAGE));
+        }
+        // Rotated is recorded BEFORE the token is spent: a sibling tab that
+        // sees it spent always sees it rotated too, so it is told
+        // "superseded" (409, retry), never "replayed" (401, sign out). Marking
+        // a token we then fail to claim is harmless: it only turns another
+        // use within the grace from 401 into 409, and issues nothing.
+        tokenBlacklistService.markRotated(refreshJti, REFRESH_ROTATION_GRACE_MS);
+        if (!tokenBlacklistService.claim(refreshJti, jwtTokenProvider.getExpiration(refreshToken).getTime())) {
+            return refreshSuperseded(refreshJti);
         }
 
-        // ── Idle session timeout — touch on successful refresh ──────────
-        // Only after the rotation has succeeded; touching pre-rotation
-        // would extend the window even if rotation failed downstream.
-        idleSessionGate.touchIfHuman(user.getId(), refreshAuthorities);
+        // Claimed and marked rotated above: if anything below fails before
+        // the new pair is out, give the old token back, or the session is
+        // stranded (every retry would read "superseded" until it expires).
+        try {
+            var descriptor = new com.example.hms.security.TokenUserDescriptor(user.getId(), username, roles);
+            // A refresh token minted after a verified TOTP code passes its second
+            // factor on, with the time it was verified, until that is older than
+            // the max age (AC-13); a password-only one never gains it.
+            java.time.Instant secondFactor = jwtTokenProvider.secondFactorAt(refreshToken);
+            // A provider user whose factor has lapsed (older than the max age)
+            // would get a pair every call refuses (403 mfa.enrollment.required)
+            // with nothing in the portal to recover: refuse the refresh
+            // instead, so the normal sign-in and challenge take over.
+            if (lapsedProviderFactor(user.getId(), username, secondFactor)) {
+                // Left spent, not released: this token can never yield a pair again.
+                auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                        .eventType(AuditEventType.TOKEN_REFRESH)
+                        .eventDescription("Refresh refused — provider second factor missing or expired")
+                        .userName(username)
+                        .userId(user.getId())
+                        .status(AuditStatus.FAILURE)
+                        .build());
+                // The cookie can never yield a pair again: drop it, so the
+                // portal's silent refresh stops retrying and signs in instead.
+                refreshTokenCookieService.clear(response);
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(new MessageResponse(MessageUtil.resolve(REFRESH_SECOND_FACTOR_KEY)));
+            }
+            String newAccessToken  = jwtTokenProvider.generateAccessToken(descriptor, secondFactor);
 
-        long nowMs      = System.currentTimeMillis();
-        long accessExp  = jwtTokenProvider.getExpiration(newAccessToken).getTime();
-        long refreshExp = jwtTokenProvider.getExpiration(newRefreshToken).getTime();
+            // Rotate the refresh token so each use yields a fresh one
+            var refreshAuth = new UsernamePasswordAuthenticationToken(
+                    new com.example.hms.security.CustomUserDetails(user,
+                            roles.stream()
+                                 .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
+                                 .collect(java.util.stream.Collectors.toSet())),
+                    null,
+                    roles.stream()
+                         .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
+                         .toList());
+            String newRefreshToken = jwtTokenProvider.generateRefreshToken(refreshAuth, secondFactor);
 
-        log.info("🔄 [REFRESH] Tokens rotated for user='{}'", username);
+            // ── Idle session timeout — touch on successful refresh ──────────
+            // Only after the rotation has succeeded; touching pre-rotation
+            // would extend the window even if rotation failed downstream.
+            idleSessionGate.touchIfHuman(user.getId(), refreshAuthorities);
 
-        auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                .eventType(AuditEventType.TOKEN_REFRESH)
-                .eventDescription("Token pair rotated (old refresh jti=" + refreshJti + ")")
-                .userName(username)
-                .userId(user.getId())
-                .status(AuditStatus.SUCCESS)
-                .build());
+            long nowMs      = System.currentTimeMillis();
+            long accessExp  = jwtTokenProvider.getExpiration(newAccessToken).getTime();
+            long refreshExp = jwtTokenProvider.getExpiration(newRefreshToken).getTime();
 
-        // Include fresh hospital context so the frontend can re-hydrate
-        var hospitalContext = resolveHospitalContext(user.getId());
+            log.info("🔄 [REFRESH] Tokens rotated for user='{}'", username);
 
-        // S-01: rotate the HttpOnly refresh-token cookie
-        writeRefreshCookie(response, newRefreshToken);
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.TOKEN_REFRESH)
+                    .eventDescription("Token pair rotated (old refresh jti=" + refreshJti + ")")
+                    .userName(username)
+                    .userId(user.getId())
+                    .status(AuditStatus.SUCCESS)
+                    .build());
 
-        return ResponseEntity.ok(JwtResponse.builder()
-                .accessToken(newAccessToken)
-                .refreshToken(newRefreshToken)
-                .issuedAt(nowMs)
-                .accessTokenExpiresAt(accessExp)
-                .refreshTokenExpiresAt(refreshExp)
-                .id(user.getId())
-                .username(user.getUsername())
-                .roles(roles)
-                .primaryHospitalId(hospitalContext.primaryHospitalId())
-                .primaryHospitalName(hospitalContext.primaryHospitalName())
-                .hospitalIds(hospitalContext.hospitalIds())
-                .build());
+            // Include fresh hospital context so the frontend can re-hydrate
+            var hospitalContext = resolveHospitalContext(user.getId());
+
+            // S-01: rotate the HttpOnly refresh-token cookie
+            writeRefreshCookie(response, newRefreshToken);
+
+            return ResponseEntity.ok(JwtResponse.builder()
+                    .accessToken(newAccessToken)
+                    .refreshToken(newRefreshToken)
+                    .issuedAt(nowMs)
+                    .accessTokenExpiresAt(accessExp)
+                    .refreshTokenExpiresAt(refreshExp)
+                    .id(user.getId())
+                    .username(user.getUsername())
+                    .roles(roles)
+                    .primaryHospitalId(hospitalContext.primaryHospitalId())
+                    .primaryHospitalName(hospitalContext.primaryHospitalName())
+                    .hospitalIds(hospitalContext.hospitalIds())
+                    .build());
+        } catch (RuntimeException mintFailed) {
+            tokenBlacklistService.release(refreshJti);
+            throw mintFailed;
+        }
     }
 
     /**
@@ -1103,14 +1252,22 @@ public class AuthController {
         return ResponseEntity.ok(dto);
     }
 
+    /**
+     * Rewrites the caller's MFA records, which can disable or delete a verified
+     * authenticator: while one is active, that takes the step-up in
+     * {@code X-Mfa-Token} (a current code or an unused backup code; 403 with a
+     * reason code otherwise), checked in the same transaction as the change.
+     */
     @PutMapping("/credentials/mfa")
     public ResponseEntity<List<UserMfaEnrollmentDTO>> updateMfaEnrollments(
-            @Valid @RequestBody List<UserMfaEnrollmentRequestDTO> payload) {
+            @Valid @RequestBody List<UserMfaEnrollmentRequestDTO> payload,
+            @RequestHeader(value = "X-Mfa-Token", required = false) String stepUpCode) {
         UUID userId = resolveCurrentUserId();
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        List<UserMfaEnrollmentDTO> response = userCredentialLifecycleService.upsertMfaEnrollments(userId, payload);
+        List<UserMfaEnrollmentDTO> response = userCredentialLifecycleService.upsertOwnMfaEnrollments(
+                userId, payload, SecurityContextHolder.getContext().getAuthentication(), stepUpCode);
         return ResponseEntity.ok(response);
     }
 
@@ -1223,6 +1380,11 @@ public class AuthController {
         String username = authentication.getName();
         log.debug("[SESSION-BOOTSTRAP] Resolving session context for user='{}'", username);
         SessionBootstrapResponseDTO response = authBootstrapService.resolveCurrentSession(username);
+        // AC-13: a provider user whose token carries no second factor is told
+        // so here; every other request answers 403 mfa.enrollment.required.
+        ProviderMfaGate gate = providerMfaGate.getIfAvailable();
+        response.setMfaEnrollmentRequired(response.isProviderUser()
+                && gate != null && !gate.secondFactorPresented(authentication));
         return ResponseEntity.ok(response);
     }
 
@@ -1240,6 +1402,12 @@ public class AuthController {
             return false;
         }
         return roles.stream().anyMatch(required::contains);
+    }
+
+    /** The account holds a live provider assignment, so its login is challenged (AC-13). */
+    private boolean isProviderUserChallenged(UUID userId, String username) {
+        ProviderMfaGate gate = providerMfaGate.getIfAvailable();
+        return gate != null && gate.isProviderUser(userId, username);
     }
 
     /**

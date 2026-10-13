@@ -65,6 +65,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -125,6 +126,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final String MSG_ASSIGNMENT_NOT_FOUND_BY_CODE = "assignment.notfound.bycode";
     private static final String DEFAULT_CONFIRMATION_CODE_INVALID = "Invalid confirmation code.";
     private static final String DEFAULT_ASSIGNMENT_ALREADY_CONFIRMED = "This assignment has already been confirmed.";
+    private static final String MSG_ACCOUNT_DISABLED_BY_ADMIN = "assignment.confirmation.accountDisabled";
+    private static final String DEFAULT_ACCOUNT_DISABLED_BY_ADMIN =
+        "This account was disabled by an administrator. Ask them to re-enable it.";
     private static final String DEFAULT_CONFIRMATION_ACTOR_MISMATCH = "Only the assigner who created this assignment can confirm it.";
     private static final String DEFAULT_ACTOR_RESOLUTION_FAILURE = "Unable to resolve the current user.";
     private static final String DEFAULT_HOLDER_CHANGE =
@@ -586,6 +590,26 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     }
 
     /**
+     * {@link #findChangeable} for several rows under the given scope, each
+     * holder's shield decided once. Every row is checked before the caller
+     * changes any: one out of scope (or missing) answers exactly as a missing id.
+     */
+    private List<UserRoleHospitalAssignment> findAllChangeable(Collection<UUID> ids,
+                                                               UserAccountAccess.AssignmentScope scope) {
+        Map<UUID, Boolean> shieldedByHolder = new HashMap<>();
+        // toList() is terminal: every row is checked (or the first refusal
+        // thrown) before the caller changes anything.
+        return new LinkedHashSet<>(ids).stream()
+            .map(id -> assignmentRepository.findById(id)
+                .filter(scope::mayChange)
+                .filter(found -> !shieldedByHolder.computeIfAbsent(
+                    found.getUser() == null ? null : found.getUser().getId(),
+                    holderId -> holderShielded(scope, found)))
+                .orElseThrow(() -> assignmentNotFound(id)))
+            .toList();
+    }
+
+    /**
      * A super-admin's account is out of a hospital admin's reach row by row
      * too, not only through {@code DELETE /user}: any trace of the role,
      * active or not, by assignment or global role ({@link UserAccountAccess.AssignmentScope#shields}).
@@ -757,8 +781,18 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public UserRoleHospitalAssignmentResponseDTO regenerateAssignmentCode(UUID assignmentId, boolean resendNotifications) {
-        UserRoleHospitalAssignment assignment = findChangeable(assignmentId);
+        return toDtoWithLinks(reissueCode(findChangeable(assignmentId), resendNotifications));
+    }
 
+    @Override
+    public void regenerateProviderStaffAssignmentCodes(Collection<UUID> ids, boolean resendNotifications) {
+        for (UserRoleHospitalAssignment assignment : findAllChangeable(ids, accountAccess.providerStaffScope())) {
+            reissueCode(assignment, resendNotifications);
+        }
+    }
+
+    /** A new assignment code and confirmation code for a row already found changeable. */
+    private UserRoleHospitalAssignment reissueCode(UserRoleHospitalAssignment assignment, boolean resendNotifications) {
         assignment.setAssignmentCode(generateAssignCode(assignment.getUser(), assignment.getHospital()));
         assignment.setConfirmationCode(generateConfirmationCode());
         assignment.setConfirmationSentAt(LocalDateTime.now());
@@ -769,8 +803,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             eventPublisher.publishEvent(new AssignmentCreatedEvent(saved.getId()));
         }
         recordAssignmentAudit(saved);
-        log.info("🔁 Regenerated assignment code for assignment '{}'", assignmentId);
-        return toDtoWithLinks(saved);
+        log.info("🔁 Regenerated assignment code for assignment '{}'", saved.getId());
+        return saved;
     }
 
     @Override
@@ -937,6 +971,14 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     }
 
     private void activateVerifiedAssignment(UserRoleHospitalAssignment assignment, String source) {
+        // An account an administrator switched off (V184) is not turned on
+        // from below, and neither is its assignment: the code is refused
+        // outright, with nothing confirmed and no credentials handed out.
+        if (assignment.getUser() != null && assignment.getUser().getDeactivatedByAdminAt() != null) {
+            throw new BusinessException(messageSource.getMessage(
+                MSG_ACCOUNT_DISABLED_BY_ADMIN, null, DEFAULT_ACCOUNT_DISABLED_BY_ADMIN,
+                org.springframework.context.i18n.LocaleContextHolder.getLocale()));
+        }
         // One kind of facility per user: two pending rows, one at a hospital
         // and one at a provider, cannot both come on.
         facilityAssignmentGuard.requireSingleFacilityKind(assignment.getUser(), getRoleCode(assignment.getRole()),
@@ -1079,6 +1121,17 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
         assignmentRepository.deleteById(id);
         log.info("🗑️ Deleted assignment ID '{}'", id);
+    }
+
+    @Override
+    public void deactivateProviderStaffAssignments(Collection<UUID> ids) {
+        List<UserRoleHospitalAssignment> retired = findAllChangeable(ids, accountAccess.providerStaffScope()).stream()
+            .filter(UserRoleHospitalAssignmentServiceImpl::retire)
+            .toList();
+        if (!retired.isEmpty()) {
+            assignmentRepository.saveAll(retired);
+        }
+        log.info("🔒 Deactivated {} of {} assignment(s) (soft — history preserved).", retired.size(), ids.size());
     }
 
     @Override

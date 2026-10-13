@@ -50,7 +50,50 @@ public final class CommonProviderConfinement {
         new ConfinementRule("GET", "/users/{id}",
             "the plan's own-profile row (there is no /me/profile handler): the caller's OWN account only;"
                 + " the confinement compares the {id} path variable with the caller's user id",
-            "id"));
+            "id"),
+        new ConfinementRule("GET", "/provider/profile",
+            "the caller's own facility profile (P1-T5); any staff member there, decided from live assignments"),
+        new ConfinementRule("PUT", "/provider/profile",
+            "the facility's operational contact (P1-T5); its PROVIDER_ADMIN only, live, never the verified identity"),
+        new ConfinementRule("GET", "/provider/staff",
+            "the facility's own staff (P1-T5); its PROVIDER_ADMIN only, live"),
+        new ConfinementRule("POST", "/provider/staff/{userId}/deactivate",
+            "retires a staff member's rows at the caller's OWN facility (P1-T5); never a peer admin or another facility"),
+        new ConfinementRule("POST", "/provider/staff/{userId}/activate",
+            "re-invites a staff member at the caller's OWN facility through a new code (P1-T5); never switches a row on"),
+        new ConfinementRule("GET", "/provider/settings",
+            "the shell's facility type and provider flags (P1-T9); no tenant or patient data"),
+        new ConfinementRule("GET", "/provider/audit",
+            "the facility's OWN audit trail (plan section 3.1); its PROVIDER_ADMIN only, live;"
+                + " ids and codes, never a row about a patient"));
+
+    /**
+     * The only handlers a provider user reaches WITHOUT a second factor
+     * (provider plan AC-13): signing in and out, the session bootstrap (which
+     * reports {@code mfaEnrollmentRequired}), and MFA enrolment and challenge.
+     * Every other request, whatever its handler (allowed, refused or
+     * unmapped), answers 403 {@code mfa.enrollment.required}.
+     *
+     * <p>Narrower than the {@code /auth} prefix on purpose: the rest of
+     * {@code /auth} changes the account itself (email, username, password,
+     * recovery contacts, the MFA records behind {@code PUT /auth/credentials/mfa})
+     * or opens the STOMP channel ({@code POST /auth/ws-ticket}), which a
+     * password alone must not do. A new {@code /auth} handler needs the second
+     * factor until it is added here, with its reason.
+     */
+    public static final List<ConfinementRule> SECOND_FACTOR_EXEMPT_RULES = List.of(
+        new ConfinementRule("POST", "/auth/login", "signing in, which is how the second factor is presented"),
+        new ConfinementRule("POST", "/auth/logout", "signing out"),
+        new ConfinementRule("POST", "/auth/token/refresh",
+            "the rotated tokens carry exactly the factor the refresh token had, never more; "
+                + "without a current one the refresh is refused (401) and the user signs in again"),
+        new ConfinementRule("GET", "/auth/session/bootstrap", "reports mfaEnrollmentRequired to the portal"),
+        new ConfinementRule("GET", "/auth/csrf-token", "the portal's CSRF bootstrap for the MFA forms"),
+        new ConfinementRule("GET", "/auth/mfa/status", "whether the account has an authenticator yet"),
+        new ConfinementRule("POST", "/auth/mfa/enroll",
+            "MFA enrolment; replacing a verified authenticator is ruled for every user by the enrolment itself (#853)"),
+        new ConfinementRule("POST", "/auth/mfa/verify-enrollment", "confirms the new authenticator"),
+        new ConfinementRule("POST", "/auth/mfa/verify", "the TOTP challenge, which mints the tokens carrying the factor"));
 
     /**
      * Paths served outside Spring MVC's request mappings, matched on the path

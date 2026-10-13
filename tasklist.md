@@ -2240,6 +2240,11 @@ split out of #781; #785 the unguarded `/patients-v2` surface removed and #786
 CDS Hooks held to clinicians and a readable chart, both from #783's
 out-of-scope list; #787 the imaging-order writes held to the acting hospital,
 from #778's D13. Each source bullet below says what it left.
+- **~~TOTP codes have no replay protection within the ±30 s window.~~ Done (#853,
+  round 4, V183 `last_totp_step`).** A code is accepted once, by a conditional
+  update that claims its time-step, at login and at every step-up. One deliberate
+  exception: the code that confirms an enrolment is not claimed, so the sign-in
+  the portal sends the user to next accepts it once.
 - **~~Patient-admitting reads by patient id with no ownership check.~~
   Closed by #783** (2026-09-27): on the 13 reads its sweep found, a
   patient-only caller reads only their own rows and another patient's id
@@ -4522,11 +4527,31 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   organizations only (the existing page size). (c) Department platform links
   have no UI and no enable/disable endpoint, only create and delete.
 
-- **Angular 22.2 deprecates `@angular/animations` and
-  `@angular/platform-browser-dynamic` (2026-10-04).** Dependabot's group bump
-  (#801) skipped both, so they were brought to 22.2.0 by hand to keep `npm ci`
-  working; replacing them (`animate.enter` / `animate.leave`, and
-  `@angular/platform-browser`) is separate work.
+- **~~Angular 22.2 deprecates `@angular/animations` and
+  `@angular/platform-browser-dynamic` (2026-10-04).~~ Done (#854,
+  2026-10-10): both removed.** Dependabot's group bump skipped both, twice:
+  on #801 they were brought to 22.2.0 by hand, and on #846 they stayed at
+  22.2.0 while `@angular/core` went to 22.2.1, so `npm ci` failed with
+  ERESOLVE. Nothing referenced either one (no import in `src/`, nothing in
+  `angular.json` or the tsconfigs; `platform-browser`'s peer on animations
+  is optional), so the replacement turned out to be a removal.
+
+- **No check that the pinned Angular framework packages agree (2026-10-10).**
+  Twice (#801, #846) a Dependabot group PR left one framework `@angular/*`
+  a patch behind `@angular/core`, and it only surfaced as an ERESOLVE in
+  `npm ci`. A small script in the portal gate that fails when the
+  exact-pinned framework entries in `package.json` differ would flag it on
+  the Dependabot PR itself (the CLI line - build, cli, ssr - is a caret
+  range on its own version, see `.github/dependabot.yml`).
+
+- **The portal overrides Vite to 7.3.5 under an Angular 22 builder that
+  wants Vite 8 (2026-10-11).** `overrides.vite` was set to 7.3.5 by
+  f4f70b844 (a security pin, Angular 20 era) and never revisited; on
+  develop `@angular/build` 22.2.x pins vite 8.x, yet the tree holds one
+  vite at 7.3.5. `ng build` and Karma barely touch Vite, so CI stays green;
+  `ng serve` and HMR run the builder on the wrong major (a local `ng serve`
+  failure was seen in the #855 worktree, unconfirmed as this cause). Drop
+  the override or move it to a patched 8.x, then run `npm start`.
 
 - **Push notifications have app code and no backend (2026-10-04).** #791
   shipped dormant push registration on both apps (FCM initialised only when
@@ -4777,9 +4802,242 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 - **External providers: `RecordAccessDenialReason.PROVIDER_FACILITY` says it is evaluated
   first**, but an inactive pharmacy/lab answers `HOSPITAL_UNKNOWN`; fix the doc or the
   order (from #835's round-13 review). Open.
+- **External providers: the provider admin profile has no opening hours and no
+  accepting-orders switch** (plan §3.1 lists both). They need columns on
+  `hospital.hospitals`, so a migration, and P1 takes none: slice 3 (P1-T5)
+  changes the operational phone, email and website only. Deferred to P2-PH,
+  in its V181 (user decision on #840). Open.
+- **External providers: `/provider/**` still tells an authenticated hospital user
+  that the path exists through MVC's own answers** (a wrong method 405 with its
+  `Allow` header, a wrong media type 415, a malformed JSON body 400), which come
+  before any handler. The handlers answer everything else exactly as an unmapped
+  path (slice 3). Closing it needs the confinement filter's treatment for every
+  caller on that prefix. Low value: the paths are public in the portal. Open.
+- **External providers: AC-15's disclosure accounting is not built yet.** No
+  provider read surfaces patient data in P1, so slice 3 adds no helper: P2-PH
+  and P2-LAB add the `RECORD_SHARE` accounting (acting = the provider, source =
+  the ordering hospital, a description of its own) with their first real
+  caller, and its per-day dedupe keyed on the offer or the order (a key without
+  it under-reports, see `CrossHospitalReachRecorder.recordBatchedReach`). Open.
+- **External providers: the provider admin pages read the caller's assignments
+  several times per request, by their own rule** (`ProviderSeatResolver`, then
+  `UserAccountAccess.providerAdministeredFacilities` and `providerStaffScope`,
+  then the member's rows twice), instead of reusing the request's
+  `HospitalContext` (`staffHospitalIds`, `hospitalFacilityTypes`), so the seat
+  can also drift from the confinement's view of the same caller. Derive the seat
+  from the context and carry one caller read through the request (found in
+  #840's rounds 2 and 3, again in round 4). Open.
+- **External providers: the provider profile runs two verification queries**
+  (latest, then latest VERIFIED) where one does: a VERIFIED row, when there is
+  one, is the latest (V180's partial unique index) (found in #840's round-3
+  review, again in round 4: `toProfile`). Open.
+- **External providers: `PROVIDER_DIRECTORY_AUTHORITIES` holds no laboratory
+  role**, so lab staff who send work to an external laboratory cannot read the
+  provider directory. Decide with P2-LAB's lab routing (found in #840's round-3
+  review). Open.
+- **External providers: the provider admin pages need ROLE_PROVIDER_ADMIN in the
+  token** as well as the live assignment (the assignment service's scope reads
+  both), so on Keycloak they answer as unmapped until P1-T11 adds the realm role.
+  Same as `POST /users/admin-register` today. Open until P1-T11.
+- **External providers: the facility audit trail scopes through a live assignment
+  join**, so rows whose assignment was hard-deleted vanish from it; it needs a
+  `hospital_id` snapshot on `audit_event_logs` (a migration: V183 is #853's MFA
+  hotfix, V184 #852's admin-disable marker, the Sage export plan takes V185, so
+  take the next free number when this is scheduled) (found in #852's round-1
+  review). Open.
+- **Provider audit page: its 400 answers are English text.** A bad `page`/`size` on
+  `GET /provider/audit` answers "The page size must be at least 1." and similar as
+  literal English (IllegalArgumentException), not message-bundle keys: the
+  backend-composed-text layer of French completeness (found in #852's round-9
+  review). Open.
+- **Provider pages: fold leave/retry/stale-answer/404-invalidate into followFacility.**
+  The four provider pages (home, profile, staff, audit) each repeat the same
+  clear-on-leave, retry, drop-a-stale-answer and invalidate-on-404 code around
+  `followFacility` (found in #852's round-4 review). Open.
+- **~~External providers: an account has no "disabled by an administrator" flag~~ Done
+  (#852 round 6, V184 `security.users.deactivated_by_admin_at`).** An administrator's
+  disable (a real active -> inactive change, or a soft delete) is recorded; while it is
+  set neither a provider re-invite, an invitation code nor an activation link switches
+  the account back on. Limit, on purpose: no backfill, because a disable made before
+  V184 cannot be told from a revoked invitation (both clear the code). Before the prod
+  sync, list inactive provider-staff accounts that never signed in and check none was
+  disabled by an administrator.
+- **Provider staff list: one `userRoles` load per member.** `toMember`'s `manageable()`
+  check walks each member's global roles, which the batch staff queries do not fetch:
+  N+1 on every staff-page load. Fetch `user.userRoles.role` in the batch, or pass the
+  resolved roles in (found in #852's round-8 review). Open.
+- **The "disabled by an administrator" rule lives in its callers, not on `User`.**
+  V184's marker is set or read by hand in three writers (user update, soft delete,
+  restore) and four readers (two verify-email paths, assignment confirmation, the
+  provider re-invite). Any other path that calls `setActive` (an import, a Keycloak
+  sync) skips it. Move it onto the entity (`disableByAdmin()`, `enableByAdmin()`,
+  `activateFromInvitation()`) and make `setActive` private to it (found in #852's
+  round-7 review). Open.
+- **Provider audit trail query scans platform-wide `USER_ROLE_ASSIGNMENT` rows.** The
+  facility trail filters every role-assignment row of the platform through correlated
+  seat subqueries, twice per page (content and count). Anchor it on the facility's
+  assignments (`idx_audit_assignment`) UNION the target-assignment branch, and return a
+  `Slice` for "has more" instead of a counted `Page` (found in #852's round-6 review). Open.
+- **The appointment calendar keeps the hospital it opened with.** The hospital id is
+  read once in `ngOnInit` and captured by the events source, so a global-scope user who
+  switches the scope chip while on `/appointments/calendar` keeps seeing (and fetching)
+  the first hospital under the new chip. Pre-existing; read the scope at fetch time, as
+  the other scope-aware pages do (found in #855's final review). Open.
+- **The patient apps and the refresh 409 (#853): fix before their next release.** A
+  refresh token is now spent atomically: of concurrent refreshes with one token, one
+  wins and the rest get 409 "superseded". The portal retries (the shared cookie has
+  rotated); the apps do not. iOS fires concurrent refreshes and surfaces the 409 as a
+  request error; Android refreshes under a mutex but clears the tokens (signs out) on
+  any non-2xx, so a 409 would sign the patient out. Both: single-flight the refresh,
+  and on 409 retry the original request with the token the winner stored. Both apps
+  are with testers only today (found in #853's round-8 review). Open.
+- **One refresh parses the same JWT 6-7 times.** `isRefreshToken`, `getIssuedAt`,
+  `getJtiFromToken`, `getUsernameFromJWT`, `getExpiration` each verify the signature
+  again; the MFA verify does the same. Parse once and read the claims (found in #853's
+  round-8 review). Open.
+- **Per-user MFA lockouts can be used to lock the real user out (#853, accepted).** The
+  login code budget and the step-up budget are per user (5 wrong codes, 15 minutes), so
+  someone holding only the password can lock the user's MFA sign-in, and someone holding
+  a stolen session can lock their step-ups (the emergency controls included). That is
+  the price of brute-force resistance. Mitigations to weigh: key the budget per user AND
+  source, a super-admin unlock, a backup code bypassing the lock (found in #853's
+  round-9 review). Open.
+- **MFA login: a code read before an authenticator swap can still be claimed after it.**
+  `verifyMfa` reads the current secret, then claims the step by (user, method, step); a
+  replacement confirmed in between resets the step, so an old-authenticator code can
+  sign in once in that window. Narrow (password + an old code + a concurrent confirm);
+  close it by claiming against the secret version (found in #853's round-9 review). Open.
+- **Concurrent first MFA enrolments: the loser gets a generic error.** V183's unique
+  index refuses the second insert (no corruption any more); answer it as 409 "already
+  started" instead (found in #853's round-9 review). Open.
+- **MFA: BCrypt work inside a transaction.** `enrollTotp` holds the user's MFA row lock
+  while it hashes 10 backup codes and renders the QR (about a second, blocking that user's
+  sign-in claim), and a backup-code check BCrypt-scans up to 10 hashes inside a
+  transaction (a pooled connection held for the scan). Hash and render before locking;
+  load the hashes, then match outside the transaction (found in #853's round-10
+  review). Open.
+- **The portal's 409 refresh retries draw on the per-IP refresh rate limit.** Up to 4
+  retries per losing tab, against 30 refreshes per minute per IP: staff behind one NAT
+  can exhaust it, and a 429 there ends in sign-out. Exempt a superseded retry, or key
+  the refresh bucket per user (found in #853's round-10 review). Open.
+- **Legacy refresh tokens are recognised by claim shape with no end date.** Bound
+  `TokenUse.isLegacyRefreshShape` by an `iat` before the #853 deploy, or remove it one
+  refresh lifetime after, so a future minimal token type can never pass as a refresh
+  token (found in #853's round-10 review). Open.
+- **MFA step-up holds a second pooled connection.** `requireStepUp` runs in its own
+  transaction (REQUIRES_NEW, so a caller's long transaction never locks the actor's MFA
+  row), but its callers (lifecycle, emergency controls, the super-admin MFA endpoint)
+  already hold a connection and often a row lock: each concurrent request needs two, three
+  on a refused code (the audit). On a small Hikari pool, enough concurrent step-ups block
+  until the connection timeout. Check the prod pool size against the concurrency of these
+  super-admin endpoints, or run the step-up before the caller opens its transaction
+  (found in #853's round-7 review). Open.
+- **MFA step-up: the non-strict bypass audit belongs inside `MfaService.requireStepUp`.**
+  Its five callers (emergency controls, hospital and organization lifecycle, support
+  impersonation, the super-admin MFA endpoint) each carry their own copy of the
+  "audit the bypass as SECURITY_ALERT_TRIGGERED" block, with slightly different fields;
+  a new caller that forgets it lets an unenrolled actor through with no forensic row.
+  Move it next to the refusal audit and return the outcome (found in #853's round-5
+  review). Open.
+- **External providers: the staff list's `providerAdmin` flag counts only PROVIDER_ADMIN rows at the facility**, while deactivate/activate refuse a member holding any admin role anywhere, so the portal can offer Deactivate/Activate on a member the action then answers 404; derive the flag from the same rule as the actions (found in #840's round-4 review). Open.
+- **External providers: `ProviderAdminService.updateProfile` returns the email as sent**, while storage lower-cases it at flush; return the stored value (found in #840's round-4 review). Open.
+- **External providers: `provider.type.invalid` and the provider-type set are declared three times** (`ProviderDirectoryServiceImpl`, `HospitalServiceImpl`, `ProviderOnboardingServiceImpl`); one constant each (found in #840's round-4 review). Open.
+- **External providers: `ProviderSeatResolver` reads `HospitalContextHolder` directly** instead of `ActingScopeResolver.ensureContext()`, so a request both context filters skipped sees no seat where every other reader computes the context (found in #840's round-4 review). Open.
+- **External providers: `UserAccountAccess.ADMIN_ROLES` was made public with no production caller outside the class**; only `ProviderRegistrarTest`, in the same package, reads it, so package-private does (found in #840's round-4 review). Open.
+- **External providers: the portal does not act on `mfaEnrollmentRequired` yet**
+  (D5 slice 4 added it to `/auth/session/bootstrap` and the 403
+  `mfa.enrollment.required`). P1-T13's shell must send a legacy user to MFA
+  enrolment or the challenge and a Keycloak user back through login with
+  `prompt=login` (or `max_age=0`): a silent SSO re-login answers from the
+  Keycloak cookie with the same `amr` and loops (and where OTP is first
+  configured, `amr` holds `pwd` only until the next login; a user with no OTP
+  goes through `kc_action=CONFIGURE_TOTP` first). Before the first provider is
+  verified on prod. Open.
+- **External providers: `ProviderMfaGate` re-parses the legacy bearer on every
+  confined request** (`JwtTokenProvider.secondFactorAt`, a signature check)
+  although `JwtAuthenticationFilter` already parsed it; carry the proof from
+  the filter's parse (found in #851's round-1 review). Open.
+- **External providers: `/auth/login` reads the caller's assignments once more
+  for the provider challenge** (`ProviderMfaGate.isProviderUser`) after the
+  authentication already loaded them; reuse that read (found in #851's round-1
+  review). Open.
+- **Auth: the MFA challenge token authenticates as its user, and a password
+  alone can replace a hospital user's authenticator.** `JwtAuthenticationFilter`
+  does not read the `purpose` claim, so the 5-minute `mfaToken` `/auth/login`
+  returns before the TOTP step is a role-less, password-only session on every
+  endpoint that asks only `authenticated()` (the legacy MFA enrolment relies on
+  it). With it, `POST /auth/mfa/enroll` resets a verified authenticator and
+  `PUT /auth/credentials/mfa` rewrites or deletes the MFA records, so whoever
+  holds the password can enrol their own device and pass the challenge. D5
+  slice 4 (#851) holds provider users to sign-in and enrolment without the
+  factor; the hotfix #853 (`fix/mfa-challenge-token-scope`) closes the root
+  for every user: the challenge token limited to the MFA step, and replacing
+  a verified authenticator needing a full session and a step-up code (found
+  while building D5 slice 4). Closed: #853 merged 2026-10-11.
+- **Provider MFA on the Keycloak path: two gaps to close before the Keycloak cutover (#851).**
+  (a) The realm forces OTP only for `ROLE_PROVIDER_ADMIN`, but the backend gate refuses
+  every confined provider user without `otp` in `amr`: a pharmacist or lab user created
+  on Keycloak without the CONFIGURE_TOTP required action is locked out. Require OTP for
+  every provider role in the realm flow. (b) On that path the gate accepts any `otp` in
+  `amr` with no age check, so the 48 h rule rests on hand-applied realm settings; check
+  `auth_time` against `app.mfa.second-factor-max-age-seconds` in the gate (found in #851's
+  review). (c) A provider user signed in with a password only (the login where OTP is
+  first configured) gets 403 `mfa.enrollment.required` on the shell's start-up reads
+  (`/feature-flags`, `/me/assignments`, `/me/dashboard-config`) before the portal reads
+  the bootstrap flag; exempt them or have the portal read the bootstrap first. (d) The
+  MFA-enrolment exemptions apply to Keycloak sessions too, so a password-only Keycloak
+  provider following the 403 ("set it up first") enrols a legacy TOTP that never reaches
+  its `amr`: a dead end with orphan rows. Exempt enrolment on the legacy path only, or
+  word the Keycloak refusal as "sign in again with your code". Open. Not
+  live: prod runs the legacy path, where a provider user never holds a password-only
+  session.
+- **Provider MFA gate plumbing.** `ProviderMfaGate.refuse()` copies
+  `ProviderConfinementPolicy.refuse()` (resolver lookup, fallback sendError), and
+  `MfaEnrollmentRequiredException` re-creates `ClientSafeAccessDeniedException`; and for an
+  exempt path the confinement filter resolves the handler twice. Share one helper and
+  check the exempt rules on the pattern `allows()` already resolved (found in #851's
+  review). Also from #851's final review: "is this a provider user" is computed three
+  times (`ProviderMfaGate.isProviderUser`, `AuthBootstrapServiceImpl`'s `providerUser`
+  flag, and the confinement filter's context), so the login challenge and the bootstrap
+  flags can drift if the rule changes; and every refresh without a second factor runs a
+  second assignment query (`isProviderUser`) after `findByUser` already loaded the rows.
+  One rule, computed once per request from the rows in hand. Also: the sign-in exemptions
+  for the MFA enrolment endpoints are listed twice (`SECOND_FACTOR_EXEMPT_RULES` and
+  `MfaChallengeScope.ENROLMENT_PATHS`) with no test tying them; and an open `/ws-chat`
+  STOMP session is never re-checked once the second factor lapses (true of token expiry
+  in general, not only of MFA). Open.
+- **Support sessions: account details outside `/auth/me/**` (#851 review).** The
+  impersonation path rule covers the sign-in and recovery endpoints, but a user's own
+  phone is changed through `PUT /users/{id}` (self-edit), and that phone receives
+  username-reminder SMS. Refuse the phone (and any other contact field) in the self-edit
+  branch under impersonation. Also: a session bootstrap under a super-admin impersonation
+  that was not stepped up reports `mfaEnrollmentRequired` for a provider target, pointing
+  the portal at an enrolment the same session is refused; it should say the factor is
+  missing because of impersonation. And `/auth/mfa/verify` returns no hospital context
+  (primaryHospitalId, hospitalIds), unlike the password-only sign-in. Likewise a patient's
+  own email and phone through `PUT /me/patient/profile` stay open to a support session.
+  Open.
+- **The role picked at login is lost at the first refresh (#851 review).** The refresh
+  rebuilds roles from every active assignment, so a multi-role user's single-role session
+  (password-only, and now through the MFA challenge too) widens after one access-token
+  lifetime. Carry the pick in the refresh token, as `amr`/`otp_at` are. Also from that
+  round: `ProviderMfaGate.refuses()` re-checks the confinement `decide()` has just checked
+  (fold into the gate plumbing bullet). Later rounds: the access-token cap at the proof's
+  end applies to every TOTP user, so a hospital MFA user's tokens shrink in the last 15
+  minutes before 48 h (a few extra refreshes, harmless; cap only provider users if it
+  matters); `/auth/mfa/verify` refuses a revoked pick before reserving an attempt, so a
+  replayed challenge writes one audit row per call (throttle or audit once per jti); and
+  one verify parses the challenge token about five times (parse once); and the pick
+  check reloads the user's details (several queries) right after the user was loaded.
+  Open.
 - **CDS acknowledgement with an unknown hospital id now answers 404** (was: saved as a
   global acknowledgement). Intended since #835; confirm no client relies on the old
   behaviour. Open.
+- **Appointment form ignores the calendar's date/time query params (pre-fill
+  never implemented).** A click on an empty calendar slot opens
+  `/appointments/new?date=…&time=…` (date only from an all-day month cell),
+  but `AppointmentFormComponent` reads neither param, so the form opens blank
+  (found in #855's review; the form side was kept out of that PR). Open.
 
 ## Open clinical questions — kept open on purpose, not forgotten
 

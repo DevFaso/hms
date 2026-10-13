@@ -20,6 +20,26 @@ public enum FacilityType {
         return this != HOSPITAL;
     }
 
+    /**
+     * A request parameter as a facility type, case-insensitively and trimmed
+     * ({@code pharmacy} is PHARMACY): the one parser the hospital list and
+     * the provider directory share. {@code null} for a blank parameter.
+     *
+     * @throws IllegalArgumentException for a value that names no type
+     */
+    public static FacilityType fromParameter(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String wanted = raw.trim();
+        for (FacilityType type : values()) {
+            if (type.name().equalsIgnoreCase(wanted)) {
+                return type;
+            }
+        }
+        throw new IllegalArgumentException("Unknown facility type.");
+    }
+
     /** A {@code null} type is a hospital: rows built before V180 and plain mocks carry none. */
     public static FacilityType orHospital(FacilityType type) {
         return type == null ? HOSPITAL : type;

@@ -52,9 +52,13 @@ public class HospitalController {
             @RequestParam(name = "unassignedOnly", required = false) Boolean unassignedOnly,
             @RequestParam(name = "city", required = false) String city,
             @RequestParam(name = "state", required = false) String state,
+            @RequestParam(name = "facilityType", required = false) String facilityType,
             Locale locale) {
-        return ResponseEntity.ok(
-                hospitalService.getAllHospitals(organizationId, unassignedOnly, city, state, locale));
+        // facilityType: HOSPITAL (the default) for everyone; PHARMACY or
+        // LABORATORY is the super-admin's explicit filter (provider plan AC-11).
+        // Passed raw: the service decides access before it parses the value.
+        return ResponseEntity.ok(hospitalService.getAllHospitals(organizationId, unassignedOnly, city, state,
+                facilityType, locale));
     }
 
     @GetMapping("/organization/{organizationId}")

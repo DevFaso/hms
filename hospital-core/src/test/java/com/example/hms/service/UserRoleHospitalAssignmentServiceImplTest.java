@@ -14,6 +14,8 @@ import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
+import com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO;
+import com.example.hms.service.support.UserAccountAccess;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +26,8 @@ import org.springframework.context.MessageSource;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,8 +36,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -189,6 +195,25 @@ class UserRoleHospitalAssignmentServiceImplTest {
         assertThat(assignment.getActive()).isTrue();
         assertThat(assignee.isActive()).isTrue();
         verify(userRepository).save(assignee);
+    }
+
+    @Test
+    void verifyAssignmentByCode_neverSwitchesOnAnAccountAnAdministratorDisabled() {
+        // V184: a super-admin disabled the invitee before their first sign-in.
+        // The outstanding code is refused outright: nothing confirmed, the
+        // assignment stays off, no credentials handed out.
+        assignee.setActive(false);
+        assignee.setDeactivatedByAdminAt(java.time.LocalDateTime.now());
+        when(assignmentRepository.findByAssignmentCode(VALID_CODE))
+            .thenReturn(Optional.of(assignment));
+
+        assertThatThrownBy(() -> service.verifyAssignmentByCode(VALID_CODE, VALID_PIN))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+
+        assertThat(assignment.getConfirmationVerifiedAt()).isNull();
+        assertThat(assignee.isActive()).isFalse();
+        verify(assignmentRepository, never()).save(any());
+        verify(userRepository, never()).save(assignee);
     }
 
     @Test
@@ -521,6 +546,83 @@ class UserRoleHospitalAssignmentServiceImplTest {
 
         assertThat(assignment.getConfirmationCode()).isNull();
         verify(assignmentRepository).save(assignment);
+    }
+
+    /** A provider admin of {@code hospital}: the general scope covers nothing, the provider staff scope the facility. */
+    private void signedInAsProviderAdminHere() {
+        // Lenient: the provider staff paths must never read the general scope.
+        lenient().when(accountAccess.assignmentScope())
+            .thenReturn(new UserAccountAccess.AssignmentScope(false, Set.of()));
+        lenient().when(accountAccess.providerStaffScope())
+            .thenReturn(new UserAccountAccess.AssignmentScope(false, Set.of(hospital.getId())));
+    }
+
+    @Test
+    void providerStaffDeactivationChecksEveryRowBeforeChangingAny() {
+        signedInAsProviderAdminHere();
+        UUID id = assignment.getId();
+        UUID outOfScope = UUID.randomUUID();
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+        when(assignmentRepository.findById(outOfScope)).thenReturn(Optional.empty());
+
+        List<UUID> oneOutOfScope = List.of(id, outOfScope);
+        assertThatThrownBy(() -> service.deactivateProviderStaffAssignments(oneOutOfScope))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThat(assignment.getActive()).isTrue();
+        verify(assignmentRepository, never()).saveAll(any());
+
+        service.deactivateProviderStaffAssignments(List.of(id));
+        assertThat(assignment.getActive()).isFalse();
+        assertThat(assignment.getConfirmationCode()).isNull();
+        verify(assignmentRepository).saveAll(List.of(assignment));
+        verify(accountAccess, never()).assignmentScope();
+    }
+
+    @Test
+    void providerStaffCodeReissueReadsTheProviderScopeOnceAndIssuesANewCode() {
+        signedInAsProviderAdminHere();
+        UUID id = assignment.getId();
+        assignment.setActive(false);
+        assignment.setConfirmationCode(null);
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+        when(assignmentRepository.save(assignment)).thenReturn(assignment);
+
+        service.regenerateProviderStaffAssignmentCodes(List.of(id, id), false);
+
+        assertThat(assignment.getConfirmationCode()).isNotBlank();
+        assertThat(assignment.getActive()).isFalse();
+        verify(accountAccess, times(1)).providerStaffScope();
+        verify(accountAccess, never()).assignmentScope();
+        verify(assignmentRepository, times(1)).save(assignment);
+    }
+
+    @Test
+    @SuppressWarnings("deprecation") // deleteAssignment is deprecated, and still reachable: it must refuse too
+    void aProviderAdminGetsNotFoundFromEveryGeneralAssignmentPathAtItsOwnFacility() {
+        signedInAsProviderAdminHere();
+        UUID id = assignment.getId();
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+
+        assertThatThrownBy(() -> service.getAssignmentById(id)).isInstanceOf(ResourceNotFoundException.class);
+        UserRoleHospitalAssignmentRequestDTO change = new UserRoleHospitalAssignmentRequestDTO();
+        assertThatThrownBy(() -> service.updateAssignment(id, change))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.deleteAssignment(id)).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.deactivateAssignment(id)).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.regenerateAssignmentCode(id, false))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.resendNotifications(id)).isInstanceOf(ResourceNotFoundException.class);
+        verify(assignmentRepository, never()).save(any());
+        verify(assignmentRepository, never()).deleteById(any());
+        verify(assignmentRepository, never()).delete(any(UserRoleHospitalAssignment.class));
+        when(assignmentRepository.findByUserId(assignee.getId())).thenReturn(List.of(assignment));
+        when(userRepository.findById(assignee.getId())).thenReturn(Optional.of(assignee));
+        service.retireAssignmentsForUserWithinCallerScope(assignee.getId());
+        assertThat(assignment.getActive()).isTrue();
+        verify(assignmentRepository, never()).saveAll(any());
+        // ...while the provider staff page's own path still reaches the row.
+        service.deactivateProviderStaffAssignments(List.of(id));
+        assertThat(assignment.getActive()).isFalse();
     }
 
     @Test

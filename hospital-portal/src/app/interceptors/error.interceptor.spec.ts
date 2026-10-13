@@ -1,6 +1,7 @@
-import { TestBed } from '@angular/core/testing';
+import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import {
   HttpClient,
+  HttpContext,
   HttpErrorResponse,
   provideHttpClient,
   withInterceptors,
@@ -8,14 +9,20 @@ import {
 } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { defer, of, throwError } from 'rxjs';
 
-import { errorInterceptor, clearReportedSilent403s } from './error.interceptor';
+import {
+  errorInterceptor,
+  clearReportedSilent403s,
+  REFRESH_SUPERSEDED_DELAY_MS,
+  REFRESH_SUPERSEDED_RETRIES,
+} from './error.interceptor';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { SessionScopeService } from '../core/session-scope.service';
 import { ImpersonationService } from '../services/impersonation.service';
 import { DowntimeService } from '../services/downtime.service';
+import { STEP_UP_REQUEST } from '../services/step-up';
 
 describe('errorInterceptor', () => {
   let http: HttpClient;
@@ -90,6 +97,67 @@ describe('errorInterceptor', () => {
     expect(body).toEqual({ ok: true });
   });
 
+  it('a refused MFA step-up (401 mfa_required, 403 with a reason) is for the dialog: no refresh, no sign-out, no 403 page', () => {
+    auth.getRefreshToken.and.returnValue('r1');
+    const context = new HttpContext().set(STEP_UP_REQUEST, true);
+
+    let unauthorized: HttpErrorResponse | undefined;
+    http.post('/super-admin/hospitals/h/suspend', {}, { context }).subscribe({
+      error: (e: HttpErrorResponse) => (unauthorized = e),
+    });
+    httpMock
+      .expectOne('/super-admin/hospitals/h/suspend')
+      .flush(
+        { message: 'mfa_required: invalid or missing X-Mfa-Token for suspend' },
+        { status: 401, statusText: 'Unauthorized' },
+      );
+
+    let forbidden: HttpErrorResponse | undefined;
+    http.post('/super-admin/hospitals/h/archive', {}, { context }).subscribe({
+      error: (e: HttpErrorResponse) => (forbidden = e),
+    });
+    httpMock
+      .expectOne('/super-admin/hospitals/h/archive')
+      .flush(
+        { reason: 'mfa.stepup.invalid-code', message: 'Wrong code' },
+        { status: 403, statusText: 'Forbidden' },
+      );
+
+    expect(unauthorized?.status).toBe(401);
+    expect(forbidden?.status).toBe(403);
+    expect(auth.refreshTokenRequest).not.toHaveBeenCalled();
+    expect(auth.logout).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it('any other 403 on a step-up request goes the normal way: the not-allowed page', () => {
+    const context = new HttpContext().set(STEP_UP_REQUEST, true);
+    let error: HttpErrorResponse | undefined;
+    http.post('/super-admin/hospitals/h/suspend', {}, { context }).subscribe({
+      error: (e: HttpErrorResponse) => (error = e),
+    });
+    httpMock
+      .expectOne('/super-admin/hospitals/h/suspend')
+      .flush({ message: 'Access denied' }, { status: 403, statusText: 'Forbidden' });
+
+    expect(error?.status).toBe(403);
+    expect(router.navigate).toHaveBeenCalledWith(['/error/403']);
+  });
+
+  it('a step-up request whose 401 is NOT about MFA (an expired session) still refreshes', () => {
+    auth.getRefreshToken.and.returnValue('r1');
+    auth.refreshTokenRequest.and.returnValue(of({ accessToken: 'new-token', refreshToken: 'r2' }));
+    const context = new HttpContext().set(STEP_UP_REQUEST, true);
+
+    http.post('/super-admin/hospitals/h/suspend', {}, { context }).subscribe();
+    httpMock
+      .expectOne('/super-admin/hospitals/h/suspend')
+      .flush({ message: 'Token expired' }, { status: 401, statusText: 'Unauthorized' });
+    httpMock.expectOne('/super-admin/hospitals/h/suspend').flush({});
+
+    expect(auth.refreshTokenRequest).toHaveBeenCalled();
+  });
+
   it('on 401 with a failing refresh, logs out and redirects to /login', () => {
     auth.getRefreshToken.and.returnValue('r1');
     auth.refreshTokenRequest.and.returnValue(throwError(() => new Error('refresh dead')));
@@ -101,6 +169,81 @@ describe('errorInterceptor', () => {
     expect(auth.logout).toHaveBeenCalled();
     expect(router.navigate).toHaveBeenCalledWith(['/login']);
     expect(error).toBeTruthy();
+  });
+
+  describe('a refresh another tab of this browser just won (409 superseded)', () => {
+    const superseded = () =>
+      new HttpErrorResponse({ status: 409, statusText: 'Conflict', url: '/auth/token/refresh' });
+
+    it('asks again with the rotated cookie and keeps this tab signed in', fakeAsync(() => {
+      auth.getRefreshToken.and.returnValue('r1');
+      let calls = 0;
+      auth.refreshTokenRequest.and.returnValue(
+        defer(() => {
+          calls++;
+          return calls === 1
+            ? throwError(superseded)
+            : of({ accessToken: 'new-token', refreshToken: 'r2' });
+        }),
+      );
+
+      let body: unknown;
+      http.get('/data').subscribe((b) => (body = b));
+      httpMock.expectOne('/data').flush(null, { status: 401, statusText: 'Unauthorized' });
+      tick(REFRESH_SUPERSEDED_DELAY_MS);
+
+      const retried = httpMock.expectOne('/data');
+      expect(retried.request.headers.get('Authorization')).toBe('Bearer new-token');
+      retried.flush({ ok: true });
+
+      expect(calls).toBe(2);
+      expect(auth.logout).not.toHaveBeenCalled();
+      expect(body).toEqual({ ok: true });
+    }));
+
+    it('gives up and signs out only after the retries are spent', fakeAsync(() => {
+      auth.getRefreshToken.and.returnValue('r1');
+      let calls = 0;
+      auth.refreshTokenRequest.and.returnValue(
+        defer(() => {
+          calls++;
+          return throwError(superseded);
+        }),
+      );
+
+      http.get('/data').subscribe({ error: () => undefined });
+      httpMock.expectOne('/data').flush(null, { status: 401, statusText: 'Unauthorized' });
+      // Every back-off step: 600 + 1200 + ... ms.
+      tick(
+        (REFRESH_SUPERSEDED_DELAY_MS *
+          REFRESH_SUPERSEDED_RETRIES *
+          (REFRESH_SUPERSEDED_RETRIES + 1)) /
+          2,
+      );
+
+      expect(calls).toBe(REFRESH_SUPERSEDED_RETRIES + 1);
+      expect(auth.logout).toHaveBeenCalled();
+    }));
+
+    it('a 401 from the refresh (a real replay) signs out at once, without retrying', fakeAsync(() => {
+      auth.getRefreshToken.and.returnValue('r1');
+      let calls = 0;
+      auth.refreshTokenRequest.and.returnValue(
+        defer(() => {
+          calls++;
+          return throwError(
+            () => new HttpErrorResponse({ status: 401, statusText: 'Unauthorized' }),
+          );
+        }),
+      );
+
+      http.get('/data').subscribe({ error: () => undefined });
+      httpMock.expectOne('/data').flush(null, { status: 401, statusText: 'Unauthorized' });
+      tick(REFRESH_SUPERSEDED_DELAY_MS);
+
+      expect(calls).toBe(1);
+      expect(auth.logout).toHaveBeenCalled();
+    }));
   });
 
   it('on 401 with no session evidence, logs out without attempting refresh', () => {
@@ -221,6 +364,22 @@ describe('errorInterceptor', () => {
       expect(router.navigate).not.toHaveBeenCalled();
       expect(error?.status).toBe(403);
     });
+  });
+
+  it('a refused MFA step-up (403 mfa.stepup.*) goes back to the page: no redirect, no refresh, no sign-out', () => {
+    let error: HttpErrorResponse | undefined;
+    http.post('/auth/mfa/enroll', {}).subscribe({ error: (e) => (error = e) });
+    httpMock
+      .expectOne('/auth/mfa/enroll')
+      .flush(
+        { code: 'mfa.stepup.invalid', message: 'not accepted' },
+        { status: 403, statusText: 'Forbidden' },
+      );
+
+    expect(router.navigate).not.toHaveBeenCalled();
+    httpMock.expectNone('/auth/token/refresh');
+    expect(error?.status).toBe(403);
+    expect((error?.error as { code: string }).code).toBe('mfa.stepup.invalid');
   });
 
   it('on non-silent 403, redirects to the error page', () => {

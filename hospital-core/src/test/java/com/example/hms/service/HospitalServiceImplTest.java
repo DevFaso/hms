@@ -15,6 +15,8 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.security.provider.ClinicalHospitals;
 import com.example.hms.utility.RoleValidator;
+import com.example.hms.exception.BusinessException;
+import com.example.hms.enums.FacilityType;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
@@ -50,6 +52,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -146,7 +149,7 @@ class HospitalServiceImplTest {
                 .thenReturn(List.of(hospital));
 
         List<HospitalResponseDTO> results = hospitalService.getAllHospitals(
-                organizationId, false, "  Ouaga  ", " Centre  ", Locale.ENGLISH);
+                organizationId, false, "  Ouaga  ", " Centre  ", null, Locale.ENGLISH);
 
         assertEquals(1, results.size());
         assertEquals("FIL-01", results.get(0).getCode());
@@ -166,11 +169,57 @@ class HospitalServiceImplTest {
     }
 
     @Test
+    @DisplayName("AC-11: a verified super-admin's facilityType=PHARMACY lists providers through the type finder")
+    void getAllHospitals_superAdminProviderFilter() {
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        Hospital pharmacy = buildHospital(UUID.randomUUID(), "Pharmacy", "PH-01");
+        when(hospitalRepository.findAllForFiltersByFacilityType(eq(FacilityType.PHARMACY), any(), any(), any(), any()))
+                .thenReturn(List.of(pharmacy));
+
+        List<HospitalResponseDTO> results = hospitalService.getAllHospitals(
+                null, null, null, null, "PHARMACY", Locale.ENGLISH);
+
+        assertEquals(1, results.size());
+        verify(hospitalRepository, never()).findAllForFilters(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("AC-11: anyone else naming a provider type is refused before any read; HOSPITAL is the clinical list")
+    void getAllHospitals_providerFilterRefusedToOthers() {
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+        when(hospitalRepository.findAllForFilters(any(), any(), any(), any())).thenReturn(List.of());
+
+        assertThrows(AccessDeniedException.class, () -> hospitalService.getAllHospitals(
+                null, null, null, null, "LABORATORY", Locale.ENGLISH));
+        hospitalService.getAllHospitals(null, null, null, null, "HOSPITAL", Locale.ENGLISH);
+
+        verify(hospitalRepository, never()).findAllForFiltersByFacilityType(any(), any(), any(), any(), any());
+        verify(hospitalRepository).findAllForFilters(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("AC-11: who first, then what: anyone else gets the same 403 for any non-HOSPITAL value, a super-admin a 400 for an unknown one")
+    void getAllHospitals_accessBeforeParsing() {
+        when(hospitalRepository.findAllForFilters(any(), any(), any(), any())).thenReturn(List.of());
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+        for (String value : List.of("PHARMACY", "laboratory", "not-a-type")) {
+            assertThrows(AccessDeniedException.class, () -> hospitalService.getAllHospitals(
+                    null, null, null, null, value, Locale.ENGLISH), value);
+        }
+        hospitalService.getAllHospitals(null, null, null, null, " hospital ", Locale.ENGLISH);
+
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        assertThrows(BusinessException.class, () -> hospitalService.getAllHospitals(
+                null, null, null, null, "not-a-type", Locale.ENGLISH));
+        verify(hospitalRepository, never()).findAllForFiltersByFacilityType(any(), any(), any(), any(), any());
+    }
+
+    @Test
     void getAllHospitals_unassignedOnlyIgnoresOrganization() {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(List.of());
 
-        hospitalService.getAllHospitals(UUID.randomUUID(), true, null, null, Locale.ENGLISH);
+        hospitalService.getAllHospitals(UUID.randomUUID(), true, null, null, null, Locale.ENGLISH);
 
         verify(hospitalRepository).findAllForFilters(isNull(), eq(Boolean.TRUE), isNull(), isNull());
     }
@@ -181,7 +230,7 @@ class HospitalServiceImplTest {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(List.of());
 
-        hospitalService.getAllHospitals(null, null, "  ", "", Locale.ENGLISH);
+        hospitalService.getAllHospitals(null, null, "  ", "", null, Locale.ENGLISH);
 
         verify(hospitalRepository).findAllForFilters(isNull(), isNull(), isNull(), isNull());
     }
@@ -199,7 +248,7 @@ class HospitalServiceImplTest {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(List.of(h1, h2));
 
-        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
+        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
 
         // No scope filtering — both hospitals returned so clinicians can pick
         // referral destinations across the network.
@@ -217,7 +266,7 @@ class HospitalServiceImplTest {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(List.of(h1, h2));
 
-        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
+        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
         assertEquals(2, result.size());
     }
 
@@ -232,7 +281,7 @@ class HospitalServiceImplTest {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(List.of(h1));
 
-        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
+        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
         assertEquals(1, result.size());
     }
 
@@ -247,7 +296,7 @@ class HospitalServiceImplTest {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(List.of(h1));
 
-        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
+        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
         // Hospital directory is unscoped — even users with empty scope see the
         // full list so they can create referrals to other hospitals.
         assertEquals(1, result.size());
@@ -1102,7 +1151,7 @@ class HospitalServiceImplTest {
                 .thenReturn(null);
 
         // null-guard in getAllHospitals returns empty list
-        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
+        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
         assertTrue(result.isEmpty());
     }
 
@@ -1343,7 +1392,7 @@ class HospitalServiceImplTest {
                 .thenReturn(List.of(h1, h2));
 
         // No scope filtering — both hospitals returned (directory is public)
-        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
+        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
         assertEquals(2, result.size());
     }
 
@@ -1362,7 +1411,7 @@ class HospitalServiceImplTest {
                 .thenReturn(hospitals);
 
         // null entries are filtered out; non-null hospitals are kept
-        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
+        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
         assertEquals(1, result.size());
     }
 

@@ -124,6 +124,9 @@ class HospitalRepositoryCallerCoverageTest {
             "the lifecycle gate must block a suspended provider as it blocks a hospital: every type, on purpose"),
         entry("LabOrderServiceImpl#findByActiveTrueAndLifecycleStateOrderByNameAsc",
             "the performing-lab picker: filtered by performsLabWork today; P2-LAB (AC-40) decides which provider labs it offers"),
+        entry("HospitalServiceImpl#findAllForFiltersByFacilityType",
+            ANY_TYPE + "the super-admin's explicit facilityType filter on the hospital list (AC-11);"
+                + " anyone else naming a provider type is refused before the read"),
         entry("HospitalServiceImpl#existsByNameIgnoreCaseAndZipCode",
             "duplicate check on hospital creation: a name already taken by any facility is taken"),
         entry("ProviderOnboardingServiceImpl#findByCodeIgnoreCase",

@@ -589,9 +589,40 @@
                 <div class="mfa-error" role="alert">{{ mfaError() }}</div>
               }
 
+              <!-- Replacing the authenticator: the step-up first -->
+              @if (mfaStep() === 'stepup') {
+                <div class="mfa-enroll-inline" data-testid="mfa-stepup">
+                  <p>{{ 'PROFILE.MFA_REPLACE_INTRO' | translate }}</p>
+                  <form (ngSubmit)="submitMfaStepUp()" class="mfa-verify-form">
+                    <label class="sr-only" for="mfaStepUpCode">{{
+                      'PROFILE.MFA_STEPUP_LABEL' | translate
+                    }}</label>
+                    <input
+                      id="mfaStepUpCode"
+                      type="text"
+                      [(ngModel)]="mfaStepUpCode"
+                      name="mfaStepUpCode"
+                      maxlength="8"
+                      [placeholder]="'PROFILE.MFA_STEPUP_PLACEHOLDER' | translate"
+                      class="totp-input"
+                      autocomplete="one-time-code"
+                    />
+                    <button class="btn-primary" type="submit" [disabled]="mfaLoading()">
+                      {{ 'PROFILE.MFA_REPLACE_CONTINUE' | translate }}
+                    </button>
+                    <button class="btn-secondary" type="button" (click)="cancelMfaReplacement()">
+                      {{ 'COMMON.CANCEL' | translate }}
+                    </button>
+                  </form>
+                </div>
+              }
+
               <!-- Inline enrollment: QR step -->
-              @if (mfaStep() === 'qr') {
+              @else if (mfaStep() === 'qr') {
                 <div class="mfa-enroll-inline">
+                  @if (mfaReplacing()) {
+                    <p class="hint">{{ 'PROFILE.MFA_REPLACE_PENDING' | translate }}</p>
+                  }
                   <p>{{ 'PROFILE.MFA_SCAN_QR' | translate }}</p>
                   <div class="qr-container">
                     <img
@@ -683,6 +714,28 @@
                     </div>
                   }
                 </div>
+                @if (hasActiveTotp()) {
+                  <button
+                    class="btn-secondary mfa-replace-btn"
+                    data-testid="mfa-replace"
+                    (click)="startMfaReplacement()"
+                    [disabled]="mfaLoading()"
+                  >
+                    <span class="material-symbols-outlined">sync_lock</span>
+                    {{ 'PROFILE.MFA_REPLACE' | translate }}
+                  </button>
+                } @else {
+                  <!-- No active authenticator (none confirmed, or disabled): set one up. -->
+                  <button
+                    class="btn-primary mfa-setup-btn"
+                    data-testid="mfa-setup"
+                    (click)="startMfaEnrollment()"
+                    [disabled]="mfaLoading()"
+                  >
+                    <span class="material-symbols-outlined">security</span>
+                    {{ 'PROFILE.MFA_SET_UP' | translate }}
+                  </button>
+                }
               } @else {
                 <div class="empty-security-state">
                   <span class="material-symbols-outlined">phonelink_lock</span>
