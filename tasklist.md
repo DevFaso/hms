@@ -5345,3 +5345,15 @@ ships*, not for building — and check the shipped surface before trusting a
   the registration rule is an authorization change, not the display fix — but
   it is a split a reader will trip over, and it should be resolved one way or
   the other with a decision behind it.
+- **Generated credentials for an e-mail-less patient travel in the HTTP
+  response when no real SMS transport is configured** (fix/registration-defects,
+  2026-10-16). `POST /users/admin-register` now generates the username and a
+  one-time password; with no e-mail and `SmsService.deliversRealSms()` false the
+  registration response carries `temporaryUsername`/`temporaryPassword` once
+  and the staff UI shows them in a one-time dialog. Remove that fallback (or
+  replace it with a set-password link the desk prints) once IKODDI SMS is live
+  on every environment. Also: phones are now stored E.164 (`+226…`) on new
+  registrations, but older rows keep their typed form, so the duplicate-phone
+  check does not see an old `70202020` as the new `+22670202020` — backfill or
+  compare on `PhoneNumbers.isSameSubscriber`. The admin welcome mail still shows
+  "—" for the password when an API caller supplied one (never the typed value).

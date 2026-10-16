@@ -40,10 +40,17 @@ export interface UserDetail {
   updatedAt: string;
   /** Present on admin-register responses: did the activation message go anywhere? */
   activationDelivery?: NotificationDeliveryStatus[];
+  /**
+   * Server-generated one-time credentials, present on an admin-register
+   * response ONLY when no e-mail or SMS could carry them. Show once, never store.
+   */
+  temporaryUsername?: string;
+  temporaryPassword?: string;
 }
 
 export interface AdminRegisterRequest {
-  username: string;
+  /** Optional on create: the server generates a temporary one (forceUsernameChange). */
+  username?: string;
   /** Optional for PATIENT registrations (phone-first); required for staff roles. */
   email?: string;
   password?: string;

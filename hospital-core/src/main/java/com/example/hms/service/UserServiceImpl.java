@@ -108,6 +108,8 @@ public class UserServiceImpl implements UserService {
     private final UserAccountAccess accountAccess;
     /** Role/facility compatibility (provider plan §3.2), checked before anything is saved. */
     private final com.example.hms.security.provider.FacilityAssignmentGuard facilityAssignmentGuard;
+    /** Tells whether generated credentials can reach an e-mail-less patient by SMS. */
+    private final SmsService smsService;
 
     @Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -271,9 +273,16 @@ public class UserServiceImpl implements UserService {
                 request.getUsername(), request.getHospitalId(), request.getRoleNames());
 
         // ---- 0) Normalize/validate inputs ----
-        final String email = request.getEmail() == null ? null : request.getEmail().toLowerCase(Locale.ROOT);
-        final String phone = request.getPhoneNumber();
-        final String username = request.getUsername();
+        final String email = request.getEmail() == null || request.getEmail().isBlank()
+                ? null : request.getEmail().trim().toLowerCase(Locale.ROOT);
+        request.setEmail(email);
+        final String phone = normalizeRegistrationPhone(request);
+        request.setPhoneNumber(phone);
+        // Username is optional: blank means "generate one" (createNewUser). A
+        // blank username must not take part in the identity lookups below.
+        final String username = request.getUsername() == null || request.getUsername().isBlank()
+                ? null : request.getUsername().trim();
+        request.setUsername(username);
 
         // Determine roles early so patient-specific logic can relax duplicate checks.
         final Set<String> roleNames = Optional.ofNullable(request.getRoleNames())
@@ -353,23 +362,24 @@ public class UserServiceImpl implements UserService {
             default -> false;
         });
 
-        // Clinical roles require a medical licence; admin/management roles do not.
-        final boolean requiresLicense = roles.stream().anyMatch(role -> switch (role.getCode()) {
-            case ROLE_DOCTOR, ROLE_NURSE, ROLE_LAB_SCIENTIST, ROLE_PHARMACIST -> true;
-            default -> false;
-        });
-
         // ---- 3) Resolve/Create User ----
-        final String lic = resolveLicenseNumber(request, requiresLicense);
+        // The licence number is optional for every role: clinicians are
+        // credentialed on diplomas, so it is recorded when known, never required.
+        final String lic = resolveLicenseNumber(request);
 
         final Optional<User> existingByIdentity = findExistingByIdentity(username, email, phone);
-        final Optional<User> existingByLicense = requiresLicense
+        final Optional<User> existingByLicense = lic != null
                 ? staffRepository.findUserIdByLicense(lic).flatMap(userRepository::findById)
                 : Optional.empty();
 
         final boolean newUserCreated = existingByIdentity.isEmpty() && existingByLicense.isEmpty();
+        final boolean passwordSupplied = request.getPassword() != null && !request.getPassword().isBlank();
         final User user = existingByIdentity.or(() -> existingByLicense)
                 .orElseGet(() -> createNewUser(request, username, email, phone, roles));
+        // Only a password the SERVER generated is ever delivered to the user
+        // (mail, SMS or the one-time response). An admin-typed password is
+        // never sent anywhere: the admin already knows it.
+        final String generatedPassword = newUserCreated && !passwordSupplied ? request.getPassword() : null;
 
         // Re-registration after a frontend compensation delete: the previous
         // attempt soft-deleted the user (FE rolls back when /api/patients
@@ -388,13 +398,13 @@ public class UserServiceImpl implements UserService {
         // ---- 4a) Forward temp password to the PATIENT assignment ----
         // The assignment notification email (AFTER_COMMIT) will expose these
         // credentials once, then verifyAssignmentByCode() clears them.
-        if (newUserCreated && isPatient && request.getPassword() != null) {
+        if (isPatient && generatedPassword != null) {
             ensuredAssignments.stream()
                     .filter(a -> a.getRole() != null
                             && ROLE_PATIENT.equalsIgnoreCase(a.getRole().getCode()))
                     .findFirst()
                     .ifPresent(patientAssignment -> {
-                        patientAssignment.setTempPlainPassword(request.getPassword());
+                        patientAssignment.setTempPlainPassword(generatedPassword);
                         assignmentRepository.save(patientAssignment);
                     });
         }
@@ -408,6 +418,15 @@ public class UserServiceImpl implements UserService {
 
         // ---- 6) Reload + map ----
         final UserResponseDTO result = reloadAndMap(user.getId());
+
+        // ---- 6a) Generated credentials nobody can deliver ----
+        // No e-mail on file and no real SMS transport: the staff UI shows them
+        // once, from this response only. Never logged, never persisted in clear.
+        if (generatedPassword != null && (email == null || email.isBlank())
+                && (smsService == null || !smsService.deliversRealSms())) {
+            result.setTemporaryUsername(user.getUsername());
+            result.setTemporaryPassword(generatedPassword);
+        }
 
         // ---- 7) Welcome email for brand-new non-patient users (fire-and-forget) ----
         if (newUserCreated && !isPatient) {
@@ -445,7 +464,7 @@ public class UserServiceImpl implements UserService {
                     user.getEmail(),
                     () -> emailService.sendAdminWelcomeEmail(
                         user.getEmail(), displayName,
-                        user.getUsername(), request.getPassword(),
+                        user.getUsername(), generatedPassword,
                         roleName, hospitalName, activationUrl),
                     emailService::deliversRealEmail);
                 if (sent) {
@@ -571,7 +590,8 @@ public class UserServiceImpl implements UserService {
         staffRepository.findByUserIdAndHospitalId(user.getId(), hospital.getId())
             .map(Staff::getLicenseNumber)
             .ifPresent(existingLic -> {
-                if (!existingLic.equalsIgnoreCase(lic)) {
+                // Only two KNOWN numbers can disagree: a licence is optional.
+                if (lic != null && !existingLic.isBlank() && !existingLic.equalsIgnoreCase(lic)) {
                     throw new ConflictException(
                         "License number mismatch for this user in this hospital; expected " + existingLic);
                 }
@@ -591,7 +611,10 @@ public class UserServiceImpl implements UserService {
             });
 
         staff.setAssignment(staffAssignment);
-        staff.setLicenseNumber(lic);
+        if (lic != null) {
+            // Never erase a known licence because this registration omitted it.
+            staff.setLicenseNumber(lic);
+        }
         staff.setEmploymentType(
             request.getEmploymentType() != null ? request.getEmploymentType() : EmploymentType.FULL_TIME);
         staff.setJobTitle(coerceJobTitle(request.getJobTitle(), roles));
@@ -619,19 +642,76 @@ public class UserServiceImpl implements UserService {
             .collect(java.util.stream.Collectors.joining(" "));
     }
 
-    private String resolveLicenseNumber(AdminSignupRequest request, boolean requiresStaff) {
-        String lic = requiresStaff
-                ? Optional.ofNullable(request.getLicenseNumber()).map(String::trim).orElse("")
-                : "";
-        if (requiresStaff && lic.isEmpty()) {
-            throw new IllegalArgumentException("licenseNumber is required for medical/admin roles.");
+    /** The trimmed licence number, or null when none was given. Never required. */
+    private static String resolveLicenseNumber(AdminSignupRequest request) {
+        return Optional.ofNullable(request.getLicenseNumber())
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .orElse(null);
+    }
+
+    /**
+     * The registration phone in E.164, a local number taking the calling code
+     * of the target hospital's country (Burkina Faso when unknown). A value
+     * that cannot be a phone number is refused with a translated message.
+     */
+    private String normalizeRegistrationPhone(AdminSignupRequest request) {
+        String raw = request.getPhoneNumber();
+        if (raw == null || raw.isBlank()) {
+            return null;
         }
-        return lic;
+        UUID hospitalId = activeHospitalFromContext();
+        if (hospitalId == null) {
+            hospitalId = request.getHospitalId();
+        }
+        String country = hospitalId == null ? null
+                : hospitalRepository.findById(hospitalId).map(Hospital::getCountry).orElse(null);
+        String e164 = com.example.hms.utility.PhoneNumbers.toE164(
+                raw, com.example.hms.utility.PhoneNumbers.callingCodeForCountry(country));
+        if (e164 == null) {
+            throw new BusinessException(MessageUtil.resolve("adminSignup.phoneNumber.invalid"));
+        }
+        return e164;
+    }
+
+    /**
+     * A temporary username nobody holds yet: {@code first.last} folded to
+     * ASCII letters, then four random digits, retried on a collision. The user
+     * is made to choose their own at first login (forceUsernameChange).
+     */
+    private String generateTemporaryUsername(String firstName, String lastName) {
+        String base = (asciiLetters(firstName) + "." + asciiLetters(lastName)).replaceAll("^\\.+|\\.+$", "");
+        if (base.isEmpty()) {
+            base = "user";
+        }
+        if (base.length() > 30) {
+            base = base.substring(0, 30);
+        }
+        for (int attempt = 0; attempt < 20; attempt++) {
+            String candidate = base + String.format(Locale.ROOT, "%04d", SECURE_RANDOM.nextInt(10_000));
+            if (!Boolean.TRUE.equals(userRepository.existsByUsername(candidate))) {
+                return candidate;
+            }
+        }
+        // Twenty collisions on one name is pathological; a random suffix is still unique.
+        return base + "." + UUID.randomUUID().toString().substring(0, 8);
+    }
+
+    private static String asciiLetters(String value) {
+        if (value == null) {
+            return "";
+        }
+        String folded = java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "");
+        return folded.toLowerCase(Locale.ROOT).replaceAll("[^a-z]", "");
     }
 
     private User createNewUser(AdminSignupRequest request, String username, String email, String phone, Set<Role> roles) {
         User u = new User();
-        u.setUsername(username);
+        boolean usernameGenerated = username == null || username.isBlank();
+        u.setUsername(usernameGenerated
+                ? generateTemporaryUsername(request.getFirstName(), request.getLastName())
+                : username);
         u.setEmail(email);
         LocalDateTime passwordSetAt = LocalDateTime.now();
 
@@ -679,7 +759,7 @@ public class UserServiceImpl implements UserService {
             u.setActivationTokenExpiresAt(LocalDateTime.now().plusDays(1));
         }
 
-        if (isPatient || Boolean.TRUE.equals(request.getForcePasswordChange())) {
+        if (isPatient || usernameGenerated || Boolean.TRUE.equals(request.getForcePasswordChange())) {
             u.setForcePasswordChange(true);
             u.setForceUsernameChange(true);
         }
@@ -1529,7 +1609,7 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * Generate a temporary password: 9 chars mixing uppercase, lowercase, digits, and specials.
+     * Generate a temporary password: 14 chars mixing uppercase, lowercase, digits, and specials.
      * Guarantees at least one character from each category.
      */
     private String generateTempPassword() {
@@ -1540,14 +1620,14 @@ public class UserServiceImpl implements UserService {
         String all     = upper + lower + digits + special;
 
         // Guarantee one from each category
-        StringBuilder sb = new StringBuilder(9);
+        StringBuilder sb = new StringBuilder(14);
         sb.append(upper.charAt(SECURE_RANDOM.nextInt(upper.length())));
         sb.append(lower.charAt(SECURE_RANDOM.nextInt(lower.length())));
         sb.append(digits.charAt(SECURE_RANDOM.nextInt(digits.length())));
         sb.append(special.charAt(SECURE_RANDOM.nextInt(special.length())));
 
-        // Fill remaining 5 chars
-        for (int i = 4; i < 9; i++) {
+        // Fill remaining 10 chars
+        for (int i = 4; i < 14; i++) {
             sb.append(all.charAt(SECURE_RANDOM.nextInt(all.length())));
         }
 
