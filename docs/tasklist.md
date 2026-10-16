@@ -206,8 +206,3 @@ Task Summary
 Total tasks: 25 | Fixed upstream: 2 (Tasks 1–2) | Completed: 23 (Tasks 3–25) | Blocked: 0
 
 Task 13 is complete using Option A. The doctor board now merges encounter-backed outpatient flow items with admission-backed inpatient flow items while preserving a flowSource label for UI disambiguation.
-### Onboarding e-mail follow-ups (fix/onboarding-email-defects, 2026-10-16)
-- [ ] D14 residual: the app adds NO unsubscribe link (body asserted in `OnboardingEmailRenderingTest`) and sets no `List-Unsubscribe` header (EmailServiceImpl only sets From/Reply-To/To/Subject); the one seen on dev is injected by the SMTP provider — disable subscription/unsubscribe tracking for the transactional sender in the provider's console (dev + prod), or route account mail through a transactional-only stream.
-- [ ] D10 residual: a brand-new staff account registered with SEVERAL roles still gets the welcome mail plus one role-assignment mail per code (the confirmation screen validates the code against the assignment in its URL). One mail would need a multi-code activation screen.
-- [ ] D11 residual: partner pharmacy SMS templates (`sms.partner.*`) still start with "HMS Rx"; rename with the partner integration owners (SMS replies parse the prefix).
-- [ ] D12 residual: staff mails render in French (`DEFAULT_RECIPIENT_LOCALE`) because `User` records no language; add a preferred-language field to render EN/ES for staff.

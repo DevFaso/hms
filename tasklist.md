@@ -4883,6 +4883,14 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   switches the scope chip while on `/appointments/calendar` keeps seeing (and fetching)
   the first hospital under the new chip. Pre-existing; read the scope at fetch time, as
   the other scope-aware pages do (found in #855's final review). Open.
+- **Onboarding e-mail residuals (#865, dev test defects D10-D14).** (a) D14: the app adds
+  no unsubscribe link and no `List-Unsubscribe` header; the one seen on dev is injected
+  by the SMTP provider: disable subscription tracking for the transactional sender (dev
+  and prod). (b) D10: a new staff account with SEVERAL roles still gets the welcome mail
+  plus one assignment mail per code; one mail needs a multi-code activation screen.
+  (c) D11: partner pharmacy SMS templates (`sms.partner.*`) still start "HMS Rx"; rename
+  with the partner owners (replies parse the prefix). (d) D12: staff mails render in
+  French because `User` has no language; add a preferred-language field. Open.
 - **The patient apps and the refresh 409 (#853): fix before their next release.** A
   refresh token is now spent atomically: of concurrent refreshes with one token, one
   wins and the rest get 409 "superseded". The portal retries (the shared cookie has

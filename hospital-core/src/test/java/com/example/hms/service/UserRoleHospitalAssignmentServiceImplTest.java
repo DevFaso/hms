@@ -352,9 +352,27 @@ class UserRoleHospitalAssignmentServiceImplTest {
         when(assignmentRepository.findById(assignment.getId()))
             .thenReturn(Optional.of(assignment));
 
+        assignment.setConfirmationCode("602517");
+        assignment.setAssignmentCode("CTO-TEST-0001");
         service.sendNotifications(assignment.getId(), true);
 
         verify(emailService, never()).sendRoleAssignmentConfirmationEmail(
+            any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void sendNotifications_stillMailsTheCodeWhenTheWelcomeMailCannotCarryIt() {
+        // Without an assignment code the welcome mail has no link to carry the
+        // code with and falls back to "see the other mail": that mail must
+        // then still go out, or the new user never receives the code.
+        assignment.setConfirmationCode("602517");
+        assignment.setAssignmentCode(null);
+        when(assignmentRepository.findById(assignment.getId()))
+            .thenReturn(Optional.of(assignment));
+
+        service.sendNotifications(assignment.getId(), true);
+
+        verify(emailService).sendRoleAssignmentConfirmationEmail(
             any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
