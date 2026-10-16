@@ -576,13 +576,6 @@ export class UserListComponent implements OnInit, OnDestroy {
     }
   }
 
-  formatEnumLabel(value: string): string {
-    return value
-      .replaceAll('_', ' ')
-      .toLowerCase()
-      .replaceAll(/\b\w/g, (c) => c.toUpperCase());
-  }
-
   private freshForm(): AdminRegisterRequest {
     return {
       username: '',

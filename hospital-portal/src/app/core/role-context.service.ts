@@ -2,6 +2,8 @@ import { Injectable, signal, computed } from '@angular/core';
 
 import { expandRoleEquivalents, roleSatisfies } from './role-equivalence';
 
+const HELD_ROLES_KEY = 'hms.heldRoles';
+
 @Injectable({ providedIn: 'root' })
 export class RoleContextService {
   isReceptionist(): boolean {
@@ -78,6 +80,69 @@ export class RoleContextService {
   clearSession(): void {
     this._providerUser.set(false);
     this._sessionResolved.set(false);
+    this.setHeldRoles([]);
+    this._refusedRoles.set(null);
+  }
+
+  /**
+   * Every role the account holds, as the login role picker listed them. The
+   * JWT carries only the role picked there, so without this a refused page
+   * cannot tell the user that another of their roles would open it. Kept in
+   * sessionStorage so a reload of the 403 page still knows it; a convenience
+   * only, never an authorization input.
+   */
+  private readonly _heldRoles = signal<string[]>(RoleContextService.readHeldRoles());
+
+  /** The roles the last refused route asked for; null when the refusal came from the server. */
+  private readonly _refusedRoles = signal<string[] | null>(null);
+
+  get heldRoles(): string[] {
+    return this._heldRoles();
+  }
+
+  setHeldRoles(roles: string[]): void {
+    this._heldRoles.set(roles);
+    try {
+      if (roles.length) {
+        sessionStorage.setItem(HELD_ROLES_KEY, JSON.stringify(roles));
+      } else {
+        sessionStorage.removeItem(HELD_ROLES_KEY);
+      }
+    } catch {
+      // Storage blocked: the hint simply has less to go on after a reload.
+    }
+  }
+
+  /** Records what a refused route required, for the 403 page's hint. */
+  noteRefusal(requiredRoles: string[] | null): void {
+    this._refusedRoles.set(requiredRoles);
+  }
+
+  /**
+   * A role the account holds, other than the active one, that would have
+   * opened the refused page: the first held role satisfying the route's
+   * roles, or — for a server refusal, whose required roles the portal cannot
+   * know — ROLE_SUPER_ADMIN when held, since it reaches everything else.
+   */
+  roleThatWouldAllow(): string | null {
+    const active = this._activeRole();
+    if (!active) return null;
+    const others = this._heldRoles().filter((r) => r !== active);
+    const required = this._refusedRoles();
+    if (required?.length) {
+      return others.find((r) => roleSatisfies(required, r)) ?? null;
+    }
+    return others.includes('ROLE_SUPER_ADMIN') ? 'ROLE_SUPER_ADMIN' : null;
+  }
+
+  private static readHeldRoles(): string[] {
+    try {
+      const raw = sessionStorage.getItem(HELD_ROLES_KEY);
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.filter((r): r is string => typeof r === 'string') : [];
+    } catch {
+      return [];
+    }
   }
 
   /** True when the current user holds ROLE_SUPER_ADMIN. */

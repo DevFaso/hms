@@ -51,6 +51,17 @@ describe('RoleGuard — /super-admin route protection', () => {
     expect(router.serializeUrl(result as UrlTree)).toBe('/error/403');
   });
 
+  it('records what a refused route required, so the 403 page can name the role to pick', () => {
+    roleContext.setHeldRoles(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']);
+    roleContext.setRoles(['ROLE_HOSPITAL_ADMIN']);
+    roleContext.activeRole = 'ROLE_HOSPITAL_ADMIN';
+
+    TestBed.runInInjectionContext(() => RoleGuard(snapshot(['ROLE_SUPER_ADMIN']), {} as never));
+
+    expect(roleContext.roleThatWouldAllow()).toBe('ROLE_SUPER_ADMIN');
+    roleContext.clearSession();
+  });
+
   it('denies a multi-role user who picked a non-super active role', () => {
     roleContext.setRoles(['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR']);
     roleContext.activeRole = 'ROLE_DOCTOR';

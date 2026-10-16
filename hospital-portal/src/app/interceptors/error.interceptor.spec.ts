@@ -32,6 +32,7 @@ describe('errorInterceptor', () => {
   let impersonation: jasmine.SpyObj<ImpersonationService>;
   let sessionScope: jasmine.SpyObj<SessionScopeService>;
   let selectedHospital: string | null;
+  let noteRefusal: jasmine.Spy;
 
   beforeEach(() => {
     clearReportedSilent403s();
@@ -63,7 +64,10 @@ describe('errorInterceptor', () => {
         { provide: SessionScopeService, useValue: sessionScope },
         {
           provide: RoleContextService,
-          useValue: { effectiveHospitalIdForRequest: () => selectedHospital },
+          useValue: {
+            effectiveHospitalIdForRequest: () => selectedHospital,
+            noteRefusal: (noteRefusal = jasmine.createSpy('noteRefusal')),
+          },
         },
       ],
     });
@@ -388,6 +392,8 @@ describe('errorInterceptor', () => {
     httpMock.expectOne('/billing-invoices').flush(null, { status: 403, statusText: 'Forbidden' });
 
     expect(router.navigate).toHaveBeenCalledWith(['/error/403']);
+    // A server refusal names no route roles: the 403 page falls back to super-admin.
+    expect(noteRefusal).toHaveBeenCalledWith(null);
     expect(error?.status).toBe(403);
   });
 

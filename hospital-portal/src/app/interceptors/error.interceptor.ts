@@ -337,6 +337,8 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         if (isSilent) {
           reportSilent403(http, req);
         } else if (!isAuditCall) {
+          // A server refusal: the portal cannot know which role it wanted.
+          roleContext.noteRefusal(null);
           void router.navigate(['/error/403']);
         }
       }
