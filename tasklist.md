@@ -5066,6 +5066,15 @@ they stay visible instead of living in a javadoc.
 
 ## Operational, open right now
 
+- ⚠ **USER ACTION — Keycloak prod bootstrap (D9).** After the opt-in
+  entrypoint fix (`fix/keycloak-bootstrap-opt-in`) is synced to main: first
+  SAVE the current `kc-admin` password (`KC_BOOTSTRAP_ADMIN_PASSWORD` on
+  `hms-keycloak-prod`) in the password manager, then make sure
+  `KC_BOOTSTRAP_ADMIN` is NOT set and remove `KC_BOOTSTRAP_ADMIN_USERNAME` /
+  `KC_BOOTSTRAP_ADMIN_PASSWORD` from `hms-keycloak-prod`. The per-boot
+  `kc.sh bootstrap-admin` was SIGKILLed (rc=137) and aborted the 2026-10-13
+  prod deploy on every retry (and twice on 2026-10-09).
+
 - ~~Deploy prod~~ ✅ prod is on `7ff43fba` (2026-08-26), both Railway services
   SUCCESS, `/api/actuator/health` UP. `ddl-auto: validate` means that healthy
   boot proves V140 applied and matches the deployed JAR.

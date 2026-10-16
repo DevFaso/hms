@@ -57,6 +57,8 @@ skip the uat verification.
 Railway picks up the `uat` push within ~30 s and starts a redeploy.
 In the `hms-keycloak-uat` logs, watch for:
 
+- (Since 2026-10 the step is opt-in: set `KC_BOOTSTRAP_ADMIN=true` on the
+  service alongside the credentials, and unset it once recovery is done.)
 - `[hms-keycloak-entrypoint] Attempting kc.sh bootstrap-admin user (idempotent, --optimized)`
   — confirms the new entrypoint is in effect.
 - The subcommand's own output (echoed verbatim by the entrypoint), then
@@ -67,6 +69,10 @@ In the `hms-keycloak-uat` logs, watch for:
   - `[hms-keycloak-entrypoint] bootstrap-admin reports admin already exists — continuing`
     — idempotent re-run on an env where the admin was created in a
     previous deploy. Expected steady state once recovery is done.
+  - `[hms-keycloak-entrypoint] bootstrap-admin was KILLED (rc=137, SIGKILL)`
+    — the subcommand's JVM was killed (memory pressure). The entrypoint
+    continues to `kc.sh start`; if the admin still does not exist,
+    redeploy (or add memory) and retry.
   - `[hms-keycloak-entrypoint] bootstrap-admin FAILED with rc=N — aborting`
     — real failure (DB unreachable, password too weak, malformed
     config). The container terminates rather than limping into
@@ -125,7 +131,7 @@ Immediately after admin login works, follow
 
 1. Create a named per-person admin user with `realm-admin` role.
 2. Delete or disable + rotate the `kc-admin` bootstrap account.
-3. Remove `KC_BOOTSTRAP_ADMIN_USERNAME` and
+3. Remove `KC_BOOTSTRAP_ADMIN` (the opt-in flag), `KC_BOOTSTRAP_ADMIN_USERNAME` and
    `KC_BOOTSTRAP_ADMIN_PASSWORD` from the Railway service's
    variables. (The new entrypoint is guarded by an `[ -n ]` check
    on both vars, so removing them turns the bootstrap step into a
