@@ -186,10 +186,13 @@ public interface EmailService {
      * @param displayName   first + last name (or username as fallback)
      * @param username      the account username
      * @param tempPassword  the plain-text temporary password (shown once)
-     * @param roleName      human-readable role label, e.g. "Hospital Admin"
+     * @param roleName      role code (e.g. "ROLE_DOCTOR"); rendered as its label in the mail's language
      * @param hospitalName  hospital the user was assigned to (may be null for global roles)
      * @param activationUrl where to enter the confirmation code; null falls back
      *                      to generic wording that still names the step
+     * @param confirmationCode the assignment's 6-digit code when this mail is the
+     *                      only one the new user receives; null when separate
+     *                      assignment mails carry the codes
      */
     void sendAdminWelcomeEmail(
         String to,
@@ -198,7 +201,8 @@ public interface EmailService {
         String tempPassword,
         String roleName,
         String hospitalName,
-        String activationUrl
+        String activationUrl,
+        String confirmationCode
     );
 
     /**

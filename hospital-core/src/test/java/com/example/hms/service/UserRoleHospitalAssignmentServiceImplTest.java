@@ -346,6 +346,19 @@ class UserRoleHospitalAssignmentServiceImplTest {
     }
 
     @Test
+    void sendNotifications_skipsTheAssignmentMailWhenTheWelcomeMailCarriesTheCode() {
+        // D10: a new single-role staff account gets ONE mail (the welcome
+        // mail with the code); the role-assignment mail must not follow it.
+        when(assignmentRepository.findById(assignment.getId()))
+            .thenReturn(Optional.of(assignment));
+
+        service.sendNotifications(assignment.getId(), true);
+
+        verify(emailService, never()).sendRoleAssignmentConfirmationEmail(
+            any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
     void sendNotifications_reportsTheActivationMailAsQueuedNotSent() {
         // The mail goes to the outbox (V173): a normal return means QUEUED,
         // and the report must not claim the SMTP server has it yet.
