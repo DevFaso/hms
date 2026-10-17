@@ -13,9 +13,12 @@ import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtDecoderInitializationException;
 import org.springframework.security.oauth2.jwt.JwtDecoders;
+import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.SupplierJwtDecoder;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 
 /**
@@ -52,6 +55,25 @@ public class OidcResourceServerConfig {
     public JwtDecoder oidcJwtDecoder() {
         log.info("[OIDC] Configuring resource-server JWT decoder for issuer={} audience={}",
                 issuerUri, audience.isBlank() ? "<none>" : audience);
+        // Resolved on the first Keycloak token, not at startup: an unreachable
+        // issuer (Keycloak down, 502) must not stop the application, whose
+        // legacy sign-in does not need Keycloak at all. SupplierJwtDecoder
+        // retries the discovery on the next token until it succeeds, then
+        // keeps the decoder. The initialisation failure is re-thrown as a
+        // JwtException so the resource server answers 401, not 500.
+        JwtDecoder lazy = new SupplierJwtDecoder(this::buildIssuerDecoder);
+        return token -> {
+            try {
+                return lazy.decode(token);
+            } catch (JwtDecoderInitializationException issuerUnavailable) {
+                log.warn("[OIDC] Issuer {} unavailable; Keycloak token refused", issuerUri);
+                throw new JwtException("OIDC issuer unavailable", issuerUnavailable);
+            }
+        };
+    }
+
+    /** The issuer-discovered decoder with the issuer (and optional audience) validators. */
+    JwtDecoder buildIssuerDecoder() {
         NimbusJwtDecoder decoder = (NimbusJwtDecoder) JwtDecoders.fromIssuerLocation(issuerUri);
 
         OAuth2TokenValidator<Jwt> defaultValidator = JwtValidators.createDefaultWithIssuer(issuerUri);
