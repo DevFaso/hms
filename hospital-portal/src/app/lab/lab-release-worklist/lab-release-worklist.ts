@@ -14,6 +14,7 @@ import { catchError, map, switchMap } from 'rxjs/operators';
 
 import { LabResultPage, LabResultResponse, LabService } from '../../services/lab.service';
 import { RoleContextService } from '../../core/role-context.service';
+import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
 
 /**
@@ -51,6 +52,7 @@ import { ToastService } from '../../core/toast.service';
 export class LabReleaseWorklistComponent implements OnInit {
   private readonly labService = inject(LabService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
 
@@ -82,6 +84,8 @@ export class LabReleaseWorklistComponent implements OnInit {
   releasingId = signal<string | null>(null);
   /** Why the last release attempt failed — shown in the dialog, which stays open. */
   releaseError = signal<string | null>(null);
+  /** Id of the row the API answered 409 for: its release must be confirmed as a self-release. */
+  selfReleaseRequiredId = signal<string | null>(null);
   /** What the last successful release was, so the screen says what happened. */
   justReleased = signal<{ patient: string; test: string } | null>(null);
 
@@ -216,6 +220,21 @@ export class LabReleaseWorklistComponent implements OnInit {
     }
     this.releaseTarget.set(null);
     this.releaseError.set(null);
+    this.selfReleaseRequiredId.set(null);
+  }
+
+  /**
+   * D58: the target was entered by the reader. Many laboratories here are one
+   * technician, so a self-release is allowed — but it is said out loud in the
+   * dialog, sent as such, and recorded as one. Also true once the API refused
+   * the release as an unconfirmed self-release (409), whatever the token says.
+   */
+  isSelfRelease(r: LabResultResponse): boolean {
+    if (this.selfReleaseRequiredId() === r.id) {
+      return true;
+    }
+    const me = this.auth.getUserId();
+    return !!me && !!r.enteredByUserId && r.enteredByUserId === me;
   }
 
   confirmRelease(): void {
@@ -227,10 +246,12 @@ export class LabReleaseWorklistComponent implements OnInit {
     // after the dispatch guards nothing (the #443 lesson).
     this.releasingId.set(target.id);
     this.releaseError.set(null);
-    this.labService.releaseResult(target.id).subscribe({
+    const selfRelease = this.isSelfRelease(target);
+    this.labService.releaseResult(target.id, selfRelease).subscribe({
       next: () => {
         this.releasingId.set(null);
         this.releaseTarget.set(null);
+        this.selfReleaseRequiredId.set(null);
         this.justReleased.set({ patient: target.patientFullName, test: target.labTestName });
         this.toast.success(this.translate.instant('LAB_RELEASE.RELEASED'));
         // Re-read rather than splice the row out locally: the row leaves the
@@ -248,6 +269,12 @@ export class LabReleaseWorklistComponent implements OnInit {
         // how a fully-translated screen stops being one. The detail is
         // logged, where a developer can read it and a biologist need not.
         console.error('Release refused for lab result', err);
+        if (!selfRelease && (err as { status?: number } | null)?.status === 409) {
+          // The reader entered this result: keep the dialog open and ask
+          // again, this time as an explicit self-release.
+          this.selfReleaseRequiredId.set(target.id);
+          return;
+        }
         const message = this.translate.instant('LAB_RELEASE.RELEASE_ERROR');
         this.releaseError.set(message);
         this.toast.error(message);

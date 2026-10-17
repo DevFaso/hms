@@ -69,6 +69,14 @@ public interface LabResultService {
         com.example.hms.payload.dto.CriticalValueReadBackRequestDTO request,
         Locale locale);
 
+    /**
+     * Releases a result. When the caller also entered it (a single-reviewer
+     * laboratory, D58) the release must be confirmed explicitly with
+     * {@code selfReleaseConfirmed}; it is then audited as a self-release.
+     */
+    LabResultResponseDTO releaseLabResult(UUID id, boolean selfReleaseConfirmed, Locale locale);
+
+    /** A release that has not confirmed a self-release. */
     LabResultResponseDTO releaseLabResult(UUID id, Locale locale);
 
     /**

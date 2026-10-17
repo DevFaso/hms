@@ -296,7 +296,7 @@ export interface PatientLabResult {
   value?: string;
   unit?: string;
   referenceRange?: string;
-  /** NORMAL | ABNORMAL | ABNORMAL_LOW | ABNORMAL_HIGH | CRITICAL | PENDING. */
+  /** NORMAL | ABNORMAL | ABNORMAL_LOW | ABNORMAL_HIGH | CRITICAL | PENDING | UNKNOWN (not interpreted, D31). */
   status?: string;
   released: boolean;
   /**

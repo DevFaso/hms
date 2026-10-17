@@ -10,6 +10,7 @@ import com.example.hms.payload.dto.LabResultSignatureRequestDTO;
 import com.example.hms.service.CriticalValueNotificationService;
 import com.example.hms.service.LabResultService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -138,8 +139,11 @@ public class LabResultController {
             + "Laboratory staff only — mirrors microbiology's finalize authority.")
     public ResponseEntity<LabResultResponseDTO> releaseLabResult(
             @PathVariable UUID id,
+            @Parameter(description = "D58: true confirms that the caller, who entered this result, releases it "
+                + "without a second reviewer. Without it a self-release answers 409.")
+            @RequestParam(name = "selfRelease", defaultValue = "false") boolean selfRelease,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(labResultService.releaseLabResult(id, locale));
+        return ResponseEntity.ok(labResultService.releaseLabResult(id, selfRelease, locale));
     }
 
     @PostMapping("/{id}/sign")

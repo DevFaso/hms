@@ -46,7 +46,7 @@ export interface LabResultSummary {
   testName: string;
   result: string;
   referenceRange: string;
-  /** PENDING while unreleased, else NORMAL | ABNORMAL | ABNORMAL_LOW | ABNORMAL_HIGH | CRITICAL. */
+  /** PENDING while unreleased, else NORMAL | ABNORMAL | ABNORMAL_LOW | ABNORMAL_HIGH | CRITICAL | UNKNOWN (not interpreted). */
   status: string;
   collectedDate: string;
   /** The lab has released this result; until then the API sends no value at all. */
@@ -336,7 +336,12 @@ function mapLabResult(l: LabResultApiResponse): LabResultSummary {
     released: !pending,
     isPending: pending,
     isAbnormal: !pending && ABNORMAL_LAB_STATUSES.has(l.status),
-    isUngraded: !pending && !ABNORMAL_LAB_STATUSES.has(l.status) && l.unitMismatch === true,
+    // D31: UNKNOWN = released but nothing interpreted it (no range applies,
+    // no flag recorded) — never drawn as a green "within normal limits".
+    isUngraded:
+      !pending &&
+      !ABNORMAL_LAB_STATUSES.has(l.status) &&
+      (l.unitMismatch === true || l.status === 'UNKNOWN'),
     unit: l.unit ?? '',
     orderedBy: l.orderedBy ?? '',
     performedBy: l.performedBy ?? '',

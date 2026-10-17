@@ -19,6 +19,7 @@ import com.example.hms.repository.LabResultRepository;
 import com.example.hms.service.lab.SupersededLabResults;
 import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.service.PatientLabResultService;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
@@ -49,6 +50,13 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
     private static final String STATUS_ABNORMAL_LOW = "ABNORMAL_LOW";
     private static final String STATUS_CRITICAL = "CRITICAL";
     private static final String STATUS_PENDING = "PENDING";
+    /**
+     * D31: released, but nothing graded it — no reference range applies and
+     * no flag was recorded. Reporting NORMAL there falsely reassures the
+     * reader (28.5 mmol/L glucose read "normal" because the test had no
+     * range). Every client already renders UNKNOWN as "not interpreted".
+     */
+    private static final String STATUS_UNKNOWN = "UNKNOWN";
 
     /**
      * Resolvable message key, not a sentence, and deliberately the same one
@@ -63,6 +71,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
     private final LabResultMapper labResultMapper;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    private final com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -153,8 +162,9 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
                 CrossHospitalReachRecorder.LAB_RESULT_PERFORMED_HERE_DESCRIPTION);
         }
 
+        Map<UUID, LocalDateTime> collectedAtByOrder = collectionTimesOf(visible);
         return visible.stream()
-            .map(result -> toResponse(result, portalView))
+            .map(result -> toResponse(result, portalView, collectedAtByOrder))
             .toList();
     }
 
@@ -289,7 +299,35 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         java.util.Comparator.comparing(LabResult::getResultDate,
             java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()));
 
-    private PatientLabResultResponseDTO toResponse(LabResult result, boolean redactUnreleased) {
+    /**
+     * D49: when each order's specimen was actually collected - the earliest
+     * collection among its specimens. collectedAt used to be the ORDER time,
+     * which is not when anything was drawn; an order with no recorded
+     * collection now reports none rather than a time nobody observed.
+     */
+    private Map<UUID, LocalDateTime> collectionTimesOf(List<LabResult> results) {
+        Set<UUID> orderIds = results.stream()
+            .map(LabResult::getLabOrder)
+            .filter(java.util.Objects::nonNull)
+            .map(LabOrder::getId)
+            .filter(java.util.Objects::nonNull)
+            .collect(java.util.stream.Collectors.toSet());
+        Map<UUID, LocalDateTime> earliest = new java.util.HashMap<>();
+        if (orderIds.isEmpty()) {
+            return earliest;
+        }
+        for (com.example.hms.model.LabSpecimen specimen : labSpecimenRepository.findByLabOrder_IdIn(orderIds)) {
+            if (specimen.getCollectedAt() == null || specimen.getLabOrder() == null) {
+                continue;
+            }
+            earliest.merge(specimen.getLabOrder().getId(), specimen.getCollectedAt(),
+                (a, b) -> a.isBefore(b) ? a : b);
+        }
+        return earliest;
+    }
+
+    private PatientLabResultResponseDTO toResponse(LabResult result, boolean redactUnreleased,
+                                                   Map<UUID, LocalDateTime> collectedAtByOrder) {
         LabOrder labOrder = result.getLabOrder();
         LabTestDefinition testDefinition = labOrder != null ? labOrder.getLabTestDefinition() : null;
         LabResultResponseDTO mapped = labResultMapper.toResponseDTO(result);
@@ -300,7 +338,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             .testCode(testDefinition != null ? testDefinition.getTestCode() : null)
             .status(resolveStatus(result, mapped))
             .released(result.isReleased())
-            .collectedAt(labOrder != null ? labOrder.getOrderDatetime() : null)
+            .collectedAt(labOrder != null ? collectedAtByOrder.get(labOrder.getId()) : null)
             .resultedAt(result.getResultDate())
             .orderedBy(resolveStaffName(labOrder != null ? labOrder.getOrderingStaff() : null))
             .category(testDefinition != null ? testDefinition.getCategory() : null)
@@ -450,7 +488,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
 
     private static String statusOf(AbnormalFlag flag) {
         if (flag == null) {
-            return STATUS_NORMAL;
+            return STATUS_UNKNOWN;
         }
         return switch (flag) {
             case CRITICAL -> STATUS_CRITICAL;

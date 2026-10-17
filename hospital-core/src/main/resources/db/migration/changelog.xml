@@ -2754,4 +2754,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V191: lab test definitions - re-file the rows create/update wrongly
+         saved global back under their author's hospital (D30), and record
+         the switched-on DRAFT/APPROVED rows as ACTIVE now that only ACTIVE
+         definitions are orderable (D48). Data-only, idempotent, no DO block.
+         ================================================================= -->
+    <changeSet id="V191-lab-test-definition-scope-and-orderable" author="hms-team" runOnChange="false">
+        <sqlFile path="V191__lab_test_definition_scope_and_orderable.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

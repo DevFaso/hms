@@ -150,6 +150,7 @@ class LabOrderCrossHospitalIT extends BaseIT {
         definition = labTestDefinitionRepository.save(LabTestDefinition.builder()
             .testCode("CBC-" + nextId())
             .name("Complete Blood Count")
+            .approvalStatus(com.example.hms.enums.LabTestDefinitionApprovalStatus.ACTIVE)
             .build());
     }
 
@@ -269,7 +270,9 @@ class LabOrderCrossHospitalIT extends BaseIT {
         //    call must succeed at B and be refused at C either way).
         mockMvc.perform(post(API + "/lab-results/{id}/release", resultId).with(acting(scientistC)))
             .andExpect(status().isNotFound());
-        mockMvc.perform(post(API + "/lab-results/{id}/release", resultId).with(acting(scientistB)))
+        // scientistB entered the result, so the release is an explicit self-release (D58).
+        mockMvc.perform(post(API + "/lab-results/{id}/release", resultId).param("selfRelease", "true")
+                .with(acting(scientistB)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.released", is(true)));
 

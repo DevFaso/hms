@@ -2956,7 +2956,14 @@
     "READ_BACK_CONFIRMED": "Read-back confirmed",
     "READ_BACK_ERROR": "Read-back could not be recorded",
     "READ_BACK_RECORDED": "Read back",
-    "READ_BACK_MISMATCH": "Read-back MISMATCH — not acknowledged"
+    "READ_BACK_MISMATCH": "Read-back MISMATCH — not acknowledged",
+    "ORDER_OPTION": "{{patient}} — {{test}} — {{date}} ({{code}})",
+    "AUTOVERIFICATION": "Autoverification",
+    "SELF_RELEASED": "Self-released",
+    "SELF_RELEASED_HINT": "Released by the person who entered it, without a second reviewer",
+    "SELF_RELEASE_TITLE": "Release your own result?",
+    "SELF_RELEASE_BODY": "You entered this result ({{test}} for {{patient}}). Releasing it yourself, without a second reviewer, is allowed; it will be recorded and shown as a self-release.",
+    "SELF_RELEASE_CONFIRM": "Release it myself"
   },
   "LAB_RELEASE": {
     "TITLE": "Release Worklist",
@@ -2994,7 +3001,9 @@
     "RELEASE_ERROR": "Could not release the result.",
     "EMPTY": "Nothing is waiting for release.",
     "LOAD_ERROR": "Could not load the release worklist.",
-    "PAGE_OF": "Page {{page}} of {{total}}"
+    "PAGE_OF": "Page {{page}} of {{total}}",
+    "SELF_RELEASE_NOTE": "You entered this result yourself. Releasing it without a second reviewer is allowed, and it is recorded as a self-release.",
+    "SELF_RELEASE_CONFIRM": "Release it myself"
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Lab Instruments",
@@ -7554,7 +7563,8 @@
     "VERIF_ENTERED_IN_ERROR": "Entered in error",
     "VERIF_PROVISIONAL": "Provisional",
     "VERIF_REFUTED": "Refuted",
-    "VERIF_UNCONFIRMED": "Unconfirmed"
+    "VERIF_UNCONFIRMED": "Unconfirmed",
+    "LAB_STATUS_NOT_INTERPRETED": "Not interpreted: no reference range"
   },
   "PHARMACY": {
     "QUEUE_CLAIM": {

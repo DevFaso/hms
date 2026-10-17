@@ -1,6 +1,10 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ConflictException;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.LabResultMapper;
 import com.example.hms.model.Hospital;
@@ -93,6 +97,7 @@ public class LabResultServiceImpl implements LabResultService {
     /** Fills the trend query's IN list in global view, where it must match nothing. */
     private static final UUID NO_HOSPITAL = new UUID(0L, 0L);
     private final com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
+    private final AuditEventLogService auditEventLogService;
 
     /**
      * Whether a normal-range result is released the moment it is saved, with
@@ -198,6 +203,9 @@ public class LabResultServiceImpl implements LabResultService {
         // controller annotation — the annotation runs before the order and
         // its test are loaded.
         labResultEntryGuard.requireMayEnterResult(labOrder.getLabTestDefinition());
+        if (!ingested) {
+            requirePlausibleResultDate(request.getResultDate(), labOrder);
+        }
 
     UUID currentUserId = authService.getCurrentUserId();
     // Never skipped, including for an unscoped ingest caller. It used to be,
@@ -691,6 +699,7 @@ public class LabResultServiceImpl implements LabResultService {
         if (!labOrder.isHandledBy(activeHospitalId)) {
             throw new ResourceNotFoundException("laborder.notfound");
         }
+        requirePlausibleResultDate(request.getResultDate(), labOrder);
     UUID currentUserId = authService.getCurrentUserId();
     validateLabResultAuthor(currentUserId, authorityHospitalId(labOrder, hospital, activeHospitalId));
 
@@ -707,6 +716,31 @@ public class LabResultServiceImpl implements LabResultService {
         LabResult updated = labResultRepository.save(labResult);
 
         return labResultMapper.toResponseDTO(updated);
+    }
+
+    /** Clock skew tolerated between the entering workstation and the server. */
+    private static final java.time.Duration RESULT_DATE_SKEW = java.time.Duration.ofMinutes(5);
+
+    /**
+     * D49: a hand-entered result time cannot precede its order or lie in the
+     * future. The portal sent the browser's local wall-clock time, which the
+     * server stores as its own (UTC) clock, so a result entered from a
+     * workstation behind UTC was recorded hours BEFORE the order it answers.
+     * The portal now sends the instant; this refuses whatever still arrives
+     * impossible. Ingested results keep the analyzer's own time.
+     */
+    private static void requirePlausibleResultDate(LocalDateTime resultDate, LabOrder labOrder) {
+        if (resultDate == null) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        if (resultDate.isAfter(now.plus(RESULT_DATE_SKEW))) {
+            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.resultDate.future"));
+        }
+        LocalDateTime orderedAt = labOrder.getOrderDatetime();
+        if (orderedAt != null && resultDate.isBefore(orderedAt.minus(RESULT_DATE_SKEW))) {
+            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.resultDate.beforeOrder"));
+        }
     }
 
     @Override
@@ -961,6 +995,17 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional
     public LabResultResponseDTO releaseLabResult(UUID id, Locale locale) {
+        return doReleaseLabResult(id, false);
+    }
+
+    @Override
+    @Transactional
+    public LabResultResponseDTO releaseLabResult(UUID id, boolean selfReleaseConfirmed, Locale locale) {
+        return doReleaseLabResult(id, selfReleaseConfirmed);
+    }
+
+    /** The release itself; both public entry points run it in their own transaction. */
+    private LabResultResponseDTO doReleaseLabResult(UUID id, boolean selfReleaseConfirmed) {
         LabResult labResult = labResultRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
         // Release was the one write path here without the scope comparison
@@ -987,10 +1032,23 @@ public class LabResultServiceImpl implements LabResultService {
             return labResultMapper.toResponseDTO(labResult);
         }
 
+        // D58 - decided, not a four-eyes rule: many laboratories here are one
+        // technician, so the person who entered a result may release it. But
+        // never in one unconsidered click: the release says so explicitly,
+        // the audit trail records it as a self-release, and the response
+        // (selfReleased) shows it to every later reader.
+        boolean selfRelease = LabResultMapper.enteredBy(labResult, actorId);
+        if (selfRelease && !selfReleaseConfirmed) {
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve("labresult.selfRelease.confirmRequired"));
+        }
+
         labResult.setReleased(true);
         labResult.setReleasedAt(LocalDateTime.now());
         labResult.setReleasedByUserId(actorId);
         labResult.setReleasedByDisplay(resolveActorDisplay(actorId, hospitalId));
+        if (selfRelease) {
+            auditSelfReleaseAfterCommit(labResult.getId(), actorId);
+        }
 
         labResultRepository.save(labResult);
         // Both halves of this line's history: #716 closes the order once every
@@ -1000,6 +1058,29 @@ public class LabResultServiceImpl implements LabResultService {
         completeOrderIfAllReleased(labResult.getLabOrder());
         enqueueReleasedObservationAfterCommit(labResult);
         return labResultMapper.toResponseDTO(labResult);
+    }
+
+    /**
+     * D58: the self-release's own audit row, after commit and outside the
+     * release (a failed audit write must not undo the clinical one, and a
+     * rolled-back release must not leave a row claiming it happened). Ids
+     * only - no value, no patient.
+     */
+    private void auditSelfReleaseAfterCommit(UUID labResultId, UUID actorId) {
+        TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.LAB_RESULT_RELEASED)
+                    .status(AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .eventDescription("Self-release: released by the user who entered the result")
+                    .entityType("LabResult")
+                    .resourceId(labResultId != null ? labResultId.toString() : null)
+                    .build());
+            } catch (RuntimeException ex) {
+                LOG.warn("Self-release audit not written for result {}: {}", labResultId, ex.getMessage());
+            }
+        });
     }
 
     /**
@@ -1246,13 +1327,15 @@ public class LabResultServiceImpl implements LabResultService {
         if (!autoVerificationEnabled || labResultMapper.isUngradedForUnitMismatch(result)) {
             return;
         }
-        boolean severityNormal = severity == null
-            || "NORMAL".equalsIgnoreCase(severity)
-            || LabResultMapper.FLAG_UNSPECIFIED.equalsIgnoreCase(severity);
-        if (!result.isReleased()
-                && severityNormal
-                && (result.getAbnormalFlag() == null
-                    || result.getAbnormalFlag() == AbnormalFlag.NORMAL)) {
+        boolean rangeSaysNormal = "NORMAL".equalsIgnoreCase(severity);
+        boolean rangeSilent = severity == null || LabResultMapper.FLAG_UNSPECIFIED.equalsIgnoreCase(severity);
+        AbnormalFlag flag = result.getAbnormalFlag();
+        // D31: something must have graded the result NORMAL - the range or an
+        // explicit flag. No range and no flag is "not interpreted", which a
+        // person releases from the worklist, never the autoverifier.
+        boolean gradedNormal = (rangeSaysNormal && (flag == null || flag == AbnormalFlag.NORMAL))
+            || (rangeSilent && flag == AbnormalFlag.NORMAL);
+        if (!result.isReleased() && gradedNormal) {
             result.setReleased(true);
             result.setReleasedAt(LocalDateTime.now());
             result.setReleasedByDisplay("Autoverification");

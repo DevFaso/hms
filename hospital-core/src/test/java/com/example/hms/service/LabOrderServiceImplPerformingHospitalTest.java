@@ -132,6 +132,7 @@ class LabOrderServiceImplPerformingHospitalTest {
         definition.setId(UUID.randomUUID());
         definition.setName("CBC");
         definition.setTestCode("CBC");
+        definition.setApprovalStatus(com.example.hms.enums.LabTestDefinitionApprovalStatus.ACTIVE);
 
         order = LabOrder.builder()
             .patient(patient)

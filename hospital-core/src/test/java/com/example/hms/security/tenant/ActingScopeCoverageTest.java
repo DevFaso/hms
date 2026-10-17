@@ -81,7 +81,6 @@ class ActingScopeCoverageTest {
                 "security/TenantLifecycleGate.java", 1,
                 "The lifecycle gate keeps its permitted-set semantics (design §3.6)",
                 "service/LabResultServiceImpl.java", 1, LAB_PR,
-                "service/LabTestDefinitionServiceImpl.java", 1, LAB_PR,
                 "controller/LabTestDefinitionController.java", 1, LAB_PR)),
         new Rule("HospitalContext.pinnedHospitalId()",
             Pattern.compile("\\.pinnedHospitalId\\(\\)"),
