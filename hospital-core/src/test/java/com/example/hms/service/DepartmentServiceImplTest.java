@@ -482,18 +482,18 @@ class DepartmentServiceImplTest {
         dto.setHospitalId(hospitalId);
         UserRoleHospitalAssignment adminAssignment = UserRoleHospitalAssignment.builder()
             .hospital(hospital).active(true).build();
-        Department department = new Department();
-        department.setName("Neurology");
-        department.setHospital(hospital);
+        Department createdDepartment = new Department();
+        createdDepartment.setName("Neurology");
+        createdDepartment.setHospital(hospital);
 
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Neurology", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(userId);
         when(roleAssignmentRepository.findByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(
             userId, hospitalId, "ROLE_HOSPITAL_ADMIN")).thenReturn(Optional.of(adminAssignment));
-        when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(adminAssignment))).thenReturn(department);
-        when(departmentRepository.save(department)).thenReturn(department);
-        when(departmentMapper.toDepartmentResponseDTO(eq(department), any(Locale.class)))
+        when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(adminAssignment))).thenReturn(createdDepartment);
+        when(departmentRepository.save(createdDepartment)).thenReturn(createdDepartment);
+        when(departmentMapper.toDepartmentResponseDTO(eq(createdDepartment), any(Locale.class)))
             .thenReturn(new DepartmentResponseDTO());
 
         departmentService.createDepartment(dto, locale);
