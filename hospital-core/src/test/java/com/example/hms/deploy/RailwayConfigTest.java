@@ -19,8 +19,8 @@ class RailwayConfigTest {
     void keycloakIsAlwaysRestarted() throws IOException {
         String toml = Files.readString(repoFile("keycloak/prod/railway.toml"));
 
-        assertThat(toml).containsPattern("(?m)^restartPolicyType\s*=\s*\"always\"\s*$");
-        assertThat(toml).doesNotContainPattern("(?m)^restartPolicyMaxRetries\s*=");
+        assertThat(toml).containsPattern("(?m)^\\s*restartPolicyType\\s*=\\s*\"always\"\\s*$");
+        assertThat(toml).doesNotContainPattern("(?m)^\\s*restartPolicyMaxRetries\\s*=");
     }
 
     private static Path repoFile(String relative) {

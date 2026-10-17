@@ -94,7 +94,7 @@ class OnboardingEmailRenderingTest {
             .contains("222222")
             .contains("onboarding/role-welcome?assignment=A-1")
             .contains("onboarding/role-welcome?assignment=A-2")
-            .contains("avec 2 rôles")
+            .contains("Les rôles ci-dessous sont prêts à être confirmés")
             .contains("Confirmer ce rôle")
             .contains("atraore")
             .doesNotContain("ROLE_NURSE")

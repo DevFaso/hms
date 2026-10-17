@@ -1099,7 +1099,7 @@ public class EmailServiceImpl implements EmailService {
         String bodyContent = "<div style=\"padding:32px 40px;\">"
             + "<p style=\"color:#1e293b;font-size:16px;margin-top:0;\">" + greeting + CLOSE_PARAGRAPH
             + "<p style=\"color:#475569;line-height:1.6;\">"
-            + text(l, "email.admin.welcome.body.created.multi", roles.size()) + ' '
+            + text(l, "email.admin.welcome.body.created.multi") + ' '
             + text(l, "email.admin.welcome.body.step.codes") + ' '
             + text(l, "email.admin.welcome.body.keep")
             + CLOSE_PARAGRAPH
