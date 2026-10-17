@@ -36,7 +36,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -374,6 +373,9 @@ class UserServiceImplTest {
             assertThat(assignCaptor.getValue().getActive())
                 .as("the assignment request must also start inactive")
                 .isFalse();
+            assertThat(assignCaptor.getValue().isWelcomeMailCarriesCode())
+                .as("D10: one role, new account -> the welcome mail is the only mail")
+                .isTrue();
 
             // The old pre-approval override force-activated the reloaded
             // assignment and saved it; that save must never come back.
@@ -716,53 +718,36 @@ class UserServiceImplTest {
     }
 
     // =====================================================================
-    // formatRoleLabel (private static) — tested via reflection
+    // welcomeMailCarriesCode — when the welcome mail is the ONLY mail (D10)
     // =====================================================================
 
     @Nested
-    @DisplayName("formatRoleLabel")
-    class FormatRoleLabel {
+    @DisplayName("welcomeMailCarriesCode")
+    class WelcomeMailCarriesCode {
 
-        private String invoke(String code) throws Exception {
-            Method m = UserServiceImpl.class.getDeclaredMethod("formatRoleLabel", String.class);
-            m.setAccessible(true);
-            return (String) m.invoke(null, code);
+        private Set<com.example.hms.model.Role> roles(int n) {
+            Set<com.example.hms.model.Role> set = new java.util.LinkedHashSet<>();
+            for (int i = 0; i < n; i++) {
+                com.example.hms.model.Role r = new com.example.hms.model.Role();
+                r.setId(java.util.UUID.randomUUID());
+                r.setCode("ROLE_X" + i);
+                set.add(r);
+            }
+            return set;
         }
 
         @Test
-        @DisplayName("converts ROLE_HOSPITAL_ADMIN → 'Hospital Admin'")
-        void hospitalAdmin() throws Exception {
-            assertThat(invoke("ROLE_HOSPITAL_ADMIN")).isEqualTo("Hospital Admin");
+        @DisplayName("a new single-role staff account gets one mail carrying the code")
+        void newSingleRoleStaff() {
+            assertThat(UserServiceImpl.welcomeMailCarriesCode(true, false, roles(1))).isTrue();
         }
 
         @Test
-        @DisplayName("converts ROLE_SUPER_ADMIN → 'Super Admin'")
-        void superAdmin() throws Exception {
-            assertThat(invoke("ROLE_SUPER_ADMIN")).isEqualTo("Super Admin");
-        }
-
-        @Test
-        @DisplayName("converts ROLE_DOCTOR → 'Doctor'")
-        void doctor() throws Exception {
-            assertThat(invoke("ROLE_DOCTOR")).isEqualTo("Doctor");
-        }
-
-        @Test
-        @DisplayName("converts ROLE_PATIENT → 'Patient'")
-        void patient() throws Exception {
-            assertThat(invoke("ROLE_PATIENT")).isEqualTo("Patient");
-        }
-
-        @Test
-        @DisplayName("code without ROLE_ prefix still title-cases correctly")
-        void withoutRolePrefix() throws Exception {
-            assertThat(invoke("NURSE")).isEqualTo("Nurse");
-        }
-
-        @Test
-        @DisplayName("null input returns 'User'")
-        void nullReturnsUser() throws Exception {
-            assertThat(invoke(null)).isEqualTo("User");
+        @DisplayName("an existing user, a patient, or several roles keep the assignment mail")
+        void otherCasesKeepTheAssignmentMail() {
+            assertThat(UserServiceImpl.welcomeMailCarriesCode(false, false, roles(1))).isFalse();
+            assertThat(UserServiceImpl.welcomeMailCarriesCode(true, true, roles(1))).isFalse();
+            assertThat(UserServiceImpl.welcomeMailCarriesCode(true, false, roles(2))).isFalse();
         }
     }
 

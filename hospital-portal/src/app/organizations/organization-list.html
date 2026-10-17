@@ -239,8 +239,15 @@
               </select>
             </div>
             <div class="field">
-              <label for="orgType">{{ 'ORGANIZATIONS.TYPE' | translate }}</label>
-              <select id="orgType" [(ngModel)]="createForm.type" name="type">
+              <label for="orgType">{{ 'ORGANIZATIONS.TYPE' | translate }} *</label>
+              <select
+                id="orgType"
+                [(ngModel)]="createForm.type"
+                name="type"
+                required
+                [attr.aria-invalid]="submitAttempted() && !createForm.type"
+                aria-describedby="orgTypeError"
+              >
                 <option value="" disabled selected>
                   {{ 'ORGANIZATIONS.SELECT_TYPE' | translate }}
                 </option>
@@ -248,6 +255,11 @@
                   <option [value]="t">{{ t | enumLabel: 'organizationType' }}</option>
                 }
               </select>
+              @if (submitAttempted() && !createForm.type) {
+                <small id="orgTypeError" class="field-error" role="alert">
+                  {{ 'ORGANIZATIONS.TYPE_REQUIRED' | translate }}
+                </small>
+              }
             </div>
             <div class="field">
               <label for="orgPhone">{{ 'ORGANIZATIONS.CONTACT_PHONE' | translate }}</label>

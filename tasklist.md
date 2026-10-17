@@ -4883,6 +4883,14 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   switches the scope chip while on `/appointments/calendar` keeps seeing (and fetching)
   the first hospital under the new chip. Pre-existing; read the scope at fetch time, as
   the other scope-aware pages do (found in #855's final review). Open.
+- **Onboarding e-mail residuals (#865, dev test defects D10-D14).** (a) D14: the app adds
+  no unsubscribe link and no `List-Unsubscribe` header; the one seen on dev is injected
+  by the SMTP provider: disable subscription tracking for the transactional sender (dev
+  and prod). (b) D10: a new staff account with SEVERAL roles still gets the welcome mail
+  plus one assignment mail per code; one mail needs a multi-code activation screen.
+  (c) D11: partner pharmacy SMS templates (`sms.partner.*`) still start "HMS Rx"; rename
+  with the partner owners (replies parse the prefix). (d) D12: staff mails render in
+  French because `User` has no language; add a preferred-language field. Open.
 - **The patient apps and the refresh 409 (#853): fix before their next release.** A
   refresh token is now spent atomically: of concurrent refreshes with one token, one
   wins and the rest get 409 "superseded". The portal retries (the shared cookie has
@@ -5065,6 +5073,15 @@ they stay visible instead of living in a javadoc.
   protocol written out.
 
 ## Operational, open right now
+
+- ⚠ **USER ACTION — Keycloak prod bootstrap (D9).** After the opt-in
+  entrypoint fix (`fix/keycloak-bootstrap-opt-in`) is synced to main: first
+  SAVE the current `kc-admin` password (`KC_BOOTSTRAP_ADMIN_PASSWORD` on
+  `hms-keycloak-prod`) in the password manager, then make sure
+  `KC_BOOTSTRAP_ADMIN` is NOT set and remove `KC_BOOTSTRAP_ADMIN_USERNAME` /
+  `KC_BOOTSTRAP_ADMIN_PASSWORD` from `hms-keycloak-prod`. The per-boot
+  `kc.sh bootstrap-admin` was SIGKILLed (rc=137) and aborted the 2026-10-13
+  prod deploy on every retry (and twice on 2026-10-09).
 
 - ~~Deploy prod~~ ✅ prod is on `7ff43fba` (2026-08-26), both Railway services
   SUCCESS, `/api/actuator/health` UP. `ddl-auto: validate` means that healthy
@@ -5345,3 +5362,11 @@ ships*, not for building — and check the shipped surface before trusting a
   the registration rule is an authorization change, not the display fix — but
   it is a split a reader will trip over, and it should be resolved one way or
   the other with a decision behind it.
+- **403 role hint only knows roles the password-login picker listed.**
+  (fix/portal-ui-defects, D7.) The JWT carries only the role picked at sign-in,
+  so the portal keeps the picker's `availableRoles` in sessionStorage
+  (`RoleContextService.heldRoles`) to say "sign in again choosing Y". An SSO
+  (Keycloak) sign-in never shows that picker, so no hint appears there, and a
+  server-side 403 names no required role, so the page can only suggest
+  ROLE_SUPER_ADMIN for those. A complete fix is backend-side: return the held
+  roles in the session bootstrap, and a required-role hint in 403 bodies.

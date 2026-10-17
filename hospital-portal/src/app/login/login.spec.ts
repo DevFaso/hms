@@ -145,6 +145,29 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
     httpMock.verify();
   });
 
+  it('lists ROLE_SUPER_ADMIN first in the role picker and keeps every held role', () => {
+    component.username = 'tchico1er';
+    component.password = 'irrelevant';
+    component.submit();
+    httpMock
+      .expectOne((req) => req.url.endsWith('/auth/login'))
+      .flush({
+        roleSelectionRequired: true,
+        availableRoles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'],
+      });
+
+    expect(component.roleSelectionMode).toBeTrue();
+    expect(component.availableRoles[0]).toBe('ROLE_SUPER_ADMIN');
+    expect(component.isRecommendedRole('ROLE_SUPER_ADMIN')).toBeTrue();
+    expect(component.isRecommendedRole('ROLE_HOSPITAL_ADMIN')).toBeFalse();
+    expect(roleContext.heldRoles).toEqual([
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_DOCTOR',
+      'ROLE_SUPER_ADMIN',
+    ]);
+    roleContext.clearSession();
+  });
+
   it('the resend-activation dialog opens alone and posts the address', () => {
     component.openForgotPassword();
     component.openResendActivation();
