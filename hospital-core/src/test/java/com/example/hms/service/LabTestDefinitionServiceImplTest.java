@@ -19,6 +19,7 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.SecurityUtils;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScope;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.AfterEach;
@@ -1234,6 +1235,26 @@ class LabTestDefinitionServiceImplTest {
     @Test
     void exportPdf_nonSuperAdminWithoutAHospital_exportsTheGlobalCatalogOnly() {
         when(repository.findVisibleAt(null)).thenReturn(List.of());
+
+        assertThat(service.exportPdf()).isNotEmpty();
+        verify(repository, never()).findAll();
+    }
+
+    @Test
+    void exportPdf_superAdminInGlobalView_ignoresAnUnpinnedActiveHospital() {
+        when(actingScopeResolver.current()).thenReturn(new ActingScope.Global(UUID.randomUUID()));
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).activeHospitalId(hospitalId).build());
+        when(repository.findAll()).thenReturn(List.of(definition));
+
+        assertThat(service.exportPdf()).isNotEmpty();
+        verify(repository, never()).findByHospital_IdAndActiveTrue(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void exportPdf_pinnedScope_exportsThatHospitalOnly() {
+        when(actingScopeResolver.current()).thenReturn(new ActingScope.Pinned(hospitalId, ActingScope.Source.REQUESTED));
+        when(repository.findByHospital_IdAndActiveTrue(hospitalId)).thenReturn(List.of(definition));
+        when(repository.findByHospitalIsNullAndActiveTrue()).thenReturn(List.of());
 
         assertThat(service.exportPdf()).isNotEmpty();
         verify(repository, never()).findAll();

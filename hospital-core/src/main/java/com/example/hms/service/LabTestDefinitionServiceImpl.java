@@ -19,8 +19,6 @@ import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.SecurityUtils;
-import com.example.hms.security.context.HospitalContext;
-import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.security.tenant.ActingScope;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.terminology.TerminologyCodes;
@@ -473,17 +471,17 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
     @Override
     public byte[] exportPdf() {
-        UUID hospitalId = HospitalContextHolder.getContext()
-            .map(HospitalContext::getActiveHospitalId)
-            .orElse(null);
-
-        // D30: with no active hospital only a super-admin exports every
-        // hospital's rows; anyone else gets the global catalog.
+        // D30: the export follows the acting scope. A pinned scope exports that
+        // hospital plus the global catalog; a super-admin in global view exports
+        // every hospital (never a stale active hospital that is not pinned);
+        // anyone else without a pin gets the global catalog.
+        ActingScope scope = actingScopeResolver.current();
+        UUID hospitalId = pinnedHospitalIdOf(scope);
         List<LabTestDefinition> definitions;
         if (hospitalId != null) {
             definitions = repository.findByHospital_IdAndActiveTrue(hospitalId);
         } else {
-            List<LabTestDefinition> unscoped = actingScopeResolver.current() instanceof ActingScope.Global
+            List<LabTestDefinition> unscoped = scope instanceof ActingScope.Global
                 ? repository.findAll()
                 : repository.findVisibleAt(null);
             definitions = unscoped.stream()
