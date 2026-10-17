@@ -29,6 +29,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
@@ -52,6 +54,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doNothing;
@@ -955,18 +958,23 @@ class UserServiceImplTest {
             assertThat(saved.getPasswordHash()).isEqualTo("$2a$10$existingHash");
         }
 
-        @Test
-        @DisplayName("an updated local phone is stored in E.164, like a registered one")
-        void updateNormalisesPhone() {
+        @ParameterizedTest(name = "phone \"{0}\" -> {1}")
+        @CsvSource({
+            "'70 20 20 20', +22670202020",
+            "'', +1-555-0100",
+            "+1-555-0999, +15550999"
+        })
+        @DisplayName("an updated phone is stored in E.164; a blank one keeps the number on file")
+        void updatePhone(String sent, String stored) {
             stubHappyPath();
             UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
-            dto.setPhoneNumber("70 20 20 20");
+            dto.setPhoneNumber(sent);
 
             userService.updateUser(userId, dto);
 
             ArgumentCaptor<User> cap = ArgumentCaptor.forClass(User.class);
             verify(userRepository).save(cap.capture());
-            assertThat(cap.getValue().getPhoneNumber()).isEqualTo("+22670202020");
+            assertThat(cap.getValue().getPhoneNumber()).isEqualTo(stored);
         }
 
         @Test
@@ -1055,36 +1063,6 @@ class UserServiceImplTest {
             ArgumentCaptor<User> cap = ArgumentCaptor.forClass(User.class);
             verify(userRepository).save(cap.capture());
             assertThat(cap.getValue().getPasswordHash()).isEqualTo("$2a$10$existingHash");
-        }
-
-        @Test
-        @DisplayName("blank phoneNumber is ignored — existing number preserved")
-        void blankPhoneNumberPreservesExisting() {
-            stubHappyPath();
-            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
-            dto.setPhoneNumber("");
-
-            userService.updateUser(userId, dto);
-
-            ArgumentCaptor<User> cap = ArgumentCaptor.forClass(User.class);
-            verify(userRepository).save(cap.capture());
-
-            assertThat(cap.getValue().getPhoneNumber()).isEqualTo("+1-555-0100");
-        }
-
-        @Test
-        @DisplayName("non-blank phoneNumber is applied")
-        void nonBlankPhoneNumberIsApplied() {
-            stubHappyPath();
-            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
-            dto.setPhoneNumber("+1-555-0999");
-
-            userService.updateUser(userId, dto);
-
-            ArgumentCaptor<User> cap = ArgumentCaptor.forClass(User.class);
-            verify(userRepository).save(cap.capture());
-
-            assertThat(cap.getValue().getPhoneNumber()).isEqualTo("+15550999");
         }
 
         @Test
@@ -1775,13 +1753,6 @@ class UserServiceImplTest {
     @DisplayName("registration without username/password/licence (D1, D2, D4, D13)")
     class GeneratedCredentials {
 
-        private Role role(String code) {
-            Role r = new Role();
-            r.setId(UUID.randomUUID());
-            r.setCode(code);
-            r.setName(code);
-            return r;
-        }
 
         private void stubCreation(Role role) {
             lenient().when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> {
@@ -1846,7 +1817,7 @@ class UserServiceImplTest {
 
             userService.createUserWithRolesAndHospital(request("ROLE_SUPER_ADMIN", "a@hospital.bf", "70202020"));
 
-            verify(userRepository, org.mockito.Mockito.times(3)).existsByUsername(any());
+            verify(userRepository, times(3)).existsByUsername(any());
         }
 
         @Test
