@@ -365,7 +365,7 @@ export class PatientDetailComponent implements OnInit {
       .then((text) => {
         // Show the server's own wording when it sent one; it names the
         // remedy. Anything unparseable falls back to the translated key.
-        let message = '';
+        let message: string;
         try {
           message = (JSON.parse(text) as { message?: string }).message ?? '';
         } catch {

@@ -130,7 +130,7 @@ function loadLocale(localeFile) {
   try {
     return JSON.parse(raw);
   } catch (err) {
-    throw new Error(`failed to parse ${path}: ${err.message}`);
+    throw new Error(`failed to parse ${path}: ${err.message}`, { cause: err });
   }
 }
 
