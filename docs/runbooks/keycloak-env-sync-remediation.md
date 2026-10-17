@@ -461,7 +461,9 @@ retired); uat is still on the `kc-admin` bootstrap account.
    The opt-in `KC_BOOTSTRAP_ADMIN=true` check (plus the `[ -n ]` credential guard) in [`keycloak/prod/entrypoint.sh`](../../keycloak/prod/entrypoint.sh)
    is what turns the bootstrap step into a no-op when the vars are
    absent. If the log instead shows `Attempting kc.sh bootstrap-admin user`,
-   one of the vars is still set — go back to step 5e.3.
+   `KC_BOOTSTRAP_ADMIN` is still `true` (with both credentials) — go back to
+   step 5e.3. If it shows `KC_BOOTSTRAP_ADMIN_USERNAME is set but
+   KC_BOOTSTRAP_ADMIN != true`, the username var was not deleted — remove it.
 
 ### 5f. Verify
 

@@ -133,9 +133,9 @@ Immediately after admin login works, follow
 2. Delete or disable + rotate the `kc-admin` bootstrap account.
 3. Remove `KC_BOOTSTRAP_ADMIN` (the opt-in flag), `KC_BOOTSTRAP_ADMIN_USERNAME` and
    `KC_BOOTSTRAP_ADMIN_PASSWORD` from the Railway service's
-   variables. (The new entrypoint is guarded by an `[ -n ]` check
-   on both vars, so removing them turns the bootstrap step into a
-   no-op on subsequent boots.)
+   variables. (The entrypoint runs the step only when
+   `KC_BOOTSTRAP_ADMIN=true` and both credentials are set; removing all
+   three makes it a no-op and takes the credential off Railway.)
 4. **Prod only:** verify Cloudflare Access or the Railway Private
    Network rule restricting `/admin` is in place.
 
