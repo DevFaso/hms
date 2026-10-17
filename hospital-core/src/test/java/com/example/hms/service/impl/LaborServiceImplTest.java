@@ -147,7 +147,7 @@ class LaborServiceImplTest {
 
         assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
             .isInstanceOf(BusinessException.class);
-        org.mockito.Mockito.verify(episodeRepository, org.mockito.Mockito.never())
+        verify(episodeRepository, never())
             .save(org.mockito.ArgumentMatchers.any());
     }
 
