@@ -241,96 +241,113 @@ class GlobalExceptionHandlerTest {
     @DisplayName("handleHttpMessageNotReadable")
     class HandleHttpMessageNotReadable {
 
+        private org.springframework.http.converter.HttpMessageNotReadableException wrap(Throwable cause) {
+            return new org.springframework.http.converter.HttpMessageNotReadableException(
+                "Outer wrapper", cause,
+                new org.springframework.mock.http.MockHttpInputMessage(new byte[0]));
+        }
+
+        @SuppressWarnings("unchecked")
+        private Map<String, Object> bodyOf(ResponseEntity<Object> response) {
+            return (Map<String, Object>) response.getBody();
+        }
+
         /**
-         * Regression for the dev 500 reported on 2026-05-10 where the
-         * pharmacy-registry frontend posted {@code "pharmacyType":"COMMUNITY"}
-         * against a Java enum that expected {@code COMMUNITY_PHARMACY}.
-         * Jackson raised {@code HttpMessageNotReadableException}, the
-         * handler used to fall through to the catch-all RuntimeException
-         * branch and return a generic 500. Now it returns a 400 with the
-         * underlying Jackson message ("not one of the values accepted")
-         * so the frontend can self-diagnose enum drift.
+         * D53: the dev QA run saw "Cannot deserialize value of type
+         * `com.example.hms.enums.PharmacyType` ..." in a toast. The parser's
+         * text, Java types and enum constants must never reach the caller.
          */
         @Test
-        @DisplayName("returns 400 with the original Jackson message preserved")
-        void returns400WithJacksonMessage() {
+        @DisplayName("returns 400 with a safe message, never the Jackson text")
+        void neverEchoesJacksonText() {
             String jacksonMessage = "Cannot deserialize value of type "
                 + "`com.example.hms.enums.PharmacyType` from String \"COMMUNITY\": "
                 + "not one of the values accepted for Enum class: "
                 + "[COMMUNITY_PHARMACY, PARTNER_PHARMACY, HOSPITAL_DISPENSARY]";
-            org.springframework.http.converter.HttpMessageNotReadableException ex =
-                new org.springframework.http.converter.HttpMessageNotReadableException(
-                    "Outer wrapper",
-                    tools.jackson.databind.exc.MismatchedInputException.from(
-                        (tools.jackson.core.JsonParser) null, Object.class, jacksonMessage),
-                    new org.springframework.mock.http.MockHttpInputMessage(new byte[0]));
+            var ex = wrap(tools.jackson.databind.exc.MismatchedInputException.from(
+                (tools.jackson.core.JsonParser) null, Object.class, jacksonMessage));
 
             ResponseEntity<Object> response = handler.handleHttpMessageNotReadable(ex, request);
 
-            @SuppressWarnings("unchecked")
-            Map<String, Object> body = (Map<String, Object>) response.getBody();
+            Map<String, Object> body = bodyOf(response);
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-            assertThat(body).isNotNull().containsEntry("status", 400);
+            assertThat(body).containsEntry("status", 400).containsEntry("code", "MALFORMED_REQUEST");
             assertThat((String) body.get("message"))
-                .startsWith("Malformed request body:")
-                .contains("not one of the values accepted")
-                .contains("COMMUNITY_PHARMACY");
+                .isEqualTo("The request could not be read. Check the values entered and try again.")
+                .doesNotContain("deserialize").doesNotContain("com.example").doesNotContain("COMMUNITY");
         }
 
         @Test
-        @DisplayName("falls back to outer message when no cause is set")
-        void fallsBackWhenCauseAbsent() {
-            org.springframework.http.converter.HttpMessageNotReadableException ex =
-                new org.springframework.http.converter.HttpMessageNotReadableException(
-                    "Required request body is missing",
-                    new org.springframework.mock.http.MockHttpInputMessage(new byte[0]));
+        @DisplayName("names the offending JSON field when Jackson reports a path")
+        void namesTheField() {
+            var cause = tools.jackson.databind.exc.MismatchedInputException.from(
+                (tools.jackson.core.JsonParser) null, Object.class, "Cannot deserialize `java.time.LocalDate`");
+            cause.prependPath(new tools.jackson.core.JacksonException.Reference(null, 0));
+            cause.prependPath(new tools.jackson.core.JacksonException.Reference(null, "items"));
+            var ex = wrap(cause);
 
-            ResponseEntity<Object> response = handler.handleHttpMessageNotReadable(ex, request);
+            Map<String, Object> body = bodyOf(handler.handleHttpMessageNotReadable(ex, request));
 
-            @SuppressWarnings("unchecked")
-            Map<String, Object> body = (Map<String, Object>) response.getBody();
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-            assertThat(body).isNotNull();
+            assertThat(body).containsEntry("field", "items[0]");
             assertThat((String) body.get("message"))
-                .startsWith("Malformed request body:")
-                .contains("Required request body is missing");
+                .isEqualTo("The value entered for \"items[0]\" is not valid.")
+                .doesNotContain("LocalDate");
         }
 
-        /**
-         * Regression guard against the Copilot-flagged "Malformed request
-         * body: null" output: when both the cause's message and the outer
-         * exception's message are blank, the handler must fall through to a
-         * fixed default rather than serialise {@code null} into the response.
-         */
         @Test
-        @DisplayName("falls back to a fixed default when both messages are blank")
-        void fallsBackToFixedDefaultWhenAllMessagesBlank() {
-            // Cause exists but has a null message — historically the source
-            // of the "Malformed request body: null" footgun.
-            tools.jackson.databind.exc.MismatchedInputException blankCause =
-                tools.jackson.databind.exc.MismatchedInputException.from(
-                    (tools.jackson.core.JsonParser) null, Object.class, (String) null);
-            org.springframework.http.converter.HttpMessageNotReadableException ex =
-                new org.springframework.http.converter.HttpMessageNotReadableException(
-                    "",
-                    blankCause,
-                    new org.springframework.mock.http.MockHttpInputMessage(new byte[0]));
+        @DisplayName("a missing body still gets the safe message, never 'null'")
+        void missingBody() {
+            var ex = new org.springframework.http.converter.HttpMessageNotReadableException(
+                "Required request body is missing",
+                new org.springframework.mock.http.MockHttpInputMessage(new byte[0]));
 
-            ResponseEntity<Object> response = handler.handleHttpMessageNotReadable(ex, request);
+            Map<String, Object> body = bodyOf(handler.handleHttpMessageNotReadable(ex, request));
+
+            assertThat((String) body.get("message"))
+                .isEqualTo("The request could not be read. Check the values entered and try again.")
+                .doesNotContain("null").doesNotContain("Required request body");
+        }
+
+        @Test
+        @DisplayName("uses the request locale through the MessageSource")
+        void translatesThroughMessageSource() {
+            var source = new org.springframework.context.support.ReloadableResourceBundleMessageSource();
+            source.setBasenames("classpath:messages");
+            source.setDefaultEncoding("UTF-8");
+            source.setFallbackToSystemLocale(false);
+            source.setAlwaysUseMessageFormat(true);
+            handler.setMessageSource(source);
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            try {
+                var ex = new org.springframework.http.converter.HttpMessageNotReadableException(
+                    "x", new org.springframework.mock.http.MockHttpInputMessage(new byte[0]));
+                Map<String, Object> body = bodyOf(handler.handleHttpMessageNotReadable(ex, request));
+                assertThat((String) body.get("message"))
+                    .isEqualTo("La demande n'a pas pu être lue. Vérifiez les valeurs saisies et réessayez.");
+            } finally {
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("handleRuntimeException")
+    class HandleRuntimeException {
+
+        @Test
+        @DisplayName("D53: the catch-all 500 never echoes the exception text")
+        void neverEchoesExceptionText() {
+            var ex = new NullPointerException("Cannot invoke \"User.getId()\" because \"user\" is null");
+
+            ResponseEntity<Object> response = handler.handleRuntimeException(ex, request);
 
             @SuppressWarnings("unchecked")
             Map<String, Object> body = (Map<String, Object>) response.getBody();
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-            assertThat(body).isNotNull();
-            // The exact wording is allowed to vary — Spring's
-            // HttpMessageNotReadableException normalises an empty message to
-            // "N/A" before we see it, so we land on
-            // "Malformed request body: N/A". The load-bearing invariant is
-            // simply that the response never serialises the literal string
-            // "null" into the body, which was Copilot's concern.
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+            assertThat(body).containsEntry("code", "UNEXPECTED_ERROR");
             assertThat((String) body.get("message"))
-                .startsWith("Malformed request body")
-                .doesNotContain("null");
+                .isEqualTo("An unexpected error occurred. Please try again or contact support.")
+                .doesNotContain("Cannot invoke");
         }
     }
 
@@ -373,8 +390,10 @@ class GlobalExceptionHandlerTest {
             var response = handler.handleTypeMismatch(ex, request);
 
             org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(400);
+            // D53: the parameter is named, the raw value and Java type are not.
             org.assertj.core.api.Assertions.assertThat(String.valueOf(response.getBody()))
-                .contains("sources").contains("PLATFORM_CONFIG");
+                .contains("sources").contains("INVALID_PARAMETER")
+                .doesNotContain("PLATFORM_CONFIG").doesNotContain("AuditSource");
         }
     }
 

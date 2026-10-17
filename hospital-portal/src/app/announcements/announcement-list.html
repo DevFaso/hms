@@ -70,11 +70,12 @@
       <h3>{{ 'ANNOUNCEMENTS.NO_ANNOUNCEMENTS' | translate }}</h3>
       <p>
         {{
-          searchTerm
-            ? 'Try adjusting your search.'
+          (searchTerm
+            ? 'COMMON.TRY_ADJUST_SEARCH'
             : canManage
-              ? 'Create your first announcement.'
-              : 'No announcements yet.'
+              ? 'ANNOUNCEMENTS.CREATE_FIRST'
+              : 'ANNOUNCEMENTS.NONE_YET'
+          ) | translate
         }}
       </p>
     </div>

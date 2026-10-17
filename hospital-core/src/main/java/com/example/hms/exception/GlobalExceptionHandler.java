@@ -5,6 +5,9 @@ import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
@@ -39,6 +42,31 @@ public class GlobalExceptionHandler {
     private static final String FIELD_ERROR     = "error";
     private static final String FIELD_MESSAGE   = "message";
     private static final String FIELD_PATH      = "path";
+    private static final String FIELD_CODE      = "code";
+
+    /** Machine-readable codes the portal maps onto its own translated text (D53). */
+    static final String CODE_MALFORMED_REQUEST = "MALFORMED_REQUEST";
+    static final String CODE_INVALID_PARAMETER = "INVALID_PARAMETER";
+    static final String CODE_UNEXPECTED_ERROR  = "UNEXPECTED_ERROR";
+
+    /**
+     * Optional so the many tests that build the advice with {@code new} keep
+     * working; each lookup has an English default when it is absent.
+     */
+    private MessageSource messageSource;
+
+    @Autowired(required = false)
+    public void setMessageSource(MessageSource messageSource) {
+        this.messageSource = messageSource;
+    }
+
+    /** Resolve a user-facing message in the request's locale, falling back to the default text. */
+    private String localized(String key, String defaultText, Object... args) {
+        if (messageSource == null) {
+            return java.text.MessageFormat.format(defaultText.replace("'", "''"), args);
+        }
+        return messageSource.getMessage(key, args, defaultText.replace("'", "''"), LocaleContextHolder.getLocale());
+    }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Object> handleResourceNotFoundException(ResourceNotFoundException ex, WebRequest request) {
@@ -214,42 +242,51 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Catches Jackson deserialisation failures (unknown enum values, malformed
-     * JSON, type-coercion errors) and surfaces them as 400 with the original
-     * Jackson message — far more actionable than the generic 500 the catch-all
-     * RuntimeException handler used to produce. Triggered on dev when the
-     * pharmacy-registry frontend posted {@code "pharmacyType":"COMMUNITY"}
-     * against the {@code PharmacyType} enum whose accepted values are
-     * {@code COMMUNITY_PHARMACY / PARTNER_PHARMACY / HOSPITAL_DISPENSARY}.
+     * Jackson deserialisation failures (unknown enum values, malformed JSON,
+     * type-coercion errors) are a 400 — but the parser's own message is never
+     * returned (D53). It named Java types and the accepted enum constants
+     * ("Cannot deserialize value of type `...PharmacyType` from String ...")
+     * and the portal showed it verbatim in a toast. The detail goes to the
+     * log; the caller gets a translated sentence naming at most the field,
+     * plus {@code code=MALFORMED_REQUEST} for clients that translate locally.
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Object> handleHttpMessageNotReadable(
             HttpMessageNotReadableException ex, WebRequest request) {
-        // Jackson exception messages embed the offending field path and the
-        // accepted values for enums; surface them so the caller can self-
-        // diagnose. The cause's message is shorter and cleaner than the
-        // outer JsonMappingException stack-trace prefix, but it can be null
-        // even when the cause itself is non-null (rare Jackson paths build a
-        // cause with no detail message) — fall through to the outer message
-        // and then to a fixed default so the response is never
-        // "Malformed request body: null".
-        String detail = resolveJacksonDetail(ex);
-        String message = detail.isEmpty()
-            ? "Malformed request body."
-            : "Malformed request body: " + detail;
-        return buildErrorResponse(HttpStatus.BAD_REQUEST, message, request);
+        log.warn("Unreadable request body at path {}: {}",
+            request.getDescription(false), ex.getMostSpecificCause().getClass().getSimpleName());
+        String field = resolveJacksonField(ex);
+        String message = field == null
+            ? localized("error.request.malformed",
+                "The request could not be read. Check the values entered and try again.")
+            : localized("error.request.invalidField",
+                "The value entered for \"{0}\" is not valid.", field);
+        Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
+        body.put(FIELD_CODE, CODE_MALFORMED_REQUEST);
+        if (field != null) {
+            body.put("field", field);
+        }
+        return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
-    private static String resolveJacksonDetail(HttpMessageNotReadableException ex) {
-        // getMostSpecificCause() falls back to the throwable itself when no
-        // cause is chained, so it is documented non-null. Its detail message,
-        // however, can be null on edge-case Jackson paths.
-        String causeMessage = ex.getMostSpecificCause().getMessage();
-        if (causeMessage != null && !causeMessage.isBlank()) {
-            return causeMessage;
+    /** The JSON property path of the failure ("items[0].dose" style), or null when Jackson gave none. */
+    private static String resolveJacksonField(HttpMessageNotReadableException ex) {
+        if (!(ex.getMostSpecificCause() instanceof tools.jackson.core.JacksonException jackson)) {
+            return null;
         }
-        String outer = ex.getMessage();
-        return outer != null && !outer.isBlank() ? outer : "";
+        StringBuilder path = new StringBuilder();
+        for (tools.jackson.core.JacksonException.Reference ref : jackson.getPath()) {
+            String name = ref.getPropertyName();
+            if (name != null) {
+                if (!path.isEmpty()) {
+                    path.append('.');
+                }
+                path.append(name);
+            } else if (ref.getIndex() >= 0) {
+                path.append('[').append(ref.getIndex()).append(']');
+            }
+        }
+        return path.isEmpty() ? null : path.toString();
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -318,12 +355,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<Object> handleTypeMismatch(
             MethodArgumentTypeMismatchException ex, WebRequest request) {
-        String requiredType = ex.getRequiredType() != null
-                ? ex.getRequiredType().getSimpleName()
-                : "value";
-        String message = "Invalid value '" + ex.getValue() + "' for parameter '"
-                + ex.getName() + "' (expected " + requiredType + ")";
-        return buildErrorResponse(HttpStatus.BAD_REQUEST, message, request);
+        // The value and the Java type stay in the log (D53): the caller is
+        // told which parameter, in its own language, and nothing else.
+        log.warn("Parameter type mismatch at path {}: parameter {} expected {}",
+            request.getDescription(false), ex.getName(),
+            ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "value");
+        String message = localized("error.request.invalidParameter",
+            "The value supplied for the parameter \"{0}\" is not valid.", ex.getName());
+        Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
+        body.put(FIELD_CODE, CODE_INVALID_PARAMETER);
+        return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
     /**
@@ -386,7 +427,14 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Object> handleRuntimeException(RuntimeException ex, WebRequest request) {
     // Log full stack to aid debugging of 500s (safe: message already generic in response)
     log.error("Unhandled runtime exception at path {}: {}", request.getDescription(false), ex.getMessage(), ex);
-    return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred: " + ex.getMessage(), request);
+    // The exception text stays in the log (D53): it is an internal Java
+    // message ("Cannot invoke ... because ... is null") no user can act on,
+    // and it can carry identifiers.
+    Map<String, Object> body = errorBody(HttpStatus.INTERNAL_SERVER_ERROR,
+        localized("error.unexpected", "An unexpected error occurred. Please try again or contact support."),
+        request);
+    body.put(FIELD_CODE, CODE_UNEXPECTED_ERROR);
+    return new ResponseEntity<>(body, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     private ResponseEntity<Object> buildErrorResponse(HttpStatus status, String message, WebRequest request) {

@@ -1093,12 +1093,18 @@ describe('Dashboard i18n refactor coverage', () => {
     expect(c.getPaymentMethodColor('UNKNOWN')).toBe('#64748b');
   });
 
-  it('formatMethodLabel converts SNAKE_CASE underscores to spaces', () => {
+  it('formatMethodLabel is the locale-aware payment-method label, not an English prettifier', () => {
     const c = createComponent(['ROLE_HOSPITAL_ADMIN']);
-    // Input is already upper-case so the title-case replace is a no-op —
-    // the only observable change is "_" → " ".
-    expect(c.formatMethodLabel('CREDIT_CARD')).toBe('CREDIT CARD');
-    expect(c.formatMethodLabel('bank_transfer')).toBe('Bank Transfer');
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation(
+      'fr',
+      { PORTAL: { ENUM: { PAYMENT_METHOD: { CREDIT_CARD: 'Carte de crédit' } } } },
+      true,
+    );
+    translate.use('fr');
+    expect(c.formatMethodLabel('CREDIT_CARD')).toBe('Carte de crédit');
+    // An unkeyed value still degrades to readable words.
+    expect(c.formatMethodLabel('BANK_WIRE')).toBe('Bank Wire');
   });
 
   // ── Language-change subscription path ────────────────────────

@@ -1,5 +1,7 @@
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { EnumLabelService } from '../../core/enum-label.service';
 import {
   PharmacyClaimResponse,
   PharmacyService,
@@ -15,25 +17,21 @@ import {
 @Component({
   selector: 'app-my-pharmacy-invoices',
   standalone: true,
-  imports: [CommonModule, DatePipe, DecimalPipe],
+  imports: [CommonModule, TranslateModule, DatePipe, DecimalPipe],
   templateUrl: './my-pharmacy-invoices.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-pharmacy-invoices.component.scss', '../patient-portal-pages.scss'],
 })
 export class MyPharmacyInvoicesComponent implements OnInit {
   private readonly svc = inject(PharmacyService);
+  private readonly translate = inject(TranslateService);
+  private readonly enumLabels = inject(EnumLabelService);
 
   payments = signal<PharmacyPaymentResponse[]>([]);
   claims = signal<PharmacyClaimResponse[]>([]);
   loading = signal(true);
   totalPaid = signal(0);
   totalClaimed = signal(0);
-
-  readonly methodLabels: Record<string, string> = {
-    CASH: 'Espèces',
-    MOBILE_MONEY: 'Mobile Money',
-    INSURANCE: 'Assurance',
-  };
 
   ngOnInit(): void {
     this.load();
@@ -63,10 +61,12 @@ export class MyPharmacyInvoicesComponent implements OnInit {
   }
 
   methodLabel(m: string): string {
-    return this.methodLabels[m] ?? m;
+    return this.enumLabels.transform(m, 'paymentMethod');
   }
 
   statusLabel(status: string): string {
-    return status.replace(/_/g, ' ').toLowerCase();
+    const key = `PHARMACY_CLAIMS.STATUS.${status}`;
+    const label = this.translate.instant(key);
+    return label === key ? this.enumLabels.transform(status) : label;
   }
 }

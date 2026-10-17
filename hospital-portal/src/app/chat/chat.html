@@ -198,8 +198,8 @@
                           >
                             <img
                               [src]="blobUrl"
-                              [alt]="att.displayName || 'chat attachment'"
-                              [title]="att.displayName || 'chat attachment'"
+                              [alt]="att.displayName || ('CHAT.ATTACHMENT' | translate)"
+                              [title]="att.displayName || ('CHAT.ATTACHMENT' | translate)"
                             />
                           </a>
                         } @else if (att.kind === 'AUDIO') {

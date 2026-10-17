@@ -137,6 +137,14 @@ describe('PostpartumTabComponent — screening', () => {
     component = TestBed.createComponent(PostpartumTabComponent).componentInstance;
   });
 
+  it('D65: with no patient picked, shows the postpartum hint, not the referrals one', () => {
+    const fixture = TestBed.createComponent(PostpartumTabComponent);
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('POSTPARTUM.PICK_PATIENT_HINT');
+    expect(text).not.toContain('MATERNITY.PICK_PATIENT_HINT');
+  });
+
   it('picking a patient loads the screening history for the plan instrument', () => {
     screeningSpy.history.and.returnValue(of([response('r1')]));
     component.onPatientPicked({ id: 'p1' } as PatientResponse);

@@ -311,12 +311,18 @@
     @if (totalPages > 1) {
       <div class="pagination-row">
         <span class="pagination-info">
-          Showing {{ currentPage() * pageSize + 1 }}–{{
-            (currentPage() + 1) * pageSize < filtered().length
-              ? (currentPage() + 1) * pageSize
-              : filtered().length
+          {{
+            'COMMON.SHOWING_RANGE'
+              | translate
+                : {
+                    from: currentPage() * pageSize + 1,
+                    to:
+                      (currentPage() + 1) * pageSize < filtered().length
+                        ? (currentPage() + 1) * pageSize
+                        : filtered().length,
+                    total: filtered().length,
+                  }
           }}
-          of {{ filtered().length }}
         </span>
         <div class="pagination-controls">
           <button

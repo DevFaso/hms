@@ -323,6 +323,28 @@ describe('errorInterceptor', () => {
     expect(error?.status).toBe(403);
   });
 
+  it('D54: a refused prescription signature stays on the page so its toast can explain why', () => {
+    let error: HttpErrorResponse | undefined;
+    http.post('/prescriptions/rx-1/sign', {}).subscribe({ error: (e) => (error = e) });
+    httpMock
+      .expectOne('/prescriptions/rx-1/sign')
+      .flush(
+        { message: 'Only the prescribing clinician can sign this prescription.' },
+        { status: 403, statusText: 'Forbidden' },
+      );
+
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(error?.status).toBe(403);
+    httpMock.expectNone('/frontend-audit');
+  });
+
+  it('still redirects a 403 on an unrelated write', () => {
+    http.post('/prescriptions', {}).subscribe({ error: () => undefined });
+    httpMock.expectOne('/prescriptions').flush(null, { status: 403, statusText: 'Forbidden' });
+
+    expect(router.navigate).toHaveBeenCalledWith(['/error/403']);
+  });
+
   describe('hospital scope refused (the one tenant resolver)', () => {
     function refuse(reason: string, hospitalId?: string): HttpErrorResponse | undefined {
       let error: HttpErrorResponse | undefined;

@@ -12,7 +12,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject, catchError, of, switchMap, tap } from 'rxjs';
 import {
@@ -82,6 +82,7 @@ export class DocumentsTabComponent implements OnInit, OnChanges {
 
   private readonly documentsService = inject(PatientDocumentsService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly requests$ = new Subject<ListRequest>();
 
@@ -189,7 +190,7 @@ export class DocumentsTabComponent implements OnInit, OnChanges {
       },
       error: () => {
         this.downloading.set(null);
-        this.toast.error('PATIENT_DOCUMENTS.DOWNLOAD_FAILED');
+        this.toast.error(this.translate.instant('PATIENT_DOCUMENTS.DOWNLOAD_FAILED'));
       },
     });
   }

@@ -33,6 +33,14 @@ public class DrugDrugInteractionRule implements CdsRule {
     private static final String ID = "drug-drug-interaction";
     private static final String SOURCE_LABEL = "HMS Drug-Drug Interaction Check";
 
+    /** Card wording in the caller's language (D61); English when built outside Spring. */
+    private com.example.hms.cdshooks.CdsCardText text = com.example.hms.cdshooks.CdsCardText.ENGLISH;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setCardText(com.example.hms.cdshooks.CdsCardText text) {
+        this.text = text;
+    }
+
     private final DrugInteractionRepository repository;
 
     public DrugDrugInteractionRule(DrugInteractionRepository repository) {
@@ -72,8 +80,8 @@ public class DrugDrugInteractionRule implements CdsRule {
     }
 
     private CdsCard buildCard(DrugInteraction di) {
-        String summary = "Drug-drug interaction: " + di.getDrug1Name()
-            + " ↔ " + di.getDrug2Name() + " (" + di.getSeverity() + ")";
+        String summary = text.get("cds.ddi.summary", "Drug-drug interaction: {0} ↔ {1} ({2})",
+            di.getDrug1Name(), di.getDrug2Name(), text.enumWord(di.getSeverity()));
         String detail = composeDetail(di);
         return new CdsCard(
             summary,
@@ -84,12 +92,12 @@ public class DrugDrugInteractionRule implements CdsRule {
         );
     }
 
-    private static String composeDetail(DrugInteraction di) {
+    private String composeDetail(DrugInteraction di) {
         StringBuilder detail = new StringBuilder();
         if (di.getDescription() != null) detail.append(di.getDescription());
         if (di.getRecommendation() != null) {
             if (!detail.isEmpty()) detail.append(' ');
-            detail.append("Recommendation: ").append(di.getRecommendation());
+            detail.append(text.get("cds.ddi.recommendation", "Recommendation: {0}", di.getRecommendation()));
         }
         return detail.isEmpty() ? null : detail.toString();
     }

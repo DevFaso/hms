@@ -598,7 +598,9 @@ export class PatientDetailComponent implements OnInit {
     ) {
       age--;
     }
-    return `${age} years`;
+    return this.translate.instant(age === 1 ? 'PATIENTS.AGE_YEAR' : 'PATIENTS.AGE_YEARS', {
+      count: age,
+    });
   }
 
   /** True for a real measurement, including 0 — but not null/undefined.

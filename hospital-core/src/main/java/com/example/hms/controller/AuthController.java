@@ -96,10 +96,6 @@ public class AuthController {
      * which one this account is on — see the DisabledException arm of
      * {@link #login} for why that matters.
      */
-    private static final String INACTIVE_ACCOUNT_GUIDANCE =
-            "Your account is not active. If you have not activated it yet, use the activation "
-            + "link or confirmation code from the message sent when the account was created. "
-            + "Otherwise, please contact your administrator.";
 
     private final UserRepository userRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
@@ -326,7 +322,7 @@ public class AuthController {
                     log.warn("🔐 [LOGIN] User '{}' tried to select role '{}' but holds only {}",
                             loginRequest.getUsername(), typed, allRoles);
                     return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                            .body(new MessageResponse("You do not hold the role: " + typed));
+                            .body(new MessageResponse(MessageUtil.resolve("auth.login.roleNotHeld", typed)));
                 }
                 effectiveRoles = List.of(selected);
             } else {
@@ -446,8 +442,10 @@ public class AuthController {
             loginAttemptService.recordFailure(loginRequest.getUsername());
             auditLoginFailure(loginRequest.getUsername(), "Login failed: bad credentials");
             log.warn("🔐 [LOGIN] Bad credentials for user='{}'", loginRequest.getUsername());
+            // D64: the refusal is shown on the sign-in screen, so it speaks the
+            // caller's language rather than always English.
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("Invalid username or password."));
+                    .body(new MessageResponse(MessageUtil.resolve("auth.login.badCredentials")));
         } catch (DisabledException ex) {
             // "Please verify your email" named a flow most accounts do not
             // have — staff activate by confirming a role assignment with an
@@ -479,13 +477,13 @@ public class AuthController {
             auditLoginFailure(loginRequest.getUsername(), "Login failed: account not active");
             log.warn("🔐 [LOGIN] Disabled account user='{}'", loginRequest.getUsername());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse(INACTIVE_ACCOUNT_GUIDANCE));
+                    .body(new MessageResponse(MessageUtil.resolve("auth.login.inactive")));
         } catch (RuntimeException ex) {
             long elapsedMs = (System.nanoTime() - start) / 1_000_000;
             log.error("🔐 [LOGIN] Unexpected failure user='{}' after {}ms : {} - {}", loginRequest.getUsername(),
                     elapsedMs, ex.getClass().getSimpleName(), ex.getMessage());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("Authentication failed."));
+                    .body(new MessageResponse(MessageUtil.resolve("auth.login.failed")));
         } finally {
             resetSecurityContextToAnonymous();
         }
@@ -1041,10 +1039,10 @@ public class AuthController {
         } catch (BadCredentialsException ex) {
             log.warn("🔒 [VERIFY-PWD] Wrong password for user='{}'", currentUsername);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("Invalid password."));
+                    .body(new MessageResponse(MessageUtil.resolve("auth.verifyPassword.invalid")));
         } catch (DisabledException ex) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("Account is disabled."));
+                    .body(new MessageResponse(MessageUtil.resolve("auth.account.disabled")));
         } finally {
             resetSecurityContextToAnonymous();
         }
@@ -1081,7 +1079,7 @@ public class AuthController {
                     new UsernamePasswordAuthenticationToken(username, request.currentPassword()));
         } catch (BadCredentialsException ex) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("Current password is incorrect."));
+                    .body(new MessageResponse(MessageUtil.resolve("auth.password.currentIncorrect")));
         } finally {
             resetSecurityContextToAnonymous();
             // Restore the original authentication after verify sub-call
@@ -1090,11 +1088,11 @@ public class AuthController {
 
         if (request.newPassword() == null || request.newPassword().length() < 8) {
             return ResponseEntity.badRequest()
-                    .body(new MessageResponse("New password must be at least 8 characters."));
+                    .body(new MessageResponse(MessageUtil.resolve("auth.password.tooShort")));
         }
         if (request.newPassword().equals(request.currentPassword())) {
             return ResponseEntity.badRequest()
-                    .body(new MessageResponse("New password must differ from the current password."));
+                    .body(new MessageResponse(MessageUtil.resolve("auth.password.sameAsCurrent")));
         }
 
         // Password history check (T-20) — reject reuse of last 5 passwords
@@ -1107,14 +1105,14 @@ public class AuthController {
                     .status(AuditStatus.FAILURE)
                     .build());
             return ResponseEntity.badRequest()
-                    .body(new MessageResponse("New password must not match any of your last 5 passwords."));
+                    .body(new MessageResponse(MessageUtil.resolve("auth.password.reused")));
         }
 
         // Update password, clear force-change flag, and record in history
         userService.changeOwnPassword(user.getId(), request.newPassword());
 
         log.info("🔑 [CHANGE-PWD] Password changed for user='{}'; forcePasswordChange cleared.", username);
-        return ResponseEntity.ok(new MessageResponse("Password changed successfully."));
+        return ResponseEntity.ok(new MessageResponse(MessageUtil.resolve("auth.password.changed")));
     }
 
     /** Request body for {@code POST /auth/me/change-password}. */
@@ -1148,15 +1146,15 @@ public class AuthController {
         String newUsername = request.newUsername() == null ? "" : request.newUsername().trim();
         if (newUsername.length() < 3 || newUsername.length() > 50) {
             return ResponseEntity.badRequest()
-                    .body(new MessageResponse("Username must be between 3 and 50 characters."));
+                    .body(new MessageResponse(MessageUtil.resolve("auth.username.length")));
         }
         if (!newUsername.matches("^[a-zA-Z0-9._-]+$")) {
             return ResponseEntity.badRequest()
-                    .body(new MessageResponse("Username may only contain letters, digits, dots, hyphens, and underscores."));
+                    .body(new MessageResponse(MessageUtil.resolve("auth.username.characters")));
         }
         if (newUsername.equals(currentUsername)) {
             return ResponseEntity.badRequest()
-                    .body(new MessageResponse("New username must differ from the current username."));
+                    .body(new MessageResponse(MessageUtil.resolve("auth.username.sameAsCurrent")));
         }
 
         try {
@@ -1168,7 +1166,7 @@ public class AuthController {
 
         log.info("🔑 [CHANGE-USR] Username changed for user='{}' -> '{}'; forceUsernameChange cleared.",
                 currentUsername, newUsername);
-        return ResponseEntity.ok(new MessageResponse("Username changed successfully."));
+        return ResponseEntity.ok(new MessageResponse(MessageUtil.resolve("auth.username.changed")));
     }
 
     /** Request body for {@code POST /auth/me/change-username}. */

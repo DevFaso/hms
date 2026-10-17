@@ -158,7 +158,7 @@
                 <li class="chart-review__card">
                   <header class="chart-review__card-head">
                     <span class="chart-review__pill chart-review__pill--info">{{
-                      n.template || 'NOTE'
+                      n.template || ('CHART_REVIEW.SECTION.NOTE' | translate)
                     }}</span>
                     @if (n.documentedAt) {
                       <time class="chart-review__card-date">
@@ -258,7 +258,7 @@
                     <td>
                       @if (r.abnormalFlag) {
                         <span class="chart-review__pill" [ngClass]="resultClass(r.abnormalFlag)">
-                          {{ r.abnormalFlag }}
+                          {{ r.abnormalFlag | enumLabel: 'labSeverityFlag' }}
                         </span>
                       } @else {
                         —
@@ -341,14 +341,16 @@
                 <li class="chart-review__card">
                   <header class="chart-review__card-head">
                     <span class="chart-review__pill chart-review__pill--info">{{
-                      i.modality || '—'
+                      (i.modality | enumLabel: 'imagingModality') || '—'
                     }}</span>
                     <span class="chart-review__card-title">{{ i.studyType || '—' }}</span>
                     @if (i.bodyRegion) {
                       <span class="chart-review__muted">· {{ i.bodyRegion }}</span>
                     }
                     @if (i.laterality) {
-                      <span class="chart-review__muted">· {{ i.laterality }}</span>
+                      <span class="chart-review__muted"
+                        >· {{ i.laterality | enumLabel: 'imagingLaterality' }}</span
+                      >
                     }
                     <span class="chart-review__pill" [ngClass]="statusClass(i.status)">
                       {{ (i.status | enumLabel: 'imagingOrderStatus') || '—' }}
@@ -428,7 +430,7 @@
                         <span class="chart-review__muted"> · {{ p.procedureCategory }}</span>
                       }
                     </td>
-                    <td>{{ p.urgency || '—' }}</td>
+                    <td>{{ (p.urgency | enumLabel: 'procedureUrgency') || '—' }}</td>
                     <td>
                       <span class="chart-review__pill" [ngClass]="statusClass(p.status)">
                         {{ (p.status | enumLabel: 'procedureOrderStatus') || '—' }}

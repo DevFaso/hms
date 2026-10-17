@@ -76,7 +76,7 @@
                 [ngModel]="allergy.severity"
                 (ngModelChange)="allergy.severity = $event"
                 [name]="'allergySeverity_' + i"
-                [attr.aria-label]="'Allergy severity for row ' + (i + 1)"
+                [attr.aria-label]="'INTAKE.ALLERGY_SEVERITY_ROW' | translate: { row: i + 1 }"
               >
                 <option value="">{{ 'CHART.SEVERITY' | translate }}</option>
                 <option value="MILD">{{ 'CHART.SEVERITY_MILD' | translate }}</option>

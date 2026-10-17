@@ -54,7 +54,10 @@
               class="toggle-btn"
               [class.on]="flag.enabled"
               (click)="toggleFlag(flag)"
-              [attr.aria-label]="flag.enabled ? 'Disable ' + flag.key : 'Enable ' + flag.key"
+              [attr.aria-label]="
+                (flag.enabled ? 'FLAGS.DISABLE_FLAG' : 'FLAGS.ENABLE_FLAG')
+                  | translate: { key: flag.key }
+              "
             >
               <span class="toggle-track">
                 <span class="toggle-thumb"></span>
