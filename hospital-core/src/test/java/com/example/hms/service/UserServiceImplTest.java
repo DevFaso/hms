@@ -970,6 +970,23 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("an unchanged legacy phone sent back by the edit dialog does not block the edit")
+        void unchangedLegacyPhoneDoesNotBlockEdit() {
+            stubHappyPath();
+            user.setPhoneNumber("70-20 ext 5");
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setFirstName("NewFirst");
+            dto.setPhoneNumber("70-20 ext 5");
+
+            userService.updateUser(userId, dto);
+
+            ArgumentCaptor<User> cap = ArgumentCaptor.forClass(User.class);
+            verify(userRepository).save(cap.capture());
+            assertThat(cap.getValue().getPhoneNumber()).isEqualTo("70-20 ext 5");
+            assertThat(cap.getValue().getFirstName()).isEqualTo("NewFirst");
+        }
+
+        @Test
         @DisplayName("blank password is ignored — existing hash preserved")
         void blankPasswordPreservesHash() {
             stubHappyPath();

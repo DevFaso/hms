@@ -1315,7 +1315,9 @@ public class UserServiceImpl implements UserService {
         if (hasText(dto.getLastName())) {
             user.setLastName(dto.getLastName());
         }
-        if (hasText(dto.getPhoneNumber())) {
+        // Normalised only when it changed: the edit dialog sends the stored
+        // phone back, and a legacy value toE164 refuses must not block an edit.
+        if (hasText(dto.getPhoneNumber()) && !dto.getPhoneNumber().trim().equals(user.getPhoneNumber())) {
             user.setPhoneNumber(normalizePhone(dto.getPhoneNumber(), activeHospitalFromContext()));
         }
         if (dto.getActive() != null) {
