@@ -77,6 +77,34 @@ class OnboardingEmailRenderingTest {
     }
 
     @Test
+    @DisplayName("new staff with two roles: ONE French mail listing each role with its own code and link")
+    void multiRoleWelcomeListsEveryRole() {
+        service.sendAdminWelcomeEmail("rec@hospital.test", "Awa Traore", "atraore", "Temp@1234", java.util.List.of(
+            new EmailService.WelcomeRole("ROLE_NURSE", "CHU Test", "111111",
+                "https://dev.e-keneya.com/onboarding/role-welcome?assignment=A-1"),
+            new EmailService.WelcomeRole("ROLE_DOCTOR", "CHU Test", "222222",
+                "https://dev.e-keneya.com/onboarding/role-welcome?assignment=A-2")));
+
+        String[] mail = captured();
+        assertThat(mail[0]).isEqualTo("Bienvenue sur e-Keneya — Activez votre compte");
+        assertThat(mail[1])
+            .contains("Infirmier(ère) à CHU Test")
+            .contains("Médecin à CHU Test")
+            .contains("111111")
+            .contains("222222")
+            .contains("onboarding/role-welcome?assignment=A-1")
+            .contains("onboarding/role-welcome?assignment=A-2")
+            .contains("Les rôles ci-dessous sont prêts à être confirmés")
+            .contains("Confirmer ce rôle")
+            .contains("atraore")
+            .doesNotContain("ROLE_NURSE")
+            .doesNotContain("ROLE_DOCTOR")
+            .doesNotContain("message séparé");
+        assertThat(mail[1].indexOf("111111")).isLessThan(mail[1].indexOf("assignment=A-1"));
+        assertThat(mail[1].indexOf("assignment=A-1")).isLessThan(mail[1].indexOf("222222"));
+    }
+
+    @Test
     @DisplayName("additional assignment for an existing user: role label in French, never the raw code")
     void assignmentMailTranslatesTheRole() {
         service.sendRoleAssignmentConfirmationEmail("doc@hospital.test", "Awa Traore", "ROLE_NURSE",

@@ -2728,6 +2728,19 @@
     </changeSet>
 
     <!-- =================================================================
+         V185 — security.users.phone_number backfilled to E.164 (#866
+         residual). One DO block (splitStatements=false). Rows whose E.164
+         form is already held are left unchanged and counted in a NOTICE.
+         Idempotent. The Sage export plan moves to V186.
+         ================================================================= -->
+    <changeSet id="V185-users-phone-e164-backfill" author="hms-team" runOnChange="false">
+        <sqlFile path="V185__users_phone_e164_backfill.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
          V187 — security.users.activated_before_delete (PR #872, D21): the
          soft delete records whether the account was activated, so the
          restore brings an e-mail-verified account back active and keeps a

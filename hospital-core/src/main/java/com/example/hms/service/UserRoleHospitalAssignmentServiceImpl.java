@@ -2204,7 +2204,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .orElseThrow(() -> assignmentNotFound(assignmentId));
         // The welcome mail carries the code only when this assignment has both
         // the confirmation code and the assignment code it reads
-        // (UserServiceImpl.soleConfirmationCode / soleAssignmentCode); without
+        // (UserServiceImpl.welcomeRoles lists it); without
         // them it points at this mail, so this mail must still go out.
         boolean welcomeHasTheCode = hasText(assignment.getConfirmationCode())
             && hasText(assignment.getAssignmentCode());

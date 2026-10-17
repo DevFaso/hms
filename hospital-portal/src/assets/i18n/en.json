@@ -3705,7 +3705,14 @@
     "USERNAME": "Username",
     "VERIFYING": "Verifying...",
     "WELCOME": "Welcome",
-    "WELCOME_TO_HMS": "Welcome to HMS"
+    "WELCOME_TO_HMS": "Welcome to HMS",
+    "ERR_NO_LINK_CODE": "No assignment code was found in the link. Please check your email.",
+    "ERR_LINK_INVALID": "This assignment link is invalid or has expired.",
+    "ERR_LOAD_FAILED": "Unable to load your assignment. Please try again later.",
+    "ERR_CODE_INCORRECT": "Incorrect code. Please check your email and try again.",
+    "ERR_ASSIGNMENT_NOT_FOUND": "Assignment not found. Please use the original email link.",
+    "ERR_GENERIC": "Something went wrong. Please try again.",
+    "OTHER_ROLES_HINT": "If your welcome email lists other roles, confirm each one with its own code, using the button under that code."
   },
   "ORGANIZATIONS": {
     "CONTACT": "Contact",

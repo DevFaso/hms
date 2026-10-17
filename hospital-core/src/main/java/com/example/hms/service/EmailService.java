@@ -206,6 +206,35 @@ public interface EmailService {
     );
 
     /**
+     * One role a brand-new account was registered with, as the welcome mail
+     * lists it: its own 6-digit code and the confirmation link for exactly
+     * that assignment.
+     *
+     * @param roleCode         role code (e.g. "ROLE_DOCTOR"), rendered as its label
+     * @param hospitalName     hospital of the assignment; null for a global role
+     * @param confirmationCode the assignment's 6-digit code
+     * @param activationUrl    the confirmation screen for this assignment; null
+     *                         when no link template is configured
+     */
+    record WelcomeRole(String roleCode, String hospitalName, String confirmationCode, String activationUrl) {
+    }
+
+    /**
+     * The welcome mail of a brand-new staff account: ONE mail listing every
+     * role it was registered with, each with its own code and link, so no
+     * separate role-assignment mail is sent. With a single role this renders
+     * exactly as
+     * {@link #sendAdminWelcomeEmail(String, String, String, String, String, String, String, String)}.
+     */
+    void sendAdminWelcomeEmail(
+        String to,
+        String displayName,
+        String username,
+        String tempPassword,
+        java.util.List<WelcomeRole> roles
+    );
+
+    /**
      * Sent immediately after an admin restores a soft-deleted account, so the
      * account owner is informed and can report unauthorised access if needed.
      *
