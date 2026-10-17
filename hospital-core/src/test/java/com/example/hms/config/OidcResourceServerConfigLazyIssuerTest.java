@@ -3,7 +3,7 @@ package com.example.hms.config;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtException;
+import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -35,6 +35,6 @@ class OidcResourceServerConfigLazyIssuerTest {
     @DisplayName("a token arriving while the issuer is unreachable is refused as an authentication error")
     void decodingWithoutTheIssuerIsAJwtError() {
         JwtDecoder decoder = config().oidcJwtDecoder();
-        assertThatThrownBy(() -> decoder.decode("e30.e30.sig")).isInstanceOf(JwtException.class);
+        assertThatThrownBy(() -> decoder.decode("e30.e30.sig")).isInstanceOf(BadJwtException.class);
     }
 }

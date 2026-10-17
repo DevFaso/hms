@@ -15,7 +15,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtDecoderInitializationException;
 import org.springframework.security.oauth2.jwt.JwtDecoders;
-import org.springframework.security.oauth2.jwt.JwtException;
+import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.SupplierJwtDecoder;
@@ -60,14 +60,14 @@ public class OidcResourceServerConfig {
         // legacy sign-in does not need Keycloak at all. SupplierJwtDecoder
         // retries the discovery on the next token until it succeeds, then
         // keeps the decoder. The initialisation failure is re-thrown as a
-        // JwtException so the resource server answers 401, not 500.
+        // BadJwtException: the resource server turns that one (only) into 401, not 500.
         JwtDecoder lazy = new SupplierJwtDecoder(this::buildIssuerDecoder);
         return token -> {
             try {
                 return lazy.decode(token);
             } catch (JwtDecoderInitializationException issuerUnavailable) {
                 log.warn("[OIDC] Issuer {} unavailable; Keycloak token refused", issuerUri);
-                throw new JwtException("OIDC issuer unavailable", issuerUnavailable);
+                throw new BadJwtException("OIDC issuer unavailable", issuerUnavailable);
             }
         };
     }
