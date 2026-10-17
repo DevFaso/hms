@@ -41,6 +41,7 @@ import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import java.util.Set;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.utility.ObstetricEligibility;
 
 @Service
 @RequiredArgsConstructor
@@ -88,6 +89,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
 
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, request.getPatientId()));
+        ObstetricEligibility.requireObstetricEligible(patient);
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 

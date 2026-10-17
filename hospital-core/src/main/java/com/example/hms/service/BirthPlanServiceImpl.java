@@ -32,6 +32,7 @@ import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import java.util.Set;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.utility.ObstetricEligibility;
 
 /**
  * Service implementation for Birth Plan operations.
@@ -76,6 +77,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
             patient = getPatientByIdOrThrow(request.getPatientId());
             hospital = getHospitalByIdOrThrow(request.getHospitalId());
         }
+        ObstetricEligibility.requireObstetricEligible(patient);
 
         // Create birth plan
         BirthPlan birthPlan = new BirthPlan();

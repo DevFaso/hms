@@ -11,6 +11,7 @@ import {
   AfterViewChecked,
   ChangeDetectionStrategy,
 } from '@angular/core';
+import { firstImplausibleVital } from '../shared/vital-sign-limits';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -129,6 +130,8 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   /* Task create dialog */
   taskCreateOpen = signal(false);
   taskForm = signal<Partial<NurseTaskCreateRequest>>({});
+  /** The patient picked in the create-task modal; its id is what the request carries. */
+  taskPatient = signal<PatientResponse | null>(null);
   taskCreating = signal(false);
 
   /* Handoff create dialog (P0 #1 — real SBAR handoffs) */
@@ -523,6 +526,16 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       this.toast.error(this.translate.instant('NURSE.TOAST.VITALS_REQUIRED'));
       return;
     }
+    const implausible = firstImplausibleVital(form);
+    if (implausible) {
+      this.toast.error(
+        this.translate.instant(implausible.messageKey, {
+          min: implausible.min,
+          max: implausible.max,
+        }),
+      );
+      return;
+    }
     this.vitalsCapturing.set(true);
     this.nurseService.captureVitals(target.patientId, form).subscribe({
       next: () => {
@@ -533,8 +546,11 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         this.closeVitalsDialog();
         this.loadAll();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('NURSE.TOAST.VITALS_SAVE_FAILED'));
+      error: (err: { error?: { fieldErrors?: Record<string, string> } }) => {
+        // A 400 from the plausibility bounds carries the server's translated
+        // per-field message; anything else keeps the generic toast.
+        const fieldMessage = Object.values(err?.error?.fieldErrors ?? {})[0];
+        this.toast.error(fieldMessage ?? this.translate.instant('NURSE.TOAST.VITALS_SAVE_FAILED'));
         this.vitalsCapturing.set(false);
       },
     });
@@ -663,12 +679,20 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
 
   openTaskCreate(): void {
     this.taskForm.set({});
+    this.taskPatient.set(null);
     this.taskCreateOpen.set(true);
   }
 
   closeTaskCreate(): void {
     this.taskCreateOpen.set(false);
     this.taskForm.set({});
+    this.taskPatient.set(null);
+  }
+
+  /** The modal picks a patient by name; a raw UUID field was the only way in before (QA D45). */
+  onTaskPatientChange(patient: PatientResponse | null): void {
+    this.taskPatient.set(patient);
+    this.taskForm.update((f) => ({ ...f, patientId: patient?.id }));
   }
 
   updateTaskField(field: keyof NurseTaskCreateRequest, value: string): void {

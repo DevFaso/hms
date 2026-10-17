@@ -48,6 +48,7 @@ import java.util.Set;
 import com.example.hms.security.context.HospitalContextHolder;
 import org.springframework.context.MessageSource;
 import com.example.hms.service.i18n.NotificationLocales;
+import com.example.hms.utility.ObstetricEligibility;
 import java.util.Locale;
 
 @Service
@@ -87,6 +88,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         }
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
+        ObstetricEligibility.requireObstetricEligible(patient);
 
         PatientHospitalRegistration registration = resolveRegistration(patient, request.getRegistrationId(), request.getHospitalId());
         Hospital hospital = resolveHospital(patient, registration, request.getHospitalId());

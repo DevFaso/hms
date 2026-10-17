@@ -12,7 +12,7 @@ import {
   AcuityLevel,
 } from '../services/admission.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
-import { StaffService, StaffResponse } from '../services/staff.service';
+import { StaffService, StaffResponse, isClinicalProvider } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { DepartmentLookupService, DepartmentOption } from '../services/department-lookup.service';
 import { ToastService } from '../core/toast.service';
@@ -200,7 +200,7 @@ export class AdmissionsComponent implements OnInit {
     const hid = this.roleContext.activeHospitalId;
     this.staffService.list(hid ?? undefined).subscribe((s) => {
       this.allStaff = s ?? [];
-      this.staffMembers.set(s ?? []);
+      this.staffMembers.set((s ?? []).filter(isClinicalProvider));
     });
     this.initPatientSearch();
 

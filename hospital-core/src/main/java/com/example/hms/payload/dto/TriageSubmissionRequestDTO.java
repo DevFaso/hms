@@ -1,5 +1,7 @@
 package com.example.hms.payload.dto;
 
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
@@ -20,6 +22,8 @@ public class TriageSubmissionRequestDTO {
 
     // ── Vital signs ────────────────────────────────────────────
 
+    @DecimalMin(value = VitalSignLimits.TEMPERATURE_MIN_C, message = "{vitals.temperature.range}")
+    @DecimalMax(value = VitalSignLimits.TEMPERATURE_MAX_C, message = "{vitals.temperature.range}")
     private Double temperatureCelsius;
 
     @Min(20) @Max(300)

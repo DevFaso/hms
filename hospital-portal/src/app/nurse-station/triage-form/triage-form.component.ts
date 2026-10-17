@@ -8,6 +8,7 @@ import {
   ChangeDetectionStrategy,
   DestroyRef,
 } from '@angular/core';
+import { firstImplausibleVital } from '../../shared/vital-sign-limits';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -113,6 +114,26 @@ export class TriageFormComponent {
   submit(): void {
     if (!this.encounter?.id) {
       this.toast.error(this.translate.instant('TRIAGE.NO_ENCOUNTER_SELECTED'));
+      return;
+    }
+
+    const implausible = firstImplausibleVital({
+      temperatureCelsius: this.temperatureCelsius(),
+      heartRateBpm: this.heartRateBpm(),
+      respiratoryRateBpm: this.respiratoryRateBpm(),
+      systolicBpMmHg: this.systolicBpMmHg(),
+      diastolicBpMmHg: this.diastolicBpMmHg(),
+      spo2Percent: this.spo2Percent(),
+      weightKg: this.weightKg(),
+      heightCm: this.heightCm(),
+    });
+    if (implausible) {
+      this.toast.error(
+        this.translate.instant(implausible.messageKey, {
+          min: implausible.min,
+          max: implausible.max,
+        }),
+      );
       return;
     }
 
