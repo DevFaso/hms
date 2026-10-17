@@ -1056,6 +1056,29 @@ public class LabResultServiceImpl implements LabResultService {
     }
 
     /**
+     * D58: the self-release's own audit row, after commit and outside the
+     * release (a failed audit write must not undo the clinical one, and a
+     * rolled-back release must not leave a row claiming it happened). Ids
+     * only - no value, no patient.
+     */
+    private void auditSelfReleaseAfterCommit(UUID labResultId, UUID actorId) {
+        TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.LAB_RESULT_RELEASED)
+                    .status(AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .eventDescription("Self-release: released by the user who entered the result")
+                    .entityType("LabResult")
+                    .resourceId(labResultId != null ? labResultId.toString() : null)
+                    .build());
+            } catch (RuntimeException ex) {
+                LOG.warn("Self-release audit not written for result {}: {}", labResultId, ex.getMessage());
+            }
+        });
+    }
+
+    /**
      * The ORU enqueued at creation went out as preliminary (OBX-11 P), because
      * that is what an unreleased result is; without a second message a receiver
      * would hold that preliminary for ever.
@@ -1081,29 +1104,6 @@ public class LabResultServiceImpl implements LabResultService {
      * try/catch catches nothing and an outbox failure would roll back the
      * release — the clinical write — for the sake of a message.
      */
-    /**
-     * D58: the self-release's own audit row, after commit and outside the
-     * release (a failed audit write must not undo the clinical one, and a
-     * rolled-back release must not leave a row claiming it happened). Ids
-     * only - no value, no patient.
-     */
-    private void auditSelfReleaseAfterCommit(UUID labResultId, UUID actorId) {
-        TransactionCallbacks.afterCommit(() -> {
-            try {
-                auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                    .eventType(AuditEventType.LAB_RESULT_RELEASED)
-                    .status(AuditStatus.SUCCESS)
-                    .userId(actorId)
-                    .eventDescription("Self-release: released by the user who entered the result")
-                    .entityType("LabResult")
-                    .resourceId(labResultId != null ? labResultId.toString() : null)
-                    .build());
-            } catch (RuntimeException ex) {
-                LOG.warn("Self-release audit not written for result {}: {}", labResultId, ex.getMessage());
-            }
-        });
-    }
-
     private void enqueueReleasedObservationAfterCommit(LabResult labResult) {
         if (wasIngestedFromAnAnalyzer(labResult)) {
             LOG.debug("Release of result {} not transmitted — it was ingested from {}, not sent by us",
@@ -1322,13 +1322,15 @@ public class LabResultServiceImpl implements LabResultService {
         if (!autoVerificationEnabled || labResultMapper.isUngradedForUnitMismatch(result)) {
             return;
         }
-        boolean severityNormal = severity == null
-            || "NORMAL".equalsIgnoreCase(severity)
-            || LabResultMapper.FLAG_UNSPECIFIED.equalsIgnoreCase(severity);
-        if (!result.isReleased()
-                && severityNormal
-                && (result.getAbnormalFlag() == null
-                    || result.getAbnormalFlag() == AbnormalFlag.NORMAL)) {
+        boolean rangeSaysNormal = "NORMAL".equalsIgnoreCase(severity);
+        boolean rangeSilent = severity == null || LabResultMapper.FLAG_UNSPECIFIED.equalsIgnoreCase(severity);
+        AbnormalFlag flag = result.getAbnormalFlag();
+        // D31: something must have graded the result NORMAL - the range or an
+        // explicit flag. No range and no flag is "not interpreted", which a
+        // person releases from the worklist, never the autoverifier.
+        boolean gradedNormal = (rangeSaysNormal && (flag == null || flag == AbnormalFlag.NORMAL))
+            || (rangeSilent && flag == AbnormalFlag.NORMAL);
+        if (!result.isReleased() && gradedNormal) {
             result.setReleased(true);
             result.setReleasedAt(LocalDateTime.now());
             result.setReleasedByDisplay("Autoverification");

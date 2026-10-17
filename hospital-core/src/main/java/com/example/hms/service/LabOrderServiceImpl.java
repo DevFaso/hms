@@ -405,6 +405,29 @@ public class LabOrderServiceImpl implements LabOrderService {
     }
 
     /**
+     * D48 / D30: a new order (or an order moved to another test) must name a
+     * definition that is ACTIVE, and that is either global or this hospital's
+     * own. A DRAFT was ordered and resulted; another tenant's private
+     * definition was reachable by id. An existing order keeping its test is
+     * left alone: a definition retired after the order was placed must not
+     * strand the sample.
+     */
+    private static void requireOrderableHere(LabTestDefinition definition, Hospital hospital, LabOrder base) {
+        boolean unchanged = base != null && base.getLabTestDefinition() != null
+            && base.getLabTestDefinition().getId() != null
+            && base.getLabTestDefinition().getId().equals(definition.getId());
+        if (unchanged) {
+            return;
+        }
+        if (definition.getHospital() != null && !definition.getHospital().getId().equals(hospital.getId())) {
+            throw new ResourceNotFoundException("labtestdefinition.notfound");
+        }
+        if (!definition.isOrderable()) {
+            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labtestdefinition.notOrderable"));
+        }
+    }
+
+    /**
      * The role@hospital context the order is recorded under.
      *
      * <p>This used to be {@code assignmentRepository.findById(assignmentId)}
@@ -446,29 +469,6 @@ public class LabOrderServiceImpl implements LabOrderService {
      *       about whether the id exists.</li>
      * </ul>
      */
-    /**
-     * D48 / D30: a new order (or an order moved to another test) must name a
-     * definition that is ACTIVE, and that is either global or this hospital's
-     * own. A DRAFT was ordered and resulted; another tenant's private
-     * definition was reachable by id. An existing order keeping its test is
-     * left alone: a definition retired after the order was placed must not
-     * strand the sample.
-     */
-    private static void requireOrderableHere(LabTestDefinition definition, Hospital hospital, LabOrder base) {
-        boolean unchanged = base != null && base.getLabTestDefinition() != null
-            && base.getLabTestDefinition().getId() != null
-            && base.getLabTestDefinition().getId().equals(definition.getId());
-        if (unchanged) {
-            return;
-        }
-        if (definition.getHospital() != null && !definition.getHospital().getId().equals(hospital.getId())) {
-            throw new ResourceNotFoundException("labtestdefinition.notfound");
-        }
-        if (!definition.isOrderable()) {
-            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labtestdefinition.notOrderable"));
-        }
-    }
-
     private UserRoleHospitalAssignment resolveOrderingAssignment(
             LabOrder base, UUID requestedAssignmentId, Staff staff, Hospital hospital) {
         UserRoleHospitalAssignment current = keptCurrentAssignment(base, staff);

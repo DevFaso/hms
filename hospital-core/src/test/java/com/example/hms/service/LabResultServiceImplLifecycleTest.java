@@ -472,6 +472,8 @@ class LabResultServiceImplLifecycleTest {
     void autoVerificationReleasesNormalResultsWhenEnabled() {
         ReflectionTestUtils.setField(service, "autoVerificationEnabled", true);
         stubEntryPath();
+        when(labResultMapper.toResponseDTO(any(LabResult.class)))
+            .thenReturn(LabResultResponseDTO.builder().severityFlag("NORMAL").build());
         when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
         when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
         org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
@@ -551,6 +553,21 @@ class LabResultServiceImplLifecycleTest {
         assertThat(saved.getValue().isReleased()).isFalse();
         assertThat(saved.getValue().getReleasedByDisplay()).isNull();
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
+    }
+
+    @Test
+    @DisplayName("D31 - even switched on, a result nothing graded (no range, no flag) is not auto-released")
+    void autoVerificationSkipsAnUngradedResult() {
+        ReflectionTestUtils.setField(service, "autoVerificationEnabled", true);
+        stubEntryPath();
+        when(labResultMapper.toResponseDTO(any(LabResult.class)))
+            .thenReturn(LabResultResponseDTO.builder().severityFlag(LabResultMapper.FLAG_UNSPECIFIED).build());
+
+        service.createLabResult(entryRequest(), Locale.ENGLISH);
+
+        ArgumentCaptor<LabResult> saved = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(saved.capture());
+        assertThat(saved.getValue().isReleased()).isFalse();
     }
 
     // ── B10: release belongs to the laboratory ─────────────────────────────
