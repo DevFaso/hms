@@ -2737,6 +2737,10 @@
         <sqlFile path="V185__users_phone_e164_backfill.sql"
                  relativeToChangelogFile="true"
                  splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
          V187 — security.users.activated_before_delete (PR #872, D21): the
          soft delete records whether the account was activated, so the
          restore brings an e-mail-verified account back active and keeps a
