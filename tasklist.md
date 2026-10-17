@@ -5352,8 +5352,10 @@ ships*, not for building — and check the shipped surface before trusting a
   registration response carries `temporaryUsername`/`temporaryPassword` once
   and the staff UI shows them in a one-time dialog. Remove that fallback (or
   replace it with a set-password link the desk prints) once IKODDI SMS is live
-  on every environment. Also: phones are now stored E.164 (`+226…`) on new
-  registrations, but older rows keep their typed form, so the duplicate-phone
-  check does not see an old `70202020` as the new `+22670202020` — backfill or
-  compare on `PhoneNumbers.isSameSubscriber`. The admin welcome mail still shows
+  on every environment. Also: phones are now stored E.164 (`+226…`) on every
+  write path (registration, profile update, bootstrap), and registration also
+  matches the two legacy shapes exactly (`22670202020`, `70202020`;
+  `UserServiceImpl.findByPhoneInAnyForm`). Older rows written with spaces,
+  dashes or a trunk zero are still not matched: backfill `users.phone_number`
+  to E.164 (a migration) and then drop the legacy-form lookup. The admin welcome mail still shows
   "—" for the password when an API caller supplied one (never the typed value).

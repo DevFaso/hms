@@ -81,6 +81,8 @@ class HospitalRepositoryCallerCoverageTest {
         entry("MorbidityAnalyticsServiceImpl.hospitalView#findById", LABEL),
         entry("PatientPortalServiceImpl.toProfileDTO#findById", LABEL + " (a hospital on the patient's own record)"),
         entry("UserServiceImpl.createUserWithRolesAndHospital#findById", LABEL + " (the activation message)"),
+        entry("UserServiceImpl.normalizePhone#findById", "reads the hospital's country for the phone calling code; grants, writes and lists nothing"),
+        entry("UserServiceImpl.findByPhoneInAnyForm#findById", "reads the acting hospital's country for the legacy phone forms; grants, writes and lists nothing"),
         entry("FacilityAssignmentGuard.requireCompatible#findById",
             ANY_TYPE + "the role/facility compatibility check is about providers (slice 1)"),
         entry("RecordAccessPolicyImpl.evaluate#findById", ANY_TYPE + "loads the acting facility to refuse a provider (AC-9)"),

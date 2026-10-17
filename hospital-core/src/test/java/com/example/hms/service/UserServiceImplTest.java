@@ -971,6 +971,20 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("an updated local phone is stored in E.164, like a registered one")
+        void updateNormalisesPhone() {
+            stubHappyPath();
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setPhoneNumber("70 20 20 20");
+
+            userService.updateUser(userId, dto);
+
+            ArgumentCaptor<User> cap = ArgumentCaptor.forClass(User.class);
+            verify(userRepository).save(cap.capture());
+            assertThat(cap.getValue().getPhoneNumber()).isEqualTo("+22670202020");
+        }
+
+        @Test
         @DisplayName("blank password is ignored — existing hash preserved")
         void blankPasswordPreservesHash() {
             stubHappyPath();
@@ -1068,7 +1082,7 @@ class UserServiceImplTest {
             ArgumentCaptor<User> cap = ArgumentCaptor.forClass(User.class);
             verify(userRepository).save(cap.capture());
 
-            assertThat(cap.getValue().getPhoneNumber()).isEqualTo("+1-555-0999");
+            assertThat(cap.getValue().getPhoneNumber()).isEqualTo("+15550999");
         }
 
         @Test
@@ -1881,6 +1895,21 @@ class UserServiceImplTest {
 
             assertThat(result.getTemporaryPassword()).isNull();
             verify(assignmentRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a person stored with a legacy local phone is matched, not created a second time")
+        void legacyLocalPhoneRowIsMatched() {
+            stubCreation(patientRole);
+            User legacy = new User();
+            legacy.setId(UUID.randomUUID());
+            legacy.setPhoneNumber("70202020");
+            when(userRepository.findByPhoneNumber("70202020")).thenReturn(Optional.of(legacy));
+
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(
+                    request("ROLE_PATIENT", null, "70202020")))
+                .isInstanceOf(Exception.class);
+            verify(userRepository, never()).saveAndFlush(any());
         }
 
         @Test

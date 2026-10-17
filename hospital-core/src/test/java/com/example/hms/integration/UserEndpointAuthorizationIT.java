@@ -377,7 +377,7 @@ class UserEndpointAuthorizationIT extends BaseIT {
         // The form sends the email and username back unchanged; changing either has its own endpoint.
         assertThat(status(put("/users/" + patientA.getId()), patient, Map.of(
             "firstName", "Awa", "lastName", "Traore", "email", patientA.getEmail(),
-            "phoneNumber", "+22671" + next(), "username", patientA.getUsername()))).isEqualTo(200);
+            "phoneNumber", "+226710" + next(), "username", patientA.getUsername()))).isEqualTo(200);
         assertThat(userRepository.findById(patientA.getId()).orElseThrow().getFirstName()).isEqualTo("Awa");
 
         assertThat(status(put("/users/" + patientA.getId()), patient, Map.of("password", "Self-Set-Pass-1")))
@@ -398,7 +398,7 @@ class UserEndpointAuthorizationIT extends BaseIT {
             "username", "orphan" + suffix,
             "firstName", "Orphan",
             "lastName", "Account",
-            "phoneNumber", "+22672" + suffix,
+            "phoneNumber", "+226720" + suffix,
             "roleNames", List.of("PATIENT"),
             "hospitalId", hospitalA.getId().toString(),
             "forcePasswordChange", true));
@@ -436,7 +436,7 @@ class UserEndpointAuthorizationIT extends BaseIT {
             "password", "Chosen-Pass-1",
             "firstName", "Mint",
             "lastName", "Admin",
-            "phoneNumber", "+22676" + suffix,
+            "phoneNumber", "+226760" + suffix,
             "roleNames", List.of("SUPER_ADMIN")));
 
         assertThat(refused.getResponse().getStatus()).isEqualTo(403);
@@ -776,7 +776,7 @@ class UserEndpointAuthorizationIT extends BaseIT {
             "email", prefix + suffix + "@signup.test",
             "firstName", prefix,
             "lastName", "Signup" + suffix,
-            "phoneNumber", "+22677" + suffix,
+            "phoneNumber", "+226770" + suffix,
             "roleNames", List.of(role),
             "hospitalId", hospital.getId().toString());
     }

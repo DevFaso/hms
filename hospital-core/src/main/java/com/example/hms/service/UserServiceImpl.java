@@ -206,7 +206,7 @@ public class UserServiceImpl implements UserService {
         user.setPasswordHash(encodedPassword);
         user.setFirstName(request.getFirstName());
         user.setLastName(request.getLastName());
-        user.setPhoneNumber(request.getPhoneNumber());
+        user.setPhoneNumber(normalizePhone(request.getPhoneNumber(), null));
         user.setActive(true); // immediate activation for bootstrap
         user.setCreatedAt(passwordSetAt);
         user.setPasswordChangedAt(passwordSetAt);
@@ -276,8 +276,6 @@ public class UserServiceImpl implements UserService {
         final String email = request.getEmail() == null || request.getEmail().isBlank()
                 ? null : request.getEmail().trim().toLowerCase(Locale.ROOT);
         request.setEmail(email);
-        final String phone = normalizeRegistrationPhone(request);
-        request.setPhoneNumber(phone);
         // Username is optional: blank means "generate one" (createNewUser). A
         // blank username must not take part in the identity lookups below.
         final String username = request.getUsername() == null || request.getUsername().isBlank()
@@ -302,6 +300,11 @@ public class UserServiceImpl implements UserService {
         } catch (AccessDeniedException denied) {
             throw refusedGrant(roleNames, denied);
         }
+
+        // Normalised only once the caller may grant these roles: a refused
+        // caller gets the 403, never a phone-format 400.
+        final String phone = normalizeRegistrationPhone(request);
+        request.setPhoneNumber(phone);
 
         // ---- 0a) Duplicate checks ----
         if (isPatient) {
@@ -332,7 +335,7 @@ public class UserServiceImpl implements UserService {
                 });
             }
             if (phone != null && !phone.isBlank()) {
-                userRepository.findByPhoneNumber(phone).ifPresent(existing -> {
+                findByPhoneInAnyForm(phone).ifPresent(existing -> {
                     throw conflictFor("phone", "Phone number '" + phone + "'", existing);
                 });
             }
@@ -658,13 +661,21 @@ public class UserServiceImpl implements UserService {
      * that cannot be a phone number is refused with a translated message.
      */
     private String normalizeRegistrationPhone(AdminSignupRequest request) {
-        String raw = request.getPhoneNumber();
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
         UUID hospitalId = activeHospitalFromContext();
         if (hospitalId == null) {
             hospitalId = request.getHospitalId();
+        }
+        return normalizePhone(request.getPhoneNumber(), hospitalId);
+    }
+
+    /**
+     * Any stored phone in E.164: a local number takes the calling code of the
+     * hospital's country (Burkina Faso when unknown); a value that cannot be a
+     * phone number is refused with a translated message. Blank stays null.
+     */
+    private String normalizePhone(String raw, UUID hospitalId) {
+        if (raw == null || raw.isBlank()) {
+            return null;
         }
         String country = hospitalId == null ? null
                 : hospitalRepository.findById(hospitalId).map(Hospital::getCountry).orElse(null);
@@ -816,9 +827,45 @@ public class UserServiceImpl implements UserService {
      * email-less (phone-first) user — cross-patient account merges would follow.
      */
     private Optional<User> findExistingByIdentity(String username, String email, String phone) {
-        return (email == null || email.isBlank())
+        Optional<User> found = (email == null || email.isBlank())
             ? userRepository.findFirstByUsernameIgnoreCaseOrPhoneNumber(username, phone)
             : userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(username, email, phone);
+        return found.isPresent() || phone == null ? found : findByPhoneInAnyForm(phone);
+    }
+
+    /**
+     * A user holding this E.164 phone, or one of the legacy shapes it was
+     * stored in before registration normalised it: the digits without the
+     * plus, and the national number without the calling code. Exact matches
+     * only, so the lookup stays index-friendly; the backfill of legacy rows
+     * is tracked in tasklist.md.
+     */
+    private Optional<User> findByPhoneInAnyForm(String e164) {
+        if (e164 == null || e164.isBlank()) {
+            return Optional.empty();
+        }
+        Set<String> forms = new LinkedHashSet<>();
+        forms.add(e164);
+        if (e164.startsWith("+")) {
+            String digits = e164.substring(1);
+            forms.add(digits);
+            UUID hospitalId = activeHospitalFromContext();
+            String country = hospitalId == null ? null
+                    : hospitalRepository.findById(hospitalId).map(Hospital::getCountry).orElse(null);
+            for (String code : new LinkedHashSet<>(List.of(com.example.hms.utility.PhoneNumbers.DEFAULT_CALLING_CODE,
+                    com.example.hms.utility.PhoneNumbers.callingCodeForCountry(country)))) {
+                if (digits.startsWith(code) && digits.length() > code.length()) {
+                    forms.add(digits.substring(code.length()));
+                }
+            }
+        }
+        for (String form : forms) {
+            Optional<User> hit = userRepository.findByPhoneNumber(form);
+            if (hit.isPresent()) {
+                return hit;
+            }
+        }
+        return Optional.empty();
     }
 
     private void checkPatientAlreadyAtHospital(String username, String email, String phone,
@@ -1256,7 +1303,7 @@ public class UserServiceImpl implements UserService {
             user.setLastName(dto.getLastName());
         }
         if (hasText(dto.getPhoneNumber())) {
-            user.setPhoneNumber(dto.getPhoneNumber());
+            user.setPhoneNumber(normalizePhone(dto.getPhoneNumber(), activeHospitalFromContext()));
         }
         if (dto.getActive() != null) {
             reactivated = applyActive(user, dto.getActive());
