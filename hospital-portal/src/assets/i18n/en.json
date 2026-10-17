@@ -5681,7 +5681,8 @@
         "LEFT": "Left",
         "RIGHT": "Right",
         "BILATERAL": "Bilateral",
-        "MIDLINE": "Midline"
+        "MIDLINE": "Midline",
+        "NOT_APPLICABLE": "Not applicable"
       },
       "LAB_SEVERITY_FLAG": {
         "NORMAL": "Normal",

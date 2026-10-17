@@ -5647,7 +5647,8 @@
         "LEFT": "Gauche",
         "RIGHT": "Droite",
         "BILATERAL": "Bilatéral",
-        "MIDLINE": "Ligne médiane"
+        "MIDLINE": "Ligne médiane",
+        "NOT_APPLICABLE": "Sans objet"
       },
       "LAB_SEVERITY_FLAG": {
         "NORMAL": "Normal",
