@@ -365,10 +365,12 @@ public class UserServiceImpl implements UserService {
         // ---- 3) Resolve/Create User ----
         // The licence number is optional for every role: clinicians are
         // credentialed on diplomas, so it is recorded when known, never required.
+        // Only a staff registration may resolve an existing account by licence:
+        // a patient registration carrying a clinician's licence must not reach it.
         final String lic = resolveLicenseNumber(request);
 
         final Optional<User> existingByIdentity = findExistingByIdentity(username, email, phone);
-        final Optional<User> existingByLicense = lic != null
+        final Optional<User> existingByLicense = lic != null && requiresStaff
                 ? staffRepository.findUserIdByLicense(lic).flatMap(userRepository::findById)
                 : Optional.empty();
 

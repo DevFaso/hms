@@ -1882,5 +1882,18 @@ class UserServiceImplTest {
             assertThat(result.getTemporaryPassword()).isNull();
             verify(assignmentRepository, never()).save(any());
         }
+
+        @Test
+        @DisplayName("a patient registration carrying a clinician's licence creates a new user, never resolves the clinician")
+        void patientCarryingStaffLicenceCreatesNewUser() {
+            stubCreation(patientRole);
+            AdminSignupRequest req = request("ROLE_PATIENT", null, "70202020");
+            req.setLicenseNumber("LIC-CLINICIAN-1");
+
+            userService.createUserWithRolesAndHospital(req);
+
+            verify(staffRepository, never()).findUserIdByLicense(any());
+            assertThat(savedUser().getUsername()).isNotBlank();
+        }
     }
 }
