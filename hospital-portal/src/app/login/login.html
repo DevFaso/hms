@@ -240,9 +240,20 @@
 
         <div class="role-picker-grid">
           @for (role of availableRoles; track role) {
-            <button type="button" class="role-card" (click)="selectRole(role)" [disabled]="loading">
-              <span class="material-symbols-outlined role-card-icon">{{ roleIcon(role) }}</span>
+            <button
+              type="button"
+              class="role-card"
+              [class.role-card--recommended]="isRecommendedRole(role)"
+              (click)="selectRole(role)"
+              [disabled]="loading"
+            >
+              <span class="material-symbols-outlined role-card-icon" aria-hidden="true">{{
+                roleIcon(role)
+              }}</span>
               <span class="role-card-label">{{ role | roleLabel }}</span>
+              @if (isRecommendedRole(role)) {
+                <span class="role-card-badge">{{ 'LOGIN.ROLE_RECOMMENDED' | translate }}</span>
+              }
             </button>
           }
         </div>

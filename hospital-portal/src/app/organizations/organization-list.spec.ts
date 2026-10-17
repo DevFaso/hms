@@ -170,3 +170,61 @@ describe('OrganizationListComponent — searching by the type on screen', () => 
     expect(second.componentInstance.orgTypes()).toEqual([]);
   });
 });
+
+describe('OrganizationListComponent — the Type select (D6)', () => {
+  let fixture: ComponentFixture<OrganizationListComponent>;
+  let component: OrganizationListComponent;
+  let orgSpy: jasmine.SpyObj<OrganizationService>;
+  let toast: jasmine.SpyObj<ToastService>;
+
+  beforeEach(async () => {
+    orgSpy = jasmine.createSpyObj<OrganizationService>('OrganizationService', [
+      'list',
+      'getTypes',
+      'create',
+    ]);
+    orgSpy.list.and.returnValue(
+      of({ content: [], totalElements: 0, totalPages: 0, size: 20, number: 0 }),
+    );
+    orgSpy.getTypes.and.returnValue(of(['HOSPITAL_CHAIN']));
+    toast = jasmine.createSpyObj<ToastService>('ToastService', ['error', 'success']);
+
+    await TestBed.configureTestingModule({
+      imports: [OrganizationListComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        { provide: OrganizationService, useValue: orgSpy },
+        { provide: ToastService, useValue: toast },
+        {
+          provide: RoleContextService,
+          useValue: roleContextStub({ superAdmin: true, hospitalId: null, roles: [] }),
+        },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(OrganizationListComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  it('opens on the placeholder, not on a blank value', () => {
+    component.openCreate();
+    expect(component.createForm.type).toBe('');
+  });
+
+  it('refuses to save without a type and explains why under the select', () => {
+    component.openCreate();
+    Object.assign(component.createForm, {
+      name: 'Org',
+      code: 'ORG-1',
+      contactEmail: 'a@b.c',
+      timezone: 'Africa/Bamako',
+    });
+    component.submitCreate();
+    fixture.detectChanges();
+
+    expect(orgSpy.create).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalled();
+    const hint = (fixture.nativeElement as HTMLElement).querySelector('#orgTypeError');
+    expect(hint?.textContent).toContain('ORGANIZATIONS.TYPE_REQUIRED');
+  });
+});

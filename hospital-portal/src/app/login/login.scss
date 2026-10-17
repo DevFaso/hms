@@ -561,6 +561,17 @@
   }
 }
 
+.role-card--recommended {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.role-card-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--primary-dark);
+}
+
 .role-card-icon {
   font-size: 32px;
   color: var(--primary);

@@ -58,6 +58,29 @@ export class EnumLabelService implements OnDestroy {
    * under `PORTAL.ENUM.*`; this map exists so a missing translation key never
    * leaks into the UI. Keep groups alphabetically ordered within each section. */
   private static readonly LABELS: Record<string, Record<string, string>> = {
+    /* ── Staff specialisations (users/user-list.ts) ───────── */
+    specialization: {
+      CARDIOLOGY: 'Cardiology',
+      CLINICAL_PHARMACY: 'Clinical Pharmacy',
+      DERMATOLOGY: 'Dermatology',
+      GENERAL_NURSE: 'General Nursing',
+      GENERAL_PRACTICE: 'General Practice',
+      GYNECOLOGY: 'Gynecology',
+      HOSPITAL_PHARMACY: 'Hospital Pharmacy',
+      ICU_NURSE: 'ICU Nursing',
+      LAB_TECHNICIAN: 'Laboratory Technician',
+      MICROBIOLOGY: 'Microbiology',
+      NEUROLOGY: 'Neurology',
+      ONCOLOGY: 'Oncology',
+      ORTHOPEDICS: 'Orthopedics',
+      OTHER: 'Other',
+      PATHOLOGY: 'Pathology',
+      PEDIATRICS: 'Pediatrics',
+      PEDIATRIC_NURSE: 'Pediatric Nursing',
+      PSYCHIATRY: 'Psychiatry',
+      RADIOLOGY: 'Radiology',
+      SURGICAL_NURSE: 'Surgical Nursing',
+    },
     /* ── Vital sign types ─────────────────────────────────── */
     vitalType: {
       BLOOD_PRESSURE: 'Blood Pressure',

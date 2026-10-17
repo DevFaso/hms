@@ -5362,3 +5362,11 @@ ships*, not for building — and check the shipped surface before trusting a
   the registration rule is an authorization change, not the display fix — but
   it is a split a reader will trip over, and it should be resolved one way or
   the other with a decision behind it.
+- **403 role hint only knows roles the password-login picker listed.**
+  (fix/portal-ui-defects, D7.) The JWT carries only the role picked at sign-in,
+  so the portal keeps the picker's `availableRoles` in sessionStorage
+  (`RoleContextService.heldRoles`) to say "sign in again choosing Y". An SSO
+  (Keycloak) sign-in never shows that picker, so no hint appears there, and a
+  server-side 403 names no required role, so the page can only suggest
+  ROLE_SUPER_ADMIN for those. A complete fix is backend-side: return the held
+  roles in the session bootstrap, and a required-role hint in 403 bodies.
