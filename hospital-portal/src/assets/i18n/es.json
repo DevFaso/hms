@@ -120,6 +120,13 @@
     "WARD_NAME": "Nombre de la sala",
     "WARD_TYPE": "Tipo de sala"
   },
+  "ERROR_403": {
+    "BACK": "Volver al panel",
+    "BODY": "No tiene permiso para ver esta página.",
+    "ROLE_HINT": "Ha iniciado sesión como {{active}}. Vuelva a iniciar sesión y elija {{better}}.",
+    "SIGN_IN_AGAIN": "Volver a iniciar sesión",
+    "TITLE": "Acceso denegado"
+  },
   "LABOR": {
     "ACTION_LINE": "Línea de acción",
     "ACTIVE_EPISODE": "Trabajo de parto en curso",
@@ -3142,6 +3149,7 @@
     "CREATING_ACCOUNT": "Creando la cuenta…",
     "BOOTSTRAP_SUBMIT": "Crear el superadministrador y comenzar",
     "ROLE_PICKER_TITLE": "Elija su rol",
+    "ROLE_RECOMMENDED": "Recomendado",
     "ROLE_PICKER_SUBTITLE": "Tiene varios roles. Seleccione con cuál desea iniciar sesión:",
     "BACK_TO_SIGN_IN": "Volver a iniciar sesión",
     "SSO_CONTINUE": "Continuar con el inicio de sesión único",
@@ -3722,7 +3730,7 @@
     "OPERATION_FAILED": "La operación ha fallado",
     "PAGE_INFO": "Página",
     "PAGE_OF": "de",
-    "REQUIRED_FIELDS": "El nombre, el código, el correo de contacto y la zona horaria son obligatorios",
+    "REQUIRED_FIELDS": "El nombre, el código, el correo de contacto, la zona horaria y el tipo son obligatorios",
     "SEARCH_PLACEHOLDER": "Buscar organizaciones…",
     "SELECT_TIMEZONE": "Seleccionar zona horaria…",
     "SELECT_TYPE": "Seleccionar tipo…",
@@ -3730,6 +3738,7 @@
     "TIMEZONE": "Zona Horaria",
     "TITLE": "Organizaciones",
     "TYPE": "Tipo",
+    "TYPE_REQUIRED": "Elija un tipo de organización.",
     "UPDATED": "Organización actualizada"
   },
   "PANEL": {
@@ -5599,6 +5608,28 @@
         "ARCHIVED": "Archivado",
         "PURGED": "Purgado",
         "PENDING_PURGE": "Purga programada"
+      },
+      "SPECIALIZATION": {
+        "CARDIOLOGY": "Cardiología",
+        "CLINICAL_PHARMACY": "Farmacia clínica",
+        "DERMATOLOGY": "Dermatología",
+        "GENERAL_NURSE": "Enfermería general",
+        "GENERAL_PRACTICE": "Medicina general",
+        "GYNECOLOGY": "Ginecología",
+        "HOSPITAL_PHARMACY": "Farmacia hospitalaria",
+        "ICU_NURSE": "Enfermería de cuidados intensivos",
+        "LAB_TECHNICIAN": "Técnico de laboratorio",
+        "MICROBIOLOGY": "Microbiología",
+        "NEUROLOGY": "Neurología",
+        "ONCOLOGY": "Oncología",
+        "ORTHOPEDICS": "Ortopedia",
+        "OTHER": "Otra",
+        "PATHOLOGY": "Anatomía patológica",
+        "PEDIATRICS": "Pediatría",
+        "PEDIATRIC_NURSE": "Enfermería pediátrica",
+        "PSYCHIATRY": "Psiquiatría",
+        "RADIOLOGY": "Radiología",
+        "SURGICAL_NURSE": "Enfermería quirúrgica"
       }
     },
     "DOCUMENTS": {

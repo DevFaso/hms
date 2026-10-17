@@ -164,6 +164,12 @@ public interface UserRoleHospitalAssignmentService {
     void sendNotifications(UUID assignmentId);
 
     /**
+     * {@link #sendNotifications(UUID)}, skipping the e-mail when the new
+     * user's welcome mail already carries this assignment's code.
+     */
+    void sendNotifications(UUID assignmentId, boolean emailCoveredByWelcome);
+
+    /**
      * The admin "resend notification" endpoint: {@link #sendNotifications}
      * for a row the caller may change; any other row answers as a missing one.
      */

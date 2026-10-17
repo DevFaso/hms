@@ -120,6 +120,13 @@
     "WARD_NAME": "Ward Name",
     "WARD_TYPE": "Ward Type"
   },
+  "ERROR_403": {
+    "BACK": "Back to dashboard",
+    "BODY": "You do not have permission to view this page.",
+    "ROLE_HINT": "You are signed in as {{active}}. Sign in again and choose {{better}}.",
+    "SIGN_IN_AGAIN": "Sign in again",
+    "TITLE": "Access denied"
+  },
   "LABOR": {
     "ACTION_LINE": "Action line",
     "ACTIVE_EPISODE": "Active labor",
@@ -3142,6 +3149,7 @@
     "CREATING_ACCOUNT": "Creating account…",
     "BOOTSTRAP_SUBMIT": "Create Super Admin & Get Started",
     "ROLE_PICKER_TITLE": "Choose Your Role",
+    "ROLE_RECOMMENDED": "Recommended",
     "ROLE_PICKER_SUBTITLE": "You have multiple roles. Select the one you'd like to sign in as:",
     "BACK_TO_SIGN_IN": "Back to Sign In",
     "SSO_CONTINUE": "Continue with Single Sign-On",
@@ -3722,7 +3730,7 @@
     "OPERATION_FAILED": "Operation failed",
     "PAGE_INFO": "Page",
     "PAGE_OF": "of",
-    "REQUIRED_FIELDS": "Name, code, contact email, and timezone are required",
+    "REQUIRED_FIELDS": "Name, code, contact email, timezone and type are required",
     "SEARCH_PLACEHOLDER": "Search organizations…",
     "SELECT_TIMEZONE": "Select timezone…",
     "SELECT_TYPE": "Select type…",
@@ -3730,6 +3738,7 @@
     "TIMEZONE": "Timezone",
     "TITLE": "Organizations",
     "TYPE": "Type",
+    "TYPE_REQUIRED": "Choose an organization type.",
     "UPDATED": "Organization updated"
   },
   "PANEL": {
@@ -5599,6 +5608,28 @@
         "ARCHIVED": "Archived",
         "PURGED": "Purged",
         "PENDING_PURGE": "Purge scheduled"
+      },
+      "SPECIALIZATION": {
+        "CARDIOLOGY": "Cardiology",
+        "CLINICAL_PHARMACY": "Clinical Pharmacy",
+        "DERMATOLOGY": "Dermatology",
+        "GENERAL_NURSE": "General Nursing",
+        "GENERAL_PRACTICE": "General Practice",
+        "GYNECOLOGY": "Gynecology",
+        "HOSPITAL_PHARMACY": "Hospital Pharmacy",
+        "ICU_NURSE": "ICU Nursing",
+        "LAB_TECHNICIAN": "Laboratory Technician",
+        "MICROBIOLOGY": "Microbiology",
+        "NEUROLOGY": "Neurology",
+        "ONCOLOGY": "Oncology",
+        "ORTHOPEDICS": "Orthopedics",
+        "OTHER": "Other",
+        "PATHOLOGY": "Pathology",
+        "PEDIATRICS": "Pediatrics",
+        "PEDIATRIC_NURSE": "Pediatric Nursing",
+        "PSYCHIATRY": "Psychiatry",
+        "RADIOLOGY": "Radiology",
+        "SURGICAL_NURSE": "Surgical Nursing"
       }
     },
     "DOCUMENTS": {

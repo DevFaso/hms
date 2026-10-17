@@ -102,6 +102,9 @@ export class OrganizationListComponent implements OnInit {
   /** Valid organization type enum values loaded from backend */
   orgTypes = signal<string[]>([]);
 
+  /** Set on the first save click so the inline "type required" hint only shows after it. */
+  readonly submitAttempted = signal(false);
+
   /** Common IANA timezones for the dropdown */
   readonly timezones: string[] = [
     'Africa/Ouagadougou',
@@ -184,7 +187,8 @@ export class OrganizationListComponent implements OnInit {
   }
 
   openCreate(): void {
-    this.createForm = { name: '', code: '', timezone: '', contactEmail: '' };
+    this.createForm = { name: '', code: '', timezone: '', contactEmail: '', type: '' };
+    this.submitAttempted.set(false);
     this.editing.set(null);
     this.showCreate.set(true);
   }
@@ -200,6 +204,7 @@ export class OrganizationListComponent implements OnInit {
       notes: org.onboardingNotes ?? '',
       type: org.type ?? '',
     };
+    this.submitAttempted.set(false);
     this.showCreate.set(true);
   }
 
@@ -209,7 +214,9 @@ export class OrganizationListComponent implements OnInit {
   }
 
   submitCreate(): void {
+    this.submitAttempted.set(true);
     if (
+      !this.createForm.type ||
       !this.createForm.name ||
       !this.createForm.code ||
       !this.createForm.contactEmail ||

@@ -448,19 +448,22 @@ retired); uat is still on the `kc-admin` bootstrap account.
 1. Open the `MediHub` Railway project → environment switcher → `uat`.
 2. Open the `hms-keycloak` service → **Variables** tab.
 3. Delete:
+   - `KC_BOOTSTRAP_ADMIN` (opt-in flag)
    - `KC_BOOTSTRAP_ADMIN_USERNAME`
    - `KC_BOOTSTRAP_ADMIN_PASSWORD`
 4. Save. Railway triggers a redeploy automatically.
 5. Watch the redeploy logs in **Deployments**. Expect:
 
    ```text
-   [hms-keycloak-entrypoint] No KC_BOOTSTRAP_ADMIN_* env vars — skipping admin bootstrap
+   [hms-keycloak-entrypoint] KC_BOOTSTRAP_ADMIN not enabled — skipping admin bootstrap
    ```
 
-   The `[ -n ]` guard in [`keycloak/prod/entrypoint.sh`](../../keycloak/prod/entrypoint.sh)
+   The opt-in `KC_BOOTSTRAP_ADMIN=true` check (plus the `[ -n ]` credential guard) in [`keycloak/prod/entrypoint.sh`](../../keycloak/prod/entrypoint.sh)
    is what turns the bootstrap step into a no-op when the vars are
    absent. If the log instead shows `Attempting kc.sh bootstrap-admin user`,
-   one of the vars is still set — go back to step 5e.3.
+   `KC_BOOTSTRAP_ADMIN` is still `true` (with both credentials) — go back to
+   step 5e.3. If it shows `KC_BOOTSTRAP_ADMIN_USERNAME is set but
+   KC_BOOTSTRAP_ADMIN != true`, the username var was not deleted — remove it.
 
 ### 5f. Verify
 

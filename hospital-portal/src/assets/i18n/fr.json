@@ -120,6 +120,13 @@
     "WARD_NAME": "Nom de l'unité",
     "WARD_TYPE": "Type d'unité"
   },
+  "ERROR_403": {
+    "BACK": "Retour au tableau de bord",
+    "BODY": "Vous n'avez pas l'autorisation d'afficher cette page.",
+    "ROLE_HINT": "Vous êtes connecté en tant que {{active}}. Reconnectez-vous en choisissant {{better}}.",
+    "SIGN_IN_AGAIN": "Se reconnecter",
+    "TITLE": "Accès refusé"
+  },
   "LABOR": {
     "ACTION_LINE": "Ligne d'action",
     "ACTIVE_EPISODE": "Travail en cours",
@@ -3142,6 +3149,7 @@
     "CREATING_ACCOUNT": "Création du compte…",
     "BOOTSTRAP_SUBMIT": "Créer le Super Admin et commencer",
     "ROLE_PICKER_TITLE": "Choisissez votre rôle",
+    "ROLE_RECOMMENDED": "Recommandé",
     "ROLE_PICKER_SUBTITLE": "Vous avez plusieurs rôles. Sélectionnez celui avec lequel vous souhaitez vous connecter :",
     "BACK_TO_SIGN_IN": "Retour à la connexion",
     "SSO_CONTINUE": "Continuer avec l'authentification unique",
@@ -3722,7 +3730,7 @@
     "OPERATION_FAILED": "L'opération a échoué",
     "PAGE_INFO": "Page",
     "PAGE_OF": "de",
-    "REQUIRED_FIELDS": "Le nom, le code, l'e-mail de contact et le fuseau horaire sont requis",
+    "REQUIRED_FIELDS": "Le nom, le code, l'e-mail de contact, le fuseau horaire et le type sont requis",
     "SEARCH_PLACEHOLDER": "Rechercher des organisations…",
     "SELECT_TIMEZONE": "Sélectionner le fuseau horaire…",
     "SELECT_TYPE": "Sélectionner le type…",
@@ -3730,6 +3738,7 @@
     "TIMEZONE": "Fuseau Horaire",
     "TITLE": "Organisations",
     "TYPE": "Type",
+    "TYPE_REQUIRED": "Choisissez un type d'organisation.",
     "UPDATED": "Organisation mise à jour"
   },
   "PANEL": {
@@ -5565,6 +5574,28 @@
         "ARCHIVED": "Archivé",
         "PURGED": "Purgé",
         "PENDING_PURGE": "Purge planifiée"
+      },
+      "SPECIALIZATION": {
+        "CARDIOLOGY": "Cardiologie",
+        "CLINICAL_PHARMACY": "Pharmacie clinique",
+        "DERMATOLOGY": "Dermatologie",
+        "GENERAL_NURSE": "Soins infirmiers généraux",
+        "GENERAL_PRACTICE": "Médecine générale",
+        "GYNECOLOGY": "Gynécologie",
+        "HOSPITAL_PHARMACY": "Pharmacie hospitalière",
+        "ICU_NURSE": "Soins infirmiers en réanimation",
+        "LAB_TECHNICIAN": "Technicien de laboratoire",
+        "MICROBIOLOGY": "Microbiologie",
+        "NEUROLOGY": "Neurologie",
+        "ONCOLOGY": "Oncologie",
+        "ORTHOPEDICS": "Orthopédie",
+        "OTHER": "Autre",
+        "PATHOLOGY": "Anatomopathologie",
+        "PEDIATRICS": "Pédiatrie",
+        "PEDIATRIC_NURSE": "Soins infirmiers pédiatriques",
+        "PSYCHIATRY": "Psychiatrie",
+        "RADIOLOGY": "Radiologie",
+        "SURGICAL_NURSE": "Soins infirmiers chirurgicaux"
       }
     },
     "DOCUMENTS": {

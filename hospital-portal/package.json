@@ -70,7 +70,7 @@
     "@grafana/faro-web-tracing": "^2.12.1",
     "@ngx-translate/core": "17.0.0",
     "@ngx-translate/http-loader": "17.0.0",
-    "@stomp/stompjs": "^7.3.0",
+    "@stomp/stompjs": "^7.4.0",
     "angular-oauth2-oidc": "^22.0.2",
     "express": "5.3.0",
     "fullcalendar": "7.1.1",
@@ -102,9 +102,9 @@
     "karma-coverage": "2.2.1",
     "karma-jasmine": "5.1.0",
     "karma-jasmine-html-reporter": "^2.3.0",
-    "prettier": "^3.9.9",
+    "prettier": "^3.9.10",
     "puppeteer": "^25.13.0",
     "typescript": "6.0.3",
-    "typescript-eslint": "^8.71.1"
+    "typescript-eslint": "^8.71.2"
   }
 }
