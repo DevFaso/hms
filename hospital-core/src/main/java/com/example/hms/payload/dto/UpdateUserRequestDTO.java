@@ -31,7 +31,7 @@ import java.util.UUID;
 @Schema(name = "UpdateUserRequestDTO", description = "Partial update payload — only provide fields you want to change")
 public class UpdateUserRequestDTO {
 
-    @Size(min = 3, max = 20, message = "{user.update.username.size}")
+    @Size(min = 3, max = com.example.hms.model.User.USERNAME_MAX_LENGTH, message = "{user.update.username.size}")
     @Schema(description = "New username; omit to keep current")
     private String username;
 

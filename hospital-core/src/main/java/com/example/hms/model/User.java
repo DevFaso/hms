@@ -40,7 +40,10 @@ import java.util.UUID;
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class User extends BaseEntity {
 
-    @Column(nullable = false, unique = true, length = 50)
+    /** The one username length limit: the column, every DTO and the generator share it (D37). */
+    public static final int USERNAME_MAX_LENGTH = 50;
+
+    @Column(nullable = false, unique = true, length = USERNAME_MAX_LENGTH)
     private String username;
 
     @Column(name = "password_hash", nullable = false, length = 255)

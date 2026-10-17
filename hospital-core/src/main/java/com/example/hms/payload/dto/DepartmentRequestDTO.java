@@ -31,7 +31,7 @@ public class DepartmentRequestDTO {
 
     @NotBlank(message = "{department.name.required}")
     @Size(min = 2, max = 100, message = "{department.name.size}")
-    @Pattern(regexp = "^[a-zA-Z0-9 \\-]+$", message = "{department.name.pattern}")
+    @Pattern(regexp = "^[\\p{L}\\p{M}\\p{N} '’.\\-]+$", message = "{department.name.pattern}")
     private String name;
 
     @Size(max = 500, message = "{department.description.size}")

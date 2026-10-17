@@ -61,3 +61,10 @@
   color: #ef4444;
   font-weight: 700;
 }
+
+.pharmacy-empty-hint {
+  margin: 0;
+  max-width: 28rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary, #5b6472);
+}

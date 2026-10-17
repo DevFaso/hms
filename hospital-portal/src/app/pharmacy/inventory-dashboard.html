@@ -5,15 +5,22 @@
       <p class="page-subtitle">{{ 'PHARMACY.INVENTORY_SUBTITLE' | translate }}</p>
     </div>
     <div class="header-actions">
-      <select
-        class="pharmacy-select"
-        [(ngModel)]="selectedPharmacyId"
-        (ngModelChange)="onPharmacyChange()"
-      >
-        @for (p of pharmacies(); track p.id) {
-          <option [value]="p.id">{{ p.name }}</option>
-        }
-      </select>
+      @if (pharmaciesLoaded() && pharmacies().length === 0) {
+        <p class="pharmacy-empty-hint" role="status" data-testid="no-pharmacy-hint">
+          {{ 'PHARMACY.NO_PHARMACY_HINT' | translate }}
+        </p>
+      } @else {
+        <select
+          class="pharmacy-select"
+          [attr.aria-label]="'PHARMACY.SELECT_PHARMACY' | translate"
+          [(ngModel)]="selectedPharmacyId"
+          (ngModelChange)="onPharmacyChange()"
+        >
+          @for (p of pharmacies(); track p.id) {
+            <option [value]="p.id">{{ p.name }}</option>
+          }
+        </select>
+      }
       <button class="btn-primary" (click)="openCreateItem()">
         <span class="material-symbols-outlined">add</span>
         {{ 'PHARMACY.ADD_ITEM' | translate }}

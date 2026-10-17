@@ -153,6 +153,8 @@ export class DispensingComponent implements OnInit, OnDestroy {
 
   // Pharmacies
   pharmacies = signal<PharmacyResponse[]>([]);
+  /** True once the pharmacy list answered, so an empty list shows a hint, not a blank select (D59). */
+  pharmaciesLoaded = signal(false);
   selectedPharmacyId = '';
 
   // Inventory items for stock lot selection
@@ -338,6 +340,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
       next: (page) => {
         const list = page?.content ?? [];
         this.pharmacies.set(list);
+        this.pharmaciesLoaded.set(true);
         if (list.length > 0) {
           this.selectedPharmacyId = list[0].id;
           this.loadWorkQueue();

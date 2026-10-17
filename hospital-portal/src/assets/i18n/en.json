@@ -6103,7 +6103,17 @@
     "MFA_STEPUP_LOCKED": "Too many wrong codes. Wait a few minutes, then try again with a current code or an unused backup code.",
     "MFA_STEPUP_REUSED": "That code was already used. Wait for the next code from your authenticator app, or use an unused backup code.",
     "MFA_STEPUP_IMPERSONATION": "A support session cannot set up or change the authenticator of this account. The account holder must do it themselves.",
-    "MFA_SET_UP": "Set up an authenticator app"
+    "MFA_SET_UP": "Set up an authenticator app",
+    "CHANGE_PASSWORD_DESC": "Enter your current password, then choose a new one of at least 8 characters.",
+    "PASSWORD_TOO_SHORT": "The new password must be at least 8 characters.",
+    "PASSWORD_SAME_AS_CURRENT": "The new password must differ from the current one.",
+    "PASSWORD_CHANGED": "Your password has been changed.",
+    "PASSWORD_CURRENT_WRONG": "The current password is incorrect.",
+    "PASSWORD_CHANGE_REFUSED": "The new password was refused. It may match one of your last 5 passwords.",
+    "PASSWORD_CHANGE_FAILED": "The password could not be changed. Please try again.",
+    "PASSWORD_MANAGED_BY_SSO": "Your password is managed by your single sign-on provider.",
+    "SAVE_NEW_PASSWORD": "Save new password",
+    "FORGOT_PASSWORD_DESC": "Forgot your current password? We can email you a reset link."
   },
   "RECEPTION": {
     "ACCEPT_OFFER": "Accept",
@@ -7887,7 +7897,9 @@
     "HAND_OVER_FAILED": "Could not record the hand-over.",
     "CANCEL_READY_SUCCESS": "Preparation cancelled.",
     "CANCEL_READY_FAILED": "Could not cancel the preparation.",
-    "PREPARED_BY": "Prepared by {{name}}"
+    "PREPARED_BY": "Prepared by {{name}}",
+    "NO_PHARMACY_HINT": "No pharmacy is registered for this hospital yet. A hospital administrator can register one in the Pharmacy Registry.",
+    "SELECT_PHARMACY": "Pharmacy"
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",
