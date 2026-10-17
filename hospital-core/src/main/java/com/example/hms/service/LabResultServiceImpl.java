@@ -995,12 +995,17 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional
     public LabResultResponseDTO releaseLabResult(UUID id, Locale locale) {
-        return releaseLabResult(id, false, locale);
+        return doReleaseLabResult(id, false, locale);
     }
 
     @Override
     @Transactional
     public LabResultResponseDTO releaseLabResult(UUID id, boolean selfReleaseConfirmed, Locale locale) {
+        return doReleaseLabResult(id, selfReleaseConfirmed, locale);
+    }
+
+    /** The release itself; both public entry points run it in their own transaction. */
+    private LabResultResponseDTO doReleaseLabResult(UUID id, boolean selfReleaseConfirmed, Locale locale) {
         LabResult labResult = labResultRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
         // Release was the one write path here without the scope comparison

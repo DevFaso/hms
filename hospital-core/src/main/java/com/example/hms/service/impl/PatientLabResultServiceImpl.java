@@ -306,12 +306,12 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
      * collection now reports none rather than a time nobody observed.
      */
     private Map<UUID, LocalDateTime> collectionTimesOf(List<LabResult> results) {
-        Set<UUID> orderIds = new java.util.HashSet<>();
-        for (LabResult result : results) {
-            if (result.getLabOrder() != null && result.getLabOrder().getId() != null) {
-                orderIds.add(result.getLabOrder().getId());
-            }
-        }
+        Set<UUID> orderIds = results.stream()
+            .map(LabResult::getLabOrder)
+            .filter(java.util.Objects::nonNull)
+            .map(LabOrder::getId)
+            .filter(java.util.Objects::nonNull)
+            .collect(java.util.stream.Collectors.toSet());
         Map<UUID, LocalDateTime> earliest = new java.util.HashMap<>();
         if (orderIds.isEmpty()) {
             return earliest;
