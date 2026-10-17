@@ -92,12 +92,11 @@ public class HospitalServiceImpl implements HospitalService {
             return List.of();
         }
 
-        // No hospital-scope filtering here: the hospital directory (name,
-        // address, phone) is not sensitive, and clinical staff need the full
-        // list to pick destination hospitals in referral / consultation
-        // workflows.  Access is already gated by SecurityConfig + controller
-        // @PreAuthorize.
-        return hospitals.stream()
+        // QA D36: the full record (address, phone, email, licence) is the
+        // caller's own hospitals' only; a super-admin reads every one. The
+        // destination picker of cross-hospital workflows reads the directory
+        // ({@link #getHospitalDirectory()}) instead.
+        return applyHospitalScope(hospitals).stream()
                 .filter(java.util.Objects::nonNull)
                 .map(hospitalMapper::toHospitalDTO)
                 .toList();
@@ -123,6 +122,19 @@ public class HospitalServiceImpl implements HospitalService {
         } catch (IllegalArgumentException unknown) {
             throw new BusinessException(MSG_PROVIDER_TYPE_INVALID);
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.HospitalDirectoryEntryDTO> getHospitalDirectory() {
+        List<Hospital> hospitals = hospitalRepository.findAllForFilters(null, null, null, null);
+        if (hospitals == null) {
+            return List.of();
+        }
+        return hospitals.stream()
+                .filter(h -> h != null && h.isActive())
+                .map(h -> new com.example.hms.payload.dto.HospitalDirectoryEntryDTO(h.getId(), h.getName(), h.getCity()))
+                .toList();
     }
 
     @Override

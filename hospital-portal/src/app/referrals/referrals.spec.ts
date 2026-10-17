@@ -94,6 +94,16 @@ describe('ReferralsComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('QA D36: the destination picker reads the hospital directory, not the scoped list', () => {
+    fixture.detectChanges();
+    const directory = httpMock.match((req) => req.url === '/hospitals/directory');
+    expect(directory.length).toBe(1);
+    directory[0].flush([{ id: 'h2', name: 'Remote Hospital', city: 'Bobo' }]);
+    expect(httpMock.match((req) => req.url === '/hospitals').length).toBe(0);
+    flushInitRequests();
+    expect(component.allHospitals().map((h) => h.id)).toEqual(['h2']);
+  });
+
   it('emptyForm should include new fields with defaults', () => {
     flushInitRequests();
     const form = component.emptyForm();

@@ -8,6 +8,10 @@ import com.example.hms.model.AuditEventLog;
 import com.example.hms.payload.dto.AuditEventLogResponseDTO;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.AuditEventLogRepository;
+import com.example.hms.repository.AuditEventLogSpecifications;
+import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.service.AuditEventLogService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -16,7 +20,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -38,6 +45,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @RestController
@@ -67,6 +75,42 @@ public class AuditEventLogController {
     private final AuditEventLogRepository auditRepository;
     private final AuditEventLogMapper auditMapper;
     private final ControllerAuthUtils authUtils;
+    private final ActingScopeResolver scopeResolver;
+
+    /**
+     * The hospitals whose audit rows the caller may read, or {@code null} for
+     * the whole platform log (QA D25). Only a verified super-admin in global
+     * view reads the platform log; a pinned super-admin reads the hospital
+     * pinned; everyone else reads the hospitals they WORK at (a patient seat
+     * is not a reason to read a hospital's audit trail), narrowed to the
+     * {@code X-Hospital-Id} they named when they named one. The role check in
+     * {@code @PreAuthorize} says who may read audit logs at all; this says
+     * which rows.
+     */
+    private Set<UUID> auditScope() {
+        ActingScope scope = scopeResolver.current();
+        Set<UUID> staff = HospitalContextHolder.getContextOrEmpty().getStaffHospitalIds();
+        return switch (scope) {
+            case ActingScope.Global global -> null;
+            case ActingScope.Pinned pinned -> scopeResolver.isVerifiedSuperAdmin() || staff.contains(pinned.hospitalId())
+                ? Set.of(pinned.hospitalId())
+                : Set.of();
+            // Several hospitals and none named: every hospital they work at.
+            case ActingScope.Refused(ActingScope.Reason reason) when reason == ActingScope.Reason.AMBIGUOUS -> staff;
+            case ActingScope.Refused refused -> Set.of();
+            case ActingScope.PatientOwned owned -> Set.of();
+        };
+    }
+
+    private Page<AuditEventLogResponseDTO> scopedPage(Set<UUID> scope, Specification<AuditEventLog> filter,
+                                                      Pageable pageable) {
+        Pageable ordered = pageable.getSort().isSorted()
+            ? pageable
+            : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+                Sort.by(Sort.Direction.DESC, "eventTimestamp"));
+        return auditRepository.findAll(AuditEventLogSpecifications.anchoredAt(scope).and(filter), ordered)
+            .map(auditMapper::toDto);
+    }
 
     @PostMapping
     @Operation(summary = "Log an Audit Event", description = "Creates a new audit log entry and returns it.")
@@ -92,6 +136,10 @@ public class AuditEventLogController {
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime toDate,
         @PageableDefault(size = 20) Pageable pageable
     ) {
+        Set<UUID> scope = auditScope();
+        if (scope != null) {
+            return ResponseEntity.ok(scopedPage(scope, AuditEventLogSpecifications.between(fromDate, toDate), pageable));
+        }
         if (fromDate != null || toDate != null) {
             return ResponseEntity.ok(auditService.getAuditLogsByDateRange(fromDate, toDate, pageable));
         }
@@ -107,6 +155,10 @@ public class AuditEventLogController {
         @Parameter(description = "UUID of the hospital", required = true)
         @PathVariable UUID hospitalId,
         @PageableDefault(size = 20) Pageable pageable) {
+        Set<UUID> scope = auditScope();
+        if (scope != null && !scope.contains(hospitalId)) {
+            throw new AccessDeniedException("You may only read the audit log of a hospital you work at.");
+        }
         return ResponseEntity.ok(auditService.getAuditLogsByHospital(hospitalId, pageable));
     }
 
@@ -126,17 +178,29 @@ public class AuditEventLogController {
         @PathVariable UUID userId,
         @PageableDefault(size = 20) Pageable pageable,
         Authentication auth) {
-        requireSelfUnlessAuditReader(userId, auth);
+        boolean self = requireSelfUnlessAuditReader(userId, auth);
+        Set<UUID> scope = self ? null : auditScope();
+        if (scope != null) {
+            return ResponseEntity.ok(scopedPage(scope, AuditEventLogSpecifications.byUser(userId), pageable));
+        }
         return ResponseEntity.ok(auditService.getAuditLogsByUser(userId, pageable));
     }
 
-    private void requireSelfUnlessAuditReader(UUID userId, Authentication auth) {
-        boolean reader = AUDIT_READER_AUTHORITIES.stream().anyMatch(a -> authUtils.hasAuthority(auth, a));
-        if (reader) return;
+    /**
+     * True when the caller reads their own activity (unscoped: it is theirs);
+     * false for an audit reader reading someone else (scoped to the reader's
+     * hospitals by the caller); anyone else naming another user is refused.
+     */
+    private boolean requireSelfUnlessAuditReader(UUID userId, Authentication auth) {
         UUID self = authUtils.resolveUserId(auth).orElse(null);
-        if (self == null || !self.equals(userId)) {
+        if (self != null && self.equals(userId)) {
+            return true;
+        }
+        boolean reader = AUDIT_READER_AUTHORITIES.stream().anyMatch(a -> authUtils.hasAuthority(auth, a));
+        if (!reader) {
             throw new AccessDeniedException("Only audit readers may view another user's activity.");
         }
+        return false;
     }
 
     @GetMapping("/event-types-summary")
@@ -144,7 +208,16 @@ public class AuditEventLogController {
     @Operation(summary = "Get event type counts", description = "Retrieve a summary of audit event counts grouped by event type.")
     @ApiResponse(responseCode = "200", description = "Event type summary retrieved successfully")
     public ResponseEntity<List<Map<String, Object>>> getEventTypesSummary() {
-        List<Map<String, Object>> summary = auditRepository.countByEventType().stream()
+        Set<UUID> scope = auditScope();
+        List<Object[]> rows;
+        if (scope == null) {
+            rows = auditRepository.countByEventType();
+        } else if (scope.isEmpty()) {
+            rows = List.of();
+        } else {
+            rows = auditRepository.countByEventTypeForHospitals(scope);
+        }
+        List<Map<String, Object>> summary = rows.stream()
             .map(row -> Map.<String, Object>of(
                 "eventType", row[0] != null ? row[0].toString() : "UNKNOWN",
                 "count", row[1]
@@ -171,6 +244,11 @@ public class AuditEventLogController {
                 parsedStatus = AuditStatus.valueOf(status.trim().toUpperCase());
             }
 
+            Set<UUID> scope = auditScope();
+            if (scope != null) {
+                return ResponseEntity.ok(scopedPage(scope,
+                    AuditEventLogSpecifications.byEventType(parsedType, parsedStatus), pageable));
+            }
             Page<AuditEventLog> page = (parsedStatus == null)
                 ? auditRepository.findByEventType(parsedType, pageable)
                 : auditRepository.findByEventTypeAndStatus(parsedType, parsedStatus, pageable);
@@ -190,6 +268,11 @@ public class AuditEventLogController {
         @RequestParam String entityType,
         @RequestParam String resourceId,
         @PageableDefault(size = 20) Pageable pageable) {
+        Set<UUID> scope = auditScope();
+        if (scope != null) {
+            return ResponseEntity.ok(scopedPage(scope,
+                AuditEventLogSpecifications.byTarget(entityType, resourceId), pageable));
+        }
         return ResponseEntity.ok(
             auditRepository.findByEntityTypeIgnoreCaseAndResourceId(entityType, resourceId, pageable)
                 .map(auditMapper::toDto)

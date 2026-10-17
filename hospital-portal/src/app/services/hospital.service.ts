@@ -56,6 +56,13 @@ export interface HospitalResponse {
   updatedAt: string;
 }
 
+/** One row of `GET /hospitals/directory`: no contact details. */
+export interface HospitalDirectoryEntry {
+  id: string;
+  name: string;
+  city: string | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class HospitalService {
   private readonly http = inject(HttpClient);
@@ -72,6 +79,15 @@ export class HospitalService {
     if (filters?.state) params = params.set('state', filters.state);
     if (filters?.unassignedOnly) params = params.set('unassignedOnly', 'true');
     return this.http.get<HospitalResponse[]>('/hospitals', { params });
+  }
+
+  /**
+   * QA D36: every active hospital as id, name and city, for the destination
+   * picker of cross-hospital workflows. `list()` returns only the caller's
+   * own hospitals unless they are a super-admin.
+   */
+  directory(): Observable<HospitalDirectoryEntry[]> {
+    return this.http.get<HospitalDirectoryEntry[]>('/hospitals/directory');
   }
 
   getById(id: string): Observable<HospitalResponse> {
