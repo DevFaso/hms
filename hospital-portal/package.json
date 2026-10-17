@@ -85,6 +85,7 @@
     "@angular/cli": "^22.2.2",
     "@angular/compiler-cli": "22.2.2",
     "@axe-core/playwright": "^4.11.3",
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.64.0",
     "@types/express": "^5.0.6",
     "@types/jasmine": "6.0.0",
