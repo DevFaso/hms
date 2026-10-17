@@ -424,6 +424,11 @@ public class SecurityConfig {
                     // and CSRF has nothing to protect. The native apps send no
                     // XSRF header, which made these unreachable for them.
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/me/change-password"),
+                    // The WebSocket ticket exchange: same header-only bearer
+                    // auth, mints no cookie and changes no state. A stale
+                    // XSRF cookie after login rotation made it answer 403
+                    // (QA D35), leaving every socket unauthenticated.
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/ws-ticket"),
                     PathPatternRequestMatcher.withDefaults().matcher("/me/push-devices/**"),
                     PathPatternRequestMatcher.withDefaults().matcher("/auth/password/**"),
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/resend-verification"),
