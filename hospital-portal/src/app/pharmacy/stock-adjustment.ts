@@ -52,6 +52,8 @@ export class StockAdjustmentComponent implements OnInit {
   private readonly translate = inject(TranslateService);
 
   pharmacies = signal<PharmacyResponse[]>([]);
+  /** True once the pharmacy list answered, so an empty list shows a hint, not a blank select (D59). */
+  pharmaciesLoaded = signal(false);
   selectedPharmacyId = '';
   inventoryItems = signal<InventoryItemResponse[]>([]);
 
@@ -98,6 +100,7 @@ export class StockAdjustmentComponent implements OnInit {
       next: (page) => {
         const list = page?.content ?? [];
         this.pharmacies.set(list);
+        this.pharmaciesLoaded.set(true);
         if (list.length > 0) {
           this.selectedPharmacyId = list[0].id;
           this.onPharmacyChange();
