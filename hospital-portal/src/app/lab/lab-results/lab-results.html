@@ -142,7 +142,9 @@
                     >{{ 'LAB_RESULTS.NOT_GRADED_UNITS_DIFFER' | translate }}</span
                   >
                 } @else if (r.severityFlag) {
-                  <span [class]="getSeverityClass(r.severityFlag)">{{ r.severityFlag }}</span>
+                  <span [class]="getSeverityClass(r.severityFlag)">{{
+                    r.severityFlag | enumLabel: 'labSeverityFlag'
+                  }}</span>
                 } @else {
                   <span>—</span>
                 }

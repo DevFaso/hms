@@ -54,7 +54,7 @@ class DrugDrugInteractionRuleTest {
         assertThat(card.summary())
             .contains("clarithromycin")
             .contains("simvastatin")
-            .contains("CONTRAINDICATED");
+            .contains("contraindicated");
         assertThat(card.detail()).contains("Switch macrolide");
     }
 

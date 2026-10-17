@@ -127,12 +127,23 @@
               <span class="material-symbols-outlined">warning</span>
             </div>
             <div class="alert-info">
-              <h4>{{ item.medicationName ?? item.medicationCode ?? 'Unknown' }}</h4>
+              <h4>
+                {{ item.medicationName ?? item.medicationCode ?? ('COMMON.UNKNOWN' | translate) }}
+              </h4>
               <p class="alert-detail">
-                <strong>{{ item.quantityOnHand }}</strong> {{ item.unit ?? 'units' }} remaining
-                (threshold: {{ item.reorderThreshold }})
+                {{
+                  'PHARMACY.STOCK_REMAINING'
+                    | translate
+                      : {
+                          qty: item.quantityOnHand,
+                          unit: item.unit ?? ('PHARMACY.UNITS' | translate),
+                          threshold: item.reorderThreshold,
+                        }
+                }}
               </p>
-              <p class="alert-detail reorder">Reorder qty: {{ item.reorderQuantity }}</p>
+              <p class="alert-detail reorder">
+                {{ 'PHARMACY.REORDER_QTY' | translate: { qty: item.reorderQuantity } }}
+              </p>
             </div>
           </div>
         }

@@ -203,7 +203,8 @@ class CdsHooksInvokeSecurityIT extends BaseIT {
 
         MvcResult allergyCheck = invoke(doctor, "hms-medication-allergy-check", patientAtA);
         assertThat(allergyCheck.getResponse().getStatus()).isEqualTo(200);
-        assertThat(allergyCheck.getResponse().getContentAsString()).contains("Allergy alert");
+        assertThat(allergyCheck.getResponse().getContentAsString())// Card wording follows the request locale (default French, D61).
+            .contains("Alerte allergie");
     }
 
     @Test

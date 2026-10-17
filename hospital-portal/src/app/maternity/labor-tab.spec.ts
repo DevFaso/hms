@@ -109,6 +109,14 @@ describe('LaborTabComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('D65: with no patient picked, shows the labour hint, not the referrals one', () => {
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('LABOR.PICK_PATIENT_HINT');
+    expect(text).not.toContain('MATERNITY.PICK_PATIENT_HINT');
+  });
+
   it('picking a patient loads episodes and entries of the active episode', () => {
     laborSpy.episodes.and.returnValue(of([episode('e1', 'ACTIVE')]));
     laborSpy.entries.and.returnValue(of([entry('pe1')]));

@@ -273,7 +273,7 @@
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">receipt_long</span>
       <h3>{{ 'BILLING.NO_INVOICES' | translate }}</h3>
-      <p>{{ searchTerm ? 'Try adjusting your search.' : 'No billing records available.' }}</p>
+      <p>{{ (searchTerm ? 'COMMON.TRY_ADJUST_SEARCH' : 'BILLING.NO_RECORDS_HINT') | translate }}</p>
     </div>
   }
 
@@ -281,7 +281,7 @@
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
       <div class="detail-panel">
         <div class="panel-header">
-          <h2>Invoice {{ inv.invoiceNumber }}</h2>
+          <h2>{{ 'BILLING.INVOICE' | translate }} {{ inv.invoiceNumber }}</h2>
           <button
             class="close-btn"
             [title]="'COMMON.CLOSE_DETAIL_PANEL' | translate"

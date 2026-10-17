@@ -17,6 +17,22 @@
     "(`{}`) or a misspelled key — otherwise silence would be the cheapest way",
     "out."
   ],
+  "fulfillmentMode": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/PharmacyFulfillmentMode.java"
+  },
+  "imagingLaterality": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/ImagingLaterality.java"
+  },
+  "imagingOrderPriority": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/ImagingOrderPriority.java"
+  },
+  "pharmacyType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/PharmacyType.java" },
+  "procedureUrgency": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/ProcedureUrgency.java"
+  },
+  "labSeverityFlag": {
+    "reason": "LabResultResponseDTO.severityFlag is a String that LabResultMapper.determineSeverityFlag DERIVES (NORMAL / LOW / HIGH, and UNSPECIFIED when no reference range applies); the chart-review abnormalFlag is an AbnormalFlag name (ABNORMAL / CRITICAL ...). PORTAL.ENUM.LAB_SEVERITY_FLAG keys NORMAL, LOW, HIGH, CRITICAL, ABNORMAL and UNSPECIFIED; check by hand when either source changes."
+  },
   "admissionStatus": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/AdmissionStatus.java"
   },

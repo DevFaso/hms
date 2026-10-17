@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { MyPharmacyInvoicesComponent } from './my-pharmacy-invoices.component';
@@ -65,7 +66,7 @@ describe('MyPharmacyInvoicesComponent', () => {
     pharmacyServiceSpy.listMyPharmacyClaims.and.callFake(claimResponseFactory as never);
 
     await TestBed.configureTestingModule({
-      imports: [MyPharmacyInvoicesComponent],
+      imports: [MyPharmacyInvoicesComponent, TranslateModule.forRoot()],
       providers: [{ provide: PharmacyService, useValue: pharmacyServiceSpy }],
     }).compileComponents();
 

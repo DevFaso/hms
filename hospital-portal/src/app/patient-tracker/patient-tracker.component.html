@@ -39,7 +39,9 @@
           <!-- Arrow-key roving (row 11). docs/ui/accessibility.md §6.6 -->
           <ul
             class="column-body"
-            [attr.aria-label]="(col.label | translate) + ' patients'"
+            [attr.aria-label]="
+              'TRACKER.COLUMN_PATIENTS' | translate: { column: (col.label | translate) }
+            "
             appRovingFocus=".patient-card"
           >
             @for (item of getColumnItems(col.key); track item.encounterId) {

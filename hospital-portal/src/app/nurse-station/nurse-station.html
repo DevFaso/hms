@@ -337,7 +337,7 @@
                     <td>{{ o.orderType | enumLabel: 'orderSourceType' }}</td>
                     <td>
                       <span class="priority-badge priority-{{ o.priority | lowercase }}">{{
-                        o.priority
+                        o.priority | enumLabel: 'taskPriority'
                       }}</span>
                     </td>
                     <td>{{ o.dueTime | date: 'shortTime' }}</td>
