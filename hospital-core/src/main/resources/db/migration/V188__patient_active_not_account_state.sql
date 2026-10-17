@@ -11,6 +11,13 @@
 -- Only records whose account is exactly a pending one: inactive, not
 -- deleted, never disabled by an administrator, never signed in. A record an
 -- administrator deactivated on an account that has signed in is untouched.
+--
+-- Staff can also switch a record off through the patient-update path, which
+-- never stamps users.deactivated_by_admin_at - so the account's state alone
+-- cannot tell the copy-on-create switch-off from a deliberate one. The rule:
+-- only records never updated after creation (updated_at within 5 seconds of
+-- created_at) are put back. A record touched since - including a deliberate
+-- deactivation - is left as it is; staff can re-activate it by hand.
 -- Idempotent: a second run matches nothing.
 
 UPDATE clinical.patients p
@@ -21,4 +28,7 @@ UPDATE clinical.patients p
    AND u.is_active = FALSE
    AND u.is_deleted = FALSE
    AND u.deactivated_by_admin_at IS NULL
-   AND u.last_login_at IS NULL;
+   AND u.last_login_at IS NULL
+   AND p.updated_at IS NOT NULL
+   AND p.created_at IS NOT NULL
+   AND p.updated_at <= p.created_at + INTERVAL '5 seconds';
