@@ -13,8 +13,9 @@ import {
   AfterVisitSummary,
   EncounterNoteRequest,
 } from '../services/encounter.service';
+import { NoteHistoryView, toNoteHistoryView } from './note-history-view';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
-import { StaffService, StaffResponse } from '../services/staff.service';
+import { StaffService, StaffResponse, isClinicalProvider } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { DepartmentLookupService, DepartmentOption } from '../services/department-lookup.service';
 import { ToastService } from '../core/toast.service';
@@ -80,7 +81,7 @@ export class EncountersComponent implements OnInit {
   showEligibilityDialog = signal(false);
 
   /* Note history + addendums */
-  noteHistory = signal<EncounterNoteResponse[]>([]);
+  noteHistory = signal<NoteHistoryView[]>([]);
   noteHistoryLoading = signal(false);
 
   /* Note sign/co-sign ceremony (P3 #20). State comes from the encounter's
@@ -195,7 +196,9 @@ export class EncountersComponent implements OnInit {
     this.staffService.list(hid ?? undefined).subscribe({
       next: (list) => {
         this.allStaff = list;
-        this.staffMembers.set(list.map((s) => ({ id: s.id, name: s.name || s.email })));
+        this.staffMembers.set(
+          list.filter(isClinicalProvider).map((s) => ({ id: s.id, name: s.name || s.email })),
+        );
       },
     });
     this.initPatientSearch();
@@ -558,7 +561,7 @@ export class EncountersComponent implements OnInit {
     this.noteHistoryLoading.set(true);
     this.encounterService.getNoteHistory(encounterId).subscribe({
       next: (history) => {
-        this.noteHistory.set(history ?? []);
+        this.noteHistory.set((history ?? []).map(toNoteHistoryView));
         this.noteHistoryLoading.set(false);
       },
       error: () => {

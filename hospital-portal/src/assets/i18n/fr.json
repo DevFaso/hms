@@ -2357,7 +2357,14 @@
     "VIEW_AVS": "Résumé de visite",
     "VIEW_DETAILS": "Voir les détails",
     "VITALS": "Signes Vitaux",
-    "WAITING_FOR_MD": "En attente du médecin"
+    "WAITING_FOR_MD": "En attente du médecin",
+    "NOTE_HISTORY_CHANGE": {
+      "CREATED": "Créée",
+      "UPDATED": "Modifiée",
+      "SIGNED": "Signée",
+      "COSIGNED": "Contresignée",
+      "ADDENDUM": "Addendum ajouté"
+    }
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmer le mot de passe",
@@ -3520,7 +3527,6 @@
     "PAIN_REASSESSMENT": "Réévaluation de la douleur",
     "PATIENTS_ASSIGNED": "Patients assignés",
     "PATIENT_DETAILS": "Détails du patient",
-    "PATIENT_ID": "ID du patient",
     "PATIENT_LIST": "Liste des patients",
     "PENDING": "En attente",
     "PENDING_ORDERS": "Demandes en attente",
@@ -3582,7 +3588,6 @@
     "OVERDUE_BADGE": "EN RETARD",
     "COMPLETED_PREFIX": "Terminé",
     "BY_PREFIX": "par",
-    "PATIENT_UUID_PLACEHOLDER": "UUID du patient",
     "VITALS_PLACEHOLDER": {
       "TEMP": "ex. 37,2",
       "HEART_RATE": "ex. 72",
@@ -10416,5 +10421,17 @@
       "BY_SUPPORT": "En son nom : support de la plateforme ({{name}})",
       "RECORD_ROLE_ASSIGNED": "Rôle attribué : {{role}}"
     }
+  },
+  "VITAL_LIMITS": {
+    "TEMPERATURE": "La température doit être comprise entre {{min}} et {{max}} °C.",
+    "HEART_RATE": "La fréquence cardiaque doit être comprise entre {{min}} et {{max}} bpm.",
+    "RESPIRATORY_RATE": "La fréquence respiratoire doit être comprise entre {{min}} et {{max}} cycles par minute.",
+    "SYSTOLIC": "La pression systolique doit être comprise entre {{min}} et {{max}} mmHg.",
+    "DIASTOLIC": "La pression diastolique doit être comprise entre {{min}} et {{max}} mmHg.",
+    "SPO2": "La SpO2 doit être comprise entre {{min}} et {{max}} %.",
+    "GLUCOSE": "La glycémie doit être comprise entre {{min}} et {{max}} mg/dL.",
+    "WEIGHT": "Le poids doit être compris entre {{min}} et {{max}} kg.",
+    "HEIGHT": "La taille doit être comprise entre {{min}} et {{max}} cm.",
+    "HEAD_CIRCUMFERENCE": "Le périmètre crânien doit être compris entre {{min}} et {{max}} cm."
   }
 }

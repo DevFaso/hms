@@ -55,6 +55,7 @@ import java.util.Set;
 import com.example.hms.security.context.HospitalContextHolder;
 import org.springframework.context.MessageSource;
 import com.example.hms.service.i18n.NotificationLocales;
+import com.example.hms.utility.ObstetricEligibility;
 import java.util.Locale;
 
 /**
@@ -115,6 +116,7 @@ public class LaborServiceImpl implements LaborService {
         }
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
+        ObstetricEligibility.requireObstetricEligible(patient);
         PatientHospitalRegistration registration = resolveRegistration(request.getRegistrationId());
         Hospital hospital = resolveHospital(registration, request.getHospitalId());
 

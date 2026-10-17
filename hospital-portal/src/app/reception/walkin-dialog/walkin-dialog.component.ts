@@ -14,7 +14,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpClient } from '@angular/common/http';
 import { debounceTime, distinctUntilChanged, Subject, switchMap, catchError, of } from 'rxjs';
 import { PatientService, PatientResponse } from '../../services/patient.service';
-import { StaffService, StaffResponse } from '../../services/staff.service';
+import { StaffService, StaffResponse, isClinicalProvider } from '../../services/staff.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 
@@ -80,7 +80,7 @@ export class WalkInDialogComponent implements OnInit {
   ngOnInit(): void {
     const hospitalId = this.roleCtx.activeHospitalId ?? undefined;
     this.staffService.list(hospitalId).subscribe({
-      next: (list) => this.allStaff.set(list),
+      next: (list) => this.allStaff.set((list ?? []).filter(isClinicalProvider)),
     });
 
     // GET /departments admits RECEPTIONIST (verified against the controller).

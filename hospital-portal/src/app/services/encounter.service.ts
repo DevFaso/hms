@@ -46,6 +46,24 @@ export interface EncounterNoteResponse {
   cosignedByName?: string | null;
 }
 
+/**
+ * One row of GET /encounters/{id}/notes/history (EncounterNoteHistoryResponseDTO).
+ * The note's content at that moment is a JSON string, not note fields: typing
+ * this as an EncounterNoteResponse rendered every entry empty (QA D43).
+ */
+export interface EncounterNoteHistoryEntry {
+  id: string;
+  noteId?: string | null;
+  template?: string | null;
+  changedAt: string;
+  changedBy?: string | null;
+  changeType?: string | null;
+  /** JSON object: template, chiefComplaint, subjective, objective, assessment, plan, … */
+  contentSnapshot?: string | null;
+  /** JSON object: authorName, signedByName, signedAt, … */
+  metadataSnapshot?: string | null;
+}
+
 export type EncounterUrgency = 'EMERGENT' | 'URGENT' | 'ROUTINE' | 'LOW';
 
 export interface EncounterResponse {
@@ -342,8 +360,10 @@ export class EncounterService {
     );
   }
 
-  getNoteHistory(encounterId: string): Observable<EncounterNoteResponse[]> {
-    return this.http.get<EncounterNoteResponse[]>(`${this.baseUrl}/${encounterId}/notes/history`);
+  getNoteHistory(encounterId: string): Observable<EncounterNoteHistoryEntry[]> {
+    return this.http.get<EncounterNoteHistoryEntry[]>(
+      `${this.baseUrl}/${encounterId}/notes/history`,
+    );
   }
 
   /** Author-only signing ceremony (P3 #20) — the backend resolves the signer

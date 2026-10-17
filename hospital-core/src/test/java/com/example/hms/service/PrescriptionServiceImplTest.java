@@ -193,6 +193,27 @@ class PrescriptionServiceImplTest {
 
         lenient().when(prescriptionMapper.toEntity(any(), any(), any(), any()))
             .thenReturn(new Prescription());
+        // The named prescriber holds a prescribing role unless a test says otherwise.
+        lenient().when(roleValidator.canCreatePrescription(user.getId(), hospitalId)).thenReturn(true);
+    }
+
+    @Test
+    void createPrescriptionRefusesAPrescriberWithoutAPrescribingRole() {
+        // QA D28: a doctor picked a receptionist as prescriber and got a 201.
+        PrescriptionRequestDTO request = buildRequest();
+        UUID currentUser = UUID.randomUUID();
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(roleValidator.canCreatePrescription(staff.getUser().getId(), hospitalId)).thenReturn(false);
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage("The prescriber must be a doctor, nurse or midwife at this hospital.");
+
+        verify(prescriptionRepository, never()).save(any());
     }
 
     @Test
@@ -330,6 +351,10 @@ class PrescriptionServiceImplTest {
         staffAssignment.setId(UUID.randomUUID());
         staffAssignment.setHospital(encounter.getHospital());
         staff.setAssignment(staffAssignment);
+        com.example.hms.model.Department staffDepartment = new com.example.hms.model.Department();
+        staffDepartment.setId(UUID.randomUUID());
+        staffDepartment.setHospital(encounter.getHospital());
+        staff.setDepartment(staffDepartment);
 
         Prescription mappedEntity = new Prescription();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
@@ -359,6 +384,10 @@ class PrescriptionServiceImplTest {
         assertThat(generatedEncounter.getPatient()).isEqualTo(patient);
         assertThat(generatedEncounter.getStaff()).isEqualTo(staff);
         assertThat(generatedEncounter.getAssignment()).isEqualTo(staffAssignment);
+        // QA D41: the anchor is a finished visit, never an open one with no department.
+        assertThat(generatedEncounter.getStatus()).isEqualTo(com.example.hms.enums.EncounterStatus.COMPLETED);
+        assertThat(generatedEncounter.getCheckoutTimestamp()).isNotNull();
+        assertThat(generatedEncounter.getDepartment()).isEqualTo(staffDepartment);
 
         verify(prescriptionMapper).toEntity(request, patient, staff, generatedEncounter);
     }

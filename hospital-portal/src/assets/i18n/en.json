@@ -2357,7 +2357,14 @@
     "VIEW_AVS": "After-visit summary",
     "VIEW_DETAILS": "View details",
     "VITALS": "Vitals",
-    "WAITING_FOR_MD": "Waiting for MD"
+    "WAITING_FOR_MD": "Waiting for MD",
+    "NOTE_HISTORY_CHANGE": {
+      "CREATED": "Created",
+      "UPDATED": "Updated",
+      "SIGNED": "Signed",
+      "COSIGNED": "Co-signed",
+      "ADDENDUM": "Addendum added"
+    }
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",
@@ -3520,7 +3527,6 @@
     "PAIN_REASSESSMENT": "Pain Reassessment",
     "PATIENTS_ASSIGNED": "Patients Assigned",
     "PATIENT_DETAILS": "Patient Details",
-    "PATIENT_ID": "Patient ID",
     "PATIENT_LIST": "Patient List",
     "PENDING": "Pending",
     "PENDING_ORDERS": "Pending Orders",
@@ -3582,7 +3588,6 @@
     "OVERDUE_BADGE": "OVERDUE",
     "COMPLETED_PREFIX": "Completed",
     "BY_PREFIX": "by",
-    "PATIENT_UUID_PLACEHOLDER": "Patient UUID",
     "VITALS_PLACEHOLDER": {
       "TEMP": "e.g. 37.2",
       "HEART_RATE": "e.g. 72",
@@ -10416,5 +10421,17 @@
       "BY_SUPPORT": "On their behalf: platform support ({{name}})",
       "RECORD_ROLE_ASSIGNED": "Role assigned: {{role}}"
     }
+  },
+  "VITAL_LIMITS": {
+    "TEMPERATURE": "Temperature must be between {{min}} and {{max}} °C.",
+    "HEART_RATE": "Heart rate must be between {{min}} and {{max}} bpm.",
+    "RESPIRATORY_RATE": "Respiratory rate must be between {{min}} and {{max}} breaths per minute.",
+    "SYSTOLIC": "Systolic pressure must be between {{min}} and {{max}} mmHg.",
+    "DIASTOLIC": "Diastolic pressure must be between {{min}} and {{max}} mmHg.",
+    "SPO2": "SpO2 must be between {{min}} and {{max}} %.",
+    "GLUCOSE": "Blood glucose must be between {{min}} and {{max}} mg/dL.",
+    "WEIGHT": "Weight must be between {{min}} and {{max}} kg.",
+    "HEIGHT": "Height must be between {{min}} and {{max}} cm.",
+    "HEAD_CIRCUMFERENCE": "Head circumference must be between {{min}} and {{max}} cm."
   }
 }

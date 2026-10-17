@@ -2,6 +2,7 @@ package com.example.hms.mapper;
 
 import com.example.hms.model.Appointment;
 import com.example.hms.model.Encounter;
+import com.example.hms.model.encounter.EncounterNote;
 import com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO;
 import com.example.hms.payload.dto.clinical.CheckOutRequestDTO;
 import tools.jackson.core.JacksonException;
@@ -70,7 +71,43 @@ public class CheckOutMapper {
             }
         }
 
-        return builder.build();
+        AfterVisitSummaryDTO summary = builder.build();
+        fillFromSignedNote(summary, encounter.getEncounterNote());
+        return summary;
+    }
+
+    /**
+     * The summary used to read only the checkout form and the two encounter
+     * columns it writes, so a visit documented in a signed note but checked out
+     * with an empty form produced a summary with nothing in it (QA D42). Each
+     * blank section now falls back to the signed note: chief complaint, the
+     * assessment as the diagnosis, and the patient instructions (or the plan)
+     * as follow-up. Anything the clinician typed at checkout still wins, and an
+     * unsigned draft is never shown to the patient.
+     */
+    private static void fillFromSignedNote(AfterVisitSummaryDTO summary, EncounterNote note) {
+        if (note == null || note.getSignedAt() == null) {
+            return;
+        }
+        if (isBlank(summary.getChiefComplaint())) {
+            summary.setChiefComplaint(trimToNull(note.getChiefComplaint()));
+        }
+        if (summary.getDischargeDiagnoses() == null || summary.getDischargeDiagnoses().isEmpty()) {
+            String assessment = trimToNull(note.getAssessment());
+            summary.setDischargeDiagnoses(assessment != null ? List.of(assessment) : Collections.emptyList());
+        }
+        if (isBlank(summary.getFollowUpInstructions())) {
+            String instructions = trimToNull(note.getPatientInstructions());
+            summary.setFollowUpInstructions(instructions != null ? instructions : trimToNull(note.getPlan()));
+        }
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private static String trimToNull(String value) {
+        return isBlank(value) ? null : value.trim();
     }
 
     /** Serialize a list of diagnoses to JSON text for persistence. */

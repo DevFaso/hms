@@ -2357,7 +2357,14 @@
     "VIEW_AVS": "Resumen de visita",
     "VIEW_DETAILS": "Ver detalles",
     "VITALS": "Signos Vitales",
-    "WAITING_FOR_MD": "Esperando al médico"
+    "WAITING_FOR_MD": "Esperando al médico",
+    "NOTE_HISTORY_CHANGE": {
+      "CREATED": "Creada",
+      "UPDATED": "Modificada",
+      "SIGNED": "Firmada",
+      "COSIGNED": "Refrendada",
+      "ADDENDUM": "Adenda añadida"
+    }
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",
@@ -3520,7 +3527,6 @@
     "PAIN_REASSESSMENT": "Reevaluación del dolor",
     "PATIENTS_ASSIGNED": "Patients Assigned",
     "PATIENT_DETAILS": "Patient Details",
-    "PATIENT_ID": "ID del paciente",
     "PATIENT_LIST": "Patient List",
     "PENDING": "Pendiente",
     "PENDING_ORDERS": "Pending Orders",
@@ -3582,7 +3588,6 @@
     "OVERDUE_BADGE": "VENCIDO",
     "COMPLETED_PREFIX": "Completado",
     "BY_PREFIX": "por",
-    "PATIENT_UUID_PLACEHOLDER": "UUID del paciente",
     "VITALS_PLACEHOLDER": {
       "TEMP": "p. ej. 37,2",
       "HEART_RATE": "p. ej. 72",
@@ -10416,5 +10421,17 @@
       "BY_SUPPORT": "En su nombre: soporte de la plataforma ({{name}})",
       "RECORD_ROLE_ASSIGNED": "Rol asignado: {{role}}"
     }
+  },
+  "VITAL_LIMITS": {
+    "TEMPERATURE": "La temperatura debe estar entre {{min}} y {{max}} °C.",
+    "HEART_RATE": "La frecuencia cardíaca debe estar entre {{min}} y {{max}} lpm.",
+    "RESPIRATORY_RATE": "La frecuencia respiratoria debe estar entre {{min}} y {{max}} respiraciones por minuto.",
+    "SYSTOLIC": "La presión sistólica debe estar entre {{min}} y {{max}} mmHg.",
+    "DIASTOLIC": "La presión diastólica debe estar entre {{min}} y {{max}} mmHg.",
+    "SPO2": "La SpO2 debe estar entre {{min}} y {{max}} %.",
+    "GLUCOSE": "La glucemia debe estar entre {{min}} y {{max}} mg/dL.",
+    "WEIGHT": "El peso debe estar entre {{min}} y {{max}} kg.",
+    "HEIGHT": "La talla debe estar entre {{min}} y {{max}} cm.",
+    "HEAD_CIRCUMFERENCE": "El perímetro cefálico debe estar entre {{min}} y {{max}} cm."
   }
 }

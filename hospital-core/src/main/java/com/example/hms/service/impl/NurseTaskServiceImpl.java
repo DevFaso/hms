@@ -30,6 +30,7 @@ import com.example.hms.model.PatientVitalSign;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.ProcedureOrder;
 import com.example.hms.model.Staff;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.PatientResponseDTO;
 import com.example.hms.payload.dto.nurse.MarVerificationRequestDTO;
@@ -1271,7 +1272,16 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             || com.example.hms.utility.NewsScoreCalculator.score(vital).total() >= 5;
         vital.setClinicallySignificant(clinicallySig);
 
-        resolveNurseStaff(nurseUserId, hospitalId).ifPresent(vital::setRecordedByStaff);
+        resolveNurseStaff(nurseUserId, hospitalId).ifPresent(staff -> {
+            vital.setRecordedByStaff(staff);
+            // The QA run found nurse-station rows with no recording assignment
+            // (D29 evidence): carry the nurse's assignment when it is at this hospital.
+            UserRoleHospitalAssignment assignment = staff.getAssignment();
+            if (assignment != null && assignment.getHospital() != null
+                && hospitalId.equals(assignment.getHospital().getId())) {
+                vital.setRecordedByAssignment(assignment);
+            }
+        });
         vitalSignRepository.save(vital);
 
         // Advance encounter status after vitals are captured.

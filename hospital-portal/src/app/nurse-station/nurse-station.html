@@ -1041,8 +1041,8 @@
             id="vf-temp"
             type="number"
             step="0.1"
-            min="30"
-            max="45"
+            min="25"
+            max="44"
             [placeholder]="'NURSE.VITALS_PLACEHOLDER.TEMP' | translate"
             [value]="vitalsForm().temperatureCelsius ?? ''"
             (input)="updateVitalsField('temperatureCelsius', $any($event.target).value)"
@@ -1247,14 +1247,12 @@
       </div>
       <div class="modal-body">
         <div class="form-row">
-          <label for="tc-patient">{{ 'NURSE.PATIENT_ID' | translate }}</label>
-          <input
-            id="tc-patient"
-            type="text"
-            class="reason-input"
-            [placeholder]="'NURSE.PATIENT_UUID_PLACEHOLDER' | translate"
-            [value]="taskForm().patientId"
-            (input)="updateTaskField('patientId', $any($event.target).value)"
+          <label for="tc-patient">{{ 'APPOINTMENTS.PATIENT' | translate }}</label>
+          <app-patient-picker
+            inputId="tc-patient"
+            [hospitalId]="hospitalId()"
+            [selected]="taskPatient()"
+            (selectedChange)="onTaskPatientChange($event)"
           />
         </div>
         <div class="form-row">

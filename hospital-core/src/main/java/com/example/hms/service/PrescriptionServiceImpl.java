@@ -10,6 +10,7 @@ import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PrescriptionMapper;
+import com.example.hms.model.Department;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
@@ -114,6 +115,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (!roleValidator.canCreatePrescription(currentUserId, hospitalId)) {
             throw new BusinessException("prescription.only.doctor.admin");
         }
+        requirePrescribingRole(staff, hospitalId);
 
         UserRoleHospitalAssignment prescriberAssignment =
             resolvePrescriberAssignmentOrThrow(staff, encounter, hospitalId);
@@ -1067,6 +1069,23 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         return resolveAssignmentForStaff(staff, hospitalId);
     }
 
+    /**
+     * The prescriber named on the order — {@code request.staffId} when the
+     * caller picks one — must hold a prescribing role at the order's hospital.
+     * Checking only the caller let a doctor attribute a prescription to a
+     * receptionist, whose own staff assignment then became the prescriber of
+     * record (QA D28).
+     */
+    private void requirePrescribingRole(Staff staff, UUID hospitalId) {
+        UUID prescriberUserId = staff.getUser() != null ? staff.getUser().getId() : null;
+        if (prescriberUserId == null) {
+            throw new BusinessException("prescription.assignment.missing.staff.user");
+        }
+        if (!roleValidator.canCreatePrescription(prescriberUserId, hospitalId)) {
+            throw new BusinessException("prescription.prescriber.role.required");
+        }
+    }
+
     private Staff resolveStaffContext(PrescriptionRequestDTO request, UUID currentUserId) {
         if (request.getStaffId() != null) {
             return staffRepository.findById(request.getStaffId())
@@ -1119,18 +1138,34 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (staff.getHospital() == null) {
             throw new BusinessException("prescription.staff.hospital.missing");
         }
+        // The anchor exists only because a prescription row needs an encounter:
+        // it is recorded as already finished, in the prescriber's department, so
+        // it never surfaces as an open visit on a worklist or tracker with no
+        // department (QA D41).
+        LocalDateTime now = LocalDateTime.now();
         Encounter encounter = Encounter.builder()
             .patient(patient)
             .staff(staff)
             .hospital(staff.getHospital())
+            .department(departmentAtHospital(staff))
             .assignment(assignment)
             .encounterType(EncounterType.CONSULTATION)
-            .encounterDate(LocalDateTime.now())
-            .status(EncounterStatus.IN_PROGRESS)
+            .encounterDate(now)
+            .checkoutTimestamp(now)
+            .status(EncounterStatus.COMPLETED)
             .notes("Auto-generated for prescription entry")
             .build();
         encounter.setCode(generateEncounterCode());
         return encounterRepository.save(encounter);
+    }
+
+    private static Department departmentAtHospital(Staff staff) {
+        Department department = staff.getDepartment();
+        if (department == null || department.getHospital() == null
+            || !department.getHospital().getId().equals(staff.getHospital().getId())) {
+            return null;
+        }
+        return department;
     }
 
     private String generateEncounterCode() {
