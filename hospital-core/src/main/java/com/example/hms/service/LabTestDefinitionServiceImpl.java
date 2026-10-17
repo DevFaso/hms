@@ -21,6 +21,8 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.SecurityUtils;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.terminology.TerminologyCodes;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
@@ -63,6 +65,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final UserRepository userRepository;
     private final HospitalRepository hospitalRepository;
+    private final ActingScopeResolver actingScopeResolver;
 
     /** Roles that may author or edit a definition AT a hospital (D30: checked at that hospital). */
     private static final Set<String> HOSPITAL_MANAGE_ROLES = Set.of(
@@ -97,7 +100,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         } else if (!isSuperAdmin(currentUser)) {
             // No assignment named: the active hospital is the scope. Only a
             // super-admin creates a global (hospital-less) definition.
-            UUID activeHospitalId = activeHospitalId();
+            UUID activeHospitalId = pinnedHospitalId();
             if (activeHospitalId == null) {
                 throw new AccessDeniedException("Only Super Admins may manage global lab test definitions.");
             }
@@ -115,7 +118,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
     @Override
     public LabTestDefinitionResponseDTO getById(UUID id) {
         LabTestDefinition definition = repository.findById(id)
-            .filter(LabTestDefinitionServiceImpl::isVisibleToCaller)
+            .filter(this::isVisibleToCaller)
             .orElseThrow(() -> new EntityNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
         return mapper.toDto(definition);
     }
@@ -127,11 +130,10 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
      */
     @Override
     public List<LabTestDefinitionResponseDTO> getAll() {
-        HospitalContext context = HospitalContextHolder.getContextOrEmpty();
-        UUID activeHospitalId = context.getActiveHospitalId();
-        List<LabTestDefinition> rows = context.isSuperAdmin() && activeHospitalId == null
+        ActingScope scope = actingScopeResolver.current();
+        List<LabTestDefinition> rows = scope instanceof ActingScope.Global
             ? repository.findAll()
-            : repository.findVisibleAt(activeHospitalId);
+            : repository.findVisibleAt(pinnedHospitalIdOf(scope));
         return rows.stream()
                 .map(mapper::toDto)
                 .toList();
@@ -140,7 +142,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
     @Override
     public List<LabTestDefinitionResponseDTO> getActiveByHospital(UUID hospitalId) {
         // The path id is a claim, not a scope.
-        if (hospitalId != null && !mayReadHospital(HospitalContextHolder.getContextOrEmpty(), hospitalId)) {
+        if (hospitalId != null && !mayReadHospital(hospitalId)) {
             throw new AccessDeniedException("Not permitted to read this hospital's lab test catalog.");
         }
         List<LabTestDefinition> globalDefinitions = repository.findByHospitalIsNullAndActiveTrue();
@@ -212,9 +214,9 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
     @Override
     public Page<LabTestDefinitionResponseDTO> search(String keyword, String unit, String category, Boolean active, LabTestDefinitionApprovalStatus approvalStatus, Pageable pageable) {
         Pageable normalizedPageable = normalizePageable(pageable);
-        HospitalContext context = HospitalContextHolder.getContextOrEmpty();
-        UUID activeHospitalId = context.getActiveHospitalId();
-        boolean everyHospital = context.isSuperAdmin() && activeHospitalId == null;
+        ActingScope scope = actingScopeResolver.current();
+        UUID activeHospitalId = pinnedHospitalIdOf(scope);
+        boolean everyHospital = scope instanceof ActingScope.Global;
         return repository.search(keyword, unit, category, active, approvalStatus,
                 everyHospital, activeHospitalId, normalizedPageable)
                 .map(mapper::toDto);
@@ -300,33 +302,35 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
     /** A caller pinned to a hospital may not author into another one by naming its assignment. */
     private void assertWithinActiveScope(User currentUser, UUID hospitalId) {
-        UUID activeHospitalId = activeHospitalId();
+        UUID activeHospitalId = pinnedHospitalId();
         if (activeHospitalId != null && !activeHospitalId.equals(hospitalId) && !isSuperAdmin(currentUser)) {
             throw new AccessDeniedException("The assignment does not belong to the active hospital.");
         }
     }
 
-    private static UUID activeHospitalId() {
-        return HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
+    /** The hospital this request acts at, or {@code null} for global view and every refusal. */
+    private UUID pinnedHospitalId() {
+        return pinnedHospitalIdOf(actingScopeResolver.current());
+    }
+
+    private static UUID pinnedHospitalIdOf(ActingScope scope) {
+        return scope instanceof ActingScope.Pinned pinned ? pinned.hospitalId() : null;
     }
 
     private boolean isSuperAdmin(User user) {
         return hasAnyRole(user, Set.of(ROLE_SUPER_ADMIN, "SUPER_ADMIN"));
     }
 
-    private static boolean isVisibleToCaller(LabTestDefinition definition) {
+    private boolean isVisibleToCaller(LabTestDefinition definition) {
         if (definition.getHospital() == null) {
             return true;
         }
-        return mayReadHospital(HospitalContextHolder.getContextOrEmpty(), definition.getHospital().getId());
+        return mayReadHospital(definition.getHospital().getId());
     }
 
-    private static boolean mayReadHospital(HospitalContext context, UUID hospitalId) {
-        UUID activeHospitalId = context.getActiveHospitalId();
-        if (context.isSuperAdmin() && activeHospitalId == null) {
-            return true;
-        }
-        return hospitalId.equals(activeHospitalId);
+    private boolean mayReadHospital(UUID hospitalId) {
+        ActingScope scope = actingScopeResolver.current();
+        return scope instanceof ActingScope.Global || hospitalId.equals(pinnedHospitalIdOf(scope));
     }
 
     private void assertUserCanManageGlobal(User currentUser) {
@@ -479,7 +483,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         if (hospitalId != null) {
             definitions = repository.findByHospital_IdAndActiveTrue(hospitalId);
         } else {
-            List<LabTestDefinition> unscoped = HospitalContextHolder.getContextOrEmpty().isSuperAdmin()
+            List<LabTestDefinition> unscoped = actingScopeResolver.current() instanceof ActingScope.Global
                 ? repository.findAll()
                 : repository.findVisibleAt(null);
             definitions = unscoped.stream()

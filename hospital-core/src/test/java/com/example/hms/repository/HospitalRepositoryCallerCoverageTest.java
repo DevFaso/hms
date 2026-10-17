@@ -111,6 +111,8 @@ class HospitalRepositoryCallerCoverageTest {
         entry("PharmacyClaimServiceImpl.createClaim#findById", PHARMACY_OWN),
         entry("PharmacyPaymentServiceImpl.createPayment#findById", PHARMACY_OWN),
         entry("MtmReviewServiceImpl.startReview#findById", PHARMACY_OWN),
+        entry("LabTestDefinitionServiceImpl.create#findById", "the caller's own acting hospital (pinned scope),"
+            + " not request-supplied; a LABORATORY facility authors its own catalog, so it is not findClinicalById"),
         entry("PanelService.assign#getReferenceById", ACTING_SCOPE),
         entry("ProgramEnrollmentService.enroll#getReferenceById", ACTING_SCOPE),
         entry("RoiRequestService.persistRequest#getReferenceById", ACTING_SCOPE));

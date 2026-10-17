@@ -19,6 +19,7 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.SecurityUtils;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,6 +60,8 @@ class LabTestDefinitionServiceImplTest {
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private UserRepository userRepository;
     @Mock private HospitalRepository hospitalRepository;
+    /** Answers the scope the test's HospitalContext describes, as the real resolver does. */
+    @Mock private ActingScopeResolver actingScopeResolver;
 
     @InjectMocks private LabTestDefinitionServiceImpl service;
 
@@ -72,6 +75,8 @@ class LabTestDefinitionServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(actingScopeResolver.current())
+            .thenAnswer(inv -> ActingScopeResolver.scopeOf(HospitalContextHolder.getContextOrEmpty()));
         defId = UUID.randomUUID();
         assignmentUUID = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
