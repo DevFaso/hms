@@ -668,8 +668,8 @@ class UserServiceImplTest {
             when(staffRepository.existsByUserId(user.getId())).thenReturn(false);
             when(assignmentRepository.existsByUserIdAndRole_CodeNot(user.getId(), "ROLE_PATIENT")).thenReturn(true);
 
-            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(
-                    patientRequest(null, "qa.reception@test.com", null, hospitalId)))
+            AdminSignupRequest req1 = patientRequest(null, "qa.reception@test.com", null, hospitalId);
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req1))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("staff account");
 
@@ -685,8 +685,8 @@ class UserServiceImplTest {
             when(userRepository.findByPhoneNumber("+22670000001")).thenReturn(Optional.of(user));
             when(staffRepository.existsByUserId(user.getId())).thenReturn(true);
 
-            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(
-                    patientRequest(null, null, "+22670000001", hospitalId)))
+            AdminSignupRequest req2 = patientRequest(null, null, "+22670000001", hospitalId);
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req2))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("phone:");
             verify(userRepository, never()).save(any());
@@ -698,8 +698,8 @@ class UserServiceImplTest {
             UUID hospitalId = stubHospital("00000000-0000-0000-0000-000000000013");
             when(userRepository.findByEmail("brand.new@test.com")).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(
-                    patientRequest(null, "brand.new@test.com", null, hospitalId)))
+            AdminSignupRequest req3 = patientRequest(null, "brand.new@test.com", null, hospitalId);
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req3))
                 .isNotInstanceOf(ConflictException.class);
 
             verify(userRepository, never()).findByPhoneNumber(any());
@@ -736,8 +736,8 @@ class UserServiceImplTest {
                 .thenReturn(true);
             lenient().when(staffRepository.findByUserId(user.getId())).thenReturn(Collections.emptyList());
 
-            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(
-                    patientRequest(null, null, "+22670000002", hospitalId)))
+            AdminSignupRequest req4 = patientRequest(null, null, "+22670000002", hospitalId);
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req4))
                 .isNotInstanceOf(ConflictException.class);
 
             assertThat(user.isDeleted()).isFalse();
@@ -754,8 +754,8 @@ class UserServiceImplTest {
             when(assignmentService.isRoleAlreadyAssigned(user.getId(), hospitalId, patientRole.getId()))
                 .thenReturn(true);
 
-            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(
-                    patientRequest(null, null, "+22670000003", hospitalId)))
+            AdminSignupRequest req5 = patientRequest(null, null, "+22670000003", hospitalId);
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req5))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("already registered at this hospital");
         }
@@ -1047,7 +1047,7 @@ class UserServiceImplTest {
             assertThat(user.isForceUsernameChange()).isFalse();
             org.mockito.ArgumentCaptor<AuditEventRequestDTO> audit = org.mockito.ArgumentCaptor.forClass(AuditEventRequestDTO.class);
             verify(auditEventLogService).logEvent(audit.capture());
-            assertThat(((java.util.Map<?, ?>) audit.getValue().getDetails()).get("usernameChanged")).isEqualTo(false);
+            assertThat((Boolean) ((java.util.Map<?, ?>) audit.getValue().getDetails()).get("usernameChanged")).isFalse();
         }
 
         @Test

@@ -841,13 +841,9 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * For patient registrations, allow reuse of existing users across hospitals.
-     * Only reject if the patient already has an active assignment at the target hospital.
-     */
-    /**
-     * A null email must NEVER reach the 3-way derived query: Spring Data turns a
-     * null argument into an {@code email IS NULL} predicate, matching every
-     * email-less (phone-first) user — cross-patient account merges would follow.
+     * Finds an existing account by the identifiers the request actually carries
+     * (email first, then phone in any stored form). A null or blank identifier is
+     * never looked up, so it cannot match every account lacking that field.
      */
     private Optional<User> findExistingByIdentity(String email, String phone) {
         // Only an identifier the request actually carries is ever looked up.
@@ -891,7 +887,7 @@ public class UserServiceImpl implements UserService {
             rawPassword = generateTempPassword();
         }
         request.setPassword(rawPassword);
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
         user.setPasswordHash(passwordEncoder.encode(rawPassword));
         user.setPasswordChangedAt(now);
         user.setForcePasswordChange(true);
