@@ -741,17 +741,18 @@ class UserServiceImplTest {
         }
 
         @Test
-        @DisplayName("a new single-role staff account gets one mail carrying the code")
-        void newSingleRoleStaff() {
+        @DisplayName("a new staff account gets one mail carrying the code, with one role or several")
+        void newStaff() {
             assertThat(UserServiceImpl.welcomeMailCarriesCode(true, false, roles(1))).isTrue();
+            assertThat(UserServiceImpl.welcomeMailCarriesCode(true, false, roles(2))).isTrue();
         }
 
         @Test
-        @DisplayName("an existing user, a patient, or several roles keep the assignment mail")
+        @DisplayName("an existing user, a patient, or no role keep the assignment mail")
         void otherCasesKeepTheAssignmentMail() {
             assertThat(UserServiceImpl.welcomeMailCarriesCode(false, false, roles(1))).isFalse();
             assertThat(UserServiceImpl.welcomeMailCarriesCode(true, true, roles(1))).isFalse();
-            assertThat(UserServiceImpl.welcomeMailCarriesCode(true, false, roles(2))).isFalse();
+            assertThat(UserServiceImpl.welcomeMailCarriesCode(true, false, roles(0))).isFalse();
         }
     }
 
@@ -1211,48 +1212,54 @@ class UserServiceImplTest {
     }
 
     // =========================================================================
-    // soleAssignmentCode — which code the welcome mail is allowed to link
+    // welcomeRoles — every role the one welcome mail lists, each with its code
     // =========================================================================
 
     @Nested
-    @DisplayName("soleAssignmentCode")
-    class SoleAssignmentCode {
+    @DisplayName("welcomeRoles")
+    class WelcomeRoles {
 
-        private UserRoleHospitalAssignment withCode(String code) {
+        private UserRoleHospitalAssignment assignment(String roleCode, String hospital,
+                                                      String assignmentCode, String confirmationCode) {
             var a = new UserRoleHospitalAssignment();
-            a.setAssignmentCode(code);
+            var role = new com.example.hms.model.Role();
+            role.setCode(roleCode);
+            a.setRole(role);
+            if (hospital != null) {
+                var h = new com.example.hms.model.Hospital();
+                h.setName(hospital);
+                a.setHospital(h);
+            }
+            a.setAssignmentCode(assignmentCode);
+            a.setConfirmationCode(confirmationCode);
             return a;
         }
 
         @Test
-        @DisplayName("links the code when there is exactly one assignment")
-        void singleAssignment() {
-            assertThat(UserServiceImpl.soleAssignmentCode(List.of(withCode("A-1")))).isEqualTo("A-1");
+        @DisplayName("lists every role with its own code and a link to its own assignment")
+        void everyRoleWithItsOwnCodeAndLink() {
+            var roles = UserServiceImpl.welcomeRoles(List.of(
+                    assignment("ROLE_NURSE", "CHU A", "A-1", "111111"),
+                    assignment("ROLE_RECEPTIONIST", "CHU A", "A-2", "222222")),
+                code -> "https://portal/onboarding/" + code);
+
+            assertThat(roles).containsExactly(
+                new EmailService.WelcomeRole("ROLE_NURSE", "CHU A", "111111", "https://portal/onboarding/A-1"),
+                new EmailService.WelcomeRole("ROLE_RECEPTIONIST", "CHU A", "222222", "https://portal/onboarding/A-2"));
         }
 
         @Test
-        @DisplayName("links nothing when two roles mean two different codes")
-        void twoAssignmentsAreAmbiguous() {
-            // Each assignment mails its own code and its own link; picking one
-            // here would make the other mail's code fail on the linked screen.
-            assertThat(UserServiceImpl.soleAssignmentCode(
-                List.of(withCode("A-1"), withCode("A-2")))).isNull();
-        }
+        @DisplayName("leaves out an assignment missing a code, so its own mail still goes out")
+        void missingCodesAreLeftOut() {
+            var roles = UserServiceImpl.welcomeRoles(List.of(
+                    assignment("ROLE_NURSE", null, "A-1", "111111"),
+                    assignment("ROLE_DOCTOR", null, "A-2", " "),
+                    assignment("ROLE_MIDWIFE", null, null, "333333")),
+                code -> "link-" + code);
 
-        @Test
-        @DisplayName("treats repeated codes as the one assignment they are")
-        void duplicateCodesCollapse() {
-            assertThat(UserServiceImpl.soleAssignmentCode(
-                List.of(withCode("A-1"), withCode("A-1")))).isEqualTo("A-1");
-        }
-
-        @Test
-        @DisplayName("links nothing when no assignment carries a code yet")
-        void noCodes() {
-            assertThat(UserServiceImpl.soleAssignmentCode(
-                List.of(withCode(null), withCode("  ")))).isNull();
-            assertThat(UserServiceImpl.soleAssignmentCode(List.of())).isNull();
-            assertThat(UserServiceImpl.soleAssignmentCode(null)).isNull();
+            assertThat(roles).extracting(EmailService.WelcomeRole::roleCode).containsExactly("ROLE_NURSE");
+            assertThat(roles.get(0).hospitalName()).isNull();
+            assertThat(UserServiceImpl.welcomeRoles(null, code -> code)).isEmpty();
         }
     }
 

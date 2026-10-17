@@ -4842,7 +4842,7 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 - **External providers: the facility audit trail scopes through a live assignment
   join**, so rows whose assignment was hard-deleted vanish from it; it needs a
   `hospital_id` snapshot on `audit_event_logs` (a migration: V183 is #853's MFA
-  hotfix, V184 #852's admin-disable marker, the Sage export plan takes V185, so
+  hotfix, V184 #852's admin-disable marker, V185 the users phone E.164 backfill, the Sage export plan now uses V186, so
   take the next free number when this is scheduled) (found in #852's round-1
   review). Open.
 - **Provider audit page: its 400 answers are English text.** A bad `page`/`size` on
@@ -5373,8 +5373,10 @@ ships*, not for building — and check the shipped surface before trusting a
   write path (registration, profile update, bootstrap), and registration also
   matches the two legacy shapes exactly (`22670202020`, `70202020`;
   `UserServiceImpl.findByPhoneInAnyForm`). Older rows written with spaces,
-  dashes or a trunk zero are still not matched: backfill `users.phone_number`
-  to E.164 (a migration) and then drop the legacy-form lookup. The admin welcome mail still shows
+  dashes or a trunk zero are now rewritten to E.164 by V185 (fix/onboarding-residuals,
+  done); rows whose E.164 form another account already holds were left unchanged
+  and counted in the deploy NOTICE: resolve those by hand, then drop the
+  legacy-form lookup (open). The admin welcome mail still shows
   "—" for the password when an API caller supplied one (never the typed value).
 - **403 role hint only knows roles the password-login picker listed.**
   (fix/portal-ui-defects, D7.) The JWT carries only the role picked at sign-in,

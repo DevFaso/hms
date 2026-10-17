@@ -3705,7 +3705,14 @@
     "USERNAME": "Nombre de usuario",
     "VERIFYING": "Verificando...",
     "WELCOME": "Welcome",
-    "WELCOME_TO_HMS": "Welcome to HMS"
+    "WELCOME_TO_HMS": "Welcome to HMS",
+    "ERR_NO_LINK_CODE": "No se encontró ningún código de asignación en el enlace. Revise su correo electrónico.",
+    "ERR_LINK_INVALID": "Este enlace de asignación no es válido o ha caducado.",
+    "ERR_LOAD_FAILED": "No se pudo cargar su asignación. Inténtelo de nuevo más tarde.",
+    "ERR_CODE_INCORRECT": "Código incorrecto. Revise su correo electrónico e inténtelo de nuevo.",
+    "ERR_ASSIGNMENT_NOT_FOUND": "Asignación no encontrada. Utilice el enlace del correo original.",
+    "ERR_GENERIC": "Algo salió mal. Inténtelo de nuevo.",
+    "OTHER_ROLES_HINT": "Si su correo de bienvenida menciona otros roles, confirme cada uno con su propio código, usando el botón que aparece debajo de ese código."
   },
   "ORGANIZATIONS": {
     "CONTACT": "Contacto",

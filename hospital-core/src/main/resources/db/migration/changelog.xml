@@ -2727,4 +2727,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V185 — security.users.phone_number backfilled to E.164 (#866
+         residual). One DO block (splitStatements=false). Rows whose E.164
+         form is already held are left unchanged and counted in a NOTICE.
+         Idempotent. The Sage export plan moves to V186.
+         ================================================================= -->
+    <changeSet id="V185-users-phone-e164-backfill" author="hms-team" runOnChange="false">
+        <sqlFile path="V185__users_phone_e164_backfill.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

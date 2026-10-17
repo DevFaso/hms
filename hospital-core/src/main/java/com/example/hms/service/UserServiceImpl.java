@@ -445,25 +445,17 @@ public class UserServiceImpl implements UserService {
                     ? hospitalRepository.findById(staffContextHospitalId)
                           .map(Hospital::getName).orElse(null)
                     : null;
-            // The account is inactive until an assignment code is confirmed, so
-            // the welcome mail carries the confirmation screen's address — but
-            // only when there is exactly one assignment to point at. A
-            // two-role registration mails one code per assignment, and
-            // RoleWelcomeComponent validates the typed code against the
-            // assignment named in the URL: linking an arbitrary one would make
-            // the other mail's code look wrong. With several, the mail names
-            // the step and each assignment mail carries its own correct link.
-            final String soleCode = soleAssignmentCode(ensuredAssignments);
-            final String activationUrl = soleCode == null
-                    ? null
-                    : assignmentLinkService.buildProfileCompletionUrl(soleCode);
-            // With one role the welcome mail is the ONLY mail (see
-            // welcomeMailCarriesCode), so it carries the 6-digit code — read
-            // from the saved assignment, which exists before this composes.
-            final String confirmationCode =
-                    welcomeMailCarriesCode(newUserCreated, isPatient, roles) && soleCode != null
-                    ? soleConfirmationCode(ensuredAssignments)
-                    : null;
+            // The account is inactive until its assignment codes are confirmed,
+            // so the welcome mail is the new user's ONLY mail (see
+            // welcomeMailCarriesCode): it lists every role with that
+            // assignment's own 6-digit code and its own confirmation link,
+            // since RoleWelcomeComponent checks the typed code against the
+            // assignment named in the URL. Only assignments that have both
+            // codes are listed — exactly those whose separate mail
+            // UserRoleHospitalAssignmentServiceImpl.sendNotifications skips.
+            final List<EmailService.WelcomeRole> welcomeRoles = welcomeMailCarriesCode(newUserCreated, isPatient, roles)
+                    ? welcomeRoles(ensuredAssignments, assignmentLinkService::buildProfileCompletionUrl)
+                    : List.of();
             // Deferred to AFTER_COMMIT for the same reason
             // AssignmentCreatedEventListener exists: this mail now carries an
             // assignment code in its button, so a rollback after the send
@@ -476,10 +468,20 @@ public class UserServiceImpl implements UserService {
                 boolean sent = com.example.hms.utility.ActivationDeliveryTracker.sendEmailAndReport(
                     com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME,
                     user.getEmail(),
-                    () -> emailService.sendAdminWelcomeEmail(
-                        user.getEmail(), displayName,
-                        user.getUsername(), generatedPassword,
-                        roleName, hospitalName, activationUrl, confirmationCode),
+                    () -> {
+                        if (welcomeRoles.isEmpty()) {
+                            // No assignment with a code: the step is named and
+                            // each assignment mail carries its own code.
+                            emailService.sendAdminWelcomeEmail(
+                                user.getEmail(), displayName,
+                                user.getUsername(), generatedPassword,
+                                roleName, hospitalName, null, null);
+                        } else {
+                            emailService.sendAdminWelcomeEmail(
+                                user.getEmail(), displayName,
+                                user.getUsername(), generatedPassword, welcomeRoles);
+                        }
+                    },
                     emailService::deliversRealEmail);
                 if (sent) {
                     log.info("📧 Welcome email queued for new user '{}'", user.getUsername());
@@ -1044,15 +1046,14 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * A brand-new staff account with exactly one role gets ONE e-mail: the
-     * welcome mail carries that assignment's confirmation code, so the
-     * separate role-assignment mail is suppressed. Several roles keep one
-     * assignment mail per code (the confirmation screen validates the code
-     * against the assignment in its URL); an existing user given another
-     * assignment keeps the role-assignment mail.
+     * A brand-new staff account gets ONE e-mail: the welcome mail lists every
+     * role it was registered with, each with its own confirmation code and
+     * link, so the separate role-assignment mails are suppressed. An existing
+     * user given another assignment, or a patient, keeps the role-assignment
+     * mail.
      */
     static boolean welcomeMailCarriesCode(boolean newUserCreated, boolean isPatient, Set<Role> roles) {
-        return newUserCreated && !isPatient && roles != null && roles.size() == 1;
+        return newUserCreated && !isPatient && roles != null && !roles.isEmpty();
     }
 
     private UserRoleHospitalAssignment ensureAssignmentSmart(UUID userId, Role role, UUID hospitalId,
@@ -1721,35 +1722,34 @@ public class UserServiceImpl implements UserService {
 
 
     /**
-     * The assignment code the welcome mail may link, or null when there is no
-     * single right answer.
-     *
-     * <p>A two-role registration mails one confirmation code per assignment,
-     * and {@code RoleWelcomeComponent} validates the typed code against the
-     * assignment named in the URL — so linking an arbitrary one would make the
-     * other mail's code look wrong. With several, the welcome mail names the
-     * step instead, and each assignment mail carries its own correct link.
+     * The roles the welcome mail lists: every assignment that has both its
+     * confirmation code and its assignment code, each with the link to its
+     * own confirmation screen. An assignment missing either is left out, and
+     * its own role-assignment mail still goes out
+     * (UserRoleHospitalAssignmentServiceImpl.sendNotifications applies the
+     * same test).
      *
      * <p>Visible for testing.
      */
-    static String soleConfirmationCode(List<UserRoleHospitalAssignment> assignments) {
-        if (assignments == null || assignments.size() != 1) {
-            return null;
-        }
-        String code = assignments.get(0).getConfirmationCode();
-        return code == null || code.isBlank() ? null : code;
-    }
-
-    static String soleAssignmentCode(List<UserRoleHospitalAssignment> assignments) {
+    static List<EmailService.WelcomeRole> welcomeRoles(List<UserRoleHospitalAssignment> assignments,
+                                                       java.util.function.UnaryOperator<String> linkFor) {
         if (assignments == null) {
-            return null;
+            return List.of();
         }
-        List<String> codes = assignments.stream()
-                .map(UserRoleHospitalAssignment::getAssignmentCode)
-                .filter(c -> c != null && !c.isBlank())
-                .distinct()
-                .toList();
-        return codes.size() == 1 ? codes.get(0) : null;
+        List<EmailService.WelcomeRole> out = new ArrayList<>();
+        for (UserRoleHospitalAssignment a : assignments) {
+            String confirmation = a.getConfirmationCode();
+            String code = a.getAssignmentCode();
+            if (confirmation == null || confirmation.isBlank() || code == null || code.isBlank()) {
+                continue;
+            }
+            out.add(new EmailService.WelcomeRole(
+                    a.getRole() != null ? a.getRole().getCode() : null,
+                    a.getHospital() != null ? a.getHospital().getName() : null,
+                    confirmation,
+                    linkFor.apply(code)));
+        }
+        return out;
     }
 
 }

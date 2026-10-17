@@ -1055,6 +1055,104 @@ public class EmailServiceImpl implements EmailService {
         log.info("✅ Admin welcome email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
+    @Override
+    public void sendAdminWelcomeEmail(String to,
+                                      String displayName,
+                                      String username,
+                                      String tempPassword,
+                                      List<WelcomeRole> roles) {
+        if (roles == null || roles.isEmpty()) {
+            sendAdminWelcomeEmail(to, displayName, username, tempPassword, null, null, null, null);
+            return;
+        }
+        if (roles.size() == 1) {
+            WelcomeRole only = roles.get(0);
+            sendAdminWelcomeEmail(to, displayName, username, tempPassword, only.roleCode(),
+                only.hospitalName(), only.activationUrl(), only.confirmationCode());
+            return;
+        }
+        if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
+        validateAddresses(List.of(to));
+        Locale l = DEFAULT_RECIPIENT_LOCALE;
+        log.info("📧 Composing multi-role admin welcome email ({} roles) for {}",
+            roles.size(), ActivationDeliveryTracker.maskEmail(to));
+
+        String escapedUsername = hasText(username)     ? escapeHtml(username)     : "—";
+        String escapedPassword = hasText(tempPassword) ? escapeHtml(tempPassword) : "—";
+        String greeting = hasText(displayName)
+            ? text(l, KEY_GREETING_HI, HTML_STRONG_OPEN + escapeHtml(displayName) + HTML_STRONG_CLOSE)
+            : text(l, KEY_GREETING_ANONYMOUS);
+
+        String header = HTML_DIV_BACKGROUND + GRADIENT_NAVY + ";"
+            + "padding:32px 40px;text-align:center;\">"
+            + "<div style=\"font-size:36px;margin-bottom:8px;\">&#127973;</div>"
+            + "<h1 style=\"color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:-0.5px;\">"
+            + text(l, "email.admin.welcome.heading") + "</h1>"
+            + "<p style=\"color:#bfdbfe;margin:6px 0 0;font-size:14px;\">" + text(l, "email.admin.welcome.tagline") + CLOSE_PARAGRAPH
+            + CLOSE_DIV;
+
+        StringBuilder roleBlocks = new StringBuilder();
+        for (WelcomeRole role : roles) {
+            roleBlocks.append(welcomeRoleBlock(l, role));
+        }
+
+        String bodyContent = "<div style=\"padding:32px 40px;\">"
+            + "<p style=\"color:#1e293b;font-size:16px;margin-top:0;\">" + greeting + CLOSE_PARAGRAPH
+            + "<p style=\"color:#475569;line-height:1.6;\">"
+            + text(l, "email.admin.welcome.body.created.multi", roles.size()) + ' '
+            + text(l, "email.admin.welcome.body.step.codes") + ' '
+            + text(l, "email.admin.welcome.body.keep")
+            + CLOSE_PARAGRAPH
+            + roleBlocks
+            + "<p style=\"color:#64748b;font-size:13px;text-align:center;margin:0 0 16px;\">"
+            + text(l, "email.role.assignment.body.expiry") + CLOSE_PARAGRAPH
+            + "<div style=\"background:#eff6ff;border:2px solid #bfdbfe;border-radius:10px;"
+            + "padding:20px 24px;margin:24px 0;\">"
+            + "<p style=\"margin:0 0 12px;font-weight:700;color:#1e3a8a;font-size:14px;"
+            + "text-transform:uppercase;letter-spacing:0.5px;\">" + text(l, "email.admin.welcome.credentials.title") + CLOSE_PARAGRAPH
+            + "<table style=\"border-collapse:collapse;width:100%;\">"
+            + "<tr><td style=\"padding:6px 0;color:#64748b;font-weight:600;\">" + text(l, "email.admin.welcome.credentials.username") + "</td>"
+            + "<td style=\"padding:6px 0 6px 16px;font-family:monospace;font-size:16px;color:#1e293b;\">"
+            + escapedUsername + "</td></tr>"
+            + "<tr><td style=\"padding:6px 0;color:#64748b;font-weight:600;\">" + text(l, "email.admin.welcome.credentials.password") + "</td>"
+            + "<td style=\"padding:6px 0 6px 16px;font-family:monospace;font-size:16px;color:#1e293b;\">"
+            + escapedPassword + "</td></tr>"
+            + "</table></div>"
+            + "<div style=\"background:#fef3c7;border-left:4px solid #f59e0b;padding:14px 16px;"
+            + "border-radius:0 8px 8px 0;margin-top:24px;\">"
+            + "<p style=\"margin:0;font-size:14px;color:#92400e;\">"
+            + "<strong>&#9888; " + text(l, "email.admin.welcome.security.title") + HTML_STRONG_CLOSE_SP
+            + text(l, "email.admin.welcome.security.body")
+            + HTML_P_DIV_CLOSE
+            + CLOSE_DIV;
+
+        String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
+        sendHtml(List.of(to), List.of(), List.of(), text(l, "email.admin.welcome.subject"), body);
+        log.info("✅ Multi-role admin welcome email queued for {}", ActivationDeliveryTracker.maskEmail(to));
+    }
+
+    /** One role of a multi-role welcome mail: label, hospital, its own code and its own link. */
+    private String welcomeRoleBlock(Locale l, WelcomeRole role) {
+        String label = hasText(role.roleCode())
+            ? escapeHtml(roleLabel(l, role.roleCode()))
+            : text(l, "email.admin.welcome.fallback.role");
+        String title = hasText(role.hospitalName())
+            ? text(l, "email.admin.welcome.role.at", label, escapeHtml(role.hospitalName()))
+            : label;
+        String link = hasText(role.activationUrl())
+            ? "<p style=\"text-align:center;margin:12px 0 0;\">" + HTML_A_OPEN + escapeHtml(role.activationUrl())
+              + "\" style=\"display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;"
+              + "padding:10px 22px;border-radius:8px;font-weight:600;\">"
+              + text(l, "email.admin.welcome.role.confirm") + "</a>" + CLOSE_PARAGRAPH
+            : "";
+        return "<div style=\"border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;margin:16px 0;\">"
+            + "<p style=\"margin:0;font-weight:700;color:#1e293b;\">" + title + CLOSE_PARAGRAPH
+            + "<p style=\"font-size:24px;font-weight:bold;letter-spacing:6px;text-align:center;"
+            + "background:#f8fafc;border:2px dashed #2563eb;border-radius:8px;padding:12px;margin:12px 0 0;\">"
+            + escapeHtml(role.confirmationCode()) + CLOSE_PARAGRAPH
+            + link
+            + CLOSE_DIV;
+    }
 
     /**
      * Activation-first call to action.

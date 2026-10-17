@@ -175,6 +175,18 @@ exposure. `KC_DB_PASSWORD` rotates with the linked Postgres service —
 use Railway's built-in rotation; Keycloak reads the value on boot so a
 restart is required after rotating.
 
+### Restart policy
+
+`railway.toml` sets `restartPolicyType = "always"` for every
+`hms-keycloak-{env}` service. It used to be `on_failure` with
+`restartPolicyMaxRetries = 3`: after a fourth crash (an out-of-memory kill,
+a Postgres blip during boot) Railway stopped restarting it and every sign-in
+failed until someone redeployed by hand (D16). With `always`, Railway keeps
+restarting it; a crash loop is visible in the deploy logs and the
+`/realms/master/` healthcheck, and must be fixed at its cause rather than by
+capping retries. `RailwayConfigTest` in hospital-core fails if the cap comes
+back.
+
 ### Scaling
 
 Start with 1 instance per env. Keycloak scales horizontally but requires

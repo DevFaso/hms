@@ -3705,7 +3705,14 @@
     "USERNAME": "Nom d'utilisateur",
     "VERIFYING": "Vérification...",
     "WELCOME": "Bienvenue",
-    "WELCOME_TO_HMS": "Bienvenue sur HMS"
+    "WELCOME_TO_HMS": "Bienvenue sur HMS",
+    "ERR_NO_LINK_CODE": "Aucun code d'affectation n'a été trouvé dans le lien. Veuillez vérifier votre e-mail.",
+    "ERR_LINK_INVALID": "Ce lien d'affectation est invalide ou a expiré.",
+    "ERR_LOAD_FAILED": "Impossible de charger votre affectation. Veuillez réessayer plus tard.",
+    "ERR_CODE_INCORRECT": "Code incorrect. Veuillez vérifier votre e-mail et réessayer.",
+    "ERR_ASSIGNMENT_NOT_FOUND": "Affectation introuvable. Veuillez utiliser le lien de l'e-mail d'origine.",
+    "ERR_GENERIC": "Une erreur s'est produite. Veuillez réessayer.",
+    "OTHER_ROLES_HINT": "Si votre e-mail de bienvenue mentionne d'autres rôles, confirmez chacun d'eux avec son propre code, à l'aide du bouton placé sous ce code."
   },
   "ORGANIZATIONS": {
     "CONTACT": "Contact",
