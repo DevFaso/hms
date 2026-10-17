@@ -13,10 +13,16 @@ import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtDecoders;
+import org.springframework.security.oauth2.jwt.JwtDecoderInitializationException;
+import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.SupplierJwtDecoder;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.web.client.RestTemplate;
+
+import java.time.Duration;
 
 /**
  * S-03 phase 1 — Keycloak resource-server wiring.
@@ -36,6 +42,15 @@ public class OidcResourceServerConfig {
 
     private static final Logger log = LoggerFactory.getLogger(OidcResourceServerConfig.class);
 
+    /**
+     * Discovery and JWKS fetches run on request threads (the issuer is resolved
+     * lazily), so they must be bounded: a Keycloak that accepts the connection
+     * and never answers must not hold a Tomcat thread, and every thread queued
+     * behind the decoder's initialisation lock, indefinitely.
+     */
+    static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(2);
+    static final Duration READ_TIMEOUT = Duration.ofSeconds(3);
+
     @Value("${app.auth.oidc.issuer-uri}")
     private String issuerUri;
 
@@ -52,7 +67,28 @@ public class OidcResourceServerConfig {
     public JwtDecoder oidcJwtDecoder() {
         log.info("[OIDC] Configuring resource-server JWT decoder for issuer={} audience={}",
                 issuerUri, audience.isBlank() ? "<none>" : audience);
-        NimbusJwtDecoder decoder = (NimbusJwtDecoder) JwtDecoders.fromIssuerLocation(issuerUri);
+        // Resolved on the first Keycloak token, not at startup: an unreachable
+        // issuer (Keycloak down, 502) must not stop the application, whose
+        // legacy sign-in does not need Keycloak at all. SupplierJwtDecoder
+        // retries the discovery on the next token until it succeeds, then
+        // keeps the decoder. The initialisation failure is re-thrown as a
+        // BadJwtException: the resource server turns that one (only) into 401, not 500.
+        JwtDecoder lazy = new SupplierJwtDecoder(this::buildIssuerDecoder);
+        return token -> {
+            try {
+                return lazy.decode(token);
+            } catch (JwtDecoderInitializationException issuerUnavailable) {
+                log.warn("[OIDC] Issuer {} unavailable; Keycloak token refused", issuerUri);
+                throw new BadJwtException("OIDC issuer unavailable", issuerUnavailable);
+            }
+        };
+    }
+
+    /** The issuer-discovered decoder with the issuer (and optional audience) validators. */
+    JwtDecoder buildIssuerDecoder() {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withIssuerLocation(issuerUri)
+                .restOperations(boundedRestTemplate())
+                .build();
 
         OAuth2TokenValidator<Jwt> defaultValidator = JwtValidators.createDefaultWithIssuer(issuerUri);
         if (!audience.isBlank()) {
@@ -61,6 +97,14 @@ public class OidcResourceServerConfig {
             decoder.setJwtValidator(defaultValidator);
         }
         return decoder;
+    }
+
+    /** A RestTemplate whose connect and read are both time-bounded. */
+    static RestTemplate boundedRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(CONNECT_TIMEOUT);
+        factory.setReadTimeout(READ_TIMEOUT);
+        return new RestTemplate(factory);
     }
 
     /**
