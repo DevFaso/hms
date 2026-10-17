@@ -126,7 +126,7 @@ jobs:
         run: bash "$GITHUB_WORKSPACE/scripts/mobile/test/run-tests.sh" dispatch keystore readback
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@48b5f213c81028ace310571dc5ec0fbbca0b2947  # v4
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a  # v4
 
       - name: Point the SDK at the runner's install
         run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
@@ -142,7 +142,7 @@ jobs:
 
       - name: Upload lint report on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: android-lint-report
           path: patient-android-app/app/build/reports/
@@ -192,7 +192,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@48b5f213c81028ace310571dc5ec0fbbca0b2947  # v4
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a  # v4
 
       - name: Check the signing secrets are set
         # Every dispatch needs these four, so they are reported first, and
@@ -264,7 +264,7 @@ jobs:
           echo "signed bundle: $(du -h "$AAB" | cut -f1)"
 
       - name: Upload the bundle as an artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: patient-android-aab
           # One path on purpose. upload-artifact@v4 re-roots the artifact at
