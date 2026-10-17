@@ -14,12 +14,15 @@ import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtDecoderInitializationException;
-import org.springframework.security.oauth2.jwt.JwtDecoders;
 import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.SupplierJwtDecoder;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.web.client.RestTemplate;
+
+import java.time.Duration;
 
 /**
  * S-03 phase 1 — Keycloak resource-server wiring.
@@ -38,6 +41,15 @@ import org.springframework.security.oauth2.server.resource.web.BearerTokenResolv
 public class OidcResourceServerConfig {
 
     private static final Logger log = LoggerFactory.getLogger(OidcResourceServerConfig.class);
+
+    /**
+     * Discovery and JWKS fetches run on request threads (the issuer is resolved
+     * lazily), so they must be bounded: a Keycloak that accepts the connection
+     * and never answers must not hold a Tomcat thread, and every thread queued
+     * behind the decoder's initialisation lock, indefinitely.
+     */
+    static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(2);
+    static final Duration READ_TIMEOUT = Duration.ofSeconds(3);
 
     @Value("${app.auth.oidc.issuer-uri}")
     private String issuerUri;
@@ -74,7 +86,9 @@ public class OidcResourceServerConfig {
 
     /** The issuer-discovered decoder with the issuer (and optional audience) validators. */
     JwtDecoder buildIssuerDecoder() {
-        NimbusJwtDecoder decoder = (NimbusJwtDecoder) JwtDecoders.fromIssuerLocation(issuerUri);
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withIssuerLocation(issuerUri)
+                .restOperations(boundedRestTemplate())
+                .build();
 
         OAuth2TokenValidator<Jwt> defaultValidator = JwtValidators.createDefaultWithIssuer(issuerUri);
         if (!audience.isBlank()) {
@@ -83,6 +97,14 @@ public class OidcResourceServerConfig {
             decoder.setJwtValidator(defaultValidator);
         }
         return decoder;
+    }
+
+    /** A RestTemplate whose connect and read are both time-bounded. */
+    static RestTemplate boundedRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(CONNECT_TIMEOUT);
+        factory.setReadTimeout(READ_TIMEOUT);
+        return new RestTemplate(factory);
     }
 
     /**
