@@ -75,6 +75,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -85,6 +86,8 @@ public class AuthController {
 
     private static final String EMAIL_VERIFICATION_FAILED = "Email verification failed.";
     private static final String BEARER_PREFIX = "Bearer ";
+    private static final String NOT_AUTHENTICATED = "Not authenticated.";
+    private static final String USER_NOT_FOUND = "User not found.";
 
     /**
      * Shown when authentication succeeded but the account is not enabled.
@@ -1062,13 +1065,13 @@ public class AuthController {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("Not authenticated."));
+                    .body(new MessageResponse(NOT_AUTHENTICATED));
         }
         String username = authentication.getName();
         var userOpt = userRepository.findByUsername(username);
         if (userOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("User not found."));
+                    .body(new MessageResponse(USER_NOT_FOUND));
         }
         var user = userOpt.get();
 
@@ -1132,13 +1135,13 @@ public class AuthController {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("Not authenticated."));
+                    .body(new MessageResponse(NOT_AUTHENTICATED));
         }
         String currentUsername = authentication.getName();
         var userOpt = userRepository.findByUsername(currentUsername);
         if (userOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("User not found."));
+                    .body(new MessageResponse(USER_NOT_FOUND));
         }
         var user = userOpt.get();
 
@@ -1172,6 +1175,33 @@ public class AuthController {
     public record ChangeUsernameRequest(@NotBlank String newUsername) {}
 
     /**
+     * The message key for what is wrong with the new password of a forced
+     * setup, or {@code null}. A reused password is audited (ids only).
+     */
+    private String setupPasswordProblem(UUID userId, CompleteSetupRequest request) {
+        String newPassword = request.newPassword();
+        if (newPassword == null || newPassword.isBlank()) {
+            return "account.setup.password.required";
+        }
+        if (newPassword.length() < 8) {
+            return "account.setup.password.length";
+        }
+        if (newPassword.equals(request.currentPassword())) {
+            return "account.setup.password.same";
+        }
+        if (passwordHistoryService.isPasswordReused(userId, newPassword)) {
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.PASSWORD_HISTORY_VIOLATION)
+                    .eventDescription("Password change rejected — matches a recent password")
+                    .userId(userId)
+                    .status(AuditStatus.FAILURE)
+                    .build());
+            return "account.setup.password.reused";
+        }
+        return null;
+    }
+
+    /**
      * The forced first sign-in (D17), in ONE call: the new username (when the
      * account must change it) and the new password (when it must change it)
      * are validated first and then applied in one transaction. The two calls
@@ -1190,13 +1220,13 @@ public class AuthController {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("Not authenticated."));
+                    .body(new MessageResponse(NOT_AUTHENTICATED));
         }
         String username = authentication.getName();
         var userOpt = userRepository.findByUsername(username);
         if (userOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("User not found."));
+                    .body(new MessageResponse(USER_NOT_FOUND));
         }
         var user = userOpt.get();
         boolean mustRename = user.isForceUsernameChange();
@@ -1217,37 +1247,15 @@ public class AuthController {
             SecurityContextHolder.getContext().setAuthentication(authentication);
         }
 
-        String newUsername = null;
-        if (mustRename) {
-            newUsername = request.newUsername() == null ? "" : request.newUsername().trim();
-            String usernameProblem = usernameProblem(newUsername, username);
-            if (usernameProblem != null) {
-                return badSetup(usernameProblem);
-            }
+        String newUsername = mustRename ? Objects.toString(request.newUsername(), "").trim() : null;
+        String problem = mustRename ? usernameProblem(newUsername, username) : null;
+        if (problem == null && mustChangePassword) {
+            problem = setupPasswordProblem(user.getId(), request);
         }
-
-        String newPassword = null;
-        if (mustChangePassword) {
-            newPassword = request.newPassword();
-            if (newPassword == null || newPassword.isBlank()) {
-                return badSetup("account.setup.password.required");
-            }
-            if (newPassword.length() < 8) {
-                return badSetup("account.setup.password.length");
-            }
-            if (newPassword.equals(request.currentPassword())) {
-                return badSetup("account.setup.password.same");
-            }
-            if (passwordHistoryService.isPasswordReused(user.getId(), newPassword)) {
-                auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                        .eventType(AuditEventType.PASSWORD_HISTORY_VIOLATION)
-                        .eventDescription("Password change rejected — matches a recent password")
-                        .userId(user.getId())
-                        .status(AuditStatus.FAILURE)
-                        .build());
-                return badSetup("account.setup.password.reused");
-            }
+        if (problem != null) {
+            return badSetup(problem);
         }
+        String newPassword = mustChangePassword ? request.newPassword() : null;
 
         try {
             userService.completeAccountSetup(user.getId(), newUsername, newPassword);

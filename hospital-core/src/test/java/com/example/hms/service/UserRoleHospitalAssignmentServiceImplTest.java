@@ -723,9 +723,9 @@ class UserRoleHospitalAssignmentServiceImplTest {
         confirmed.setHospital(hospital);
         confirmed.setConfirmationVerifiedAt(java.time.LocalDateTime.now().minusDays(5));
         confirmed.setConfirmationCode(null);
-        org.mockito.Mockito.when(assignmentRepository.findByUserId(assignee.getId()))
+        when(assignmentRepository.findByUserId(assignee.getId()))
             .thenReturn(java.util.List.of(assignment, linkOnly, confirmed));
-        org.mockito.Mockito.when(assignmentRepository.save(org.mockito.ArgumentMatchers.any(UserRoleHospitalAssignment.class)))
+        when(assignmentRepository.save(org.mockito.ArgumentMatchers.any(UserRoleHospitalAssignment.class)))
             .thenAnswer(inv -> inv.getArgument(0));
 
         int reissued = service.reissuePendingInvitationsForRestoredUser(assignee.getId());
@@ -735,7 +735,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
         org.assertj.core.api.Assertions.assertThat(assignment.getActive()).isFalse();
         org.assertj.core.api.Assertions.assertThat(confirmed.getConfirmationCode()).isNull();
         org.assertj.core.api.Assertions.assertThat(linkOnly.getConfirmationCode()).isNull();
-        org.mockito.Mockito.verify(eventPublisher)
+        verify(eventPublisher)
             .publishEvent(org.mockito.ArgumentMatchers.any(com.example.hms.event.AssignmentCreatedEvent.class));
     }
 }

@@ -778,7 +778,26 @@ class UserServiceImplTest {
 
             assertThat(user.isDeleted()).isTrue();
             assertThat(user.isActive()).isFalse();
+            assertThat(user.getActivatedBeforeDelete()).isTrue();
             verify(userRepository).save(user);
+        }
+
+        @Test
+        @DisplayName("D21: deleting a pending invitee records that it was never activated")
+        void recordsPendingInvitee() {
+            user.setDeleted(false);
+            user.setActive(false);
+            user.setLastLoginAt(null);
+            UserRoleHospitalAssignment pending = new UserRoleHospitalAssignment();
+            pending.setConfirmationSentAt(java.time.LocalDateTime.now().minusDays(1));
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(assignmentRepository.findByUserId(userId)).thenReturn(List.of(pending));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+
+            userService.deleteUser(userId);
+
+            assertThat(user.getActivatedBeforeDelete()).isFalse();
         }
 
         @Test
@@ -953,19 +972,38 @@ class UserServiceImplTest {
             user.setActive(false);
             user.setLastLoginAt(null);
             user.setActivationToken(null);
+            user.setActivatedBeforeDelete(true); // recorded by the delete
             UserRoleHospitalAssignment patientRow = new UserRoleHospitalAssignment();
             patientRow.setActive(false);
-            patientRow.setConfirmationSentAt(null);
+            // Exactly what sign-up leaves: a sent row the e-mail link never stamps verified.
+            patientRow.setConfirmationSentAt(java.time.LocalDateTime.now().minusDays(3));
             patientRow.setConfirmationVerifiedAt(null);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
-            when(assignmentRepository.findByUserId(userId)).thenReturn(List.of(patientRow));
+            lenient().when(assignmentRepository.findByUserId(userId)).thenReturn(List.of(patientRow));
             when(staffRepository.findByUserId(userId)).thenReturn(List.of());
 
             userService.restoreUser(userId);
 
             assertThat(user.isActive()).isTrue();
+            assertThat(user.getActivatedBeforeDelete()).isNull();
             verify(assignmentService, never()).reissuePendingInvitationsForRestoredUser(any());
+        }
+
+        @Test
+        @DisplayName("D21: a recorded pending invitee stays inactive even with no rows to judge by")
+        void recordedPendingInviteeStaysInactive() {
+            user.setDeleted(true);
+            user.setActive(false);
+            user.setActivatedBeforeDelete(false);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+
+            userService.restoreUser(userId);
+
+            assertThat(user.isActive()).isFalse();
+            verify(assignmentService).reissuePendingInvitationsForRestoredUser(userId);
         }
 
         @Test

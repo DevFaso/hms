@@ -1193,6 +1193,10 @@ public class UserServiceImpl implements UserService {
             throw refused(AuditEventType.USER_DELETE, "delete", id);
         }
 
+        // Read before anything is switched off: the restore puts back this
+        // answer, since afterwards nothing on the account or its rows can
+        // tell a verified account from a pending invitee (D21).
+        user.setActivatedBeforeDelete(user.isActive() || hasSignedInOrConfirmed(user));
         user.setDeleted(true);
         user.setActive(false);
         // An administrator's disable: no invitation code or provider re-invite undoes it.
@@ -1236,7 +1240,9 @@ public class UserServiceImpl implements UserService {
         // delete revoked; the marker is cleared so that code can activate the
         // account, exactly as a first invitation does (V184: an inactive
         // account without the marker is simply not activated yet).
-        boolean previouslyActivated = wasEverActivated(user);
+        Boolean recorded = user.getActivatedBeforeDelete();
+        boolean previouslyActivated = recorded != null ? recorded : wasEverActivated(user);
+        user.setActivatedBeforeDelete(null);
         user.setDeleted(false);
         user.setActive(previouslyActivated);
         user.setDeactivatedByAdminAt(null);
@@ -1499,20 +1505,26 @@ public class UserServiceImpl implements UserService {
         return denied;
     }
 
+    /** The account has signed in, or one of its assignments was confirmed with its code. */
+    private boolean hasSignedInOrConfirmed(User user) {
+        return user.getLastLoginAt() != null
+                || assignmentRepository.findByUserId(user.getId()).stream()
+                        .anyMatch(a -> a.getConfirmationVerifiedAt() != null);
+    }
+
     /**
-     * Whether the account was ever switched on by its holder: it has signed in,
-     * or one of its assignments was confirmed with the emailed code (or by the
-     * registrar). A deleted account's active flag no longer says it, since the
-     * delete cleared it.
+     * Fallback for an account deleted before V187 recorded
+     * {@code activated_before_delete}: whether it was ever switched on, guessed
+     * from what the delete left behind. A deleted account's active flag no
+     * longer says it, since the delete cleared it. Inexact for one case only:
+     * a patient verified by e-mail who never signed in still shows a sent,
+     * unconfirmed sign-up row and is restored inactive.
      */
     private boolean wasEverActivated(User user) {
-        if (user.getLastLoginAt() != null) {
+        if (hasSignedInOrConfirmed(user)) {
             return true;
         }
         List<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUserId(user.getId());
-        if (assignments.stream().anyMatch(a -> a.getConfirmationVerifiedAt() != null)) {
-            return true;
-        }
         // Only an account still waiting on something counts as never activated:
         // an unused e-mail verification link, or an invitation code that was
         // sent and never entered. An account verified by e-mail (the link

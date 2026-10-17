@@ -39,6 +39,7 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -471,7 +472,7 @@ class AuthControllerTest {
     void completeSetup_aTakenUsernameIs400() throws Exception {
         forcedInvitee(true, false);
         currentPasswordAccepted();
-        org.mockito.Mockito.doThrow(new com.example.hms.exception.BusinessException("This username is already taken."))
+        doThrow(new com.example.hms.exception.BusinessException("This username is already taken."))
                 .when(userService).completeAccountSetup(any(), eq("awa.traore"), eq(null));
 
         completeSetup("{\"newUsername\":\"awa.traore\",\"currentPassword\":\"Temp#Pass1\"}")
