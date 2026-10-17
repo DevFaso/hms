@@ -680,7 +680,7 @@ public class UserServiceImpl implements UserService {
      * is made to choose their own at first login (forceUsernameChange).
      */
     private String generateTemporaryUsername(String firstName, String lastName) {
-        String base = (asciiLetters(firstName) + "." + asciiLetters(lastName)).replaceAll("^\\.+|\\.+$", "");
+        String base = trimDots(asciiLetters(firstName) + "." + asciiLetters(lastName));
         if (base.isEmpty()) {
             base = "user";
         }
@@ -695,6 +695,19 @@ public class UserServiceImpl implements UserService {
         }
         // Twenty collisions on one name is pathological; a random suffix is still unique.
         return base + "." + UUID.randomUUID().toString().substring(0, 8);
+    }
+
+    /** Leading and trailing dots removed, without a regex (CodeQL java/polynomial-redos). */
+    private static String trimDots(String value) {
+        int start = 0;
+        int end = value.length();
+        while (start < end && value.charAt(start) == '.') {
+            start++;
+        }
+        while (end > start && value.charAt(end - 1) == '.') {
+            end--;
+        }
+        return value.substring(start, end);
     }
 
     private static String asciiLetters(String value) {
