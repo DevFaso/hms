@@ -801,6 +801,21 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("D21: a second delete keeps what the first delete recorded")
+        void repeatDeleteKeepsRecordedAnswer() {
+            user.setDeleted(true);
+            user.setActive(false);
+            user.setActivatedBeforeDelete(true);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+
+            userService.deleteUser(userId);
+
+            assertThat(user.getActivatedBeforeDelete()).isTrue();
+        }
+
+        @Test
         @DisplayName("deactivates associated staff records when user is deleted")
         void deactivatesStaffRecords() {
             user.setDeleted(false);

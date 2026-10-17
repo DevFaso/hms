@@ -1196,7 +1196,11 @@ public class UserServiceImpl implements UserService {
         // Read before anything is switched off: the restore puts back this
         // answer, since afterwards nothing on the account or its rows can
         // tell a verified account from a pending invitee (D21).
-        user.setActivatedBeforeDelete(user.isActive() || hasSignedInOrConfirmed(user));
+        // A repeat delete keeps the first answer: by then the account is
+        // already switched off and would be recorded as never activated.
+        if (!user.isDeleted()) {
+            user.setActivatedBeforeDelete(user.isActive() || hasSignedInOrConfirmed(user));
+        }
         user.setDeleted(true);
         user.setActive(false);
         // An administrator's disable: no invitation code or provider re-invite undoes it.
