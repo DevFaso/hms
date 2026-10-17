@@ -185,6 +185,18 @@ class ActingScopeResolverTest {
         }
 
         @Test
+        @DisplayName("D22: the forced first sign-in's own-credential calls ignore a hospital the caller is only invited to")
+        void ownCredentialCallsIgnoreTheHeader() {
+            when(repository.existsByUserIdAndHospitalIdAndActiveFalse(USER, B)).thenReturn(true);
+            for (String path : java.util.List.of(
+                    "/auth/me/complete-setup", "/auth/me/change-password", "/auth/me/change-username")) {
+                // No active assignment anywhere: the invitee's only row (at B) is still pending.
+                assertThat(ActingScopeResolver.isRefusedHeader(onPath(path, B.toString()))).as(path).isFalse();
+            }
+            assertThat(ActingScopeResolver.isRefusedHeader(onPath("/auth/me/other", B.toString()))).isTrue();
+        }
+
+        @Test
         @DisplayName("a data path, or a path that only starts like one, still carries the refusal")
         void dataPathsStillRefuse() {
             assertThat(ActingScopeResolver.isRefusedHeader(onPath("/me/hospital", B.toString(), at(A, "ROLE_DOCTOR"))))

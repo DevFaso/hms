@@ -42,6 +42,9 @@ export const SCOPE_ESTABLISHING_PATTERNS: readonly RegExp[] = [
   /\/auth\/logout(?:[/?#]|$)/i,
   /\/auth\/token\/refresh(?:[/?#]|$)/i,
   /\/me\/assignments(?:[?#]|$)/i,
+  // The caller's own credentials on the forced first sign-in: run before any
+  // role is confirmed, so they must not name a hospital (D22).
+  /\/auth\/me\/(?:complete-setup|change-password|change-username)(?:[?#]|$)/i,
 ];
 
 export const apiPrefixInterceptor: HttpInterceptorFn = (req, next) => {

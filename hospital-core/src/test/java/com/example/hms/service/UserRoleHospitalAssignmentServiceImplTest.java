@@ -65,6 +65,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
     @Mock private com.example.hms.repository.EncounterRepository encounterRepository;
     /** The caller rules have their own tests (UserAccountAccessTest, AssignmentGrantScopeTest); here a super-admin's scope. */
     @Mock private com.example.hms.service.support.UserAccountAccess accountAccess;
+    @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private UserRoleHospitalAssignmentServiceImpl service;
@@ -702,5 +703,32 @@ class UserRoleHospitalAssignmentServiceImplTest {
         service.deleteAssignment(id);
 
         verify(assignmentRepository).deleteById(id);
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("D21: a restored invitee's unconfirmed invitations get fresh codes, mailed; confirmed rows are left alone")
+    void reissuesOnlyTheUnconfirmedInvitations() {
+        assignment.setActive(false);
+        assignment.setConfirmationCode(null); // revoked by the delete
+        assignment.setConfirmationVerifiedAt(null);
+        UserRoleHospitalAssignment confirmed = new UserRoleHospitalAssignment();
+        confirmed.setId(UUID.randomUUID());
+        confirmed.setUser(assignee);
+        confirmed.setHospital(hospital);
+        confirmed.setConfirmationVerifiedAt(java.time.LocalDateTime.now().minusDays(5));
+        confirmed.setConfirmationCode(null);
+        org.mockito.Mockito.when(assignmentRepository.findByUserId(assignee.getId()))
+            .thenReturn(java.util.List.of(assignment, confirmed));
+        org.mockito.Mockito.when(assignmentRepository.save(org.mockito.ArgumentMatchers.any(UserRoleHospitalAssignment.class)))
+            .thenAnswer(inv -> inv.getArgument(0));
+
+        int reissued = service.reissuePendingInvitationsForRestoredUser(assignee.getId());
+
+        org.assertj.core.api.Assertions.assertThat(reissued).isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(assignment.getConfirmationCode()).isNotBlank();
+        org.assertj.core.api.Assertions.assertThat(assignment.getActive()).isFalse();
+        org.assertj.core.api.Assertions.assertThat(confirmed.getConfirmationCode()).isNull();
+        org.mockito.Mockito.verify(eventPublisher)
+            .publishEvent(org.mockito.ArgumentMatchers.any(com.example.hms.event.AssignmentCreatedEvent.class));
     }
 }

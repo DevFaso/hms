@@ -4,6 +4,7 @@ import static com.example.hms.config.SecurityConstants.ROLE_PREFIX;
 import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.BootstrapSignupRequest;
@@ -264,7 +265,7 @@ public class AuthController {
                     .status(AuditStatus.FAILURE)
                     .build());
             return ResponseEntity.status(423)
-                    .body(new MessageResponse("Account is temporarily locked. Try again in " + remainMin + " minute(s)."));
+                    .body(new MessageResponse(MessageUtil.resolve("auth.login.locked", remainMin)));
         }
 
         try {
@@ -440,6 +441,7 @@ public class AuthController {
 
         } catch (BadCredentialsException ex) {
             loginAttemptService.recordFailure(loginRequest.getUsername());
+            auditLoginFailure(loginRequest.getUsername(), "Login failed: bad credentials");
             log.warn("🔐 [LOGIN] Bad credentials for user='{}'", loginRequest.getUsername());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse("Invalid username or password."));
@@ -471,6 +473,7 @@ public class AuthController {
             // expected mistake, and without those resets the holder would be
             // locked out at the exact moment activation succeeds.
             loginAttemptService.recordFailure(loginRequest.getUsername());
+            auditLoginFailure(loginRequest.getUsername(), "Login failed: account not active");
             log.warn("🔐 [LOGIN] Disabled account user='{}'", loginRequest.getUsername());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse(INACTIVE_ACCOUNT_GUIDANCE));
@@ -483,6 +486,28 @@ public class AuthController {
         } finally {
             resetSecurityContextToAnonymous();
         }
+    }
+
+    /**
+     * A refused sign-in, in the audit trail (D20). The account id when the
+     * typed name resolves to exactly one account, never the typed name itself
+     * (it may be a password typed into the wrong field) and never the password.
+     * An unknown name is recorded with no id at all.
+     */
+    private void auditLoginFailure(String typedName, String description) {
+        UUID accountId = null;
+        if (typedName != null && !typedName.isBlank()) {
+            List<UUID> ids = userRepository.findIdsByUsernameIgnoreCase(typedName);
+            accountId = ids.size() == 1 ? ids.get(0) : null;
+        }
+        auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .eventType(AuditEventType.LOGIN_FAILURE)
+                .eventDescription(description)
+                .userId(accountId)
+                .resourceId(accountId == null ? null : accountId.toString())
+                .entityType("USER")
+                .status(AuditStatus.FAILURE)
+                .build());
     }
 
     @Operation(summary = "Verify email address", description = "Endpoint to verify email using a token sent after registration. "
@@ -1145,6 +1170,120 @@ public class AuthController {
 
     /** Request body for {@code POST /auth/me/change-username}. */
     public record ChangeUsernameRequest(@NotBlank String newUsername) {}
+
+    /**
+     * The forced first sign-in (D17), in ONE call: the new username (when the
+     * account must change it) and the new password (when it must change it)
+     * are validated first and then applied in one transaction. The two calls
+     * it replaces could not be made in sequence: the rename invalidated the
+     * access token (its subject is the username), so the session ended before
+     * the password call and the account kept its temporary password. Each
+     * forced flag clears only with its own change. The client signs out after
+     * success and the holder signs in with the new details.
+     */
+    @PostMapping("/me/complete-setup")
+    @Operation(summary = "Complete the forced first sign-in",
+            description = "Changes the username and the password together when the account is forced to change them.")
+    @ApiResponse(responseCode = "200", description = "Account set up; sign in again with the new details")
+    @ApiResponse(responseCode = "400", description = "A value is invalid, the current password is wrong, or nothing is pending")
+    public ResponseEntity<Object> completeAccountSetup(@Valid @RequestBody CompleteSetupRequest request) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse("Not authenticated."));
+        }
+        String username = authentication.getName();
+        var userOpt = userRepository.findByUsername(username);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse("User not found."));
+        }
+        var user = userOpt.get();
+        boolean mustRename = user.isForceUsernameChange();
+        boolean mustChangePassword = user.isForcePasswordChange();
+        if (!mustRename && !mustChangePassword) {
+            return badSetup("account.setup.nothing");
+        }
+
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(username, request.currentPassword()));
+        } catch (BadCredentialsException ex) {
+            // 400, not 401: the session is fine, and the portal treats a 401
+            // as an expired session (refresh, then sign-out).
+            return badSetup("account.setup.password.current");
+        } finally {
+            resetSecurityContextToAnonymous();
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
+
+        String newUsername = null;
+        if (mustRename) {
+            newUsername = request.newUsername() == null ? "" : request.newUsername().trim();
+            String usernameProblem = usernameProblem(newUsername, username);
+            if (usernameProblem != null) {
+                return badSetup(usernameProblem);
+            }
+        }
+
+        String newPassword = null;
+        if (mustChangePassword) {
+            newPassword = request.newPassword();
+            if (newPassword == null || newPassword.isBlank()) {
+                return badSetup("account.setup.password.required");
+            }
+            if (newPassword.length() < 8) {
+                return badSetup("account.setup.password.length");
+            }
+            if (newPassword.equals(request.currentPassword())) {
+                return badSetup("account.setup.password.same");
+            }
+            if (passwordHistoryService.isPasswordReused(user.getId(), newPassword)) {
+                auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                        .eventType(AuditEventType.PASSWORD_HISTORY_VIOLATION)
+                        .eventDescription("Password change rejected — matches a recent password")
+                        .userId(user.getId())
+                        .status(AuditStatus.FAILURE)
+                        .build());
+                return badSetup("account.setup.password.reused");
+            }
+        }
+
+        try {
+            userService.completeAccountSetup(user.getId(), newUsername, newPassword);
+        } catch (BusinessException ex) {
+            return ResponseEntity.badRequest().body(new MessageResponse(ex.getMessage()));
+        }
+        log.info("🔑 [ACCOUNT-SETUP] Completed for user={}", user.getId());
+        return ResponseEntity.ok(new MessageResponse(MessageUtil.resolve("account.setup.done")));
+    }
+
+    /** The bundle key for what is wrong with a chosen username, or {@code null}. */
+    private static String usernameProblem(String newUsername, String currentUsername) {
+        if (newUsername.isEmpty()) {
+            return "account.setup.username.required";
+        }
+        if (newUsername.length() < 3 || newUsername.length() > 50) {
+            return "account.setup.username.length";
+        }
+        if (!newUsername.matches("^[a-zA-Z0-9._-]+$")) {
+            return "account.setup.username.chars";
+        }
+        if (newUsername.equalsIgnoreCase(currentUsername)) {
+            return "account.setup.username.same";
+        }
+        return null;
+    }
+
+    private static ResponseEntity<Object> badSetup(String key) {
+        return ResponseEntity.badRequest().body(new MessageResponse(MessageUtil.resolve(key)));
+    }
+
+    /** Request body for {@code POST /auth/me/complete-setup}. */
+    public record CompleteSetupRequest(
+            String newUsername,
+            @NotBlank String currentPassword,
+            String newPassword) {}
 
     @PostMapping("/request-reset")
     public ResponseEntity<Void> legacyRequestPasswordReset(
