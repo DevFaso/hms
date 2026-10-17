@@ -210,7 +210,6 @@ public class EmailServiceImpl implements EmailService {
         return s != null && !s.isBlank();
     }
 
-    /** "Hi {name}," or the anonymous greeting when no name is known. */
     /**
      * A role in the mail's language: {@code ROLE_DOCTOR}, {@code DOCTOR} or
      * {@code Doctor} all resolve {@code email.role.label.DOCTOR}. An unknown
@@ -232,6 +231,7 @@ public class EmailServiceImpl implements EmailService {
         return label != null ? label : humanised;
     }
 
+    /** "Hi {name}," or the anonymous greeting when no name is known. */
     private String greetingHi(Locale locale, String displayName) {
         return hasText(displayName)
             ? text(locale, KEY_GREETING_HI, escapeHtml(displayName))
