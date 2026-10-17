@@ -32,7 +32,7 @@ public class AssignmentCreatedEventListener {
         log.debug("[ASSIGNMENT_NOTIFY] Sending notifications for committed assignment {}",
                 event.getAssignmentId());
         try {
-            assignmentService.sendNotifications(event.getAssignmentId());
+            assignmentService.sendNotifications(event.getAssignmentId(), event.isEmailCoveredByWelcome());
         } catch (RuntimeException ex) {
             // Log but do not rethrow — the outer transaction already committed.
             log.warn("[ASSIGNMENT_NOTIFY] ⚠️ Failed to send notifications for assignment {}: {}",

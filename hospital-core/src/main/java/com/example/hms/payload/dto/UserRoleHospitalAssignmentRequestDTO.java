@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
@@ -74,4 +75,14 @@ public class UserRoleHospitalAssignmentRequestDTO {
     // Relaxed: allow omission entirely; service layer will enforce requirement based on role.
     return true;
     }
+
+    /**
+     * Server-side only, never bound from JSON: true when the account-creation
+     * welcome mail already carries this assignment's confirmation code, so
+     * the separate role-assignment e-mail is not sent (one mail per new user).
+     * SMS notifications are unaffected.
+     */
+    @JsonIgnore
+    @Schema(hidden = true)
+    private boolean welcomeMailCarriesCode;
 }

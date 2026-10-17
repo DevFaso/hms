@@ -640,7 +640,7 @@ class EmailServiceImplTest {
             emailService.sendAdminWelcomeEmail(
                 "admin@hospital.com", "Jane Doe", "janedoe",
                 "Temp@1234", "Hospital Admin", "City General Hospital",
-                "https://portal.example/onboarding/role-welcome?assignment=A-1");
+                "https://portal.example/onboarding/role-welcome?assignment=A-1", null);
             verify(mailOutbox, times(1)).enqueue(any(), any(), any(), any(), any());
         }
 
@@ -651,7 +651,7 @@ class EmailServiceImplTest {
             emailService.sendAdminWelcomeEmail(
                 "admin@hospital.com", "Jane Doe", "janedoe",
                 "Temp@1234", "Super Admin", null,
-                "https://portal.example/onboarding/role-welcome?assignment=A-2");
+                "https://portal.example/onboarding/role-welcome?assignment=A-2", null);
             verify(mailOutbox, times(1)).enqueue(any(), any(), any(), any(), any());
             String html = renderedHtml();
             assertThat(html)
@@ -666,7 +666,7 @@ class EmailServiceImplTest {
             stubMailSender();
             emailService.sendAdminWelcomeEmail(
                 "admin@hospital.com", null, "janedoe",
-                "Temp@1234", "Doctor", "City Hospital", null);
+                "Temp@1234", "Doctor", "City Hospital", null, null);
             verify(mailOutbox, times(1)).enqueue(any(), any(), any(), any(), any());
             assertThat(renderedHtml()).contains("email.common.greeting.anonymous");
         }
@@ -678,7 +678,7 @@ class EmailServiceImplTest {
             String activationUrl = "https://dev.e-keneya.com/onboarding/role-welcome?assignment=A-77";
             emailService.sendAdminWelcomeEmail(
                 "nurse@hospital.com", "Awa Traore", "atraore",
-                "Temp@1234", "Nurse", "City General Hospital", activationUrl);
+                "Temp@1234", "Nurse", "City General Hospital", activationUrl, null);
 
             String html = renderedHtml();
             assertThat(html)
@@ -702,7 +702,7 @@ class EmailServiceImplTest {
             stubMailSender();
             emailService.sendAdminWelcomeEmail(
                 "nurse@hospital.com", "Awa Traore", "atraore",
-                "Temp@1234", "Nurse", "City General Hospital", null);
+                "Temp@1234", "Nurse", "City General Hospital", null, null);
 
             String html = renderedHtml();
             assertThat(html)
@@ -719,11 +719,34 @@ class EmailServiceImplTest {
         }
 
         @Test
+        @DisplayName("D10: with a code it is the ONLY mail: code, expiry, link, credentials, security notice")
+        void carriesTheCodeWhenItIsTheOnlyMail() {
+            stubMailSender();
+            String activationUrl = "https://dev.e-keneya.com/onboarding/role-welcome?assignment=A-9";
+            emailService.sendAdminWelcomeEmail(
+                "doc@hospital.com", "Awa Traore", "atraore",
+                "Temp@1234", "ROLE_DOCTOR", "City General Hospital", activationUrl, "482913");
+
+            String html = renderedHtml();
+            assertThat(html)
+                .contains("482913")
+                .contains("email.admin.welcome.body.step.code")
+                .contains("email.role.assignment.body.expiry")
+                .contains(activationUrl)
+                .contains("email.admin.welcome.credentials.username")
+                .contains("email.admin.welcome.security.body")
+                // No pointer to a second mail: there is none.
+                .doesNotContain("email.role.assignment.subject")
+                // The role is never shown as its raw code.
+                .doesNotContain("ROLE_DOCTOR");
+        }
+
+        @Test
         @DisplayName("throws IllegalArgumentException for null recipient")
         void rejectsNullRecipient() {
             assertThatThrownBy(() ->
                 emailService.sendAdminWelcomeEmail(
-                    null, "Jane Doe", "janedoe", "Temp@1234", "Admin", "Hospital", null))
+                    null, "Jane Doe", "janedoe", "Temp@1234", "Admin", "Hospital", null, null))
                 .isInstanceOf(IllegalArgumentException.class);
         }
 
@@ -732,7 +755,7 @@ class EmailServiceImplTest {
         void rejectsInvalidRecipient() {
             assertThatThrownBy(() ->
                 emailService.sendAdminWelcomeEmail(
-                    "not-an-email", "Jane Doe", "janedoe", "Temp@1234", "Admin", "Hospital", null))
+                    "not-an-email", "Jane Doe", "janedoe", "Temp@1234", "Admin", "Hospital", null, null))
                 .isInstanceOf(IllegalArgumentException.class);
         }
     }

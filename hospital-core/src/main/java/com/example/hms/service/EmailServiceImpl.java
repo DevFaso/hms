@@ -210,6 +210,27 @@ public class EmailServiceImpl implements EmailService {
         return s != null && !s.isBlank();
     }
 
+    /**
+     * A role in the mail's language: {@code ROLE_DOCTOR}, {@code DOCTOR} or
+     * {@code Doctor} all resolve {@code email.role.label.DOCTOR}. An unknown
+     * role falls back to a humanised code ("Lab Manager"), never the raw code.
+     */
+    String roleLabel(Locale locale, String role) {
+        if (!hasText(role)) {
+            return role;
+        }
+        String code = role.trim().toUpperCase(Locale.ROOT).replace(' ', '_');
+        if (code.startsWith("ROLE_")) {
+            code = code.substring("ROLE_".length());
+        }
+        String humanised = java.util.Arrays.stream(code.split("_"))
+            .filter(w -> !w.isEmpty())
+            .map(w -> w.charAt(0) + w.substring(1).toLowerCase(Locale.ROOT))
+            .collect(java.util.stream.Collectors.joining(" "));
+        String label = messageSource.getMessage("email.role.label." + code, null, humanised, locale);
+        return label != null ? label : humanised;
+    }
+
     /** "Hi {name}," or the anonymous greeting when no name is known. */
     private String greetingHi(Locale locale, String displayName) {
         return hasText(displayName)
@@ -443,7 +464,7 @@ public class EmailServiceImpl implements EmailService {
             ? hospitalDisplayName : text(l, "email.role.assignment.fallback.hospital");
         String hospitalHtml = escapeHtml(hospitalPlain);
         // Only the staff mail names the role; the patient mail never did.
-        String roleHtml = hasText(roleDisplayName) ? escapeHtml(roleDisplayName) : text(l, "email.role.assignment.fallback.role");
+        String roleHtml = hasText(roleDisplayName) ? escapeHtml(roleLabel(l, roleDisplayName)) : text(l, "email.role.assignment.fallback.role");
         String codeHtml = escapeHtml(confirmationCode);
         String greeting = greetingHi(l, userName);
 
@@ -948,13 +969,14 @@ public class EmailServiceImpl implements EmailService {
                                       String tempPassword,
                                       String roleName,
                                       String hospitalName,
-                                      String activationUrl) {
+                                      String activationUrl,
+                                      String confirmationCode) {
         if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
         validateAddresses(List.of(to));
         Locale l = DEFAULT_RECIPIENT_LOCALE;
         log.info("📧 Composing admin welcome email for {}", ActivationDeliveryTracker.maskEmail(to));
 
-        String escapedRole     = hasText(roleName)     ? escapeHtml(roleName)     : text(l, "email.admin.welcome.fallback.role");
+        String escapedRole     = hasText(roleName)     ? escapeHtml(roleLabel(l, roleName)) : text(l, "email.admin.welcome.fallback.role");
         String escapedHospital = hasText(hospitalName) ? escapeHtml(hospitalName) : null;
         String escapedUsername = hasText(username)     ? escapeHtml(username)     : "—";
         String escapedPassword = hasText(tempPassword) ? escapeHtml(tempPassword) : "—";
@@ -980,15 +1002,29 @@ public class EmailServiceImpl implements EmailService {
             + "<p style=\"color:#bfdbfe;margin:6px 0 0;font-size:14px;\">" + text(l, "email.admin.welcome.tagline") + CLOSE_PARAGRAPH
             + CLOSE_DIV;
 
-        // The step names the assignment mail by its subject, resolved through
-        // the same key so the two mails agree in every language.
+        // With a code this is the new user's ONLY mail and carries the code
+        // itself. Without one (several roles: one assignment mail per code)
+        // the step names the assignment mail by its subject, resolved through
+        // the same key so the mails agree in every language.
+        boolean carriesCode = hasText(confirmationCode);
+        String step = carriesCode
+            ? text(l, "email.admin.welcome.body.step.code")
+            : text(l, "email.admin.welcome.body.step", text(l, KEY_ROLE_ASSIGNMENT_SUBJECT));
+        String codeBlock = carriesCode
+            ? "<p style=\"font-size:28px;font-weight:bold;letter-spacing:6px;text-align:center;"
+              + "background:#f8fafc;border:2px dashed #2563eb;border-radius:8px;padding:16px;margin:16px 0;\">"
+              + escapeHtml(confirmationCode) + CLOSE_PARAGRAPH
+              + "<p style=\"color:#64748b;font-size:13px;text-align:center;margin:0 0 16px;\">"
+              + text(l, "email.role.assignment.body.expiry") + CLOSE_PARAGRAPH
+            : "";
         String bodyContent = "<div style=\"padding:32px 40px;\">"
             + "<p style=\"color:#1e293b;font-size:16px;margin-top:0;\">" + greeting + CLOSE_PARAGRAPH
             + "<p style=\"color:#475569;line-height:1.6;\">"
             + created + ' '
-            + text(l, "email.admin.welcome.body.step", text(l, KEY_ROLE_ASSIGNMENT_SUBJECT)) + ' '
+            + step + ' '
             + text(l, "email.admin.welcome.body.keep")
             + CLOSE_PARAGRAPH
+            + codeBlock
             + "<div style=\"background:#eff6ff;border:2px solid #bfdbfe;border-radius:10px;"
             + "padding:20px 24px;margin:24px 0;\">"
             + "<p style=\"margin:0 0 12px;font-weight:700;color:#1e3a8a;font-size:14px;"

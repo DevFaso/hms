@@ -383,7 +383,8 @@ public class UserServiceImpl implements UserService {
 
         // ---- 4) Ensure roles + hospital-scoped assignments ----
         final List<UserRoleHospitalAssignment> ensuredAssignments =
-                ensureRolesAndAssignments(user, roles, staffContextHospitalId);
+                ensureRolesAndAssignments(user, roles, staffContextHospitalId,
+                        welcomeMailCarriesCode(newUserCreated, isPatient, roles));
 
         // ---- 4a) Forward temp password to the PATIENT assignment ----
         // The assignment notification email (AFTER_COMMIT) will expose these
@@ -412,9 +413,10 @@ public class UserServiceImpl implements UserService {
         // ---- 7) Welcome email for brand-new non-patient users (fire-and-forget) ----
         if (newUserCreated && !isPatient) {
             final String displayName = UserDisplayUtil.resolveDisplayName(user);
+            // The raw code: the mail renders the label in its own language.
             final String roleName    = roles.stream()
-                    .map(r -> formatRoleLabel(r.getCode()))
-                    .findFirst().orElse("User");
+                    .map(Role::getCode)
+                    .findFirst().orElse(null);
             final String hospitalName = staffContextHospitalId != null
                     ? hospitalRepository.findById(staffContextHospitalId)
                           .map(Hospital::getName).orElse(null)
@@ -431,6 +433,13 @@ public class UserServiceImpl implements UserService {
             final String activationUrl = soleCode == null
                     ? null
                     : assignmentLinkService.buildProfileCompletionUrl(soleCode);
+            // With one role the welcome mail is the ONLY mail (see
+            // welcomeMailCarriesCode), so it carries the 6-digit code — read
+            // from the saved assignment, which exists before this composes.
+            final String confirmationCode =
+                    welcomeMailCarriesCode(newUserCreated, isPatient, roles) && soleCode != null
+                    ? soleConfirmationCode(ensuredAssignments)
+                    : null;
             // Deferred to AFTER_COMMIT for the same reason
             // AssignmentCreatedEventListener exists: this mail now carries an
             // assignment code in its button, so a rollback after the send
@@ -446,7 +455,7 @@ public class UserServiceImpl implements UserService {
                     () -> emailService.sendAdminWelcomeEmail(
                         user.getEmail(), displayName,
                         user.getUsername(), request.getPassword(),
-                        roleName, hospitalName, activationUrl),
+                        roleName, hospitalName, activationUrl, confirmationCode),
                     emailService::deliversRealEmail);
                 if (sent) {
                     log.info("📧 Welcome email queued for new user '{}'", user.getUsername());
@@ -544,7 +553,7 @@ public class UserServiceImpl implements UserService {
     }
 
     private List<UserRoleHospitalAssignment> ensureRolesAndAssignments(
-            User user, Set<Role> roles, UUID staffContextHospitalId) {
+            User user, Set<Role> roles, UUID staffContextHospitalId, boolean welcomeMailCarriesCode) {
         final List<UserRoleHospitalAssignment> result = new ArrayList<>();
         for (Role r : roles) {
             addUserRoleIfAbsent(user.getId(), r.getId());
@@ -552,7 +561,7 @@ public class UserServiceImpl implements UserService {
             log.info("[ASSIGN] {} -> user={} hospitalId={} (inactive until code verification)",
                     r.getCode(), user.getUsername(), staffContextHospitalId);
 
-            result.add(ensureAssignmentSmart(user.getId(), r, staffContextHospitalId));
+            result.add(ensureAssignmentSmart(user.getId(), r, staffContextHospitalId, welcomeMailCarriesCode));
         }
         return result;
     }
@@ -607,16 +616,6 @@ public class UserServiceImpl implements UserService {
         }
 
         staffRepository.save(staff);
-    }
-
-    /** Converts ROLE_HOSPITAL_ADMIN → "Hospital Admin". */
-    private static String formatRoleLabel(String roleCode) {
-        if (roleCode == null) return "User";
-        String stripped = roleCode.startsWith(ROLE_PREFIX) ? roleCode.substring(ROLE_PREFIX.length()) : roleCode;
-        return java.util.Arrays.stream(stripped.split("_"))
-            .filter(w -> !w.isEmpty())
-            .map(w -> Character.toUpperCase(w.charAt(0)) + w.substring(1).toLowerCase())
-            .collect(java.util.stream.Collectors.joining(" "));
     }
 
     private String resolveLicenseNumber(AdminSignupRequest request, boolean requiresStaff) {
@@ -902,7 +901,20 @@ public class UserServiceImpl implements UserService {
         return "Unknown User";
     }
 
-    private UserRoleHospitalAssignment ensureAssignmentSmart(UUID userId, Role role, UUID hospitalId) {
+    /**
+     * A brand-new staff account with exactly one role gets ONE e-mail: the
+     * welcome mail carries that assignment's confirmation code, so the
+     * separate role-assignment mail is suppressed. Several roles keep one
+     * assignment mail per code (the confirmation screen validates the code
+     * against the assignment in its URL); an existing user given another
+     * assignment keeps the role-assignment mail.
+     */
+    static boolean welcomeMailCarriesCode(boolean newUserCreated, boolean isPatient, Set<Role> roles) {
+        return newUserCreated && !isPatient && roles != null && roles.size() == 1;
+    }
+
+    private UserRoleHospitalAssignment ensureAssignmentSmart(UUID userId, Role role, UUID hospitalId,
+                                                             boolean welcomeMailCarriesCode) {
         UUID roleId = role.getId();
 
         // avoid duplicates
@@ -917,6 +929,7 @@ public class UserServiceImpl implements UserService {
                     .roleId(roleId)
                     .hospitalId(hospitalId) // may be null for global
                     .active(false)
+                    .welcomeMailCarriesCode(welcomeMailCarriesCode)
                     .build());
         }
 
@@ -1575,6 +1588,14 @@ public class UserServiceImpl implements UserService {
      *
      * <p>Visible for testing.
      */
+    static String soleConfirmationCode(List<UserRoleHospitalAssignment> assignments) {
+        if (assignments == null || assignments.size() != 1) {
+            return null;
+        }
+        String code = assignments.get(0).getConfirmationCode();
+        return code == null || code.isBlank() ? null : code;
+    }
+
     static String soleAssignmentCode(List<UserRoleHospitalAssignment> assignments) {
         if (assignments == null) {
             return null;
