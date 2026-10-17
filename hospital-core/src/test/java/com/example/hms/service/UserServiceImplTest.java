@@ -975,7 +975,7 @@ class UserServiceImplTest {
             assertThat(event.getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.USER_RESTORE);
             assertThat(event.getResourceId()).isEqualTo(userId.toString());
             assertThat(event.getEntityType()).isEqualTo("USER");
-            assertThat(((java.util.Map<?, ?>) event.getDetails()).get("reactivated")).isEqualTo(true);
+            assertThat((Boolean) ((java.util.Map<?, ?>) event.getDetails()).get("reactivated")).isTrue();
         }
 
         @Test

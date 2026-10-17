@@ -20,6 +20,8 @@ import java.util.UUID;
  */
 public final class AuditEventLogSpecifications {
 
+    private static final String EVENT_TIMESTAMP = "eventTimestamp";
+
     private AuditEventLogSpecifications() {
     }
 
@@ -42,12 +44,12 @@ public final class AuditEventLogSpecifications {
                 return cb.conjunction();
             }
             if (from == null) {
-                return cb.lessThanOrEqualTo(root.get("eventTimestamp"), to);
+                return cb.lessThanOrEqualTo(root.get(EVENT_TIMESTAMP), to);
             }
             if (to == null) {
-                return cb.greaterThanOrEqualTo(root.get("eventTimestamp"), from);
+                return cb.greaterThanOrEqualTo(root.get(EVENT_TIMESTAMP), from);
             }
-            return cb.between(root.get("eventTimestamp"), from, to);
+            return cb.between(root.get(EVENT_TIMESTAMP), from, to);
         };
     }
 

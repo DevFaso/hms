@@ -80,7 +80,7 @@ describe('ReferralsComponent', () => {
   function flushInitRequests(): void {
     // ngOnInit triggers: load(), loadAssignedHospitals(), loadAllHospitals()
     httpMock.match((req) => req.url.includes('/referrals')).forEach((r) => r.flush([]));
-    const myHospReq = httpMock.match((req) => req.url.includes('/hospitals/me'));
+    const myHospReq = httpMock.match((req) => req.url === '/me/hospital');
     myHospReq.forEach((r) => r.flush(mockHospital));
     const allHospReq = httpMock.match((req) => req.url.includes('/hospitals'));
     allHospReq.forEach((r) => r.flush([mockHospital, mockHospital2]));
