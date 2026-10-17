@@ -80,6 +80,7 @@ class UserServiceImplTest {
     @Mock private AssignmentLinkService assignmentLinkService;
     @Mock private UserAccountAccess accountAccess;
     @Mock private com.example.hms.security.provider.FacilityAssignmentGuard facilityAssignmentGuard;
+    @Mock private SmsService smsService;
 
     @InjectMocks
     private UserServiceImpl userService;
@@ -955,6 +956,37 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("an updated local phone is stored in E.164, like a registered one")
+        void updateNormalisesPhone() {
+            stubHappyPath();
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setPhoneNumber("70 20 20 20");
+
+            userService.updateUser(userId, dto);
+
+            ArgumentCaptor<User> cap = ArgumentCaptor.forClass(User.class);
+            verify(userRepository).save(cap.capture());
+            assertThat(cap.getValue().getPhoneNumber()).isEqualTo("+22670202020");
+        }
+
+        @Test
+        @DisplayName("an unchanged legacy phone sent back by the edit dialog does not block the edit")
+        void unchangedLegacyPhoneDoesNotBlockEdit() {
+            stubHappyPath();
+            user.setPhoneNumber("70-20 ext 5");
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setFirstName("NewFirst");
+            dto.setPhoneNumber("70-20 ext 5");
+
+            userService.updateUser(userId, dto);
+
+            ArgumentCaptor<User> cap = ArgumentCaptor.forClass(User.class);
+            verify(userRepository).save(cap.capture());
+            assertThat(cap.getValue().getPhoneNumber()).isEqualTo("70-20 ext 5");
+            assertThat(cap.getValue().getFirstName()).isEqualTo("NewFirst");
+        }
+
+        @Test
         @DisplayName("blank password is ignored — existing hash preserved")
         void blankPasswordPreservesHash() {
             stubHappyPath();
@@ -1052,7 +1084,7 @@ class UserServiceImplTest {
             ArgumentCaptor<User> cap = ArgumentCaptor.forClass(User.class);
             verify(userRepository).save(cap.capture());
 
-            assertThat(cap.getValue().getPhoneNumber()).isEqualTo("+1-555-0999");
+            assertThat(cap.getValue().getPhoneNumber()).isEqualTo("+15550999");
         }
 
         @Test
@@ -1736,6 +1768,163 @@ class UserServiceImplTest {
                     eq(UserRepository.DIRECTORY_UNSCOPED), any());
             verify(userRepository).searchUsers(eq("a"), any(), any(), eq(false), eq(true), eq(false),
                     eq(UserRepository.DIRECTORY_UNSCOPED), any());
+        }
+    }
+
+    @Nested
+    @DisplayName("registration without username/password/licence (D1, D2, D4, D13)")
+    class GeneratedCredentials {
+
+        private Role role(String code) {
+            Role r = new Role();
+            r.setId(UUID.randomUUID());
+            r.setCode(code);
+            r.setName(code);
+            return r;
+        }
+
+        private void stubCreation(Role role) {
+            lenient().when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> {
+                User u = inv.getArgument(0);
+                if (u.getId() == null) u.setId(UUID.randomUUID());
+                return u;
+            });
+            lenient().when(userRepository.existsByUsername(any())).thenReturn(false);
+            lenient().when(roleRepository.findByCode(role.getCode())).thenReturn(Optional.of(role));
+            lenient().when(passwordEncoder.encode(any())).thenReturn("encoded");
+            UserRoleHospitalAssignment a = new UserRoleHospitalAssignment();
+            a.setId(UUID.randomUUID());
+            a.setRole(role);
+            lenient().when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
+                .thenReturn(Optional.of(a));
+            lenient().when(userRepository.findByIdWithRolesAndProfiles(any(UUID.class)))
+                .thenAnswer(inv -> {
+                    User reloaded = new User();
+                    reloaded.setId(inv.getArgument(0));
+                    return Optional.of(reloaded);
+                });
+            lenient().when(userMapper.toResponseDTO(any(), any())).thenAnswer(inv -> new UserResponseDTO());
+        }
+
+        private AdminSignupRequest request(String roleCode, String email, String phone) {
+            AdminSignupRequest req = new AdminSignupRequest();
+            req.setFirstName("Aïcha");
+            req.setLastName("Ouédraogo");
+            req.setEmail(email);
+            req.setPhoneNumber(phone);
+            req.setRoleNames(Set.of(roleCode));
+            return req;
+        }
+
+        private User savedUser() {
+            org.mockito.ArgumentCaptor<User> c = org.mockito.ArgumentCaptor.forClass(User.class);
+            verify(userRepository).saveAndFlush(c.capture());
+            return c.getValue();
+        }
+
+        @Test
+        @DisplayName("no username/password: both generated, both change flags set, local phone becomes +226")
+        void generatesUsernameAndPassword() {
+            stubCreation(superAdminRole);
+            AdminSignupRequest req = request("ROLE_SUPER_ADMIN", "a@hospital.bf", "70202020");
+
+            userService.createUserWithRolesAndHospital(req);
+
+            User saved = savedUser();
+            assertThat(saved.getUsername()).matches("aicha\\.ouedraogo\\d{4}");
+            assertThat(saved.isForcePasswordChange()).isTrue();
+            assertThat(saved.isForceUsernameChange()).isTrue();
+            assertThat(saved.getPhoneNumber()).isEqualTo("+22670202020");
+            assertThat(req.getPassword()).hasSize(14);
+        }
+
+        @Test
+        @DisplayName("a username already taken is retried until a free one is found")
+        void generatedUsernameAvoidsCollisions() {
+            stubCreation(superAdminRole);
+            when(userRepository.existsByUsername(any())).thenReturn(true, true, false);
+
+            userService.createUserWithRolesAndHospital(request("ROLE_SUPER_ADMIN", "a@hospital.bf", "70202020"));
+
+            verify(userRepository, org.mockito.Mockito.times(3)).existsByUsername(any());
+        }
+
+        @Test
+        @DisplayName("an invalid phone number is refused before anything is saved")
+        void rejectsInvalidPhone() {
+            AdminSignupRequest req = request("ROLE_SUPER_ADMIN", "a@hospital.bf", "7020-abc");
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(userRepository, never()).saveAndFlush(any());
+        }
+
+        @Test
+        @DisplayName("a patient with no e-mail and no SMS transport gets the generated credentials once in the response")
+        void phoneOnlyPatientGetsCredentialsInResponse() {
+            stubCreation(patientRole);
+            when(smsService.deliversRealSms()).thenReturn(false);
+
+            UserResponseDTO result = userService.createUserWithRolesAndHospital(
+                request("ROLE_PATIENT", null, "70202020"));
+
+            User saved = savedUser();
+            assertThat(result.getTemporaryUsername()).isEqualTo(saved.getUsername());
+            assertThat(result.getTemporaryPassword()).hasSize(14);
+        }
+
+        @Test
+        @DisplayName("with a real SMS transport the credentials go by SMS, not into the response")
+        void phoneOnlyPatientWithSmsGetsNothingInResponse() {
+            stubCreation(patientRole);
+            when(smsService.deliversRealSms()).thenReturn(true);
+
+            UserResponseDTO result = userService.createUserWithRolesAndHospital(
+                request("ROLE_PATIENT", null, "70202020"));
+
+            assertThat(result.getTemporaryPassword()).isNull();
+            assertThat(result.getTemporaryUsername()).isNull();
+        }
+
+        @Test
+        @DisplayName("an admin-typed password is never handed out: not in the response, not on the patient assignment")
+        void adminTypedPasswordIsNeverDelivered() {
+            stubCreation(patientRole);
+            AdminSignupRequest req = request("ROLE_PATIENT", null, "70202020");
+            req.setUsername("chosen.name");
+            req.setPassword("Typed@Secret1");
+
+            UserResponseDTO result = userService.createUserWithRolesAndHospital(req);
+
+            assertThat(result.getTemporaryPassword()).isNull();
+            verify(assignmentRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a person stored with a legacy local phone is matched, not created a second time")
+        void legacyLocalPhoneRowIsMatched() {
+            stubCreation(patientRole);
+            User legacy = new User();
+            legacy.setId(UUID.randomUUID());
+            legacy.setPhoneNumber("70202020");
+            when(userRepository.findByPhoneNumber("70202020")).thenReturn(Optional.of(legacy));
+
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(
+                    request("ROLE_PATIENT", null, "70202020")))
+                .isInstanceOf(Exception.class);
+            verify(userRepository, never()).saveAndFlush(any());
+        }
+
+        @Test
+        @DisplayName("a patient registration carrying a clinician's licence creates a new user, never resolves the clinician")
+        void patientCarryingStaffLicenceCreatesNewUser() {
+            stubCreation(patientRole);
+            AdminSignupRequest req = request("ROLE_PATIENT", null, "70202020");
+            req.setLicenseNumber("LIC-CLINICIAN-1");
+
+            userService.createUserWithRolesAndHospital(req);
+
+            verify(staffRepository, never()).findUserIdByLicense(any());
+            assertThat(savedUser().getUsername()).isNotBlank();
         }
     }
 }

@@ -5362,6 +5362,20 @@ ships*, not for building — and check the shipped surface before trusting a
   the registration rule is an authorization change, not the display fix — but
   it is a split a reader will trip over, and it should be resolved one way or
   the other with a decision behind it.
+- **Generated credentials for an e-mail-less patient travel in the HTTP
+  response when no real SMS transport is configured** (fix/registration-defects,
+  2026-10-16). `POST /users/admin-register` now generates the username and a
+  one-time password; with no e-mail and `SmsService.deliversRealSms()` false the
+  registration response carries `temporaryUsername`/`temporaryPassword` once
+  and the staff UI shows them in a one-time dialog. Remove that fallback (or
+  replace it with a set-password link the desk prints) once IKODDI SMS is live
+  on every environment. Also: phones are now stored E.164 (`+226…`) on every
+  write path (registration, profile update, bootstrap), and registration also
+  matches the two legacy shapes exactly (`22670202020`, `70202020`;
+  `UserServiceImpl.findByPhoneInAnyForm`). Older rows written with spaces,
+  dashes or a trunk zero are still not matched: backfill `users.phone_number`
+  to E.164 (a migration) and then drop the legacy-form lookup. The admin welcome mail still shows
+  "—" for the password when an API caller supplied one (never the typed value).
 - **403 role hint only knows roles the password-login picker listed.**
   (fix/portal-ui-defects, D7.) The JWT carries only the role picked at sign-in,
   so the portal keeps the picker's `availableRoles` in sessionStorage
