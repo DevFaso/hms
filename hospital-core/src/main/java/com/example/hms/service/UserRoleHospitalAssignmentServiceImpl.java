@@ -1197,6 +1197,21 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             deactivated.size(), assignments.size(), userId);
     }
 
+    @Override
+    public int reissuePendingInvitationsForRestoredUser(UUID userId) {
+        List<UserRoleHospitalAssignment> pending = assignmentRepository.findByUserId(userId).stream()
+            .filter(a -> a.getConfirmationVerifiedAt() == null)
+            // Only invitations that went out as a code: a patient row activated
+            // by the e-mail link never had one and must not get staff mail.
+            .filter(a -> a.getConfirmationSentAt() != null)
+            .toList();
+        for (UserRoleHospitalAssignment assignment : pending) {
+            reissueCode(assignment, true);
+        }
+        log.info("🔁 Reissued {} pending invitation(s) for restored user ID '{}'.", pending.size(), userId);
+        return pending.size();
+    }
+
     /**
      * {@code DELETE /assignments/user/{userId}}: retires the user's rows the
      * caller may change ({@link UserAccountAccess#assignmentScope}). A

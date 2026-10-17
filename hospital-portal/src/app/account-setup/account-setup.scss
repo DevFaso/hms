@@ -210,6 +210,13 @@
     }
   }
 
+  &.btn-link {
+    background: transparent;
+    color: var(--primary, #0e7c6b);
+    margin-top: 0.5rem;
+    text-decoration: underline;
+  }
+
   &.btn-success {
     background: #10b981;
     color: #fff;

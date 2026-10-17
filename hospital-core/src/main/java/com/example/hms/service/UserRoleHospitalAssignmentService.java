@@ -102,6 +102,17 @@ public interface UserRoleHospitalAssignmentService {
     void deleteAllAssignmentsForUser(UUID userId);
 
     /**
+     * A restored account that was never activated: every invitation it never
+     * confirmed gets a fresh assignment and confirmation code, mailed through
+     * the usual assignment notification (the delete revoked the old codes).
+     * The rows stay inactive until the holder enters the new code. No caller
+     * check: for {@code UserService.restoreUser}, which has already decided the
+     * caller may administer the account. Never call it from a controller.
+     * Returns how many invitations were reissued.
+     */
+    int reissuePendingInvitationsForRestoredUser(UUID userId);
+
+    /**
      * {@code DELETE /assignments/user/{userId}}: retire the user's assignments
      * the caller may change. A super-admin: every row. A hospital admin: the
      * rows at hospitals they administer, never an admin role's row, and none

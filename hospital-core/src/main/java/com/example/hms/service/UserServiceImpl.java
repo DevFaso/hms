@@ -1193,6 +1193,14 @@ public class UserServiceImpl implements UserService {
             throw refused(AuditEventType.USER_DELETE, "delete", id);
         }
 
+        // Read before anything is switched off: the restore puts back this
+        // answer, since afterwards nothing on the account or its rows can
+        // tell a verified account from a pending invitee (D21).
+        // A repeat delete keeps the first answer: by then the account is
+        // already switched off and would be recorded as never activated.
+        if (!user.isDeleted()) {
+            user.setActivatedBeforeDelete(user.isActive() || hasSignedInOrConfirmed(user));
+        }
         user.setDeleted(true);
         user.setActive(false);
         // An administrator's disable: no invitation code or provider re-invite undoes it.
@@ -1228,10 +1236,24 @@ public class UserServiceImpl implements UserService {
             throw refused(AuditEventType.USER_ENABLE, "restore", id);
         }
 
+        // Restore the state before the delete, not "active". A pending invitee
+        // (never signed in, no confirmed assignment) has never proved they
+        // hold the address the invitation went to: switching them on here let
+        // them sign in with the mailed temporary password and no code (D21).
+        // They stay inactive and get a fresh code for each invitation the
+        // delete revoked; the marker is cleared so that code can activate the
+        // account, exactly as a first invitation does (V184: an inactive
+        // account without the marker is simply not activated yet).
+        Boolean recorded = user.getActivatedBeforeDelete();
+        boolean previouslyActivated = recorded != null ? recorded : wasEverActivated(user);
+        user.setActivatedBeforeDelete(null);
         user.setDeleted(false);
-        user.setActive(true);
+        user.setActive(previouslyActivated);
         user.setDeactivatedByAdminAt(null);
         userRepository.save(user);
+        if (!previouslyActivated) {
+            assignmentService.reissuePendingInvitationsForRestoredUser(user.getId());
+        }
         // A lockout collected while the account was switched off must not
         // survive it being switched on. After commit: a rollback must not
         // leave the counter cleared for an account that stayed deactivated.
@@ -1352,6 +1374,14 @@ public class UserServiceImpl implements UserService {
             user.setPasswordRotationWarningAt(null);
             user.setPasswordRotationForcedAt(null);
             user.setForcePasswordChange(false);
+            // An administrator handing out a new password means the holder
+            // should sign in with it now: the lock collected on the old one
+            // must not refuse it (D18). After commit, as above; a reactivation
+            // in the same update already registered the same clear.
+            if (!reactivated) {
+                TransactionCallbacks.afterCommit(
+                    () -> loginAttemptService.resetAttempts(reactivatedId));
+            }
         }
 
         User updated = userRepository.save(user);
@@ -1477,6 +1507,38 @@ public class UserServiceImpl implements UserService {
                 .status(AuditStatus.FAILURE)
                 .build());
         return denied;
+    }
+
+    /** The account has signed in, or one of its assignments was confirmed with its code. */
+    private boolean hasSignedInOrConfirmed(User user) {
+        return user.getLastLoginAt() != null
+                || assignmentRepository.findByUserId(user.getId()).stream()
+                        .anyMatch(a -> a.getConfirmationVerifiedAt() != null);
+    }
+
+    /**
+     * Fallback for an account deleted before V187 recorded
+     * {@code activated_before_delete}: whether it was ever switched on, guessed
+     * from what the delete left behind. A deleted account's active flag no
+     * longer says it, since the delete cleared it. Inexact for one case only:
+     * a patient verified by e-mail who never signed in still shows a sent,
+     * unconfirmed sign-up row and is restored inactive.
+     */
+    private boolean wasEverActivated(User user) {
+        if (hasSignedInOrConfirmed(user)) {
+            return true;
+        }
+        List<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUserId(user.getId());
+        // Only an account still waiting on something counts as never activated:
+        // an unused e-mail verification link, or an invitation code that was
+        // sent and never entered. An account verified by e-mail (the link
+        // clears the token but stamps no assignment) or created active by the
+        // platform waits on nothing, so it was activated.
+        if (user.getActivationToken() != null) {
+            return false;
+        }
+        return assignments.stream()
+                .noneMatch(a -> a.getConfirmationSentAt() != null && a.getConfirmationVerifiedAt() == null);
     }
 
     /** The one answer for a missing account and for one the caller may not touch. */
@@ -1670,6 +1732,49 @@ public class UserServiceImpl implements UserService {
         user.setForceUsernameChange(false);
         userRepository.save(user);
         log.info("🔑 [CHANGE-USR] Username updated and forceUsernameChange cleared for user={}", userId);
+    }
+
+    @Override
+    @Transactional
+    public void completeAccountSetup(UUID userId, String newUsername, String newPassword) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, userId));
+        if (newUsername != null) {
+            // Any letter case, deleted accounts included: the same rule as an
+            // administrator's rename (requireIdentifiersFree).
+            if (userRepository.existsUsernameOnOtherAccount(newUsername, userId)) {
+                throw new BusinessException(MessageUtil.resolve("account.setup.username.taken"));
+            }
+            user.setUsername(newUsername);
+            user.setForceUsernameChange(false);
+        }
+        String encodedPassword = null;
+        if (newPassword != null) {
+            encodedPassword = passwordEncoder.encode(newPassword);
+            user.setPasswordHash(encodedPassword);
+            user.setPasswordChangedAt(LocalDateTime.now());
+            user.setForcePasswordChange(false);
+            user.setPasswordRotationWarningAt(null);
+            user.setPasswordRotationForcedAt(null);
+        }
+        userRepository.save(user);
+        if (encodedPassword != null) {
+            passwordHistoryService.recordPassword(userId, encodedPassword);
+        }
+        // Ids only: never the username typed, never the password.
+        final boolean renamed = newUsername != null;
+        final boolean passwordChanged = newPassword != null;
+        TransactionCallbacks.afterCommit(() -> auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .userId(userId)
+                .eventType(passwordChanged ? AuditEventType.PASSWORD_CHANGED : AuditEventType.USER_UPDATE)
+                .eventDescription("First sign-in setup completed")
+                .details(Map.of("usernameChanged", renamed, "passwordChanged", passwordChanged))
+                .resourceId(userId.toString())
+                .entityType("USER")
+                .status(AuditStatus.SUCCESS)
+                .build()));
+        log.info("🔑 [ACCOUNT-SETUP] Setup completed for user={} (username={}, password={})",
+                userId, renamed, passwordChanged);
     }
 
     @Override

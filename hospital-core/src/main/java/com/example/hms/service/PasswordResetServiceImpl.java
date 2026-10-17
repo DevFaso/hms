@@ -1,10 +1,15 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.PasswordResetToken;
 import com.example.hms.model.User;
 import com.example.hms.repository.PasswordResetTokenRepository;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.security.LoginAttemptService;
+import com.example.hms.utility.TransactionCallbacks;
 import com.example.hms.utility.UserDisplayUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +38,8 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     private final PasswordResetTokenRepository tokenRepository;
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
+    private final LoginAttemptService loginAttemptService;
+    private final AuditEventLogService auditEventLogService;
     /**
      * The reset-token clock: it writes {@code expiration} and every validity
      * check and the expired-token cleanup read it back. {@code passwordChangedAt}
@@ -94,7 +101,12 @@ public class PasswordResetServiceImpl implements PasswordResetService {
             log.debug("🔗 [DEV ONLY] Reset link: {}", resetLink);
         }
 
-        log.info("🔑 Password reset link issued for: {}", user.getEmail());
+        // Ids only: never the address, the link or the token.
+        final UUID requesterId = user.getId();
+        TransactionCallbacks.afterCommit(() -> audit(AuditEventType.PASSWORD_RESET_REQUEST,
+            "Password reset link issued", requesterId));
+
+        log.info("🔑 Password reset link issued for user {}", user.getId());
     }
 
     /* ===================== CONSUME ===================== */
@@ -127,7 +139,17 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         String displayName = UserDisplayUtil.resolveDisplayName(user);
         emailService.sendPasswordResetConfirmationEmail(user.getEmail(), displayName);
 
-        log.info("✅ Password successfully reset for user: {}", user.getEmail());
+        // The holder has just proved they control the account's address: the
+        // failed attempts and the lock collected before the reset must not
+        // refuse the new password (D18). After commit, so a rollback leaves the
+        // lock in place for a password that did not change.
+        final UUID resetUserId = user.getId();
+        TransactionCallbacks.afterCommit(() -> {
+            loginAttemptService.resetAttempts(resetUserId);
+            audit(AuditEventType.PASSWORD_RESET_COMPLETE, "Password reset completed", resetUserId);
+        });
+
+        log.info("✅ Password successfully reset for user {}", user.getId());
     }
 
     /* ===================== HELPERS / OPS ===================== */
@@ -156,6 +178,17 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     }
 
     /* -------------------- local helpers -------------------- */
+
+    private void audit(AuditEventType type, String description, UUID userId) {
+        auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+            .eventType(type)
+            .eventDescription(description)
+            .userId(userId)
+            .resourceId(userId.toString())
+            .entityType("USER")
+            .status(AuditStatus.SUCCESS)
+            .build());
+    }
 
     private static String generateRawToken() {
         byte[] bytes = new byte[TOKEN_BYTES];

@@ -5046,6 +5046,15 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   `/appointments/new?date=…&time=…` (date only from an all-day month cell),
   but `AppointmentFormComponent` reads neither param, so the form opens blank
   (found in #855's review; the form side was kept out of that PR). Open.
+- **Account-flow residuals from the D17-D22 fix (fix/account-activation-flows).**
+  Pre-existing, outside that PR's diff: the `ACCOUNT_LOCKED` audit row still stores the
+  typed username (use the account id, as `LOGIN_FAILURE` now does); the legacy
+  `/auth/me/change-password` and `/auth/me/change-username` answer English sentences
+  (the setup screen no longer calls them; the profile page does); `changeOwnUsername`
+  checks uniqueness case-sensitively (the new `complete-setup` path and the admin rename
+  use `existsUsernameOnOtherAccount`). Restore edge: a never-activated account with no
+  assignment at all (a self-registered patient who never verified) comes back inactive
+  with nothing to re-send; the patient e-mail verification resend is the way in. Open.
 
 ## Open clinical questions — kept open on purpose, not forgotten
 
