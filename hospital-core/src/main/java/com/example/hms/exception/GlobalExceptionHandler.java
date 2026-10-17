@@ -253,8 +253,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Object> handleHttpMessageNotReadable(
             HttpMessageNotReadableException ex, WebRequest request) {
-        log.warn("Unreadable request body at path {}: {}",
-            request.getDescription(false), ex.getMostSpecificCause().getClass().getSimpleName());
+        if (log.isWarnEnabled()) {
+            log.warn("Unreadable request body at path {}: {}",
+                request.getDescription(false), ex.getMostSpecificCause().getClass().getSimpleName());
+        }
         String field = resolveJacksonField(ex);
         String message = field == null
             ? localized("error.request.malformed",
@@ -357,9 +359,11 @@ public class GlobalExceptionHandler {
             MethodArgumentTypeMismatchException ex, WebRequest request) {
         // The value and the Java type stay in the log (D53): the caller is
         // told which parameter, in its own language, and nothing else.
-        log.warn("Parameter type mismatch at path {}: parameter {} expected {}",
-            request.getDescription(false), ex.getName(),
-            ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "value");
+        if (log.isWarnEnabled()) {
+            log.warn("Parameter type mismatch at path {}: parameter {} expected {}",
+                request.getDescription(false), ex.getName(),
+                ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "value");
+        }
         String message = localized("error.request.invalidParameter",
             "The value supplied for the parameter \"{0}\" is not valid.", ex.getName());
         Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
