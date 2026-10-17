@@ -82,6 +82,14 @@ public class User extends BaseEntity {
     @Column(name = "deactivated_by_admin_at")
     private LocalDateTime deactivatedByAdminAt;
 
+    /**
+     * Set by a soft delete: whether the account was activated at that moment
+     * (active, signed in, or an assignment confirmed). The restore puts it
+     * back and clears it. {@code null}: not deleted, or deleted before V187.
+     */
+    @Column(name = "activated_before_delete")
+    private Boolean activatedBeforeDelete;
+
     private LocalDateTime lastLoginAt;
 
     @Column(name = "activation_token", unique = true, length = 100)

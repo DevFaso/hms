@@ -6,72 +6,53 @@
       <p class="subtitle">{{ 'SETUP.SUBTITLE' | translate }}</p>
     </div>
 
-    <!-- ── Username Section ── -->
-    @if (needsUsername()) {
-      <section class="setup-section" [class.completed]="usernameSuccess">
-        <div class="section-header">
-          <span class="material-icons section-icon">{{
-            usernameSuccess ? 'check_circle' : 'person'
-          }}</span>
-          <h2>{{ 'SETUP.CHOOSE_USERNAME' | translate }}</h2>
+    @if (done) {
+      <div class="continue-section">
+        <div class="success-message final-success" role="status">
+          <span class="material-icons" aria-hidden="true">verified</span>
+          {{ 'SETUP.DONE' | translate }}
         </div>
-
-        @if (!usernameSuccess) {
-          <p class="section-desc">
-            {{ 'SETUP.USERNAME_DESC' | translate }}
-          </p>
-          <div class="form-group">
-            <label for="newUsername">{{ 'SETUP.NEW_USERNAME' | translate }}</label>
-            <input
-              type="text"
-              id="newUsername"
-              [(ngModel)]="newUsername"
-              [placeholder]="'SETUP.USERNAME_PLACEHOLDER' | translate"
-              maxlength="50"
-              autocomplete="username"
-              [disabled]="loading"
-            />
-            <span class="form-hint">{{ 'SETUP.USERNAME_HINT' | translate }}</span>
-          </div>
-          @if (usernameError) {
-            <div class="error-message">
-              <span class="material-icons">error</span>
-              {{ usernameError }}
+        <button type="button" class="btn btn-success" (click)="signOut()">
+          {{ 'SETUP.SIGN_IN_AGAIN' | translate }}
+          <span class="material-icons" aria-hidden="true">arrow_forward</span>
+        </button>
+      </div>
+    } @else {
+      <form class="setup-form" (ngSubmit)="submit()" novalidate>
+        @if (needsUsername()) {
+          <section class="setup-section">
+            <div class="section-header">
+              <span class="material-icons section-icon" aria-hidden="true">person</span>
+              <h2>{{ 'SETUP.CHOOSE_USERNAME' | translate }}</h2>
             </div>
-          }
-          <button
-            class="btn btn-primary"
-            (click)="submitUsername()"
-            [disabled]="loading || !newUsername.trim()"
-          >
-            @if (loading) {
-              <span class="spinner"></span>
-            }
-            {{ 'SETUP.SAVE_USERNAME' | translate }}
-          </button>
-        } @else {
-          <div class="success-message">
-            <span class="material-icons">check_circle</span>
-            {{ 'SETUP.USERNAME_UPDATED' | translate: { username: newUsername } }}
-          </div>
+            <p class="section-desc">{{ 'SETUP.USERNAME_DESC' | translate }}</p>
+            <div class="form-group">
+              <label for="newUsername">{{ 'SETUP.NEW_USERNAME' | translate }}</label>
+              <input
+                type="text"
+                id="newUsername"
+                name="newUsername"
+                [(ngModel)]="newUsername"
+                [placeholder]="'SETUP.USERNAME_PLACEHOLDER' | translate"
+                maxlength="50"
+                autocomplete="username"
+                [disabled]="loading"
+              />
+              <span class="form-hint">{{ 'SETUP.USERNAME_HINT' | translate }}</span>
+            </div>
+          </section>
         }
-      </section>
-    }
 
-    <!-- ── Password Section ── -->
-    @if (needsPassword()) {
-      <section class="setup-section" [class.completed]="passwordSuccess">
-        <div class="section-header">
-          <span class="material-icons section-icon">{{
-            passwordSuccess ? 'check_circle' : 'lock'
-          }}</span>
-          <h2>{{ 'SETUP.SET_PASSWORD' | translate }}</h2>
-        </div>
-
-        @if (!passwordSuccess) {
-          <p class="section-desc">
-            {{ 'SETUP.PASSWORD_DESC' | translate }}
-          </p>
+        <section class="setup-section">
+          <div class="section-header">
+            <span class="material-icons section-icon" aria-hidden="true">lock</span>
+            <h2>
+              {{ (needsPassword() ? 'SETUP.SET_PASSWORD' : 'SETUP.CONFIRM_IDENTITY') | translate }}
+            </h2>
+          </div>
+          @if (needsPassword()) {
+            <p class="section-desc">{{ 'SETUP.PASSWORD_DESC' | translate }}</p>
+          }
 
           <div class="form-group">
             <label for="currentPassword">{{ 'SETUP.CURRENT_PASSWORD' | translate }}</label>
@@ -79,6 +60,7 @@
               <input
                 [type]="showCurrentPassword ? 'text' : 'password'"
                 id="currentPassword"
+                name="currentPassword"
                 [(ngModel)]="currentPassword"
                 [placeholder]="'SETUP.CURRENT_PLACEHOLDER' | translate"
                 autocomplete="current-password"
@@ -87,88 +69,79 @@
               <button
                 type="button"
                 class="toggle-password"
+                [attr.aria-label]="'SETUP.TOGGLE_VISIBILITY' | translate"
                 (click)="showCurrentPassword = !showCurrentPassword"
               >
-                <span class="material-icons">{{
+                <span class="material-icons" aria-hidden="true">{{
                   showCurrentPassword ? 'visibility_off' : 'visibility'
                 }}</span>
               </button>
             </div>
+            <span class="form-hint">{{ 'SETUP.CURRENT_HINT' | translate }}</span>
           </div>
 
-          <div class="form-group">
-            <label for="newPassword">{{ 'SETUP.NEW_PASSWORD' | translate }}</label>
-            <div class="password-field">
+          @if (needsPassword()) {
+            <div class="form-group">
+              <label for="newPassword">{{ 'SETUP.NEW_PASSWORD' | translate }}</label>
+              <div class="password-field">
+                <input
+                  [type]="showNewPassword ? 'text' : 'password'"
+                  id="newPassword"
+                  name="newPassword"
+                  [(ngModel)]="newPassword"
+                  [placeholder]="'SETUP.NEW_PLACEHOLDER' | translate"
+                  autocomplete="new-password"
+                  [disabled]="loading"
+                />
+                <button
+                  type="button"
+                  class="toggle-password"
+                  [attr.aria-label]="'SETUP.TOGGLE_VISIBILITY' | translate"
+                  (click)="showNewPassword = !showNewPassword"
+                >
+                  <span class="material-icons" aria-hidden="true">{{
+                    showNewPassword ? 'visibility_off' : 'visibility'
+                  }}</span>
+                </button>
+              </div>
+              <span class="form-hint">{{ 'SETUP.MIN_LENGTH' | translate }}</span>
+            </div>
+
+            <div class="form-group">
+              <label for="confirmPassword">{{ 'SETUP.CONFIRM_PASSWORD' | translate }}</label>
               <input
-                [type]="showNewPassword ? 'text' : 'password'"
-                id="newPassword"
-                [(ngModel)]="newPassword"
-                [placeholder]="'SETUP.NEW_PLACEHOLDER' | translate"
+                type="password"
+                id="confirmPassword"
+                name="confirmPassword"
+                [(ngModel)]="confirmPassword"
+                [placeholder]="'SETUP.CONFIRM_PLACEHOLDER' | translate"
                 autocomplete="new-password"
                 [disabled]="loading"
               />
-              <button
-                type="button"
-                class="toggle-password"
-                (click)="showNewPassword = !showNewPassword"
-              >
-                <span class="material-icons">{{
-                  showNewPassword ? 'visibility_off' : 'visibility'
-                }}</span>
-              </button>
-            </div>
-            <span class="form-hint">{{ 'SETUP.MIN_LENGTH' | translate }}</span>
-          </div>
-
-          <div class="form-group">
-            <label for="confirmPassword">{{ 'SETUP.CONFIRM_PASSWORD' | translate }}</label>
-            <input
-              type="password"
-              id="confirmPassword"
-              [(ngModel)]="confirmPassword"
-              [placeholder]="'SETUP.CONFIRM_PLACEHOLDER' | translate"
-              autocomplete="new-password"
-              [disabled]="loading"
-            />
-          </div>
-
-          @if (passwordError) {
-            <div class="error-message">
-              <span class="material-icons">error</span>
-              {{ passwordError }}
             </div>
           }
-          <button
-            class="btn btn-primary"
-            (click)="submitPassword()"
-            [disabled]="loading || !currentPassword || !newPassword || !confirmPassword"
-          >
-            @if (loading) {
-              <span class="spinner"></span>
-            }
-            {{ 'SETUP.SAVE_PASSWORD' | translate }}
-          </button>
-        } @else {
-          <div class="success-message">
-            <span class="material-icons">check_circle</span>
-            {{ 'SETUP.PASSWORD_UPDATED' | translate }}
+        </section>
+
+        @if (error) {
+          <div class="error-message" role="alert">
+            <span class="material-icons" aria-hidden="true">error</span>
+            <span>{{ error }}</span>
           </div>
         }
-      </section>
-    }
 
-    <!-- ── Continue Button ── -->
-    @if (allDone) {
-      <div class="continue-section">
-        <div class="success-message final-success">
-          <span class="material-icons">verified</span>
-          {{ 'SETUP.ALL_SET' | translate }}
-        </div>
-        <button class="btn btn-success" (click)="continue()">
-          {{ 'SETUP.CONTINUE' | translate }}
-          <span class="material-icons">arrow_forward</span>
+        <button type="submit" class="btn btn-primary" [disabled]="!canSubmit">
+          @if (loading) {
+            <span class="spinner"></span>
+          }
+          {{ 'SETUP.SAVE' | translate }}
         </button>
-      </div>
+
+        @if (roleNotConfirmed) {
+          <button type="button" class="btn btn-link" (click)="signOut()">
+            {{ 'SETUP.SIGN_OUT' | translate }}
+          </button>
+        }
+      </form>
     }
   </div>
 </div>

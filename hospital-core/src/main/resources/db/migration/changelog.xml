@@ -2737,6 +2737,16 @@
         <sqlFile path="V185__users_phone_e164_backfill.sql"
                  relativeToChangelogFile="true"
                  splitStatements="false"
+         V187 — security.users.activated_before_delete (PR #872, D21): the
+         soft delete records whether the account was activated, so the
+         restore brings an e-mail-verified account back active and keeps a
+         pending invitee inactive. Additive, idempotent, no DO blocks, no
+         backfill. (V185/V186 taken by other branches.)
+         ================================================================= -->
+    <changeSet id="V187-user-activated-before-delete" author="hms-team" runOnChange="false">
+        <sqlFile path="V187__user_activated_before_delete.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
                  stripComments="false"/>
     </changeSet>
 

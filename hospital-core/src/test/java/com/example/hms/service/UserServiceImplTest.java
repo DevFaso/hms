@@ -22,6 +22,8 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.security.provider.ClinicalHospitals;
 import com.example.hms.service.support.UserAccountAccess;
 import com.example.hms.utility.UserDisplayUtil;
@@ -777,7 +779,41 @@ class UserServiceImplTest {
 
             assertThat(user.isDeleted()).isTrue();
             assertThat(user.isActive()).isFalse();
+            assertThat(user.getActivatedBeforeDelete()).isTrue();
             verify(userRepository).save(user);
+        }
+
+        @Test
+        @DisplayName("D21: deleting a pending invitee records that it was never activated")
+        void recordsPendingInvitee() {
+            user.setDeleted(false);
+            user.setActive(false);
+            user.setLastLoginAt(null);
+            UserRoleHospitalAssignment pending = new UserRoleHospitalAssignment();
+            pending.setConfirmationSentAt(java.time.LocalDateTime.now().minusDays(1));
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(assignmentRepository.findByUserId(userId)).thenReturn(List.of(pending));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+
+            userService.deleteUser(userId);
+
+            assertThat(user.getActivatedBeforeDelete()).isFalse();
+        }
+
+        @Test
+        @DisplayName("D21: a second delete keeps what the first delete recorded")
+        void repeatDeleteKeepsRecordedAnswer() {
+            user.setDeleted(true);
+            user.setActive(false);
+            user.setActivatedBeforeDelete(true);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+
+            userService.deleteUser(userId);
+
+            assertThat(user.getActivatedBeforeDelete()).isTrue();
         }
 
         @Test
@@ -814,6 +850,88 @@ class UserServiceImplTest {
     }
 
     // =====================================================================
+    // completeAccountSetup (D17)
+    // =====================================================================
+
+    @Nested
+    @DisplayName("completeAccountSetup")
+    class CompleteAccountSetup {
+
+        @Test
+        @DisplayName("applies the username and the password together and clears both flags")
+        void appliesBoth() {
+            user.setUsername("invitee.tmp");
+            user.setForceUsernameChange(true);
+            user.setForcePasswordChange(true);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.existsUsernameOnOtherAccount("awa.traore", userId)).thenReturn(false);
+            when(passwordEncoder.encode("New#Pass2026")).thenReturn("enc");
+
+            userService.completeAccountSetup(userId, "awa.traore", "New#Pass2026");
+
+            assertThat(user.getUsername()).isEqualTo("awa.traore");
+            assertThat(user.getPasswordHash()).isEqualTo("enc");
+            assertThat(user.isForceUsernameChange()).isFalse();
+            assertThat(user.isForcePasswordChange()).isFalse();
+            verify(userRepository).save(user);
+            verify(passwordHistoryService).recordPassword(userId, "enc");
+            org.mockito.ArgumentCaptor<AuditEventRequestDTO> audit = org.mockito.ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+            verify(auditEventLogService).logEvent(audit.capture());
+            assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.PASSWORD_CHANGED);
+            assertThat(String.valueOf(audit.getValue())).doesNotContain("New#Pass2026").doesNotContain("awa.traore");
+        }
+
+        @Test
+        @DisplayName("a taken username changes nothing, the password included")
+        void takenUsernameChangesNothing() {
+            user.setUsername("invitee.tmp");
+            user.setForceUsernameChange(true);
+            user.setForcePasswordChange(true);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.existsUsernameOnOtherAccount("Admin", userId)).thenReturn(true);
+
+            assertThatThrownBy(() -> userService.completeAccountSetup(userId, "Admin", "New#Pass2026"))
+                    .isInstanceOf(BusinessException.class);
+
+            assertThat(user.getUsername()).isEqualTo("invitee.tmp");
+            assertThat(user.isForcePasswordChange()).isTrue();
+            verify(userRepository, never()).save(any());
+            verify(passwordEncoder, never()).encode(any());
+        }
+
+        @Test
+        @DisplayName("only the password: the username flag is left alone")
+        void passwordOnly() {
+            user.setUsername("someone");
+            user.setForceUsernameChange(false);
+            user.setForcePasswordChange(true);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(passwordEncoder.encode("New#Pass2026")).thenReturn("enc");
+
+            userService.completeAccountSetup(userId, null, "New#Pass2026");
+
+            assertThat(user.getUsername()).isEqualTo("someone");
+            assertThat(user.isForcePasswordChange()).isFalse();
+            verify(userRepository, never()).existsUsernameOnOtherAccount(any(), any());
+        }
+
+        @Test
+        @DisplayName("only the username: no password is recorded and the password flag stays as it was")
+        void usernameOnly() {
+            user.setUsername("invitee.tmp");
+            user.setForceUsernameChange(true);
+            user.setForcePasswordChange(false);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            userService.completeAccountSetup(userId, "awa.traore", null);
+
+            assertThat(user.getUsername()).isEqualTo("awa.traore");
+            assertThat(user.isForceUsernameChange()).isFalse();
+            verify(passwordHistoryService, never()).recordPassword(any(), any());
+        }
+    }
+
+    // =====================================================================
     // restoreUser
     // =====================================================================
 
@@ -826,6 +944,7 @@ class UserServiceImplTest {
         void restoresUser() {
             user.setDeleted(true);
             user.setActive(false);
+            user.setLastLoginAt(java.time.LocalDateTime.now().minusDays(3));
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
             when(staffRepository.findByUserId(userId)).thenReturn(List.of());
@@ -836,6 +955,107 @@ class UserServiceImplTest {
             assertThat(user.isDeleted()).isFalse();
             assertThat(user.isActive()).isTrue();
             verify(userRepository).save(user);
+        }
+
+        @Test
+        @DisplayName("D21: a pending invitee (never signed in, nothing confirmed) stays inactive and gets fresh codes")
+        void neverActivatedStaysInactiveAndIsReinvited() {
+            user.setDeleted(true);
+            user.setActive(false);
+            user.setLastLoginAt(null);
+            user.setDeactivatedByAdminAt(java.time.LocalDateTime.now());
+            UserRoleHospitalAssignment pending = new UserRoleHospitalAssignment();
+            pending.setActive(false);
+            pending.setConfirmationSentAt(java.time.LocalDateTime.now().minusDays(2));
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(assignmentRepository.findByUserId(userId)).thenReturn(List.of(pending));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+
+            userService.restoreUser(userId);
+
+            assertThat(user.isDeleted()).isFalse();
+            assertThat(user.isActive()).isFalse();
+            // Cleared so the fresh code can activate the account, as a first invitation does.
+            assertThat(user.getDeactivatedByAdminAt()).isNull();
+            verify(assignmentService).reissuePendingInvitationsForRestoredUser(userId);
+        }
+
+        @Test
+        @DisplayName("D21: a patient verified by e-mail who never signed in comes back active and is not re-invited")
+        void emailVerifiedPatientComesBackActive() {
+            user.setDeleted(true);
+            user.setActive(false);
+            user.setLastLoginAt(null);
+            user.setActivationToken(null);
+            user.setActivatedBeforeDelete(true); // recorded by the delete
+            UserRoleHospitalAssignment patientRow = new UserRoleHospitalAssignment();
+            patientRow.setActive(false);
+            // Exactly what sign-up leaves: a sent row the e-mail link never stamps verified.
+            patientRow.setConfirmationSentAt(java.time.LocalDateTime.now().minusDays(3));
+            patientRow.setConfirmationVerifiedAt(null);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            lenient().when(assignmentRepository.findByUserId(userId)).thenReturn(List.of(patientRow));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+
+            userService.restoreUser(userId);
+
+            assertThat(user.isActive()).isTrue();
+            assertThat(user.getActivatedBeforeDelete()).isNull();
+            verify(assignmentService, never()).reissuePendingInvitationsForRestoredUser(any());
+        }
+
+        @Test
+        @DisplayName("D21: a recorded pending invitee stays inactive even with no rows to judge by")
+        void recordedPendingInviteeStaysInactive() {
+            user.setDeleted(true);
+            user.setActive(false);
+            user.setActivatedBeforeDelete(false);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+
+            userService.restoreUser(userId);
+
+            assertThat(user.isActive()).isFalse();
+            verify(assignmentService).reissuePendingInvitationsForRestoredUser(userId);
+        }
+
+        @Test
+        @DisplayName("D21: an account with an unused verification link stays inactive")
+        void unusedVerificationLinkStaysInactive() {
+            user.setDeleted(true);
+            user.setActive(false);
+            user.setLastLoginAt(null);
+            user.setActivationToken("pending-link");
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(assignmentRepository.findByUserId(userId)).thenReturn(List.of());
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+
+            userService.restoreUser(userId);
+
+            assertThat(user.isActive()).isFalse();
+        }
+
+        @Test
+        @DisplayName("D21: an account with a confirmed assignment comes back active and is not re-invited")
+        void confirmedAssignmentComesBackActive() {
+            user.setDeleted(true);
+            user.setActive(false);
+            user.setLastLoginAt(null);
+            UserRoleHospitalAssignment confirmed = new UserRoleHospitalAssignment();
+            confirmed.setConfirmationVerifiedAt(java.time.LocalDateTime.now().minusDays(10));
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(assignmentRepository.findByUserId(userId)).thenReturn(List.of(confirmed));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+
+            userService.restoreUser(userId);
+
+            assertThat(user.isActive()).isTrue();
+            verify(assignmentService, never()).reissuePendingInvitationsForRestoredUser(any());
         }
 
         @Test
@@ -1279,6 +1499,7 @@ class UserServiceImplTest {
             target.setUsername("someone");
             target.setActive(false);
             target.setDeleted(true);
+            target.setLastLoginAt(java.time.LocalDateTime.now().minusDays(3));
             when(userRepository.findById(userId)).thenReturn(Optional.of(target));
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
             when(staffRepository.findByUserId(userId)).thenReturn(List.of());
@@ -1362,6 +1583,22 @@ class UserServiceImplTest {
             // the never() carries weight here: updateUser sets active from the
             // DTO either way, so asserting it stayed true proves nothing.
             verify(loginAttemptService, never()).resetAttempts(any());
+        }
+
+        @Test
+        @DisplayName("D18: an administrator setting a new password clears the lockout")
+        void adminPasswordSetClearsTheLockout() {
+            User target = reactivationTarget(true);
+            target.setPasswordHash("old-hash");
+            when(passwordEncoder.matches("N3w-Passw0rd!", "old-hash")).thenReturn(false);
+            when(passwordEncoder.encode("N3w-Passw0rd!")).thenReturn("new-hash");
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setPassword("N3w-Passw0rd!");
+
+            userService.updateUser(userId, dto);
+
+            assertThat(target.getPasswordHash()).isEqualTo("new-hash");
+            verify(loginAttemptService).resetAttempts(userId);
         }
 
         @Test

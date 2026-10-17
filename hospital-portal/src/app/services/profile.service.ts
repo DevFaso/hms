@@ -196,6 +196,20 @@ export class ProfileService {
     return this.http.post<{ message: string }>('/auth/me/change-username', { newUsername });
   }
 
+  /**
+   * POST /auth/me/complete-setup — the forced first sign-in in ONE call: the
+   * new username (when forced) and the new password (when forced) change
+   * together, so a rename can no longer end the session before the password
+   * is saved. The caller signs out afterwards.
+   */
+  completeSetup(body: {
+    newUsername?: string;
+    currentPassword: string;
+    newPassword?: string;
+  }): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>('/auth/me/complete-setup', body);
+  }
+
   /** PUT /auth/credentials/mfa — update MFA enrollments */
   updateMfaEnrollments(
     enrollments: { method: string; destination?: string; primary?: boolean }[],

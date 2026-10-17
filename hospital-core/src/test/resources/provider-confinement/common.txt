@@ -34,6 +34,7 @@ POST /auth/me/change-email
 POST /auth/me/change-email/confirm
 POST /auth/me/change-password
 POST /auth/me/change-username
+POST /auth/me/complete-setup
 POST /auth/mfa/enroll
 POST /auth/mfa/verify
 POST /auth/mfa/verify-enrollment
