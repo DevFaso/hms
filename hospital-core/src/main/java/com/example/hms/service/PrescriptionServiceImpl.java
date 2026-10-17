@@ -895,6 +895,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (!roleValidator.canCreatePrescription(currentUserId, hospitalId)) {
             throw new BusinessException("prescription.only.doctor.admin");
         }
+        // The staff member written as prescriber must be able to prescribe,
+        // on update as on create (D28).
+        requirePrescribingRole(staff, hospitalId);
 
         UserRoleHospitalAssignment prescriberAssignment =
             resolvePrescriberAssignmentOrThrow(staff, encounter, hospitalId);

@@ -217,6 +217,30 @@ class PrescriptionServiceImplTest {
     }
 
     @Test
+    void updatePrescriptionRefusesAPrescriberWithoutAPrescribingRole() {
+        // QA D28 on update: a doctor re-attributes their prescription to a
+        // receptionist with a PUT carrying the receptionist's staffId.
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        PrescriptionRequestDTO request = buildRequest();
+        UUID currentUser = UUID.randomUUID();
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(roleValidator.canCreatePrescription(staff.getUser().getId(), hospitalId)).thenReturn(false);
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage("The prescriber must be a doctor, nurse or midwife at this hospital.");
+
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
     void createPrescriptionWhenAuthorizedPersistsEntityAndReturnsDto() {
         PrescriptionRequestDTO request = buildRequest();
         UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
