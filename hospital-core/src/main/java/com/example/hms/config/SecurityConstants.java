@@ -62,8 +62,13 @@ public class SecurityConstants {
      * fragment for {@code hasAnyAuthority(...)}, written once: both
      * {@code UserController} annotations and {@code UserAccountAccess} read it.
      */
+    // The same authorities as POST /patients (PatientController
+    // .createPatientByReceptionist): a registrar this list admitted but that
+    // endpoint refused created a patient ACCOUNT and then got a 403 on the
+    // patient record, leaving an orphan (QA D55, the doctor). A guard test
+    // keeps the two lists equal.
     public static final String USER_REGISTRAR_AUTHORITIES =
-        "'ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE'";
+        "'ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_MIDWIFE'";
 
     /**
      * The other way into {@code POST /users/admin-register}: the administrator

@@ -99,4 +99,12 @@ public class UserResponseDTO {
     @Schema(description = "Generated one-time password, present only when it could not be delivered")
     private String temporaryPassword;
 
+    /**
+     * Registration responses only: TRUE when this call created the account,
+     * FALSE when it linked an existing one. A failed follow-up step may only
+     * discard an account it created.
+     */
+    @Schema(description = "Registration only: whether this call created the account")
+    private Boolean newAccount;
+
 }

@@ -45,6 +45,7 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
       this.query.set('');
       this.suggestions.set([]);
       this.dropdownOpen.set(false);
+      this.noMatch.set(false);
     }
   }
   @Output() selectedChange = new EventEmitter<PatientResponse | null>();
@@ -54,6 +55,8 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
   readonly suggestions = signal<PatientResponse[]>([]);
   readonly dropdownOpen = signal(false);
   readonly searchLoading = signal(false);
+  /** The last finished search found nothing (QA D68): say so, not an empty box. */
+  readonly noMatch = signal(false);
   private readonly search$ = new Subject<string>();
   private searchSub?: Subscription;
 
@@ -69,6 +72,7 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
         // unfiltered because the backend never implemented that param.
         switchMap((q) => {
           this.searchLoading.set(true);
+          this.noMatch.set(false);
           const scoped = this.patientService
             .search({ name: q, hospitalId: this.hospitalId ?? undefined, size: 8 })
             .pipe(catchError(() => of([] as PatientResponse[])));
@@ -90,6 +94,7 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
         const items = merged.slice(0, 8);
         this.suggestions.set(items);
         this.dropdownOpen.set(items.length > 0);
+        this.noMatch.set(items.length === 0);
         this.searchLoading.set(false);
       });
   }
@@ -111,6 +116,7 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
     } else {
       this.suggestions.set([]);
       this.dropdownOpen.set(false);
+      this.noMatch.set(false);
     }
   }
 
@@ -122,6 +128,7 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
   }
 
   clear(): void {
+    this.noMatch.set(false);
     this.selectedPatient.set(null);
     this.query.set('');
     this.suggestions.set([]);

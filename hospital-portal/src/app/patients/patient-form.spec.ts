@@ -202,6 +202,48 @@ describe('PatientFormComponent', () => {
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/patients', 'p9']);
   });
 
+  function fillValidForm(): void {
+    Object.assign(component.form, {
+      firstName: 'Awa',
+      lastName: 'Ouedraogo',
+      email: '',
+      phoneNumberPrimary: '+22670707070',
+      gender: 'FEMALE',
+      dateOfBirth: '1992-05-04',
+      country: 'Burkina Faso',
+      city: 'Ouagadougou',
+      hospitalId: 'h1',
+    });
+  }
+
+  it('QA D24: discards the account it just created when the patient step fails', () => {
+    userSpy.adminRegister.and.returnValue(of({ id: 'u-new', newAccount: true } as UserDetail));
+    userSpy.delete.and.returnValue(of({ message: 'ok' }));
+    patientSpy.create.and.returnValue(throwError(() => ({ status: 400, error: {} })));
+    fillValidForm();
+    component.onSubmit();
+    expect(userSpy.delete).toHaveBeenCalledWith('u-new');
+  });
+
+  it('QA D24: never deletes an existing account the registration linked', () => {
+    userSpy.adminRegister.and.returnValue(
+      of({ id: 'u-existing', newAccount: false } as UserDetail),
+    );
+    patientSpy.create.and.returnValue(throwError(() => ({ status: 400, error: {} })));
+    fillValidForm();
+    component.onSubmit();
+    expect(userSpy.delete).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalled();
+  });
+
+  it('QA D24: an answer that does not say the account is new is treated as existing', () => {
+    userSpy.adminRegister.and.returnValue(of({ id: 'u-unknown' } as UserDetail));
+    patientSpy.create.and.returnValue(throwError(() => ({ status: 400, error: {} })));
+    fillValidForm();
+    component.onSubmit();
+    expect(userSpy.delete).not.toHaveBeenCalled();
+  });
+
   it('sends and confirms an SMS verification code, then attaches the challenge to the create payload', () => {
     patientSpy.requestPhoneVerification.and.returnValue(
       of({

@@ -1,6 +1,7 @@
 package com.example.hms.controller;
 
 import java.util.Optional;
+import com.example.hms.config.SecurityConstants;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.enums.EncounterStatus;
@@ -141,14 +142,24 @@ public class ReceptionController {
 
     // ── MVP 11: Duplicate candidate detection ────────────────────────────────
 
+    // Every role the patient-registration form serves (the patient
+    // registrars, SecurityConstants.USER_REGISTRAR_AUTHORITIES): the form
+    // calls this while the registrar types, and a nurse or midwife got a 403
+    // that sent them to the error page (QA D40).
     @GetMapping("/patients/duplicate-candidates")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority(" + SecurityConstants.USER_REGISTRAR_AUTHORITIES + ",'ROLE_ADMIN')")
     @Operation(summary = "Return possible duplicate patient records ranked by confidence score")
     public ResponseEntity<List<DuplicateCandidateDTO>> getDuplicateCandidates(
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String dob,
             @RequestParam(required = false) String phone) {
         UUID hospitalId = resolveHospitalId();
+        if (hospitalId == null) {
+            // No pinned hospital (a super-admin in global view, or a caller
+            // with several hospitals and none chosen): a duplicate check has
+            // no scope, and an unscoped patient search would cross tenants.
+            return ResponseEntity.ok(List.of());
+        }
         return ResponseEntity.ok(receptionService.getDuplicateCandidates(name, dob, phone, hospitalId));
     }
 
