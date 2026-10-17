@@ -1509,8 +1509,20 @@ public class UserServiceImpl implements UserService {
         if (user.getLastLoginAt() != null) {
             return true;
         }
-        return assignmentRepository.findByUserId(user.getId()).stream()
-                .anyMatch(a -> a.getConfirmationVerifiedAt() != null);
+        List<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUserId(user.getId());
+        if (assignments.stream().anyMatch(a -> a.getConfirmationVerifiedAt() != null)) {
+            return true;
+        }
+        // Only an account still waiting on something counts as never activated:
+        // an unused e-mail verification link, or an invitation code that was
+        // sent and never entered. An account verified by e-mail (the link
+        // clears the token but stamps no assignment) or created active by the
+        // platform waits on nothing, so it was activated.
+        if (user.getActivationToken() != null) {
+            return false;
+        }
+        return assignments.stream()
+                .noneMatch(a -> a.getConfirmationSentAt() != null && a.getConfirmationVerifiedAt() == null);
     }
 
     /** The one answer for a missing account and for one the caller may not touch. */

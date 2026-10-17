@@ -931,6 +931,7 @@ class UserServiceImplTest {
             user.setDeactivatedByAdminAt(java.time.LocalDateTime.now());
             UserRoleHospitalAssignment pending = new UserRoleHospitalAssignment();
             pending.setActive(false);
+            pending.setConfirmationSentAt(java.time.LocalDateTime.now().minusDays(2));
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
             when(assignmentRepository.findByUserId(userId)).thenReturn(List.of(pending));
@@ -943,6 +944,45 @@ class UserServiceImplTest {
             // Cleared so the fresh code can activate the account, as a first invitation does.
             assertThat(user.getDeactivatedByAdminAt()).isNull();
             verify(assignmentService).reissuePendingInvitationsForRestoredUser(userId);
+        }
+
+        @Test
+        @DisplayName("D21: a patient verified by e-mail who never signed in comes back active and is not re-invited")
+        void emailVerifiedPatientComesBackActive() {
+            user.setDeleted(true);
+            user.setActive(false);
+            user.setLastLoginAt(null);
+            user.setActivationToken(null);
+            UserRoleHospitalAssignment patientRow = new UserRoleHospitalAssignment();
+            patientRow.setActive(false);
+            patientRow.setConfirmationSentAt(null);
+            patientRow.setConfirmationVerifiedAt(null);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(assignmentRepository.findByUserId(userId)).thenReturn(List.of(patientRow));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+
+            userService.restoreUser(userId);
+
+            assertThat(user.isActive()).isTrue();
+            verify(assignmentService, never()).reissuePendingInvitationsForRestoredUser(any());
+        }
+
+        @Test
+        @DisplayName("D21: an account with an unused verification link stays inactive")
+        void unusedVerificationLinkStaysInactive() {
+            user.setDeleted(true);
+            user.setActive(false);
+            user.setLastLoginAt(null);
+            user.setActivationToken("pending-link");
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(assignmentRepository.findByUserId(userId)).thenReturn(List.of());
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+
+            userService.restoreUser(userId);
+
+            assertThat(user.isActive()).isFalse();
         }
 
         @Test

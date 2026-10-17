@@ -106,6 +106,37 @@ describe('AccountSetupComponent', () => {
     expect(router.navigateByUrl).toHaveBeenCalledWith('/login');
   }));
 
+  it('signs out once when the user leaves before the delayed sign-out', fakeAsync(() => {
+    profiles.completeSetup.and.returnValue(of({ message: 'ok' }));
+    const fixture = create(profile({ forcePasswordChange: true }));
+    const c = fixture.componentInstance;
+    fill(c, {
+      currentPassword: 'Temp-Pass-1!',
+      newPassword: 'Brand-New-2!',
+      confirmPassword: 'Brand-New-2!',
+    });
+    c.submit();
+
+    c.signOut();
+    tick(SETUP_SIGN_OUT_DELAY_MS);
+    expect(auth.logout).toHaveBeenCalledTimes(1);
+  }));
+
+  it('cancels the delayed sign-out when the page is destroyed', fakeAsync(() => {
+    profiles.completeSetup.and.returnValue(of({ message: 'ok' }));
+    const fixture = create(profile({ forcePasswordChange: true }));
+    fill(fixture.componentInstance, {
+      currentPassword: 'Temp-Pass-1!',
+      newPassword: 'Brand-New-2!',
+      confirmPassword: 'Brand-New-2!',
+    });
+    fixture.componentInstance.submit();
+
+    fixture.destroy();
+    tick(SETUP_SIGN_OUT_DELAY_MS);
+    expect(auth.logout).not.toHaveBeenCalled();
+  }));
+
   it('sends no username when only the password is forced', () => {
     profiles.completeSetup.and.returnValue(of({ message: 'ok' }));
     const c = create(profile({ forcePasswordChange: true })).componentInstance;

@@ -1201,6 +1201,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     public int reissuePendingInvitationsForRestoredUser(UUID userId) {
         List<UserRoleHospitalAssignment> pending = assignmentRepository.findByUserId(userId).stream()
             .filter(a -> a.getConfirmationVerifiedAt() == null)
+            // Only invitations that went out as a code: a patient row activated
+            // by the e-mail link never had one and must not get staff mail.
+            .filter(a -> a.getConfirmationSentAt() != null)
             .toList();
         for (UserRoleHospitalAssignment assignment : pending) {
             reissueCode(assignment, true);

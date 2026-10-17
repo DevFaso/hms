@@ -711,6 +711,12 @@ class UserRoleHospitalAssignmentServiceImplTest {
         assignment.setActive(false);
         assignment.setConfirmationCode(null); // revoked by the delete
         assignment.setConfirmationVerifiedAt(null);
+        assignment.setConfirmationSentAt(java.time.LocalDateTime.now().minusDays(1));
+        UserRoleHospitalAssignment linkOnly = new UserRoleHospitalAssignment();
+        linkOnly.setId(UUID.randomUUID());
+        linkOnly.setUser(assignee);
+        linkOnly.setHospital(hospital);
+        linkOnly.setConfirmationSentAt(null); // a patient row activated by the e-mail link
         UserRoleHospitalAssignment confirmed = new UserRoleHospitalAssignment();
         confirmed.setId(UUID.randomUUID());
         confirmed.setUser(assignee);
@@ -718,7 +724,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
         confirmed.setConfirmationVerifiedAt(java.time.LocalDateTime.now().minusDays(5));
         confirmed.setConfirmationCode(null);
         org.mockito.Mockito.when(assignmentRepository.findByUserId(assignee.getId()))
-            .thenReturn(java.util.List.of(assignment, confirmed));
+            .thenReturn(java.util.List.of(assignment, linkOnly, confirmed));
         org.mockito.Mockito.when(assignmentRepository.save(org.mockito.ArgumentMatchers.any(UserRoleHospitalAssignment.class)))
             .thenAnswer(inv -> inv.getArgument(0));
 
@@ -728,6 +734,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
         org.assertj.core.api.Assertions.assertThat(assignment.getConfirmationCode()).isNotBlank();
         org.assertj.core.api.Assertions.assertThat(assignment.getActive()).isFalse();
         org.assertj.core.api.Assertions.assertThat(confirmed.getConfirmationCode()).isNull();
+        org.assertj.core.api.Assertions.assertThat(linkOnly.getConfirmationCode()).isNull();
         org.mockito.Mockito.verify(eventPublisher)
             .publishEvent(org.mockito.ArgumentMatchers.any(com.example.hms.event.AssignmentCreatedEvent.class));
     }

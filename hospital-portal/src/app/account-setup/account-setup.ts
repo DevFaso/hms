@@ -1,4 +1,11 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -33,6 +40,11 @@ export class AccountSetupComponent implements OnInit {
   private readonly profileService = inject(ProfileService);
   private readonly router = inject(Router);
   private readonly translate = inject(TranslateService);
+  private signOutTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => this.clearSignOutTimer());
+  }
 
   needsUsername = signal(false);
   needsPassword = signal(false);
@@ -112,7 +124,7 @@ export class AccountSetupComponent implements OnInit {
           this.currentPassword = '';
           this.newPassword = '';
           this.confirmPassword = '';
-          setTimeout(() => this.signOut(), SETUP_SIGN_OUT_DELAY_MS);
+          this.signOutTimer = setTimeout(() => this.signOut(), SETUP_SIGN_OUT_DELAY_MS);
         },
         error: (err: unknown) => {
           this.loading = false;
@@ -123,8 +135,16 @@ export class AccountSetupComponent implements OnInit {
 
   /** Leave now: sign in again with the new details. */
   signOut(): void {
+    this.clearSignOutTimer();
     this.auth.logout();
     void this.router.navigateByUrl('/login');
+  }
+
+  private clearSignOutTimer(): void {
+    if (this.signOutTimer !== null) {
+      clearTimeout(this.signOutTimer);
+      this.signOutTimer = null;
+    }
   }
 
   private showError(err: unknown): void {
