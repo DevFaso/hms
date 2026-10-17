@@ -337,6 +337,42 @@ class PatientServiceImplTest {
     }
 
     @Test
+    void createPatientKeepsTheRecordActiveWhileTheAccountAwaitsActivation() {
+        // QA D27: the record used to copy the pending account's state and so
+        // vanished from every clinical picker until the patient signed in.
+        UUID userId = UUID.randomUUID();
+        PatientRequestDTO request = PatientRequestDTO.builder().userId(userId).hospitalId(hospitalId).build();
+        User pending = new User();
+        pending.setId(userId);
+        pending.setActive(false);
+        Patient savedPatient = new Patient();
+        savedPatient.setId(patientId);
+        savedPatient.setHospitalRegistrations(new java.util.HashSet<>());
+        PatientHospitalRegistration registration = new PatientHospitalRegistration();
+        registration.setPatient(savedPatient);
+        registration.setHospital(hospital);
+        registration.setMrn("HSP0002");
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(pending));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(patientRepository.findByUserId(userId)).thenReturn(Optional.empty());
+        when(patientMapper.toPatient(request, pending)).thenReturn(savedPatient);
+        when(patientRepository.save(savedPatient)).thenReturn(savedPatient);
+        when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
+            .thenReturn(Optional.empty());
+        when(registrationRepository.existsByMrnAndHospitalId(anyString(), eq(hospitalId))).thenReturn(false);
+        when(registrationRepository.save(any(PatientHospitalRegistration.class))).thenReturn(registration);
+        when(patientMapper.toPatientDTO(savedPatient, hospitalId))
+            .thenReturn(PatientResponseDTO.builder().id(patientId).build());
+        when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+
+        patientService.createPatient(request, Locale.ENGLISH);
+
+        assertThat(savedPatient.isActive()).isTrue();
+        verify(patientRepository).save(savedPatient);
+    }
+
+    @Test
     void createPatientByStaffStampsPhoneVerifiedWhenChallengeConsumes() {
         UUID userId = UUID.randomUUID();
         UUID challengeId = UUID.randomUUID();

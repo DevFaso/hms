@@ -372,19 +372,29 @@ public class UserServiceImpl implements UserService {
         // a patient registration carrying a clinician's licence must not reach it.
         final String lic = resolveLicenseNumber(request);
 
-        final Optional<User> existingByIdentity = findExistingByIdentity(username, email, phone);
+        // Staff identifiers were refused at 0a, so only a patient registration
+        // can land on an existing account here, and 0a has already refused a
+        // staff one.
+        final Optional<User> existingByIdentity = isPatient
+                ? findExistingByIdentity(email, phone)
+                : Optional.empty();
         final Optional<User> existingByLicense = lic != null && requiresStaff
                 ? staffRepository.findUserIdByLicense(lic).flatMap(userRepository::findById)
                 : Optional.empty();
 
         final boolean newUserCreated = existingByIdentity.isEmpty() && existingByLicense.isEmpty();
         final boolean passwordSupplied = request.getPassword() != null && !request.getPassword().isBlank();
+        final boolean reclaimed = existingByIdentity.map(this::isDiscardedRegistration).orElse(false);
         final User user = existingByIdentity.or(() -> existingByLicense)
-                .orElseGet(() -> createNewUser(request, username, email, phone, roles));
+                .orElseGet(() -> createNewUser(request, request.getUsername(), email, phone, roles));
+        if (reclaimed) {
+            reclaimDiscardedRegistration(user, request);
+        }
         // Only a password the SERVER generated is ever delivered to the user
         // (mail, SMS or the one-time response). An admin-typed password is
         // never sent anywhere: the admin already knows it.
-        final String generatedPassword = newUserCreated && !passwordSupplied ? request.getPassword() : null;
+        final String generatedPassword = (newUserCreated || reclaimed) && !passwordSupplied
+                ? request.getPassword() : null;
 
         // Re-registration after a frontend compensation delete: the previous
         // attempt soft-deleted the user (FE rolls back when /api/patients
@@ -394,12 +404,21 @@ public class UserServiceImpl implements UserService {
         // save" diagnostic.
         restoreIfSoftDeleted(user);
 
-        applyForcePasswordChangeIfReturning(user, newUserCreated, request);
+        // A returning patient's credentials are theirs: a registrar linking
+        // them at another hospital never rotates them.
+        if (!isPatient) {
+            applyForcePasswordChangeIfReturning(user, newUserCreated, request);
+        }
 
         // ---- 4) Ensure roles + hospital-scoped assignments ----
         final List<UserRoleHospitalAssignment> ensuredAssignments =
                 ensureRolesAndAssignments(user, roles, staffContextHospitalId,
                         welcomeMailCarriesCode(newUserCreated, isPatient, roles));
+        if (reclaimed) {
+            // The discard revoked the invitation's code: a fresh one, sent
+            // with the new credentials set below (step 4a).
+            assignmentService.reissuePendingInvitationsForRestoredUser(user.getId());
+        }
 
         // ---- 4a) Forward temp password to the PATIENT assignment ----
         // The assignment notification email (AFTER_COMMIT) will expose these
@@ -424,6 +443,9 @@ public class UserServiceImpl implements UserService {
 
         // ---- 6) Reload + map ----
         final UserResponseDTO result = reloadAndMap(user.getId());
+        // The portal's compensation delete after a failed patient step may
+        // only discard an account THIS call created (QA D24).
+        result.setNewAccount(newUserCreated || reclaimed);
 
         // ---- 6a) Generated credentials nobody can deliver ----
         // No e-mail on file and no real SMS transport: the staff UI shows them
@@ -827,11 +849,78 @@ public class UserServiceImpl implements UserService {
      * null argument into an {@code email IS NULL} predicate, matching every
      * email-less (phone-first) user — cross-patient account merges would follow.
      */
-    private Optional<User> findExistingByIdentity(String username, String email, String phone) {
-        Optional<User> found = (email == null || email.isBlank())
-            ? userRepository.findFirstByUsernameIgnoreCaseOrPhoneNumber(username, phone)
-            : userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(username, email, phone);
-        return found.isPresent() || phone == null ? found : findByPhoneInAnyForm(phone);
+    private Optional<User> findExistingByIdentity(String email, String phone) {
+        // Only an identifier the request actually carries is ever looked up.
+        // The derived OR queries this used to call turned a null phone into a
+        // `phone_number IS NULL` predicate, so a patient registered with an
+        // email and no phone matched the first phone-less account on the
+        // platform - a staff member (QA D24). The username is not an identity
+        // at all: the portal generates a random one per registration, and a
+        // collision with someone else's must never merge two people.
+        if (email != null && !email.isBlank()) {
+            Optional<User> byEmail = userRepository.findByEmail(email);
+            if (byEmail.isPresent()) {
+                return byEmail;
+            }
+        }
+        return findByPhoneInAnyForm(phone);
+    }
+
+    /**
+     * An account a registration created and then discarded itself: a
+     * soft-deleted patient account that was never activated and never got a
+     * patient record (the portal's compensation delete after a failed patient
+     * step). Anything else soft-deleted stays an administrator's to restore.
+     */
+    private boolean isDiscardedRegistration(User existing) {
+        return existing != null
+                && existing.isDeleted()
+                && !Boolean.TRUE.equals(existing.getActivatedBeforeDelete())
+                && existing.getLastLoginAt() == null
+                && !patientRepository.existsByUserId(existing.getId());
+    }
+
+    /**
+     * Fresh one-time credentials for a reclaimed registration: the discarded
+     * attempt's temporary password was revoked with its invitation and was
+     * never delivered with a working code.
+     */
+    private void reclaimDiscardedRegistration(User user, AdminSignupRequest request) {
+        String rawPassword = request.getPassword();
+        if (rawPassword == null || rawPassword.isBlank()) {
+            rawPassword = generateTempPassword();
+        }
+        request.setPassword(rawPassword);
+        LocalDateTime now = LocalDateTime.now();
+        user.setPasswordHash(passwordEncoder.encode(rawPassword));
+        user.setPasswordChangedAt(now);
+        user.setForcePasswordChange(true);
+        user.setForceUsernameChange(true);
+        user.setActive(false);
+        userRepository.save(user);
+    }
+
+    /**
+     * A patient registration may link an existing PATIENT account (Epic-style,
+     * one person across hospitals), never a staff one: no ROLE_PATIENT is ever
+     * added to, no password change forced on, and no activation message sent
+     * to an account that holds a staff role or a staff record (QA D24). The
+     * registrar gets a conflict naming the field; the person is registered
+     * with a different email or phone.
+     */
+    private void refuseStaffAccountForPatient(User existing, String email) {
+        if (existing == null) {
+            return;
+        }
+        boolean staffAccount = staffRepository.existsByUserId(existing.getId())
+                || assignmentRepository.existsByUserIdAndRole_CodeNot(existing.getId(), ROLE_PATIENT);
+        if (!staffAccount) {
+            return;
+        }
+        boolean byEmail = email != null && email.equalsIgnoreCase(existing.getEmail());
+        throw new ConflictException(byEmail
+                ? "email:This email belongs to a staff account and cannot be used for a patient."
+                : "phone:This phone number belongs to a staff account and cannot be used for a patient.");
     }
 
     /**
@@ -871,8 +960,21 @@ public class UserServiceImpl implements UserService {
 
     private void checkPatientAlreadyAtHospital(String username, String email, String phone,
                                                 AdminSignupRequest request) {
-        Optional<User> existing = findExistingByIdentity(username, email, phone);
+        Optional<User> existing = findExistingByIdentity(email, phone);
         if (existing.isEmpty()) {
+            // A new person. A requested username someone else already holds
+            // is dropped so the server generates one, instead of the
+            // registration either failing or merging into that account.
+            if (username != null && userRepository.findByUsernameIgnoreCase(username).isPresent()) {
+                request.setUsername(null);
+            }
+            return;
+        }
+        refuseStaffAccountForPatient(existing.get(), email);
+        if (isDiscardedRegistration(existing.get())) {
+            // The registrar's own earlier attempt, discarded when its patient
+            // step failed: the retry reclaims it (QA D40), instead of a 409
+            // "already registered" against an account nobody can see.
             return;
         }
         UUID targetHospitalId = resolveHospitalForPatient(request);
@@ -1014,7 +1116,7 @@ public class UserServiceImpl implements UserService {
         if (principal == null || principal.isBlank()) {
             return Optional.empty();
         }
-        return userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(principal, principal, null);
+        return userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(principal, principal, principal);
     }
 
     private UUID resolveActorAssignmentId(User actor) {
@@ -1740,6 +1842,9 @@ public class UserServiceImpl implements UserService {
     public void completeAccountSetup(UUID userId, String newUsername, String newPassword) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, userId));
+        // The holder may keep the name they were given (QA D52): that clears
+        // the flag without a rename.
+        final boolean renamed = newUsername != null && !newUsername.equals(user.getUsername());
         if (newUsername != null) {
             // Any letter case, deleted accounts included: the same rule as an
             // administrator's rename (requireIdentifiersFree).
@@ -1763,7 +1868,6 @@ public class UserServiceImpl implements UserService {
             passwordHistoryService.recordPassword(userId, encodedPassword);
         }
         // Ids only: never the username typed, never the password.
-        final boolean renamed = newUsername != null;
         final boolean passwordChanged = newPassword != null;
         TransactionCallbacks.afterCommit(() -> auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .userId(userId)

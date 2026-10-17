@@ -70,6 +70,10 @@ export class AccountSetupComponent implements OnInit {
       return;
     }
     this.needsUsername.set(!!profile.forceUsernameChange);
+    // Offered as the default: keeping it is a valid choice (QA D52).
+    if (this.needsUsername()) {
+      this.newUsername = profile.username ?? '';
+    }
     this.needsPassword.set(!!profile.forcePasswordChange);
 
     if (!this.needsUsername() && !this.needsPassword()) {
