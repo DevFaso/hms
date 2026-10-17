@@ -152,6 +152,7 @@ public class EmailServiceImpl implements EmailService {
     private static final String COLOR_BRAND_TINT = "#bfdbfe";
     private static final String KEY_BRAND = "email.common.brand";
     private static final String KEY_GREETING_HI = "email.common.greeting.hi";
+    private static final String KEY_ROLE_ASSIGNMENT_EXPIRY = "email.role.assignment.body.expiry";
     private static final String KEY_GREETING_DEAR = "email.common.greeting.dear";
     private static final String KEY_GREETING_ANONYMOUS = "email.common.greeting.anonymous";
     private static final String KEY_SIGNIN_BUTTON = "email.common.signin.button";
@@ -523,7 +524,7 @@ public class EmailServiceImpl implements EmailService {
                 + credentialsSection
                 + paragraph(HTML_STRONG_OPEN + text(l, "email.role.assignment.body.inactive") + HTML_STRONG_CLOSE)
                 + paragraph(text(l, "email.role.assignment.body.unexpected"))
-                + "<p style=\"color:#666\">" + text(l, "email.role.assignment.body.expiry") + CLOSE_PARAGRAPH;
+                + "<p style=\"color:#666\">" + text(l, KEY_ROLE_ASSIGNMENT_EXPIRY) + CLOSE_PARAGRAPH;
         }
 
         sendHtml(List.of(to), List.of(), List.of(), subject, body);
@@ -1015,7 +1016,7 @@ public class EmailServiceImpl implements EmailService {
               + "background:#f8fafc;border:2px dashed #2563eb;border-radius:8px;padding:16px;margin:16px 0;\">"
               + escapeHtml(confirmationCode) + CLOSE_PARAGRAPH
               + "<p style=\"color:#64748b;font-size:13px;text-align:center;margin:0 0 16px;\">"
-              + text(l, "email.role.assignment.body.expiry") + CLOSE_PARAGRAPH
+              + text(l, KEY_ROLE_ASSIGNMENT_EXPIRY) + CLOSE_PARAGRAPH
             : "";
         String bodyContent = "<div style=\"padding:32px 40px;\">"
             + "<p style=\"color:#1e293b;font-size:16px;margin-top:0;\">" + greeting + CLOSE_PARAGRAPH
@@ -1105,7 +1106,7 @@ public class EmailServiceImpl implements EmailService {
             + CLOSE_PARAGRAPH
             + roleBlocks
             + "<p style=\"color:#64748b;font-size:13px;text-align:center;margin:0 0 16px;\">"
-            + text(l, "email.role.assignment.body.expiry") + CLOSE_PARAGRAPH
+            + text(l, KEY_ROLE_ASSIGNMENT_EXPIRY) + CLOSE_PARAGRAPH
             + "<div style=\"background:#eff6ff;border:2px solid #bfdbfe;border-radius:10px;"
             + "padding:20px 24px;margin:24px 0;\">"
             + "<p style=\"margin:0 0 12px;font-weight:700;color:#1e3a8a;font-size:14px;"
