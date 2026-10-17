@@ -174,6 +174,16 @@ public class LabTestDefinition extends BaseEntity {
     @Column(name = "rejection_reason", length = 2048)
     private String rejectionReason;
 
+    /**
+     * D48: a test may be ordered only once the approval workflow has made it
+     * ACTIVE (and nobody has switched it off). A DRAFT, a definition still in
+     * review, a rejected or a retired one is not orderable, whatever the
+     * {@code active} flag says.
+     */
+    public boolean isOrderable() {
+        return active && approvalStatus == LabTestDefinitionApprovalStatus.ACTIVE;
+    }
+
     @PrePersist
     @PreUpdate
     private void validate() {

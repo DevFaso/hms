@@ -4,6 +4,7 @@ import static com.example.hms.config.SecurityConstants.*;
 
 import com.example.hms.enums.LabTestDefinitionApprovalStatus;
 import com.example.hms.mapper.LabTestDefinitionMapper;
+import com.example.hms.model.Hospital;
 import com.example.hms.model.LabTestDefinition;
 import com.example.hms.model.LabTestReferenceRange;
 import com.example.hms.model.User;
@@ -13,6 +14,7 @@ import com.example.hms.payload.dto.LabTestDefinitionApprovalRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionResponseDTO;
 import com.example.hms.payload.dto.LabTestReferenceRangeDTO;
+import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -60,6 +62,11 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
     private final LabTestDefinitionMapper mapper;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final UserRepository userRepository;
+    private final HospitalRepository hospitalRepository;
+
+    /** Roles that may author or edit a definition AT a hospital (D30: checked at that hospital). */
+    private static final Set<String> HOSPITAL_MANAGE_ROLES = Set.of(
+        ROLE_HOSPITAL_ADMIN, ROLE_LAB_MANAGER, ROLE_SUPER_ADMIN, ROLE_LAB_SCIENTIST, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER);
 
     @Override
     public LabTestDefinitionResponseDTO create(LabTestDefinitionRequestDTO dto) {
@@ -71,37 +78,71 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         User currentUser = userRepository.findByUsername(username)
             .orElseThrow(() -> new AccessDeniedException(CURRENT_USER_RESOLUTION_ERROR));
 
+        // D30: a definition belongs to the hospital it was authored at. It was
+        // saved with hospital_id NULL whatever the caller sent - a global row
+        // every other tenant read, whose own author then got 403 on its
+        // reference ranges because global rows are super-admin only.
         UserRoleHospitalAssignment assignment = null;
+        Hospital hospital = null;
         if (dto.getAssignmentId() != null) {
             assignment = assignmentRepository.findById(dto.getAssignmentId())
                 .orElseThrow(() -> new EntityNotFoundException(ASSIGNMENT_NOT_FOUND));
-            assertUserCanManageHospital(currentUser, assignment);
-        } else {
-            assertUserCanManageGlobal(currentUser);
+            assertOwnAssignment(currentUser, assignment);
+            hospital = assignment.getHospital();
+            if (hospital == null) {
+                throw new IllegalStateException("Assignment is not linked to a hospital");
+            }
+            assertWithinActiveScope(currentUser, hospital.getId());
+            assertUserCanManageHospitalId(currentUser, hospital.getId());
+        } else if (!isSuperAdmin(currentUser)) {
+            // No assignment named: the active hospital is the scope. Only a
+            // super-admin creates a global (hospital-less) definition.
+            UUID activeHospitalId = activeHospitalId();
+            if (activeHospitalId == null) {
+                throw new AccessDeniedException("Only Super Admins may manage global lab test definitions.");
+            }
+            assertUserCanManageHospitalId(currentUser, activeHospitalId);
+            hospital = hospitalRepository.findById(activeHospitalId)
+                .orElseThrow(() -> new EntityNotFoundException("Hospital not found"));
         }
 
         dto.setLoincCode(TerminologyCodes.normalizeAndRequireValidLoinc(dto.getLoincCode()));
         LabTestDefinition entity = mapper.toEntity(dto, assignment);
-        entity.setHospital(null);
+        entity.setHospital(hospital);
         return mapper.toDto(repository.save(entity));
     }
 
     @Override
     public LabTestDefinitionResponseDTO getById(UUID id) {
-        return mapper.toDto(repository.findById(id)
-            .orElseThrow(() -> new EntityNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND)));
+        LabTestDefinition definition = repository.findById(id)
+            .filter(LabTestDefinitionServiceImpl::isVisibleToCaller)
+            .orElseThrow(() -> new EntityNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
+        return mapper.toDto(definition);
     }
 
+    /**
+     * D30: the catalog a caller reads is the global rows plus their active
+     * hospital's own. A super-admin in global view (no active hospital) reads
+     * every row; anyone else with no active hospital reads the global rows.
+     */
     @Override
     public List<LabTestDefinitionResponseDTO> getAll() {
-        return repository.findAll()
-                .stream()
+        HospitalContext context = HospitalContextHolder.getContextOrEmpty();
+        UUID activeHospitalId = context.getActiveHospitalId();
+        List<LabTestDefinition> rows = context.isSuperAdmin() && activeHospitalId == null
+            ? repository.findAll()
+            : repository.findVisibleAt(activeHospitalId);
+        return rows.stream()
                 .map(mapper::toDto)
                 .toList();
     }
 
     @Override
     public List<LabTestDefinitionResponseDTO> getActiveByHospital(UUID hospitalId) {
+        // The path id is a claim, not a scope.
+        if (hospitalId != null && !mayReadHospital(HospitalContextHolder.getContextOrEmpty(), hospitalId)) {
+            throw new AccessDeniedException("Not permitted to read this hospital's lab test catalog.");
+        }
         List<LabTestDefinition> globalDefinitions = repository.findByHospitalIsNullAndActiveTrue();
         List<LabTestDefinition> hospitalDefinitions = hospitalId != null
             ? repository.findByHospital_IdAndActiveTrue(hospitalId)
@@ -128,28 +169,26 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         LabTestDefinition existing = repository.findById(id)
             .orElseThrow(() -> new EntityNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
 
-        if (isGlobalDefinition(existing)) {
-            assertUserCanManageGlobal(currentUser);
-        } else {
-            assertUserCanManageHospital(currentUser, existing.getAssignment());
-        }
+        assertCanManage(currentUser, existing);
 
         dto.setLoincCode(TerminologyCodes.normalizeAndRequireValidLoinc(dto.getLoincCode()));
 
-        if (dto.getAssignmentId() != null) {
-            if (existing.getAssignment() == null
-                || !dto.getAssignmentId().equals(existing.getAssignment().getId())) {
-                UserRoleHospitalAssignment assignment = assignmentRepository.findById(dto.getAssignmentId())
-                    .orElseThrow(() -> new EntityNotFoundException(ASSIGNMENT_NOT_FOUND));
-                assertUserCanManageHospital(currentUser, assignment);
-                existing.setAssignment(assignment);
+        // D30: an edit never moves a definition between hospitals (or into the
+        // global catalog) - it used to null hospital_id on every save. A new
+        // owning assignment must be the caller's own, at the same hospital.
+        if (dto.getAssignmentId() != null
+            && (existing.getAssignment() == null
+                || !dto.getAssignmentId().equals(existing.getAssignment().getId()))) {
+            UserRoleHospitalAssignment assignment = assignmentRepository.findById(dto.getAssignmentId())
+                .orElseThrow(() -> new EntityNotFoundException(ASSIGNMENT_NOT_FOUND));
+            assertOwnAssignment(currentUser, assignment);
+            UUID assignmentHospitalId = assignment.getHospital() != null ? assignment.getHospital().getId() : null;
+            UUID definitionHospitalId = existing.getHospital() != null ? existing.getHospital().getId() : null;
+            if (!Objects.equals(assignmentHospitalId, definitionHospitalId)) {
+                throw new AccessDeniedException("A lab test definition cannot be moved to another hospital.");
             }
-        } else if (existing.getAssignment() != null) {
-            assertUserCanManageGlobal(currentUser);
-            existing.setAssignment(null);
-            existing.setHospital(null);
+            existing.setAssignment(assignment);
         }
-        existing.setHospital(null);
         mapper.updateEntityFromDto(dto, existing);
         return mapper.toDto(repository.save(existing));
     }
@@ -165,11 +204,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
         LabTestDefinition existing = repository.findById(id)
             .orElseThrow(() -> new EntityNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
-        if (isGlobalDefinition(existing)) {
-            assertUserCanManageGlobal(currentUser);
-        } else {
-            assertUserCanManageHospital(currentUser, existing.getAssignment());
-        }
+        assertCanManage(currentUser, existing);
         Objects.requireNonNull(existing, "Lab Test Definition reference cannot be null");
         repository.delete(existing);
     }
@@ -177,7 +212,11 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
     @Override
     public Page<LabTestDefinitionResponseDTO> search(String keyword, String unit, String category, Boolean active, LabTestDefinitionApprovalStatus approvalStatus, Pageable pageable) {
         Pageable normalizedPageable = normalizePageable(pageable);
-        return repository.search(keyword, unit, category, active, approvalStatus, normalizedPageable)
+        HospitalContext context = HospitalContextHolder.getContextOrEmpty();
+        UUID activeHospitalId = context.getActiveHospitalId();
+        boolean everyHospital = context.isSuperAdmin() && activeHospitalId == null;
+        return repository.search(keyword, unit, category, active, approvalStatus,
+                everyHospital, activeHospitalId, normalizedPageable)
                 .map(mapper::toDto);
     }
 
@@ -230,24 +269,64 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         };
     }
 
-    private void assertUserCanManageHospital(User currentUser, UserRoleHospitalAssignment assignment) {
-        if (assignment == null || assignment.getHospital() == null) {
-            throw new IllegalStateException("Assignment is not linked to a hospital");
+    /** D30: authority over a definition is decided at ITS hospital, not by who created it. */
+    private void assertCanManage(User currentUser, LabTestDefinition definition) {
+        if (isGlobalDefinition(definition)) {
+            assertUserCanManageGlobal(currentUser);
+        } else {
+            assertUserCanManageHospitalId(currentUser, definition.getHospital().getId());
         }
+    }
 
-        if (assignment.getUser() != null && assignment.getUser().getId().equals(currentUser.getId())) {
+    private void assertUserCanManageHospitalId(User currentUser, UUID hospitalId) {
+        if (isSuperAdmin(currentUser)) {
             return;
         }
-
-        boolean hasElevatedRole = assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
-            currentUser.getId(),
-            assignment.getHospital().getId(),
-            Set.of(ROLE_HOSPITAL_ADMIN, ROLE_LAB_MANAGER, ROLE_SUPER_ADMIN, ROLE_LAB_SCIENTIST, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER)
-        );
-
-        if (!hasElevatedRole) {
+        if (hospitalId == null || !assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                currentUser.getId(), hospitalId, HOSPITAL_MANAGE_ROLES)) {
             throw new AccessDeniedException("Unauthorized to manage lab tests for this hospital.");
         }
+    }
+
+    /** The assignment a definition is filed under must be the caller's own (a super-admin may name any). */
+    private void assertOwnAssignment(User currentUser, UserRoleHospitalAssignment assignment) {
+        if (isSuperAdmin(currentUser)) {
+            return;
+        }
+        if (assignment.getUser() == null || !currentUser.getId().equals(assignment.getUser().getId())) {
+            throw new AccessDeniedException("Unauthorized to manage lab tests for this hospital.");
+        }
+    }
+
+    /** A caller pinned to a hospital may not author into another one by naming its assignment. */
+    private void assertWithinActiveScope(User currentUser, UUID hospitalId) {
+        UUID activeHospitalId = activeHospitalId();
+        if (activeHospitalId != null && !activeHospitalId.equals(hospitalId) && !isSuperAdmin(currentUser)) {
+            throw new AccessDeniedException("The assignment does not belong to the active hospital.");
+        }
+    }
+
+    private static UUID activeHospitalId() {
+        return HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
+    }
+
+    private boolean isSuperAdmin(User user) {
+        return hasAnyRole(user, Set.of(ROLE_SUPER_ADMIN, "SUPER_ADMIN"));
+    }
+
+    private static boolean isVisibleToCaller(LabTestDefinition definition) {
+        if (definition.getHospital() == null) {
+            return true;
+        }
+        return mayReadHospital(HospitalContextHolder.getContextOrEmpty(), definition.getHospital().getId());
+    }
+
+    private static boolean mayReadHospital(HospitalContext context, UUID hospitalId) {
+        UUID activeHospitalId = context.getActiveHospitalId();
+        if (context.isSuperAdmin() && activeHospitalId == null) {
+            return true;
+        }
+        return hospitalId.equals(activeHospitalId);
     }
 
     private void assertUserCanManageGlobal(User currentUser) {
@@ -295,33 +374,33 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
         switch (action) {
             case "SUBMIT_FOR_QA" -> {
-                assertHasAnyRole(currentUser, Set.of(ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
+                assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.DRAFT, LabTestDefinitionApprovalStatus.REJECTED));
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
                 definition.setRejectionReason(null);
             }
             case "COMPLETE_QA_REVIEW" -> {
-                assertHasAnyRole(currentUser, Set.of(ROLE_QUALITY_MANAGER, ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
+                assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_QUALITY_MANAGER, ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW));
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
                 definition.setReviewedById(currentUser.getId());
                 definition.setReviewedAt(LocalDateTime.now());
             }
             case "APPROVE" -> {
-                assertHasAnyRole(currentUser, Set.of(ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
+                assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL));
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
                 definition.setApprovedById(currentUser.getId());
                 definition.setApprovedAt(LocalDateTime.now());
             }
             case "ACTIVATE" -> {
-                assertHasAnyRole(currentUser, Set.of(ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_SUPER_ADMIN));
+                assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.APPROVED));
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
                 definition.setActive(true);
             }
             case "REJECT" -> {
-                assertHasAnyRole(currentUser, Set.of(ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_SUPER_ADMIN));
+                assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(
                     LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW,
                     LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL));
@@ -333,7 +412,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 definition.setActive(false);
             }
             case "RETIRE" -> {
-                assertHasAnyRole(currentUser, Set.of(ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
+                assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.ACTIVE, LabTestDefinitionApprovalStatus.APPROVED));
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.RETIRED);
                 definition.setActive(false);
@@ -344,8 +423,18 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         return mapper.toDto(repository.save(definition));
     }
 
-    private void assertHasAnyRole(User user, Set<String> roles) {
-        if (!hasAnyRole(user, roles)) {
+    /**
+     * D30: the approval role must be held AT the definition's hospital — a
+     * director at hospital B does not approve hospital A's catalog. A global
+     * definition's workflow stays with the super-admin.
+     */
+    private void assertHasAnyRoleAt(User user, LabTestDefinition definition, Set<String> roles) {
+        if (isSuperAdmin(user)) {
+            return;
+        }
+        if (isGlobalDefinition(definition)
+            || !assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                user.getId(), definition.getHospital().getId(), roles)) {
             throw new AccessDeniedException("Insufficient role to perform this approval action.");
         }
     }
@@ -370,11 +459,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         LabTestDefinition definition = repository.findById(id)
             .orElseThrow(() -> new EntityNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
 
-        if (isGlobalDefinition(definition)) {
-            assertUserCanManageGlobal(currentUser);
-        } else {
-            assertUserCanManageHospital(currentUser, definition.getAssignment());
-        }
+        assertCanManage(currentUser, definition);
 
         List<LabTestReferenceRange> entityRanges = mapper.mapRangeDtosToEntities(ranges);
 
@@ -388,11 +473,19 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             .map(HospitalContext::getActiveHospitalId)
             .orElse(null);
 
-        List<LabTestDefinition> definitions = hospitalId != null
-            ? repository.findByHospital_IdAndActiveTrue(hospitalId)
-            : repository.findAll().stream()
-                .filter(def -> def.isActive())
+        // D30: with no active hospital only a super-admin exports every
+        // hospital's rows; anyone else gets the global catalog.
+        List<LabTestDefinition> definitions;
+        if (hospitalId != null) {
+            definitions = repository.findByHospital_IdAndActiveTrue(hospitalId);
+        } else {
+            List<LabTestDefinition> unscoped = HospitalContextHolder.getContextOrEmpty().isSuperAdmin()
+                ? repository.findAll()
+                : repository.findVisibleAt(null);
+            definitions = unscoped.stream()
+                .filter(LabTestDefinition::isActive)
                 .toList();
+        }
 
         // Include global definitions when hospital-scoped
         if (hospitalId != null) {

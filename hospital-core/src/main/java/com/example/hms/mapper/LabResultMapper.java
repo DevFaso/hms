@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Predicate;
 
 @Component
@@ -88,6 +89,8 @@ public class LabResultMapper {
         .released(result.isReleased())
         .releasedAt(result.getReleasedAt())
         .releasedByFullName(result.getReleasedByDisplay())
+        .selfReleased(result.isReleased() && enteredBy(result, result.getReleasedByUserId()))
+        .enteredByUserId(enteredByUserIdOf(result) != null ? enteredByUserIdOf(result).toString() : null)
         .signedAt(result.getSignedAt())
         .signedBy(result.getSignedByDisplay())
         .signatureValue(result.getSignatureValue())
@@ -97,6 +100,20 @@ public class LabResultMapper {
             .sourceMessageControlId(result.getSourceMessageControlId())
             .observationResultStatus(result.getObservationResultStatus())
             .build();
+    }
+
+    /** D58: the user who entered the result - its assignment's user - or null when unknown. */
+    public static UUID enteredByUserIdOf(LabResult result) {
+        if (result == null || result.getAssignment() == null || result.getAssignment().getUser() == null) {
+            return null;
+        }
+        return result.getAssignment().getUser().getId();
+    }
+
+    /** D58: whether {@code userId} is the user who entered this result. */
+    public static boolean enteredBy(LabResult result, UUID userId) {
+        UUID author = enteredByUserIdOf(result);
+        return author != null && author.equals(userId);
     }
 
     public LabResultTrendPointDTO toTrendPointDTO(LabResult result) {

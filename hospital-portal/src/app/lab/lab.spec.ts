@@ -6,7 +6,12 @@ import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
 import { LabComponent } from './lab';
-import { LabService, LabOrderResponse, PerformingLab } from '../services/lab.service';
+import {
+  LabService,
+  LabOrderResponse,
+  LabTestDefinition,
+  PerformingLab,
+} from '../services/lab.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService } from '../services/patient.service';
 import { ProfileService } from '../services/profile.service';
@@ -144,6 +149,28 @@ describe('LabComponent — performing laboratory', () => {
     expect(options).toEqual(['', LAB_B, 'lab-c']);
     expect(select.value).toBe('');
     expect(component.form.performingHospitalId).toBe('');
+  });
+
+  it('D48: offers only ACTIVE definitions to order, keeping the one an edited order names', async () => {
+    await setup(['ROLE_DOCTOR'], []);
+    const def = (
+      id: string,
+      approvalStatus: LabTestDefinition['approvalStatus'],
+      isActive = true,
+    ) => ({ id, testCode: id, testName: id, isActive, approvalStatus }) as LabTestDefinition;
+    component.labTestDefs.set([
+      def('active', 'ACTIVE'),
+      def('draft', 'DRAFT'),
+      def('approved', 'APPROVED'),
+      def('switched-off', 'ACTIVE', false),
+      def('retired', 'RETIRED'),
+    ]);
+
+    component.form.labTestDefinitionId = '';
+    expect(component.orderableTestDefs().map((d) => d.id)).toEqual(['active']);
+
+    component.form.labTestDefinitionId = 'retired';
+    expect(component.orderableTestDefs().map((d) => d.id)).toEqual(['active', 'retired']);
   });
 
   it('does not fetch the laboratories for a user who cannot place orders', async () => {

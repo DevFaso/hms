@@ -7,6 +7,7 @@ import { LabReleaseWorklistComponent } from './lab-release-worklist';
 import { LabResultResponse } from '../../services/lab.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
+import { AuthService } from '../../auth/auth.service';
 import { RoleContextStub, roleContextStub } from '../../testing/role-context.stub';
 
 /**
@@ -56,7 +57,7 @@ describe('LabReleaseWorklistComponent', () => {
     } as LabResultResponse;
   }
 
-  function setup(roles: string[], superAdmin = false): void {
+  function setup(roles: string[], superAdmin = false, userId: string | null = null): void {
     scope = roleContextStub({ superAdmin, hospitalId: 'h-1', roles });
     toast = jasmine.createSpyObj<ToastService>('ToastService', [
       'success',
@@ -72,6 +73,7 @@ describe('LabReleaseWorklistComponent', () => {
         provideHttpClientTesting(),
         { provide: RoleContextService, useValue: scope },
         { provide: ToastService, useValue: toast },
+        { provide: AuthService, useValue: { getUserId: () => userId } },
       ],
     });
 
@@ -256,6 +258,73 @@ describe('LabReleaseWorklistComponent', () => {
     expect(component.rows().length).toBe(0);
     expect(toast.success).toHaveBeenCalled();
     expect(host().querySelector('[data-testid="release-just-released"]')).not.toBeNull();
+  });
+
+  it('D58: says so when the reader entered the result, and sends it as a self-release', () => {
+    setup(['ROLE_LAB_SCIENTIST'], false, 'user-1');
+    fixture.detectChanges();
+    const mine = result({ enteredByUserId: 'user-1' });
+    flushWorklist([mine]);
+
+    component.askRelease(mine);
+    fixture.detectChanges();
+    expect(host().querySelector('[data-testid="self-release-note"]')).not.toBeNull();
+    expect(host().querySelector('[data-testid="release-confirm-submit"]')?.textContent).toContain(
+      'LAB_RELEASE.SELF_RELEASE_CONFIRM',
+    );
+
+    component.confirmRelease();
+    const release = httpMock.expectOne(
+      (r) => r.url === '/lab-results/result-1/release' && r.method === 'POST',
+    );
+    expect(release.request.params.get('selfRelease')).toBe('true');
+    release.flush({ ...mine, released: true, selfReleased: true });
+    flushWorklist([]);
+    expect(toast.success).toHaveBeenCalled();
+  });
+
+  it("D58: a colleague's result is released without the self-release flag", () => {
+    setup(['ROLE_LAB_SCIENTIST'], false, 'user-1');
+    fixture.detectChanges();
+    const theirs = result({ enteredByUserId: 'user-2' });
+    flushWorklist([theirs]);
+
+    component.askRelease(theirs);
+    fixture.detectChanges();
+    expect(host().querySelector('[data-testid="self-release-note"]')).toBeNull();
+
+    component.confirmRelease();
+    const release = httpMock.expectOne(
+      (r) => r.url === '/lab-results/result-1/release' && r.method === 'POST',
+    );
+    expect(release.request.params.has('selfRelease')).toBeFalse();
+    release.flush({ ...theirs, released: true });
+    flushWorklist([]);
+  });
+
+  it('D58: when the API answers 409 the dialog stays and asks for an explicit self-release', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    fixture.detectChanges();
+    flushWorklist([result()]);
+
+    component.askRelease(result());
+    component.confirmRelease();
+    httpMock
+      .expectOne((r) => r.url === '/lab-results/result-1/release' && r.method === 'POST')
+      .flush({ message: 'self-release' }, { status: 409, statusText: 'Conflict' });
+    fixture.detectChanges();
+
+    expect(component.releaseTarget()).not.toBeNull();
+    expect(host().querySelector('[data-testid="self-release-note"]')).not.toBeNull();
+    expect(toast.error).not.toHaveBeenCalled();
+
+    component.confirmRelease();
+    const retry = httpMock.expectOne(
+      (r) => r.url === '/lab-results/result-1/release' && r.method === 'POST',
+    );
+    expect(retry.request.params.get('selfRelease')).toBe('true');
+    retry.flush({ ...result(), released: true, selfReleased: true });
+    flushWorklist([]);
   });
 
   it('keeps a row whose release failed, and says why', () => {

@@ -182,6 +182,7 @@ class LabOrderEndToEndIT extends BaseIT {
             .unit("mmol/L")
             .referenceRanges(List.of(LabTestReferenceRange.builder()
                 .minValue(0.0).maxValue(RANGE_MAX).unit("mmol/L").build()))
+            .approvalStatus(com.example.hms.enums.LabTestDefinitionApprovalStatus.ACTIVE)
             .build());
     }
 
@@ -244,11 +245,19 @@ class LabOrderEndToEndIT extends BaseIT {
             .andExpect(status().isForbidden());
         assertThat(labResultRepository.findById(resultId).orElseThrow().isReleased()).isFalse();
 
-        // 5. The scientist releases; the only result of the order is now
-        //    released, so the order is COMPLETED (B2).
+        // 5. The scientist who entered the result releases it (D58): one click
+        //    is refused, because a self-release must be explicit...
         mockMvc.perform(post(RESULT_RELEASE, resultId).contextPath(API).with(signedInAs(scientist)).with(csrf()))
+            .andExpect(status().isConflict());
+        assertThat(labResultRepository.findById(resultId).orElseThrow().isReleased()).isFalse();
+        //    ...and the confirmed self-release goes through, marked as one. The
+        //    only result of the order is now released, so the order is
+        //    COMPLETED (B2).
+        mockMvc.perform(post(RESULT_RELEASE, resultId).contextPath(API).param("selfRelease", "true")
+                .with(signedInAs(scientist)).with(csrf()))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.released").value(true));
+            .andExpect(jsonPath("$.released").value(true))
+            .andExpect(jsonPath("$.selfReleased").value(true));
         assertThat(orderStatus(orderId)).isEqualTo(LabOrderStatus.COMPLETED);
         // the second order still has two unreleased results
         assertThat(orderStatus(secondOrderId)).isEqualTo(LabOrderStatus.RESULTED);

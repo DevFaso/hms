@@ -199,6 +199,36 @@ class LabResultServiceImplLifecycleTest {
             .thenReturn(List.of());
     }
 
+    // ── D49: a hand-entered result time must be possible ──────────────────
+
+    @Test
+    @DisplayName("D49 — a result timed before its order is refused, nothing saved")
+    void aResultTimedBeforeItsOrderIsRefused() {
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        order.setOrderDatetime(LocalDateTime.now().minusMinutes(30));
+        // The QA run: a browser four hours behind UTC sent its local wall clock.
+        LabResultRequestDTO request = entryRequest();
+        request.setResultDate(order.getOrderDatetime().minusHours(4));
+
+        assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class);
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("D49 — a result timed in the future is refused, nothing saved")
+    void aResultTimedInTheFutureIsRefused() {
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        LabResultRequestDTO request = entryRequest();
+        request.setResultDate(LocalDateTime.now().plusHours(4));
+
+        assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class);
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
     // ── B2: results drive the order ────────────────────────────────────────
 
     @Test
@@ -276,7 +306,7 @@ class LabResultServiceImplLifecycleTest {
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(last));
         when(labResultMapper.toResponseDTO(last)).thenReturn(LabResultResponseDTO.builder().build());
 
-        service.releaseLabResult(last.getId(), Locale.ENGLISH);
+        service.releaseLabResult(last.getId(), true, Locale.ENGLISH);
 
         org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(labOrderRepository, labResultRepository);
         inOrder.verify(labOrderRepository).findWithLockById(order.getId());
@@ -306,7 +336,7 @@ class LabResultServiceImplLifecycleTest {
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(first, last));
         when(labResultMapper.toResponseDTO(last)).thenReturn(LabResultResponseDTO.builder().build());
 
-        service.releaseLabResult(last.getId(), Locale.ENGLISH);
+        service.releaseLabResult(last.getId(), true, Locale.ENGLISH);
 
         assertThat(last.isReleased()).isTrue();
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.COMPLETED);
@@ -356,7 +386,7 @@ class LabResultServiceImplLifecycleTest {
             .thenReturn(List.of(preliminary, finalResult));
         when(labResultMapper.toResponseDTO(finalResult)).thenReturn(LabResultResponseDTO.builder().build());
 
-        service.releaseLabResult(finalResult.getId(), Locale.ENGLISH);
+        service.releaseLabResult(finalResult.getId(), true, Locale.ENGLISH);
 
         assertThat(finalResult.isReleased()).isTrue();
         assertThat(preliminary.isReleased()).as("the record is untouched — only the reading changes").isFalse();
@@ -387,7 +417,7 @@ class LabResultServiceImplLifecycleTest {
             .thenReturn(List.of(pendingOtherAnalyte, finalResult));
         when(labResultMapper.toResponseDTO(finalResult)).thenReturn(LabResultResponseDTO.builder().build());
 
-        service.releaseLabResult(finalResult.getId(), Locale.ENGLISH);
+        service.releaseLabResult(finalResult.getId(), true, Locale.ENGLISH);
 
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
     }
@@ -414,7 +444,7 @@ class LabResultServiceImplLifecycleTest {
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(released, pending));
         when(labResultMapper.toResponseDTO(released)).thenReturn(LabResultResponseDTO.builder().build());
 
-        service.releaseLabResult(released.getId(), Locale.ENGLISH);
+        service.releaseLabResult(released.getId(), true, Locale.ENGLISH);
 
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
         verify(labOrderRepository, never()).save(any(LabOrder.class));
@@ -586,7 +616,7 @@ class LabResultServiceImplLifecycleTest {
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(alreadyReleased));
         when(labResultMapper.toResponseDTO(alreadyReleased)).thenReturn(LabResultResponseDTO.builder().build());
 
-        service.releaseLabResult(alreadyReleased.getId(), Locale.ENGLISH);
+        service.releaseLabResult(alreadyReleased.getId(), true, Locale.ENGLISH);
 
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.COMPLETED);
         verify(labOrderRepository).updateStatusFrom(
@@ -614,7 +644,7 @@ class LabResultServiceImplLifecycleTest {
         when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.CANCELLED);
         when(labResultMapper.toResponseDTO(last)).thenReturn(LabResultResponseDTO.builder().build());
 
-        service.releaseLabResult(last.getId(), Locale.ENGLISH);
+        service.releaseLabResult(last.getId(), true, Locale.ENGLISH);
 
         assertThat(last.isReleased()).isTrue();
         // the instance is never mutated — the committed CANCELLED is what
@@ -641,7 +671,7 @@ class LabResultServiceImplLifecycleTest {
         org.mockito.Mockito.lenient().when(roleValidator.isHospitalAdmin(actorId, hospitalId)).thenReturn(true);
 
         UUID resultId = result.getId();
-        assertThatThrownBy(() -> service.releaseLabResult(resultId, Locale.ENGLISH))
+        assertThatThrownBy(() -> service.releaseLabResult(resultId, true, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class);
         assertThat(result.isReleased()).isFalse();
         verify(labResultRepository, never()).save(any(LabResult.class));
@@ -669,7 +699,7 @@ class LabResultServiceImplLifecycleTest {
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(result));
         when(labResultMapper.toResponseDTO(result)).thenReturn(LabResultResponseDTO.builder().build());
 
-        service.releaseLabResult(result.getId(), Locale.ENGLISH);
+        service.releaseLabResult(result.getId(), true, Locale.ENGLISH);
 
         assertThat(result.isReleased()).isTrue();
         assertThat(result.getReleasedByUserId()).isEqualTo(actorId);
@@ -685,7 +715,7 @@ class LabResultServiceImplLifecycleTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
 
         UUID resultId = result.getId();
-        assertThatThrownBy(() -> service.releaseLabResult(resultId, Locale.ENGLISH))
+        assertThatThrownBy(() -> service.releaseLabResult(resultId, true, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
         assertThat(result.isReleased()).isFalse();
         verify(authService, never()).hasRole(any());
@@ -703,7 +733,7 @@ class LabResultServiceImplLifecycleTest {
         org.mockito.Mockito.lenient().when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(true);
 
         UUID resultId = result.getId();
-        assertThatThrownBy(() -> service.releaseLabResult(resultId, Locale.ENGLISH))
+        assertThatThrownBy(() -> service.releaseLabResult(resultId, true, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 

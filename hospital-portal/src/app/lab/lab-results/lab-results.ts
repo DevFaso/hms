@@ -19,6 +19,37 @@ import { HospitalScopeUrlService } from '../../core/hospital-scope-url.service';
 import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 
+/**
+ * D49: the order code the API sends is the order's UUID. Readers get its first
+ * eight characters, enough to tell two orders apart on one screen.
+ */
+export function shortOrderCode(code: string | null | undefined): string {
+  const trimmed = (code ?? '').trim();
+  return trimmed ? '#' + trimmed.slice(0, 8).toUpperCase() : '—';
+}
+
+/**
+ * D49: a `datetime-local` value is the user's wall clock with no zone, and the
+ * API stores result times on the server's UTC clock (the clock order times are
+ * stamped with). Sending the wall clock as is recorded a result entered from a
+ * workstation behind UTC hours BEFORE the order it answers.
+ */
+export function toServerDateTime(localValue: string): string {
+  const instant = new Date(localValue);
+  return Number.isNaN(instant.getTime()) ? localValue : instant.toISOString().slice(0, 19);
+}
+
+/** The reverse: a server (UTC, zone-less) time as a `datetime-local` value in the user's zone. */
+export function toLocalInputValue(serverValue: string): string {
+  const zoned = /(Z|[+-]\d{2}:\d{2})$/.test(serverValue) ? serverValue : serverValue + 'Z';
+  const instant = new Date(zoned);
+  if (Number.isNaN(instant.getTime())) {
+    return serverValue.slice(0, 16);
+  }
+  const pad = (n: number): string => n.toString().padStart(2, '0');
+  return `${instant.getFullYear()}-${pad(instant.getMonth() + 1)}-${pad(instant.getDate())}T${pad(instant.getHours())}:${pad(instant.getMinutes())}`;
+}
+
 @Component({
   selector: 'app-lab-results',
   standalone: true,
@@ -222,6 +253,9 @@ export class LabResultsComponent implements OnInit {
   form: LabResultRequest = this.emptyForm();
 
   showDeleteConfirm = signal(false);
+  /** D58: the result whose self-release is being confirmed; null when no dialog is open. */
+  selfReleaseTarget = signal<LabResultResponse | null>(null);
+  readonly shortOrderCode = shortOrderCode;
   deletingResult = signal<LabResultResponse | null>(null);
   deleting = signal(false);
 
@@ -283,7 +317,7 @@ export class LabResultsComponent implements OnInit {
       patientId: r.patientId ?? '',
       resultValue: r.resultValue ?? '',
       resultUnit: r.resultUnit ?? '',
-      resultDate: r.resultDate ? r.resultDate.slice(0, 16) : this.toLocalDatetime(new Date()),
+      resultDate: r.resultDate ? toLocalInputValue(r.resultDate) : this.toLocalDatetime(new Date()),
       notes: r.notes ?? '',
     };
     this.editing.set(true);
@@ -313,10 +347,14 @@ export class LabResultsComponent implements OnInit {
     this.saving.set(true);
 
     const id = this.editingId();
+    const payload: LabResultRequest = {
+      ...this.form,
+      resultDate: toServerDateTime(this.form.resultDate),
+    };
     const op =
       this.editing() && id
-        ? this.labService.updateResult(id, this.form)
-        : this.labService.createResult(this.form);
+        ? this.labService.updateResult(id, payload)
+        : this.labService.createResult(payload);
 
     op.subscribe({
       next: () => {
@@ -400,13 +438,49 @@ export class LabResultsComponent implements OnInit {
     return performing === this.roleContext.effectiveHospitalIdForRequest();
   }
 
+  /**
+   * D58: the reader entered this result. A self-release is allowed (many
+   * laboratories here are one technician) but never one click: it is confirmed
+   * in a dialog that says so, and the API records it as a self-release.
+   */
+  isSelfRelease(r: LabResultResponse): boolean {
+    const me = this.auth.getUserId();
+    return !!me && !!r.enteredByUserId && r.enteredByUserId === me;
+  }
+
   releaseResult(r: LabResultResponse): void {
-    this.labService.releaseResult(r.id).subscribe({
+    if (this.isSelfRelease(r)) {
+      this.selfReleaseTarget.set(r);
+      return;
+    }
+    this.sendRelease(r, false);
+  }
+
+  confirmSelfRelease(): void {
+    const target = this.selfReleaseTarget();
+    if (!target) return;
+    this.selfReleaseTarget.set(null);
+    this.sendRelease(target, true);
+  }
+
+  cancelSelfRelease(): void {
+    this.selfReleaseTarget.set(null);
+  }
+
+  private sendRelease(r: LabResultResponse, selfRelease: boolean): void {
+    this.labService.releaseResult(r.id, selfRelease).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('LAB_RESULTS.RELEASED'));
         this.loadResults();
       },
-      error: () => this.toast.error(this.translate.instant('LAB_RESULTS.RELEASE_ERROR')),
+      error: (err: unknown) => {
+        // 409: the API knows this reader entered the result — ask, explicitly.
+        if (!selfRelease && (err as { status?: number } | null)?.status === 409) {
+          this.selfReleaseTarget.set(r);
+          return;
+        }
+        this.toast.error(this.translate.instant('LAB_RESULTS.RELEASE_ERROR'));
+      },
     });
   }
 
@@ -492,7 +566,7 @@ export class LabResultsComponent implements OnInit {
 
   getReleasedByDisplay(r: LabResultResponse): string {
     const actor = (r.releasedByFullName ?? '').trim();
-    return actor || 'Autoverification';
+    return actor || this.translate.instant('LAB_RESULTS.AUTOVERIFICATION');
   }
 
   sortedTrendHistory(r: LabResultResponse): LabResultTrendPoint[] {

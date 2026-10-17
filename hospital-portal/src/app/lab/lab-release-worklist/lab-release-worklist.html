@@ -227,6 +227,11 @@
           }}
         </p>
         <p class="confirm-note">{{ 'LAB_RELEASE.CONFIRM_NOTE' | translate }}</p>
+        @if (isSelfRelease(target)) {
+          <p class="self-release-note" role="note" data-testid="self-release-note">
+            {{ 'LAB_RELEASE.SELF_RELEASE_NOTE' | translate }}
+          </p>
+        }
 
         @if (releaseError(); as message) {
           <p class="modal-error" role="alert" data-testid="release-confirm-error">{{ message }}</p>
@@ -249,7 +254,10 @@
             @if (releasingId()) {
               <span class="material-symbols-outlined spin">progress_activity</span>
             }
-            {{ 'LAB_RELEASE.RELEASE' | translate }}
+            {{
+              (isSelfRelease(target) ? 'LAB_RELEASE.SELF_RELEASE_CONFIRM' : 'LAB_RELEASE.RELEASE')
+                | translate
+            }}
           </button>
         </div>
       </div>

@@ -66,6 +66,14 @@ public class LabResultResponseDTO {
     private boolean released;
     private LocalDateTime releasedAt;
     private String releasedByFullName;
+    /**
+     * D58: the user who released this result is the one who entered it (a
+     * single-reviewer release). Shown beside the release so no reader takes
+     * it for a second person's check.
+     */
+    private boolean selfReleased;
+    /** The user who entered the result (its assignment's user), so a client can ask for the self-release confirmation up front. */
+    private String enteredByUserId;
     private LocalDateTime signedAt;
     private String signedBy;
     private String signatureValue;

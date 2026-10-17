@@ -2956,7 +2956,14 @@
     "READ_BACK_CONFIRMED": "Relecture confirmée",
     "READ_BACK_ERROR": "La relecture n'a pas pu être enregistrée",
     "READ_BACK_RECORDED": "Relecture confirmée",
-    "READ_BACK_MISMATCH": "DISCORDANCE de relecture — non acquitté"
+    "READ_BACK_MISMATCH": "DISCORDANCE de relecture — non acquitté",
+    "ORDER_OPTION": "{{patient}} — {{test}} — {{date}} ({{code}})",
+    "AUTOVERIFICATION": "Validation automatique",
+    "SELF_RELEASED": "Auto-validé",
+    "SELF_RELEASED_HINT": "Validé par la personne qui l’a saisi, sans second relecteur",
+    "SELF_RELEASE_TITLE": "Valider votre propre résultat ?",
+    "SELF_RELEASE_BODY": "Vous avez saisi ce résultat ({{test}} pour {{patient}}). Le valider vous-même, sans second relecteur, est permis ; la validation sera enregistrée et affichée comme une auto-validation.",
+    "SELF_RELEASE_CONFIRM": "Le valider moi-même"
   },
   "LAB_RELEASE": {
     "TITLE": "File de validation",
@@ -2994,7 +3001,9 @@
     "RELEASE_ERROR": "Impossible de valider le résultat.",
     "EMPTY": "Aucun résultat en attente de validation.",
     "LOAD_ERROR": "Impossible de charger la file de validation.",
-    "PAGE_OF": "Page {{page}} sur {{total}}"
+    "PAGE_OF": "Page {{page}} sur {{total}}",
+    "SELF_RELEASE_NOTE": "Vous avez saisi ce résultat vous-même. Le valider sans second relecteur est permis, et la validation est enregistrée comme une auto-validation.",
+    "SELF_RELEASE_CONFIRM": "Le valider moi-même"
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Instruments de laboratoire",
@@ -7554,7 +7563,8 @@
     "VERIF_ENTERED_IN_ERROR": "Saisie par erreur",
     "VERIF_PROVISIONAL": "Provisoire",
     "VERIF_REFUTED": "Réfutée",
-    "VERIF_UNCONFIRMED": "Non confirmée"
+    "VERIF_UNCONFIRMED": "Non confirmée",
+    "LAB_STATUS_NOT_INTERPRETED": "Non interprété : aucun intervalle de référence"
   },
   "PHARMACY": {
     "QUEUE_CLAIM": {
