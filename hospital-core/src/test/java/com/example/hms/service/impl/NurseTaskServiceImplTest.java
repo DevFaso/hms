@@ -2934,7 +2934,8 @@ class NurseTaskServiceImplTest {
         UUID rxId = rx.getId();
         NurseMedicationAdministrationRequestDTO given = givenRequest();
 
-        assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, UUID.randomUUID(), hospitalId, given))
+        UUID nurseId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, given))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.noDoseDue");
         verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
@@ -2966,7 +2967,8 @@ class NurseTaskServiceImplTest {
         UUID marId = given.getId();
         NurseMedicationAdministrationRequestDTO again = givenRequest();
 
-        assertThatThrownBy(() -> service.recordMedicationAdministration(marId, UUID.randomUUID(), hospitalId, again))
+        UUID nurseId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.recordMedicationAdministration(marId, nurseId, hospitalId, again))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.alreadyRecorded");
     }
@@ -3021,11 +3023,12 @@ class NurseTaskServiceImplTest {
         Prescription foreign = scheduledRx(UUID.randomUUID(), "q12h");
         lenient().when(prescriptionRepository.findByIdForUpdate(foreign.getId())).thenReturn(Optional.of(foreign));
         UUID rxId = foreign.getId();
-        org.mockito.Mockito.doReturn(Optional.empty())
+        doReturn(Optional.empty())
             .when(prescriptionRepository).findByIdAndHospitalIdForUpdate(rxId, hospitalId);
         NurseMedicationAdministrationRequestDTO given = givenRequest();
 
-        assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, UUID.randomUUID(), hospitalId, given))
+        UUID nurseId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, given))
             .isInstanceOf(ResourceNotFoundException.class);
         verify(prescriptionRepository).findByIdAndHospitalIdForUpdate(rxId, hospitalId);
         verify(prescriptionRepository, never()).findByIdForUpdate(rxId);
@@ -3041,12 +3044,13 @@ class NurseTaskServiceImplTest {
         when(marRepository.findById(stale.getId())).thenReturn(Optional.of(stale));
         when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
         // Another nurse committed GIVEN while this call waited on the lock.
-        org.mockito.Mockito.doReturn(Optional.of(MedicationAdministrationStatus.GIVEN))
+        doReturn(Optional.of(MedicationAdministrationStatus.GIVEN))
             .when(marRepository).findStatusById(stale.getId());
         UUID marId = stale.getId();
         NurseMedicationAdministrationRequestDTO given = givenRequest();
 
-        assertThatThrownBy(() -> service.recordMedicationAdministration(marId, UUID.randomUUID(), hospitalId, given))
+        UUID nurseId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.recordMedicationAdministration(marId, nurseId, hospitalId, given))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.alreadyRecorded");
         org.mockito.InOrder order = org.mockito.Mockito.inOrder(prescriptionRepository, marRepository);

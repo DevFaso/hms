@@ -16,7 +16,7 @@ final class MarDoseSchedule {
     private static final Pattern EVERY_HOURS =
         Pattern.compile("\\b(?:EVERY|TOUTES LES|CADA)\\s+(\\d{1,2})\\s*(?:H|HR|HRS|HOURS|HEURES|HORAS)\\b");
     private static final Pattern TIMES_DAILY =
-        Pattern.compile("\\b(\\d)\\s*(?:X|FOIS|VECES)\\s*(?:/\\s*J|/\\s*D|PAR JOUR|AL DIA|AL DÍA|DAILY|A DAY|PER DAY)\\b");
+        Pattern.compile("\\b(\\d)\\s*(?:X|FOIS|VECES)\\s*(?:/\\s*J|/\\s*D|PAR JOUR|AL DIA|AL DÍA|DAILY|A DAY|PER DAY)\\b", Pattern.CANON_EQ);
 
     private MarDoseSchedule() {
     }
