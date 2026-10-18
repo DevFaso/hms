@@ -676,6 +676,61 @@ class DispenseServiceImplTest {
         }
 
         @Test
+        @DisplayName("D95: a complete fill of a prescription with no quantity is DISPENSED")
+        void completeFillWithoutPrescribedQuantityIsDispensed() {
+            prescription.setQuantity(null);
+            DispenseRequestDTO dto = buildRequest();
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
+                    .thenReturn(BigDecimal.valueOf(10));
+            when(dispenseRepository.countCompleteFillsForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
+                    .thenReturn(1L);
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(DispenseResponseDTO.builder().id(dispenseId).build());
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            service.createDispense(dto);
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+        }
+
+        @Test
+        @DisplayName("D95: a short fill of a prescription with no quantity stays PARTIALLY_FILLED")
+        void shortFillWithoutPrescribedQuantityStaysPartial() {
+            prescription.setQuantity(null);
+            DispenseRequestDTO dto = buildRequest();
+            dto.setQuantityDispensed(BigDecimal.valueOf(5));
+            Dispense entity = buildDispense(DispenseStatus.PARTIAL);
+
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
+                    .thenReturn(BigDecimal.valueOf(5));
+            when(dispenseRepository.countCompleteFillsForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
+                    .thenReturn(0L);
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(DispenseResponseDTO.builder().id(dispenseId).build());
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            service.createDispense(dto);
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTIALLY_FILLED);
+        }
+
+        @Test
         @DisplayName("refill fill: a partial second fill is PARTIALLY_FILLED, not DISPENSED")
         void refillPartialFillIsNotMistakenForComplete() {
             // Approving a refill returns the prescription to the queue, so the

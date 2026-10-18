@@ -233,6 +233,7 @@ class LabOrderEndToEndIT extends BaseIT {
         // 3b. B8: the roles the annotation admits get past the edge too. They
         //     post on a second order so the queue assertion below stays exact.
         UUID secondOrderId = placeOrder(LocalDateTime.now().minusHours(2));
+        collectSpecimen(secondOrderId);
         postResult(director, secondOrderId, NORMAL_VALUE).andExpect(status().isCreated());
         postResult(qualityManager, secondOrderId, NORMAL_VALUE).andExpect(status().isCreated());
         assertThat(orderStatus(secondOrderId)).isEqualTo(LabOrderStatus.RESULTED);
@@ -282,6 +283,7 @@ class LabOrderEndToEndIT extends BaseIT {
         // row. A duplicate row is visible and correctable — a release of both
         // completes the order — and a lost result is neither.
         UUID orderId = placeOrder(LocalDateTime.now().minusMinutes(20));
+        collectSpecimen(orderId);
         LocalDateTime resultedAt = LocalDateTime.now().withNano(0);
 
         String first = postResult(scientist, orderId, CRITICAL_VALUE, resultedAt)
@@ -319,6 +321,7 @@ class LabOrderEndToEndIT extends BaseIT {
     @DisplayName("a critical value notifies the doctor, stays unreleased, and is acknowledged only by a matching read-back")
     void criticalValueClosesTheLoopThroughReadBack() throws Exception {
         UUID orderId = placeOrder(LocalDateTime.now().minusMinutes(30));
+        collectSpecimen(orderId);
 
         UUID resultId = postResult(scientist, orderId, CRITICAL_VALUE).andExpect(status().isCreated())
             .andExpect(jsonPath("$.severityFlag").value("HIGH"))
@@ -359,6 +362,16 @@ class LabOrderEndToEndIT extends BaseIT {
     }
 
     // ── HTTP helpers ─────────────────────────────────────────────────────
+
+    /** D107: a hand-entered result needs a collected specimen first. */
+    private void collectSpecimen(UUID orderId) throws Exception {
+        mockMvc.perform(post(LAB_ORDER_SPECIMENS, orderId)
+                .contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsBytes(LabSpecimenRequestDTO.builder().specimenType("BLOOD").build()))
+                .with(signedInAs(technician)).with(csrf()))
+            .andExpect(status().isCreated());
+    }
 
     private UUID placeOrder(LocalDateTime orderedAt) throws Exception {
         LabOrderRequestDTO request = LabOrderRequestDTO.builder()

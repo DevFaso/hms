@@ -45,4 +45,9 @@ public class LabTestReferenceRangeDTO implements Serializable {
 
     @Size(max = 500, message = "{lab.referenceRange.notes.maxLength}")
     private String notes;
+
+    /** D107: critical (panic) limits; a value beyond them grades CRITICAL. */
+    private Double criticalLow;
+
+    private Double criticalHigh;
 }
