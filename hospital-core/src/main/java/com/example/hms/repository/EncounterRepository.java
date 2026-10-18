@@ -93,6 +93,23 @@ public interface EncounterRepository
     // Find active (in-progress) encounters for a specific doctor — used for "roomed patients"
     List<Encounter> findByStaff_IdAndStatus(UUID staffId, EncounterStatus status);
 
+    /**
+     * The patient's visits still open, with the clinician who holds each: the
+     * portal's care team and message recipients (QA D115). The patient's own
+     * chart across hospitals — ownership is the bound, not a hospital scope.
+     */
+    @Query("""
+        SELECT e FROM Encounter e
+        JOIN FETCH e.staff s
+        JOIN FETCH s.user
+        LEFT JOIN FETCH e.hospital
+        WHERE e.patient.id = :patientId
+          AND e.status NOT IN :closed
+        ORDER BY e.encounterDate DESC
+    """)
+    List<Encounter> findOpenWithClinicianByPatientId(@Param("patientId") UUID patientId,
+                                                     @Param("closed") Collection<EncounterStatus> closed);
+
     // Find the most recent encounter for a patient at a hospital in a given status
     Optional<Encounter> findFirstByPatient_IdAndHospital_IdAndStatusOrderByEncounterDateDesc(
         UUID patientId, UUID hospitalId, EncounterStatus status);

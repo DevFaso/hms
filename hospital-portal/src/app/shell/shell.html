@@ -152,6 +152,16 @@
     </div>
   </aside>
 
+  @if (!sidebarCollapsed()) {
+    <!-- Phones only (shell.scss): the drawer's backdrop closes it on a tap. -->
+    <div
+      class="sidebar-backdrop"
+      aria-hidden="true"
+      (click)="closeSidebar()"
+      (keydown.escape)="closeSidebar()"
+    ></div>
+  }
+
   <!-- Main Content -->
   <div class="main-area">
     <!-- Header -->

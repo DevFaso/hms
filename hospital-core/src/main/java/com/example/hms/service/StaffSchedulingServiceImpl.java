@@ -403,7 +403,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
                                                   LocalDate endDate,
                                                   Locale locale) {
         Locale effectiveLocale = safeLocale(locale);
-        DateRange range = resolveDateRange(startDate, endDate, effectiveLocale);
+        DateRange range = resolveLeaveRange(startDate, endDate, effectiveLocale);
         List<StaffLeaveRequest> leaves;
         if (staffId != null) {
             leaves = leaveRepository.findByStaff_IdAndStartDateBetweenOrderByStartDateAsc(
@@ -704,6 +704,25 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         }
         return new DateRange(effectiveStart, effectiveEnd);
     }
+
+    /**
+     * Leave is requested weeks or months ahead: the shift window (today plus
+     * 14 days) hid every request starting later, so an admin never saw it to
+     * decide on it (QA D117). With no dates given, the leave list reaches
+     * back a month (leave already under way) and a year ahead.
+     */
+    private DateRange resolveLeaveRange(LocalDate start, LocalDate end, Locale locale) {
+        LocalDate today = LocalDate.now(clock);
+        LocalDate effectiveStart = start != null ? start : today.minusDays(LEAVE_LOOKBACK_DAYS);
+        LocalDate effectiveEnd = end != null ? end : today.plusDays(LEAVE_LOOKAHEAD_DAYS);
+        if (effectiveEnd.isBefore(effectiveStart)) {
+            throw new BusinessRuleException(message("schedule.dateRange.invalid", locale));
+        }
+        return new DateRange(effectiveStart, effectiveEnd);
+    }
+
+    private static final long LEAVE_LOOKBACK_DAYS = 31;
+    private static final long LEAVE_LOOKAHEAD_DAYS = 366;
 
     private record DateRange(LocalDate start, LocalDate end) { }
 }

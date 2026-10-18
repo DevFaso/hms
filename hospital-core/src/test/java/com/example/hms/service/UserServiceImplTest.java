@@ -1379,6 +1379,50 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("an administrator renaming the account clears the forced rename (D127)")
+        void adminRenameClearsForceUsernameChange() {
+            stubHappyPath();
+            user.setForceUsernameChange(true);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setUsername("chosen.by.admin");
+
+            userService.updateUser(userId, dto);
+
+            ArgumentCaptor<User> cap = ArgumentCaptor.forClass(User.class);
+            verify(userRepository).save(cap.capture());
+            assertThat(cap.getValue().getUsername()).isEqualTo("chosen.by.admin");
+            assertThat(cap.getValue().isForceUsernameChange()).isFalse();
+        }
+
+        @Test
+        @DisplayName("the edit dialog sending the same username back keeps the forced rename")
+        void sameUsernameKeepsForceUsernameChange() {
+            stubHappyPath();
+            user.setForceUsernameChange(true);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setUsername(user.getUsername());
+
+            userService.updateUser(userId, dto);
+
+            ArgumentCaptor<User> cap = ArgumentCaptor.forClass(User.class);
+            verify(userRepository).save(cap.capture());
+            assertThat(cap.getValue().isForceUsernameChange()).isTrue();
+        }
+
+        @Test
+        @DisplayName("a deleted account cannot be edited (D126)")
+        void deletedAccountIsNotEditable() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            user.setDeleted(true);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setFirstName("Ghost");
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(BusinessException.class);
+            verify(userRepository, never()).save(any(User.class));
+        }
+
+        @Test
         @DisplayName("blank password is ignored — existing hash preserved")
         void blankPasswordPreservesHash() {
             stubHappyPath();
@@ -2113,7 +2157,7 @@ class UserServiceImplTest {
                     .thenReturn(new UserAccountAccess.DirectoryScope(false, hospitals));
             when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
                     .thenReturn(onePage);
-            when(userRepository.searchUsers(any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(), any(),
+            when(userRepository.searchUsers(any(), any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(), any(),
                     any())).thenReturn(onePage);
 
             // Even if a deleted flag reached the service, the scoped path has no deleted view.
@@ -2121,8 +2165,19 @@ class UserServiceImplTest {
             userService.searchUsers("ami", "ROLE_NURSE", "x@y", 0, 10, true, true);
 
             verify(userRepository).findAllPaged(eq(false), eq(false), eq(true), eq(hospitals), any());
-            verify(userRepository).searchUsers(eq("ami"), eq("ROLE_NURSE"), eq("x@y"), eq(false), eq(false),
+            verify(userRepository).searchUsers(eq("ami"), isNull(), eq("ROLE_NURSE"), eq("x@y"), eq(false), eq(false),
                     eq(true), eq(hospitals), any());
+        }
+
+        @Test
+        @DisplayName("D119 — a phone-shaped term is also searched on its digits; a name is not")
+        void phoneShapedTermsSearchByDigits() {
+            assertThat(UserServiceImpl.phoneDigits("70 20 20 20")).isEqualTo("70202020");
+            assertThat(UserServiceImpl.phoneDigits("+226 70-20")).isEqualTo("2267020");
+            assertThat(UserServiceImpl.phoneDigits("Awa Traoré")).isNull();
+            assertThat(UserServiceImpl.phoneDigits("awa@example.org")).isNull();
+            assertThat(UserServiceImpl.phoneDigits("12")).isNull();
+            assertThat(UserServiceImpl.phoneDigits(null)).isNull();
         }
 
         @Test
@@ -2143,7 +2198,7 @@ class UserServiceImplTest {
                     .thenReturn(new UserAccountAccess.DirectoryScope(true, Set.of()));
             when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
                     .thenReturn(onePage);
-            when(userRepository.searchUsers(any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(), any(),
+            when(userRepository.searchUsers(any(), any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(), any(),
                     any())).thenReturn(onePage);
 
             userService.getAllUsers(0, 10, true, false);
@@ -2151,7 +2206,7 @@ class UserServiceImplTest {
 
             verify(userRepository).findAllPaged(eq(true), eq(false), eq(false),
                     eq(UserRepository.DIRECTORY_UNSCOPED), any());
-            verify(userRepository).searchUsers(eq("a"), any(), any(), eq(false), eq(true), eq(false),
+            verify(userRepository).searchUsers(eq("a"), isNull(), any(), any(), eq(false), eq(true), eq(false),
                     eq(UserRepository.DIRECTORY_UNSCOPED), any());
         }
     }

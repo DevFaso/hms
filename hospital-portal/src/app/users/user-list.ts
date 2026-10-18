@@ -333,6 +333,8 @@ export class UserListComponent implements OnInit, OnDestroy {
   }
 
   openEdit(user: UserSummary): void {
+    // A deleted account is restored first; the server refuses the edit (D126).
+    if (user.deleted) return;
     this.editing.set(user);
     // Pre-populate with summary data; phoneNumber comes from full detail fetch.
     this.createForm = {

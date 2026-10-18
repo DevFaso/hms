@@ -84,6 +84,10 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
 
     Optional<Patient> findByPhoneNumberSecondary(String phoneNumberSecondary);
 
+    /** Another patient already holds this e-mail, in any letter case (QA D113). */
+    @Query("SELECT COUNT(p) > 0 FROM Patient p WHERE LOWER(p.email) = LOWER(:email) AND p.id <> :id")
+    boolean existsEmailOnOtherPatient(@Param("email") String email, @Param("id") UUID id);
+
     Optional<Patient> findByUserId(UUID userId);
 
     /**

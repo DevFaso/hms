@@ -262,6 +262,24 @@ describe('errorInterceptor', () => {
     expect(error?.status).toBe(401);
   });
 
+  for (const url of ['/api/auth/me/change-password', '/api/auth/me/change-email']) {
+    it(`a wrong current password on ${url} stays on the form: no refresh, no sign-out (D87)`, () => {
+      auth.getRefreshToken.and.returnValue('r1');
+      auth.getUserProfile.and.returnValue({ id: 'u1' } as never);
+
+      let error: HttpErrorResponse | undefined;
+      http.post(url, {}).subscribe({ error: (e) => (error = e) });
+      httpMock
+        .expectOne(url)
+        .flush({ message: 'wrong' }, { status: 401, statusText: 'Unauthorized' });
+
+      expect(auth.refreshTokenRequest).not.toHaveBeenCalled();
+      expect(auth.logout).not.toHaveBeenCalled();
+      expect(router.navigate).not.toHaveBeenCalled();
+      expect(error?.status).toBe(401);
+    });
+  }
+
   it('never refreshes or logs out again on the 401 of the logout call itself', () => {
     // AuthService.logout() fires POST /auth/logout; an expired bearer answers
     // 401. A refresh here would mint a new session mid-logout, and a second

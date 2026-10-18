@@ -69,6 +69,13 @@ const PAGE_HANDLED_403_ACTION_PATTERNS = [
 
 const SILENT_401_PATTERNS = [/\/chat\/mark-read\//];
 
+/** Requests whose 401 means "the password you typed is wrong". */
+export const CREDENTIAL_CHECK_PATTERNS: readonly RegExp[] = [
+  /\/auth\/verify-password(?:[/?#]|$)/i,
+  /\/auth\/me\/change-password(?:[/?#]|$)/i,
+  /\/auth\/me\/change-email(?:[/?#]|$)/i,
+];
+
 /**
  * URL+method pairs already reported this session — a background GET that keeps
  * polling a forbidden endpoint must not flood the audit log.
@@ -293,7 +300,11 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
           return throwError(() => error);
         }
         const isRefreshCall = req.url.includes('/auth/token/refresh');
-        const isVerifyPassword = req.url.includes('/auth/verify-password');
+        // Endpoints that check the password typed in the form answer a wrong
+        // one with 401 (the mobile apps rely on it). That is a form error, not
+        // an expired session: refreshing and then signing out threw the user
+        // out of their own profile (D87).
+        const isVerifyPassword = CREDENTIAL_CHECK_PATTERNS.some((p) => p.test(req.url));
 
         // Closes Copilot review #4 on PR #224. If the 401 fires while an
         // impersonation token is in use (typically because the 30-min TTL

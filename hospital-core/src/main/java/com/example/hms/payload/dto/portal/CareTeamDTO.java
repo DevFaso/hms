@@ -23,6 +23,21 @@ public class CareTeamDTO {
     @Schema(description = "Historical primary care providers")
     private List<PrimaryCareEntry> primaryCareHistory;
 
+    @Schema(description = "Clinicians of the patient's visits still open, one entry per clinician")
+    private List<VisitClinicianEntry> visitClinicians;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class VisitClinicianEntry {
+        private UUID userId;
+        private String displayName;
+        private UUID hospitalId;
+        private String hospitalName;
+        private java.time.LocalDateTime visitDate;
+    }
+
     @Data
     @Builder
     @NoArgsConstructor
