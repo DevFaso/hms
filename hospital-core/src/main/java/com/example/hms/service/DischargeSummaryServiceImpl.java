@@ -592,12 +592,10 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
                 .findByPatient_IdOrderByDischargeDateDesc(patientId);
         int enriched = 0;
         for (DischargeSummary summary : summaries) {
-            if (isPrescriptionAnchor(summary.getEncounter())) {
-                continue; // QA D151: never shown, so never enriched
-            }
-            boolean changed = false;
             Encounter enc = summary.getEncounter();
-            if (enc == null) continue;
+            // QA D151: a prescription anchor is never shown, so never enriched.
+            if (enc == null || isPrescriptionAnchor(enc)) continue;
+            boolean changed = false;
 
             // Enrich hospitalCourse from encounter notes if missing.
             //

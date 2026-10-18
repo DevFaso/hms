@@ -1987,8 +1987,9 @@ class EncounterServiceImplTest {
             Encounter mine = encounterAt(CALLER_HOSPITAL);
             mine.setEsiScore(null);
             encounterExists(mine);
+            UUID id = mine.getId();
 
-            assertThatThrownBy(() -> service.completeTriage(mine.getId(), false, CALLER_HOSPITAL))
+            assertThatThrownBy(() -> service.completeTriage(id, false, CALLER_HOSPITAL))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("encounter.triage.incomplete");
             assertThat(mine.getStatus()).isEqualTo(EncounterStatus.ARRIVED);
@@ -2000,8 +2001,9 @@ class EncounterServiceImplTest {
             Encounter mine = encounterAt(CALLER_HOSPITAL);
             mine.setArrivalTimestamp(LocalDateTime.now().plusMinutes(5));
             encounterExists(mine);
+            UUID id = mine.getId();
 
-            assertThatThrownBy(() -> service.completeTriage(mine.getId(), false, CALLER_HOSPITAL))
+            assertThatThrownBy(() -> service.completeTriage(id, false, CALLER_HOSPITAL))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("encounter.triage.incomplete");
         }

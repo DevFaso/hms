@@ -276,15 +276,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         List<Prescription> prescriptions = prescriptionRepository
             .findByPatient_IdAndHospital_Id(ctx.patientId(), hospitalId);
 
-        List<Admission> closedStays = prescriptions.isEmpty() ? List.of()
-            : admissionRepository.findByPatient_IdAndHospital_Id(ctx.patientId(), hospitalId).stream()
-                .filter(a -> a.getActualDischargeDateTime() != null)
-                .toList();
+        List<Admission> closedStays = closedStaysFor(ctx.patientId(), hospitalId, prescriptions);
 
         List<NurseMedicationTaskResponseDTO> result = new ArrayList<>();
         for (Prescription rx : prescriptions) {
-            if (!ACTIVE_RX_STATUSES.contains(rx.getStatus())) continue;
-            if (endedWithAStay(rx, closedStays)) continue;
+            if (!ACTIVE_RX_STATUSES.contains(rx.getStatus()) || endedWithAStay(rx, closedStays)) continue;
 
             String marStatus = resolveMarStatus(rx, now);
             if (!isFilteredOut(statusFilter, marStatus)) {
@@ -866,6 +862,16 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return count;
     }
 
+    /** The patient's discharged stays here; none are fetched when there is no prescription to end. */
+    private List<Admission> closedStaysFor(UUID patientId, UUID hospitalId, List<Prescription> prescriptions) {
+        if (prescriptions.isEmpty()) {
+            return List.of();
+        }
+        return admissionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
+            .filter(a -> a.getActualDischargeDateTime() != null)
+            .toList();
+    }
+
     /** Count medications by status (DUE / OVERDUE). Returns {due, overdue}. */
     private long[] countMedicationStatuses(List<PatientContext> patients, UUID hospitalId, LocalDateTime now) {
         long due = 0;
@@ -874,13 +880,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             if (ctx.patientId() == null || hospitalId == null) continue;
             List<Prescription> prescriptions = prescriptionRepository
                 .findByPatient_IdAndHospital_Id(ctx.patientId(), hospitalId);
-            List<Admission> closedStays = prescriptions.isEmpty() ? List.of()
-                : admissionRepository.findByPatient_IdAndHospital_Id(ctx.patientId(), hospitalId).stream()
-                    .filter(a -> a.getActualDischargeDateTime() != null)
-                    .toList();
+            List<Admission> closedStays = closedStaysFor(ctx.patientId(), hospitalId, prescriptions);
             for (Prescription rx : prescriptions) {
-                if (!ACTIVE_RX_STATUSES.contains(rx.getStatus())) continue;
-                if (endedWithAStay(rx, closedStays)) continue;
+                if (!ACTIVE_RX_STATUSES.contains(rx.getStatus()) || endedWithAStay(rx, closedStays)) continue;
                 String marStatus = resolveMarStatus(rx, now);
                 switch (marStatus) {
                     case STATUS_DUE -> due++;

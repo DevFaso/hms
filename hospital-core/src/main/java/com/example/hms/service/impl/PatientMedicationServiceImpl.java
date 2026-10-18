@@ -43,6 +43,8 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
     private static final Pattern DAYS_PATTERN = Pattern.compile("(\\d{1,5})\\s?days?", Pattern.CASE_INSENSITIVE);
     private static final Pattern WEEKS_PATTERN = Pattern.compile("(\\d{1,5})\\s?weeks?", Pattern.CASE_INSENSITIVE);
     private static final int DEFAULT_LIMIT = 50;
+    private static final String STATUS_ACTIVE = "ACTIVE";
+    private static final String STATUS_COMPLETED = "COMPLETED";
     /** The key PatientChartAccess throws: a refused staff read reads as "no such patient". */
     private static final String MSG_PATIENT_NOT_FOUND = "patient.notFound";
 
@@ -176,14 +178,19 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             .orElse(null);
         LocalDate endDate = resolveEndDate(startDate, prescription.getDuration());
 
+        String status = resolveStatus(prescription.getStatus(), endDate);
+        if (STATUS_ACTIVE.equals(status)
+            && com.example.hms.service.InpatientOrderEnd.endedWithAStay(prescription, closedStays)) {
+            status = STATUS_COMPLETED;
+        }
+
         return PatientMedicationResponseDTO.builder()
             .id(prescription.getId())
             .medicationName(resolveMedicationName(prescription))
             .dosage(prescription.getDosage())
             .frequency(prescription.getFrequency())
             .route(prescription.getRoute())
-            .status(com.example.hms.service.InpatientOrderEnd.endedWithAStay(prescription, closedStays) && "ACTIVE".equals(resolveStatus(prescription.getStatus(), endDate))
-                ? "COMPLETED" : resolveStatus(prescription.getStatus(), endDate))
+            .status(status)
             .startDate(startDate)
             .endDate(endDate)
             .prescribedBy(Optional.ofNullable(prescription.getStaff()).map(Staff::getFullName).orElse(null))
@@ -270,13 +277,13 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
 
     private String resolveStatus(PrescriptionStatus status, LocalDate endDate) {
         if (status == null) {
-            return endDate != null && endDate.isBefore(LocalDate.now()) ? "COMPLETED" : "ACTIVE";
+            return endDate != null && endDate.isBefore(LocalDate.now()) ? STATUS_COMPLETED : STATUS_ACTIVE;
         }
 
         return switch (status) {
             case DISCONTINUED, CANCELLED -> "DISCONTINUED";
             case DRAFT, PENDING_SIGNATURE, TRANSMISSION_FAILED -> "ON_HOLD";
-            default -> endDate != null && endDate.isBefore(LocalDate.now()) ? "COMPLETED" : "ACTIVE";
+            default -> endDate != null && endDate.isBefore(LocalDate.now()) ? STATUS_COMPLETED : STATUS_ACTIVE;
         };
     }
 }
