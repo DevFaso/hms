@@ -548,6 +548,35 @@ class DischargeSummaryServiceImplTest {
                     DischargeSummaryServiceImpl.OUTCOME_HIT)).isEqualTo(2.0d);
         }
 
+        @Test
+        @DisplayName("QA D152: the medication reconciliation leaves out DRAFT, unsigned and withdrawn orders")
+        void portalFetch_reconciliation_leavesOutDraftUnsignedAndWithdrawn() {
+            summary.setHospitalCourse("already enriched");
+            when(encounterRepository.findCompletedWithoutDischargeSummary(patientId)).thenReturn(List.of());
+            when(dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId))
+                    .thenReturn(List.of(summary));
+            List<com.example.hms.model.Prescription> rxs = new java.util.ArrayList<>();
+            for (com.example.hms.enums.PrescriptionStatus st : List.of(
+                    com.example.hms.enums.PrescriptionStatus.DRAFT,
+                    com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE,
+                    com.example.hms.enums.PrescriptionStatus.CANCELLED,
+                    com.example.hms.enums.PrescriptionStatus.DISCONTINUED,
+                    com.example.hms.enums.PrescriptionStatus.SIGNED)) {
+                com.example.hms.model.Prescription rx = new com.example.hms.model.Prescription();
+                rx.setMedicationName(st.name());
+                rx.setStatus(st);
+                rxs.add(rx);
+            }
+            when(prescriptionRepository.findByEncounter_Id(eq(encounterId), any()))
+                    .thenReturn(new org.springframework.data.domain.PageImpl<>(rxs));
+
+            service.getDischargeSummariesForPortalPatient(patientId);
+
+            assertThat(summary.getMedicationReconciliation())
+                    .extracting(com.example.hms.model.discharge.MedicationReconciliationEntry::getMedicationName)
+                    .containsExactly("SIGNED");
+        }
+
         /**
          * Concurrency contract for the portal-side backfill.
          *

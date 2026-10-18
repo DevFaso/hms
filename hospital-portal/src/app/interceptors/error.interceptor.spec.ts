@@ -354,6 +354,18 @@ describe('errorInterceptor', () => {
     httpMock.expectNone('/frontend-audit');
   });
 
+  it('QA D188: a 403 on the transfer worklist keeps the bed board: no redirect, one audit report', () => {
+    let error: HttpErrorResponse | undefined;
+    http.get('/transfers/pending?hospitalId=h1').subscribe({ error: (e) => (error = e) });
+    httpMock
+      .expectOne('/transfers/pending?hospitalId=h1')
+      .flush(null, { status: 403, statusText: 'Forbidden' });
+    httpMock.expectOne('/frontend-audit').flush({});
+
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(error?.status).toBe(403);
+  });
+
   it('on a 403 from a CDS Hooks invocation (a POST), degrades quietly and does not redirect', () => {
     let error: HttpErrorResponse | undefined;
     http.post('/cds-services/hms-bpa-protocols', {}).subscribe({ error: (e) => (error = e) });
