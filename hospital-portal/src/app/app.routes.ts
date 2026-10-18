@@ -1304,9 +1304,10 @@ export const routes: Routes = [
         path: 'pharmacy-registry',
         canActivate: [RoleGuard],
         data: {
-          // E9 #68: mirrors PharmacyDirectoryController, which admits clinicians and
-          // pharmacists only since E9 #67 (D5).
-          roles: ['ROLE_PHARMACIST', 'ROLE_SUPER_ADMIN'],
+          // E9 #68 / QA D39: the page reads and writes /pharmacy-registry
+          // (PharmacyRegistryController), whose list admits the hospital admin
+          // and whose create/update/delete are hospital-admin and super-admin only.
+          roles: ['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () =>
           import('./pharmacy/pharmacy-registry').then((m) => m.PharmacyRegistryComponent),

@@ -1146,7 +1146,7 @@ public class AuthController {
         var user = userOpt.get();
 
         String newUsername = request.newUsername() == null ? "" : request.newUsername().trim();
-        if (newUsername.length() < 3 || newUsername.length() > 50) {
+        if (newUsername.length() < 3 || newUsername.length() > com.example.hms.model.User.USERNAME_MAX_LENGTH) {
             return ResponseEntity.badRequest()
                     .body(new MessageResponse("Username must be between 3 and 50 characters."));
         }
@@ -1271,7 +1271,7 @@ public class AuthController {
         if (newUsername.isEmpty()) {
             return "account.setup.username.required";
         }
-        if (newUsername.length() < 3 || newUsername.length() > 50) {
+        if (newUsername.length() < 3 || newUsername.length() > com.example.hms.model.User.USERNAME_MAX_LENGTH) {
             return "account.setup.username.length";
         }
         if (!newUsername.matches("^[a-zA-Z0-9._-]+$")) {

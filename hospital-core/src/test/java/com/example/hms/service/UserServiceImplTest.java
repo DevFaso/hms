@@ -372,6 +372,13 @@ class UserServiceImplTest {
             assertThat(userCaptor.getValue().isActive())
                 .as("staff must start inactive until the emailed code is verified")
                 .isFalse();
+            // D38: the registrar typed this password, so the holder must replace it.
+            assertThat(userCaptor.getValue().isForcePasswordChange())
+                .as("an admin-chosen password must be replaced at first sign-in")
+                .isTrue();
+            assertThat(userCaptor.getValue().isForceUsernameChange())
+                .as("the username the admin chose is kept")
+                .isFalse();
 
             org.mockito.ArgumentCaptor<com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO>
                 assignCaptor = org.mockito.ArgumentCaptor.forClass(
@@ -1421,7 +1428,7 @@ class UserServiceImplTest {
 
             assertThat(saved.getPasswordHash()).isEqualTo("$2a$10$newHash");
             assertThat(saved.getPasswordChangedAt()).isNotNull();
-            assertThat(saved.isForcePasswordChange()).isFalse();
+            assertThat(saved.isForcePasswordChange()).as("D38: an admin-chosen password must be replaced at next sign-in").isTrue();
         }
 
         @Test

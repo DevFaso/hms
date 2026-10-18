@@ -1001,9 +1001,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           label: 'Pharmacy Registry',
           translationKey: 'NAV.PHARMACY_REGISTRY',
           route: '/pharmacy-registry',
-          // Mirrors the /pharmacy-registry RoleGuard (E9 #68); the /pharmacies
-          // API admits clinicians and pharmacists only since E9 #67.
-          roles: ['ROLE_PHARMACIST', 'ROLE_SUPER_ADMIN'],
+          // Mirrors the /pharmacy-registry RoleGuard (E9 #68, QA D39).
+          roles: ['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
         {
           icon: 'inventory_2',

@@ -768,7 +768,8 @@ public class UserServiceImpl implements UserService {
         // registration by receptionist).  The user will be forced to change it on
         // first login via forcePasswordChange flag.
         String rawPassword = request.getPassword();
-        if (rawPassword == null || rawPassword.isBlank()) {
+        boolean passwordChosenByAdmin = rawPassword != null && !rawPassword.isBlank();
+        if (!passwordChosenByAdmin) {
             rawPassword = generateTempPassword();
             request.setForcePasswordChange(true);
         }
@@ -811,6 +812,12 @@ public class UserServiceImpl implements UserService {
         if (isPatient || usernameGenerated || Boolean.TRUE.equals(request.getForcePasswordChange())) {
             u.setForcePasswordChange(true);
             u.setForceUsernameChange(true);
+        }
+        // Every caller is an administrator registering someone else: a password
+        // they typed is known to them, so the holder replaces it at first sign-in
+        // (D38). The username they chose stays.
+        if (passwordChosenByAdmin) {
+            u.setForcePasswordChange(true);
         }
         u.setCreatedAt(passwordSetAt);
         u.setPasswordChangedAt(passwordSetAt);
@@ -1505,7 +1512,10 @@ public class UserServiceImpl implements UserService {
             user.setPasswordChangedAt(passwordSetAt);
             user.setPasswordRotationWarningAt(null);
             user.setPasswordRotationForcedAt(null);
-            user.setForcePasswordChange(false);
+            // Only an administrator reaches here (a self-edit cannot carry a
+            // password), and a password someone else chose is a shared secret:
+            // the holder must replace it at the next sign-in (D38).
+            user.setForcePasswordChange(true);
             // An administrator handing out a new password means the holder
             // should sign in with it now: the lock collected on the old one
             // must not refuse it (D18). After commit, as above; a reactivation

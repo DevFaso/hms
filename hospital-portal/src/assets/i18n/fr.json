@@ -6110,7 +6110,17 @@
     "MFA_STEPUP_LOCKED": "Trop de codes erronés. Patientez quelques minutes, puis réessayez avec un code actuel ou un code de secours inutilisé.",
     "MFA_STEPUP_REUSED": "Ce code a déjà été utilisé. Attendez le code suivant de votre application d'authentification, ou utilisez un code de secours inutilisé.",
     "MFA_STEPUP_IMPERSONATION": "Une session de support ne peut pas configurer ni modifier l'authentificateur de ce compte. Le titulaire du compte doit le faire lui-même.",
-    "MFA_SET_UP": "Configurer une application d'authentification"
+    "MFA_SET_UP": "Configurer une application d'authentification",
+    "CHANGE_PASSWORD_DESC": "Saisissez votre mot de passe actuel, puis choisissez-en un nouveau d’au moins 8 caractères.",
+    "PASSWORD_TOO_SHORT": "Le nouveau mot de passe doit comporter au moins 8 caractères.",
+    "PASSWORD_SAME_AS_CURRENT": "Le nouveau mot de passe doit être différent de l’actuel.",
+    "PASSWORD_CHANGED": "Votre mot de passe a été modifié.",
+    "PASSWORD_CURRENT_WRONG": "Le mot de passe actuel est incorrect.",
+    "PASSWORD_CHANGE_REFUSED": "Le nouveau mot de passe a été refusé. Il correspond peut-être à l’un de vos 5 derniers mots de passe.",
+    "PASSWORD_CHANGE_FAILED": "Le mot de passe n’a pas pu être modifié. Veuillez réessayer.",
+    "PASSWORD_MANAGED_BY_SSO": "Votre mot de passe est géré par votre fournisseur d’authentification unique.",
+    "SAVE_NEW_PASSWORD": "Enregistrer le nouveau mot de passe",
+    "FORGOT_PASSWORD_DESC": "Mot de passe actuel oublié ? Nous pouvons vous envoyer un lien de réinitialisation par e-mail."
   },
   "RECEPTION": {
     "ACCEPT_OFFER": "Accepter",
@@ -7894,7 +7904,9 @@
     "HAND_OVER_FAILED": "Impossible d'enregistrer la remise.",
     "CANCEL_READY_SUCCESS": "Préparation annulée.",
     "CANCEL_READY_FAILED": "Impossible d'annuler la préparation.",
-    "PREPARED_BY": "Préparée par {{name}}"
+    "PREPARED_BY": "Préparée par {{name}}",
+    "NO_PHARMACY_HINT": "Aucune pharmacie n’est encore enregistrée pour cet établissement. Un administrateur de l’établissement peut en enregistrer une dans le Registre des pharmacies.",
+    "SELECT_PHARMACY": "Pharmacie"
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",

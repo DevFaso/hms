@@ -495,8 +495,12 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     private UserRoleHospitalAssignment resolveCreatorAssignment(Hospital hospital) {
         UUID currentUserId = authService.getCurrentUserId();
+        // A user can hold several assignments at one hospital (an admin who is also a
+        // doctor, or an inactive patient role). A single-result lookup throws on the
+        // second row, so prefer the active HOSPITAL_ADMIN assignment, then any active one.
         Optional<UserRoleHospitalAssignment> existingAssignment = roleAssignmentRepository
-            .findByUserIdAndHospitalId(currentUserId, hospital.getId());
+            .findByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(currentUserId, hospital.getId(), ROLE_HOSPITAL_ADMIN)
+            .or(() -> roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(currentUserId, hospital.getId()));
 
         if (existingAssignment.isPresent()) {
             return existingAssignment.get();

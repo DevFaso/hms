@@ -161,12 +161,36 @@ class MedicationCatalogItemServiceImplTest {
      * entry by omitting hospitalId. Catalog governance stays with super-admin.
      */
     @Test
-    void create_asHospitalAdmin_withoutHospitalId_throws() {
+    void create_asHospitalAdmin_withoutHospitalId_defaultsToActingHospital() {
+        // D34: the portal form never sends hospitalId; the admin's entry goes to
+        // the hospital they act for, never to the global catalog.
+        MedicationCatalogItemRequestDTO noHospital = MedicationCatalogItemRequestDTO.builder()
+                .nameFr("Amoxicilline")
+                .genericName("Amoxicillin")
+                .build();
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(mapper.toEntity(noHospital)).thenReturn(item);
+        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
+        when(mapper.toResponseDTO(item)).thenReturn(responseDTO);
+
+        service.create(noHospital);
+
+        ArgumentCaptor<MedicationCatalogItem> captor =
+                ArgumentCaptor.forClass(MedicationCatalogItem.class);
+        verify(catalogRepository).save(captor.capture());
+        assertThat(captor.getValue().getHospital()).isSameAs(hospital);
+    }
+
+    @Test
+    void create_asHospitalAdmin_withoutHospitalIdOrScope_throws() {
         MedicationCatalogItemRequestDTO global = MedicationCatalogItemRequestDTO.builder()
                 .nameFr("Amoxicilline")
                 .genericName("Amoxicillin")
                 .build();
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
 
         assertThatThrownBy(() -> service.create(global))
                 .isInstanceOf(com.example.hms.exception.BusinessException.class)
