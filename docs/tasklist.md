@@ -206,3 +206,10 @@ Task Summary
 Total tasks: 25 | Fixed upstream: 2 (Tasks 1–2) | Completed: 23 (Tasks 3–25) | Blocked: 0
 
 Task 13 is complete using Option A. The doctor board now merges encounter-backed outpatient flow items with admission-backed inpatient flow items while preserving a flowSource label for UI disambiguation.
+
+## Standing platform debt
+
+- **D121 (QA round 2), backend-composed English.** CDS Hooks card text and server error `message` strings are written in English by hospital-core; the portal shows them verbatim. Localizing them needs per-request message bundles on the server (Accept-Language), which is a feature, not a template fix. The check-in toast no longer echoes the server's English sentence.
+- **D121, remaining raw enum renders.** 218 sites stay pinned in `hospital-portal/scripts/i18n-raw-enums-baseline.json`; the pin list may only shrink. Many are free text (frequency, route, reason fields) and need a per-field decision.
+- **D129, patient notice on a new hospital link.** Telling the patient (SMS/portal) that a second hospital registered them is a new notification flow. Staff already get a toast when they link a patient.
+- **D130, colour contrast.** The axe `color-contrast` rule is still disabled in `e2e/a11y.spec.ts`; text fixed so far is the muted labels in admin assignments/governance and patient education. Turning the rule back on needs a page-by-page pass.

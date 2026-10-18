@@ -177,6 +177,14 @@ export class ReferralsComponent implements OnInit {
     }));
   }
 
+  /** The localized specialty name, so a list never shows CARDIOLOGY raw (D121). */
+  specialtyLabel(value: string | null | undefined): string {
+    if (!value) return '';
+    const key = `REFERRALS.SPECIALTY_OPTION.${value}`;
+    const label = this.translate.instant(key);
+    return label && label !== key ? label : value;
+  }
+
   ngOnInit(): void {
     // Cross-tenant: hydrate URL scope before the first list fetch so
     // the auth interceptor sends the right X-Hospital-Id (or omits it

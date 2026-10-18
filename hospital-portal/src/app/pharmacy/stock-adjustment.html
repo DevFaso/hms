@@ -49,7 +49,7 @@
             >
               <option value="">{{ 'PHARMACY.SELECT_TYPE_OPTION' | translate }}</option>
               @for (t of transactionTypes; track t) {
-                <option [value]="t">{{ t }}</option>
+                <option [value]="t">{{ t | enumLabel: 'stockTransactionType' }}</option>
               }
             </select>
           </div>
@@ -231,7 +231,7 @@
     <select id="txFilterType" [(ngModel)]="filterType" (ngModelChange)="onFilterChange()">
       <option value="">{{ 'COMMON.ALL' | translate }}</option>
       @for (t of transactionTypes; track t) {
-        <option [value]="t">{{ t }}</option>
+        <option [value]="t">{{ t | enumLabel: 'stockTransactionType' }}</option>
       }
     </select>
   </div>
@@ -260,7 +260,7 @@
             <tr>
               <td>
                 <span class="tx-type" [class]="getTypeClass(tx.transactionType)">
-                  {{ tx.transactionType }}
+                  {{ tx.transactionType | enumLabel: 'stockTransactionType' }}
                 </span>
               </td>
               <td>

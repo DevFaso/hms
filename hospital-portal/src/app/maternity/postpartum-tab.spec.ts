@@ -137,6 +137,15 @@ describe('PostpartumTabComponent — screening', () => {
     component = TestBed.createComponent(PostpartumTabComponent).componentInstance;
   });
 
+  it('D121: a schedule without a phase never renders POSTPARTUM.PHASE_null', () => {
+    expect(component.phaseLabelKey({ phase: null } as unknown as PostpartumSchedule)).toBe(
+      'POSTPARTUM.PHASE_UNKNOWN',
+    );
+    expect(
+      component.phaseLabelKey({ phase: 'SHIFT_BASELINE' } as unknown as PostpartumSchedule),
+    ).toBe('POSTPARTUM.PHASE_SHIFT_BASELINE');
+  });
+
   it('D65: with no patient picked, shows the postpartum hint, not the referrals one', () => {
     const fixture = TestBed.createComponent(PostpartumTabComponent);
     fixture.detectChanges();

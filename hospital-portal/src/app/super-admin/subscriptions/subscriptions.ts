@@ -14,6 +14,7 @@ import { catchError, of } from 'rxjs';
 
 import { SubscriptionService } from '../../services/subscription.service';
 import { SubscriptionPlan, SubscriptionPlanRequest } from '../../services/subscription.model';
+import { currentLocale } from '../../shared/i18n/app-locale';
 
 const FRESH_REQUEST: SubscriptionPlanRequest = {
   name: '',
@@ -143,8 +144,14 @@ export class SubscriptionsComponent implements OnInit {
   }
 
   formatPrice(cents: number, currency: string): string {
-    const amount = (cents / 100).toFixed(2);
-    return `${amount} ${currency}`;
+    try {
+      return new Intl.NumberFormat(currentLocale(), { style: 'currency', currency }).format(
+        cents / 100,
+      );
+    } catch {
+      // An unknown ISO code would throw: keep the amount readable.
+      return `${new Intl.NumberFormat(currentLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cents / 100)} ${currency}`;
+    }
   }
 
   updateForm<K extends keyof SubscriptionPlanRequest>(

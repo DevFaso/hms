@@ -23,6 +23,7 @@ import {
   DoctorResultQueueItem,
   PatientSnapshot,
 } from '../services/dashboard.service';
+import { currentLocale } from '../shared/i18n/app-locale';
 
 /**
  * Every route literal the dashboard links to (tiles, quick actions, fetch
@@ -473,10 +474,16 @@ describe('Dashboard navigation & RBAC', () => {
     });
     expect(c.qualityManagerStatCards().length).toBe(5);
     const passRateCard = c.qualityManagerStatCards().find((c) => c.key === 'pass_rate');
-    expect(passRateCard?.value).toBe('90.0%');
+    // D130: the decimal separator follows the UI language, never a bare dot.
+    const expected =
+      new Intl.NumberFormat(currentLocale(), {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      }).format(90) + ' %';
+    expect(passRateCard?.value).toBe(expected);
   });
 
-  it('qualityManagerStatCards pass rate should show N/A when qualityPassRate is null', () => {
+  it('qualityManagerStatCards pass rate should show a dash when qualityPassRate is null', () => {
     const c = createComponent(['ROLE_QUALITY_MANAGER'], []);
     c.isQualityManager.set(true);
     c.qualityManagerDashboard.set({
@@ -495,7 +502,7 @@ describe('Dashboard navigation & RBAC', () => {
       ordersToday: 0,
     });
     const passRateCard = c.qualityManagerStatCards().find((c) => c.key === 'pass_rate');
-    expect(passRateCard?.value).toBe('N/A');
+    expect(passRateCard?.value).toBe('—');
   });
 
   it('lab-director should take priority over lab-scientist in activeView', () => {

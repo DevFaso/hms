@@ -2084,7 +2084,10 @@
     "WORKFORCE_ABSENCE": "Absences du Personnel",
     "WRITE_OFFS": "Radiations",
     "WRITE_RX": "Rédiger Rx",
-    "WRITTEN_OFF": "Radié"
+    "WRITTEN_OFF": "Radié",
+    "FILTER_BY_DATE": "Filtrer par date",
+    "FILTER_BY_URGENCY": "Filtrer par urgence",
+    "FILTER_BY_LOCATION": "Filtrer par emplacement"
   },
   "DELIVERY": {
     "CREDENTIALS_NOT_DELIVERED": "Les identifiants de connexion à usage unique n'ont pas pu être envoyés au patient.",
@@ -5699,6 +5702,24 @@
         "ED_NOTE": "Note des urgences",
         "MEDICATION_ORDER": "Prescription médicamenteuse",
         "CARE_PLAN": "Plan de soins"
+      },
+      "ADMISSION_TYPE": {
+        "EMERGENCY": "Urgence",
+        "ELECTIVE": "Programmée",
+        "URGENT": "Urgente",
+        "NEWBORN": "Nouveau-né",
+        "TRANSFER": "Transfert",
+        "OBSERVATION": "Observation",
+        "DAY_CASE": "Ambulatoire",
+        "LABOR_DELIVERY": "Travail et accouchement",
+        "PSYCHIATRIC": "Psychiatrique"
+      },
+      "STOCK_TRANSACTION_TYPE": {
+        "RECEIPT": "Réception",
+        "DISPENSE": "Dispensation",
+        "ADJUSTMENT": "Ajustement",
+        "TRANSFER": "Transfert",
+        "RETURN": "Retour"
       }
     },
     "DOCUMENTS": {
@@ -7713,7 +7734,7 @@
     "ALL_DISPENSARIES": "Toutes les pharmacies hospitalières",
     "ALL_STOCKED": "Tous les articles sont bien approvisionnés",
     "ATC_CODE": "Code ATC",
-    "ATC_FORMAT_HINT": "Le code ATC doit respecter le format OMS L##LL## (ex. J01CA04).",
+    "ATC_FORMAT_HINT": "Le code ATC doit respecter le format OMS L##, L##L, L##LL ou L##LL## (ex. J01, J01CA, J01CA04).",
     "BACK_ORDER": "Commande en attente",
     "BACK_ORDER_PLACED": "Prescription placée en commande en attente",
     "BRAND_NAME": "Nom Commercial",
@@ -8030,7 +8051,9 @@
       "NASAL": "Nasale"
     },
     "NO_PHARMACY_HINT": "Aucune pharmacie n’est encore enregistrée pour cet établissement. Un administrateur de l’établissement peut en enregistrer une dans le Registre des pharmacies.",
-    "SELECT_PHARMACY": "Pharmacie"
+    "SELECT_PHARMACY": "Pharmacie",
+    "QTY_ON_HAND_COLUMN": "Qté en stock",
+    "REORDER_QTY_COLUMN": "Qté à commander"
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",
@@ -9059,7 +9082,8 @@
     "DELIVERY_LINK": "Accouchement",
     "DELIVERY_LINK_NONE": "Non lié (né ailleurs)",
     "DELIVERY_LINKED": "lié à l'accouchement",
-    "PICK_PATIENT_HINT": "Choisissez une patiente pour voir son suivi post-partum."
+    "PICK_PATIENT_HINT": "Choisissez une patiente pour voir son suivi post-partum.",
+    "PHASE_UNKNOWN": "Phase non encore définie"
   },
   "ASSIGN_ADMIN": {
     "TITLE": "Administration des Affectations",

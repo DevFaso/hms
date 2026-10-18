@@ -1,3 +1,4 @@
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import {
   Component,
   computed,
@@ -41,7 +42,7 @@ const ADJUSTMENT_REASON_CODES = [
 @Component({
   selector: 'app-stock-adjustment',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './stock-adjustment.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './stock-adjustment.scss',

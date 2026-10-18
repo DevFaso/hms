@@ -138,7 +138,7 @@
                 </div>
                 <div class="cell-secondary">{{ r.patientMrn }}</div>
               </td>
-              <td>{{ r.targetSpecialty || '—' }}</td>
+              <td>{{ specialtyLabel(r.targetSpecialty) || '—' }}</td>
               <td>{{ r.referringProviderName || '—' }}</td>
               <td>{{ r.receivingProviderName || ('REFERRALS.UNASSIGNED' | translate) }}</td>
               <td>
@@ -268,7 +268,7 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'REFERRALS.SPECIALTY' | translate }}</span
-              ><span class="field-value">{{ ref.targetSpecialty }}</span>
+              ><span class="field-value">{{ specialtyLabel(ref.targetSpecialty) }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'REFERRALS.URGENCY' | translate }}</span
@@ -717,7 +717,7 @@
                 | translate
                   : {
                       name: deletingRef()?.patientName,
-                      specialty: deletingRef()?.targetSpecialty,
+                      specialty: specialtyLabel(deletingRef()?.targetSpecialty),
                     }
             }}
           </p>
@@ -764,7 +764,7 @@
               | translate
                 : {
                     name: acknowledgingRef()?.patientName,
-                    specialty: acknowledgingRef()?.targetSpecialty,
+                    specialty: specialtyLabel(acknowledgingRef()?.targetSpecialty),
                   }
           }}
         </p>
@@ -823,7 +823,7 @@
               | translate
                 : {
                     name: schedulingRef()?.patientName,
-                    specialty: schedulingRef()?.targetSpecialty,
+                    specialty: specialtyLabel(schedulingRef()?.targetSpecialty),
                   }
           }}
         </p>
@@ -887,7 +887,7 @@
               | translate
                 : {
                     name: rejectingRef()?.patientName,
-                    specialty: rejectingRef()?.targetSpecialty,
+                    specialty: specialtyLabel(rejectingRef()?.targetSpecialty),
                   }
           }}
         </p>
@@ -947,7 +947,7 @@
               | translate
                 : {
                     name: completingRef()?.patientName,
-                    specialty: completingRef()?.targetSpecialty,
+                    specialty: specialtyLabel(completingRef()?.targetSpecialty),
                   }
           }}
         </p>

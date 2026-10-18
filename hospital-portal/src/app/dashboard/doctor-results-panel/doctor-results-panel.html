@@ -91,26 +91,27 @@
             <span class="rp-section-count">{{ criticalResults().length }}</span>
           </div>
           @for (r of criticalResults(); track r.id) {
-            <div
-              class="rp-row"
-              role="button"
-              tabindex="0"
-              (click)="selectPatient(r.patientId)"
-              (keydown.enter)="selectPatient(r.patientId)"
-            >
-              <div class="rp-row-info">
+            <div class="rp-row">
+              <!-- One focusable control per action: a role=button row that
+                   holds links and buttons is a nested-interactive axe
+                   violation (D120). -->
+              <button
+                type="button"
+                class="rp-row-info rp-row-select"
+                (click)="selectPatient(r.patientId)"
+              >
                 <span class="rp-patient-name">{{ r.patientName }}</span>
                 <span class="rp-test-name">{{ r.testName }}</span>
-              </div>
+              </button>
               <span class="rp-value rp-value-critical">{{ r.resultValue }}</span>
               <span class="rp-time">{{ formatDate(r.resultedAt) }}</span>
               <a
                 [routerLink]="['/patients', r.patientId]"
                 class="rp-action"
                 [title]="'DASHBOARD.OPEN_CHART' | translate"
-                (click)="$event.stopPropagation()"
+                [attr.aria-label]="'DASHBOARD.OPEN_CHART' | translate"
               >
-                <span class="material-symbols-outlined">open_in_new</span>
+                <span class="material-symbols-outlined" aria-hidden="true">open_in_new</span>
               </a>
               <!--
                 A CRITICAL result cannot be dismissed: `LabResultServiceImpl
@@ -132,9 +133,12 @@
                   'DASHBOARD.READ_BACK_FOR'
                     | translate: { test: r.testName, patient: r.patientName }
                 "
-                (click)="$event.stopPropagation()"
+                [attr.aria-label]="
+                  'DASHBOARD.READ_BACK_FOR'
+                    | translate: { test: r.testName, patient: r.patientName }
+                "
               >
-                <span class="material-symbols-outlined">record_voice_over</span>
+                <span class="material-symbols-outlined" aria-hidden="true">record_voice_over</span>
               </a>
             </div>
           }
@@ -150,34 +154,36 @@
             <span class="rp-section-count">{{ abnormalResults().length }}</span>
           </div>
           @for (r of abnormalResults(); track r.id) {
-            <div
-              class="rp-row"
-              role="button"
-              tabindex="0"
-              (click)="selectPatient(r.patientId)"
-              (keydown.enter)="selectPatient(r.patientId)"
-            >
-              <div class="rp-row-info">
+            <div class="rp-row">
+              <!-- One focusable control per action: a role=button row that
+                   holds links and buttons is a nested-interactive axe
+                   violation (D120). -->
+              <button
+                type="button"
+                class="rp-row-info rp-row-select"
+                (click)="selectPatient(r.patientId)"
+              >
                 <span class="rp-patient-name">{{ r.patientName }}</span>
                 <span class="rp-test-name">{{ r.testName }}</span>
-              </div>
+              </button>
               <span class="rp-value rp-value-abnormal">{{ r.resultValue }}</span>
               <span class="rp-time">{{ formatDate(r.resultedAt) }}</span>
               <a
                 [routerLink]="['/patients', r.patientId]"
                 class="rp-action"
                 [title]="'DASHBOARD.OPEN_CHART' | translate"
-                (click)="$event.stopPropagation()"
+                [attr.aria-label]="'DASHBOARD.OPEN_CHART' | translate"
               >
-                <span class="material-symbols-outlined">open_in_new</span>
+                <span class="material-symbols-outlined" aria-hidden="true">open_in_new</span>
               </a>
               <button
                 class="rp-ack-btn"
                 [disabled]="acknowledging().includes(r.id)"
                 [title]="'DASHBOARD.ACKNOWLEDGE' | translate"
-                (click)="acknowledgeResult(r.id); $event.stopPropagation()"
+                [attr.aria-label]="'DASHBOARD.ACKNOWLEDGE' | translate"
+                (click)="acknowledgeResult(r.id)"
               >
-                <span class="material-symbols-outlined">done</span>
+                <span class="material-symbols-outlined" aria-hidden="true">done</span>
               </button>
             </div>
           }
@@ -193,34 +199,36 @@
             <span class="rp-section-count">{{ normalResults().length }}</span>
           </div>
           @for (r of normalResults(); track r.id) {
-            <div
-              class="rp-row"
-              role="button"
-              tabindex="0"
-              (click)="selectPatient(r.patientId)"
-              (keydown.enter)="selectPatient(r.patientId)"
-            >
-              <div class="rp-row-info">
+            <div class="rp-row">
+              <!-- One focusable control per action: a role=button row that
+                   holds links and buttons is a nested-interactive axe
+                   violation (D120). -->
+              <button
+                type="button"
+                class="rp-row-info rp-row-select"
+                (click)="selectPatient(r.patientId)"
+              >
                 <span class="rp-patient-name">{{ r.patientName }}</span>
                 <span class="rp-test-name">{{ r.testName }}</span>
-              </div>
+              </button>
               <span class="rp-value">{{ r.resultValue }}</span>
               <span class="rp-time">{{ formatDate(r.resultedAt) }}</span>
               <a
                 [routerLink]="['/patients', r.patientId]"
                 class="rp-action"
                 [title]="'DASHBOARD.OPEN_CHART' | translate"
-                (click)="$event.stopPropagation()"
+                [attr.aria-label]="'DASHBOARD.OPEN_CHART' | translate"
               >
-                <span class="material-symbols-outlined">open_in_new</span>
+                <span class="material-symbols-outlined" aria-hidden="true">open_in_new</span>
               </a>
               <button
                 class="rp-ack-btn"
                 [disabled]="acknowledging().includes(r.id)"
                 [title]="'DASHBOARD.ACKNOWLEDGE' | translate"
-                (click)="acknowledgeResult(r.id); $event.stopPropagation()"
+                [attr.aria-label]="'DASHBOARD.ACKNOWLEDGE' | translate"
+                (click)="acknowledgeResult(r.id)"
               >
-                <span class="material-symbols-outlined">done</span>
+                <span class="material-symbols-outlined" aria-hidden="true">done</span>
               </button>
             </div>
           }

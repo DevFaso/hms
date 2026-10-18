@@ -238,6 +238,7 @@
     "NURSE.NOTE": "Note",
     "NURSE.NOTES": "Notes",
     "NURSE.OBSERVATION": "Observation",
+    "PORTAL.ENUM.ADMISSION_TYPE.OBSERVATION": "Observation",
     "NURSE.PLAN": "Plan",
     "NURSE.ROUTINE": "Routine",
     "NURSE.SPO2": "SpO₂",

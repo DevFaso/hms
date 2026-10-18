@@ -322,6 +322,11 @@ export class PrescriptionsComponent implements OnInit {
   editingWithdrawn = signal(false);
 
   statusOptions(): { value: string; labelKey: string }[] {
+    if (!this.editing()) {
+      // A new order cannot be born withdrawn: offering Cancelled or
+      // Discontinued at creation recorded an order nobody ever placed (D129).
+      return this.prescriptionStatuses.filter((s) => !isWithdrawnStatus(s.value));
+    }
     if (!this.editingWithdrawn()) {
       return this.prescriptionStatuses;
     }
