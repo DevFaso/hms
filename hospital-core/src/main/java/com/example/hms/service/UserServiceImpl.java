@@ -1290,7 +1290,7 @@ public class UserServiceImpl implements UserService {
         boolean scoped = !scope.everyone();
         Page<User> users = userRepository.findAllPaged(
             !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable);
-        return users.map(userMapper::toSummaryDTO);
+        return users.map(u -> directoryRow(u, scope));
     }
 
     @Override
@@ -1305,7 +1305,21 @@ public class UserServiceImpl implements UserService {
         boolean scoped = !scope.everyone();
         Page<User> users = userRepository.searchUsers(name, role, email,
             !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable);
-        return users.map(userMapper::toSummaryDTO);
+        return users.map(u -> directoryRow(u, scope));
+    }
+
+    /**
+     * QA D125: a non-administrator sees a patient account in the directory (chat still
+     * needs its id, name and role) but never its e-mail or its username, which for a
+     * patient is commonly the e-mail address too.
+     */
+    private UserSummaryDTO directoryRow(User user, DirectoryScope scope) {
+        UserSummaryDTO dto = userMapper.toSummaryDTO(user);
+        if (dto != null && !scope.seesPatientContacts() && user.getStaffProfile() == null) {
+            dto.setEmail(null);
+            dto.setUsername(null);
+        }
+        return dto;
     }
 
     /** The caller's hospitals, or the repository's sentinel when the directory is unscoped. */

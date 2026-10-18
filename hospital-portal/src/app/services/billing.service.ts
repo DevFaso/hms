@@ -25,6 +25,7 @@ export const INVOICE_STATUSES: InvoiceStatus[] = [
 
 export interface BillingInvoiceResponse {
   id: string;
+  patientId?: string;
   patientFullName: string;
   patientName: string;
   patientEmail: string;
@@ -60,19 +61,44 @@ export interface InvoiceItemResponse {
   quantity: number;
   unitPrice: number;
   totalPrice: number;
+  staffDisplay?: string;
 }
 
+/** Backend ItemCategory. */
+export type InvoiceItemCategory = 'SERVICE' | 'MEDICATION' | 'LAB_TEST' | 'GENERAL';
+export const INVOICE_ITEM_CATEGORIES: InvoiceItemCategory[] = [
+  'SERVICE',
+  'MEDICATION',
+  'LAB_TEST',
+  'GENERAL',
+];
+
+export interface InvoiceItemRequest {
+  billingInvoiceId: string;
+  itemDescription: string;
+  itemCategory: InvoiceItemCategory;
+  quantity: number;
+  unitPrice: number;
+}
+
+/**
+ * The server numbers the invoice (per hospital), writes it at the caller's
+ * acting hospital, and never takes the amount paid from this form: it moves
+ * only through recorded payments. With lines, the total is their sum.
+ */
 export interface BillingInvoiceRequest {
-  patientEmail: string;
-  hospitalName: string;
+  /** The picked patient (phone-only patients included). */
+  patientId: string;
   encounterReference?: string;
-  invoiceNumber: string;
   invoiceDate: string;
   dueDate: string;
+  /** The amount of an invoice with no lines; ignored once it has lines. */
   totalAmount: number;
-  amountPaid: number;
+  /** DRAFT, SENT or CANCELLED; paid statuses follow payments. */
   status: InvoiceStatus;
   notes?: string;
+  /** Idempotency key, one per create form: a double submit is one invoice. */
+  clientRequestId?: string;
 }
 
 export interface InvoiceSearchFilters {
@@ -152,6 +178,15 @@ export class BillingService {
 
   getInvoiceItems(invoiceId: string): Observable<InvoiceItemResponse[]> {
     return this.http.get<InvoiceItemResponse[]>(`/invoice-items/invoice/${invoiceId}`);
+  }
+
+  createInvoiceItem(req: InvoiceItemRequest): Observable<InvoiceItemResponse> {
+    return this.http.post<InvoiceItemResponse>('/invoice-items', req);
+  }
+
+  /** The backend answers text/plain, so parse as text. */
+  deleteInvoiceItem(id: string): Observable<string> {
+    return this.http.delete(`/invoice-items/${id}`, { responseType: 'text' });
   }
 
   createInvoice(req: BillingInvoiceRequest): Observable<BillingInvoiceResponse> {

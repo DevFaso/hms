@@ -67,6 +67,7 @@ describe('ProfileComponent — editing the profile', () => {
       'getRoles',
       'hasAnyRole',
       'setUserProfile',
+      'logout',
     ]);
     auth.getUserId.and.returnValue('u1');
     auth.getUserProfile.and.callFake(() => stored);
@@ -407,6 +408,8 @@ describe('ProfileComponent — editing the profile', () => {
       expect(toast.success).toHaveBeenCalledWith('PROFILE.PASSWORD_CHANGED');
       expect(component.pwdCurrent()).toBe('');
       expect(component.changingPassword()).toBeFalse();
+      // QA D114: the old session is dead server-side; sign in again.
+      expect(auth.logout).toHaveBeenCalled();
     });
 
     it('refuses a mismatch, a short or an unchanged password without calling the server', () => {

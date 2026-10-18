@@ -13,4 +13,9 @@ public interface HospitalUserDetails extends UserDetails {
      * Returns the UUID of the associated user record.
      */
     UUID getUserId();
+
+    /** When the account's password last changed, or null if unknown (QA D114). */
+    default java.time.LocalDateTime getPasswordChangedAt() {
+        return null;
+    }
 }
